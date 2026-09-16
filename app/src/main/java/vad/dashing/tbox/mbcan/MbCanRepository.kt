@@ -349,6 +349,25 @@ object MbCanRepository {
         runOnStateApply { MbCanEngineFacade.stopHardKeyDiagnostics() }
     }
 
+    /**
+     * Production CCS stalk tracking via left-wheel joystick (RES+/SET−).
+     * Shares the OEM hardkey subscription with diagnostics.
+     */
+    fun setCcsHardKeyTrackingEnabled(enabled: Boolean) {
+        runOnStateApply {
+            if (enabled) {
+                MbCanEngineFacade.addHardKeyListener(ccsHardKeyListener)
+            } else {
+                MbCanEngineFacade.removeHardKeyListener(ccsHardKeyListener)
+            }
+        }
+    }
+
+    private val ccsHardKeyListener: (Int, Int, Int) -> Unit =
+        { keyCode, keyStatus, keyType ->
+            CcsRememberedSetpoint.onHardKey(keyCode, keyStatus, keyType)
+        }
+
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()
     private val cfgPushScheduleLock = Any()

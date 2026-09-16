@@ -70,7 +70,10 @@ object MbCanEngineFacade {
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
-    private var hardKeyDiagnosticListenerProxy: Any? = null
+    /** Shared OEM hardkey proxy; fans out to production + diagnostic listeners. */
+    private var hardKeyListenerProxy: Any? = null
+    private val hardKeyListenersLock = Any()
+    private val hardKeyListeners = mutableListOf<(keyCode: Int, keyStatus: Int, keyType: Int) -> Unit>()
     @Volatile private var onHardKeyDiagnosticEvent: ((keyCode: Int, keyStatus: Int, keyType: Int) -> Unit)? = null
     /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
     @Volatile private var vehicleListenerWantSteer = false
@@ -1349,23 +1352,79 @@ object MbCanEngineFacade {
         }.getOrDefault(false)
     }
 
+    /**
+     * Register a production hardkey listener (A9 `IMBHardKeyListener`).
+     * Shares one OEM subscription with diagnostics; safe to call repeatedly.
+     */
+    @Synchronized
+    fun addHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            if (hardKeyListeners.none { it === listener }) {
+                hardKeyListeners.add(listener)
+            }
+        }
+        return ensureHardKeyOemRegistered()
+    }
+
+    /** Remove a production hardkey listener; OEM unregisters only when nobody remains. */
+    @Synchronized
+    fun removeHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            hardKeyListeners.removeAll { it === listener }
+        }
+        return maybeUnregisterHardKeyOem()
+    }
+
     @Synchronized
     fun startHardKeyDiagnostics(
         onEvent: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
     ): Result<Unit> {
         onHardKeyDiagnosticEvent = onEvent
-        if (hardKeyDiagnosticListenerProxy != null) return Result.success(Unit)
+        return ensureHardKeyOemRegistered()
+    }
+
+    @Synchronized
+    fun stopHardKeyDiagnostics(): Result<Unit> {
+        onHardKeyDiagnosticEvent = null
+        return maybeUnregisterHardKeyOem()
+    }
+
+    private fun hardKeyHasConsumers(): Boolean {
+        if (onHardKeyDiagnosticEvent != null) return true
+        synchronized(hardKeyListenersLock) {
+            return hardKeyListeners.isNotEmpty()
+        }
+    }
+
+    private fun dispatchHardKey(keyCode: Int, keyStatus: Int, keyType: Int) {
+        val snapshot: List<(Int, Int, Int) -> Unit>
+        synchronized(hardKeyListenersLock) {
+            snapshot = hardKeyListeners.toList()
+        }
+        for (listener in snapshot) {
+            oemSafe("hardKeyListener") { listener(keyCode, keyStatus, keyType) }
+        }
+        oemSafe("hardKeyDiagnostic") {
+            onHardKeyDiagnosticEvent?.invoke(keyCode, keyStatus, keyType)
+        }
+    }
+
+    private fun ensureHardKeyOemRegistered(): Result<Unit> {
+        if (hardKeyListenerProxy != null) return Result.success(Unit)
         val availability = ensureInitialized()
         if (availability !is MbCanAvailability.Available) {
-            onHardKeyDiagnosticEvent = null
             return Result.failure(
-                IllegalStateException((availability as? MbCanAvailability.Unavailable)?.reason ?: "mbCAN unavailable")
+                IllegalStateException(
+                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "mbCAN unavailable",
+                ),
             )
         }
-        val inst = engineInstance ?: run {
-            onHardKeyDiagnosticEvent = null
-            return Result.failure(IllegalStateException("MBCanEngine instance is null"))
-        }
+        val inst = engineInstance
+            ?: return Result.failure(IllegalStateException("MBCanEngine instance is null"))
         return runCatching {
             val iface = Class.forName("com.mengbo.mbCan.interfaces.IMBHardKeyListener")
             val proxy = Proxy.newProxyInstance(
@@ -1384,7 +1443,7 @@ object MbCanEngineFacade {
                             val keyCode = (args?.getOrNull(0) as? Number)?.toInt() ?: return@oemSafe
                             val keyStatus = (args.getOrNull(1) as? Number)?.toInt() ?: return@oemSafe
                             val keyType = (args.getOrNull(2) as? Number)?.toInt() ?: return@oemSafe
-                            onHardKeyDiagnosticEvent?.invoke(keyCode, keyStatus, keyType)
+                            dispatchHardKey(keyCode, keyStatus, keyType)
                         }
                         null
                     }
@@ -1393,19 +1452,17 @@ object MbCanEngineFacade {
             }
             val register = inst.javaClass.getMethod("registHardKeyListener", iface)
             nativeCallLock.withLock { register.invoke(inst, proxy) }
-            hardKeyDiagnosticListenerProxy = proxy
+            hardKeyListenerProxy = proxy
         }.onFailure {
-            hardKeyDiagnosticListenerProxy = null
-            onHardKeyDiagnosticEvent = null
+            hardKeyListenerProxy = null
         }
     }
 
-    @Synchronized
-    fun stopHardKeyDiagnostics(): Result<Unit> {
-        onHardKeyDiagnosticEvent = null
+    private fun maybeUnregisterHardKeyOem(): Result<Unit> {
+        if (hardKeyHasConsumers()) return Result.success(Unit)
         val inst = engineInstance
-        val proxy = hardKeyDiagnosticListenerProxy
-        hardKeyDiagnosticListenerProxy = null
+        val proxy = hardKeyListenerProxy
+        hardKeyListenerProxy = null
         if (inst == null || proxy == null) return Result.success(Unit)
         return runCatching {
             nativeCallLock.withLock {
