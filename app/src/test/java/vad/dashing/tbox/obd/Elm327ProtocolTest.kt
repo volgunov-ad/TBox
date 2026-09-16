@@ -207,6 +207,29 @@ class ObdDtcCatalogTest {
         assertEquals(null, ObdDtcCatalog.description("P9999"))
         ObdDtcCatalog.resetForTests()
     }
+
+    @Test
+    fun assetPath_ruAndEn() {
+        assertEquals("obd/dtc_ru.tsv", ObdDtcCatalog.assetPathForFlavor("ru"))
+        assertEquals("obd/dtc_en.tsv", ObdDtcCatalog.assetPathForFlavor("en"))
+    }
+
+    @Test
+    fun russianAsset_hasTranslatedCommonCodes() {
+        val candidates = listOf(
+            java.io.File("src/main/assets/obd/dtc_ru.tsv"),
+            java.io.File("app/src/main/assets/obd/dtc_ru.tsv"),
+        )
+        val file = candidates.firstOrNull { it.isFile }
+        assertTrue("dtc_ru.tsv not found in $candidates", file != null)
+        val map = ObdDtcCatalog.parseTsv(file!!.readLines().asSequence())
+        assertTrue(map.size > 1000)
+        val p0301 = map["P0301"]
+        assertTrue("P0301 missing", !p0301.isNullOrBlank())
+        assertTrue("P0301 not RU: $p0301", p0301!!.any { it in '\u0400'..'\u04FF' })
+        val p0100 = map["P0100"]!!
+        assertTrue(p0100.contains("расход") || p0100.contains("воздух"))
+    }
 }
 
 class ObdDtcExportTest {

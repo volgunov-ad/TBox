@@ -1,15 +1,21 @@
 package vad.dashing.tbox.obd
 
 import android.content.Context
+import vad.dashing.tbox.BuildConfig
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Generic SAE-style DTC text catalog (English), loaded from `assets/obd/dtc_en.tsv`.
+ * Generic SAE-style DTC text catalog, loaded from assets.
  *
- * Source: mytrile/obd-trouble-codes (MIT). Manufacturer-specific codes may be absent.
+ * - `ru` flavor → [ASSET_RU]
+ * - `en` flavor → [ASSET_EN]
+ *
+ * English source: mytrile/obd-trouble-codes (MIT).
+ * Russian: glossary translation of that catalog (`tools/translate_obd_dtc_ru.py`).
  */
 object ObdDtcCatalog {
-    private const val ASSET_PATH = "obd/dtc_en.tsv"
+    private const val ASSET_EN = "obd/dtc_en.tsv"
+    private const val ASSET_RU = "obd/dtc_ru.tsv"
 
     private val descriptions = AtomicReference<Map<String, String>?>(null)
 
@@ -17,12 +23,23 @@ object ObdDtcCatalog {
 
     fun size(): Int = descriptions.get()?.size ?: 0
 
+    fun assetPathForFlavor(flavor: String = BuildConfig.FLAVOR): String =
+        if (flavor.equals("ru", ignoreCase = true)) ASSET_RU else ASSET_EN
+
     fun ensureLoaded(context: Context) {
         if (descriptions.get() != null) return
         synchronized(this) {
             if (descriptions.get() != null) return
-            val map = context.applicationContext.assets.open(ASSET_PATH).bufferedReader().use { reader ->
-                parseTsv(reader.lineSequence())
+            val assets = context.applicationContext.assets
+            val primary = assetPathForFlavor()
+            val map = runCatching {
+                assets.open(primary).bufferedReader().use { parseTsv(it.lineSequence()) }
+            }.getOrElse {
+                if (primary != ASSET_EN) {
+                    assets.open(ASSET_EN).bufferedReader().use { parseTsv(it.lineSequence()) }
+                } else {
+                    throw it
+                }
             }
             descriptions.set(map)
         }

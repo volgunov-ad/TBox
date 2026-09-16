@@ -2317,7 +2317,7 @@
     <string name="elm327_dtc_export_button">Сохранить в Загрузки (.txt)</string>
     <string name="elm327_dtc_export_error">Не удалось сохранить: %1$s</string>
     <string name="elm327_dtc_desc_missing">нет в каталоге</string>
-    <string name="elm327_dtc_desc_note">Расшифровки — общий SAE-каталог (EN). Коды производителя могут отсутствовать.</string>
+    <string name="elm327_dtc_desc_note">Расшифровки — общий SAE-каталог на русском. Коды производителя могут отсутствовать.</string>
     <string name="elm327_monitor_section_title">Статус мониторов</string>
     <string name="elm327_monitor_section_desc">Mode 01 PID 01 (с момента сброса DTC) и PID 41 (текущий цикл). MIL, число кодов, readiness.</string>
     <string name="elm327_monitor_read_button">Читать статус мониторов</string>
