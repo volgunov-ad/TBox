@@ -94,45 +94,23 @@ class AccCruiseDomainTest {
     }
 
     @Test
-    fun ccsStepDeltaAndBatchSteps() {
-        assertEquals(null, AccCruiseDomain.ccsStepDelta(null, 90))
-        assertEquals(10, AccCruiseDomain.ccsStepDelta(80f, 90))
-        assertEquals(-5, AccCruiseDomain.ccsStepDelta(95f, 90))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(0))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(1))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(-1))
-        assertEquals(2, AccCruiseDomain.ccsBatchSteps(2))
-        assertEquals(5, AccCruiseDomain.ccsBatchSteps(12))
-        assertEquals(5, AccCruiseDomain.ccsBatchSteps(-9))
-        assertEquals(3, AccCruiseDomain.ccsBatchSteps(-3))
+    fun ccsRememberedStepDelta_isTargetMinusSetpoint() {
+        assertNull(AccCruiseDomain.ccsRememberedStepDelta(null, 90))
+        assertEquals(10, AccCruiseDomain.ccsRememberedStepDelta(80, 90))
+        assertEquals(-5, AccCruiseDomain.ccsRememberedStepDelta(95, 90))
+        assertEquals(0, AccCruiseDomain.ccsRememberedStepDelta(90, 90))
     }
 
     @Test
-    fun ccsOvershot_respectsDirectionAndBand() {
-        assertFalse(AccCruiseDomain.ccsOvershot(90f, 90, increasing = true))
-        assertFalse(AccCruiseDomain.ccsOvershot(91f, 90, increasing = true))
-        assertTrue(AccCruiseDomain.ccsOvershot(92f, 90, increasing = true))
-        assertFalse(AccCruiseDomain.ccsOvershot(89f, 90, increasing = false))
-        assertTrue(AccCruiseDomain.ccsOvershot(88f, 90, increasing = false))
-        assertFalse(AccCruiseDomain.ccsOvershot(null, 90, increasing = true))
-    }
-
-    @Test
-    fun ccsSpeedUnchanged_usesOneKmhWindow() {
-        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 90.4f))
-        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 89.1f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, 91.5f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(null, 90f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, null))
-    }
-
-    @Test
-    fun isCcsActiveAtTarget_requiresActiveStatusAndSpeed() {
-        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(2, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90f, 90))
+    fun isCcsActiveAtTarget_prefersRememberedSetpoint() {
+        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90, 80f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(2, 90, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90, 90f, 90))
+        // Fallback to vehicle-speed band only when memory is empty.
+        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, null, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, null, 80f, 90))
     }
 
     @Test

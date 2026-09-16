@@ -173,7 +173,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 ### CCS (обычный круиз, без ACC)
 
-Цикл converge: замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**; затем post-verify **1 с** и догон при уходе. Запуск: после enable+SET− из Off/Standby (ждём Active), или сразу converge из Active если скорость ≠ уставке. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
+Цикл converge шагает сессионную **запомненную уставку** (`CcsRememberedSetpoint`) к цели виджета — тот же смысл, что `VSetDis` у ACC. **Не** использует текущую скорость автомобиля как обратную связь: машина отстаёт от внутренней уставки CCS, и старый speed-based batch (пачки до 5×±1 по `carSpeed`) «выкручивал» stalk дальше цели. После SET− baseline = текущая скорость; каждый RES+/SET− nudges remembered ±1; стоп при `remembered == target` (таймаут **30 с**). Затем post-verify **1 с** и догон по remembered. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
 **Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами. Пишется при SET− с виджета / входе в Active с руля (если пусто или скорость дальше **2 км/ч** от прежней — новый SET; иначе RES и keep), при stalk ±1 после settle **500 мс**, при завершении CCS converge. **Active→Standby** сохраняет; **Off (0)** и unbind очищают. Окно «наш импульс» **2 с** после MFS с виджета подавляет stalk-эвристику. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
 
@@ -181,7 +181,8 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | **0** Off, **1** Active, **2** Standby; key-mode on ∈ **{1,2}**; identity | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
 | **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
-| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1; пачки до 5×±1; verify 2 с / post-batch 1 с | — | — | — |
+| Скорость для baseline SET− | `TripTelemetryRepository.carSpeed` (HU) | float км/ч; только захват remembered при SET− / пустой памяти | — | — | — |
+| Обратная связь converge | `CcsRememberedSetpoint` (сессия) | exact ±1 как ACC VSetDis; **не** live `carSpeed` | — | — | — |
 
 ### Команды MFS (импульсы)
 

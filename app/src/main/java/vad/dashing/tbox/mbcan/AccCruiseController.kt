@@ -24,7 +24,7 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  *
  * Logical states: Off / Standby / Active / Fault (see [AccCruiseDomain.cruiseLogicalState]).
  * Road-proven MFS: **210** = full off from Active; **212** = pause Active?Standby;
- * **214** SET? activates from Standby; ACC/CCS converge loops unchanged.
+ * **214** SET? activates from Standby; ACC steps VSetDis, CCS steps remembered setpoint.
  */
 object AccCruiseController {
     private const val LOG_TAG = "AccCruise"
@@ -335,6 +335,7 @@ object AccCruiseController {
             accMode = UniversalCanRepository.accCruiseMode.value,
             vSetDisKmh = UniversalCanRepository.accCruiseVSetDisKmh.value,
             ccsStatus = UniversalCanRepository.ccsCruiseStatus.value,
+            rememberedSetpointKmh = CcsRememberedSetpoint.kmh.value,
             vehicleSpeedKmh = TripTelemetryRepository.carSpeed.value,
             targetKmh = target,
         )
@@ -535,138 +536,60 @@ object AccCruiseController {
             return
         }
 
-        // Batch converge loop (unchanged algorithm).
-        val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
-        while (isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed) {
-            if (convergeAbortedByDriver(useAcc = false)) {
-                debug("ccsConverge abort_driver ${signalSnapshot()}")
-                return
-            }
-
-            val speed = TripTelemetryRepository.carSpeed.value
-            if (speed == null || !speed.isFinite()) {
-                delay(AccCruiseDomain.STATE_POLL_MS)
-                continue
-            }
-
-            // 1) Already in band: wait verify, recheck, stop or restart measure.
-            if (AccCruiseDomain.isVehicleSpeedAtTarget(speed, target)) {
-                if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_AT_TARGET_VERIFY_MS)) {
-                    debug("ccsConverge verify_aborted ${signalSnapshot()}")
-                    return
-                }
-                if (convergeAbortedByDriver(useAcc = false)) {
-                    debug("ccsConverge abort_driver ${signalSnapshot()}")
-                    return
-                }
-                if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
-                    debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
-                    CcsRememberedSetpoint.remember(target, "ccs_converge_done")
-                    runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
-                    return
-                }
-                continue
-            }
-
-            val delta = AccCruiseDomain.ccsStepDelta(speed, target)
-            if (delta == null) {
-                delay(AccCruiseDomain.STATE_POLL_MS)
-                continue
-            }
-            val steps = AccCruiseDomain.ccsBatchSteps(delta)
-            if (steps <= 0) {
-                delay(AccCruiseDomain.STATE_POLL_MS)
-                continue
-            }
-            val increasing = delta > 0
-
-            // 2) Pulse batch of ?1 (up to 5); overshoot ? restart measure.
-            var overshot = false
-            for (i in 0 until steps) {
-                if (!isCurrentGeneration(generation) || System.currentTimeMillis() >= deadlineElapsed) {
-                    debug("ccsConverge batch_stop gen/deadline ${signalSnapshot()}")
-                    return
-                }
-                if (convergeAbortedByDriver(useAcc = false)) {
-                    debug("ccsConverge abort_driver ${signalSnapshot()}")
-                    return
-                }
-                CcsRememberedSetpoint.markOurPulse()
-                if (increasing) {
-                    pulseResPlus()
-                    if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
-                        debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
-                        return
-                    }
-                } else {
-                    pulseSetMinus()
-                    if (!delayWhileConverging(generation, useAcc = false, decreaseMs)) {
-                        debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
-                        return
-                    }
-                }
-                if (AccCruiseDomain.ccsOvershot(TripTelemetryRepository.carSpeed.value, target, increasing)) {
-                    overshot = true
-                    debug("ccsConverge overshoot speed=${TripTelemetryRepository.carSpeed.value}")
-                    break
-                }
-            }
-            if (overshot) continue
-            if (!isCurrentGeneration(generation) || System.currentTimeMillis() >= deadlineElapsed) {
-                debug("ccsConverge stop gen/deadline ${signalSnapshot()}")
-                return
-            }
-
-            // 3) Wait 1s; branch on in-band / unchanged / still moving.
-            val waitStart = TripTelemetryRepository.carSpeed.value
-            if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
-                debug("ccsConverge post_batch_aborted ${signalSnapshot()}")
-                return
-            }
-            if (convergeAbortedByDriver(useAcc = false)) {
-                debug("ccsConverge abort_driver ${signalSnapshot()}")
-                return
-            }
-            val waitEnd = TripTelemetryRepository.carSpeed.value
-            if (AccCruiseDomain.isVehicleSpeedAtTarget(waitEnd, target)) {
-                if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
-                    debug("ccsConverge post_verify_aborted ${signalSnapshot()}")
-                    return
-                }
-                if (convergeAbortedByDriver(useAcc = false)) {
-                    debug("ccsConverge abort_driver ${signalSnapshot()}")
-                    return
-                }
-                if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
-                    debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
-                    CcsRememberedSetpoint.remember(target, "ccs_converge_done")
-                    runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
-                    return
-                }
-                continue
-            }
-            if (AccCruiseDomain.ccsSpeedUnchanged(waitStart, waitEnd)) {
-                continue
-            }
-
-            // 4) Still moving toward target: one more 1s patience, then restart measure.
-            if (!ccsWaitWhileAlive(generation, deadlineElapsed, AccCruiseDomain.CCS_POST_BATCH_WAIT_MS)) {
-                debug("ccsConverge patience_aborted ${signalSnapshot()}")
-                return
-            }
-            if (convergeAbortedByDriver(useAcc = false)) {
-                debug("ccsConverge abort_driver ${signalSnapshot()}")
-                return
-            }
-            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
-                debug("ccsConverge done_in_band speed=${TripTelemetryRepository.carSpeed.value}")
-                CcsRememberedSetpoint.remember(target, "ccs_converge_done")
-                runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
+        // Baseline for stepping: remembered setpoint is the CCS analog of ACC VSetDis.
+        // Never use live vehicle speed as the control PV — the car lags and windup follows.
+        if (CcsRememberedSetpoint.kmh.value == null) {
+            if (!CcsRememberedSetpoint.captureFromVehicleSpeed("ccs_converge_baseline")) {
+                debug("ccsConverge no_baseline_speed ${signalSnapshot()}")
                 return
             }
         }
-        debug("ccsConverge end timeout_or_cancel ${signalSnapshot()}")
-        if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = false)) return
+
+        val current = CcsRememberedSetpoint.kmh.value
+        if (current != null && current == target) {
+            debug("ccsConverge already_at_target remembered=$current")
+            runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
+            return
+        }
+
+        val deadlineElapsed = System.currentTimeMillis() + AccCruiseDomain.CCS_CONVERGE_TIMEOUT_MS
+        while (
+            isCurrentGeneration(generation) &&
+            System.currentTimeMillis() < deadlineElapsed &&
+            !convergeAbortedByDriver(useAcc = false)
+        ) {
+            val setpoint = CcsRememberedSetpoint.kmh.value ?: break
+            if (setpoint == target) break
+            CcsRememberedSetpoint.markOurPulse()
+            if (setpoint < target) {
+                CcsRememberedSetpoint.nudgeBy(1, "ccs_converge_res")
+                pulseResPlus()
+                if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
+                    debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
+                    return
+                }
+            } else {
+                CcsRememberedSetpoint.nudgeBy(-1, "ccs_converge_set")
+                pulseSetMinus()
+                if (!delayWhileConverging(generation, useAcc = false, decreaseMs)) {
+                    debug("ccsConverge abort_driver_during_step ${signalSnapshot()}")
+                    return
+                }
+            }
+        }
+        debug(
+            "ccsConverge end genOk=${isCurrentGeneration(generation)} " +
+                "remembered=${CcsRememberedSetpoint.kmh.value} target=$target",
+        )
+        if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = false)) {
+            if (convergeAbortedByDriver(useAcc = false)) {
+                debug("ccsConverge abort_driver ${signalSnapshot()}")
+            }
+            return
+        }
+        if (CcsRememberedSetpoint.kmh.value == target) {
+            CcsRememberedSetpoint.remember(target, "ccs_converge_done")
+        }
         runPostConvergeVerify(generation, useAcc = false, target, increaseMs, decreaseMs)
     }
 
@@ -743,43 +666,54 @@ object AccCruiseController {
                     "vSet=${UniversalCanRepository.accCruiseVSetDisKmh.value} target=$target",
             )
         } else {
-            if (AccCruiseDomain.isVehicleSpeedAtTarget(TripTelemetryRepository.carSpeed.value, target)) {
-                debug("postVerify ok speed=${TripTelemetryRepository.carSpeed.value}")
+            val remembered = CcsRememberedSetpoint.kmh.value
+            if (remembered != null && remembered == target) {
+                debug("postVerify ok remembered=$remembered")
                 return
             }
-            val delta = AccCruiseDomain.ccsStepDelta(TripTelemetryRepository.carSpeed.value, target)
+            val delta = AccCruiseDomain.ccsRememberedStepDelta(remembered, target)
             if (delta == null) {
-                debug("postVerify catchup_ccs no_speed ${signalSnapshot()}")
+                debug("postVerify catchup_ccs no_remembered ${signalSnapshot()}")
                 return
             }
-            val steps = AccCruiseDomain.ccsBatchSteps(delta)
-                .coerceAtMost(AccCruiseDomain.POST_CONVERGE_CATCHUP_MAX_STEPS)
-            if (steps <= 0) {
-                debug("postVerify catchup_ccs in_band_or_small_delta delta=$delta")
+            if (delta == 0) {
+                debug("postVerify catchup_ccs already_at_target")
                 return
             }
-            val increasing = delta > 0
-            debug("postVerify catchup_ccs steps=$steps increasing=$increasing ${signalSnapshot()}")
-            for (i in 0 until steps) {
-                if (!isCurrentGeneration(generation) || convergeAbortedByDriver(useAcc = false)) {
-                    debug("postVerify abort_driver_catchup ${signalSnapshot()}")
+            debug("postVerify catchup_ccs delta=$delta ${signalSnapshot()}")
+            var steps = 0
+            while (
+                isCurrentGeneration(generation) &&
+                !convergeAbortedByDriver(useAcc = false) &&
+                steps < AccCruiseDomain.POST_CONVERGE_CATCHUP_MAX_STEPS
+            ) {
+                val setpoint = CcsRememberedSetpoint.kmh.value ?: break
+                if (setpoint == target) {
+                    debug("postVerify catchup_ccs done remembered=$setpoint")
                     return
                 }
-                if (increasing) {
+                CcsRememberedSetpoint.markOurPulse()
+                if (setpoint < target) {
+                    CcsRememberedSetpoint.nudgeBy(1, "ccs_post_verify_res")
                     pulseResPlus()
                     if (!delayWhileConverging(generation, useAcc = false, increaseMs)) {
                         debug("postVerify abort_driver_catchup ${signalSnapshot()}")
                         return
                     }
                 } else {
+                    CcsRememberedSetpoint.nudgeBy(-1, "ccs_post_verify_set")
                     pulseSetMinus()
                     if (!delayWhileConverging(generation, useAcc = false, decreaseMs)) {
                         debug("postVerify abort_driver_catchup ${signalSnapshot()}")
                         return
                     }
                 }
+                steps++
             }
-            debug("postVerify catchup_ccs end speed=${TripTelemetryRepository.carSpeed.value}")
+            debug(
+                "postVerify catchup_ccs end steps=$steps " +
+                    "remembered=${CcsRememberedSetpoint.kmh.value} target=$target",
+            )
         }
     }
 
@@ -804,20 +738,6 @@ object AccCruiseController {
         }
         debug("$tag refreshed ${signalSnapshot()}")
         return true
-    }
-
-    /** Delay up to [durationMs] while generation and deadline remain valid; false if aborted by time. */
-    private suspend fun ccsWaitWhileAlive(
-        generation: Int,
-        deadlineElapsed: Long,
-        durationMs: Long,
-    ): Boolean {
-        val endAt = minOf(deadlineElapsed, System.currentTimeMillis() + durationMs)
-        while (isCurrentGeneration(generation) && System.currentTimeMillis() < endAt) {
-            if (convergeAbortedByDriver(useAcc = false)) return false
-            delay(AccCruiseDomain.STATE_POLL_MS)
-        }
-        return isCurrentGeneration(generation) && System.currentTimeMillis() < deadlineElapsed
     }
 
     /**

@@ -32,8 +32,11 @@ enum class CruiseLogicalState {
  * gas override (ACC cannot brake while pedal held) is mode 7.
  * Conventional CCS: Gasped / EMS [CruiseControlStatus] — 0=Off, 1=Active, 2=Standby (ICM lamp hint).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
- * CCS converge: vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) in batches of up to
- * [CCS_BATCH_MAX_STEPS] with post-batch waits — not TBox cruiseSetSpeed.
+ *
+ * CCS converge steps the session [CcsRememberedSetpoint] toward the widget target
+ * (same role as ACC VSetDis). Vehicle speed is *not* used as control feedback —
+ * the car lags behind the CCS setpoint, so speed-based batches wind the stalk past the target.
+ * TBox cruiseSetSpeed is not used.
  */
 object AccCruiseDomain {
     const val MFS_PULSE_VALUE = 1
@@ -87,20 +90,14 @@ object AccCruiseDomain {
     /** Wait for ACC to become engaged after enable / SET pulse. */
     const val ENGAGE_TIMEOUT_MS = 4_000L
 
-    /** CCS: max time to converge vehicle speed to widget target after SET-. */
+    /** CCS: safety deadline for remembered-setpoint stepping after SET-. */
     const val CCS_CONVERGE_TIMEOUT_MS = 30_000L
 
-    /** CCS: treat vehicle speed as matching widget target within this band (km/h). */
+    /**
+     * Fallback only: when remembered CCS setpoint is unknown, treat vehicle speed as
+     * matching the widget target within this band (km/h).
+     */
     const val CCS_SPEED_TOLERANCE_KMH = 1
-
-    /** CCS: max ±1 km/h pulses per batch (actual steps = min of this and |delta|). */
-    const val CCS_BATCH_MAX_STEPS = 5
-
-    /** CCS: when already in-band at measure, wait this long then recheck. */
-    const val CCS_AT_TARGET_VERIFY_MS = 2_000L
-
-    /** CCS: wait after a pulse batch (and for follow-up patience / verify). */
-    const val CCS_POST_BATCH_WAIT_MS = 1_000L
 
     /**
      * After ACC/CCS converge ends, wait this long then re-check setpoint
@@ -261,13 +258,24 @@ object AccCruiseDomain {
     fun isActiveAtTarget(accMode: Int?, vSetDisKmh: Int?, targetKmh: Int): Boolean =
         isEngaged(accMode) && vSetDisKmh != null && vSetDisKmh == normalizeAccCruiseTargetKmh(targetKmh)
 
+    /**
+     * CCS Active and already at the widget target.
+     *
+     * Prefers the session [rememberedSetpointKmh] (exact match, like ACC VSetDis).
+     * Falls back to vehicle-speed band only when memory is empty.
+     */
     fun isCcsActiveAtTarget(
         cruiseControlStatus: Int?,
+        rememberedSetpointKmh: Int?,
         vehicleSpeedKmh: Float?,
         targetKmh: Int,
     ): Boolean {
         if (!isCcsActive(cruiseControlStatus)) return false
-        return isVehicleSpeedAtTarget(vehicleSpeedKmh, targetKmh)
+        val target = normalizeAccCruiseTargetKmh(targetKmh)
+        if (rememberedSetpointKmh != null) {
+            return rememberedSetpointKmh == target
+        }
+        return isVehicleSpeedAtTarget(vehicleSpeedKmh, target)
     }
 
     fun isAtWidgetTarget(
@@ -275,12 +283,13 @@ object AccCruiseDomain {
         accMode: Int?,
         vSetDisKmh: Int?,
         ccsStatus: Int?,
+        rememberedSetpointKmh: Int?,
         vehicleSpeedKmh: Float?,
         targetKmh: Int,
     ): Boolean = if (useAccPath) {
         isActiveAtTarget(accMode, vSetDisKmh, targetKmh)
     } else {
-        isCcsActiveAtTarget(ccsStatus, vehicleSpeedKmh, targetKmh)
+        isCcsActiveAtTarget(ccsStatus, rememberedSetpointKmh, vehicleSpeedKmh, targetKmh)
     }
 
     fun isVehicleSpeedAtTarget(vehicleSpeedKmh: Float?, targetKmh: Int): Boolean {
@@ -291,45 +300,13 @@ object AccCruiseDomain {
     }
 
     /**
-     * Signed km/h delta from rounded vehicle speed to widget target.
-     * Positive = need to increase cruise setpoint; null if speed unknown.
+     * Signed km/h delta from remembered CCS setpoint to widget target.
+     * Positive = need RES+; null if setpoint unknown.
      */
-    fun ccsStepDelta(vehicleSpeedKmh: Float?, targetKmh: Int): Int? {
-        val speed = vehicleSpeedKmh ?: return null
-        if (!speed.isFinite()) return null
+    fun ccsRememberedStepDelta(rememberedSetpointKmh: Int?, targetKmh: Int): Int? {
+        val setpoint = rememberedSetpointKmh ?: return null
         val target = normalizeAccCruiseTargetKmh(targetKmh)
-        return target - speed.roundToInt()
-    }
-
-    /** Number of ±1 pulses in the next batch: min([CCS_BATCH_MAX_STEPS], |delta|), 0 if in band. */
-    fun ccsBatchSteps(delta: Int): Int {
-        val absDelta = abs(delta)
-        if (absDelta <= CCS_SPEED_TOLERANCE_KMH) return 0
-        return minOf(CCS_BATCH_MAX_STEPS, absDelta)
-    }
-
-    /**
-     * True when speed has crossed past the target band in the step direction.
-     * [increasing] true = RES+ direction; false = SET− direction.
-     */
-    fun ccsOvershot(vehicleSpeedKmh: Float?, targetKmh: Int, increasing: Boolean): Boolean {
-        val speed = vehicleSpeedKmh ?: return false
-        if (!speed.isFinite()) return false
-        val target = normalizeAccCruiseTargetKmh(targetKmh)
-        val rounded = speed.roundToInt()
-        return if (increasing) {
-            rounded > target + CCS_SPEED_TOLERANCE_KMH
-        } else {
-            rounded < target - CCS_SPEED_TOLERANCE_KMH
-        }
-    }
-
-    /** True when speed did not meaningfully move over a wait window (|end-start| < 1 km/h). */
-    fun ccsSpeedUnchanged(startKmh: Float?, endKmh: Float?): Boolean {
-        val start = startKmh ?: return false
-        val end = endKmh ?: return false
-        if (!start.isFinite() || !end.isFinite()) return false
-        return abs(end - start) < 1f
+        return target - setpoint
     }
 
     /** mbCAN FRM byte is displayed km/h (unsigned). */
