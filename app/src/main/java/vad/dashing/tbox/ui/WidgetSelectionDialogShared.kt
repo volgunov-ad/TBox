@@ -193,6 +193,8 @@ import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
 val WidgetDialogDropdownSelectorWidth = 300.dp
+/** Wider selector for long OBD PID labels (+ discovery hints) in Additional. */
+val WidgetDialogObdPidDropdownSelectorWidth = 480.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
@@ -2911,7 +2913,7 @@ internal fun WidgetSelectionDialogForm(
                             },
                             enabled = state.togglesEnabled,
                             options = pidOptions,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                            selectorWidth = WidgetDialogObdPidDropdownSelectorWidth,
                         )
                     }
                     if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
