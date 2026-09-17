@@ -645,7 +645,6 @@
     <string name="settings_auto_prevent_restart_swd_title">Automatically send PREVENT RESTART command to SWD on TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Disables network and anomaly checks in TBox operation. These checks can cause extra reboots.</string>
 
-    <string name="settings_floating_panels_title">Floating panels settings</string>
     <string name="settings_show_floating_panel_title">Show floating panel</string>
     <string name="settings_enable_floating_bg_title">Enable floating panel background</string>
     <string name="settings_enable_floating_bg_desc">If disabled, the background is transparent</string>
@@ -712,9 +711,9 @@
     <string name="settings_main_screen_canvas_bg_light">Background color (light theme)</string>
     <string name="settings_main_screen_canvas_bg_dark">Background color (dark theme)</string>
     <string name="settings_main_screen_canvas_bg_reset">Reset main screen background colors</string>
-    <string name="settings_main_screen_corner_buttons_title">Settings and Add widget buttons</string>
     <string name="settings_main_screen_corner_buttons_size">Button size: %1$d</string>
     <string name="settings_main_screen_corner_buttons_size_hint">Main-screen button diameter in dp (10…100; default 32).</string>
+    <string name="settings_main_screen_corner_buttons_applies_desc">Size and colors apply to all main-screen corner buttons: Settings, Add widget, wallpaper paging arrows, and the window-mode buttons — X (close) and square (restore fullscreen).</string>
     <string name="settings_main_screen_corner_buttons_bg_light">Background color (light theme)</string>
     <string name="settings_main_screen_corner_buttons_bg_dark">Background color (dark theme)</string>
     <string name="settings_main_screen_corner_buttons_icon_light">Icon color (light theme)</string>
@@ -1219,7 +1218,15 @@
     <string name="left_menu_config_dialog_hint">Check the items to show and drag the list icon to reorder. Settings and Main screen settings are always enabled.</string>
     <string name="left_menu_config_drag_handle_a11y">Drag menu item</string>
 
-    <string name="settings_misc_title">Misc</string>
+    <string name="settings_tab_car">Car</string>
+    <string name="settings_tab_trips">Trips</string>
+    <string name="settings_tab_interface">Interface</string>
+    <string name="settings_tab_system">System</string>
+    <string name="settings_tab_panels">Panels</string>
+    <string name="settings_tab_common">General</string>
+    <string name="settings_tab_buttons">Buttons</string>
+    <string name="settings_trips_fuel_title">Trips and fuel</string>
+    <string name="settings_expert_section_title">Expert mode and diagnostics</string>
     <string name="key_press_diagnostics_open">Steering wheel key test</string>
     <string name="key_press_diagnostics_title">Steering wheel and stalk key test</string>
     <string name="key_press_diagnostics_desc">Press one key at a time. While this window is open, the app records mbCAN/VHAL events and regular Android KeyEvents. Subscription errors are also shown in the log.</string>

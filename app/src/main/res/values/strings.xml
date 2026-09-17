@@ -648,7 +648,6 @@
     <string name="settings_auto_prevent_restart_swd_title">Автоматическая отправка команды PREVENT RESTART приложению SWD в TBox</string>
     <string name="settings_auto_prevent_restart_swd_desc">Отключение проверки состояния сети и аномалий в работе TBox. Эти проверки могут приводить к лишним перезагрузкам</string>
 
-    <string name="settings_floating_panels_title">Настройки плавающих панелей</string>
     <string name="settings_show_floating_panel_title">Показывать плавающую панель</string>
     <string name="settings_enable_floating_bg_title">Включить фон плавающей панели</string>
     <string name="settings_enable_floating_bg_desc">Если выключено, то фон будет прозрачный</string>
@@ -715,9 +714,9 @@
     <string name="settings_main_screen_canvas_bg_light">Цвет фона (светлая тема)</string>
     <string name="settings_main_screen_canvas_bg_dark">Цвет фона (тёмная тема)</string>
     <string name="settings_main_screen_canvas_bg_reset">Сбросить цвета фона экрана</string>
-    <string name="settings_main_screen_corner_buttons_title">Кнопки «Настройки» и «Добавить виджет»</string>
     <string name="settings_main_screen_corner_buttons_size">Размер кнопок: %1$d</string>
     <string name="settings_main_screen_corner_buttons_size_hint">Диаметр кнопок на главном экране в dp (10…100; по умолчанию 32).</string>
+    <string name="settings_main_screen_corner_buttons_applies_desc">Размер и цвета применяются ко всем угловым кнопкам главного экрана: «Настройки», «Добавить виджет», стрелкам перелистывания фоновых картинок, а также кнопкам оконного режима — крестик (закрыть) и квадрат (вернуть полноэкранный режим).</string>
     <string name="settings_main_screen_corner_buttons_bg_light">Цвет фона (светлая тема)</string>
     <string name="settings_main_screen_corner_buttons_bg_dark">Цвет фона (тёмная тема)</string>
     <string name="settings_main_screen_corner_buttons_icon_light">Цвет значка (светлая тема)</string>
@@ -1227,7 +1226,15 @@
     <string name="left_menu_config_dialog_hint">Отметьте нужные пункты и перетащите за значок списка, чтобы изменить порядок. «Настройки» и «Настройки главного экрана» всегда включены.</string>
     <string name="left_menu_config_drag_handle_a11y">Перетащить пункт меню</string>
 
-    <string name="settings_misc_title">Прочее</string>
+    <string name="settings_tab_car">Автомобиль</string>
+    <string name="settings_tab_trips">Поездки</string>
+    <string name="settings_tab_interface">Интерфейс</string>
+    <string name="settings_tab_system">Система</string>
+    <string name="settings_tab_panels">Панели</string>
+    <string name="settings_tab_common">Общие</string>
+    <string name="settings_tab_buttons">Кнопки</string>
+    <string name="settings_trips_fuel_title">Поездки и топливо</string>
+    <string name="settings_expert_section_title">Экспертный режим и диагностика</string>
     <string name="key_press_diagnostics_open">Тест кнопок руля</string>
     <string name="key_press_diagnostics_title">Тест кнопок руля и подрулевых переключателей</string>
     <string name="key_press_diagnostics_desc">Нажимайте кнопки по одной. Пока окно открыто, приложение записывает события mbCAN/VHAL и обычные Android KeyEvent. Ошибки подписки также отображаются в журнале.</string>
