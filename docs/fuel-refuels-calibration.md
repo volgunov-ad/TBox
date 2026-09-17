@@ -73,6 +73,7 @@
 - **Фактические литры** (`actualLiters`) — например, по чеку АЗС вместо оценки по процентам.
 - **Температура при заправке** — для корректного обучения калибровки, если автоматическое значение нужно исправить.
 - Остальные поля (тип топлива, цена и т.д.) — учёт стоимости и отображение.
+- **«Обновить данные по заправке»** — ручной повторный запрос цен Multigo для записей без `pricePerLiterRub` (`ACTION_REFRESH_REFUEL_PRICES`): координаты из записи или текущий фикс; при успехе пересчитывается `costRub` и дельта `TripRecord.fuelRefueledCostRub`.
 
 Для **обучения** сервис использует **`actualLiters`** как «литры по чеку» и температуру из **`ambientTempForCalibrationC()`** (сохранённая температура или **15 °C**, если в записи `null`).
 
@@ -204,7 +205,7 @@
 
 | Область | Файлы / пакет |
 |---------|----------------|
-| Запись заправки, JSON списка | `Refuel.kt`, `RefuelRepository`, `BackgroundService.applyActiveTripFuelStep`, `scheduleRefuelCostUpdate` |
+| Запись заправки, JSON списка | `Refuel.kt`, `RefuelRepository`, `BackgroundService.applyActiveTripFuelStep`, `scheduleRefuelCostUpdate`, `refreshMissingRefuelPrices` (`ACTION_REFRESH_REFUEL_PRICES`) |
 | Учёт топлива по поездке | `TripFuelAccounting.kt` (`applyFuelCalibratedLitersStep`) |
 | Калибровка | `fuellevelcalibration/*`, в т.ч. `FuelSmartEstimator`, `FuelPhysics`, `CalibrationStore`, `FuelCalibrationJson`, `FuelFilter` |
 | Настройки и сбросы | `Settings.kt` (`saveFuelTankLitersAndClearFuelCalibration`, …), `AppDataViewModels.kt` |

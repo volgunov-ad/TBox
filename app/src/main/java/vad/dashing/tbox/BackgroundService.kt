@@ -118,6 +118,7 @@ import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
 import vad.dashing.tbox.fuel.FuelPriceClient
 import vad.dashing.tbox.fuel.FuelPriceResult
+import vad.dashing.tbox.fuel.RefuelPriceRefresh
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.fuel.RefuelRecord
@@ -241,6 +242,7 @@ class BackgroundService : Service() {
     private lateinit var trackRefuelsSetting: StateFlow<Boolean>
     private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
+    private val refreshRefuelPricesInFlight = AtomicBoolean(false)
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -498,6 +500,8 @@ class BackgroundService : Service() {
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
         /** Обучение калибровки уровня топлива по одной записи заправки ([EXTRA_REFUEL_ID]). */
         const val ACTION_FUEL_CALIBRATION_TRAIN = "vad.dashing.tbox.FUEL_CALIBRATION_TRAIN"
+        /** Manual Multigo price refresh for refuels that still lack a price (F-01). */
+        const val ACTION_REFRESH_REFUEL_PRICES = "vad.dashing.tbox.REFRESH_REFUEL_PRICES"
         const val EXTRA_REFUEL_ID = "vad.dashing.tbox.EXTRA_REFUEL_ID"
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
@@ -1268,6 +1272,7 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
+            ACTION_REFRESH_REFUEL_PRICES -> refreshMissingRefuelPrices()
             ACTION_STOP -> performServiceStopIfRunning()
             ACTION_SEND_AT -> {
                 val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
@@ -2991,6 +2996,113 @@ class BackgroundService : Service() {
             )
             maybePersistTrips(force = true)
             showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+        }
+    }
+
+    /**
+     * Manual refresh (F-01): for each refuel still missing a Multigo price, fetch once using
+     * stored coordinates (or a live fix if the row has none) and apply trip cost delta.
+     */
+    private fun refreshMissingRefuelPrices() {
+        if (!refreshRefuelPricesInFlight.compareAndSet(false, true)) {
+            showRefuelToast(getString(R.string.toast_refuel_price_refresh_busy))
+            return
+        }
+        scope.launch {
+            try {
+                val candidates = RefuelPriceRefresh.missingPriceCandidates(RefuelRepository.refuels.value)
+                if (candidates.isEmpty()) {
+                    showRefuelToast(getString(R.string.toast_refuel_price_refresh_nothing))
+                    return@launch
+                }
+                showRefuelToast(getString(R.string.toast_refuel_searching_fuel_price))
+                var updated = 0
+                var failed = 0
+                val liveCoords = currentFuelCoordinatesOrNull()
+                for (refuel in candidates) {
+                    val coordinates = RefuelPriceRefresh.coordinatesOf(refuel) ?: liveCoords
+                    if (coordinates == null) {
+                        failed++
+                        TboxRepository.addLog(
+                            "WARN",
+                            "Fuel price",
+                            "Refresh skip ${refuel.id}: no coordinates",
+                        )
+                        continue
+                    }
+                    val price = try {
+                        withContext(Dispatchers.IO) {
+                            fuelPriceClient.fetchPrice(coordinates, refuel.fuelId)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        TboxRepository.addLog(
+                            "WARN",
+                            "Fuel price",
+                            "Refresh fetch failed ${refuel.id}: ${e.message}",
+                        )
+                        null
+                    }
+                    if (price == null) {
+                        failed++
+                        continue
+                    }
+                    val previousCost = refuel.costRub
+                    val newCost = FuelCostAccounting.refuelCostRub(
+                        refuel.actualLiters,
+                        price.pricePerLiterRub,
+                    )
+                    val latest = RefuelRepository.refuels.value.firstOrNull { it.id == refuel.id }
+                        ?: continue
+                    RefuelRepository.replaceRefuel(
+                        latest.copy(
+                            latitude = coordinates.latitude,
+                            longitude = coordinates.longitude,
+                            pricePerLiterRub = price.pricePerLiterRub,
+                            priceSourceName = price.sourceName,
+                            costRub = newCost,
+                        )
+                    )
+                    val tripId = latest.tripId
+                    if (tripId != null) {
+                        val trip = TripRepository.trips.value.firstOrNull { it.id == tripId }
+                        if (trip != null) {
+                            val delta = FuelCostAccounting.tripFuelCostDeltaRub(previousCost, newCost)
+                            if (delta != 0f) {
+                                TripRepository.replaceTrip(
+                                    trip.copy(
+                                        fuelRefueledCostRub =
+                                            (trip.fuelRefueledCostRub + delta).coerceAtLeast(0f),
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    updated++
+                    TboxRepository.addLog(
+                        "INFO",
+                        "Fuel price",
+                        "Refresh ${refuel.id}: ${price.pricePerLiterRub} RUB/L (${price.sourceName})",
+                    )
+                }
+                maybePersistRefuels(force = true)
+                if (updated > 0) {
+                    maybePersistTrips(force = true)
+                }
+                when {
+                    updated > 0 && failed == 0 ->
+                        showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+                    updated > 0 ->
+                        showRefuelToast(
+                            getString(R.string.toast_refuel_price_refresh_partial, updated, failed),
+                        )
+                    else ->
+                        showRefuelToast(getString(R.string.toast_refuel_fuel_price_not_found))
+                }
+            } finally {
+                refreshRefuelPricesInFlight.set(false)
+            }
         }
     }
 

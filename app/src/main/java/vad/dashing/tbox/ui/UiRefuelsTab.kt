@@ -85,6 +85,7 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.fuel.FuelTypeOption
 import vad.dashing.tbox.fuel.FuelTypes
+import vad.dashing.tbox.fuel.RefuelPriceRefresh
 import vad.dashing.tbox.R
 import vad.dashing.tbox.fuel.RefuelRecord
 import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
@@ -171,9 +172,23 @@ fun RefuelsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val hasMissingPrice = remember(refuels) {
+                    RefuelPriceRefresh.missingPriceCandidates(refuels).isNotEmpty()
+                }
+                Button(
+                    enabled = hasMissingPrice,
+                    onClick = rememberWrappedOnClick {
+                        onServiceCommand(BackgroundService.ACTION_REFRESH_REFUEL_PRICES, "", "")
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.refuels_refresh_prices),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
                 Button(
                     enabled = refuels.isNotEmpty(),
                     onClick = rememberWrappedOnClick { showExportDialog = true },
