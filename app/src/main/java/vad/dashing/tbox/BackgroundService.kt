@@ -6471,6 +6471,13 @@ class BackgroundService : Service() {
                 return
             }
             val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
+            // Keep the user-configured delay inside the episode budget: pending deadline is
+            // marked at BOOT_COMPLETED (+30 s only), so delays > 30 s would expire the episode
+            // before the first attempt without this extension.
+            MainScreenBootOpenStore.extendDeadlineTo(
+                this@BackgroundService,
+                MainScreenBootOpenPolicy.newDeadlineWithInitialDelayMs(delaySeconds * 1000L),
+            )
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
             val source = MainScreenBootOpenStore.sourceAction(this@BackgroundService)
                 .ifBlank { "?" }

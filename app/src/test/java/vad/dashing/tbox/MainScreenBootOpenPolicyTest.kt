@@ -35,4 +35,37 @@ class MainScreenBootOpenPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun episodeDeadline_includesInitialDelay() {
+        val start = 10_000L
+        val delayMs = 60_000L
+        val deadline = MainScreenBootOpenPolicy.newDeadlineWithInitialDelayMs(
+            initialDelayMs = delayMs,
+            nowElapsedRealtimeMs = start,
+        )
+        assertEquals(start + delayMs + MainScreenBootOpenPolicy.MAX_EPISODE_MS, deadline)
+
+        // First attempt happens right after the initial delay — must not be expired yet.
+        assertFalse(
+            MainScreenBootOpenPolicy.isEpisodeExpired(start + delayMs + 1_000L, deadline),
+        )
+        assertTrue(
+            MainScreenBootOpenPolicy.isEpisodeExpired(
+                start + delayMs + MainScreenBootOpenPolicy.MAX_EPISODE_MS,
+                deadline,
+            ),
+        )
+    }
+
+    @Test
+    fun episodeDeadline_initialDelay_neverNegative() {
+        assertEquals(
+            5_000L + MainScreenBootOpenPolicy.MAX_EPISODE_MS,
+            MainScreenBootOpenPolicy.newDeadlineWithInitialDelayMs(
+                initialDelayMs = -100L,
+                nowElapsedRealtimeMs = 5_000L,
+            ),
+        )
+    }
 }

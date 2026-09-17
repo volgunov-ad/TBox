@@ -320,6 +320,7 @@
             android:exported="true">
             <intent-filter android:priority="998">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="vad.dashing.tbox.DEBUG_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
