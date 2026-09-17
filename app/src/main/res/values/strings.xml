@@ -1748,6 +1748,8 @@
     <string name="dialog_save_trips_downloads">Сохранить все поездки в один файл в папку Загрузки</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">Нет заправок</string>
+    <string name="refuels_tab_list">Заправки</string>
+    <string name="refuels_tab_settings">Настройки</string>
     <string name="refuels_export">Экспорт</string>
     <string name="refuels_refresh_prices">Обновить данные по заправке</string>
     <string name="refuels_delete">Удалить заправку</string>
