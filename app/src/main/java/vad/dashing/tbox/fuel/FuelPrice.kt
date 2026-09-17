@@ -61,6 +61,29 @@ object FuelTypes {
 object FuelCostAccounting {
     fun refuelCostRub(refueledLiters: Float, pricePerLiterRub: Float): Float =
         refueledLiters * pricePerLiterRub
+
+    /**
+     * Trip `fuelRefueledCostRub` delta when a refuel's stored cost changes after a late
+     * price fetch (or refresh). Null → filled adds the new cost; both set applies delta.
+     */
+    fun tripFuelCostDeltaRub(previousCostRub: Float?, newCostRub: Float?): Float {
+        val prev = previousCostRub ?: 0f
+        val next = newCostRub ?: 0f
+        return next - prev
+    }
+}
+
+/** Candidates for a manual Multigo price refresh (F-01). */
+object RefuelPriceRefresh {
+    fun missingPriceCandidates(refuels: List<RefuelRecord>): List<RefuelRecord> =
+        refuels.filter { it.pricePerLiterRub == null }
+
+    fun coordinatesOf(refuel: RefuelRecord): FuelCoordinates? {
+        val lat = refuel.latitude ?: return null
+        val lng = refuel.longitude ?: return null
+        if (lat == 0.0 && lng == 0.0) return null
+        return FuelCoordinates(latitude = lat, longitude = lng)
+    }
 }
 
 class FuelPriceClient(

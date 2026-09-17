@@ -1743,7 +1743,10 @@
     <string name="dialog_save_trips_downloads">Save all trips to one file in the Downloads folder</string>
     <string name="trips_export_separator">----------------------------------------</string>
     <string name="refuels_empty">No refuels</string>
+    <string name="refuels_tab_list">Refuels</string>
+    <string name="refuels_tab_settings">Settings</string>
     <string name="refuels_export">Export</string>
+    <string name="refuels_refresh_prices">Refresh refuel data</string>
     <string name="refuels_delete">Delete refuel</string>
     <string name="refuels_time">Date and time</string>
     <string name="refuels_odometer">Odometer</string>
@@ -1779,6 +1782,8 @@
     <string name="toast_refuel_searching_fuel_price">Searching for fuel price</string>
     <string name="toast_refuel_fuel_price_not_found">Fuel price not found</string>
     <string name="toast_refuel_fuel_cost_saved">Fuel cost saved to the refuel log</string>
+    <string name="toast_refuel_price_refresh_not_found">Refuel entry not found</string>
+    <string name="toast_refuel_price_refresh_busy">Price refresh already in progress</string>
     <string name="toast_fuel_calibration_ok">Calibration updated from this refuel</string>
     <string name="toast_fuel_calibration_refuel_not_found">Refuel entry not found</string>
     <string name="toast_fuel_calibration_already_used">This refuel was already used for training</string>
