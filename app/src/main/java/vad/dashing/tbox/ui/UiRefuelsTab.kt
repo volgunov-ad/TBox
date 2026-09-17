@@ -35,6 +35,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
@@ -85,7 +86,6 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.fuel.FuelTypeOption
 import vad.dashing.tbox.fuel.FuelTypes
-import vad.dashing.tbox.fuel.RefuelPriceRefresh
 import vad.dashing.tbox.R
 import vad.dashing.tbox.fuel.RefuelRecord
 import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
@@ -172,23 +172,9 @@ fun RefuelsTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val hasMissingPrice = remember(refuels) {
-                    RefuelPriceRefresh.missingPriceCandidates(refuels).isNotEmpty()
-                }
-                Button(
-                    enabled = hasMissingPrice,
-                    onClick = rememberWrappedOnClick {
-                        onServiceCommand(BackgroundService.ACTION_REFRESH_REFUEL_PRICES, "", "")
-                    },
-                ) {
-                    Text(
-                        stringResource(R.string.refuels_refresh_prices),
-                        style = MaterialTheme.typography.tboxButton,
-                    )
-                }
                 Button(
                     enabled = refuels.isNotEmpty(),
                     onClick = rememberWrappedOnClick { showExportDialog = true },
@@ -263,6 +249,13 @@ fun RefuelsTab(
                                             appDataViewModel.updateRefuelFuelType(refuel.id, option)
                                         },
                                         onRequestDelete = { pendingDeleteRefuelId = refuel.id },
+                                        onRequestRefreshPrice = {
+                                            onServiceCommand(
+                                                BackgroundService.ACTION_REFRESH_REFUEL_PRICES,
+                                                BackgroundService.EXTRA_REFUEL_ID,
+                                                refuel.id,
+                                            )
+                                        },
                                         onRequestTrainCalibration = {
                                             onServiceCommand(
                                                 BackgroundService.ACTION_FUEL_CALIBRATION_TRAIN,
@@ -483,6 +476,7 @@ private fun RefuelHeaderRow() {
         RefuelHeaderCell(stringResource(R.string.refuels_cost), 150)
         RefuelHeaderCell(stringResource(R.string.refuels_calibration_train), 180)
         RefuelHeaderCell("", 80)
+        RefuelHeaderCell("", 80)
     }
 }
 
@@ -504,6 +498,7 @@ private fun RefuelTableRow(
     onSourceCommit: (String) -> Unit,
     onFuelTypeSelected: (FuelTypeOption) -> Unit,
     onRequestDelete: () -> Unit,
+    onRequestRefreshPrice: () -> Unit,
     onRequestTrainCalibration: () -> Unit,
 ) {
     val noData = stringResource(R.string.value_no_data)
@@ -602,6 +597,20 @@ private fun RefuelTableRow(
                 else -> {
                     Text(text = noData, style = MaterialTheme.typography.tboxCaption, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+        }
+        Box(
+            modifier = Modifier.width(80.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            RefuelCircleIconButton(
+                onClick = onRequestRefreshPrice,
+                contentDescription = stringResource(R.string.refuels_refresh_prices),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Refresh,
+                    contentDescription = null,
+                )
             }
         }
         Box(

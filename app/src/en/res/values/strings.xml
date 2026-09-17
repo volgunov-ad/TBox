@@ -1780,9 +1780,8 @@
     <string name="toast_refuel_searching_fuel_price">Searching for fuel price</string>
     <string name="toast_refuel_fuel_price_not_found">Fuel price not found</string>
     <string name="toast_refuel_fuel_cost_saved">Fuel cost saved to the refuel log</string>
-    <string name="toast_refuel_price_refresh_nothing">No refuels without a price to refresh</string>
+    <string name="toast_refuel_price_refresh_not_found">Refuel entry not found</string>
     <string name="toast_refuel_price_refresh_busy">Price refresh already in progress</string>
-    <string name="toast_refuel_price_refresh_partial">Updated prices: %1$d, not found: %2$d</string>
     <string name="toast_fuel_calibration_ok">Calibration updated from this refuel</string>
     <string name="toast_fuel_calibration_refuel_not_found">Refuel entry not found</string>
     <string name="toast_fuel_calibration_already_used">This refuel was already used for training</string>

@@ -1785,9 +1785,8 @@
     <string name="toast_refuel_searching_fuel_price">Поиск цены топлива</string>
     <string name="toast_refuel_fuel_price_not_found">Цена топлива не найдена</string>
     <string name="toast_refuel_fuel_cost_saved">Стоимость топлива записана в журнал заправок</string>
-    <string name="toast_refuel_price_refresh_nothing">Нет заправок без цены для обновления</string>
+    <string name="toast_refuel_price_refresh_not_found">Запись заправки не найдена</string>
     <string name="toast_refuel_price_refresh_busy">Обновление цен уже выполняется</string>
-    <string name="toast_refuel_price_refresh_partial">Обновлено цен: %1$d, не найдено: %2$d</string>
     <string name="toast_fuel_calibration_ok">Калибровка обновлена по этой заправке</string>
     <string name="toast_fuel_calibration_refuel_not_found">Заправка не найдена</string>
     <string name="toast_fuel_calibration_already_used">Эта заправка уже использовалась для обучения</string>
