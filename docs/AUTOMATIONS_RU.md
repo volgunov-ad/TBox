@@ -155,6 +155,10 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 | **Wi-Fi: подключение к сети** (`wifi_associated`) | `on` — есть ассоциация с любой сетью; `off` — нет ассоциации **или радио выключено** |
 | **Wi-Fi: точка доступа** (`wifi_ssid`) | SSID текущей сети или `none`, если радио выключено / ассоциации нет |
 | **Интернет ГУ** (`hu_internet_status`) | `online` / `offline` / `unknown` (/ `checking`) — HTTP(S) probe URL с вкладки «Модем». `online` сразу после удачной проверки; `offline` только после **двух** подряд неудачных |
+| **Wi‑Fi модем: связь** (`wifi_modem_link_status`) | `idle` / `ok` / `auth_failed` / `unreachable` / `error` — HTTP к админке при источнике «Wi‑Fi HTTP»; `idle` для TBox / без поллера |
+| **Модем: передача данных** (`modem_mobile_data`) | `on` / `off` — `apnStatus` (TBox MDC или Wi‑Fi модем) |
+| **Модем: тип сети** (`modem_net_type`) | `2g` / `3g` / `4g` / `none` — из `netStatus` вкладки «Модем» |
+| **Модем: SIM** (`modem_sim_status`) | `none` / `ready` / `pin` / `error` / `unknown` — из `simStatus` |
 
 SSID выбирается из **сохранённых** сетей ГУ.
 Отдельного триггера «отвалились именно от X» нет: для отключения от любой сети —
@@ -165,6 +169,11 @@ SSID выбирается из **сохранённых** сетей ГУ.
 радио (`disableNetwork` текущего netId + `disconnect` — иначе ГУ сразу вернётся в ту же сеть).
 На API 29+ эти действия из обычного приложения недоступны. ADB по Wi-Fi при выключении
 радио оборвётся.
+
+**Wi‑Fi модем (HTTP):** действия `wifi_modem_set_data` (вкл/выкл передачи данных) и
+`wifi_modem_reboot` — только при источнике модема «Wi‑Fi HTTP» и запущенном поллере.
+Состояния выше (`wifi_modem_link_status`, `modem_*`) доступны в условиях и триггерах;
+`modem_mobile_data` / `modem_net_type` / `modem_sim_status` работают и для источника TBox.
 
 ### Геопозиция
 

@@ -183,6 +183,14 @@ enum class AutomationSignalId(
     WIFI_ASSOCIATED("wifi_associated", AutomationSignalValueType.STATE),
     WIFI_SSID("wifi_ssid", AutomationSignalValueType.STATE),
     HU_INTERNET_STATUS("hu_internet_status", AutomationSignalValueType.STATE),
+    /** HTTP link to Wi‑Fi modem admin when source is WIFI_HTTP; [idle] for TBox / poller off. */
+    WIFI_MODEM_LINK_STATUS("wifi_modem_link_status", AutomationSignalValueType.STATE),
+    /** Mobile data / PPP from [TboxRepository.apnStatus] (TBox or Wi‑Fi modem sink). */
+    MODEM_MOBILE_DATA("modem_mobile_data", AutomationSignalValueType.STATE),
+    /** Cellular RAT from [TboxRepository.netState] (`2g`/`3g`/`4g`/`none`). */
+    MODEM_NET_TYPE("modem_net_type", AutomationSignalValueType.STATE),
+    /** SIM readiness from [TboxRepository.netState.simStatus]. */
+    MODEM_SIM_STATUS("modem_sim_status", AutomationSignalValueType.STATE),
     FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
 
     companion object {
