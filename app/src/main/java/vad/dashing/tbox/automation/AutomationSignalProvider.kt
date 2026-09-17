@@ -123,6 +123,30 @@ class AutomationSignalProvider(
                             vad.dashing.tbox.internet.HuInternetStatusLogic.automationStateKey(status),
                         )
                     }.distinctUntilChanged()
+                AutomationSignalId.WIFI_MODEM_LINK_STATUS ->
+                    TboxRepository.wifiModemLinkStatus.map { status ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_MOBILE_DATA ->
+                    TboxRepository.apnStatus.map { up ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.mobileDataKey(up),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_NET_TYPE ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.netTypeKey(net.netStatus),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_SIM_STATUS ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.simStatusKey(net.simStatus),
+                        )
+                    }.distinctUntilChanged()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }

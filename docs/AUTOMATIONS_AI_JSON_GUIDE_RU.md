@@ -695,6 +695,9 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
 | `wifi_ssid` | `app` | точный SSID или `none` |
 | `hu_internet_status` | `app` | `unknown`, `checking`, `online`, `offline` (см. вкладку «Модем»; offline после 2 fail подряд) |
+| `wifi_modem_link_status` | `app` | `idle`, `ok`, `auth_failed`, `unreachable`, `error` (HTTP к Wi‑Fi модему; idle без поллера / источник TBox) |
+| `modem_net_type` | `app` | `none`, `2g`, `3g`, `4g` |
+| `modem_sim_status` | `app` | `none`, `ready`, `pin`, `error`, `unknown` |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
 
 Следующие сигналы имеют только значения `off` / `on`:
@@ -702,7 +705,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

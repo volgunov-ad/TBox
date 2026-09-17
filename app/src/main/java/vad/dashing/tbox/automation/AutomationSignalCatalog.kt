@@ -722,6 +722,36 @@ object AutomationSignalCatalog {
                 "checking почти не публикуется (чтобы не дёргать автоматизации).",
         ),
         state(
+            AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+            "Wi‑Fi модем: связь",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.LINK_OPTIONS,
+            typicalRange = "HTTP-связь с админкой Wi‑Fi модема при источнике «Wi‑Fi HTTP»: " +
+                "ok / auth_failed / unreachable / error; idle — источник TBox или поллер не запущен.",
+        ),
+        state(
+            AutomationSignalId.MODEM_MOBILE_DATA,
+            "Модем: передача данных",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off по apnStatus (TBox MDC или Wi‑Fi модем). " +
+                "То же readback, что после действия wifi_modem_set_data.",
+        ),
+        state(
+            AutomationSignalId.MODEM_NET_TYPE,
+            "Модем: тип сети",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.NET_TYPE_OPTIONS,
+            typicalRange = "2g / 3g / 4g / none из netStatus вкладки «Модем» (TBox или Wi‑Fi HTTP).",
+        ),
+        state(
+            AutomationSignalId.MODEM_SIM_STATUS,
+            "Модем: SIM",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.SIM_OPTIONS,
+            typicalRange = "none / ready / pin / error / unknown из simStatus вкладки «Модем».",
+        ),
+        state(
             AutomationSignalId.FOREGROUND_APP,
             "Приложение на экране",
             appOnly,

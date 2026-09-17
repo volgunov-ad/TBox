@@ -400,4 +400,25 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.stateOptionLabel("offline"),
         )
     }
+
+    @Test
+    fun modemSignals_areAppOnlyWithExplicitStates() {
+        val link = AutomationSignalCatalog.get(AutomationSignalId.WIFI_MODEM_LINK_STATUS)
+        val data = AutomationSignalCatalog.get(AutomationSignalId.MODEM_MOBILE_DATA)
+        val net = AutomationSignalCatalog.get(AutomationSignalId.MODEM_NET_TYPE)
+        val sim = AutomationSignalCatalog.get(AutomationSignalId.MODEM_SIM_STATUS)
+        assertEquals(
+            listOf("idle", "ok", "auth_failed", "unreachable", "error"),
+            link.stateOptions,
+        )
+        assertEquals(listOf("off", "on"), data.stateOptions)
+        assertEquals(listOf("none", "2g", "3g", "4g"), net.stateOptions)
+        assertEquals(listOf("none", "ready", "pin", "error", "unknown"), sim.stateOptions)
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(link.id))
+        assertTrue(link.valueHint().contains("Wi‑Fi HTTP"))
+        assertTrue(data.valueHint().contains("apnStatus"))
+        assertEquals("Связь OK", AutomationSignalCatalog.stateOptionLabel("ok"))
+        assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
+        assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
+    }
 }
