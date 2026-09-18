@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -147,6 +148,8 @@ class AutomationSignalProvider(
                             vad.dashing.tbox.wifimodem.ModemAutomationStates.simStatusKey(net.simStatus),
                         )
                     }.distinctUntilChanged()
+                AutomationSignalId.APP_THEME_MODE -> appThemeModeFlow()
+                AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -234,6 +237,35 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual -> "day"
+            HeadUnitDayNightRepository.Mode.DarkManual -> "night"
+            HeadUnitDayNightRepository.Mode.LightAuto,
+            HeadUnitDayNightRepository.Mode.DarkAuto,
+            -> "auto"
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual,
+            HeadUnitDayNightRepository.Mode.LightAuto,
+            -> "day"
+
+            HeadUnitDayNightRepository.Mode.DarkManual,
+            HeadUnitDayNightRepository.Mode.DarkAuto,
+            -> "night"
+
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
 
 private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     val context = AppContextHolder.appContextOrNull

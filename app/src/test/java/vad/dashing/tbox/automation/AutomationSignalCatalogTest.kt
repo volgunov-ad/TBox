@@ -421,4 +421,37 @@ class AutomationSignalCatalogTest {
         assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
         assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
     }
+
+    @Test
+    fun appThemeMode_isAppOnlyWithExplicitStates() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME_MODE)
+        assertEquals(listOf("day", "night", "auto"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: режим",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME_MODE),
+        )
+        assertEquals("День", AutomationSignalCatalog.stateOptionLabel("day"))
+        assertEquals("Ночь", AutomationSignalCatalog.stateOptionLabel("night"))
+        assertEquals("Авто", AutomationSignalCatalog.stateOptionLabel("auto"))
+        assertTrue(descriptor.valueHint().isNotBlank())
+    }
+
+    @Test
+    fun appTheme_effectiveThemeIsAppOnlyDayOrNight() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME)
+        assertEquals(listOf("day", "night"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: сейчас",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME),
+        )
+        assertTrue(descriptor.valueHint().contains("авто-день"))
+    }
 }

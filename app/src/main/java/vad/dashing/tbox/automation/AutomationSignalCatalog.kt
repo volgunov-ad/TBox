@@ -761,6 +761,26 @@ object AutomationSignalCatalog {
                 "сигнала нет. Камера 360 com.mengbo.avm учитывается по штатному оверлею " +
                 "(Settings.Global avm_state), даже если UsageStats держит предыдущее приложение.",
         ),
+        state(
+            AutomationSignalId.APP_THEME_MODE,
+            "Тема приложения: режим",
+            appOnly,
+            listOf("day", "night", "auto"),
+            typicalRange = "day / night — ручная тема (ГУ или локальная тема приложения, " +
+                "если оно отвязано от системы), auto — штатный режим день/ночи ГУ. " +
+                "Текущее разрешение авто-режима различает сигнал app_theme. Тот же режим, " +
+                "что у переключателя темы и действий toggle_app_day_night_theme / " +
+                "enable_head_unit_auto_theme.",
+        ),
+        state(
+            AutomationSignalId.APP_THEME,
+            "Тема приложения: сейчас",
+            appOnly,
+            listOf("day", "night"),
+            typicalRange = "Эффективная тема в моменте: day — светлая, night — тёмная, " +
+                "ручная или разрешённая авто-режимом. Триггер «День» срабатывает и на ручной, " +
+                "и на авто-день; «Ночь» — и на ручную, и на авто-ночь.",
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

@@ -301,6 +301,8 @@ object AutomationSignalStateEncoding {
         "defrost" -> "Лобовое"
         "defrost_foot" -> "Лобовое и ноги"
         "snow" -> "Снег"
+        "day" -> "День"
+        "night" -> "Ночь"
         "auto" -> "Авто"
         "manual" -> "Вручную"
         "sport" -> "Спорт"

@@ -720,6 +720,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `modem_net_type` | `app` | `none`, `2g`, `3g`, `4g` |
 | `modem_sim_status` | `app` | `none`, `ready`, `pin`, `error`, `unknown` |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
+| `app_theme_mode` | `app` | `day`, `night`, `auto` (режим темы: ручной день/ночь или авто день/ночь ГУ) |
+| `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 
 Следующие сигналы имеют только значения `off` / `on`:
 

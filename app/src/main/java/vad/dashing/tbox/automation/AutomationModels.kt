@@ -194,7 +194,9 @@ enum class AutomationSignalId(
     MODEM_NET_TYPE("modem_net_type", AutomationSignalValueType.STATE),
     /** SIM readiness from [TboxRepository.netState.simStatus]. */
     MODEM_SIM_STATUS("modem_sim_status", AutomationSignalValueType.STATE),
-    FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
+    FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE),
+    APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
+    APP_THEME("app_theme", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

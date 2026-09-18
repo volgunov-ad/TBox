@@ -247,5 +247,7 @@ object AutomationParameterLabels {
         AutomationSignalId.MODEM_NET_TYPE -> "Модем: тип сети"
         AutomationSignalId.MODEM_SIM_STATUS -> "Модем: SIM"
         AutomationSignalId.FOREGROUND_APP -> "Приложение на экране"
+        AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
+        AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
     }
 }
