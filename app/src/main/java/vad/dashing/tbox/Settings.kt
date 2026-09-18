@@ -306,6 +306,21 @@ data class FloatingDashboardWidgetConfig(
      * Only used when [roadMatchMapKitBasemap] is true.
      */
     val roadMatchBasemapTransparencyPercent: Int = 0,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: allowed overspeed (km/h) before alert color.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH].
+     */
+    val speedCamOverageKmh: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: alert / map search radius in metres.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M].
+     */
+    val speedCamRadiusM: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: draw nearby cameras on the road-match map tile.
+     * Default off.
+     */
+    val speedCamShowOnMap: Boolean = false,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -781,6 +796,9 @@ class SettingsManager(private val context: Context) {
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
+        /** JSON manifest of installed SpeedCamOnline iGO pack. */
+        private val SPEED_CAM_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}speed_cam_installed_json")
         /** Optional override for Yandex MapKit API key; blank → [BuildConfig.MAPKIT_API_KEY]. */
         private val MAPKIT_API_KEY_KEY =
             stringPreferencesKey("${KEY_PREFIX}mapkit_api_key")
@@ -2270,6 +2288,16 @@ class SettingsManager(private val context: Context) {
     suspend fun saveRoadMapsInstalledJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadSpeedCamInstalledJson(): String {
+        return context.settingsDataStore.data.first()[SPEED_CAM_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveSpeedCamInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPEED_CAM_INSTALLED_JSON_KEY] = json
         }
     }
 

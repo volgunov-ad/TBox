@@ -71,6 +71,7 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
+import vad.dashing.tbox.speedcam.SpeedCamRepository
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
@@ -119,6 +120,7 @@ fun DashboardRoadMatchMapWidgetItem(
 ) {
     val live by RoadMatchOverlayRepository.state.collectAsStateWithLifecycle()
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    val speedCam by SpeedCamRepository.state.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_road_match_map_widget)
     val title = titleOverride.trim().ifBlank { defaultTitle }
@@ -457,6 +459,17 @@ fun DashboardRoadMatchMapWidgetItem(
                         color = Color(0xFFF3A721),
                         radiusPx = 7.dp.toPx(),
                     )
+                }
+                speedCam.nearbyForMap.forEach { cam ->
+                    val center = toOffset(cam.lat, cam.lon, vp)
+                    val r = if (cam.isAlertTarget) 5.5.dp.toPx() else 3.5.dp.toPx()
+                    val color = if (cam.isAlertTarget) {
+                        Color(0xFFE53935)
+                    } else {
+                        Color(0xFFB0BEC5)
+                    }
+                    drawCircle(color = Color.Black.copy(alpha = 0.35f), radius = r + 1.5f, center = center)
+                    drawCircle(color = color, radius = r, center = center)
                 }
             }
 

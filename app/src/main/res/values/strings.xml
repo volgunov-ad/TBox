@@ -1129,6 +1129,20 @@
     <string name="settings_mock_road_match_mode_rails_desc">Точка жёстко держится на дороге; съезд выбирает гироскоп или руль. Во дворе или при большом уходе — отвязка.</string>
     <string name="settings_mock_road_match_mode_free_turns_desc">Как «Обычный», но курс сильнее тянется к выбранной дороге. Перед сложным перекрёстком или съездом точка временно отвязывается и снова прилипает после манёвра.</string>
     <string name="road_maps_open_button">Карты дорог</string>
+    <string name="speed_cam_open_button">База камер</string>
+    <string name="speed_cam_hub_title">База камер SpeedCam</string>
+    <string name="speed_cam_download">Скачать с сайта</string>
+    <string name="speed_cam_install_usb">Установить с флешки…</string>
+    <string name="speed_cam_delete">Удалить базу</string>
+    <string name="speed_cam_status_empty">База не установлена</string>
+    <string name="speed_cam_status_installed">Точек: %1$d · %2$s</string>
+    <string name="speed_cam_overage_title">Допуск превышения: %1$d км/ч</string>
+    <string name="speed_cam_overage_desc">Если скорость больше лимита камеры плюс допуск — расстояние и иконка подсвечиваются активным цветом</string>
+    <string name="speed_cam_radius_title">Дальность: %1$d м</string>
+    <string name="speed_cam_radius_desc">Искать ближайшую камеру по курсу в этом радиусе (300–1000 м)</string>
+    <string name="speed_cam_show_on_map_title">Показывать на карте</string>
+    <string name="speed_cam_show_on_map_desc">Рисовать ближайшие камеры на плитке «Карта привязки к дорогам» (по умолчанию выкл.)</string>
+    <string name="speed_cam_no_target">—</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>
     <string name="road_maps_catalog_checking">Проверка карт на сервере…</string>
@@ -1835,6 +1849,7 @@
     <string name="data_title_cruise_status_widget">Статус круиз-контроля</string>
     <string name="data_title_sla_speed_limit_widget">Ограничение по знаку</string>
     <string name="data_title_osm_speed_limit_widget">Ограничение по карте</string>
+    <string name="data_title_speed_cam_widget">Камера</string>
     <string name="data_title_speed_limiter_widget">Ограничитель скорости</string>
     <string name="sla_speed_limit_no_sign">—</string>
     <string name="osm_speed_limit_unknown">—</string>
@@ -2168,6 +2183,7 @@
     <string name="widget_acc_cruise_decrease_interval_desc">Пауза между шагами −1 км/ч (50–1500).</string>
     <string name="widget_desc_sla_speed_limit">Текущее ограничение скорости, распознанное системой SLA/TSR.</string>
     <string name="widget_desc_osm_speed_limit">Ограничение с дорожной карты OSM: текущий лимит на matched-ребре и следующий впереди (до 500 м), если он однозначен.</string>
+    <string name="widget_desc_speed_cam">Ближайшая камера по курсу из базы SpeedCamOnline: иконка, направление (↑ попутно / ↓ навстречу) и дистанция. Настраиваемые допуск превышения и дальность.</string>
     <string name="widget_desc_speed_limiter">Ограничитель скорости: уставка с CAN VALUESET (253); без данных — «—», первый ± пишет 30.</string>
     <string name="widget_actions_speed_limiter">Свайп вверх/вниз или кнопки ± — изменить скорость; двойное нажатие — включить; одиночное — выключить.</string>
     <string name="widget_speed_limiter_action_decrease">Уменьшить ограничение скорости</string>
