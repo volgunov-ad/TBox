@@ -457,4 +457,41 @@ class AutomationCodecTest {
         assertEquals(definition, decoded.automations.single())
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
     }
+
+    @Test
+    fun roundTrip_preservesHardKeyTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "hardkey-1",
+            name = "HardKey",
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 115),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "нажато",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decodeHardKeyTrigger_unknownStatus_isRejected() {
+        val raw = """
+            {"formatVersion":1,"automations":[{"id":"a","name":"A","description":"","enabled":false,
+            "triggers":[{"type":"hard_key","id":"1","keyCode":115,"keyStatus":"held"}],
+            "actions":[],"runMode":"single","maxRuns":1,"conditionWaitMillis":0}]}
+        """.trimIndent()
+        assertTrue(AutomationCodec.decode(raw).isFailure)
+    }
 }

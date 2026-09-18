@@ -61,6 +61,8 @@
 
 **A10 VHAL:** кандидаты `289475088`/`560991239`/`557845512`/`561003776` подписываются, но событий не дают (начальные значения 0/`[0]`/`[0, 0]`). Реагируют только **две правые кнопки руля** (верхняя и нижняя) — приходят как Android `KeyEvent` с compose `keyCode=17179869184`; различие кнопок пока не подтверждено (нужен `scanCode` из нативного события, логируется окном). Левая клавиша джойстика и дверные кнопки на A10 событий не дают.
 
+**Production-использование кодов:** триггер автоматизаций `hard_key` (см. docs/AUTOMATIONS_AI_JSON_GUIDE_RU.md) получает те же `eMBCAN_HARDKEY` события через `MbCanRepository.setAutomationHardKeyTrackingEnabled` (fan-out `MbCanEngineFacade.addHardKeyListener`). Подписка включается только на A9 (`UniversalCanRepository.mode == Android9MbCan`) и только пока существует включённое runnable-правило с триггером `hard_key`; повторные события той же кнопки и статуса в течение 120 мс подавляются (`AutomationHardKeyForwarder`). CCS-трекинг `RES+`/`SET−` (`CcsRememberedSetpoint`) использует ту же OEM-подписку независимо.
+
 ---
 
 ## Car Settings: климат, экраны и overspeed

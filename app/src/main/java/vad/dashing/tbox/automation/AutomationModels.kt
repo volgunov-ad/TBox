@@ -24,6 +24,9 @@ const val AUTOMATION_GEOFENCE_RADIUS_GAP_M = 10.0
 const val AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M = 50.0
 const val AUTOMATION_GEOFENCE_MAX_RADIUS_M = 1_000_000.0
 const val AUTOMATION_SOLAR_MAX_OFFSET_MINUTES = 180
+const val AUTOMATION_HARD_KEY_MIN_CODE = 0
+const val AUTOMATION_HARD_KEY_MAX_CODE = 1023
+const val AUTOMATION_HARD_KEY_DEBOUNCE_MS = 120L
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
@@ -210,6 +213,19 @@ enum class AutomationSystemEvent(val storageKey: String) {
     }
 }
 
+/** A9 mbCAN hardkey keyStatus: 0 = нажата, 1 = отпущена. */
+enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int) {
+    PRESSED("pressed", 0),
+    RELEASED("released", 1);
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationHardKeyStatus? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+
+        fun fromRawValue(raw: Int): AutomationHardKeyStatus? = entries.firstOrNull { it.rawValue == raw }
+    }
+}
+
 enum class AutomationGeofenceDirection(val storageKey: String) {
     ENTER("enter"),
     EXIT("exit");
@@ -335,6 +351,18 @@ sealed interface AutomationTrigger {
     data class WidgetPressed(
         override val id: String = "1",
         val triggerId: String,
+    ) : AutomationTrigger
+
+    /**
+     * Fired by OEM A9 mbCAN hardkey events (steering wheel keys, door buttons).
+     * Verified [keyCode] values are listed in docs/MBCAN_VHAL_PARAMETERS_RU.md and
+     * [vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat.mbCanKeyName]; the backend is
+     * available only when the head unit runs the Android 9 mbCAN CAN stack.
+     */
+    data class HardKey(
+        override val id: String = "1",
+        val keyCode: Int,
+        val keyStatus: AutomationHardKeyStatus = AutomationHardKeyStatus.PRESSED,
     ) : AutomationTrigger
 
     data class Interval(

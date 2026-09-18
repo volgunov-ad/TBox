@@ -127,6 +127,12 @@ object AutomationCodec {
                 .put("id", trigger.id)
                 .put("triggerId", trigger.triggerId)
 
+            is AutomationTrigger.HardKey -> JSONObject()
+                .put(KEY_TYPE, "hard_key")
+                .put("id", trigger.id)
+                .put("keyCode", trigger.keyCode)
+                .put("keyStatus", trigger.keyStatus.storageKey)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -193,6 +199,14 @@ object AutomationCodec {
             "widget_pressed" -> AutomationTrigger.WidgetPressed(
                 id = json.requireNonBlankString("id"),
                 triggerId = json.requireNonBlankString("triggerId"),
+            )
+
+            "hard_key" -> AutomationTrigger.HardKey(
+                id = json.requireNonBlankString("id"),
+                keyCode = json.requireInt("keyCode"),
+                keyStatus = AutomationHardKeyStatus.fromStorageKey(
+                    json.requireNonBlankString("keyStatus"),
+                ) ?: throw IllegalArgumentException("Unknown hard key status"),
             )
 
             "interval" -> AutomationTrigger.Interval(
