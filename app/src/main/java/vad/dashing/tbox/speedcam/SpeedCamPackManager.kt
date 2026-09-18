@@ -155,7 +155,7 @@ class SpeedCamPackManager(
         }
     }
 
-    private fun installFromFileLocked(
+    private suspend fun installFromFileLocked(
         part: File,
         sourceLabel: String,
         deleteSource: Boolean,

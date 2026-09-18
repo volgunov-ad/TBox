@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -76,7 +77,15 @@ fun DashboardSpeedCamWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-        ) { contentHeight ->
+            modifier = Modifier
+                .fillMaxSize()
+                .wrapContentHeight(Alignment.CenterVertically),
+        ) { contentModifier ->
+            val valueStyle = calculateResponsiveTextStyle(
+                containerHeight = availableHeight,
+                textType = TextType.VALUE,
+            )
+            val distStyle = valueStyle.scaledWidgetText(0.55f)
             val alert = state.alert?.takeIf { it.distanceM <= tileRadius.toDouble() }
             val speed = geo.speedKmh
             val overLimit = alert != null &&
@@ -85,9 +94,7 @@ fun DashboardSpeedCamWidgetItem(
                 speed > alert.point.speedKmh + tileOverage
             val accent = if (overLimit) activeColor else resolvedTextColor
             BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .size(contentHeight),
+                modifier = contentModifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 val iconSize = (maxHeight * 0.48f).coerceIn(28.dp, 72.dp)
@@ -100,11 +107,7 @@ fun DashboardSpeedCamWidgetItem(
                         Text(
                             text = dash,
                             color = resolvedTextColor.copy(alpha = 0.5f),
-                            style = scaledWidgetText(
-                                baseSp = 28f,
-                                availableHeight = contentHeight,
-                                fraction = 0.35f,
-                            ),
+                            style = valueStyle,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
                         )
@@ -118,6 +121,7 @@ fun DashboardSpeedCamWidgetItem(
                                 speedKmh = alert.point.speedKmh,
                                 relative = alert.relative,
                                 color = accent,
+                                speedTextStyle = valueStyle.scaledWidgetText(0.45f),
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -129,11 +133,7 @@ fun DashboardSpeedCamWidgetItem(
                         Text(
                             text = dist,
                             color = accent,
-                            style = scaledWidgetText(
-                                baseSp = 18f,
-                                availableHeight = contentHeight,
-                                fraction = 0.22f,
-                            ),
+                            style = distStyle,
                             fontWeight = FontWeight.SemiBold,
                             textAlign = TextAlign.Center,
                         )
@@ -150,6 +150,7 @@ private fun SpeedCamIcon(
     speedKmh: Int,
     relative: SpeedCamRelativeDirection,
     color: Color,
+    speedTextStyle: TextStyle,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
@@ -158,7 +159,6 @@ private fun SpeedCamIcon(
             val cx = size.width / 2f
             val cy = size.height / 2f
             val r = size.minDimension * 0.38f
-            // Body: circle for fixed/traffic, rounded square-ish for others via circle.
             drawCircle(color = color, radius = r, center = Offset(cx, cy), style = stroke)
             when (category) {
                 SpeedCamCategory.TRAFFIC_LIGHT -> {
@@ -214,7 +214,7 @@ private fun SpeedCamIcon(
             Text(
                 text = speedKmh.toString(),
                 color = color,
-                style = scaledWidgetText(baseSp = 14f, availableHeight = 40.dp, fraction = 0.55f),
+                style = speedTextStyle,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
