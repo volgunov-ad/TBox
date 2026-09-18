@@ -765,12 +765,12 @@ object AutomationSignalCatalog {
             AutomationSignalId.APP_THEME_MODE,
             "Тема приложения: режим",
             appOnly,
-            listOf("day", "night", "auto"),
-            typicalRange = "day / night — ручная тема (ГУ или локальная тема приложения, " +
-                "если оно отвязано от системы), auto — штатный режим день/ночи ГУ. " +
-                "Текущее разрешение авто-режима различает сигнал app_theme. Тот же режим, " +
-                "что у переключателя темы и действий toggle_app_day_night_theme / " +
-                "enable_head_unit_auto_theme.",
+            listOf("manual_day", "manual_night", "auto_day", "auto_night"),
+            typicalRange = "manual_day / manual_night — ручная тема (ГУ или локальная тема " +
+                "приложения, если оно отвязано от системы), auto_day / auto_night — штатный " +
+                "авто день/ночь ГУ с текущим разрешением. Один триггер «любой день/ночь» — " +
+                "сигнал app_theme. Тот же режим, что у переключателя темы и действий " +
+                "toggle_app_day_night_theme / enable_head_unit_auto_theme.",
         ),
         state(
             AutomationSignalId.APP_THEME,

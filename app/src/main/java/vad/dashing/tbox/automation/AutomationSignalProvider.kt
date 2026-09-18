@@ -241,11 +241,10 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
 private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
     HeadUnitDayNightRepository.modeState.map { mode ->
         val value = when (mode) {
-            HeadUnitDayNightRepository.Mode.LightManual -> "day"
-            HeadUnitDayNightRepository.Mode.DarkManual -> "night"
-            HeadUnitDayNightRepository.Mode.LightAuto,
-            HeadUnitDayNightRepository.Mode.DarkAuto,
-            -> "auto"
+            HeadUnitDayNightRepository.Mode.LightManual -> "manual_day"
+            HeadUnitDayNightRepository.Mode.DarkManual -> "manual_night"
+            HeadUnitDayNightRepository.Mode.LightAuto -> "auto_day"
+            HeadUnitDayNightRepository.Mode.DarkAuto -> "auto_night"
             null -> null
         }
         value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
