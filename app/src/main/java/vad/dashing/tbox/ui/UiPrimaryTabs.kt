@@ -1581,6 +1581,8 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
     val floatingPanelsLayoutSnapDp by
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val floatingPanelsAllowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -1821,6 +1823,13 @@ fun FloatingPanelsSettingsTabContent(
             description = stringResource(R.string.settings_panel_layout_snap_desc),
             minValue = MIN_PANEL_LAYOUT_SNAP_DP,
             maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+        )
+        SettingSwitch(
+            floatingPanelsAllowBeyondScreen,
+            { enabled -> settingsViewModel.saveFloatingPanelsAllowBeyondScreen(enabled) },
+            stringResource(R.string.settings_floating_allow_beyond_screen_title),
+            stringResource(R.string.settings_floating_allow_beyond_screen_desc),
+            true,
         )
 
         Text(

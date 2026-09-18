@@ -53,10 +53,30 @@ const val MIN_MAIN_SCREEN_PANEL_REL_PERCENT = 2
 const val MIN_FLOATING_PANEL_SIZE_PX = 25
 
 /**
+ * Soft floor for manual X/Y when “allow beyond screen” is on (gesture drag has no floor).
+ * Keeps GeometryWhxyCommitBlock range checks finite.
+ */
+const val FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX = -100_000
+
+/**
  * Layout guide grid on the main screen is drawn only when snap step is strictly greater than this
  * (dp) and the “show grid” setting is on.
  */
 const val MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE = 5
+
+/** Pixel origin for a floating overlay after optional screen-edge floor. */
+data class FloatingPanelOriginPx(val x: Int, val y: Int)
+
+/**
+ * When [allowBeyondScreen] is false, floors X/Y at 0 (left/top screen edge).
+ * When true, returns [x]/[y] unchanged so panels can sit past screen edges.
+ */
+fun clampFloatingPanelOrigin(x: Int, y: Int, allowBeyondScreen: Boolean): FloatingPanelOriginPx =
+    if (allowBeyondScreen) {
+        FloatingPanelOriginPx(x = x, y = y)
+    } else {
+        FloatingPanelOriginPx(x = x.coerceAtLeast(0), y = y.coerceAtLeast(0))
+    }
 
 fun normalizeWidgetTextAlign(raw: Int): Int =
     raw.coerceIn(WIDGET_TEXT_ALIGN_CENTER, WIDGET_TEXT_ALIGN_END)

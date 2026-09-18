@@ -63,6 +63,7 @@ import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX
 import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1522,6 +1523,9 @@ fun FloatingDashboardPositionSizeSettings(
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
     val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
     val floatingDashboardStartY by settingsViewModel.floatingDashboardStartY.collectAsStateWithLifecycle()
+    val allowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val originMin = if (allowBeyondScreen) FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX else 0
 
     GeometryWhxyCommitBlock(
         widthLabel = stringResource(R.string.floating_panel_width_px),
@@ -1534,8 +1538,8 @@ fun FloatingDashboardPositionSizeSettings(
         savedY = floatingDashboardStartY,
         minWidth = MIN_FLOATING_PANEL_SIZE_PX,
         minHeight = MIN_FLOATING_PANEL_SIZE_PX,
-        minX = 0,
-        minY = 0,
+        minX = originMin,
+        minY = originMin,
         enabled = enabled,
         modifier = modifier,
         onCommit = { w, h, x, y ->

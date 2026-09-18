@@ -712,6 +712,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
+    val floatingPanelsAllowBeyondScreen = settingsManager.floatingPanelsAllowBeyondScreenFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val floatingDashboardHeight = activeFloatingDashboardConfig
         .map { it.height }
         .stateIn(
@@ -2888,6 +2895,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsAllowBeyondScreen(enabled)
+        }
+    }
+
     fun saveFloatingDashboardWidth(width: Int) {
         updateSelectedFloatingDashboard { it.copy(width = width) }
     }
@@ -2914,12 +2927,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         startX: Int,
         startY: Int,
     ) {
+        val origin = clampFloatingPanelOrigin(
+            x = startX,
+            y = startY,
+            allowBeyondScreen = floatingPanelsAllowBeyondScreen.value,
+        )
         updateSelectedFloatingDashboard {
             it.copy(
                 width = width.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
                 height = height.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
-                startX = startX.coerceAtLeast(0),
-                startY = startY.coerceAtLeast(0),
+                startX = origin.x,
+                startY = origin.y,
             )
         }
     }
