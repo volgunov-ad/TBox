@@ -66,6 +66,25 @@ class WidgetTextAppearanceTest {
     }
 
     @Test
+    fun clampFloatingPanelOrigin_floorsWhenBeyondDisabled() {
+        val origin = clampFloatingPanelOrigin(x = -40, y = -10, allowBeyondScreen = false)
+        assertEquals(0, origin.x)
+        assertEquals(0, origin.y)
+    }
+
+    @Test
+    fun clampFloatingPanelOrigin_passesThroughWhenBeyondEnabled() {
+        val origin = clampFloatingPanelOrigin(x = -40, y = -10, allowBeyondScreen = true)
+        assertEquals(-40, origin.x)
+        assertEquals(-10, origin.y)
+    }
+
+    @Test
+    fun floatingPanelBeyondScreenMinOrigin_isNegative() {
+        assertEquals(-100_000, FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX)
+    }
+
+    @Test
     fun mainScreenPanelRelMinPercent_matchesFraction() {
         assertEquals(2, MIN_MAIN_SCREEN_PANEL_REL_PERCENT)
         assertEquals(0.02f, MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 0.0001f)

@@ -926,6 +926,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
@@ -1810,6 +1812,10 @@ class SettingsManager(private val context: Context) {
                 preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
             )
         }
+        .distinctUntilChanged()
+
+    val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
         .distinctUntilChanged()
 
     val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -4143,6 +4149,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
         }
     }
 
