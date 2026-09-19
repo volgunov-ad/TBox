@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SpeedCam SECTION: ring + horizontal bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2.5C6.75,2.5 2.5,6.75 2.5,12S6.75,21.5 12,21.5 21.5,17.25 21.5,12 17.25,2.5 12,2.5zM12,4.7c4.03,0 7.3,3.27 7.3,7.3s-3.27,7.3 -7.3,7.3 -7.3,-3.27 -7.3,-7.3 3.27,-7.3 7.3,-7.3z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7.6,11.05h8.8v1.9H7.6z"/>
+</vector>

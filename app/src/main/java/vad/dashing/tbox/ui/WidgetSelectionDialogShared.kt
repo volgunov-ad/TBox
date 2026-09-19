@@ -102,6 +102,11 @@ import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M
+import vad.dashing.tbox.speedcam.isSpeedCamWidgetDataKey
+import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
+import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
@@ -372,6 +377,23 @@ internal class WidgetSelectionDialogState(
         } else {
             0
         },
+    )
+    var speedCamOverageKmh by mutableIntStateOf(
+        if (isSpeedCamWidgetDataKey(initialConfig.dataKey)) {
+            normalizeSpeedCamOverageKmh(initialConfig.speedCamOverageKmh)
+        } else {
+            DEFAULT_SPEED_CAM_OVERAGE_KMH
+        },
+    )
+    var speedCamRadiusM by mutableIntStateOf(
+        if (isSpeedCamWidgetDataKey(initialConfig.dataKey)) {
+            normalizeSpeedCamRadiusM(initialConfig.speedCamRadiusM)
+        } else {
+            DEFAULT_SPEED_CAM_RADIUS_M
+        },
+    )
+    var speedCamShowOnMap by mutableStateOf(
+        isSpeedCamWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
     )
     var mediaShowLikeButton by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
@@ -853,6 +875,11 @@ internal class WidgetSelectionDialogState(
             roadMatchMapKitBasemap = false
             roadMatchBasemapTransparencyPercent = 0
         }
+        if (!isSpeedCamWidgetDataKey(key)) {
+            speedCamOverageKmh = DEFAULT_SPEED_CAM_OVERAGE_KMH
+            speedCamRadiusM = DEFAULT_SPEED_CAM_RADIUS_M
+            speedCamShowOnMap = false
+        }
         if (supportsMusicControlsHeightSetting(key)) {
             val previousDefault = if (supportsMusicControlsHeightSetting(previousKey)) {
                 MusicWidgetControlsDisplay.defaultControlsHeightPercent(previousKey)
@@ -1181,6 +1208,17 @@ internal class WidgetSelectionDialogState(
             } else {
                 0
             },
+            speedCamOverageKmh = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+                normalizeSpeedCamOverageKmh(speedCamOverageKmh)
+            } else {
+                DEFAULT_SPEED_CAM_OVERAGE_KMH
+            },
+            speedCamRadiusM = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+                normalizeSpeedCamRadiusM(speedCamRadiusM)
+            } else {
+                DEFAULT_SPEED_CAM_RADIUS_M
+            },
+            speedCamShowOnMap = isSpeedCamWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
         )
     }
 
@@ -1469,6 +1507,17 @@ internal class WidgetSelectionDialogState(
         } else {
             0
         }
+        speedCamOverageKmh = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+            normalizeSpeedCamOverageKmh(cfg.speedCamOverageKmh)
+        } else {
+            DEFAULT_SPEED_CAM_OVERAGE_KMH
+        }
+        speedCamRadiusM = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+            normalizeSpeedCamRadiusM(cfg.speedCamRadiusM)
+        } else {
+            DEFAULT_SPEED_CAM_RADIUS_M
+        }
+        speedCamShowOnMap = isSpeedCamWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
         controlAppearanceEpoch++
     }
 
@@ -2712,6 +2761,43 @@ internal fun WidgetSelectionDialogForm(
                                 selectorWidth = WidgetDialogDropdownSelectorWidth,
                             )
                         }
+                    }
+                    if (isSpeedCamWidgetDataKey(state.selectedDataKey)) {
+                        SettingSliderInt(
+                            value = state.speedCamOverageKmh,
+                            onValueChange = {
+                                state.speedCamOverageKmh = normalizeSpeedCamOverageKmh(it)
+                            },
+                            text = stringResource(
+                                R.string.speed_cam_overage_title,
+                                state.speedCamOverageKmh,
+                            ),
+                            description = stringResource(R.string.speed_cam_overage_desc),
+                            minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
+                            maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSliderInt(
+                            value = state.speedCamRadiusM,
+                            onValueChange = {
+                                state.speedCamRadiusM = normalizeSpeedCamRadiusM(it)
+                            },
+                            text = stringResource(
+                                R.string.speed_cam_radius_title,
+                                state.speedCamRadiusM,
+                            ),
+                            description = stringResource(R.string.speed_cam_radius_desc),
+                            minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_RADIUS_M,
+                            maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_RADIUS_M,
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSwitch(
+                            isChecked = state.speedCamShowOnMap,
+                            onCheckedChange = { state.speedCamShowOnMap = it },
+                            text = stringResource(R.string.speed_cam_show_on_map_title),
+                            description = stringResource(R.string.speed_cam_show_on_map_desc),
+                            enabled = state.togglesEnabled,
+                        )
                     }
                     if (isCruiseWidgetDataKey(state.selectedDataKey)) {
                         val cruiseTypeEntries = listOf(

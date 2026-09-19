@@ -31,6 +31,10 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
+import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
+import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.SpeedCamUiState
+import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
@@ -223,6 +227,7 @@ class BackgroundService : Service() {
     private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
+    private var speedCamTickerJob: Job? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -2054,6 +2059,7 @@ class BackgroundService : Service() {
                 }
                 startWheelPulseFeatureWatcher()
                 startMockLocationJob()
+                startSpeedCamTicker()
                 vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
                     context = this@BackgroundService,
                     scope = scope,
@@ -4522,6 +4528,58 @@ class BackgroundService : Service() {
             gnssBearingDeg = display.bearingDeg,
             gnssVisible = display.locateStatus,
         )
+    }
+
+    /**
+     * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any SpeedCam tile
+     * is present. Uses the shared pack index from [SpeedCamPackManagerHolder].
+     */
+    private fun startSpeedCamTicker() {
+        if (speedCamTickerJob != null) return
+        if (!::dashboardWidgets.isInitialized ||
+            !::floatingDashboards.isInitialized ||
+            !::mainScreenDashboards.isInitialized
+        ) {
+            return
+        }
+        speedCamTickerJob = scope.launch {
+            val manager = SpeedCamPackManagerHolder.get(this@BackgroundService, settingsManager)
+            runCatching { manager.ensureLoaded() }
+            combine(
+                GeoDisplayRepository.state,
+                manager.snapshot,
+                combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
+                    Triple(dash, floating, main)
+                },
+            ) { display, snap, widgets -> Triple(display, snap, widgets) }
+                .collect { (display, snap, widgets) ->
+                    val (dash, floating, main) = widgets
+                    val agg = SpeedCamWidgetPresence.aggregate(dash, floating, main)
+                    if (agg == null) {
+                        if (SpeedCamRepository.state.value != SpeedCamUiState.EMPTY) {
+                            SpeedCamRepository.clear()
+                        }
+                        return@collect
+                    }
+                    val carSpeed = TripTelemetryRepository.accountingCarSpeed()
+                    val speed = when {
+                        display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
+                        carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
+                        else -> 0f
+                    }
+                    SpeedCamRepository.updateFromPose(
+                        index = manager.currentIndex(),
+                        installedMeta = snap,
+                        lat = display.latitude,
+                        lon = display.longitude,
+                        bearingDeg = display.bearingDeg,
+                        vehicleSpeedKmh = speed,
+                        radiusM = agg.radiusM,
+                        overageKmh = agg.overageKmh,
+                        showMapMarkers = agg.showOnMap,
+                    )
+                }
+        }
     }
 
     private fun startConstantDrAutoCalibJob() {

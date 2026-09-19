@@ -1995,6 +1995,7 @@ enum class MainScreenSettingsSection {
 private enum class LocationSection {
     General,
     Mock,
+    Cameras,
     DataDebug,
 }
 
@@ -2179,6 +2180,7 @@ fun LocationTabContent(
                     when (section) {
                         LocationSection.General -> R.string.location_tab_general
                         LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.Cameras -> R.string.location_tab_cameras
                         LocationSection.DataDebug -> R.string.location_tab_data_debug
                     },
                 )
@@ -2974,6 +2976,11 @@ fun LocationTabContent(
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
                 } // Mock
+                LocationSection.Cameras -> {
+            item {
+                SpeedCamCamerasSection(settingsViewModel = settingsViewModel)
+            }
+                } // Cameras
                 LocationSection.DataDebug -> {
             item {
                 StatusRow(

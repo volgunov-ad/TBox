@@ -1774,6 +1774,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
     }
 
+    fun speedCamPackManager(context: android.content.Context): vad.dashing.tbox.speedcam.SpeedCamPackManager {
+        return vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder.get(
+            context = context,
+            settingsManager = settingsManager,
+        )
+    }
+
     fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
         viewModelScope.launch {
             settingsManager.saveGyroBiasOffsets(offsets)

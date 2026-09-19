@@ -176,6 +176,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         EPB_PARK_LAMP_WIDGET_DATA_KEY,
         ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
         BRAKE_FLUID_WIDGET_DATA_KEY,
+        vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Alert
 
         MUSIC_WIDGET_DATA_KEY,

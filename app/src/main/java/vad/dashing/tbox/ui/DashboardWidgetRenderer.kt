@@ -730,6 +730,22 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY -> {
+            DashboardSpeedCamWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                activeColor = controlAppearance.activeContent,
+                overageKmh = widgetConfig.speedCamOverageKmh,
+                radiusM = widgetConfig.speedCamRadiusM,
+            )
+        }
+
         SPEED_LIMITER_WIDGET_DATA_KEY -> {
             DashboardSpeedLimiterWidgetItem(
                 settingsViewModel = settingsViewModel,
