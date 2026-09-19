@@ -79,6 +79,7 @@
     <string name="location_section_debug">Debug</string>
     <string name="location_tab_general">General</string>
     <string name="location_tab_mock">Spoofing</string>
+    <string name="location_tab_cameras">Cameras</string>
     <string name="location_tab_data_debug">Data and debug</string>
     <string name="unit_byte">B</string>
     <string name="unit_kilobyte">KB</string>

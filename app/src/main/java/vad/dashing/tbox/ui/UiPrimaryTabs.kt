@@ -1995,6 +1995,7 @@ enum class MainScreenSettingsSection {
 private enum class LocationSection {
     General,
     Mock,
+    Cameras,
     DataDebug,
 }
 
@@ -2179,6 +2180,7 @@ fun LocationTabContent(
                     when (section) {
                         LocationSection.General -> R.string.location_tab_general
                         LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.Cameras -> R.string.location_tab_cameras
                         LocationSection.DataDebug -> R.string.location_tab_data_debug
                     },
                 )
@@ -2962,17 +2964,9 @@ fun LocationTabContent(
                         settingsViewModel = settingsViewModel,
                         enabled = true,
                     )
-                    SpeedCamEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = true,
-                    )
                 } else {
                     // Maps can be downloaded even when mock power is off.
                     RoadMapsEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = mockEnabledForSource,
-                    )
-                    SpeedCamEntryButton(
                         settingsViewModel = settingsViewModel,
                         enabled = mockEnabledForSource,
                     )
@@ -2982,6 +2976,14 @@ fun LocationTabContent(
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
                 } // Mock
+                LocationSection.Cameras -> {
+            item {
+                SpeedCamEntryButton(
+                    settingsViewModel = settingsViewModel,
+                    enabled = true,
+                )
+            }
+                } // Cameras
                 LocationSection.DataDebug -> {
             item {
                 StatusRow(
