@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SpeedCam DUMMY: thin empty ring. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,3C7.03,3 3,7.03 3,12s4.03,9 9,9 9,-4.03 9,-9 -4.03,-9 -9,-9zM12,4.5c4.14,0 7.5,3.36 7.5,7.5S16.14,19.5 12,19.5 4.5,16.14 4.5,12 7.86,4.5 12,4.5z"/>
+</vector>

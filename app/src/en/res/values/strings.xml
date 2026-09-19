@@ -1135,6 +1135,17 @@
     <string name="speed_cam_show_on_map_title">Show on map</string>
     <string name="speed_cam_show_on_map_desc">Draw nearby cameras on the road-match map tile (off by default)</string>
     <string name="speed_cam_no_target">—</string>
+    <string name="speed_cam_icon_catalog_desc">“Camera” widget icon (SpeedCamOnline)</string>
+    <string name="speed_cam_icon_fixed">Camera: fixed</string>
+    <string name="speed_cam_icon_traffic_light">Camera: traffic light</string>
+    <string name="speed_cam_icon_section">Camera: section</string>
+    <string name="speed_cam_icon_mobile">Camera: mobile</string>
+    <string name="speed_cam_icon_police_post">Camera: police post</string>
+    <string name="speed_cam_icon_railway">Camera: railway</string>
+    <string name="speed_cam_icon_dummy">Camera: dummy</string>
+    <string name="speed_cam_icon_other">Camera: other</string>
+    <string name="speed_cam_icon_arrow_same">Camera: arrow same way</string>
+    <string name="speed_cam_icon_arrow_oncoming">Camera: arrow oncoming</string>
     <string name="road_maps_hub_title">Road maps</string>
     <string name="road_maps_hub_intro">Download whole Russian federal subjects and Belarus regions for road snapping. Catalog and packs come from the maps folder on Yandex Disk. OpenStreetMap data (ODbL).</string>
     <string name="road_maps_catalog_checking">Checking maps on the server…</string>

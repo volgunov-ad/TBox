@@ -1143,6 +1143,17 @@
     <string name="speed_cam_show_on_map_title">Показывать на карте</string>
     <string name="speed_cam_show_on_map_desc">Рисовать ближайшие камеры на плитке «Карта привязки к дорогам» (по умолчанию выкл.)</string>
     <string name="speed_cam_no_target">—</string>
+    <string name="speed_cam_icon_catalog_desc">Иконка виджета «Камера» (SpeedCamOnline)</string>
+    <string name="speed_cam_icon_fixed">Камера: стационарная</string>
+    <string name="speed_cam_icon_traffic_light">Камера: светофор</string>
+    <string name="speed_cam_icon_section">Камера: участок</string>
+    <string name="speed_cam_icon_mobile">Камера: мобильная</string>
+    <string name="speed_cam_icon_police_post">Камера: пост ДПС</string>
+    <string name="speed_cam_icon_railway">Камера: ж/д переезд</string>
+    <string name="speed_cam_icon_dummy">Камера: муляж</string>
+    <string name="speed_cam_icon_other">Камера: прочее</string>
+    <string name="speed_cam_icon_arrow_same">Камера: стрелка попутно</string>
+    <string name="speed_cam_icon_arrow_oncoming">Камера: стрелка навстречу</string>
     <string name="road_maps_hub_title">Карты дорог</string>
     <string name="road_maps_hub_intro">Скачивайте целые субъекты России и области Беларуси для привязки к дорогам. Каталог и пакеты загружаются из папки maps на Яндекс.Диске. Данные OpenStreetMap (ODbL).</string>
     <string name="road_maps_catalog_checking">Проверка карт на сервере…</string>

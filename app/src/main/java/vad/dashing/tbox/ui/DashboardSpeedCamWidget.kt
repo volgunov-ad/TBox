@@ -1,6 +1,5 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,11 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -34,6 +29,7 @@ import vad.dashing.tbox.speedcam.SpeedCamCategory
 import vad.dashing.tbox.speedcam.SpeedCamLookahead
 import vad.dashing.tbox.speedcam.SpeedCamRelativeDirection
 import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.SpeedCamUiIcons
 import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
 import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
@@ -116,10 +112,10 @@ fun DashboardSpeedCamWidgetItem(
                             modifier = Modifier.size(iconSize),
                             contentAlignment = Alignment.Center,
                         ) {
-                            SpeedCamIcon(
+                            SpeedCamTypeIcon(
                                 category = alert.point.category,
-                                speedKmh = alert.point.speedKmh,
                                 relative = alert.relative,
+                                speedKmh = alert.point.speedKmh,
                                 color = accent,
                                 speedTextStyle = valueStyle.scaledWidgetText(0.45f),
                                 modifier = Modifier.fillMaxSize(),
@@ -145,71 +141,39 @@ fun DashboardSpeedCamWidgetItem(
 }
 
 @Composable
-private fun SpeedCamIcon(
+private fun SpeedCamTypeIcon(
     category: SpeedCamCategory,
-    speedKmh: Int,
     relative: SpeedCamRelativeDirection,
+    speedKmh: Int,
     color: Color,
     speedTextStyle: TextStyle,
     modifier: Modifier = Modifier,
 ) {
+    val typeIcon = SpeedCamUiIcons.forCategory(category)
+    val arrowIcon = SpeedCamUiIcons.forRelative(relative)
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = Stroke(width = size.minDimension * 0.08f, cap = StrokeCap.Round)
-            val cx = size.width / 2f
-            val cy = size.height / 2f
-            val r = size.minDimension * 0.38f
-            drawCircle(color = color, radius = r, center = Offset(cx, cy), style = stroke)
-            when (category) {
-                SpeedCamCategory.TRAFFIC_LIGHT -> {
-                    val dotR = r * 0.18f
-                    drawCircle(color, radius = dotR, center = Offset(cx, cy - r * 0.35f))
-                    drawCircle(color, radius = dotR, center = Offset(cx, cy))
-                    drawCircle(color, radius = dotR, center = Offset(cx, cy + r * 0.35f))
-                }
-                SpeedCamCategory.SECTION -> {
-                    drawLine(
-                        color = color,
-                        start = Offset(cx - r * 0.45f, cy),
-                        end = Offset(cx + r * 0.45f, cy),
-                        strokeWidth = stroke.width,
-                        cap = StrokeCap.Round,
-                    )
-                }
-                SpeedCamCategory.RAILWAY -> {
-                    drawLine(
-                        color = color,
-                        start = Offset(cx - r * 0.4f, cy - r * 0.35f),
-                        end = Offset(cx + r * 0.4f, cy + r * 0.35f),
-                        strokeWidth = stroke.width,
-                    )
-                    drawLine(
-                        color = color,
-                        start = Offset(cx + r * 0.4f, cy - r * 0.35f),
-                        end = Offset(cx - r * 0.4f, cy + r * 0.35f),
-                        strokeWidth = stroke.width,
-                    )
-                }
-                else -> Unit
-            }
-            // Direction arrow: ↑ same travel way, ↓ oncoming
-            val arrow = Path()
-            val ay = if (relative == SpeedCamRelativeDirection.SAME) {
-                cy - r * 0.95f
-            } else {
-                cy + r * 0.95f
-            }
-            val tipY = if (relative == SpeedCamRelativeDirection.SAME) {
-                cy - r * 1.25f
-            } else {
-                cy + r * 1.25f
-            }
-            arrow.moveTo(cx, tipY)
-            arrow.lineTo(cx - r * 0.28f, ay)
-            arrow.lineTo(cx + r * 0.28f, ay)
-            arrow.close()
-            drawPath(arrow, color = color)
-        }
+        CustomizableUiIcon(
+            iconKey = typeIcon.key,
+            drawableRes = typeIcon.drawableRes,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(0.92f),
+            tint = color,
+        )
+        CustomizableUiIcon(
+            iconKey = arrowIcon.key,
+            drawableRes = arrowIcon.drawableRes,
+            contentDescription = null,
+            modifier = Modifier
+                .align(
+                    if (relative == SpeedCamRelativeDirection.SAME) {
+                        Alignment.TopCenter
+                    } else {
+                        Alignment.BottomCenter
+                    },
+                )
+                .fillMaxSize(0.28f),
+            tint = color,
+        )
         if (speedKmh > 0) {
             Text(
                 text = speedKmh.toString(),
