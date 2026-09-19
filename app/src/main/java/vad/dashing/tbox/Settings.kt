@@ -34,6 +34,7 @@ import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -975,6 +976,10 @@ class SettingsManager(private val context: Context) {
         /** App-local day/night (`1` light / `2` dark) used when [FOLLOW_SYSTEM_DAY_NIGHT_KEY] is false. */
         private val APP_DAY_NIGHT_THEME_KEY = intPreferencesKey("${KEY_PREFIX}app_day_night_theme")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
+
+        /** JSON of per-role text size scales (see [vad.dashing.tbox.ui.theme.TboxTextSizeScales]). */
+        private val APP_TEXT_SIZE_SCALES_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}app_text_size_scales_json")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
@@ -1934,6 +1939,12 @@ class SettingsManager(private val context: Context) {
     val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             TboxFontFamily.fromId(preferences[APP_FONT_FAMILY_ID_KEY] ?: TboxFontFamily.Default.id).id
+        }
+        .distinctUntilChanged()
+
+    val appTextSizeScalesFlow: Flow<TboxTextSizeScales> = context.settingsDataStore.data
+        .map { preferences ->
+            TboxTextSizeScales.fromJson(preferences[APP_TEXT_SIZE_SCALES_JSON_KEY])
         }
         .distinctUntilChanged()
 
@@ -4356,6 +4367,23 @@ class SettingsManager(private val context: Context) {
     suspend fun saveAppFontFamilyId(fontFamilyId: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[APP_FONT_FAMILY_ID_KEY] = TboxFontFamily.fromId(fontFamilyId).id
+        }
+    }
+
+    suspend fun saveAppTextSizeScales(scales: TboxTextSizeScales) {
+        val normalized = TboxTextSizeScales(
+            caption = TboxTextSizeScales.normalize(scales.caption),
+            body = TboxTextSizeScales.normalize(scales.body),
+            button = TboxTextSizeScales.normalize(scales.button),
+            title = TboxTextSizeScales.normalize(scales.title),
+            headline = TboxTextSizeScales.normalize(scales.headline),
+            tabLabel = TboxTextSizeScales.normalize(scales.tabLabel),
+            widgetTitle = TboxTextSizeScales.normalize(scales.widgetTitle),
+            widgetValue = TboxTextSizeScales.normalize(scales.widgetValue),
+            widgetUnit = TboxTextSizeScales.normalize(scales.widgetUnit),
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_TEXT_SIZE_SCALES_JSON_KEY] = normalized.toJsonString()
         }
     }
 

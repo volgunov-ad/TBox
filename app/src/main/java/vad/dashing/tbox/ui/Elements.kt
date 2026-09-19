@@ -73,7 +73,10 @@ import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
+import vad.dashing.tbox.ui.theme.TextSizeRole
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -779,6 +782,103 @@ fun SettingAppFontFamily(
         }
     }
 }
+
+@Composable
+fun SettingTextSizeScales(
+    scales: TboxTextSizeScales,
+    onScalesChange: (TboxTextSizeScales) -> Unit,
+    enabled: Boolean = true,
+) {
+    val roles = TextSizeRole.entries
+    val steps = ((TboxTextSizeScales.MAX - TboxTextSizeScales.MIN) / TboxTextSizeScales.STEP).roundToInt() - 1
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_text_size_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_text_size_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        roles.forEach { role ->
+            val value = scales.scaleFor(role)
+            val previewStyle = when (role) {
+                TextSizeRole.Caption -> MaterialTheme.typography.tboxCaption
+                TextSizeRole.Body -> MaterialTheme.typography.tboxBody
+                TextSizeRole.Button -> MaterialTheme.typography.tboxButton
+                TextSizeRole.Title -> MaterialTheme.typography.tboxTitle
+                TextSizeRole.Headline -> MaterialTheme.typography.tboxHeadline
+                TextSizeRole.TabLabel -> MaterialTheme.typography.tboxTabLabel
+                TextSizeRole.WidgetTitle -> LocalTboxTextStyles.current.WidgetTitle
+                TextSizeRole.WidgetValue -> LocalTboxTextStyles.current.WidgetValue
+                TextSizeRole.WidgetUnit -> LocalTboxTextStyles.current.WidgetUnit
+            }
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = textSizeRoleLabel(role),
+                        style = previewStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_text_size_value,
+                            value,
+                        ),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = value,
+                    onValueChange = { onScalesChange(scales.withRole(role, it)) },
+                    valueRange = TboxTextSizeScales.MIN..TboxTextSizeScales.MAX,
+                    steps = steps.coerceAtLeast(0),
+                    enabled = enabled,
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { onScalesChange(TboxTextSizeScales.Default) },
+            enabled = enabled && scales != TboxTextSizeScales.Default,
+            modifier = Modifier.padding(top = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_text_size_reset),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+    }
+}
+
+@Composable
+private fun textSizeRoleLabel(role: TextSizeRole): String = stringResource(
+    when (role) {
+        TextSizeRole.Caption -> R.string.settings_text_size_caption
+        TextSizeRole.Body -> R.string.settings_text_size_body
+        TextSizeRole.Button -> R.string.settings_text_size_button
+        TextSizeRole.Title -> R.string.settings_text_size_title_role
+        TextSizeRole.Headline -> R.string.settings_text_size_headline
+        TextSizeRole.TabLabel -> R.string.settings_text_size_tab_label
+        TextSizeRole.WidgetTitle -> R.string.settings_text_size_widget_title
+        TextSizeRole.WidgetValue -> R.string.settings_text_size_widget_value
+        TextSizeRole.WidgetUnit -> R.string.settings_text_size_widget_unit
+    },
+)
 
 @Composable
 fun <T> GenericDropdownSelector(
