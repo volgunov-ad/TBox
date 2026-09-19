@@ -1124,6 +1124,12 @@
     <string name="road_maps_open_button">Road maps</string>
     <string name="speed_cam_open_button">Speed cameras</string>
     <string name="speed_cam_hub_title">SpeedCam database</string>
+    <string name="speed_cam_section_title">SpeedCamOnline database</string>
+    <string name="speed_cam_section_last_loaded">Last download: %1$s</string>
+    <string name="speed_cam_section_last_loaded_never">Last download: not installed yet</string>
+    <string name="speed_cam_section_points">Points in database: %1$d</string>
+    <string name="speed_cam_section_source_hint">Camera database comes from SpeedCamOnline (iGO extended / igoext). Download with the button below, or get the file manually from the site / USB:</string>
+    <string name="speed_cam_section_site_link">https://speedcamonline.ru/</string>
     <string name="speed_cam_download">Download from site</string>
     <string name="speed_cam_install_usb">Install from USB…</string>
     <string name="speed_cam_delete">Delete database</string>

@@ -2978,10 +2978,7 @@ fun LocationTabContent(
                 } // Mock
                 LocationSection.Cameras -> {
             item {
-                SpeedCamEntryButton(
-                    settingsViewModel = settingsViewModel,
-                    enabled = true,
-                )
+                SpeedCamCamerasSection(settingsViewModel = settingsViewModel)
             }
                 } // Cameras
                 LocationSection.DataDebug -> {

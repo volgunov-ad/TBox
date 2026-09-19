@@ -1132,6 +1132,12 @@
     <string name="road_maps_open_button">Карты дорог</string>
     <string name="speed_cam_open_button">База камер</string>
     <string name="speed_cam_hub_title">База камер SpeedCam</string>
+    <string name="speed_cam_section_title">База SpeedCamOnline</string>
+    <string name="speed_cam_section_last_loaded">Последняя загрузка: %1$s</string>
+    <string name="speed_cam_section_last_loaded_never">Последняя загрузка: ещё не загружалась</string>
+    <string name="speed_cam_section_points">Точек в базе: %1$d</string>
+    <string name="speed_cam_section_source_hint">База камер берётся с сайта SpeedCamOnline (формат iGO, расширенная кодировка — igoext). Можно скачать кнопкой ниже или вручную с сайта / с флешки:</string>
+    <string name="speed_cam_section_site_link">https://speedcamonline.ru/</string>
     <string name="speed_cam_download">Скачать с сайта</string>
     <string name="speed_cam_install_usb">Установить с флешки…</string>
     <string name="speed_cam_delete">Удалить базу</string>
