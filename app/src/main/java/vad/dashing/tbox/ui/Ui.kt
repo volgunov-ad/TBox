@@ -128,7 +128,7 @@ fun TboxApp(
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
-        UiIconRuntimeProvider(settingsViewModel) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
             MainScreen(

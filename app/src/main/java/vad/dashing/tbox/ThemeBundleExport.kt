@@ -141,7 +141,7 @@ object ThemeBundleExport {
             return
         }
         zipAssetSuffix(normalized, ASSETS_UI_ICONS_DIR)?.let { filename ->
-            if (UiIconPaths.isValidKey(filename)) {
+            if (UiIconPaths.isValidStorageFileName(filename)) {
                 state.uiIcons[filename] = zis.readBytes()
             }
             return
@@ -450,8 +450,12 @@ object ThemeBundleExport {
     ) {
         val lookup = settingsManager.launcherAppIconLookup()
         UiIconPaths.listResolvableKeys(context.filesDir, lookup).sorted().forEach { key ->
-            val file = UiIconPaths.resolveIconFile(context.filesDir, key, lookup) ?: return@forEach
-            putFileEntry(zos, "$ASSETS_UI_ICONS_DIR$key", file)
+            listOf(UiIconPaths.Variant.Day, UiIconPaths.Variant.Night).forEach { variant ->
+                val file = UiIconPaths.resolveVariantFile(context.filesDir, key, lookup, variant)
+                    ?: return@forEach
+                val fileName = UiIconPaths.storageFileName(key, variant) ?: return@forEach
+                putFileEntry(zos, "$ASSETS_UI_ICONS_DIR$fileName", file)
+            }
         }
     }
 

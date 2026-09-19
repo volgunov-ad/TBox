@@ -67,7 +67,7 @@ fun DashboardAppListWidgetItem(
                         modifier = Modifier
                             .matchParentSize()
                             .scale(iconScale),
-                        colorFilter = ColorFilter.tint(controls.inactiveContent),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_app_list, controls.inactiveContent),
                     )
                 }
             }

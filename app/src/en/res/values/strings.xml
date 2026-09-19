@@ -2282,7 +2282,7 @@
     <string name="themes_target_ui_icons">Widget and menu icons</string>
     <string name="settings_ui_icons_open">Configure widget and menu icons</string>
     <string name="ui_icons_settings_title">Widget and menu icons</string>
-    <string name="ui_icons_settings_description">Replace built-in icons here. Every entry explains where and in which state the icon is shown. PNG or WebP with a transparent background is recommended, up to 512×512 pixels and 512 KiB.</string>
+    <string name="ui_icons_settings_description">Replace built-in icons here. Every entry explains where and in which state the icon is shown. PNG or WebP with a transparent background is recommended, up to 512×512 pixels and 512 KiB. “Don’t change colors” disables recoloring and lets you set separate light and dark images.</string>
     <string name="ui_icons_search">Search by name</string>
     <string name="ui_icons_navigation_description">The “%1$s” icon in the app’s left menu.</string>
     <string name="ui_icons_widget_description">The “%1$s” icon shown in the corresponding widget state.</string>
@@ -2293,6 +2293,11 @@
     <string name="ui_icons_reset">Reset</string>
     <string name="ui_icons_saved">Icon saved</string>
     <string name="ui_icons_invalid_key">Unknown icon</string>
+    <string name="ui_icons_preserve_colors">Don’t change colors</string>
+    <string name="ui_icons_preserve_colors_hint">Keeps the icon’s original colors for day/night and active/inactive. You can upload separate light and dark icons; if only one is set, it is used for both themes.</string>
+    <string name="ui_icons_day">Light theme</string>
+    <string name="ui_icons_night">Dark theme</string>
+    <string name="ui_icons_replace_variant">Replace</string>
 
     <string name="app_list_dialog_title">App list</string>
     <string name="app_list_action_open">Open</string>

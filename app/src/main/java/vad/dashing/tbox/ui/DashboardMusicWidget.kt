@@ -1698,8 +1698,8 @@ private fun MediaControlActionButton(
                 onLongClick = onLongClick
             ),
     ) {
-        Icon(
-            painter = customizableUiPainter(id = iconRes),
+        CustomizableUiIcon(
+            drawableRes = iconRes,
             contentDescription = contentDescription,
             tint = if (actionEnabled) iconTint else iconTint.copy(alpha = 0.5f),
             modifier = Modifier

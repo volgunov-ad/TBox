@@ -73,7 +73,7 @@ fun DashboardFrontWindscreenHeatWidgetItem(
                     modifier = Modifier
                         .fillMaxSize()
                         .scale(iconScale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_front_windscreen_heat, iconColor)
                 )
             }
         }

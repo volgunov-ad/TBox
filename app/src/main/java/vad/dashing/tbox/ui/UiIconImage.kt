@@ -30,6 +30,8 @@ private data class UiIconRuntime(
     val revision: Int = 0,
     val lookup: LauncherAppIconPaths.Lookup = LauncherAppIconPaths.Lookup.None,
     val suppressCustomIcons: Boolean = true,
+    val currentTheme: Int = 1,
+    val preserveColors: Set<String> = emptySet(),
 )
 
 private val LocalUiIconRuntime = compositionLocalOf { UiIconRuntime() }
@@ -43,17 +45,21 @@ private val LocalUiIconRuntime = compositionLocalOf { UiIconRuntime() }
 @Composable
 fun UiIconRuntimeProvider(
     settingsViewModel: SettingsViewModel,
+    currentTheme: Int,
     content: @Composable () -> Unit,
 ) {
     val revision by settingsViewModel.uiIconRevision.collectAsStateWithLifecycle()
+    val preserveColors by settingsViewModel.uiIconPreserveColors.collectAsStateWithLifecycle()
     val themeActivationInProgress by
         settingsViewModel.themeActivationInProgress.collectAsStateWithLifecycle()
     val lookup = rememberLauncherAppIconLookup(settingsViewModel)
-    val runtime = remember(revision, lookup, themeActivationInProgress) {
+    val runtime = remember(revision, lookup, themeActivationInProgress, currentTheme, preserveColors) {
         UiIconRuntime(
             revision = revision,
             lookup = lookup,
             suppressCustomIcons = themeActivationInProgress,
+            currentTheme = currentTheme,
+            preserveColors = preserveColors,
         )
     }
     CompositionLocalProvider(LocalUiIconRuntime provides runtime, content = content)
@@ -63,15 +69,41 @@ fun UiIconRuntimeProvider(
 private fun rememberCustomUiIconPainter(iconKey: String): BitmapPainter? {
     val context = LocalContext.current
     val runtime = LocalUiIconRuntime.current
-    return remember(iconKey, context.filesDir, runtime) {
+    val preserve = iconKey in runtime.preserveColors
+    return remember(iconKey, context.filesDir, runtime, preserve) {
         if (runtime.suppressCustomIcons) {
             null
         } else {
-            UiIconPaths.resolveIconFile(context.filesDir, iconKey, runtime.lookup)
+            UiIconPaths.resolveIconFile(
+                filesDir = context.filesDir,
+                iconKey = iconKey,
+                lookup = runtime.lookup,
+                preserveColors = preserve,
+                currentTheme = runtime.currentTheme,
+            )
                 ?.let(::decodeFileToOwnedImageBitmap)
                 ?.let(::BitmapPainter)
         }
     }
+}
+
+@Composable
+fun rememberShouldPreserveUiIconColors(iconKey: String): Boolean {
+    val runtime = LocalUiIconRuntime.current
+    val customPainter = rememberCustomUiIconPainter(iconKey)
+    return iconKey in runtime.preserveColors && customPainter != null
+}
+
+@Composable
+fun uiIconColorFilter(iconKey: String, tint: Color): ColorFilter? =
+    if (rememberShouldPreserveUiIconColors(iconKey)) null else tint.asOptionalColorFilter()
+
+@Composable
+fun uiIconColorFilter(@DrawableRes drawableRes: Int, tint: Color): ColorFilter? {
+    val iconKey = requireNotNull(UiIconCatalog.keyForDrawable(drawableRes)) {
+        "Drawable $drawableRes is missing from UiIconCatalog"
+    }
+    return uiIconColorFilter(iconKey, tint)
 }
 
 @Composable
@@ -81,6 +113,56 @@ fun customizableUiPainter(
         "Drawable $id is missing from UiIconCatalog"
     },
 ): Painter = rememberCustomUiIconPainter(iconKey) ?: painterResource(id)
+
+/**
+ * Image that respects per-icon «preserve colors»: skips [ColorFilter.tint] when a custom
+ * override exists and the flag is set.
+ */
+@Composable
+fun CustomizableUiTintedImage(
+    iconKey: String,
+    @DrawableRes drawableRes: Int,
+    contentDescription: String?,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
+    alpha: Float = 1f,
+) {
+    Image(
+        painter = customizableUiPainter(drawableRes, iconKey),
+        contentDescription = contentDescription,
+        modifier = modifier,
+        alignment = alignment,
+        contentScale = contentScale,
+        alpha = alpha,
+        colorFilter = uiIconColorFilter(iconKey, tint),
+    )
+}
+
+@Composable
+fun CustomizableUiTintedImage(
+    @DrawableRes drawableRes: Int,
+    contentDescription: String?,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    alignment: Alignment = Alignment.Center,
+    contentScale: ContentScale = ContentScale.Fit,
+    alpha: Float = 1f,
+) {
+    CustomizableUiTintedImage(
+        iconKey = requireNotNull(UiIconCatalog.keyForDrawable(drawableRes)) {
+            "Drawable $drawableRes is missing from UiIconCatalog"
+        },
+        drawableRes = drawableRes,
+        contentDescription = contentDescription,
+        tint = tint,
+        modifier = modifier,
+        alignment = alignment,
+        contentScale = contentScale,
+        alpha = alpha,
+    )
+}
 
 @Composable
 fun CustomizableUiImage(
@@ -137,13 +219,14 @@ fun CustomizableUiIcon(
     tint: Color = Color.Unspecified,
 ) {
     val customPainter = rememberCustomUiIconPainter(iconKey)
+    val preserve = rememberShouldPreserveUiIconColors(iconKey)
     if (customPainter != null) {
         Image(
             painter = customPainter,
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = ContentScale.Fit,
-            colorFilter = tint.asOptionalColorFilter(),
+            colorFilter = if (preserve) null else tint.asOptionalColorFilter(),
         )
     } else {
         Icon(
@@ -164,12 +247,23 @@ fun CustomizableUiIcon(
     tint: Color = Color.Unspecified,
 ) {
     val customPainter = rememberCustomUiIconPainter(iconKey)
-    Icon(
-        painter = customPainter ?: painterResource(drawableRes),
-        contentDescription = contentDescription,
-        modifier = modifier,
-        tint = tint,
-    )
+    val preserve = rememberShouldPreserveUiIconColors(iconKey)
+    if (customPainter != null && preserve) {
+        Image(
+            painter = customPainter,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = ContentScale.Fit,
+            colorFilter = null,
+        )
+    } else {
+        Icon(
+            painter = customPainter ?: painterResource(drawableRes),
+            contentDescription = contentDescription,
+            modifier = modifier,
+            tint = tint,
+        )
+    }
 }
 
 @Composable

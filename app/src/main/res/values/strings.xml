@@ -2303,7 +2303,7 @@
     <string name="themes_target_ui_icons">Иконки виджетов и меню</string>
     <string name="settings_ui_icons_open">Настроить иконки виджетов и меню</string>
     <string name="ui_icons_settings_title">Иконки виджетов и меню</string>
-    <string name="ui_icons_settings_description">Здесь можно заменить встроенные иконки. Для каждой иконки указано, где и в каком состоянии она отображается. Рекомендуется PNG или WebP с прозрачным фоном, не более 512×512 пикселей и 512 КиБ.</string>
+    <string name="ui_icons_settings_description">Здесь можно заменить встроенные иконки. Для каждой иконки указано, где и в каком состоянии она отображается. Рекомендуется PNG или WebP с прозрачным фоном, не более 512×512 пикселей и 512 КиБ. Опция «Не менять цвета» отключает подмену цвета и позволяет задать отдельные картинки для светлой и тёмной темы.</string>
     <string name="ui_icons_search">Поиск по названию</string>
     <string name="ui_icons_navigation_description">Иконка «%1$s» в левом меню приложения.</string>
     <string name="ui_icons_widget_description">Иконка «%1$s», отображаемая в соответствующем состоянии виджета.</string>
@@ -2314,6 +2314,11 @@
     <string name="ui_icons_reset">Сбросить</string>
     <string name="ui_icons_saved">Иконка сохранена</string>
     <string name="ui_icons_invalid_key">Неизвестная иконка</string>
+    <string name="ui_icons_preserve_colors">Не менять цвета</string>
+    <string name="ui_icons_preserve_colors_hint">Без подмены цвета для дня/ночи и активного состояния. Можно загрузить отдельную иконку для светлой и тёмной темы; если загружена только одна — она используется для обеих.</string>
+    <string name="ui_icons_day">Светлая тема</string>
+    <string name="ui_icons_night">Тёмная тема</string>
+    <string name="ui_icons_replace_variant">Заменить</string>
 
     <string name="app_list_dialog_title">Список программ</string>
     <string name="app_list_action_open">Открыть</string>
