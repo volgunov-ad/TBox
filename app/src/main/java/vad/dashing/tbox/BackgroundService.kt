@@ -196,6 +196,7 @@ class BackgroundService : Service() {
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
     private var elm327Manager: Elm327Manager? = null
+    private var elm327StartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -658,6 +659,12 @@ class BackgroundService : Service() {
         private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
         /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
         private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Extra settle after [ServiceLifecyclePhase.Running] before ELM327 RFCOMM. */
+        private const val ELM327_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Max wait for mbCAN/VHAL availability to leave Unknown before ELM327 start. */
+        private const val ELM327_CAN_WAIT_MS = 20_000L
+        /** Wait for BluetoothAdapter.STATE_ON after enable() during ELM327 start. */
+        private const val ELM327_BT_ENABLE_TIMEOUT_MS = 20_000L
         /**
          * Extra settle after [ServiceLifecyclePhase.Running] before usage-stats force-show may
          * mount floating overlays (maps/nav AppWidget panels crash on fragile HU if opened mid-startup).
@@ -715,12 +722,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeEnabled)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
+            // Eagerly: service starts ELM after Running via .value; WhileSubscribed would
+            // leave boot snapshot stale if collectors race with deferred start.
             elm327Enabled = settingsManager.elm327EnabledFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.elm327Enabled)
+                .stateIn(scope, eager, settingsSnap.elm327Enabled)
             elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.elm327DeviceAddress)
+                .stateIn(scope, eager, settingsSnap.elm327DeviceAddress)
             elm327PairingPin = settingsManager.elm327PairingPinFlow
-                .stateIn(scope, warmOnCollect, settingsSnap.elm327PairingPin)
+                .stateIn(scope, eager, settingsSnap.elm327PairingPin)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -853,11 +862,11 @@ class BackgroundService : Service() {
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
             elm327Enabled = settingsManager.elm327EnabledFlow
-                .stateIn(scope, warmOnCollect, false)
+                .stateIn(scope, eager, false)
             elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
-                .stateIn(scope, warmOnCollect, "")
+                .stateIn(scope, eager, "")
             elm327PairingPin = settingsManager.elm327PairingPinFlow
-                .stateIn(scope, warmOnCollect, "")
+                .stateIn(scope, eager, "")
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, "")
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -4139,6 +4148,7 @@ class BackgroundService : Service() {
 
     private fun startElm327() {
         if (elm327Manager != null) return
+        if (elm327StartJob?.isActive == true) return
         if (!::elm327Enabled.isInitialized || !elm327Enabled.value) return
         if (!::elm327DeviceAddress.isInitialized) return
         val address = elm327DeviceAddress.value.trim()
@@ -4147,22 +4157,115 @@ class BackgroundService : Service() {
             ObdRepository.setLastError("no_device")
             return
         }
-        val manager = Elm327Manager(context = this, scope = scope)
-        elm327Manager = manager
-        ObdInterestAggregator.attach(manager)
-        manager.onPidDiscoverySuccess = { pids, atMs ->
-            settingsManager.saveElm327PidDiscoveryResult(pids, atMs)
+        elm327StartJob = scope.launch {
+            var loggedStartupWait = false
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "ELM327",
+                        "defer connect until service startup finishes",
+                    )
+                    ObdRepository.setStatus("starting")
+                }
+                delay(200)
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value
+            ) {
+                return@launch
+            }
+
+            TboxRepository.addLog(
+                "INFO",
+                "ELM327",
+                "wait mbCAN/VHAL availability up to ${ELM327_CAN_WAIT_MS}ms",
+            )
+            withTimeoutOrNull(ELM327_CAN_WAIT_MS) {
+                UniversalCanRepository.availability.first { availability ->
+                    availability !is vad.dashing.tbox.mbcan.MbCanAvailability.Unknown
+                }
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value
+            ) {
+                return@launch
+            }
+
+            TboxRepository.addLog(
+                "INFO",
+                "ELM327",
+                "post-startup settle ${ELM327_POST_STARTUP_SETTLE_MS}ms before RFCOMM",
+            )
+            delay(ELM327_POST_STARTUP_SETTLE_MS)
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value ||
+                elm327Manager != null
+            ) {
+                return@launch
+            }
+
+            val mac = elm327DeviceAddress.value.trim()
+            if (mac.isEmpty()) {
+                ObdRepository.setStatus("no_device")
+                ObdRepository.setLastError("no_device")
+                return@launch
+            }
+
+            if (!vad.dashing.tbox.obd.Elm327BluetoothPower.isEnabled()) {
+                ObdRepository.setStatus("enabling_bt")
+                TboxRepository.addLog(
+                    "INFO",
+                    "ELM327",
+                    "Bluetooth off — requesting enable",
+                )
+                val btOn = vad.dashing.tbox.obd.Elm327BluetoothPower.ensureEnabled(
+                    this@BackgroundService,
+                    timeoutMs = ELM327_BT_ENABLE_TIMEOUT_MS,
+                )
+                if (!btOn) {
+                    ObdRepository.setLastError("Bluetooth disabled")
+                    ObdRepository.setStatus("disconnected")
+                    TboxRepository.addLog(
+                        "WARN",
+                        "ELM327",
+                        "Bluetooth still off after enable request",
+                    )
+                    // Manager still starts: reconnect loop will retry enable+connect.
+                }
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value ||
+                elm327Manager != null
+            ) {
+                return@launch
+            }
+
+            val manager = Elm327Manager(context = this@BackgroundService, scope = scope)
+            elm327Manager = manager
+            ObdInterestAggregator.attach(manager)
+            manager.onPidDiscoverySuccess = { pids, atMs ->
+                settingsManager.saveElm327PidDiscoveryResult(pids, atMs)
+            }
+            manager.onPairingPinResolved = { pin ->
+                settingsManager.saveElm327PairingPinSetting(pin)
+            }
+            if (::elm327PairingPin.isInitialized) {
+                manager.setPairingPin(elm327PairingPin.value)
+            }
+            TboxRepository.addLog("INFO", "ELM327", "starting manager for $mac")
+            manager.start(mac)
         }
-        manager.onPairingPinResolved = { pin ->
-            settingsManager.saveElm327PairingPinSetting(pin)
-        }
-        if (::elm327PairingPin.isInitialized) {
-            manager.setPairingPin(elm327PairingPin.value)
-        }
-        manager.start(address)
     }
 
     private fun stopElm327() {
+        elm327StartJob?.cancel()
+        elm327StartJob = null
         ObdInterestAggregator.attach(null)
         elm327Manager?.stop()
         elm327Manager = null

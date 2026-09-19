@@ -294,6 +294,14 @@ class Elm327Manager(
         // Do not hold [sessionMutex] across connect/init — otherwise stop() cannot close a hung socket.
         ObdRepository.setStatus("connecting")
         ObdRepository.setConnected(false)
+        if (!Elm327BluetoothPower.isEnabled()) {
+            ObdRepository.setStatus("enabling_bt")
+            val on = Elm327BluetoothPower.ensureEnabled(context)
+            if (!on) {
+                error("Bluetooth disabled")
+            }
+            if (!running) return
+        }
         maybePairDevice()
         if (!running) return
         val s = Elm327BluetoothSession(deviceAddress)

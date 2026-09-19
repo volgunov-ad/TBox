@@ -2301,6 +2301,12 @@
     <string name="elm327_tab_pid">PID</string>
     <string name="elm327_enabled_title">ELM327 connection</string>
     <string name="elm327_enabled_desc">Bluetooth SPP to an OBD-II (ELM327) adapter. Pairing is handled by the app; set the PIN below if needed. Mode 01 PIDs for widgets, Mode 02 freeze frame, and fault-code reading.</string>
+    <string name="elm327_bluetooth_title">Bluetooth</string>
+    <string name="elm327_bluetooth_desc">System Bluetooth state. When ELM327 connection is enabled, the app turns Bluetooth on after the background service starts if it is off.</string>
+    <string name="elm327_bluetooth_on">on</string>
+    <string name="elm327_bluetooth_off">off</string>
+    <string name="elm327_status_bt_off">Bluetooth off</string>
+    <string name="elm327_status_enabling_bt">Enabling Bluetooth…</string>
     <string name="elm327_device_title">Bluetooth adapter</string>
     <string name="elm327_device_none">Not selected</string>
     <string name="elm327_device_refresh">Refresh list</string>
