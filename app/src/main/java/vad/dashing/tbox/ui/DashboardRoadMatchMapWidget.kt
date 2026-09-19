@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -521,11 +520,15 @@ fun DashboardRoadMatchMapWidgetItem(
             }
 
             if (showTitle) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
+                ).copy(fontWeight = FontWeight.SemiBold)
                 Text(
                     text = title,
                     color = resolvedTextColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = titleStyle,
                     maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -533,10 +536,14 @@ fun DashboardRoadMatchMapWidgetItem(
                 )
             }
             if (!displayState.shadow.visible) {
+                val noDataStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.UNIT,
+                )
                 Text(
                     text = noData,
                     color = resolvedTextColor.copy(alpha = 0.72f),
-                    fontSize = 11.sp,
+                    style = noDataStyle,
                     maxLines = 2,
                     modifier = Modifier
                         .align(Alignment.Center)
