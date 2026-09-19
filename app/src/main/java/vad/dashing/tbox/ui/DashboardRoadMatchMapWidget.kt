@@ -151,6 +151,8 @@ fun DashboardRoadMatchMapWidgetItem(
     }
     var displayedHeading by remember { mutableFloatStateOf(0f) }
     var displayedAheadFrac by remember { mutableFloatStateOf(0f) }
+    var displayedLat by remember { mutableDoubleStateOf(Double.NaN) }
+    var displayedLon by remember { mutableDoubleStateOf(Double.NaN) }
     var followCameraReady by remember { mutableStateOf(false) }
     var setRotationDeg by remember { mutableFloatStateOf(0f) }
 
@@ -218,6 +220,9 @@ fun DashboardRoadMatchMapWidgetItem(
     val targetAheadLatest by rememberUpdatedState(
         if (headingUp) RoadMatchCanvasProjection.HEADING_UP_AHEAD_FRACTION else 0f,
     )
+    val targetLatLatest by rememberUpdatedState(displayState.shadow.lat)
+    val targetLonLatest by rememberUpdatedState(displayState.shadow.lon)
+    val shadowVisibleLatest by rememberUpdatedState(displayState.shadow.visible)
     LaunchedEffect(setMode) {
         if (setMode) {
             followCameraReady = false
@@ -232,13 +237,21 @@ fun DashboardRoadMatchMapWidgetItem(
                     ((now - lastNs).toDouble() / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 }
                 lastNs = now
+                if (!shadowVisibleLatest) {
+                    followCameraReady = false
+                    return@withFrameNanos
+                }
                 val targetHalf = targetHalfLatest
                 val targetHeading = targetHeadingLatest
                 val targetAhead = targetAheadLatest
+                val targetLat = targetLatLatest
+                val targetLon = targetLonLatest
                 if (!followCameraReady) {
                     displayedHalfHeight = targetHalf
                     displayedHeading = targetHeading
                     displayedAheadFrac = targetAhead
+                    displayedLat = targetLat
+                    displayedLon = targetLon
                     followCameraReady = true
                     return@withFrameNanos
                 }
@@ -249,6 +262,10 @@ fun DashboardRoadMatchMapWidgetItem(
                 val headT = RoadMatchCanvasProjection.followBlendT(
                     dt,
                     RoadMatchCanvasProjection.FOLLOW_HEADING_TAU_SEC,
+                )
+                val posT = RoadMatchCanvasProjection.followBlendT(
+                    dt,
+                    RoadMatchCanvasProjection.FOLLOW_POS_TAU_SEC,
                 )
                 displayedHalfHeight = RoadMatchCanvasProjection.lerpSpan(
                     displayedHalfHeight,
@@ -261,6 +278,26 @@ fun DashboardRoadMatchMapWidgetItem(
                     headT,
                 )
                 displayedAheadFrac += (targetAhead - displayedAheadFrac) * headT
+                val jumpM = RoadMatchCanvasProjection.approxDistanceM(
+                    displayedLat,
+                    displayedLon,
+                    targetLat,
+                    targetLon,
+                )
+                if (jumpM >= RoadMatchCanvasProjection.FOLLOW_POS_SNAP_M) {
+                    displayedLat = targetLat
+                    displayedLon = targetLon
+                } else {
+                    val blended = RoadMatchCanvasProjection.lerpLatLon(
+                        displayedLat,
+                        displayedLon,
+                        targetLat,
+                        targetLon,
+                        posT.toDouble(),
+                    )
+                    displayedLat = blended.lat
+                    displayedLon = blended.lon
+                }
             }
         }
     }
@@ -279,6 +316,8 @@ fun DashboardRoadMatchMapWidgetItem(
             halfHeightM = displayedHalfHeight,
             headingDeg = displayedHeading,
             aheadFraction = displayedAheadFrac,
+            followLat = displayedLat,
+            followLon = displayedLon,
         )
     }
 

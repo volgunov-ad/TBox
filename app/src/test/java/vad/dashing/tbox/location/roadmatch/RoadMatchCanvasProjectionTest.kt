@@ -120,4 +120,54 @@ class RoadMatchCanvasProjectionTest {
         val longStep = RoadMatchCanvasProjection.followBlendT(2.0, 0.4)
         assertTrue(longStep > 0.95f)
     }
+
+    @Test
+    fun lerpLatLon_blendsAlongEastNorthMetres() {
+        val fromLat = 55.75
+        val fromLon = 37.61
+        val target = RoadMatchSeedMath.shiftCenter(fromLat, fromLon, eastM = 40.0, northM = 20.0)
+        val mid = RoadMatchCanvasProjection.lerpLatLon(
+            fromLat,
+            fromLon,
+            target.lat,
+            target.lon,
+            0.5,
+        )
+        val expected = RoadMatchSeedMath.shiftCenter(fromLat, fromLon, eastM = 20.0, northM = 10.0)
+        assertEquals(expected.lat, mid.lat, 1e-7)
+        assertEquals(expected.lon, mid.lon, 1e-7)
+        assertEquals(
+            0.0,
+            RoadMatchCanvasProjection.approxDistanceM(fromLat, fromLon, fromLat, fromLon),
+            0.01,
+        )
+        assertTrue(
+            RoadMatchCanvasProjection.approxDistanceM(
+                fromLat,
+                fromLon,
+                target.lat,
+                target.lon,
+            ) in 40.0..50.0,
+        )
+    }
+
+    @Test
+    fun viewport_followLatLon_overridesShadowBase() {
+        val shadow = OverlayPoseMarker(55.75, 37.61, 0f, visible = true)
+        val state = RoadMatchOverlayState(active = true, shadow = shadow)
+        val follow = RoadMatchSeedMath.shiftCenter(shadow.lat, shadow.lon, eastM = 0.0, northM = 50.0)
+        val vp = RoadMatchCanvasProjection.viewport(
+            state = state,
+            aspectRatio = 1f,
+            halfHeightM = 100.0,
+            headingDeg = 0f,
+            aheadFraction = 0f,
+            followLat = follow.lat,
+            followLon = follow.lon,
+        )!!
+        assertEquals(follow.lat, vp.centerLat, 1e-9)
+        assertEquals(follow.lon, vp.centerLon, 1e-9)
+        val shadowPt = vp.project(shadow.lat, shadow.lon)
+        assertTrue(shadowPt.y > 0.5f)
+    }
 }
