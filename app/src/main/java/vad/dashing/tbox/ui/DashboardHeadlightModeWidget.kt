@@ -73,7 +73,10 @@ fun DashboardHeadlightModeCycleWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(controls.activeContent),
+                        colorFilter = uiIconColorFilter(
+                            headlightModeWidgetLabelIconRes(currentMode),
+                            controls.activeContent,
+                        ),
                     )
                 } else {
                     Box(

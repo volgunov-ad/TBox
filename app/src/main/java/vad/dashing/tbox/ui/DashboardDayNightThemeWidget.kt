@@ -127,7 +127,7 @@ fun DashboardDayNightThemeWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.matchParentSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        colorFilter = uiIconColorFilter(iconRes, iconColor)
                     )
                 }
             }

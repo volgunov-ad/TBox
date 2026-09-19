@@ -212,7 +212,14 @@ object ThemeLayoutExport {
         )
         val arr = JSONArray()
         keys.sorted().forEach { arr.put(it) }
-        return JSONObject().put("keys", arr)
+        val preserve = settingsManager.uiIconPreserveColorsFlow.first()
+            .filter { it in keys }
+            .sorted()
+        val preserveArr = JSONArray()
+        preserve.forEach { preserveArr.put(it) }
+        return JSONObject()
+            .put("keys", arr)
+            .put("preserveColors", preserveArr)
     }
 
     private suspend fun collectHttpRequestIconKeysForSections(

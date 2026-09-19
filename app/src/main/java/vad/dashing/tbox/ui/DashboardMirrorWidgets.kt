@@ -82,7 +82,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_mirror_adjust, iconColor)
                 )
             }
         }
@@ -149,7 +149,7 @@ fun DashboardMirrorFoldWidgetItem(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),
-                    colorFilter = ColorFilter.tint(controls.inactiveContent)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_mirror_fold, controls.inactiveContent)
                 )
             }
         }

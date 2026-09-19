@@ -189,7 +189,7 @@ fun DashboardAccCruiseWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_acc_cruise, iconColor),
                     )
                     Text(
                         text = target.toString(),

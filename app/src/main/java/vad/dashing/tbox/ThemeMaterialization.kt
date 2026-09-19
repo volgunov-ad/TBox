@@ -354,6 +354,9 @@ object ThemeMaterialization {
             if (ThemeApplyTarget.UI_ICONS in resolvedTargets ||
                 targetSourceChanged(ThemeApplyTarget.UI_ICONS)
             ) {
+                if (ThemeApplyTarget.UI_ICONS in resolvedTargets) {
+                    applyUiIconPreserveColorsFromThemeJson(settingsManager, themeJson)
+                }
                 settingsManager.bumpUiIconRevision()
             }
             if (ThemeApplyTarget.TILE_BACKGROUNDS in resolvedTargets ||
@@ -765,6 +768,33 @@ object ThemeMaterialization {
             json.put("applyTargets", ThemeApplyTarget.toJsonArray(manifest.applyTargets))
         }
         File(dir, MANIFEST_FILE).writeText(json.toString(2))
+    }
+
+    private suspend fun applyUiIconPreserveColorsFromThemeJson(
+        settingsManager: SettingsManager,
+        themeJson: String,
+    ) {
+        val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return
+        val section = root.optJSONObject(ThemeSection.UI_ICONS.jsonKey) ?: return
+        val keysArr = section.optJSONArray("keys") ?: JSONArray()
+        val preserveArr = section.optJSONArray("preserveColors") ?: JSONArray()
+        val keys = buildList {
+            for (i in 0 until keysArr.length()) {
+                val key = keysArr.optString(i).trim()
+                if (UiIconPaths.isValidKey(key)) add(key)
+            }
+        }
+        val preserve = buildList {
+            for (i in 0 until preserveArr.length()) {
+                val key = preserveArr.optString(i).trim()
+                if (UiIconPaths.isValidKey(key)) add(key)
+            }
+        }
+        settingsManager.mergeUiIconPreserveColorsFromTheme(
+            themeKeys = keys,
+            preserveColorsKeys = preserve,
+            bumpRevision = false,
+        )
     }
 
     private fun parseManifest(obj: JSONObject): ThemeManifest {

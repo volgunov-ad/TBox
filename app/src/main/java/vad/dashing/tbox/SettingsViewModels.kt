@@ -2507,6 +2507,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0,
         )
 
+    val uiIconPreserveColors = settingsManager.uiIconPreserveColorsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet(),
+        )
+
     fun setCustomLauncherAppIconFromUri(
         packageName: String,
         sourceUri: Uri?,
@@ -2558,16 +2565,29 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun setCustomUiIconFromUri(
         iconKey: String,
         sourceUri: Uri?,
+        variant: UiIconPaths.Variant = UiIconPaths.Variant.Day,
         onResult: (SetLauncherAppCustomIconResult) -> Unit,
     ) {
         viewModelScope.launch {
-            onResult(settingsManager.setCustomUiIconFromUri(iconKey, sourceUri))
+            onResult(settingsManager.setCustomUiIconFromUri(iconKey, sourceUri, variant))
         }
     }
 
     fun clearCustomUiIcon(iconKey: String) {
         viewModelScope.launch {
             settingsManager.clearCustomUiIcon(iconKey)
+        }
+    }
+
+    fun clearCustomUiIconVariant(iconKey: String, variant: UiIconPaths.Variant) {
+        viewModelScope.launch {
+            settingsManager.clearCustomUiIconVariant(iconKey, variant)
+        }
+    }
+
+    fun setUiIconPreserveColors(iconKey: String, enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.setUiIconPreserveColors(iconKey, enabled)
         }
     }
 

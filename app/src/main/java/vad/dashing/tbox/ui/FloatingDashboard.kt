@@ -160,7 +160,7 @@ fun FloatingDashboardUI(
     }
 
     TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        UiIconRuntimeProvider(settingsViewModel) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
             CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

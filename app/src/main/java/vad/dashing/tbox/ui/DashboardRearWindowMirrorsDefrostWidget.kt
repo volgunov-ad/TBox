@@ -73,7 +73,7 @@ fun DashboardRearWindowMirrorsDefrostWidgetItem(
                     modifier = Modifier
                         .fillMaxSize()
                         .scale(iconScale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_rear_window_mirrors_defrost, iconColor)
                 )
             }
         }
