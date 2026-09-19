@@ -143,6 +143,7 @@ fun FloatingDashboardUI(
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId)
@@ -159,7 +160,7 @@ fun FloatingDashboardUI(
         }
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
         UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
             CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
                 Surface(

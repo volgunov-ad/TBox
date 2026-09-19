@@ -801,6 +801,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
 
@@ -1134,6 +1135,10 @@ fun SettingsTabContent(
             description = stringResource(R.string.settings_app_font_family_desc),
             enabled = true,
             selectorWidth = 250.dp
+        )
+        SettingTextSizeScales(
+            scales = appTextSizeScales,
+            onScalesChange = { settingsViewModel.saveAppTextSizeScales(it) },
         )
         SettingSwitch(
             uiClickSoundsEnabled,

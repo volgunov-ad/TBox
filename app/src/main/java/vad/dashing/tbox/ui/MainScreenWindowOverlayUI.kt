@@ -63,6 +63,7 @@ fun MainScreenWindowOverlayUI(
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
@@ -86,7 +87,7 @@ fun MainScreenWindowOverlayUI(
     val layoutSnapEnabled by settingsViewModel.mainScreenPanelsLayoutSnapEnabled
         .collectAsStateWithLifecycle()
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
         // Main-screen panel coords are absolute LTR pixels; keep crop placement LTR too.
         CompositionLocalProvider(
             LocalClickSoundEnabled provides uiClickSoundsEnabled,

@@ -101,6 +101,7 @@ fun TboxApp(
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -126,7 +127,7 @@ fun TboxApp(
         )
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
         UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {

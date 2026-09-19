@@ -41,6 +41,7 @@ import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ui.theme.LocalTboxTextSizeScales
 import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
 import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
@@ -306,6 +307,7 @@ fun calculateResponsiveTextStyle(
     )
     val role = textType.toWidgetRole()
     val styles = LocalTboxTextStyles.current
+    val globalRoleScale = LocalTboxTextSizeScales.current.forWidgetRole(role)
     val baseStyle = when (role) {
         TboxWidgetTextRole.TITLE -> styles.WidgetTitle
         TboxWidgetTextRole.VALUE -> styles.WidgetValue
@@ -316,6 +318,7 @@ fun calculateResponsiveTextStyle(
         role = role,
         baseStyle = baseStyle,
         textScale = scale,
+        globalRoleScale = globalRoleScale,
     ).copy(fontWeight = LocalWidgetFontWeight.current)
 }
 

@@ -23,6 +23,7 @@ import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
@@ -1377,6 +1378,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = TboxFontFamily.Default.id
+        )
+
+    val appTextSizeScales = settingsManager.appTextSizeScalesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TboxTextSizeScales.Default,
         )
 
     val updateChannel = settingsManager.updateChannelFlow
@@ -3241,6 +3249,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveAppFontFamilyId(fontFamilyId: Int) {
         viewModelScope.launch {
             settingsManager.saveAppFontFamilyId(fontFamilyId)
+        }
+    }
+
+    fun saveAppTextSizeScales(scales: TboxTextSizeScales) {
+        viewModelScope.launch {
+            settingsManager.saveAppTextSizeScales(scales)
         }
     }
 
