@@ -1142,6 +1142,9 @@
     <string name="speed_cam_install_usb">Установить с флешки…</string>
     <string name="speed_cam_delete">Удалить базу</string>
     <string name="speed_cam_status_empty">База не установлена</string>
+    <string name="speed_cam_status_downloading">Скачивание…</string>
+    <string name="speed_cam_error_network">Сеть оборвалась при скачивании. Проверьте интернет ГУ и нажмите «Скачать с сайта» ещё раз (или установите файл с флешки).</string>
+    <string name="speed_cam_error_download">Не удалось скачать базу камер</string>
     <string name="speed_cam_status_installed">Точек: %1$d · %2$s</string>
     <string name="speed_cam_overage_title">Допуск превышения: %1$d км/ч</string>
     <string name="speed_cam_overage_desc">Если скорость больше лимита камеры плюс допуск — расстояние и иконка подсвечиваются активным цветом</string>
