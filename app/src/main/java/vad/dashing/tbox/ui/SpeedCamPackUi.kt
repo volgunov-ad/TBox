@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,7 +19,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -68,8 +66,8 @@ fun SpeedCamCamerasSection(
         Text(
             text = speedCamLastLoadedLabel(snap),
             style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(bottom = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
         )
         if (snap.installed) {
             Text(
@@ -91,25 +89,21 @@ fun SpeedCamCamerasSection(
             text = stringResource(R.string.speed_cam_section_source_hint),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
         )
         Text(
             text = stringResource(R.string.speed_cam_section_site_link),
-            style = MaterialTheme.typography.tboxBody.copy(
-                textDecoration = TextDecoration.Underline,
-                color = MaterialTheme.colorScheme.primary,
-            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.primary,
             modifier = Modifier
-                .padding(bottom = 12.dp)
-                .clickable(
-                    onClick = rememberWrappedOnClick {
-                        runCatching {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(SPEED_CAM_SITE_URL)),
-                            )
-                        }
-                    },
-                ),
+                .clickableWithSound {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(SPEED_CAM_SITE_URL)),
+                        )
+                    }
+                }
+                .padding(bottom = 8.dp),
         )
 
         snap.lastError?.let { err ->
@@ -117,7 +111,7 @@ fun SpeedCamCamerasSection(
                 text = err,
                 style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 8.dp),
+                modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
             )
         }
         if (snap.busy) {
@@ -130,6 +124,7 @@ fun SpeedCamCamerasSection(
             Text(
                 text = snap.statusMessage,
                 style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         }
