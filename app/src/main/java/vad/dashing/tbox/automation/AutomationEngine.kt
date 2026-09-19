@@ -495,7 +495,7 @@ class AutomationEngine(
                 startedAtEpochMillis = context.firedAtEpochMillis,
             )
             TboxRepository.addLog(
-                "INFO",
+                "DEBUG",
                 LOG_TAG,
                 "${definition.name}: started trigger=${context.triggerId}" +
                     if (skipConditions) " (run now)" else "",
@@ -531,7 +531,7 @@ class AutomationEngine(
                         signalSnapshot = { latestSamples.toMap() },
                     )
                     TboxRepository.addLog(
-                        if (result.success) "INFO" else "ERROR",
+                        if (result.success) "DEBUG" else "ERROR",
                         LOG_TAG,
                         "${definition.name}: ${result.message}",
                     )
