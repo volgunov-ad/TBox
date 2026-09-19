@@ -511,6 +511,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val adbLastHost = settingsManager.adbLastHostFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "127.0.0.1")
+
+    val adbLastPort = settingsManager.adbLastPortFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5555)
+
+    val adbMode = settingsManager.adbModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "tcp")
+
     val elm327Enabled = settingsManager.elm327EnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -2098,6 +2107,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspCompanionEnabledSetting(enabled)
+        }
+    }
+
+    fun saveAdbLastHostSetting(host: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastHostSetting(host)
+        }
+    }
+
+    fun saveAdbLastPortSetting(port: Int) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastPortSetting(port)
+        }
+    }
+
+    fun saveAdbModeSetting(mode: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbModeSetting(mode)
         }
     }
 

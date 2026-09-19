@@ -17,6 +17,7 @@ enum class LeftMenuTabField(
 ) {
     MODEM("modem", R.string.tab_modem),
     AT_COMMANDS("at_commands", R.string.tab_at_commands),
+    ADB("adb", R.string.tab_adb),
     GEOPOSITION("geoposition", R.string.tab_geoposition),
     ESP_COMPANION("esp_companion", R.string.tab_esp_companion),
     ELM327("elm327", R.string.tab_elm327),
@@ -46,6 +47,7 @@ enum class LeftMenuTabField(
         fun defaultOrder(): List<LeftMenuTabField> = listOf(
             MODEM,
             AT_COMMANDS,
+            ADB,
             GEOPOSITION,
             ESP_COMPANION,
             ELM327,

@@ -71,6 +71,7 @@ object UiIconCatalog {
         addIcon(MENU_UPDATE, UiIconCategory.NAVIGATION, R.string.update_menu_available, R.drawable.ic_menu_update)
         addIcon("menu.tab.modem", UiIconCategory.NAVIGATION, R.string.tab_modem, R.drawable.menu_icon_modem)
         addIcon("menu.tab.at_commands", UiIconCategory.NAVIGATION, R.string.tab_at_commands, R.drawable.menu_icon_at)
+        addIcon("menu.tab.adb", UiIconCategory.NAVIGATION, R.string.tab_adb, R.drawable.ic_menu_adb)
         addIcon("menu.tab.geoposition", UiIconCategory.NAVIGATION, R.string.tab_geoposition)
         addIcon("menu.tab.esp_companion", UiIconCategory.NAVIGATION, R.string.tab_esp_companion)
         addIcon("menu.tab.elm327", UiIconCategory.NAVIGATION, R.string.tab_elm327, R.drawable.ic_menu_elm327)

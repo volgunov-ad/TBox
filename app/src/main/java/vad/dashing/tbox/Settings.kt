@@ -726,6 +726,9 @@ class SettingsManager(private val context: Context) {
         private val HU_INTERNET_PROBE_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
+        private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
+        private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
         private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
         private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
         private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
@@ -1425,6 +1428,18 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val adbLastHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_LAST_HOST_KEY]?.takeIf { it.isNotBlank() } ?: "127.0.0.1" }
+        .distinctUntilChanged()
+
+    val adbLastPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> (preferences[ADB_LAST_PORT_KEY] ?: 5555).coerceIn(1, 65535) }
+        .distinctUntilChanged()
+
+    val adbModeFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_MODE_KEY]?.takeIf { it == "usb" } ?: "tcp" }
         .distinctUntilChanged()
 
     val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -2954,6 +2969,24 @@ class SettingsManager(private val context: Context) {
         return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
             preferences[WIFI_MODEM_MODEL_KEY]
         )
+    }
+
+    suspend fun saveAdbLastHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveAdbLastPortSetting(port: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_PORT_KEY] = port.coerceIn(1, 65535)
+        }
+    }
+
+    suspend fun saveAdbModeSetting(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_MODE_KEY] = if (mode == "usb") "usb" else "tcp"
+        }
     }
 
     suspend fun saveElm327EnabledSetting(enabled: Boolean) {
