@@ -170,4 +170,33 @@ class RoadMatchCanvasProjectionTest {
         val shadowPt = vp.project(shadow.lat, shadow.lon)
         assertTrue(shadowPt.y > 0.5f)
     }
+
+    @Test
+    fun followBase_staysAtFixedScreenSpotWhileTrueShadowLeads() {
+        // Screen-locked pose: draw at follow base; true geo shadow leads ahead on the map.
+        val trueShadow = OverlayPoseMarker(55.75, 37.61, 0f, visible = true)
+        val state = RoadMatchOverlayState(active = true, shadow = trueShadow)
+        val follow = RoadMatchSeedMath.shiftCenter(
+            trueShadow.lat,
+            trueShadow.lon,
+            eastM = 0.0,
+            northM = -30.0,
+        )
+        val half = 100.0
+        val ahead = RoadMatchCanvasProjection.HEADING_UP_AHEAD_FRACTION
+        val vp = RoadMatchCanvasProjection.viewport(
+            state = state,
+            aspectRatio = 1f,
+            halfHeightM = half,
+            headingDeg = 0f,
+            aheadFraction = ahead,
+            followLat = follow.lat,
+            followLon = follow.lon,
+        )!!
+        val locked = vp.project(follow.lat, follow.lon)
+        assertEquals(0.5f, locked.x, 0.02f)
+        assertEquals(0.5f + ahead / 2f, locked.y, 0.02f)
+        val truePt = vp.project(trueShadow.lat, trueShadow.lon)
+        assertTrue(truePt.y < locked.y)
+    }
 }

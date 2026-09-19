@@ -485,8 +485,16 @@ fun DashboardRoadMatchMapWidgetItem(
                         rotationDeg = setRotationDeg,
                     )
                 }
+                // Follow: pin the pose to the smoothed follow base so it stays fixed on
+                // screen while roads/GNSS (true geo) slide under the chase camera.
+                // Set-mode: pose is already the viewport center (draft).
+                val poseForDraw = if (setMode || !displayedLat.isFinite() || !displayedLon.isFinite()) {
+                    displayState.shadow
+                } else {
+                    displayState.shadow.copy(lat = displayedLat, lon = displayedLon)
+                }
                 drawPoseMarker(
-                    marker = displayState.shadow,
+                    marker = poseForDraw,
                     viewport = vp,
                     color = Color(0xFF35C46A),
                     radiusPx = 6.dp.toPx(),
