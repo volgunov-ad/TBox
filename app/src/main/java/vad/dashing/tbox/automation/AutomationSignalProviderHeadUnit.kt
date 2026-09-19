@@ -185,7 +185,7 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
             }
         }?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
-    AutomationSignalId.FRONT_WINDSCREEN_HEAT -> UniversalCanRepository.hvacDefrosterFrontState.binaryFlow()
+    AutomationSignalId.FRONT_WINDSCREEN_HEAT -> UniversalCanRepository.frontWindscreenHeatState.binaryFlow()
     AutomationSignalId.HVAC_REAR_DEFROSTER -> UniversalCanRepository.hvacDefrosterState.binaryFlow()
     AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED -> UniversalCanRepository.hvacAcCleanWhenLockedState.binaryFlow()
     AutomationSignalId.HVAC_ANION_PURIFY -> UniversalCanRepository.hvacAnionPurifyState.binaryFlow()
