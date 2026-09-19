@@ -1134,6 +1134,9 @@
     <string name="speed_cam_install_usb">Install from USB…</string>
     <string name="speed_cam_delete">Delete database</string>
     <string name="speed_cam_status_empty">No database installed</string>
+    <string name="speed_cam_status_downloading">Downloading…</string>
+    <string name="speed_cam_error_network">Download interrupted. Check head-unit internet and tap Download again (or install the file from USB).</string>
+    <string name="speed_cam_error_download">Could not download camera database</string>
     <string name="speed_cam_status_installed">Points: %1$d · %2$s</string>
     <string name="speed_cam_overage_title">Overage allowance: %1$d km/h</string>
     <string name="speed_cam_overage_desc">When speed exceeds the camera limit plus this allowance, distance and icon use the active color</string>

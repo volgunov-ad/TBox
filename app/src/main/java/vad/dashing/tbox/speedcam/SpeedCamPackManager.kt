@@ -11,12 +11,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 
 /**
@@ -67,47 +66,30 @@ class SpeedCamPackManager(
     ): Boolean = withContext(Dispatchers.IO) {
         mutex.withLock {
             try {
-                publishBusyLocked(0f, "Downloading…")
+                publishBusyLocked(0f, appContext.getString(R.string.speed_cam_status_downloading))
                 val part = File(rootDir(), "$DATA_FILE_NAME.part")
                 if (part.exists()) part.delete()
-                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 30_000
-                    readTimeout = 120_000
-                    instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "TBoxMonitor/SpeedCam")
-                }
-                try {
-                    val code = conn.responseCode
-                    if (code !in 200..299) {
-                        failLocked("HTTP $code")
-                        return@withLock false
+                SpeedCamDownloader.downloadToFile(part, url) { readTotal, total ->
+                    if (total != null) {
+                        publishBusyLocked(
+                            (readTotal.toDouble() / total).toFloat().coerceIn(0f, 1f),
+                            appContext.getString(R.string.speed_cam_status_downloading),
+                        )
+                    } else if (readTotal > 0L) {
+                        // No Content-Length from SCO — show indeterminate-ish progress by MB.
+                        val fake = (readTotal / (4L * 1024L * 1024L).toDouble())
+                            .toFloat()
+                            .coerceIn(0.05f, 0.85f)
+                        publishBusyLocked(
+                            fake,
+                            appContext.getString(R.string.speed_cam_status_downloading),
+                        )
                     }
-                    val total = conn.contentLengthLong.takeIf { it > 0L }
-                    FileOutputStream(part).use { out ->
-                        conn.inputStream.use { input ->
-                            val buf = ByteArray(64 * 1024)
-                            var readTotal = 0L
-                            while (true) {
-                                val n = input.read(buf)
-                                if (n <= 0) break
-                                out.write(buf, 0, n)
-                                readTotal += n
-                                if (total != null) {
-                                    publishBusyLocked(
-                                        (readTotal.toDouble() / total).toFloat().coerceIn(0f, 1f),
-                                        "Downloading…",
-                                    )
-                                }
-                            }
-                        }
-                    }
-                } finally {
-                    conn.disconnect()
                 }
                 installFromFileLocked(part, sourceLabel, deleteSource = true)
             } catch (e: Exception) {
                 Log.e(TAG, "downloadFromSite failed", e)
-                failLocked(e.message ?: "download failed")
+                failLocked(friendlyDownloadError(e))
                 false
             }
         }
@@ -285,13 +267,24 @@ class SpeedCamPackManager(
         )
     }
 
+    private fun friendlyDownloadError(e: Exception): String {
+        val raw = e.message?.trim().orEmpty()
+        return if (SpeedCamDownloader.isTransientNetworkFailure(raw)) {
+            appContext.getString(R.string.speed_cam_error_network)
+        } else if (raw.isNotEmpty()) {
+            raw
+        } else {
+            appContext.getString(R.string.speed_cam_error_download)
+        }
+    }
+
     companion object {
         private const val TAG = "SpeedCamPack"
         const val DIR_NAME = "speedcam"
         const val DATA_FILE_NAME = "speedcam.txt"
         const val MANIFEST_FILE_NAME = "manifest.json"
         /** SpeedCamOnline iGO extended, all types, Russia. */
-        const val DEFAULT_DOWNLOAD_URL = "https://speedcamonline.ru/igoext/Rus/"
+        const val DEFAULT_DOWNLOAD_URL = SpeedCamDownloader.DEFAULT_URL
 
         fun manifestToJson(m: SpeedCamInstallManifest): String =
             JSONObject()
