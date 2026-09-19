@@ -201,7 +201,7 @@ class AdbConnection(
             payload,
             useChecksum || command == AdbProtocol.CMD_CNXN,
         )
-        transport.write(packet)
+        transport.writePacket(packet)
     }
 
     private fun receive(): AdbMessage {

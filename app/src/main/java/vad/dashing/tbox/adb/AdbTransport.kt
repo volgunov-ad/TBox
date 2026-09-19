@@ -18,6 +18,10 @@ interface AdbTransport : Closeable {
     fun read(buffer: ByteArray, offset: Int, length: Int): Int
 
     fun write(buffer: ByteArray, offset: Int = 0, length: Int = buffer.size)
+
+    fun writePacket(packet: ByteArray) {
+        write(packet)
+    }
 }
 
 class AdbTcpTransport private constructor(
@@ -74,6 +78,27 @@ class AdbUsbTransport private constructor(
     }
 
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
+        writeTransfer(buffer, offset, length)
+    }
+
+    override fun writePacket(packet: ByteArray) {
+        require(packet.size >= AdbProtocol.HEADER_SIZE) { "ADB packet is too short" }
+        writeTransfer(packet, 0, AdbProtocol.HEADER_SIZE)
+        if (packet.size > AdbProtocol.HEADER_SIZE) {
+            writeTransfer(
+                packet,
+                AdbProtocol.HEADER_SIZE,
+                packet.size - AdbProtocol.HEADER_SIZE,
+            )
+        }
+    }
+
+    override fun close() {
+        runCatching { connection.releaseInterface(usbInterface) }
+        connection.close()
+    }
+
+    private fun writeTransfer(buffer: ByteArray, offset: Int, length: Int) {
         var written = 0
         while (written < length) {
             val chunkLength = minOf(length - written, USB_WRITE_CHUNK)
@@ -82,11 +107,6 @@ class AdbUsbTransport private constructor(
             if (count <= 0) throw IOException("USB write failed: $count")
             written += count
         }
-    }
-
-    override fun close() {
-        runCatching { connection.releaseInterface(usbInterface) }
-        connection.close()
     }
 
     companion object {

@@ -35,6 +35,23 @@ class AdbConnectionAuthTest {
     }
 
     @Test
+    fun connect_usesPacketWrite() {
+        val transport = FakeTransport(
+            packet(
+                AdbProtocol.CMD_CNXN,
+                AdbProtocol.VERSION,
+                4096,
+                "device::features=cmd\u0000".toByteArray(),
+            ),
+        )
+        val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
+        connection.connect()
+
+        assertEquals(1, transport.packetWrites)
+        assertEquals(0, transport.rawWrites)
+    }
+
+    @Test
     fun connect_modernPeerUsesZeroChecksumsAfterCnxn() {
         val remoteId = 4
         val transport = FakeTransport(
@@ -179,6 +196,10 @@ class AdbConnectionAuthTest {
     ) : AdbTransport {
         override val description: String = "fake"
         val writes = ArrayList<ByteArray>()
+        var rawWrites = 0
+            private set
+        var packetWrites = 0
+            private set
         private var position = 0
         private var closed = false
 
@@ -191,7 +212,13 @@ class AdbConnectionAuthTest {
         }
 
         override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            rawWrites++
             writes.add(buffer.copyOfRange(offset, offset + length))
+        }
+
+        override fun writePacket(packet: ByteArray) {
+            packetWrites++
+            writes.add(packet.copyOf())
         }
 
         override fun close() {
