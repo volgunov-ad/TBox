@@ -60,7 +60,8 @@ object SpeedCamRepository {
         } else {
             null
         }
-        val nearby = if (showMapMarkers && bearing != null) {
+        // Map markers only need position; alert still requires course.
+        val nearby = if (showMapMarkers) {
             SpeedCamLookahead.nearbyMarkers(
                 index = index,
                 lat = lat,

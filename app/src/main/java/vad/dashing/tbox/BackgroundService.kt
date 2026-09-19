@@ -33,6 +33,7 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
 import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
 import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.SpeedCamUiState
 import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.obd.Elm327Manager
@@ -226,6 +227,7 @@ class BackgroundService : Service() {
     private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
+    private var speedCamTickerJob: Job? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -4533,28 +4535,28 @@ class BackgroundService : Service() {
      * is present. Uses the shared pack index from [SpeedCamPackManagerHolder].
      */
     private fun startSpeedCamTicker() {
+        if (speedCamTickerJob != null) return
         if (!::dashboardWidgets.isInitialized ||
             !::floatingDashboards.isInitialized ||
             !::mainScreenDashboards.isInitialized
         ) {
             return
         }
-        scope.launch {
+        speedCamTickerJob = scope.launch {
             val manager = SpeedCamPackManagerHolder.get(this@BackgroundService, settingsManager)
             runCatching { manager.ensureLoaded() }
             combine(
                 GeoDisplayRepository.state,
+                manager.snapshot,
                 combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                     Triple(dash, floating, main)
                 },
-            ) { display, widgets -> display to widgets }
-                .collect { (display, widgets) ->
+            ) { display, snap, widgets -> Triple(display, snap, widgets) }
+                .collect { (display, snap, widgets) ->
                     val (dash, floating, main) = widgets
                     val agg = SpeedCamWidgetPresence.aggregate(dash, floating, main)
                     if (agg == null) {
-                        if (SpeedCamRepository.state.value.alert != null ||
-                            SpeedCamRepository.state.value.nearbyForMap.isNotEmpty()
-                        ) {
+                        if (SpeedCamRepository.state.value != SpeedCamUiState.EMPTY) {
                             SpeedCamRepository.clear()
                         }
                         return@collect
@@ -4567,7 +4569,7 @@ class BackgroundService : Service() {
                     }
                     SpeedCamRepository.updateFromPose(
                         index = manager.currentIndex(),
-                        installedMeta = manager.snapshot.value,
+                        installedMeta = snap,
                         lat = display.latitude,
                         lon = display.longitude,
                         bearingDeg = display.bearingDeg,

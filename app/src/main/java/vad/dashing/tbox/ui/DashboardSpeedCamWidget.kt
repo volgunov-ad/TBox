@@ -55,6 +55,7 @@ fun DashboardSpeedCamWidgetItem(
     val defaultTitle = stringResource(R.string.data_title_speed_cam_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val dash = stringResource(R.string.speed_cam_no_target)
+    val packMissing = stringResource(R.string.speed_cam_pack_missing)
     val isRu = LocalConfiguration.current.locales[0]?.language.equals("ru", ignoreCase = true)
         || Locale.getDefault().language.equals("ru", ignoreCase = true)
     val tileRadius = normalizeSpeedCamRadiusM(radiusM)
@@ -100,10 +101,11 @@ fun DashboardSpeedCamWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     if (alert == null) {
+                        val emptyLabel = if (!state.installed) packMissing else dash
                         Text(
-                            text = dash,
+                            text = emptyLabel,
                             color = resolvedTextColor.copy(alpha = 0.5f),
-                            style = valueStyle,
+                            style = valueStyle.scaledWidgetText(if (!state.installed) 0.55f else 1f),
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
                         )

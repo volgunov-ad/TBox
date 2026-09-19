@@ -1143,6 +1143,7 @@
     <string name="speed_cam_show_on_map_title">Показывать на карте</string>
     <string name="speed_cam_show_on_map_desc">Рисовать ближайшие камеры на плитке «Карта привязки к дорогам» (по умолчанию выкл.)</string>
     <string name="speed_cam_no_target">—</string>
+    <string name="speed_cam_pack_missing">Нет базы</string>
     <string name="speed_cam_icon_catalog_desc">Иконка виджета «Камера» (SpeedCamOnline)</string>
     <string name="speed_cam_icon_fixed">Камера: стационарная</string>
     <string name="speed_cam_icon_traffic_light">Камера: светофор</string>

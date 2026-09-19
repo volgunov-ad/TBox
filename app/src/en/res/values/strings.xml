@@ -1135,6 +1135,7 @@
     <string name="speed_cam_show_on_map_title">Show on map</string>
     <string name="speed_cam_show_on_map_desc">Draw nearby cameras on the road-match map tile (off by default)</string>
     <string name="speed_cam_no_target">—</string>
+    <string name="speed_cam_pack_missing">No DB</string>
     <string name="speed_cam_icon_catalog_desc">“Camera” widget icon (SpeedCamOnline)</string>
     <string name="speed_cam_icon_fixed">Camera: fixed</string>
     <string name="speed_cam_icon_traffic_light">Camera: traffic light</string>
