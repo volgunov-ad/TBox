@@ -1,11 +1,14 @@
 package vad.dashing.tbox.automation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 class AutomationValidatorTest {
     @Test
@@ -633,6 +636,23 @@ class AutomationValidatorTest {
             ),
         )
         assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun hardKeyTrigger_rejectedOnAndroid10Vhal() = runBlocking {
+        UniversalCanRepository.setMode(HeadUnitCanMode.Android10Vhal)
+        try {
+            val definition = validDefinition(
+                triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 115)),
+            )
+            assertTrue(
+                AutomationValidator.validate(definition).any {
+                    it.message.contains("Android 9")
+                },
+            )
+        } finally {
+            UniversalCanRepository.setMode(HeadUnitCanMode.Android9MbCan)
+        }
     }
 
     @Test

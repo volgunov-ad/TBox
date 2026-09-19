@@ -1,8 +1,10 @@
 package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 
 data class AutomationValidationIssue(
@@ -159,6 +161,13 @@ object AutomationValidator {
                         "$path.keyCode",
                         "Код кнопки должен быть от $AUTOMATION_HARD_KEY_MIN_CODE " +
                             "до $AUTOMATION_HARD_KEY_MAX_CODE",
+                    )
+                }
+                if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Триггер «Кнопка на руле/двери» работает только на ГУ Android 9 (mbCAN). " +
+                            "На Android 10 замените на плитку «Триггер автоматизации»",
                     )
                 }
             }
@@ -554,6 +563,20 @@ object AutomationValidator {
             is AutomationAction.CanCommand -> {
                 if (!AutomationCanCatalog.isAllowed(action)) {
                     issues += AutomationValidationIssue(path, "CAN-команда отсутствует в безопасном каталоге")
+                } else {
+                    val canMode = UniversalCanRepository.mode.value
+                    val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                    if (entry != null && !entry.supports(canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "CAN-действие не подтверждено для текущего backend ГУ",
+                        )
+                    } else if (!AutomationCanValueCodec.isResolvable(action, canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "Значение CAN недоступно на текущем backend ГУ",
+                        )
+                    }
                 }
             }
 

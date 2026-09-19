@@ -574,12 +574,17 @@ sealed interface AutomationAction {
     /**
      * The persisted property id is accepted only when [AutomationCanCatalog] exposes it.
      * Users never enter arbitrary ids; codec validation blocks hand-edited unsafe values.
+     *
+     * [value] is the legacy / A9-canonical raw int. Optional [valueKey] (`on`/`off`,
+     * `close`/`open`/`vent`, …) makes binary and window actions portable across A9/A10;
+     * see [AutomationCanValueCodec].
      */
     data class CanCommand(
         val bus: AutomationCanBus = AutomationCanBus.VEHICLE,
         val propertyId: Int,
         val operation: AutomationCanOperation,
         val value: Int = 0,
+        val valueKey: String? = null,
     ) : AutomationAction
 
     data class LaunchApplication(
