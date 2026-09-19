@@ -235,14 +235,13 @@ private fun StepperAdjustIcon(
     @StringRes contentDescriptionRes: Int,
 ) {
     val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
-    Icon(
-        painter = customizableUiPainter(
-            resolveStepperAdjustIconDrawableRes(
-                increase = increase,
-                isVertical = isVertical,
-                style = adjustIconStyle,
-            )
-        ),
+    val drawableRes = resolveStepperAdjustIconDrawableRes(
+        increase = increase,
+        isVertical = isVertical,
+        style = adjustIconStyle,
+    )
+    CustomizableUiIcon(
+        drawableRes = drawableRes,
         contentDescription = stringResource(contentDescriptionRes),
         tint = tint,
         modifier = Modifier

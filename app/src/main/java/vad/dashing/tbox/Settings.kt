@@ -908,6 +908,13 @@ class SettingsManager(private val context: Context) {
         private val UI_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}ui_icon_revision")
 
+        /**
+         * JSON object of iconKey → true for UI icons that must keep original colors
+         * (no day/night or active/inactive tint).
+         */
+        private val UI_ICON_PRESERVE_COLORS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}ui_icon_preserve_colors_json")
+
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
@@ -1747,6 +1754,12 @@ class SettingsManager(private val context: Context) {
 
     val uiIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[UI_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val uiIconPreserveColorsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parseUiIconPreserveColorsJson(preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty())
+        }
         .distinctUntilChanged()
 
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
@@ -3684,16 +3697,83 @@ class SettingsManager(private val context: Context) {
     suspend fun hasCustomUiIcon(iconKey: String): Boolean =
         withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            UiIconPaths.hasResolvableIcon(context.filesDir, iconKey, lookup)
+            val preserve = uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+            UiIconPaths.hasResolvableIcon(
+                filesDir = context.filesDir,
+                iconKey = iconKey,
+                lookup = lookup,
+                preserveColors = preserve,
+            )
         }
 
     suspend fun clearCustomUiIcon(iconKey: String) {
         withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)) {
+            val deleted = UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)
+            val clearedFlag = setUiIconPreserveColors(iconKey, enabled = false, bumpRevision = false)
+            if (deleted || clearedFlag) {
                 bumpUiIconRevision()
             }
         }
+    }
+
+    suspend fun clearCustomUiIconVariant(iconKey: String, variant: UiIconPaths.Variant) {
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup, variant)) {
+                bumpUiIconRevision()
+            }
+        }
+    }
+
+    suspend fun isUiIconPreserveColors(iconKey: String): Boolean =
+        uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+
+    /**
+     * @return true when the stored flag changed
+     */
+    suspend fun setUiIconPreserveColors(
+        iconKey: String,
+        enabled: Boolean,
+        bumpRevision: Boolean = true,
+    ): Boolean {
+        val key = iconKey.trim()
+        if (!UiIconPaths.isValidKey(key)) return false
+        var changed = false
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            changed = if (enabled) current.add(key) else current.remove(key)
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (changed && bumpRevision) bumpUiIconRevision()
+        return changed
+    }
+
+    /**
+     * When a theme with UI icons activates, merge preserve-color flags for [themeKeys]:
+     * keys listed in [preserveColorsKeys] become true; other [themeKeys] become false.
+     * Keys not present in [themeKeys] are left unchanged.
+     */
+    suspend fun mergeUiIconPreserveColorsFromTheme(
+        themeKeys: Collection<String>,
+        preserveColorsKeys: Collection<String>,
+        bumpRevision: Boolean = true,
+    ) {
+        val themeKeySet = themeKeys.map { it.trim() }.filter { UiIconPaths.isValidKey(it) }.toSet()
+        if (themeKeySet.isEmpty()) return
+        val preserveSet = preserveColorsKeys.map { it.trim() }.filter { it in themeKeySet }.toSet()
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            themeKeySet.forEach { key ->
+                if (key in preserveSet) current.add(key) else current.remove(key)
+            }
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (bumpRevision) bumpUiIconRevision()
     }
 
     suspend fun clearSharedUiIconsFolder() {
@@ -3703,6 +3783,9 @@ class SettingsManager(private val context: Context) {
                 dir.listFiles()?.forEach { file ->
                     if (file.isFile) file.delete()
                 }
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = "{}"
             }
             bumpUiIconRevision()
         }
@@ -4089,17 +4172,18 @@ class SettingsManager(private val context: Context) {
     suspend fun setCustomUiIconFromUri(
         iconKey: String,
         sourceUri: Uri?,
+        variant: UiIconPaths.Variant = UiIconPaths.Variant.Day,
     ): SetLauncherAppCustomIconResult {
         if (!UiIconPaths.isValidKey(iconKey)) {
             return SetLauncherAppCustomIconResult.InvalidPackage
         }
         return withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup)
+            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup, variant)
                 ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                clearCustomUiIcon(iconKey)
+                clearCustomUiIconVariant(iconKey, variant)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {
@@ -4439,6 +4523,30 @@ class SettingsManager(private val context: Context) {
         } catch (_: Exception) {
             MainScreenSettingsButtonPosition.Default
         }
+    }
+
+    private fun parseUiIconPreserveColorsJson(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+        return try {
+            val obj = JSONObject(raw)
+            val out = linkedSetOf<String>()
+            obj.keys().forEach { key ->
+                if (obj.optBoolean(key, false) && UiIconPaths.isValidKey(key)) {
+                    out.add(key.trim())
+                }
+            }
+            out
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun serializeUiIconPreserveColors(keys: Set<String>): String {
+        val obj = JSONObject()
+        keys.sorted().forEach { key ->
+            if (UiIconPaths.isValidKey(key)) obj.put(key, true)
+        }
+        return obj.toString()
     }
 
     private fun parseMainScreenAddButtonJson(raw: String): MainScreenAddButtonPosition {

@@ -173,6 +173,20 @@ PNG для виджетов «Ярлык приложения» и «HTTP-зап
 зависят от числовых Android resource id. Файлы находятся в `assets/ui_icons/{iconKey}`, после
 materialize — в `files/themes/{cacheKey}/ui_icons/{iconKey}`.
 
+Для иконок с опцией «Не менять цвета» дополнительно может быть файл
+`assets/ui_icons/{iconKey}.dark` (тёмная тема). Если загружен только один из day/night файлов,
+он используется для обеих тем. В `theme.json` секция выглядит так:
+
+```json
+"uiIcons": {
+  "keys": ["menu.tab.modem", "dashboard.vehicle.trunk"],
+  "preserveColors": ["menu.tab.modem"]
+}
+```
+
+`preserveColors` — список ключей, для которых приложение не подменяет цвет (день/ночь и
+active/inactive). При активации темы флаги мержатся в DataStore для ключей из `keys`.
+
 Область применения `uiIcons` независима от `appIcons`. Если она выключена, кэш темы не
 участвует в чтении или записи UI-иконок: используются `files/ui_icons/`, затем встроенные
 drawable/Material Icons. Дисковый кэш темы при этом не удаляется.

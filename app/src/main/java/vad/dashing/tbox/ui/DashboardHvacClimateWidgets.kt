@@ -106,7 +106,7 @@ fun DashboardHvacSyncWidgetItem(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_hvac_sync, iconColor)
                 )
             }
         }
@@ -143,8 +143,8 @@ fun DashboardHvacFanWidgetItem(
         adjustIconStyle = stepperAdjustIconStyle,
         controlsActive = !frontOffActive,
         centerIcon = { contentColor ->
-            Icon(
-                painter = customizableUiPainter(R.drawable.ic_widget_hvac_fan),
+            CustomizableUiIcon(
+                drawableRes = R.drawable.ic_widget_hvac_fan,
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
                 tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
@@ -389,7 +389,10 @@ fun DashboardHvacBlowModeCycleWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.matchParentSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        colorFilter = uiIconColorFilter(
+                            if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face,
+                            iconColor,
+                        ),
                     )
                 }
             }
@@ -515,7 +518,7 @@ private fun BlowModePanelButton(
                 .fillMaxSize()
                 .padding(4.dp)
                 .scale(iconScale),
-            colorFilter = ColorFilter.tint(iconColor)
+            colorFilter = uiIconColorFilter(hvacBlowModeIconRes(mode), iconColor),
         )
     }
 }
@@ -610,7 +613,11 @@ fun DashboardHvacCustomModeCycleWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.matchParentSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        colorFilter = uiIconColorFilter(
+                            if (mode != null) hvacCustomModeIconRes(mode)
+                            else R.drawable.ic_widget_hvac_mode_eco,
+                            iconColor,
+                        ),
                     )
                 }
             }

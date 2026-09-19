@@ -141,7 +141,7 @@ fun DashboardNetNewWidgetItem(
                     painter = customizableUiPainter(id = imageSignalRes),
                     contentDescription = netState.signalLevel.toString(),
                     contentScale = ContentScale.Fit,
-                    colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
+                    colorFilter = uiIconColorFilter(imageSignalRes, imageColorSignal),
                     modifier = Modifier.matchParentSize().scale(iconScale)
                 )
                 if (imageNetRes != null) {
@@ -149,7 +149,7 @@ fun DashboardNetNewWidgetItem(
                         painter = customizableUiPainter(id = imageNetRes),
                         contentDescription = netState.signalLevel.toString(),
                         contentScale = ContentScale.Fit,
-                        colorFilter = imageColorNet.let { ColorFilter.tint(it) },
+                        colorFilter = uiIconColorFilter(imageNetRes, imageColorNet),
                         modifier = Modifier
                             .matchParentSize()
                             .scale(iconScale)
