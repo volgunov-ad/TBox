@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.obd.Elm327BluetoothPower
 import vad.dashing.tbox.obd.Elm327Protocol
 import vad.dashing.tbox.obd.ObdDtc
 import vad.dashing.tbox.obd.ObdDtcCatalog
@@ -278,9 +279,19 @@ fun Elm327TabContent(
         startDiscovery()
     }
 
+    val bluetoothEnabled by remember {
+        Elm327BluetoothPower.enabledFlow(context)
+    }.collectAsStateWithLifecycle(initialValue = Elm327BluetoothPower.isEnabled())
+    val canToggleBluetooth = remember {
+        Elm327BluetoothPower.canToggleBluetooth(context)
+    }
+
     val statusLabel = when {
         !enabled -> stringResource(R.string.elm327_status_stopped)
         selectedAddress.isBlank() -> stringResource(R.string.elm327_status_no_device)
+        !bluetoothEnabled && status != "enabling_bt" ->
+            stringResource(R.string.elm327_status_bt_off)
+        status == "enabling_bt" -> stringResource(R.string.elm327_status_enabling_bt)
         connected -> stringResource(R.string.elm327_status_connected)
         status == "pairing" -> stringResource(R.string.elm327_status_pairing)
         status == "connecting" || status == "starting" ->
@@ -337,6 +348,15 @@ fun Elm327TabContent(
                         description = stringResource(R.string.elm327_enabled_desc),
                         enabled = true,
                     )
+                    SettingSwitch(
+                        isChecked = bluetoothEnabled,
+                        onCheckedChange = { on ->
+                            Elm327BluetoothPower.setEnabled(context, on)
+                        },
+                        text = stringResource(R.string.elm327_bluetooth_title),
+                        description = stringResource(R.string.elm327_bluetooth_desc),
+                        enabled = canToggleBluetooth,
+                    )
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
@@ -345,6 +365,14 @@ fun Elm327TabContent(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     StatusRow(stringResource(R.string.elm327_status_title), statusLabel)
+                    StatusRow(
+                        stringResource(R.string.elm327_bluetooth_title),
+                        if (bluetoothEnabled) {
+                            stringResource(R.string.elm327_bluetooth_on)
+                        } else {
+                            stringResource(R.string.elm327_bluetooth_off)
+                        },
+                    )
                     StatusRow(
                         stringResource(R.string.elm327_adapter_voltage),
                         adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",

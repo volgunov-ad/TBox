@@ -4,7 +4,8 @@
 
 ## Возможности
 
-- Вкладка меню **ELM327** с тремя разделами (`HorizontalSectionTabRow`): **Подключение** (вкл/выкл, статус шины ATDP/ATDPN, BT/MAC/PIN), **Диагностика** (снимок, мониторы, DTC, VIN, freeze frame), **PID** (discovery).
+- Вкладка меню **ELM327** с тремя разделами (`HorizontalSectionTabRow`): **Подключение** (вкл/выкл ELM, Bluetooth, статус шины ATDP/ATDPN, BT/MAC/PIN), **Диагностика** (снимок, мониторы, DTC, VIN, freeze frame), **PID** (discovery).
+- Старт ELM после завершения инициализации фоновой службы (`Running`) и появления mbCAN/VHAL (не Unknown), с короткой паузой; при выключенном Bluetooth — `enable()` и ожидание `STATE_ON`.
 - **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
 - **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 0A (permanent), Mode 04 clear с подтверждением.
 - **VIN**: Mode 09 `0902`.
