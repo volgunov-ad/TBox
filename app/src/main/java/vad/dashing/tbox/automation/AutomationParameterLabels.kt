@@ -242,6 +242,12 @@ object AutomationParameterLabels {
         AutomationSignalId.WIFI_ASSOCIATED -> "Wi-Fi: подключение к сети"
         AutomationSignalId.WIFI_SSID -> "Wi-Fi: точка доступа"
         AutomationSignalId.HU_INTERNET_STATUS -> "Интернет ГУ"
+        AutomationSignalId.WIFI_MODEM_LINK_STATUS -> "Wi‑Fi модем: связь"
+        AutomationSignalId.MODEM_MOBILE_DATA -> "Модем: передача данных"
+        AutomationSignalId.MODEM_NET_TYPE -> "Модем: тип сети"
+        AutomationSignalId.MODEM_SIM_STATUS -> "Модем: SIM"
         AutomationSignalId.FOREGROUND_APP -> "Приложение на экране"
+        AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
+        AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
     }
 }

@@ -100,6 +100,19 @@ class Elm327ProtocolTest {
     }
 
     @Test
+    fun isSilentTimeout_detection() {
+        // Blank response at any elapsed time — adapter never answered.
+        assertTrue(Elm327Protocol.isSilentTimeout("", 100L, 4_000L))
+        assertTrue(Elm327Protocol.isSilentTimeout("   \r\n", 3_990L, 4_000L))
+        // Full window elapsed without a prompt — partial data, dead-ish link.
+        assertTrue(Elm327Protocol.isSilentTimeout("41 0C 1A", 4_000L, 4_000L))
+        assertTrue(Elm327Protocol.isSilentTimeout("41 0C 1A", 4_015L, 4_000L))
+        // Prompt received inside the window — healthy, even for slow VIN requests.
+        assertTrue(!Elm327Protocol.isSilentTimeout("49 02 01", 9_500L, 10_000L))
+        assertTrue(!Elm327Protocol.isSilentTimeout("12.6V", 20L, 4_000L))
+    }
+
+    @Test
     fun isElmError_busInitOk_isNotError() {
         assertTrue(!Elm327Protocol.isElmError("BUS INIT: OK"))
         assertTrue(!Elm327Protocol.isElmError("SEARCHING...\rBUS INIT: OK\r41 0C 1A F8"))

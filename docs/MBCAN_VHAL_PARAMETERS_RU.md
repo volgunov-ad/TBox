@@ -57,7 +57,11 @@
 
 Код **верхней левой кнопки руля зависит от модификации** авто — на тестовой машине не определён (см. raw `keyCode` в окне).
 
+Окно дополнительно расшифровывает прочие известные коды (не руль/двери): 28 `OK`, 103 `UP`, 105 `LEFT`, 106 `RIGHT`, 108 `DOWN`, 116 `POWER`, 587 `HOME`.
+
 **A10 VHAL:** кандидаты `289475088`/`560991239`/`557845512`/`561003776` подписываются, но событий не дают (начальные значения 0/`[0]`/`[0, 0]`). Реагируют только **две правые кнопки руля** (верхняя и нижняя) — приходят как Android `KeyEvent` с compose `keyCode=17179869184`; различие кнопок пока не подтверждено (нужен `scanCode` из нативного события, логируется окном). Левая клавиша джойстика и дверные кнопки на A10 событий не дают.
+
+**Production-использование кодов:** триггер автоматизаций `hard_key` (см. docs/AUTOMATIONS_AI_JSON_GUIDE_RU.md) получает те же `eMBCAN_HARDKEY` события через `MbCanRepository.setAutomationHardKeyTrackingEnabled` (fan-out `MbCanEngineFacade.addHardKeyListener`). Подписка включается только на A9 (`UniversalCanRepository.mode == Android9MbCan`) и только пока существует включённое runnable-правило с триггером `hard_key`; повторные события той же кнопки и статуса в течение 120 мс подавляются (`AutomationHardKeyForwarder`). CCS-трекинг `RES+`/`SET−` (`CcsRememberedSetpoint`) использует ту же OEM-подписку независимо.
 
 ---
 
@@ -124,14 +128,29 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 |-----------|--------|
 | **0 Off** | Выключен; RES+/SET− не активируют |
 | **1 Standby** | Предварительно включён; SET− = текущая скорость, RES+ = прежняя уставка |
-| **2 Active** | Ведёт; RES+/SET− ±; тормоз → Standby; газ → Standby пока нажат |
+| **2 Active** | Ведёт; RES+/SET− ±; тормоз → Standby; газ → Override пока нажат |
+| **Override** | Только ACC: `ACCMode == 7` — водитель держит газ, ACC не тормозит; после отпускания снова Active. Иконка виджета статуса зелёная; тап/свайпы как у Active |
 | **Fault** | Только ACC: `ACCMode == 9` (ошибка); иконки оранжевые (`WidgetActiveColors.Secondary`), тапы no-op |
 
-**Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6,7 → Standby`; `3,4,5 → Active`; `9 → Fault`.
+**Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6 → Standby`; `3,4,5 → Active`; `7 → Override`; `9 → Fault`.
+
+Полная таблица значений ACCMode (стоковый decode — A10 Launcher `CarSettingsManager.updateAccMode`: `enable = v ∈ 1..7`, `active = v ∈ {3,4,5}`, при `v == 7` предупреждение `info_acc_mode_override` на 3000 мс — «When you step on the gas, ACC can't slow down»):
+
+| ACCMode | Штатный смысл | Наше состояние / виджет статуса |
+|---------|---------------|----------------------------------|
+| 0 | off (карта ADAS скрыта) | Off |
+| 1 | enable, не active | Standby |
+| 2 | enable, не active | Standby |
+| 3 | active | Active |
+| 4 | active | Active |
+| 5 | active | Active |
+| 6 | enable, не active | Standby |
+| 7 | enable, не active + предупреждение «газ перебивает ACC» | Override (зелёная иконка `#4CAF50`) |
+| 9 и прочие вне 1–7 | штатка считает «выкл»/скрывает карту | Fault (только 9; наша интерпретация) |
 
 **Маппинг чтения CCS** (`CruiseControlStatus`, ICM-хинт): `0 → Off`; `1 → Active`; `2 → Standby`; иное/null → Off. Для MFS key-mode сток считает «on» оба `{1,2}` (`isCcsEngaged`).
 
-**Автоматизации:** отдельные state-сигналы `acc_cruise_state` (ACCMode → `off`/`standby`/`active`/`fault`) и `ccs_cruise_state` (CruiseControlStatus → `off`/`standby`/`active`). Не путать с `acc_status` (ключ зажигания). Уставка по-прежнему `cruise_set_speed`.
+**Автоматизации:** отдельные state-сигналы `acc_cruise_state` (ACCMode → `off`/`standby`/`active`/`override`/`fault`) и `ccs_cruise_state` (CruiseControlStatus → `off`/`standby`/`active`; Override/Fault только у ACC). Метка `override` в UI — «Перебивка газом». Не путать с `acc_status` (ключ зажигания). Уставка по-прежнему `cruise_set_speed`.
 
 **MFS (дорожная семантика на Dashing):** **210** из Active → полное Off; **212** Cancel → пауза Active→Standby; **214** SET− активирует из Standby; **213** RES+.
 
@@ -139,7 +158,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. После converge — пауза **1 с**, проверка уставки и догон при ±1; abort converge при уходе из Active (тормоз→Standby или Off). Мигает только нажатая плитка. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active/Override → **212**; Fault → no-op. Иконка: Active — `activeContent`, Override — зелёная (`#4CAF50`), Fault — оранжевая, Standby — тусклая. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active/Override**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active/Override. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
 
 ### ACC (адаптивный)
 
@@ -151,20 +170,31 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6,7}**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (ставит `accFrmFeedbackAvailable`; ненулевой ACCMode — ещё `accModeEverNonZero`). **Pull:** нет (push-only) |
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6}**, Override **7**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (ставит `accFrmFeedbackAvailable`; ненулевой ACCMode — ещё `accModeEverNonZero`). **Pull:** нет (push-only) |
 | **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
 
 ### CCS (обычный круиз, без ACC)
 
-Цикл converge: замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**; затем post-verify **1 с** и догон при уходе. Запуск: после enable+SET− из Off/Standby (ждём Active), или сразу converge из Active если скорость ≠ уставке. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
+Цикл converge шагает сессионную **запомненную уставку** (`CcsRememberedSetpoint`) к цели виджета — тот же смысл, что `VSetDis` у ACC. **Не** использует текущую скорость автомобиля как обратную связь: машина отстаёт от внутренней уставки CCS, и старый speed-based batch (пачки до 5×±1 по `carSpeed`) «выкручивал» stalk дальше цели. После SET− baseline = текущая скорость; каждый RES+/SET− nudges remembered ±1; стоп при `remembered == target` (таймаут **30 с**). Затем post-verify **1 с** и догон по remembered. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
-**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами. Пишется при SET− с виджета / входе в Active с руля (если пусто или скорость дальше **2 км/ч** от прежней — новый SET; иначе RES и keep), при stalk ±1 после settle **500 мс**, при завершении CCS converge. **Active→Standby** сохраняет; **Off (0)** и unbind очищают. Окно «наш импульс» **2 с** после MFS с виджета подавляет stalk-эвристику. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
+**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами.
+
+Источники (только CCS; ACC не затрагивается):
+
+1. **Виджет** — MFS 213/214 + nudge remembered; окно «наш импульс» **2 с** глушит speed-эвристики / reconcile (не hardkey: write MFS на hardkey-канал не попадает).
+2. **A9 hardkey** — левый джойстик руля: вверх **29** = RES+, вниз **30** = SET− (`eMBCAN_HARDKEY`, production fan-out вместе с «Тест кнопок руля»). **Standby+RES+** → keep remembered (resume); **Standby+SET−** → capture текущей скорости; **Active ±** → remembered ±1. Debounce **120 мс**, только `keyStatus=0` (нажатие). На **A10** левый джойстик пока событий не даёт — hardkey-трекинг не включается.
+3. **Fallback без hardkey** (A10 / пропуск): вход в Active — если скорость дальше **2 км/ч** от remembered → capture (SET), иначе keep (RES); Active ±1 по скорости после settle **500 мс**.
+4. **Stable reconcile**: Active, скорость в полосе **±1 км/ч** от якоря **≥2 с**, и `|v − remembered| ≥ 2` → принять `round(v)` (рассинхрон / газ / пропущенный stalk). Не работает в окне нашего импульса (чтобы не ломать converge).
+
+**Active→Standby** сохраняет; **Off (0)** и unbind очищают. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | **0** Off, **1** Active, **2** Standby; key-mode on ∈ **{1,2}**; identity | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
 | **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
-| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1; пачки до 5×±1; verify 2 с / post-batch 1 с | — | — | — |
+| Скорость для baseline SET− | `TripTelemetryRepository.carSpeed` (HU) | float км/ч; захват remembered при SET− / пустой памяти / stable reconcile | — | — | — |
+| Обратная связь converge | `CcsRememberedSetpoint` (сессия) | exact ±1 как ACC VSetDis; **не** live `carSpeed` | — | — | — |
+| **Android 9** — stalk RES+/SET− | `eMBCAN_HARDKEY` keyCode **29** / **30** | press=`keyStatus` **0**; production listener в `CcsRememberedSetpoint` | — | — | **Push:** `registHardKeyListener` (shared с диагностикой) |
 
 ### Команды MFS (импульсы)
 

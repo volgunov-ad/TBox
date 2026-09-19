@@ -400,4 +400,59 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.stateOptionLabel("offline"),
         )
     }
+
+    @Test
+    fun modemSignals_areAppOnlyWithExplicitStates() {
+        val link = AutomationSignalCatalog.get(AutomationSignalId.WIFI_MODEM_LINK_STATUS)
+        val data = AutomationSignalCatalog.get(AutomationSignalId.MODEM_MOBILE_DATA)
+        val net = AutomationSignalCatalog.get(AutomationSignalId.MODEM_NET_TYPE)
+        val sim = AutomationSignalCatalog.get(AutomationSignalId.MODEM_SIM_STATUS)
+        assertEquals(
+            listOf("idle", "ok", "auth_failed", "unreachable", "error"),
+            link.stateOptions,
+        )
+        assertEquals(listOf("off", "on"), data.stateOptions)
+        assertEquals(listOf("none", "2g", "3g", "4g"), net.stateOptions)
+        assertEquals(listOf("none", "ready", "pin", "error", "unknown"), sim.stateOptions)
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(link.id))
+        assertTrue(link.valueHint().contains("Wi‑Fi HTTP"))
+        assertTrue(data.valueHint().contains("apnStatus"))
+        assertEquals("Связь OK", AutomationSignalCatalog.stateOptionLabel("ok"))
+        assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
+        assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
+    }
+
+    @Test
+    fun appThemeMode_isAppOnlyWithExplicitStates() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME_MODE)
+        assertEquals(listOf("manual_day", "manual_night", "auto_day", "auto_night"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: режим",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME_MODE),
+        )
+        assertEquals("День (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_day"))
+        assertEquals("Ночь (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_night"))
+        assertEquals("День (авто)", AutomationSignalCatalog.stateOptionLabel("auto_day"))
+        assertEquals("Ночь (авто)", AutomationSignalCatalog.stateOptionLabel("auto_night"))
+        assertTrue(descriptor.valueHint().isNotBlank())
+    }
+
+    @Test
+    fun appTheme_effectiveThemeIsAppOnlyDayOrNight() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME)
+        assertEquals(listOf("day", "night"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: сейчас",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME),
+        )
+        assertTrue(descriptor.valueHint().contains("авто-день"))
+    }
 }

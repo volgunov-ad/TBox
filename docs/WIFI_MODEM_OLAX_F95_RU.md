@@ -91,6 +91,11 @@ HTTP(S) probe по настраиваемому URL (по умолчанию `ht
 `TboxRepository.huInternetStatus`. Тот же статус доступен в автоматизациях как сигнал
 `hu_internet_status` (триггер «Состояние» / условие «Состояние»).
 
+Состояния модема для автоматизаций (источник «Приложение»):
+`wifi_modem_link_status`, `modem_mobile_data`, `modem_net_type`, `modem_sim_status`.
+Действия: `wifi_modem_set_data`, `wifi_modem_reboot` (нужен источник Wi‑Fi HTTP).
+См. [AUTOMATIONS_RU.md](./AUTOMATIONS_RU.md).
+
 Android-нюанс (как у Routspan): при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
 запросы к `192.168.x.x` надо **биндить к Wi‑Fi Network** (`ConnectivityManager.bindProcessToNetwork`
 или per-socket `Network.bindSocket`).

@@ -419,6 +419,7 @@ fun TboxScreen(
                 when (selectedTab) {
                     LeftMenuTabField.MODEM.id -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.ADB.id -> AdbTab(settingsViewModel)
                     LeftMenuTabField.GEOPOSITION.id -> LocationTab(
                         viewModel,
                         settingsViewModel,
@@ -639,6 +640,13 @@ fun CanTab(
         canViewModel = canViewModel,
         onSaveToFile = onSaveToFile
     )
+}
+
+@Composable
+fun AdbTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    AdbTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

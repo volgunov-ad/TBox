@@ -71,6 +71,7 @@ object UiIconCatalog {
         addIcon(MENU_UPDATE, UiIconCategory.NAVIGATION, R.string.update_menu_available, R.drawable.ic_menu_update)
         addIcon("menu.tab.modem", UiIconCategory.NAVIGATION, R.string.tab_modem, R.drawable.menu_icon_modem)
         addIcon("menu.tab.at_commands", UiIconCategory.NAVIGATION, R.string.tab_at_commands, R.drawable.menu_icon_at)
+        addIcon("menu.tab.adb", UiIconCategory.NAVIGATION, R.string.tab_adb, R.drawable.ic_menu_adb)
         addIcon("menu.tab.geoposition", UiIconCategory.NAVIGATION, R.string.tab_geoposition)
         addIcon("menu.tab.esp_companion", UiIconCategory.NAVIGATION, R.string.tab_esp_companion)
         addIcon("menu.tab.elm327", UiIconCategory.NAVIGATION, R.string.tab_elm327, R.drawable.ic_menu_elm327)
@@ -406,6 +407,43 @@ object UiIconCatalog {
                 drawable,
                 label,
                 R.string.dashboard_loc_content_desc,
+            )
+        }
+
+        listOf(
+            Triple("fixed", R.drawable.ic_widget_speed_cam_fixed, R.string.speed_cam_icon_fixed),
+            Triple(
+                "traffic_light",
+                R.drawable.ic_widget_speed_cam_traffic_light,
+                R.string.speed_cam_icon_traffic_light,
+            ),
+            Triple("section", R.drawable.ic_widget_speed_cam_section, R.string.speed_cam_icon_section),
+            Triple("mobile", R.drawable.ic_widget_speed_cam_mobile, R.string.speed_cam_icon_mobile),
+            Triple(
+                "police_post",
+                R.drawable.ic_widget_speed_cam_police_post,
+                R.string.speed_cam_icon_police_post,
+            ),
+            Triple("railway", R.drawable.ic_widget_speed_cam_railway, R.string.speed_cam_icon_railway),
+            Triple("dummy", R.drawable.ic_widget_speed_cam_dummy, R.string.speed_cam_icon_dummy),
+            Triple("other", R.drawable.ic_widget_speed_cam_other, R.string.speed_cam_icon_other),
+            Triple(
+                "arrow.same",
+                R.drawable.ic_widget_speed_cam_arrow_same,
+                R.string.speed_cam_icon_arrow_same,
+            ),
+            Triple(
+                "arrow.oncoming",
+                R.drawable.ic_widget_speed_cam_arrow_oncoming,
+                R.string.speed_cam_icon_arrow_oncoming,
+            ),
+        ).forEach { (state, drawable, nameRes) ->
+            addIcon(
+                "dashboard.speedcam.$state",
+                UiIconCategory.LOCATION,
+                nameRes,
+                drawable,
+                descriptionRes = R.string.speed_cam_icon_catalog_desc,
             )
         }
 

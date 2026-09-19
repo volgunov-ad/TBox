@@ -511,6 +511,15 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val adbLastHost = settingsManager.adbLastHostFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "127.0.0.1")
+
+    val adbLastPort = settingsManager.adbLastPortFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5555)
+
+    val adbMode = settingsManager.adbModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "tcp")
+
     val elm327Enabled = settingsManager.elm327EnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -710,6 +719,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
+        )
+
+    val floatingPanelsAllowBeyondScreen = settingsManager.floatingPanelsAllowBeyondScreenFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
         )
 
     val floatingDashboardHeight = activeFloatingDashboardConfig
@@ -1767,6 +1783,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
     }
 
+    fun speedCamPackManager(context: android.content.Context): vad.dashing.tbox.speedcam.SpeedCamPackManager {
+        return vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder.get(
+            context = context,
+            settingsManager = settingsManager,
+        )
+    }
+
     fun saveGyroBiasOffsets(offsets: vad.dashing.tbox.location.GyroBiasOffsets) {
         viewModelScope.launch {
             settingsManager.saveGyroBiasOffsets(offsets)
@@ -2084,6 +2107,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspCompanionEnabledSetting(enabled)
+        }
+    }
+
+    fun saveAdbLastHostSetting(host: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastHostSetting(host)
+        }
+    }
+
+    fun saveAdbLastPortSetting(port: Int) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastPortSetting(port)
+        }
+    }
+
+    fun saveAdbModeSetting(mode: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbModeSetting(mode)
         }
     }
 
@@ -2888,6 +2929,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsAllowBeyondScreen(enabled)
+        }
+    }
+
     fun saveFloatingDashboardWidth(width: Int) {
         updateSelectedFloatingDashboard { it.copy(width = width) }
     }
@@ -2914,12 +2961,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         startX: Int,
         startY: Int,
     ) {
+        val origin = clampFloatingPanelOrigin(
+            x = startX,
+            y = startY,
+            allowBeyondScreen = floatingPanelsAllowBeyondScreen.value,
+        )
         updateSelectedFloatingDashboard {
             it.copy(
                 width = width.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
                 height = height.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
-                startX = startX.coerceAtLeast(0),
-                startY = startY.coerceAtLeast(0),
+                startX = origin.x,
+                startY = origin.y,
             )
         }
     }

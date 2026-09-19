@@ -153,6 +153,15 @@ object AutomationValidator {
                     )
                 }
             }
+            is AutomationTrigger.HardKey -> {
+                if (trigger.keyCode !in AUTOMATION_HARD_KEY_MIN_CODE..AUTOMATION_HARD_KEY_MAX_CODE) {
+                    issues += AutomationValidationIssue(
+                        "$path.keyCode",
+                        "Код кнопки должен быть от $AUTOMATION_HARD_KEY_MIN_CODE " +
+                            "до $AUTOMATION_HARD_KEY_MAX_CODE",
+                    )
+                }
+            }
             is AutomationTrigger.Interval -> {
                 if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
                     issues += AutomationValidationIssue(

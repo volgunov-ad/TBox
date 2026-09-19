@@ -5,6 +5,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.speedcam.isSpeedCamWidgetDataKey
+import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
+import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M
 import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
@@ -404,6 +409,19 @@ fun serializeWidgetConfigsToJsonArray(
                 .normalize(config.roadMatchBasemapTransparencyPercent)
             if (transparency != 0) {
                 obj.put("roadMatchBasemapTransparencyPercent", transparency)
+            }
+        }
+        if (isSpeedCamWidgetDataKey(config.dataKey)) {
+            val overage = normalizeSpeedCamOverageKmh(config.speedCamOverageKmh)
+            if (overage != DEFAULT_SPEED_CAM_OVERAGE_KMH) {
+                obj.put("speedCamOverageKmh", overage)
+            }
+            val radius = normalizeSpeedCamRadiusM(config.speedCamRadiusM)
+            if (radius != DEFAULT_SPEED_CAM_RADIUS_M) {
+                obj.put("speedCamRadiusM", radius)
+            }
+            if (config.speedCamShowOnMap) {
+                obj.put("speedCamShowOnMap", true)
             }
         }
         array.put(obj)
@@ -844,6 +862,22 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 0
                             },
+                        speedCamOverageKmh = if (isSpeedCamWidgetDataKey(dataKey)) {
+                            normalizeSpeedCamOverageKmh(
+                                item.optInt("speedCamOverageKmh", DEFAULT_SPEED_CAM_OVERAGE_KMH),
+                            )
+                        } else {
+                            DEFAULT_SPEED_CAM_OVERAGE_KMH
+                        },
+                        speedCamRadiusM = if (isSpeedCamWidgetDataKey(dataKey)) {
+                            normalizeSpeedCamRadiusM(
+                                item.optInt("speedCamRadiusM", DEFAULT_SPEED_CAM_RADIUS_M),
+                            )
+                        } else {
+                            DEFAULT_SPEED_CAM_RADIUS_M
+                        },
+                        speedCamShowOnMap = isSpeedCamWidgetDataKey(dataKey) &&
+                            item.optBoolean("speedCamShowOnMap", false),
                     )
                 )
             }

@@ -26,6 +26,9 @@
    - SSID сохранённой Wi-Fi-сети;
    - координаты геозоны;
    - модель ГУ A9/mbCAN или A10/VHAL для backend-зависимой CAN-команды;
+   - `keyCode` для триггера `hard_key`, если пользователь не назвал кнопку из таблицы
+     верифицированных кодов (docs/MBCAN_VHAL_PARAMETERS_RU.md); код верхней левой кнопки
+     руля зависит от модификации авто;
    - страницу главного экрана, если пользователь не указал её и выбор важен.
 3. Если пользователь не выбрал источник сигнала, используй `head_unit`, когда он разрешён;
    иначе используй единственный разрешённый источник. Между `head_unit` и `tbox`
@@ -61,8 +64,8 @@
 - `conditionWaitMillis: 0` означает: если общие условия ложны в момент триггера, запуск
   пропускается. Значение больше нуля означает ожидание всех условий до таймаута. Числовой,
   state- или geofence-триггер при этом должен снова/всё ещё выполняться; уже сработавшие
-  системный, периодический, временной и солнечный триггеры считаются выполненными до конца
-  ожидания.
+  системный, виджетный, кнопочный (`hard_key`), периодический, временной и солнечный триггеры
+  считаются выполненными до конца ожидания.
 - Вложенный `if_then_else` проверяет условие в момент, когда очередь дошла до этого действия.
 - Одно правило не запускается чаще одного раза в 2 секунды.
 - `null`, неизвестное или недоступное значение сигнала само по себе не удовлетворяет условию.
@@ -145,6 +148,24 @@
 - `triggerId`: непустой, до 32 символов, регистр важен;
 - срабатывает при тапе по плитке «Триггер автоматизации» (`automationTriggerWidget`) с тем же ID в настройках плитки;
 - срабатывает независимо от активного/неактивного состояния плитки; в режиме редактирования тап по плитке открывает настройки и не срабатывает;
+- нажатия, случившиеся до полного запуска фоновой службы, теряются.
+
+### Кнопка на руле / двери (A9 mbCAN)
+
+```json
+{"type":"hard_key","id":"1","keyCode":115,"keyStatus":"pressed"}
+```
+
+- `keyCode`: `0..1023`; верифицированные коды кнопок Jetour Dashing — в таблице
+  «Верифицированные коды кнопок» (docs/MBCAN_VHAL_PARAMETERS_RU.md); код верхней левой кнопки
+  руля зависит от модификации — уточните его через окно «Тест кнопок руля»;
+- `keyStatus`: `pressed` (0 — нажата) или `released` (1 — отпущена); OEM доставляет оба события;
+- работает только на головных устройствах Android 9 (mbCAN): подписка `IMBHardKeyListener`
+  включается автоматически, пока хотя бы одно включённое правило использует этот триггер;
+  на Android 10 (VHAL) события кнопок не приходят — правило не сработает;
+- повторные события той же кнопки и того же статуса в течение 120 мс подавляются (антидребезг);
+- срабатывание — только по факту события кнопки (после перезапуска службы «уже нажатое»
+  состояние не воспроизводится); условия/cooldown/`runMode` действуют как обычно;
 - нажатия, случившиеся до полного запуска фоновой службы, теряются.
 
 ### Периодически
@@ -590,7 +611,10 @@
 
 Не используй `esp_relay_set`: это устаревшее и отклоняемое действие. Для медиакоманд нужен
 доступ TBox Monitor к уведомлениям. Для `show_alert` нужно разрешение «Поверх других окон».
-Wi-Fi-команды работают с клиентским Wi-Fi ГУ и недоступны обычному приложению на API 29+.
+Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Если активна SoftAP/раздача ГУ, переключение
+радио сначала пытается её выключить. При `WRITE_SECURE_SETTINGS` дополнительно пишется
+`Settings.Global.WIFI_ON`. На «чистом» API 29+ с targetSdk ≥ 29 `setWifiEnabled` обычно
+недоступен обычному приложению; на ГУ с API 28 (в т.ч. Adayo «Android 10») — да.
 
 ---
 
@@ -695,14 +719,19 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
 | `wifi_ssid` | `app` | точный SSID или `none` |
 | `hu_internet_status` | `app` | `unknown`, `checking`, `online`, `offline` (см. вкладку «Модем»; offline после 2 fail подряд) |
+| `wifi_modem_link_status` | `app` | `idle`, `ok`, `auth_failed`, `unreachable`, `error` (HTTP к Wi‑Fi модему; idle без поллера / источник TBox) |
+| `modem_net_type` | `app` | `none`, `2g`, `3g`, `4g` |
+| `modem_sim_status` | `app` | `none`, `ready`, `pin`, `error`, `unknown` |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
+| `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
+| `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 
 Следующие сигналы имеют только значения `off` / `on`:
 
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и
@@ -761,6 +790,9 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ и не
 
 У сигнала `hvac_front_off` значение `on` означает, что состояние FRONT_OFF активно, то есть
 передний климат выключен. Не путай его с действием «включить климат».
+
+Сигнал `front_windscreen_heat` — **электрообогрев** лобового (property 316), не обдув.
+Обдув лобового — это режим `defrost` / `defrost_foot` у `hvac_fan_direction` (property 40).
 
 ### Остальные vehicle-команды
 

@@ -12,7 +12,10 @@ internal object MainScreenBootOpenPolicy {
     /** Gaps between startActivity attempts after the user-configured initial delay. */
     val RETRY_GAPS_MS: LongArray = longArrayOf(0L, 2_000L, 5_000L, 15_000L, 30_000L)
 
-    /** Wall-clock budget from first pending mark (elapsedRealtime). */
+    /**
+     * Wall-clock budget for the retry schedule (elapsedRealtime).
+     * Applied after the user-configured initial delay — see [newDeadlineWithInitialDelayMs].
+     */
     const val MAX_EPISODE_MS: Long = 30_000L
 
     /** Delay before checking [MainActivityForegroundTracker] after each startActivity. */
@@ -34,6 +37,17 @@ internal object MainScreenBootOpenPolicy {
         nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
         maxEpisodeMs: Long = MAX_EPISODE_MS,
     ): Long = nowElapsedRealtimeMs + maxEpisodeMs
+
+    /**
+     * Deadline that keeps the user-configured initial delay inside the episode budget:
+     * the retry schedule gets [MAX_EPISODE_MS] after the delay elapses, so delays up to
+     * [vad.dashing.tbox.SettingsManager.MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS] do not
+     * expire the episode before the first attempt.
+     */
+    fun newDeadlineWithInitialDelayMs(
+        initialDelayMs: Long,
+        nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
+    ): Long = nowElapsedRealtimeMs + initialDelayMs.coerceAtLeast(0L) + MAX_EPISODE_MS
 }
 
 /**
@@ -69,6 +83,13 @@ internal object MainScreenBootOpenStore {
     fun deadlineElapsedRealtimeMs(context: Context): Long =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getLong(KEY_DEADLINE_ELAPSED, 0L)
+
+    /** Extends the episode deadline; never shortens it (no-op for earlier values). */
+    fun extendDeadlineTo(context: Context, deadlineElapsedRealtimeMs: Long) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (deadlineElapsedRealtimeMs <= prefs.getLong(KEY_DEADLINE_ELAPSED, 0L)) return
+        prefs.edit().putLong(KEY_DEADLINE_ELAPSED, deadlineElapsedRealtimeMs).apply()
+    }
 
     fun sourceAction(context: Context): String =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

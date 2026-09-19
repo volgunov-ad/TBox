@@ -621,6 +621,31 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun hardKeyTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 158),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun hardKeyTrigger_outOfRangeKeyCode_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 5000)),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".keyCode") },
+        )
+    }
+
+    @Test
     fun setAutomationTriggerWidgetAction_isAccepted() {
         val definition = validDefinition(
             actions = listOf(

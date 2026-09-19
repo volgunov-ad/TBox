@@ -20,6 +20,7 @@ import kotlinx.coroutines.job
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import vad.dashing.tbox.Wheels
+import vad.dashing.tbox.automation.AutomationHardKeyForwarder
 import vad.dashing.tbox.esp.HuCanMarkLog
 
 enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
@@ -348,6 +349,46 @@ object MbCanRepository {
     fun stopHardKeyDiagnosticsAsync() {
         runOnStateApply { MbCanEngineFacade.stopHardKeyDiagnostics() }
     }
+
+    /**
+     * Production CCS stalk tracking via left-wheel joystick (RES+/SET−).
+     * Shares the OEM hardkey subscription with diagnostics.
+     */
+    fun setCcsHardKeyTrackingEnabled(enabled: Boolean) {
+        runOnStateApply {
+            if (enabled) {
+                MbCanEngineFacade.addHardKeyListener(ccsHardKeyListener)
+            } else {
+                MbCanEngineFacade.removeHardKeyListener(ccsHardKeyListener)
+            }
+        }
+    }
+
+    private val ccsHardKeyListener: (Int, Int, Int) -> Unit =
+        { keyCode, keyStatus, keyType ->
+            CcsRememberedSetpoint.onHardKey(keyCode, keyStatus, keyType)
+        }
+
+    /**
+     * Production hardkey tracking for automation triggers (steering wheel keys, door
+     * buttons). Shares the OEM hardkey subscription with diagnostics and CCS tracking.
+     */
+    fun setAutomationHardKeyTrackingEnabled(enabled: Boolean) {
+        runOnStateApply {
+            if (enabled) {
+                MbCanEngineFacade.addHardKeyListener(automationHardKeyListener)
+            } else {
+                MbCanEngineFacade.removeHardKeyListener(automationHardKeyListener)
+            }
+        }
+    }
+
+    private val automationHardKeyForwarder = AutomationHardKeyForwarder()
+
+    private val automationHardKeyListener: (Int, Int, Int) -> Unit =
+        { keyCode, keyStatus, _ ->
+            automationHardKeyForwarder.onHardKey(keyCode, keyStatus)
+        }
 
     private val cfgPushHandler = Handler(Looper.getMainLooper())
     private val pendingCfgPushes = mutableMapOf<Int, Int>()

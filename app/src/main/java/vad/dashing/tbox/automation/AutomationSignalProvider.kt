@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -123,6 +124,32 @@ class AutomationSignalProvider(
                             vad.dashing.tbox.internet.HuInternetStatusLogic.automationStateKey(status),
                         )
                     }.distinctUntilChanged()
+                AutomationSignalId.WIFI_MODEM_LINK_STATUS ->
+                    TboxRepository.wifiModemLinkStatus.map { status ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_MOBILE_DATA ->
+                    TboxRepository.apnStatus.map { up ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.mobileDataKey(up),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_NET_TYPE ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.netTypeKey(net.netStatus),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_SIM_STATUS ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.simStatusKey(net.simStatus),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.APP_THEME_MODE -> appThemeModeFlow()
+                AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -210,6 +237,34 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual -> "manual_day"
+            HeadUnitDayNightRepository.Mode.DarkManual -> "manual_night"
+            HeadUnitDayNightRepository.Mode.LightAuto -> "auto_day"
+            HeadUnitDayNightRepository.Mode.DarkAuto -> "auto_night"
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual,
+            HeadUnitDayNightRepository.Mode.LightAuto,
+            -> "day"
+
+            HeadUnitDayNightRepository.Mode.DarkManual,
+            HeadUnitDayNightRepository.Mode.DarkAuto,
+            -> "night"
+
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
 
 private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     val context = AppContextHolder.appContextOrNull

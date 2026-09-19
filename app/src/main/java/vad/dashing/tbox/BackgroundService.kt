@@ -31,6 +31,10 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
+import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
+import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.SpeedCamUiState
+import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
 import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
@@ -118,6 +122,7 @@ import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
 import vad.dashing.tbox.fuel.FuelPriceClient
 import vad.dashing.tbox.fuel.FuelPriceResult
+import vad.dashing.tbox.fuel.RefuelPriceRefresh
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.fuel.RefuelRecord
@@ -223,6 +228,7 @@ class BackgroundService : Service() {
     private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
+    private var speedCamTickerJob: Job? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -242,6 +248,7 @@ class BackgroundService : Service() {
     private lateinit var trackRefuelsSetting: StateFlow<Boolean>
     private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
+    private val refreshRefuelPricesInFlight = AtomicBoolean(false)
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -499,6 +506,8 @@ class BackgroundService : Service() {
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
         /** Обучение калибровки уровня топлива по одной записи заправки ([EXTRA_REFUEL_ID]). */
         const val ACTION_FUEL_CALIBRATION_TRAIN = "vad.dashing.tbox.FUEL_CALIBRATION_TRAIN"
+        /** Manual Multigo price refresh for one refuel ([EXTRA_REFUEL_ID]). */
+        const val ACTION_REFRESH_REFUEL_PRICES = "vad.dashing.tbox.REFRESH_REFUEL_PRICES"
         const val EXTRA_REFUEL_ID = "vad.dashing.tbox.EXTRA_REFUEL_ID"
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
@@ -1277,6 +1286,14 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
+            ACTION_REFRESH_REFUEL_PRICES -> {
+                val refuelId = intent.getStringExtra(EXTRA_REFUEL_ID)?.trim().orEmpty()
+                if (refuelId.isNotEmpty()) {
+                    refreshRefuelPrice(refuelId)
+                } else {
+                    TboxRepository.addLog("WARN", "Fuel price", "refresh: пустой refuel id")
+                }
+            }
             ACTION_STOP -> performServiceStopIfRunning()
             ACTION_SEND_AT -> {
                 val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
@@ -2051,6 +2068,7 @@ class BackgroundService : Service() {
                 }
                 startWheelPulseFeatureWatcher()
                 startMockLocationJob()
+                startSpeedCamTicker()
                 vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
                     context = this@BackgroundService,
                     scope = scope,
@@ -3000,6 +3018,97 @@ class BackgroundService : Service() {
             )
             maybePersistTrips(force = true)
             showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+        }
+    }
+
+    /**
+     * Manual refresh (F-01): re-fetch Multigo price for one refuel using stored
+     * coordinates (or a live fix if the row has none) and apply trip cost delta.
+     */
+    private fun refreshRefuelPrice(refuelId: String) {
+        if (!refreshRefuelPricesInFlight.compareAndSet(false, true)) {
+            showRefuelToast(getString(R.string.toast_refuel_price_refresh_busy))
+            return
+        }
+        scope.launch {
+            try {
+                val refuel = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+                if (refuel == null) {
+                    showRefuelToast(getString(R.string.toast_refuel_price_refresh_not_found))
+                    return@launch
+                }
+                val liveCoords = currentFuelCoordinatesOrNull()
+                val coordinates = RefuelPriceRefresh.coordinatesOf(refuel) ?: liveCoords
+                if (coordinates == null) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Fuel price",
+                        "Refresh skip $refuelId: no coordinates",
+                    )
+                    showRefuelToast(getString(R.string.toast_refuel_coordinates_not_found))
+                    return@launch
+                }
+                showRefuelToast(getString(R.string.toast_refuel_searching_fuel_price))
+                val price = try {
+                    withContext(Dispatchers.IO) {
+                        fuelPriceClient.fetchPrice(coordinates, refuel.fuelId)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Fuel price",
+                        "Refresh fetch failed $refuelId: ${e.message}",
+                    )
+                    null
+                }
+                if (price == null) {
+                    showRefuelToast(getString(R.string.toast_refuel_fuel_price_not_found))
+                    return@launch
+                }
+                val previousCost = refuel.costRub
+                val newCost = FuelCostAccounting.refuelCostRub(
+                    refuel.actualLiters,
+                    price.pricePerLiterRub,
+                )
+                val latest = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+                    ?: return@launch
+                RefuelRepository.replaceRefuel(
+                    latest.copy(
+                        latitude = coordinates.latitude,
+                        longitude = coordinates.longitude,
+                        pricePerLiterRub = price.pricePerLiterRub,
+                        priceSourceName = price.sourceName,
+                        costRub = newCost,
+                    )
+                )
+                maybePersistRefuels(force = true)
+                val tripId = latest.tripId
+                if (tripId != null) {
+                    val trip = TripRepository.trips.value.firstOrNull { it.id == tripId }
+                    if (trip != null) {
+                        val delta = FuelCostAccounting.tripFuelCostDeltaRub(previousCost, newCost)
+                        if (delta != 0f) {
+                            TripRepository.replaceTrip(
+                                trip.copy(
+                                    fuelRefueledCostRub =
+                                        (trip.fuelRefueledCostRub + delta).coerceAtLeast(0f),
+                                )
+                            )
+                            maybePersistTrips(force = true)
+                        }
+                    }
+                }
+                TboxRepository.addLog(
+                    "INFO",
+                    "Fuel price",
+                    "Refresh $refuelId: ${price.pricePerLiterRub} RUB/L (${price.sourceName})",
+                )
+                showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+            } finally {
+                refreshRefuelPricesInFlight.set(false)
+            }
         }
     }
 
@@ -4522,6 +4631,58 @@ class BackgroundService : Service() {
             gnssBearingDeg = display.bearingDeg,
             gnssVisible = display.locateStatus,
         )
+    }
+
+    /**
+     * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any SpeedCam tile
+     * is present. Uses the shared pack index from [SpeedCamPackManagerHolder].
+     */
+    private fun startSpeedCamTicker() {
+        if (speedCamTickerJob != null) return
+        if (!::dashboardWidgets.isInitialized ||
+            !::floatingDashboards.isInitialized ||
+            !::mainScreenDashboards.isInitialized
+        ) {
+            return
+        }
+        speedCamTickerJob = scope.launch {
+            val manager = SpeedCamPackManagerHolder.get(this@BackgroundService, settingsManager)
+            runCatching { manager.ensureLoaded() }
+            combine(
+                GeoDisplayRepository.state,
+                manager.snapshot,
+                combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
+                    Triple(dash, floating, main)
+                },
+            ) { display, snap, widgets -> Triple(display, snap, widgets) }
+                .collect { (display, snap, widgets) ->
+                    val (dash, floating, main) = widgets
+                    val agg = SpeedCamWidgetPresence.aggregate(dash, floating, main)
+                    if (agg == null) {
+                        if (SpeedCamRepository.state.value != SpeedCamUiState.EMPTY) {
+                            SpeedCamRepository.clear()
+                        }
+                        return@collect
+                    }
+                    val carSpeed = TripTelemetryRepository.accountingCarSpeed()
+                    val speed = when {
+                        display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
+                        carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
+                        else -> 0f
+                    }
+                    SpeedCamRepository.updateFromPose(
+                        index = manager.currentIndex(),
+                        installedMeta = snap,
+                        lat = display.latitude,
+                        lon = display.longitude,
+                        bearingDeg = display.bearingDeg,
+                        vehicleSpeedKmh = speed,
+                        radiusM = agg.radiusM,
+                        overageKmh = agg.overageKmh,
+                        showMapMarkers = agg.showOnMap,
+                    )
+                }
+        }
     }
 
     private fun startConstantDrAutoCalibJob() {
@@ -6471,6 +6632,13 @@ class BackgroundService : Service() {
                 return
             }
             val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
+            // Keep the user-configured delay inside the episode budget: pending deadline is
+            // marked at BOOT_COMPLETED (+30 s only), so delays > 30 s would expire the episode
+            // before the first attempt without this extension.
+            MainScreenBootOpenStore.extendDeadlineTo(
+                this@BackgroundService,
+                MainScreenBootOpenPolicy.newDeadlineWithInitialDelayMs(delaySeconds * 1000L),
+            )
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
             val source = MainScreenBootOpenStore.sourceAction(this@BackgroundService)
                 .ifBlank { "?" }

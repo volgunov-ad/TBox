@@ -38,10 +38,10 @@ private val CRUISE_STATUS_SWIPE_THRESHOLD_DP = 40.dp
 
 /**
  * Cruise status tile: live ACC VSetDis or remembered CCS setpoint.
- * Single tap: Off → enable+SET−; Standby → RES+ if setpoint else SET−; Active → pause (212); Fault → no-op.
- * Double tap: full off (210) when Standby/Active.
+ * Single tap: Off → enable+SET−; Standby → RES+ if setpoint else SET−; Active/Override → pause (212); Fault → no-op.
+ * Double tap: full off (210) when Standby/Active/Override.
  * Standby: swipe down → SET−, swipe up → RES+.
- * Active: swipe up → RES+ (+1), swipe down → SET− (−1).
+ * Active/Override: swipe up → RES+ (+1), swipe down → SET− (−1).
  */
 @Composable
 fun DashboardCruiseStatusWidgetItem(
@@ -100,6 +100,7 @@ fun DashboardCruiseStatusWidgetItem(
         !known -> controls.inactiveContent.copy(alpha = 0.25f)
         logical == CruiseLogicalState.Fault -> WidgetActiveColors.Secondary
         logical == CruiseLogicalState.Active -> controls.activeContent
+        logical == CruiseLogicalState.Override -> Color(0xFF4CAF50)
         logical == CruiseLogicalState.Standby -> controls.inactiveContent
         else -> controls.inactiveContent.copy(alpha = 0.45f)
     }
@@ -121,6 +122,7 @@ fun DashboardCruiseStatusWidgetItem(
                             when (logicalState.value) {
                                 CruiseLogicalState.Standby,
                                 CruiseLogicalState.Active,
+                                CruiseLogicalState.Override,
                                 -> AccCruiseController.launchStatusSwipeUp(typeState.value)
                                 else -> Unit
                             }
@@ -130,6 +132,7 @@ fun DashboardCruiseStatusWidgetItem(
                             when (logicalState.value) {
                                 CruiseLogicalState.Standby,
                                 CruiseLogicalState.Active,
+                                CruiseLogicalState.Override,
                                 -> AccCruiseController.launchStatusSwipeDown(typeState.value)
                                 else -> Unit
                             }

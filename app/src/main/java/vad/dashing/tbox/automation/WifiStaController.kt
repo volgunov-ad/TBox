@@ -1,29 +1,41 @@
 package vad.dashing.tbox.automation
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.wifi.WifiConfiguration
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.SystemClock
-import kotlinx.coroutines.delay
+import android.provider.Settings
+import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 
 /**
- * Client-mode (STA) Wi-Fi for automations. SoftAP is out of scope.
- * Enable/disable and enableNetwork are the API 28 WifiManager surface;
- * they are rejected on API 29+.
+ * Client-mode (STA) Wi-Fi for automations. SoftAP is out of scope as a feature,
+ * but an active SoftAP often blocks [WifiManager.setWifiEnabled] on API 28.
+ *
+ * On API 29+ AOSP rejects [WifiManager.setWifiEnabled] for apps with targetSdk ≥ 29;
+ * we still try OEM paths and a [Settings.Global.WIFI_ON] write when
+ * [Manifest.permission.WRITE_SECURE_SETTINGS] is granted.
  */
 object WifiStaController {
-    private const val RADIO_WAIT_MS = 8_000L
+    private const val TAG = "WifiSta"
+    private const val RADIO_WAIT_MS = 12_000L
     private const val ASSOCIATE_WAIT_MS = 15_000L
     private const val POLL_MS = 200L
+    private const val SOFT_AP_SETTLE_MS = 700L
 
     fun snapshots(context: Context): Flow<WifiStaSnapshot> {
         val app = context.applicationContext
@@ -59,33 +71,61 @@ object WifiStaController {
         WifiStaSsid.uniqueSsids(configuredNetworks(context).map { it.second })
 
     suspend fun setRadioEnabled(context: Context, enabled: Boolean): AutomationActionResult {
-        val blocked = api29Message("включение и выключение Wi-Fi")
-        if (blocked != null) return AutomationActionResult.failure(blocked)
-        val wifi = wifiManager(context)
+        val app = context.applicationContext
+        val wifi = wifiManager(app)
             ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
-        val current = wifi.isWifiEnabled
-        if (current == enabled) {
+        if (isRadioEnabled(wifi) == enabled) {
             return AutomationActionResult.ok(if (enabled) "Wi-Fi уже включён" else "Wi-Fi уже выключен")
         }
-        if (!setWifiEnabledCompat(wifi, enabled)) {
-            return AutomationActionResult.failure("Не удалось переключить Wi-Fi")
+
+        var softApStopped = false
+        var accepted = setWifiEnabledCompat(wifi, enabled)
+        if (!accepted && isWifiApEnabledCompat(wifi)) {
+            Log.i(TAG, "setWifiEnabled($enabled) rejected; stopping SoftAP and retrying")
+            softApStopped = stopSoftApCompat(app, wifi)
+            if (softApStopped) {
+                delay(SOFT_AP_SETTLE_MS)
+                accepted = setWifiEnabledCompat(wifi, enabled)
+            }
         }
-        val ok = waitUntil(RADIO_WAIT_MS) { wifi.isWifiEnabled == enabled }
+        if (!accepted) {
+            // Some HUs honour WIFI_ON when WRITE_SECURE_SETTINGS is granted.
+            if (writeWifiOnSetting(app, enabled)) {
+                Log.i(TAG, "wrote Settings.Global.WIFI_ON=${if (enabled) 1 else 0}; retry setWifiEnabled")
+                setWifiEnabledCompat(wifi, enabled)
+                accepted = true // wait for radio state even if the API still returns false
+            }
+        }
+
+        if (!accepted) {
+            return AutomationActionResult.failure(
+                WifiStaToggleDiagnostics.failureMessage(
+                    airplane = isAirplaneModeOn(app),
+                    softApEnabled = isWifiApEnabledCompat(wifi),
+                    sdkInt = Build.VERSION.SDK_INT,
+                ),
+            )
+        }
+
+        val ok = waitUntil(RADIO_WAIT_MS) { isRadioEnabled(wifi) == enabled }
         return if (ok) {
-            AutomationActionResult.ok(if (enabled) "Wi-Fi включён" else "Wi-Fi выключен")
+            val base = if (enabled) "Wi-Fi включён" else "Wi-Fi выключен"
+            val suffix = if (softApStopped) " (точка доступа ГУ выключена)" else ""
+            AutomationActionResult.ok(base + suffix)
         } else {
-            AutomationActionResult.failure("Таймаут переключения Wi-Fi")
+            AutomationActionResult.failure(
+                "Таймаут переключения Wi-Fi" +
+                    if (isAirplaneModeOn(app)) " (режим полёта)" else "",
+            )
         }
     }
 
     suspend fun connectToSaved(context: Context, ssid: String): AutomationActionResult {
-        val blocked = api29Message("подключение к сохранённой сети")
-        if (blocked != null) return AutomationActionResult.failure(blocked)
         val wanted = WifiStaSsid.normalize(ssid)
             ?: return AutomationActionResult.failure("Выберите сохранённую сеть")
         val wifi = wifiManager(context)
             ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
-        if (!wifi.isWifiEnabled) {
+        if (!isRadioEnabled(wifi)) {
             val enabled = setRadioEnabled(context, true)
             if (!enabled.success) return enabled
         }
@@ -110,11 +150,9 @@ object WifiStaController {
     }
 
     fun disconnectCurrent(context: Context): AutomationActionResult {
-        val blocked = api29Message("отключение от сети")
-        if (blocked != null) return AutomationActionResult.failure(blocked)
         val wifi = wifiManager(context)
             ?: return AutomationActionResult.failure("Wi-Fi недоступен на этом устройстве")
-        if (!wifi.isWifiEnabled) {
+        if (!isRadioEnabled(wifi)) {
             return AutomationActionResult.ok("Wi-Fi выключен")
         }
         val snap = readSnapshot(wifi)
@@ -136,7 +174,7 @@ object WifiStaController {
     @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")
     private fun readSnapshot(wifi: WifiManager): WifiStaSnapshot {
-        val enabled = runCatching { wifi.isWifiEnabled }.getOrDefault(false)
+        val enabled = isRadioEnabled(wifi)
         if (!enabled) return radioOffSnapshot()
         val info = runCatching { wifi.connectionInfo }.getOrNull()
         val ssid = WifiStaSsid.normalize(info?.ssid)
@@ -165,16 +203,80 @@ object WifiStaController {
     private fun wifiManager(context: Context): WifiManager? =
         context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
 
-    private fun api29Message(what: String): String? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            "На Android 10+ $what из приложения недоступно"
-        } else {
-            null
-        }
+    @Suppress("DEPRECATION")
+    private fun isRadioEnabled(wifi: WifiManager): Boolean =
+        runCatching { wifi.isWifiEnabled }.getOrDefault(false)
+
+    private fun isAirplaneModeOn(context: Context): Boolean =
+        runCatching {
+            Settings.Global.getInt(
+                context.contentResolver,
+                Settings.Global.AIRPLANE_MODE_ON,
+                0,
+            ) != 0
+        }.getOrDefault(false)
+
+    private fun hasWriteSecureSettings(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_SECURE_SETTINGS,
+        ) == PackageManager.PERMISSION_GRANTED
+
+    private fun writeWifiOnSetting(context: Context, enabled: Boolean): Boolean {
+        if (!hasWriteSecureSettings(context)) return false
+        return runCatching {
+            Settings.Global.putInt(
+                context.contentResolver,
+                Settings.Global.WIFI_ON,
+                if (enabled) 1 else 0,
+            )
+            true
+        }.getOrDefault(false)
+    }
 
     @Suppress("DEPRECATION")
-    private fun setWifiEnabledCompat(wifi: WifiManager, enabled: Boolean): Boolean =
-        runCatching { wifi.setWifiEnabled(enabled) }.getOrDefault(false)
+    private fun setWifiEnabledCompat(wifi: WifiManager, enabled: Boolean): Boolean {
+        return runCatching { wifi.setWifiEnabled(enabled) }
+            .onFailure { e -> Log.w(TAG, "setWifiEnabled($enabled) threw", e) }
+            .getOrDefault(false)
+            .also { ok ->
+                if (!ok) Log.w(TAG, "setWifiEnabled($enabled) returned false")
+            }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isWifiApEnabledCompat(wifi: WifiManager): Boolean {
+        return runCatching {
+            val method = wifi.javaClass.getMethod("isWifiApEnabled")
+            method.invoke(wifi) as? Boolean ?: false
+        }.getOrDefault(false)
+    }
+
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun stopSoftApCompat(context: Context, wifi: WifiManager): Boolean {
+        val viaWifiManager = runCatching {
+            val method = wifi.javaClass.getMethod(
+                "setWifiApEnabled",
+                WifiConfiguration::class.java,
+                Boolean::class.javaPrimitiveType,
+            )
+            method.invoke(wifi, null, false) as? Boolean ?: false
+        }.onFailure { e -> Log.w(TAG, "setWifiApEnabled(false) failed", e) }
+            .getOrDefault(false)
+        if (viaWifiManager) return true
+
+        // ConnectivityManager.stopTethering is @SystemApi on recent SDKs — call via reflection.
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        return runCatching {
+            val tetherWifi = ConnectivityManager::class.java.getField("TETHERING_WIFI").getInt(null)
+            val stop = ConnectivityManager::class.java.getMethod("stopTethering", Int::class.javaPrimitiveType)
+            stop.invoke(cm, tetherWifi)
+            true
+        }.onFailure { e -> Log.w(TAG, "stopTethering(WIFI) failed", e) }
+            .getOrDefault(false)
+    }
 
     @Suppress("DEPRECATION")
     private fun enableNetworkCompat(wifi: WifiManager, netId: Int): Boolean =

@@ -32,7 +32,7 @@ import vad.dashing.tbox.valueToString
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Live status for wheel-pulse odometer on Geolocation → calibrations. */
+/** Live status for wheel-pulse odometer on Settings → Поездки. */
 @Composable
 fun WheelPulseCalibrationSection(
     settingsViewModel: SettingsViewModel,
@@ -65,7 +65,6 @@ fun WheelPulseCalibrationSection(
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
         SettingsTitle(stringResource(R.string.location_wheel_pulse_title))
         Text(
             text = stringResource(R.string.location_wheel_pulse_desc),

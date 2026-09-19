@@ -732,6 +732,38 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun hardKeyTrigger_firesOnExactCodeAndStatus() {
+        val evaluator = evaluator(
+            AutomationTrigger.HardKey(
+                id = "press",
+                keyCode = 115,
+                keyStatus = AutomationHardKeyStatus.PRESSED,
+            ),
+            AutomationTrigger.HardKey(
+                id = "release",
+                keyCode = 316,
+                keyStatus = AutomationHardKeyStatus.RELEASED,
+            ),
+        )
+        assertEquals("press", evaluator.onHardKey(115, AutomationHardKeyStatus.PRESSED)?.triggerId)
+        assertEquals("release", evaluator.onHardKey(316, AutomationHardKeyStatus.RELEASED)?.triggerId)
+    }
+
+    @Test
+    fun hardKeyTrigger_ignoresOtherCodeOrStatus() {
+        val evaluator = evaluator(
+            AutomationTrigger.HardKey(
+                id = "press",
+                keyCode = 115,
+                keyStatus = AutomationHardKeyStatus.PRESSED,
+            ),
+        )
+        assertNull(evaluator.onHardKey(115, AutomationHardKeyStatus.RELEASED))
+        assertNull(evaluator.onHardKey(114, AutomationHardKeyStatus.PRESSED))
+        assertTrue(evaluator.triggerStillMatching("press"))
+    }
+
+    @Test
     fun timeCondition_usesInjectedWallClock() {
         val night = AutomationCondition.Time(
             after = AutomationTimeOfDay(22, 0),

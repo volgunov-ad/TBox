@@ -2,6 +2,7 @@ package vad.dashing.tbox.obd
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,7 +29,16 @@ class Elm327Manager(
         private const val POLL_IDLE_MS = 250L
         private const val BETWEEN_PIDS_MS = 40L
         private const val PAIRING_RETRY_MS = 60_000L
+
+        /** Consecutive transacts without an ELM `>` prompt before forcing a reconnect. */
+        private const val SILENT_FAILURE_LIMIT = 3
+
+        /** Open-but-silent session is dropped after this window while polling is active. */
+        private const val STALE_LINK_MS = 30_000L
     }
+
+    /** Transact timed out / got no prompt repeatedly — the RFCOMM link is silently dead. */
+    private class Elm327DeadLinkException(message: String) : Exception(message)
 
     private val sessionMutex = Mutex()
     private var session: Elm327BluetoothSession? = null
@@ -38,6 +48,8 @@ class Elm327Manager(
     private var deviceAddress: String = ""
     private var pairingPin: String = ""
     private var reopenFailureStreak = 0
+    private var silentFailureStreak = 0
+    private var lastGoodTransactMs = 0L
     private var lastPairingAttemptMs = 0L
     private val interestedPidIds = AtomicReference<Set<String>>(emptySet())
     private val dtcRequestPending = AtomicBoolean(false)
@@ -235,8 +247,15 @@ class Elm327Manager(
                 if (vinRequestPending.getAndSet(false)) {
                     readVin(sess)
                 }
+                // On-demand handlers swallow exceptions into their own error flows;
+                // re-check the dead-link streak here so the loop still reconnects.
+                if (silentFailureStreak >= SILENT_FAILURE_LIMIT) {
+                    throw Elm327DeadLinkException("no ELM response x$silentFailureStreak")
+                }
                 pollInterested(sess)
                 delay(POLL_IDLE_MS)
+            } catch (ce: CancellationException) {
+                throw ce
             } catch (e: Exception) {
                 Log.w(TAG, "loop error: ${e.message}")
                 ObdRepository.setConnected(false)
@@ -257,7 +276,20 @@ class Elm327Manager(
 
     private suspend fun ensureSession() {
         sessionMutex.withLock {
-            if (session?.isOpen == true) return
+            val existing = session
+            if (existing != null && existing.isOpen) {
+                // A socket can stay "connected" after a silent RFCOMM drop. While
+                // polling is active, a long window without any adapter response
+                // means the link is dead — drop it and reconnect below.
+                val polling = interestedPidIds.get().isNotEmpty()
+                val silentForMs = System.currentTimeMillis() - lastGoodTransactMs
+                if (!polling || silentForMs <= STALE_LINK_MS) return
+                existing.close()
+                session = null
+                Log.w(TAG, "stale ELM link: ${silentForMs}ms without response; reconnecting")
+                ObdRepository.setConnected(false)
+                ObdRepository.setStatus("reconnecting")
+            }
         }
         // Do not hold [sessionMutex] across connect/init — otherwise stop() cannot close a hung socket.
         ObdRepository.setStatus("connecting")
@@ -298,6 +330,8 @@ class Elm327Manager(
                 session = s
             }
             reopenFailureStreak = 0
+            silentFailureStreak = 0
+            lastGoodTransactMs = System.currentTimeMillis()
             ObdRepository.setConnected(true)
             ObdRepository.setStatus("connected")
             ObdRepository.setLastError(null)
@@ -372,10 +406,22 @@ class Elm327Manager(
         val t0 = System.currentTimeMillis()
         val raw = sess.transact(command, timeoutMs = timeoutMs)
         val elapsed = (System.currentTimeMillis() - t0).coerceAtLeast(0L)
-        if (Elm327Protocol.isElmError(raw)) {
+        if (Elm327Protocol.isSilentTimeout(raw, elapsed, timeoutMs)) {
+            // No `>` prompt: the adapter never answered. Count it — a silently dead
+            // RFCOMM link throws no IOException, so without this the loop hangs forever.
+            silentFailureStreak++
             ObdRepository.noteBusError(elapsed)
+            if (silentFailureStreak >= SILENT_FAILURE_LIMIT) {
+                throw Elm327DeadLinkException("no ELM response x$silentFailureStreak ($command)")
+            }
         } else {
-            ObdRepository.noteBusOk(elapsed)
+            silentFailureStreak = 0
+            lastGoodTransactMs = System.currentTimeMillis()
+            if (Elm327Protocol.isElmError(raw)) {
+                ObdRepository.noteBusError(elapsed)
+            } else {
+                ObdRepository.noteBusOk(elapsed)
+            }
         }
         return raw
     }
@@ -384,11 +430,11 @@ class Elm327Manager(
         runCatching {
             val desc = timedTransact(sess, Elm327Protocol.PROTOCOL_DESC_REQUEST, timeoutMs = 3_000L)
             ObdRepository.setProtocolDescription(Elm327Protocol.parseAtTextResponse(desc))
-        }
+        }.onFailure { if (it is Elm327DeadLinkException) throw it }
         runCatching {
             val num = timedTransact(sess, Elm327Protocol.PROTOCOL_NUM_REQUEST, timeoutMs = 3_000L)
             ObdRepository.setProtocolNumber(Elm327Protocol.parseAtTextResponse(num))
-        }
+        }.onFailure { if (it is Elm327DeadLinkException) throw it }
     }
 
     private enum class DtcKind { STORED, PENDING, PERMANENT }

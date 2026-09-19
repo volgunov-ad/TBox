@@ -64,6 +64,14 @@ object Elm327Protocol {
         return false
     }
 
+    /**
+     * True when [Elm327BluetoothSession.transact] ended without the ELM `>` prompt:
+     * either no bytes at all within the window, or the full window elapsed (partial
+     * data without a prompt). Indicates a silently dead / degraded RFCOMM link.
+     */
+    fun isSilentTimeout(raw: String, elapsedMs: Long, timeoutMs: Long): Boolean =
+        raw.isBlank() || elapsedMs >= timeoutMs
+
     fun normalizeResponse(raw: String): String =
         raw
             .replace(">", "")

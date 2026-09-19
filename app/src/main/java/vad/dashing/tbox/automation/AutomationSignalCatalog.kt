@@ -173,8 +173,8 @@ object AutomationSignalCatalog {
             "Состояние ACC (круиз)",
             headUnitOnly,
             AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
-            typicalRange = "Только ГУ. Off/Standby/Active/Fault из ACCMode: " +
-                "0=off; 1,2,6,7=standby; 3,4,5=active; 9=fault. " +
+            typicalRange = "Только ГУ. Off/Standby/Active/Override/Fault из ACCMode: " +
+                "0=off; 1,2,6=standby; 3,4,5=active; 7=override (газ перебивает ACC); 9=fault. " +
                 "Не путать со «Статус ACC (ключ)» (acc_status).",
         ),
         state(
@@ -722,6 +722,36 @@ object AutomationSignalCatalog {
                 "checking почти не публикуется (чтобы не дёргать автоматизации).",
         ),
         state(
+            AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+            "Wi‑Fi модем: связь",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.LINK_OPTIONS,
+            typicalRange = "HTTP-связь с админкой Wi‑Fi модема при источнике «Wi‑Fi HTTP»: " +
+                "ok / auth_failed / unreachable / error; idle — источник TBox или поллер не запущен.",
+        ),
+        state(
+            AutomationSignalId.MODEM_MOBILE_DATA,
+            "Модем: передача данных",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off по apnStatus (TBox MDC или Wi‑Fi модем). " +
+                "То же readback, что после действия wifi_modem_set_data.",
+        ),
+        state(
+            AutomationSignalId.MODEM_NET_TYPE,
+            "Модем: тип сети",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.NET_TYPE_OPTIONS,
+            typicalRange = "2g / 3g / 4g / none из netStatus вкладки «Модем» (TBox или Wi‑Fi HTTP).",
+        ),
+        state(
+            AutomationSignalId.MODEM_SIM_STATUS,
+            "Модем: SIM",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.SIM_OPTIONS,
+            typicalRange = "none / ready / pin / error / unknown из simStatus вкладки «Модем».",
+        ),
+        state(
             AutomationSignalId.FOREGROUND_APP,
             "Приложение на экране",
             appOnly,
@@ -730,6 +760,26 @@ object AutomationSignalCatalog {
                 "Пакет самого TBox учитывается, только если открыт главный экран. Без разрешения " +
                 "сигнала нет. Камера 360 com.mengbo.avm учитывается по штатному оверлею " +
                 "(Settings.Global avm_state), даже если UsageStats держит предыдущее приложение.",
+        ),
+        state(
+            AutomationSignalId.APP_THEME_MODE,
+            "Тема приложения: режим",
+            appOnly,
+            listOf("manual_day", "manual_night", "auto_day", "auto_night"),
+            typicalRange = "manual_day / manual_night — ручная тема (ГУ или локальная тема " +
+                "приложения, если оно отвязано от системы), auto_day / auto_night — штатный " +
+                "авто день/ночь ГУ с текущим разрешением. Один триггер «любой день/ночь» — " +
+                "сигнал app_theme. Тот же режим, что у переключателя темы и действий " +
+                "toggle_app_day_night_theme / enable_head_unit_auto_theme.",
+        ),
+        state(
+            AutomationSignalId.APP_THEME,
+            "Тема приложения: сейчас",
+            appOnly,
+            listOf("day", "night"),
+            typicalRange = "Эффективная тема в моменте: day — светлая, night — тёмная, " +
+                "ручная или разрешённая авто-режимом. Триггер «День» срабатывает и на ручной, " +
+                "и на авто-день; «Ночь» — и на ручную, и на авто-ночь.",
         ),
     )
 

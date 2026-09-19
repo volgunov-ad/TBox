@@ -306,6 +306,21 @@ data class FloatingDashboardWidgetConfig(
      * Only used when [roadMatchMapKitBasemap] is true.
      */
     val roadMatchBasemapTransparencyPercent: Int = 0,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: allowed overspeed (km/h) before alert color.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH].
+     */
+    val speedCamOverageKmh: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: alert / map search radius in metres.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M].
+     */
+    val speedCamRadiusM: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: draw nearby cameras on the road-match map tile.
+     * Default off.
+     */
+    val speedCamShowOnMap: Boolean = false,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -711,6 +726,9 @@ class SettingsManager(private val context: Context) {
         private val HU_INTERNET_PROBE_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
+        private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
+        private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
         private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
         private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
         private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
@@ -781,6 +799,9 @@ class SettingsManager(private val context: Context) {
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
+        /** JSON manifest of installed SpeedCamOnline iGO pack. */
+        private val SPEED_CAM_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}speed_cam_installed_json")
         /** Optional override for Yandex MapKit API key; blank → [BuildConfig.MAPKIT_API_KEY]. */
         private val MAPKIT_API_KEY_KEY =
             stringPreferencesKey("${KEY_PREFIX}mapkit_api_key")
@@ -926,6 +947,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
@@ -1407,6 +1430,18 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
+    val adbLastHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_LAST_HOST_KEY]?.takeIf { it.isNotBlank() } ?: "127.0.0.1" }
+        .distinctUntilChanged()
+
+    val adbLastPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> (preferences[ADB_LAST_PORT_KEY] ?: 5555).coerceIn(1, 65535) }
+        .distinctUntilChanged()
+
+    val adbModeFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_MODE_KEY]?.takeIf { it == "usb" } ?: "tcp" }
+        .distinctUntilChanged()
+
     val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ELM327_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
@@ -1810,6 +1845,10 @@ class SettingsManager(private val context: Context) {
                 preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] ?: DEFAULT_PANEL_LAYOUT_SNAP_DP
             )
         }
+        .distinctUntilChanged()
+
+    val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
         .distinctUntilChanged()
 
     val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -2264,6 +2303,16 @@ class SettingsManager(private val context: Context) {
     suspend fun saveRoadMapsInstalledJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadSpeedCamInstalledJson(): String {
+        return context.settingsDataStore.data.first()[SPEED_CAM_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveSpeedCamInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPEED_CAM_INSTALLED_JSON_KEY] = json
         }
     }
 
@@ -2920,6 +2969,24 @@ class SettingsManager(private val context: Context) {
         return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
             preferences[WIFI_MODEM_MODEL_KEY]
         )
+    }
+
+    suspend fun saveAdbLastHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveAdbLastPortSetting(port: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_PORT_KEY] = port.coerceIn(1, 65535)
+        }
+    }
+
+    suspend fun saveAdbModeSetting(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_MODE_KEY] = if (mode == "usb") "usb" else "tcp"
+        }
     }
 
     suspend fun saveElm327EnabledSetting(enabled: Boolean) {
@@ -4143,6 +4210,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
         }
     }
 

@@ -18,6 +18,10 @@
 Changelog для version.json берётся из Changelog.dm (секция текущей versionName),
 если не передан --changelog. Markdown (**жирный**, `код`, *курсив*) снимается.
 
+Gradle запускается с -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8"
+(переопределяет 2 GiB из gradle.properties, чтобы R8/lintVital не падали с OOM;
+можно изменить через --gradle-jvm-args или отключить пустой строкой).
+
 Запуск из корня репозитория:
   python tools/build_ota_release.py
 
@@ -43,6 +47,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
+DEFAULT_GRADLE_JVM_ARGS = "-Xmx4096m -Dfile.encoding=UTF-8"
 GRADLE_FILE = Path("app/build.gradle.kts")
 CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
@@ -155,9 +160,12 @@ def resolve_channel(args: argparse.Namespace) -> ChannelConfig:
     return choose_channel_interactive()
 
 
-def run_gradle(project_dir: Path, tasks: tuple[str, ...]) -> None:
+def run_gradle(project_dir: Path, tasks: tuple[str, ...], jvm_args: str) -> None:
     wrapper = gradle_wrapper(project_dir)
-    command = [str(wrapper), *tasks]
+    command = [str(wrapper)]
+    if jvm_args:
+        command.append(f"-Dorg.gradle.jvmargs={jvm_args}")
+    command.extend(tasks)
     print(f"Running: {' '.join(command)}")
     subprocess.run(command, cwd=project_dir, check=True)
 
@@ -349,6 +357,15 @@ def parse_args() -> argparse.Namespace:
         help="minSupportedVersionCode в version.json",
     )
     parser.add_argument(
+        "--gradle-jvm-args",
+        default=DEFAULT_GRADLE_JVM_ARGS,
+        help=(
+            "Аргументы JVM демона Gradle (-Dorg.gradle.jvmargs); пустая строка — "
+            "использовать gradle.properties. По умолчанию: "
+            f'"{DEFAULT_GRADLE_JVM_ARGS}" (защита от OOM на R8/lintVital)'
+        ),
+    )
+    parser.add_argument(
         "--skip-build",
         action="store_true",
         help="Не запускать Gradle, использовать уже собранные APK",
@@ -379,7 +396,7 @@ def main() -> int:
         print()
 
         if not args.skip_build:
-            run_gradle(root, channel.gradle_tasks)
+            run_gradle(root, channel.gradle_tasks, args.gradle_jvm_args)
         else:
             print("Пропуск сборки (--skip-build)")
 

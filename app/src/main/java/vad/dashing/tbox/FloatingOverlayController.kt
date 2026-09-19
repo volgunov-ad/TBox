@@ -162,6 +162,17 @@ internal class FloatingOverlayController(
         private const val MIN_OVERLAY_SIZE = MIN_FLOATING_PANEL_SIZE_PX
         private const val OVERLAY_FADE_MS = 300L
         private const val MAIN_SCREEN_WINDOW_TAG = "MainScreenWindow"
+
+        private fun floatingOverlayWindowFlags(allowBeyondScreen: Boolean): Int {
+            var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            if (allowBeyondScreen) {
+                flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            }
+            return flags
+        }
     }
 
     val isMainScreenWindowVisible: Boolean
@@ -169,6 +180,23 @@ internal class FloatingOverlayController(
 
     @Volatile
     private var overlaysClosing = false
+
+    @Volatile
+    private var allowBeyondScreen = false
+
+    init {
+        overlayScope.launch {
+            settingsManager.floatingPanelsAllowBeyondScreenFlow.collect { enabled ->
+                val previous = allowBeyondScreen
+                allowBeyondScreen = enabled
+                if (previous != enabled) {
+                    withContext(Dispatchers.Main) {
+                        applyAllowBeyondScreenToMountedOverlays(enabled)
+                    }
+                }
+            }
+        }
+    }
 
     fun suspendOverlays() {
         try {
@@ -887,10 +915,7 @@ internal class FloatingOverlayController(
             bounds.width,
             bounds.height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            floatingOverlayWindowFlags(allowBeyondScreen),
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -1033,9 +1058,10 @@ internal class FloatingOverlayController(
 
     private fun updateWindowPosition(panelId: String, x: Int, y: Int) {
         val params = overlayParams[panelId] ?: return
-        if (params.x == x && params.y == y) return
-        params.x = x.coerceAtLeast(0)
-        params.y = y.coerceAtLeast(0)
+        val origin = clampFloatingPanelOrigin(x, y, allowBeyondScreen)
+        if (params.x == origin.x && params.y == origin.y) return
+        params.x = origin.x
+        params.y = origin.y
         overlayViews[panelId]?.let { view ->
             try {
                 if (view.isAttachedToWindow) {
@@ -1069,8 +1095,9 @@ internal class FloatingOverlayController(
      */
     private fun updateOverlayFrame(panelId: String, x: Int, y: Int, width: Int, height: Int) {
         val params = overlayParams[panelId] ?: return
-        val newX = x.coerceAtLeast(0)
-        val newY = y
+        val origin = clampFloatingPanelOrigin(x, y, allowBeyondScreen)
+        val newX = origin.x
+        val newY = origin.y
         val newW = width.coerceAtLeast(1)
         val newH = height.coerceAtLeast(1)
         if (params.x == newX && params.y == newY && params.width == newW && params.height == newH) {
@@ -1101,6 +1128,7 @@ internal class FloatingOverlayController(
             Log.w(TAG, "updateOverlayLayout bounds failed for ${config.id}", e)
             return
         }
+        val desiredFlags = floatingOverlayWindowFlags(allowBeyondScreen)
         val newWidth = bounds.width
         val newHeight = bounds.height
         val newX = bounds.x
@@ -1108,7 +1136,8 @@ internal class FloatingOverlayController(
         if (params.width == newWidth &&
             params.height == newHeight &&
             params.x == newX &&
-            params.y == newY
+            params.y == newY &&
+            params.flags == desiredFlags
         ) {
             return
         }
@@ -1116,6 +1145,7 @@ internal class FloatingOverlayController(
         params.height = newHeight
         params.x = newX
         params.y = newY
+        params.flags = desiredFlags
         overlayViews[config.id]?.let { view ->
             try {
                 if (view.isAttachedToWindow) {
@@ -1128,9 +1158,14 @@ internal class FloatingOverlayController(
     }
 
     private suspend fun effectiveOverlayBounds(config: FloatingDashboardConfig): PanelPxBounds {
+        val origin = clampFloatingPanelOrigin(
+            x = config.startX,
+            y = config.startY,
+            allowBeyondScreen = allowBeyondScreen,
+        )
         val expanded = PanelPxBounds(
-            x = config.startX.coerceAtLeast(0),
-            y = config.startY.coerceAtLeast(0),
+            x = origin.x,
+            y = origin.y,
             width = config.width.coerceAtLeast(1),
             height = config.height.coerceAtLeast(1),
         )
@@ -1164,6 +1199,32 @@ internal class FloatingOverlayController(
             stripThicknessPx = stripThicknessPx,
             touchZoneThicknessPx = touchZoneThicknessPx,
         )
+    }
+
+    /**
+     * Updates [FLAG_LAYOUT_NO_LIMITS] and re-floors origins when the beyond-screen setting changes
+     * while overlays are already mounted.
+     */
+    private fun applyAllowBeyondScreenToMountedOverlays(enabled: Boolean) {
+        val wm = windowManager ?: return
+        val desiredFlags = floatingOverlayWindowFlags(enabled)
+        for ((panelId, params) in overlayParams) {
+            val origin = clampFloatingPanelOrigin(params.x, params.y, enabled)
+            val flagsChanged = params.flags != desiredFlags
+            val originChanged = params.x != origin.x || params.y != origin.y
+            if (!flagsChanged && !originChanged) continue
+            params.flags = desiredFlags
+            params.x = origin.x
+            params.y = origin.y
+            val view = overlayViews[panelId] ?: continue
+            try {
+                if (view.isAttachedToWindow) {
+                    wm.updateViewLayout(view, params)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "applyAllowBeyondScreen failed for $panelId", e)
+            }
+        }
     }
 
     /**
