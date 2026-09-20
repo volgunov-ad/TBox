@@ -77,7 +77,9 @@ class AdbUsbTransport private constructor(
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (closed) throw IOException("ADB USB transport closed")
-        val count = connection.bulkTransfer(inputEndpoint, buffer, offset, length, timeoutMs)
+        val count = runCatching {
+            connection.bulkTransfer(inputEndpoint, buffer, offset, length, timeoutMs)
+        }.getOrElse { throw IOException("USB read failed: ${it.message}", it) }
         if (count < 0) throw SocketTimeoutException("USB read timed out")
         return count
     }
@@ -132,7 +134,9 @@ class AdbUsbTransport private constructor(
         while (written < length) {
             val chunkLength = minOf(length - written, USB_WRITE_CHUNK)
             val chunk = buffer.copyOfRange(offset + written, offset + written + chunkLength)
-            val count = connection.bulkTransfer(outputEndpoint, chunk, chunk.size, timeoutMs)
+            val count = runCatching {
+                connection.bulkTransfer(outputEndpoint, chunk, chunk.size, timeoutMs)
+            }.getOrElse { throw IOException("USB write failed: ${it.message}", it) }
             if (count <= 0) throw IOException("USB write failed: $count")
             written += count
         }
@@ -151,27 +155,28 @@ class AdbUsbTransport private constructor(
         private var heldNetworkConnection: UsbDeviceConnection? = null
 
         fun isAdbDevice(device: UsbDevice): Boolean =
-            findInterface(device) != null
+            runCatching { findInterface(device) != null }.getOrDefault(false)
 
         /**
          * True when the same USB device also exposes RNDIS / CDC-networking interfaces.
          * TBox (Neoway) is such a composite: careless open/close of the usbfs handle can
          * drop the system RNDIS link used for UDP to 192.168.225.1.
          */
-        fun sharesNetworkWithHost(device: UsbDevice): Boolean {
-            for (index in 0 until device.interfaceCount) {
-                val usbInterface = device.getInterface(index)
-                if (isNetworkInterface(
-                        usbInterface.interfaceClass,
-                        usbInterface.interfaceSubclass,
-                        usbInterface.interfaceProtocol,
-                    )
-                ) {
-                    return true
+        fun sharesNetworkWithHost(device: UsbDevice): Boolean =
+            runCatching {
+                for (index in 0 until device.interfaceCount) {
+                    val usbInterface = device.getInterface(index)
+                    if (isNetworkInterface(
+                            usbInterface.interfaceClass,
+                            usbInterface.interfaceSubclass,
+                            usbInterface.interfaceProtocol,
+                        )
+                    ) {
+                        return@runCatching true
+                    }
                 }
-            }
-            return false
-        }
+                false
+            }.getOrDefault(false)
 
         fun isNetworkInterface(interfaceClass: Int, interfaceSubclass: Int, interfaceProtocol: Int = 0): Boolean {
             // interfaceProtocol reserved for future RNDIS variants; wireless class is enough today.
@@ -190,15 +195,16 @@ class AdbUsbTransport private constructor(
                 ?: throw IOException("ADB USB interface not found")
             val sharesNetwork = sharesNetworkWithHost(device)
             if (!sharesNetwork) {
-                clearParkedNetworkConnection()
+                // Drop any parked TBox handle reference without close() (RNDIS-safe).
+                discardAllParkedNetworkConnections()
             }
 
             val reused = if (sharesNetwork) takeParkedNetworkConnection(device.deviceId) else null
             if (reused != null) {
                 val fromPark = claimOrNull(reused, found, device, timeoutMs, sharesNetwork, force = false)
                 if (fromPark != null) return fromPark
-                // Stale parked FD (re-enumeration / DETACH race) — drop and open fresh.
-                runCatching { reused.close() }
+                // Stale parked FD — drop reference only. close() on a dead/composite
+                // handle can native-crash or unbind RNDIS on this HU.
             }
 
             val connection = usbManager.openDevice(device)
@@ -248,10 +254,7 @@ class AdbUsbTransport private constructor(
 
         private fun parkNetworkConnection(deviceId: Int, connection: UsbDeviceConnection) {
             synchronized(holdLock) {
-                val previous = heldNetworkConnection
-                if (previous != null && previous !== connection) {
-                    runCatching { previous.close() }
-                }
+                // Never close() a displaced park — that unbinds TBox RNDIS / can crash.
                 heldNetworkDeviceId = deviceId
                 heldNetworkConnection = connection
             }
@@ -267,22 +270,19 @@ class AdbUsbTransport private constructor(
             }
         }
 
-        private fun clearParkedNetworkConnection() {
-            synchronized(holdLock) {
-                val previous = heldNetworkConnection
-                heldNetworkDeviceId = null
-                heldNetworkConnection = null
-                runCatching { previous?.close() }
-            }
-        }
-
-        /** Drop a parked handle after physical DETACH (FD is already dead). */
+        /** Drop parked handle reference without closing the FD (RNDIS / OEM-safe). */
         fun discardParkedNetworkConnection(deviceId: Int) {
             synchronized(holdLock) {
                 if (heldNetworkDeviceId != deviceId) return
                 heldNetworkDeviceId = null
                 heldNetworkConnection = null
-                // Do not close — kernel already invalidated the device.
+            }
+        }
+
+        private fun discardAllParkedNetworkConnections() {
+            synchronized(holdLock) {
+                heldNetworkDeviceId = null
+                heldNetworkConnection = null
             }
         }
 
