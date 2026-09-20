@@ -76,33 +76,36 @@ object AdbRepository {
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> refreshUsbDevices()
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    val device = extraUsbDevice(intent)
-                    refreshUsbDevices()
-                    if (device != null && device.deviceId == connectedUsbDeviceId) {
-                        scope.launch {
-                            mutex.withLock {
-                                closeConnection()
-                                setError(TransportType.USB, device.deviceName, "USB device disconnected")
+            runCatching {
+                when (intent?.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> refreshUsbDevices()
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        val device = extraUsbDevice(intent)
+                        refreshUsbDevices()
+                        if (device == null) return@runCatching
+                        val detachedId = device.deviceId
+                        // Always drop a parked handle for this id — device is gone.
+                        AdbUsbTransport.discardParkedNetworkConnection(detachedId)
+                        if (detachedId == connectedUsbDeviceId) {
+                            scope.launch {
+                                mutex.withLock {
+                                    closeConnection(deviceGone = true)
+                                    setError(TransportType.USB, device.deviceName, "USB device disconnected")
+                                }
                             }
                         }
-                    } else if (device != null && AdbUsbTransport.sharesNetworkWithHost(device)) {
-                        // Physical unplug — parked usbfs handle is stale.
-                        AdbUsbTransport.discardParkedNetworkConnection(device.deviceId)
                     }
-                }
-                ACTION_USB_PERMISSION -> {
-                    val device = extraUsbDevice(intent)
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    refreshUsbDevices()
-                    if (device != null && device.deviceId == pendingUsbDeviceId) {
-                        pendingUsbDeviceId = null
-                        if (granted) {
-                            connectUsb(device.deviceId)
-                        } else {
-                            setError(TransportType.USB, device.deviceName, "USB permission denied")
+                    ACTION_USB_PERMISSION -> {
+                        val device = extraUsbDevice(intent)
+                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        refreshUsbDevices()
+                        if (device != null && device.deviceId == pendingUsbDeviceId) {
+                            pendingUsbDeviceId = null
+                            if (granted) {
+                                connectUsb(device.deviceId)
+                            } else {
+                                setError(TransportType.USB, device.deviceName, "USB permission denied")
+                            }
                         }
                     }
                 }
@@ -304,11 +307,15 @@ object AdbRepository {
         }
     }
 
-    private fun closeConnection() {
+    private fun closeConnection(deviceGone: Boolean = false) {
         val previous = connection
         connection = null
         connectedUsbDeviceId = null
-        runCatching { previous?.close() }
+        if (deviceGone) {
+            runCatching { previous?.abandonUsb() }
+        } else {
+            runCatching { previous?.close() }
+        }
     }
 
     private fun setError(type: TransportType?, endpoint: String, message: String) {

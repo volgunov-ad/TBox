@@ -73,7 +73,10 @@ class AdbUsbTransport private constructor(
     private val sharesNetworkWithHost: Boolean,
 ) : AdbTransport {
 
+    @Volatile private var closed = false
+
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+        if (closed) throw IOException("ADB USB transport closed")
         val count = connection.bulkTransfer(inputEndpoint, buffer, offset, length, timeoutMs)
         if (count < 0) throw SocketTimeoutException("USB read timed out")
         return count
@@ -96,6 +99,7 @@ class AdbUsbTransport private constructor(
     }
 
     override fun close() {
+        if (!markClosed()) return
         runCatching { connection.releaseInterface(usbInterface) }
         if (sharesNetworkWithHost) {
             // Keep the usbfs FD open. On this HU, closing UsbDeviceConnection on the
@@ -104,10 +108,26 @@ class AdbUsbTransport private constructor(
             parkNetworkConnection(deviceId, connection)
             return
         }
-        connection.close()
+        runCatching { connection.close() }
+    }
+
+    /**
+     * Physical DETACH / dead handle: do not call releaseInterface/close on the
+     * UsbDeviceConnection — that can native-crash on some OEM USB stacks.
+     */
+    fun abandon() {
+        if (!markClosed()) return
+        discardParkedNetworkConnection(deviceId)
+    }
+
+    private fun markClosed(): Boolean = synchronized(this) {
+        if (closed) return false
+        closed = true
+        true
     }
 
     private fun writeTransfer(buffer: ByteArray, offset: Int, length: Int) {
+        if (closed) throw IOException("ADB USB transport closed")
         var written = 0
         while (written < length) {
             val chunkLength = minOf(length - written, USB_WRITE_CHUNK)
@@ -169,15 +189,51 @@ class AdbUsbTransport private constructor(
             val found = findInterface(device)
                 ?: throw IOException("ADB USB interface not found")
             val sharesNetwork = sharesNetworkWithHost(device)
-            val connection = openConnection(usbManager, device, sharesNetwork)
-            // Prefer force=false so we never usb_detach_kernel_driver on sibling RNDIS
-            // interfaces (force=true has wedged TBox networking on this HU).
-            val claimed = connection.claimInterface(found.usbInterface, false) ||
-                (!sharesNetwork && connection.claimInterface(found.usbInterface, true))
-            if (!claimed) {
-                discardConnection(device.deviceId, connection, sharesNetwork)
-                throw IOException("Unable to claim ADB USB interface")
+            if (!sharesNetwork) {
+                clearParkedNetworkConnection()
             }
+
+            val reused = if (sharesNetwork) takeParkedNetworkConnection(device.deviceId) else null
+            if (reused != null) {
+                val fromPark = claimOrNull(reused, found, device, timeoutMs, sharesNetwork, force = false)
+                if (fromPark != null) return fromPark
+                // Stale parked FD (re-enumeration / DETACH race) — drop and open fresh.
+                runCatching { reused.close() }
+            }
+
+            val connection = usbManager.openDevice(device)
+                ?: throw IOException("Unable to open USB device")
+            val opened = claimOrNull(
+                connection,
+                found,
+                device,
+                timeoutMs,
+                sharesNetwork,
+                force = !sharesNetwork,
+            )
+            if (opened != null) return opened
+            if (sharesNetwork) {
+                // Keep FD parked rather than close() which can unbind RNDIS.
+                parkNetworkConnection(device.deviceId, connection)
+            } else {
+                runCatching { connection.close() }
+            }
+            throw IOException("Unable to claim ADB USB interface")
+        }
+
+        private fun claimOrNull(
+            connection: UsbDeviceConnection,
+            found: AdbUsbInterface,
+            device: UsbDevice,
+            timeoutMs: Int,
+            sharesNetwork: Boolean,
+            force: Boolean,
+        ): AdbUsbTransport? {
+            val claimed = runCatching {
+                connection.claimInterface(found.usbInterface, false) ||
+                    (force && connection.claimInterface(found.usbInterface, true))
+            }.getOrDefault(false)
+            if (!claimed) return null
             return AdbUsbTransport(
                 connection,
                 found.usbInterface,
@@ -190,47 +246,14 @@ class AdbUsbTransport private constructor(
             )
         }
 
-        private fun openConnection(
-            usbManager: UsbManager,
-            device: UsbDevice,
-            sharesNetwork: Boolean,
-        ): UsbDeviceConnection {
-            if (sharesNetwork) {
-                val reused = takeParkedNetworkConnection(device.deviceId)
-                if (reused != null) return reused
-            } else {
-                // Switching away from a parked TBox handle — drop it only when opening
-                // a different, non-network ADB gadget so we do not leak FDs forever.
-                clearParkedNetworkConnection()
-            }
-            return usbManager.openDevice(device)
-                ?: throw IOException("Unable to open USB device")
-        }
-
-        private fun discardConnection(
-            deviceId: Int,
-            connection: UsbDeviceConnection,
-            sharesNetwork: Boolean,
-        ) {
-            if (sharesNetwork) {
-                parkNetworkConnection(deviceId, connection)
-            } else {
-                connection.close()
-            }
-        }
-
         private fun parkNetworkConnection(deviceId: Int, connection: UsbDeviceConnection) {
             synchronized(holdLock) {
                 val previous = heldNetworkConnection
-                val previousId = heldNetworkDeviceId
                 if (previous != null && previous !== connection) {
                     runCatching { previous.close() }
                 }
                 heldNetworkDeviceId = deviceId
                 heldNetworkConnection = connection
-                if (previousId != null && previousId != deviceId) {
-                    // replaced a different device handle
-                }
             }
         }
 
