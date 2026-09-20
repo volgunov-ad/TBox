@@ -462,6 +462,27 @@ object BodyComfortWrite {
     fun isAllowedWindowValue(value: Int, android10: Boolean): Boolean =
         if (android10) value in WINDOW_A10_COMMANDS else value in WINDOW_A9_PERCENT_STEPS
 
+    /**
+     * Remap A9 percent steps ↔ A10 close/open/vent when the raw value belongs to the other
+     * backend. Same-backend values pass through; unknown ints return null.
+     */
+    fun remapWindowValueForMode(value: Int, mode: HeadUnitCanMode): Int? {
+        val android10 = mode == HeadUnitCanMode.Android10Vhal
+        if (isAllowedWindowValue(value, android10)) return value
+        return when (value) {
+            0 -> if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE else null
+            BodyComfortDomain.WINDOW_A9_VENT_PERCENT ->
+                if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_VENT else null
+            BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT, 100 ->
+                if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE -> if (!android10) 0 else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN -> if (!android10) 100 else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_VENT ->
+                if (!android10) BodyComfortDomain.WINDOW_A9_VENT_PERCENT else null
+            else -> null
+        }
+    }
+
     data class A9WindowBytes(
         val fr: Int,
         val fl: Int,

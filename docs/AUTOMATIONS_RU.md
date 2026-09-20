@@ -341,7 +341,11 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 - все CAN-настройки из безопасного каталога; значения в списке подписаны
   (подогрев/вентиляция сидений, режимы фар, температура в °C, шторка/люк/стёкла и т.п.),
   а не сырыми кодами. Шторка **1…11** (закрыто…открыто), люк **1…11** и **12** (откинуть)
-  одинаково на A9 и A10. Стёкла: A9 **0 / 20 / 80 / 100** (машина не держит промежуточные), A10 **1** закрыть / **2** открыть / **3** щель;
+  одинаково на A9 и A10. Стёкла: A9 **0 / 20 / 80 / 100**, A10 **1** закрыть / **2** открыть /
+  **3** щель; в JSON предпочтительны семантики `close` / `open` / `vent` / `comfort_open`,
+  а для бинарных CAN — `on` / `off` (legacy int A9 остаётся валидным и ремапится на A10);
+  список значений в редакторе зависит от текущего backend ГУ, при сохранении portable-ключ
+  пишется в экспорт;
 - действия TBox Monitor (поездка, моточасы, тема, **плавающие панели — видимость/включение**
   для всех панелей или одной выбранной: переключить / скрыть / показать и
   переключить / включить / выключить, ESP-реле, **Wi-Fi** вкл/выкл / подключение к
@@ -392,7 +396,14 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 
 Шторка (**46**) и люк (**45**) пишутся через `canSetVehicleParam` / VHAL с теми же сырыми
 значениями на обеих ГУ. Стёкла на A9 идут через `canSetWindowStatus` (не property 47/55–58);
-на A10 — четыре `WindowCon_Req`. Список значений в редакторе зависит от текущего backend ГУ.
+на A10 — четыре `WindowCon_Req`. Список значений в редакторе зависит от текущего backend ГУ;
+при выполнении legacy A9↔A10 ints и семантики `close`/`open`/`vent` ремапятся
+(`AutomationCanValueCodec` / `BodyComfortWrite.remapWindowValueForMode`). Бинарные
+`SetProperty` на A10 перекодируются из шкалы mbCAN через `VhalBinaryToggleCodec`.
+
+Триггер `hard_key` на ГУ Android 10 (VHAL) помечается невалидным при проверке — замените на
+плитку «Триггер автоматизации». A9-only CAN (аудио EQ, аромат и т.п.) на A10 также
+отклоняется валидатором.
 
 Все записи выполняются только через `UniversalCanRepository`, поэтому сохраняются backend
 mapping, ограничения значений, JNI-сериализация, post-command refresh и диагностика.
@@ -415,7 +426,7 @@ mapping, ограничения значений, JNI-сериализация, 
 
 | Слой | Основные файлы |
 |------|----------------|
-| Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt` |
+| Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt`, `AutomationCanValueCodec.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
 | Интернет ГУ (сигнал `hu_internet_status`) | `internet/HuInternetMonitor.kt`, `TboxRepository.huInternetStatus` |
 | Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt` |

@@ -31,6 +31,7 @@ import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
+import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
@@ -279,7 +280,7 @@ private fun CanCommandFields(
                     propertyId = selected.propertyId,
                     operation = operation,
                     value = selected.defaultValueFor(canMode),
-                ),
+                ).let(AutomationCanValueCodec::withPortableKey),
             )
         },
     )
@@ -301,7 +302,11 @@ private fun CanCommandFields(
                     AutomationCanOperation.TRUNK_PULSE -> "Импульс открыть/закрыть"
                 }
             },
-            onValueChange = { onChange(action.copy(operation = it)) },
+            onValueChange = {
+                onChange(
+                    AutomationCanValueCodec.withPortableKey(action.copy(operation = it, valueKey = null)),
+                )
+            },
             modifier = Modifier.weight(1f),
         )
         if (action.operation != AutomationCanOperation.TOGGLE) {
@@ -313,13 +318,21 @@ private fun CanCommandFields(
                 entry.allowedValuesFor(canMode)
             }
             if (values.isNotEmpty()) {
-                val options = if (action.value in values) values else listOf(action.value) + values
+                val currentValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
+                    ?: action.value
+                val options = if (currentValue in values) values else listOf(currentValue) + values
                 AutomationDropdown(
                     label = "Значение",
-                    value = action.value,
+                    value = currentValue,
                     options = options,
                     optionLabel = { entry.valueLabel(it, canMode) },
-                    onValueChange = { onChange(action.copy(value = it)) },
+                    onValueChange = { selectedValue ->
+                        onChange(
+                            AutomationCanValueCodec.withPortableKey(
+                                action.copy(value = selectedValue, valueKey = null),
+                            ),
+                        )
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -756,7 +769,7 @@ private fun defaultAction(
                 entry.allowedOperations.first()
             },
             value = entry.defaultValueFor(canMode),
-        )
+        ).let(AutomationCanValueCodec::withPortableKey)
     }
 
     ActionUiKind.BUILTIN ->

@@ -126,8 +126,19 @@ class AutomationActionExecutor(
                         "Недопустимая операция или значение CAN",
                     )
                 }
+                val writeValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
+                    ?: return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
                 if (action.operation == AutomationCanOperation.SET &&
-                    action.value !in entry.allowedValuesFor(canMode)
+                    writeValue !in entry.allowedValuesFor(canMode)
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (action.operation == AutomationCanOperation.TRUNK_PULSE &&
+                    writeValue !in setOf(1, 2)
                 ) {
                     return@withLock AutomationActionResult.failure(
                         "Недопустимая операция или значение CAN",
@@ -141,18 +152,18 @@ class AutomationActionExecutor(
                 val command = when (action.bus) {
                     AutomationCanBus.VEHICLE -> when (action.operation) {
                         AutomationCanOperation.SET ->
-                            MbCanCommand.SetProperty(action.propertyId, action.value)
+                            MbCanCommand.SetProperty(action.propertyId, writeValue)
 
                         AutomationCanOperation.TOGGLE ->
                             MbCanCommand.ToggleProperty(action.propertyId)
 
                         AutomationCanOperation.TRUNK_PULSE ->
-                            MbCanCommand.TrunkPulse(action.value)
+                            MbCanCommand.TrunkPulse(writeValue)
                     }
 
                     AutomationCanBus.AUDIO -> when (action.operation) {
                         AutomationCanOperation.SET ->
-                            MbCanCommand.SetAudioProperty(action.propertyId, action.value)
+                            MbCanCommand.SetAudioProperty(action.propertyId, writeValue)
 
                         AutomationCanOperation.TOGGLE ->
                             MbCanCommand.ToggleAudioProperty(action.propertyId)
