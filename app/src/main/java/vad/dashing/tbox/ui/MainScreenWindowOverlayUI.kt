@@ -3,8 +3,6 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -184,7 +182,8 @@ fun MainScreenWindowOverlayUI(
 
                 if (cropEnabled) {
                     MainScreenDraggableCornerButton(
-                        icon = Icons.Filled.Close,
+                        iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_EXIT,
+                        drawableRes = R.drawable.ic_main_screen_close,
                         contentDescription = stringResource(R.string.main_screen_window_mode_exit_cd),
                         iconSize = cornerIconSize,
                         backgroundColor = cornerBackgroundColor,
@@ -204,7 +203,8 @@ fun MainScreenWindowOverlayUI(
                         layoutSnapStepPx = effectiveLayoutSnapStepPx,
                     )
                     MainScreenDraggableCornerButton(
-                        icon = WindowModeRestoreSquareIcon,
+                        iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_RESTORE,
+                        drawableRes = R.drawable.ic_main_screen_window_restore,
                         contentDescription = stringResource(
                             R.string.main_screen_window_mode_restore_cd,
                         ),
