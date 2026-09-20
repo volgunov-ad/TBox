@@ -6,6 +6,7 @@ import vad.dashing.tbox.R
 
 enum class UiIconCategory {
     NAVIGATION,
+    MAIN_SCREEN,
     VEHICLE,
     CLIMATE,
     SEAT,
@@ -34,7 +35,8 @@ data class UiIconCatalogEntry(
 )
 
 /**
- * Stable semantic keys for every replaceable icon rendered by the left menu and dashboard widgets.
+ * Stable semantic keys for every replaceable icon rendered by the left menu, main-screen corner
+ * buttons, and dashboard widgets.
  *
  * Keys describe the visual/state rather than a widget instance, so one sidecar override is shared
  * everywhere that visual is used.
@@ -44,6 +46,13 @@ object UiIconCatalog {
     const val MENU_CLOSE = "navigation.menu.close"
     const val MENU_HOME = "navigation.home"
     const val MENU_UPDATE = "navigation.update"
+
+    const val MAIN_SCREEN_SETTINGS = "main_screen.button.settings"
+    const val MAIN_SCREEN_ADD = "main_screen.button.add"
+    const val MAIN_SCREEN_WALLPAPER_PREV = "main_screen.button.wallpaper.prev"
+    const val MAIN_SCREEN_WALLPAPER_NEXT = "main_screen.button.wallpaper.next"
+    const val MAIN_SCREEN_WINDOW_EXIT = "main_screen.button.window.exit"
+    const val MAIN_SCREEN_WINDOW_RESTORE = "main_screen.button.window.restore"
 
     private val catalogEntries: List<UiIconCatalogEntry> = buildList {
         fun addIcon(
@@ -102,6 +111,43 @@ object UiIconCatalog {
             UiIconCategory.NAVIGATION,
             R.string.tab_car_settings,
             R.drawable.ic_tab_car_settings,
+        )
+
+        addIcon(
+            MAIN_SCREEN_SETTINGS,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_settings,
+            R.drawable.ic_main_open_console,
+        )
+        addIcon(
+            MAIN_SCREEN_ADD,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_add,
+            R.drawable.ic_main_screen_add,
+        )
+        addIcon(
+            MAIN_SCREEN_WALLPAPER_PREV,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_wallpaper_prev,
+            R.drawable.ic_main_screen_arrow_left,
+        )
+        addIcon(
+            MAIN_SCREEN_WALLPAPER_NEXT,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_wallpaper_next,
+            R.drawable.ic_main_screen_arrow_right,
+        )
+        addIcon(
+            MAIN_SCREEN_WINDOW_EXIT,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_window_exit,
+            R.drawable.ic_main_screen_close,
+        )
+        addIcon(
+            MAIN_SCREEN_WINDOW_RESTORE,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_window_restore,
+            R.drawable.ic_main_screen_window_restore,
         )
 
         addIcon(

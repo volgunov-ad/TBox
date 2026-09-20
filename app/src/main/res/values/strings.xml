@@ -2308,7 +2308,14 @@
     <string name="ui_icons_settings_description">Здесь можно заменить встроенные иконки. Для каждой иконки указано, где и в каком состоянии она отображается. Рекомендуется PNG или WebP с прозрачным фоном, не более 512×512 пикселей и 512 КиБ. Опция «Не менять цвета» отключает подмену цвета и позволяет задать отдельные картинки для светлой и тёмной темы.</string>
     <string name="ui_icons_search">Поиск по названию</string>
     <string name="ui_icons_navigation_description">Иконка «%1$s» в левом меню приложения.</string>
+    <string name="ui_icons_main_screen_description">Угловая кнопка «%1$s» на главном экране.</string>
     <string name="ui_icons_widget_description">Иконка «%1$s», отображаемая в соответствующем состоянии виджета.</string>
+    <string name="ui_icon_main_screen_settings">Главный экран — настройки</string>
+    <string name="ui_icon_main_screen_add">Главный экран — добавить панель</string>
+    <string name="ui_icon_main_screen_wallpaper_prev">Главный экран — предыдущие обои</string>
+    <string name="ui_icon_main_screen_wallpaper_next">Главный экран — следующие обои</string>
+    <string name="ui_icon_main_screen_window_exit">Главный экран — закрыть оконный режим</string>
+    <string name="ui_icon_main_screen_window_restore">Главный экран — вернуть на весь экран</string>
     <string name="ui_icons_source_theme">Источник: активная тема</string>
     <string name="ui_icons_source_local">Источник: пользовательская иконка</string>
     <string name="ui_icons_source_builtin">Источник: встроенная иконка</string>

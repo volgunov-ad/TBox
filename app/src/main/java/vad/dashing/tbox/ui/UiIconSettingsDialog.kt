@@ -233,10 +233,13 @@ private fun UiIconSettingsRow(
         hasAny -> stringResource(R.string.ui_icons_source_local)
         else -> stringResource(R.string.ui_icons_source_builtin)
     }
-    val description = if (entry.category == UiIconCategory.NAVIGATION) {
-        stringResource(R.string.ui_icons_navigation_description, localized.title)
-    } else {
-        stringResource(R.string.ui_icons_widget_description, localized.title)
+    val description = when (entry.category) {
+        UiIconCategory.NAVIGATION ->
+            stringResource(R.string.ui_icons_navigation_description, localized.title)
+        UiIconCategory.MAIN_SCREEN ->
+            stringResource(R.string.ui_icons_main_screen_description, localized.title)
+        else ->
+            stringResource(R.string.ui_icons_widget_description, localized.title)
     }
 
     Surface(

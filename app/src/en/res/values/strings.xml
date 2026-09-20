@@ -2287,7 +2287,14 @@
     <string name="ui_icons_settings_description">Replace built-in icons here. Every entry explains where and in which state the icon is shown. PNG or WebP with a transparent background is recommended, up to 512×512 pixels and 512 KiB. “Don’t change colors” disables recoloring and lets you set separate light and dark images.</string>
     <string name="ui_icons_search">Search by name</string>
     <string name="ui_icons_navigation_description">The “%1$s” icon in the app’s left menu.</string>
+    <string name="ui_icons_main_screen_description">The “%1$s” corner button on the main screen.</string>
     <string name="ui_icons_widget_description">The “%1$s” icon shown in the corresponding widget state.</string>
+    <string name="ui_icon_main_screen_settings">Main screen — settings</string>
+    <string name="ui_icon_main_screen_add">Main screen — add panel</string>
+    <string name="ui_icon_main_screen_wallpaper_prev">Main screen — previous wallpaper</string>
+    <string name="ui_icon_main_screen_wallpaper_next">Main screen — next wallpaper</string>
+    <string name="ui_icon_main_screen_window_exit">Main screen — close window mode</string>
+    <string name="ui_icon_main_screen_window_restore">Main screen — restore fullscreen</string>
     <string name="ui_icons_source_theme">Source: active theme</string>
     <string name="ui_icons_source_local">Source: custom icon</string>
     <string name="ui_icons_source_builtin">Source: built-in icon</string>
