@@ -96,6 +96,17 @@ class AdbConnection(
         transport.close()
     }
 
+    /** Physical USB DETACH: never touch the native USB handle (OEM crash risk). */
+    fun abandonUsb() {
+        connected = false
+        val usb = transport as? AdbUsbTransport
+        if (usb != null) {
+            usb.abandon()
+        } else {
+            runCatching { transport.close() }
+        }
+    }
+
     private fun executeV2(command: String): AdbShellResult? {
         val ids = open(AdbShellV2.service(command)) ?: return null
         val parser = AdbShellV2Parser()

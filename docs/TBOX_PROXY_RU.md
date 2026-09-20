@@ -63,6 +63,19 @@ flowchart LR
 
 Библиотека tbox-proxy дополнительно использует локальный порт и TCP для IPC между процессами (см. README tbox-proxy). Приложение эти параметры не переопределяет.
 
+### ADB к TBox (вкладка «ADB»)
+
+TBox — **составное** USB-устройство: системный **RNDIS** (сеть `192.168.225.1`) и отдельно интерфейс **ADB** (`0xFF/0x42/0x01`).
+
+На ГУ Adayo закрытие `UsbDeviceConnection` (usbfs FD) для этого композита может отвязать системный RNDIS и оборвать UDP-связь приложения с TBox. Вкладка «ADB» поэтому:
+
+- claim ADB-интерфейса с `force=false` (без `usb_detach_kernel_driver` у соседнего RNDIS);
+- при Disconnect на RNDIS+ADB **не закрывает** usbfs FD — только `releaseInterface`, дескриптор держится для повторного подключения (поведение ближе к Bugjaeger по USB);
+- при физическом DETACH **не вызывает** `releaseInterface`/`close` на уже мёртвом handle (на части OEM это даёт native crash) — только сбрасывает park;
+- DETACH учитывается и во время CONNECTING (`activeUsbDeviceId`); `bulkTransfer`/`claimInterface` обёрнуты в `runCatching`; протухший park не `close()`-ится.
+
+TCP-режим (`127.0.0.1:5555` и т.п.) — отдельно, для shell на самом ГУ; к TBox по USB используйте USB-режим.
+
 ---
 
 ## Формат пакета (`TboxProtocol`)

@@ -182,16 +182,37 @@ fun AdbTabContent(
                                 onClick = { selectedUsbDeviceId = candidate.deviceId },
                                 enabled = !isConnected && !isBusy,
                             )
-                            Text(
-                                text = "${candidate.name} (${hexId(candidate.vendorId)}:${hexId(candidate.productId)})",
-                                style = MaterialTheme.typography.tboxBody,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${candidate.name} (${hexId(candidate.vendorId)}:${hexId(candidate.productId)})",
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (candidate.sharesNetworkWithHost) {
+                                    Text(
+                                        text = stringResource(R.string.adb_usb_network_device_label),
+                                        style = MaterialTheme.typography.tboxCaption,
+                                        color = MaterialTheme.colorScheme.error,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
+            }
+            val selectedSharesNetwork = usbCandidates
+                .firstOrNull { it.deviceId == selectedUsbDeviceId }
+                ?.sharesNetworkWithHost == true
+            if (selectedSharesNetwork) {
+                Text(
+                    text = stringResource(R.string.adb_usb_tbox_rndis_warning),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             Text(
                 text = stringResource(R.string.adb_authorization_hint),

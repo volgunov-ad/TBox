@@ -89,6 +89,8 @@
     <string name="adb_console">Консоль</string>
     <string name="adb_clear_log">Очистить консоль</string>
     <string name="adb_authorization_hint">Подтвердите RSA-ключ на подключаемом устройстве, если появится запрос.</string>
+    <string name="adb_usb_network_device_label">RNDIS / сеть (TBox)</string>
+    <string name="adb_usb_tbox_rndis_warning">Составное USB TBox (RNDIS+ADB). При отключении приложение оставляет USB-дескриптор открытым (как Bugjaeger), чтобы не срывать сеть RNDIS с TBox.</string>
     <string name="tab_geoposition">Геопозиция</string>
     <string name="location_section_source">Источник</string>
     <string name="location_section_usb_gnss">USB GNSS</string>

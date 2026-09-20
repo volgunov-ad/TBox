@@ -51,6 +51,8 @@ object AdbRepository {
         val vendorId: Int,
         val productId: Int,
         val hasPermission: Boolean,
+        /** Same USB device also carries RNDIS/CDC-net (typical TBox). */
+        val sharesNetworkWithHost: Boolean = false,
     )
 
     private const val MAX_LOG_LINES = 500
@@ -70,34 +72,48 @@ object AdbRepository {
     private lateinit var usbManager: UsbManager
     private var connection: AdbConnection? = null
     private var connectedUsbDeviceId: Int? = null
+    /** Set for the whole USB open/connect attempt, including before CNXN completes. */
+    @Volatile private var activeUsbDeviceId: Int? = null
     private var pendingUsbDeviceId: Int? = null
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> refreshUsbDevices()
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    val device = extraUsbDevice(intent)
-                    refreshUsbDevices()
-                    if (device != null && device.deviceId == connectedUsbDeviceId) {
-                        scope.launch {
-                            mutex.withLock {
-                                closeConnection()
-                                setError(TransportType.USB, device.deviceName, "USB device disconnected")
+            runCatching {
+                when (intent?.action) {
+                    UsbManager.ACTION_USB_DEVICE_ATTACHED -> refreshUsbDevices()
+                    UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                        val device = extraUsbDevice(intent)
+                        refreshUsbDevices()
+                        if (device == null) return@runCatching
+                        val detachedId = device.deviceId
+                        // Always drop a parked handle for this id — device is gone.
+                        AdbUsbTransport.discardParkedNetworkConnection(detachedId)
+                        val wasActive = detachedId == connectedUsbDeviceId ||
+                            detachedId == activeUsbDeviceId
+                        if (wasActive) {
+                            scope.launch {
+                                mutex.withLock {
+                                    closeConnection(deviceGone = true)
+                                    setError(
+                                        TransportType.USB,
+                                        runCatching { device.deviceName }.getOrDefault("USB"),
+                                        "USB device disconnected",
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                ACTION_USB_PERMISSION -> {
-                    val device = extraUsbDevice(intent)
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    refreshUsbDevices()
-                    if (device != null && device.deviceId == pendingUsbDeviceId) {
-                        pendingUsbDeviceId = null
-                        if (granted) {
-                            connectUsb(device.deviceId)
-                        } else {
-                            setError(TransportType.USB, device.deviceName, "USB permission denied")
+                    ACTION_USB_PERMISSION -> {
+                        val device = extraUsbDevice(intent)
+                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        refreshUsbDevices()
+                        if (device != null && device.deviceId == pendingUsbDeviceId) {
+                            pendingUsbDeviceId = null
+                            if (granted) {
+                                connectUsb(device.deviceId)
+                            } else {
+                                setError(TransportType.USB, device.deviceName, "USB permission denied")
+                            }
                         }
                     }
                 }
@@ -126,18 +142,25 @@ object AdbRepository {
 
     fun refreshUsbDevices() {
         if (!initialized) return
-        _usbCandidates.value = usbManager.deviceList.values
-            .filter(AdbUsbTransport::isAdbDevice)
-            .sortedBy { it.deviceName }
-            .map {
-                UsbCandidate(
-                    deviceId = it.deviceId,
-                    name = usbDisplayName(it),
-                    vendorId = it.vendorId,
-                    productId = it.productId,
-                    hasPermission = usbManager.hasPermission(it),
+        _usbCandidates.value = runCatching {
+            usbManager.deviceList.values
+                .filter(AdbUsbTransport::isAdbDevice)
+                // Prefer dedicated ADB gadgets over TBox RNDIS+ADB composites.
+                .sortedWith(
+                    compareBy<UsbDevice> { AdbUsbTransport.sharesNetworkWithHost(it) }
+                        .thenBy { it.deviceName },
                 )
-            }
+                .map {
+                    UsbCandidate(
+                        deviceId = it.deviceId,
+                        name = usbDisplayName(it),
+                        vendorId = it.vendorId,
+                        productId = it.productId,
+                        hasPermission = runCatching { usbManager.hasPermission(it) }.getOrDefault(false),
+                        sharesNetworkWithHost = AdbUsbTransport.sharesNetworkWithHost(it),
+                    )
+                }
+        }.getOrDefault(_usbCandidates.value)
     }
 
     fun requestUsbPermission(deviceId: Int) {
@@ -201,14 +224,25 @@ object AdbRepository {
             mutex.withLock {
                 closeConnection()
                 val endpoint = usbDisplayName(device)
+                val sharesNetwork = AdbUsbTransport.sharesNetworkWithHost(device)
+                activeUsbDeviceId = deviceId
                 _state.value = State(Phase.CONNECTING, TransportType.USB, endpoint)
                 appendLog("Connecting to USB $endpoint")
+                if (sharesNetwork) {
+                    appendLog(
+                        "Note: composite USB with RNDIS (TBox). " +
+                            "Keeping USB handle across disconnect so RNDIS is not unbound.",
+                    )
+                }
                 runCatching {
                     val transport = AdbUsbTransport.open(usbManager, device)
                     connectTransport(transport, TransportType.USB, endpoint, deviceId)
                 }.onFailure {
-                    closeConnection()
-                    setError(TransportType.USB, endpoint, it.message ?: it.javaClass.simpleName)
+                    val gone = findUsbDevice(deviceId) == null
+                    closeConnection(deviceGone = gone)
+                    if (_state.value.error != "USB device disconnected") {
+                        setError(TransportType.USB, endpoint, it.message ?: it.javaClass.simpleName)
+                    }
                 }
             }
         }
@@ -244,7 +278,9 @@ object AdbRepository {
                     }
                     .onFailure {
                         val previous = _state.value
-                        closeConnection()
+                        val gone = previous.transport == TransportType.USB &&
+                            connectedUsbDeviceId?.let { findUsbDevice(it) == null } == true
+                        closeConnection(deviceGone = gone)
                         setError(
                             previous.transport,
                             previous.endpoint,
@@ -282,16 +318,24 @@ object AdbRepository {
             )
             appendLog("Connected to $endpoint")
         } catch (error: Exception) {
-            runCatching { newConnection.close() }
+            val deviceGone = usbDeviceId != null && findUsbDevice(usbDeviceId) == null
+            runCatching {
+                if (deviceGone) newConnection.abandonUsb() else newConnection.close()
+            }
             throw error
         }
     }
 
-    private fun closeConnection() {
+    private fun closeConnection(deviceGone: Boolean = false) {
         val previous = connection
         connection = null
         connectedUsbDeviceId = null
-        runCatching { previous?.close() }
+        activeUsbDeviceId = null
+        if (deviceGone) {
+            runCatching { previous?.abandonUsb() }
+        } else {
+            runCatching { previous?.close() }
+        }
     }
 
     private fun setError(type: TransportType?, endpoint: String, message: String) {
