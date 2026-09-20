@@ -99,6 +99,26 @@ object VhalBinaryToggleCodec {
         else -> null
     }
 
+    /**
+     * Maps an mbCAN [ToggleBinary] set value (usually 1=off / 2=on) to the stock VHAL write
+     * encoding. Returns null when [propertyId] has no VHAL mapping or [mbCanValue] is not
+     * exactly [offValue]/[onValue].
+     */
+    fun encodeMbCanToggleSetValue(
+        propertyId: Int,
+        mbCanValue: Int,
+        offValue: Int,
+        onValue: Int,
+    ): Int? {
+        if (!isVhalBinaryToggleProperty(propertyId)) return null
+        val targetOn = when (mbCanValue) {
+            onValue -> true
+            offValue -> false
+            else -> return null
+        }
+        return encodeWriteValue(propertyId, targetOn)
+    }
+
     /** VHAL read polarity exceptions that differ from mbCAN's usual 2=on convention. */
     fun decodeReadState(propertyId: Int, raw: Int): MbCanBinaryState? = when (propertyId) {
         // R_0200_CEM_IPM_AnionPurify: 1=on, 2=off; write polarity is independently 2=on, 1=off.

@@ -1799,28 +1799,39 @@ object Android10VhalRepository {
         _speedLimiterValueSetRaw.value = null
     }
 
-    private fun encodeVhalSetValue(propertyId: Int, mbCanValue: Int): Int? = when (propertyId) {
-        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY ->
-            FollowMeHomeMode.fromMbCanRaw(mbCanValue)?.vhalWriteValue
-        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST ->
-            CarSettingsLocksLightsDomain.encodeLowBeamHeightVhal(mbCanValue)
-        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT ->
-            CarSettingsLocksLightsDomain.encodeRemoteLockFeedbackVhal(mbCanValue)
-        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY ->
-            CarSettingsAdasDomain.decodeFcwSensitivityMbCan(mbCanValue)
-                ?.let(CarSettingsAdasDomain::encodeFcwSensitivityVhal)
-        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL ->
-            CarSettingsAdasDomain.decodeLdwSensitivityMbCan(mbCanValue)
-                ?.let(CarSettingsAdasDomain::encodeLdwSensitivityVhal)
-        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
-        MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
-            HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
-        MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED ->
-            mbCanValue.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }
-        MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
-            HvacClimateDomain.mbCanBlowModeToVhalWrite(mbCanValue)
-        MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> mbCanValue
-        else -> mbCanValue
+    private fun encodeVhalSetValue(propertyId: Int, mbCanValue: Int): Int? {
+        val policy = MbCanCommandRegistry.get(propertyId)?.policy
+        if (policy is MbCanCommandPolicy.ToggleBinary) {
+            return VhalBinaryToggleCodec.encodeMbCanToggleSetValue(
+                propertyId = propertyId,
+                mbCanValue = mbCanValue,
+                offValue = policy.offValue,
+                onValue = policy.onValue,
+            )
+        }
+        return when (propertyId) {
+            MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY ->
+                FollowMeHomeMode.fromMbCanRaw(mbCanValue)?.vhalWriteValue
+            MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST ->
+                CarSettingsLocksLightsDomain.encodeLowBeamHeightVhal(mbCanValue)
+            MbCanKnownVehiclePropertyId.DEFENCES_PROMPT ->
+                CarSettingsLocksLightsDomain.encodeRemoteLockFeedbackVhal(mbCanValue)
+            MbCanKnownVehiclePropertyId.FCW_SENSITIVITY ->
+                CarSettingsAdasDomain.decodeFcwSensitivityMbCan(mbCanValue)
+                    ?.let(CarSettingsAdasDomain::encodeFcwSensitivityVhal)
+            MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL ->
+                CarSettingsAdasDomain.decodeLdwSensitivityMbCan(mbCanValue)
+                    ?.let(CarSettingsAdasDomain::encodeLdwSensitivityVhal)
+            MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
+            MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
+                HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
+            MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED ->
+                mbCanValue.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }
+            MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION ->
+                HvacClimateDomain.mbCanBlowModeToVhalWrite(mbCanValue)
+            MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL -> mbCanValue
+            else -> mbCanValue
+        }
     }
 
     private fun clearCertifiedCarSettings() {

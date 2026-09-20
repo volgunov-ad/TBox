@@ -489,7 +489,7 @@ object AutomationCodec {
                 .put("bus", action.bus.storageKey)
                 .put("propertyId", action.propertyId)
                 .put("operation", action.operation.storageKey)
-                .put("value", action.value)
+                .put("value", AutomationCanValueCodec.encodeJsonValue(action))
 
             is AutomationAction.LaunchApplication -> JSONObject()
                 .put(KEY_TYPE, "launch_application")
@@ -530,15 +530,7 @@ object AutomationCodec {
                 elseActions = json.optJSONArray("elseActions")?.mapObjects(::decodeAction).orEmpty(),
             )
 
-            "can_command" -> AutomationAction.CanCommand(
-                bus = json.requireStorageEnum("bus", AutomationCanBus.entries) { it.storageKey },
-                propertyId = json.requireInt("propertyId"),
-                operation = json.requireStorageEnum(
-                    "operation",
-                    AutomationCanOperation.entries,
-                ) { it.storageKey },
-                value = json.requireInt("value"),
-            )
+            "can_command" -> decodeCanCommand(json)
 
             "launch_application" -> AutomationAction.LaunchApplication(
                 packageName = json.requireNonBlankString("packageName"),
@@ -582,6 +574,37 @@ object AutomationCodec {
 
             else -> throw IllegalArgumentException("Unknown action type")
         }
+
+    private fun decodeCanCommand(json: JSONObject): AutomationAction.CanCommand {
+        val bus = json.requireStorageEnum("bus", AutomationCanBus.entries) { it.storageKey }
+        val propertyId = json.requireInt("propertyId")
+        val operation = json.requireStorageEnum(
+            "operation",
+            AutomationCanOperation.entries,
+        ) { it.storageKey }
+        val rawValue = json.opt("value")
+        val (value, valueKey) = when (rawValue) {
+            is String -> 0 to AutomationCanValueCodec.normalizeKey(rawValue)
+            is Number -> {
+                val long = rawValue.toLong()
+                require(rawValue.toDouble().isFinite() && rawValue.toDouble() == long.toDouble()) {
+                    "Expected integer or semantic string: value"
+                }
+                require(long in Int.MIN_VALUE..Int.MAX_VALUE) { "Integer out of range: value" }
+                long.toInt() to null
+            }
+            else -> throw IllegalArgumentException("Expected integer or semantic string: value")
+        }
+        return AutomationCanValueCodec.canonicalize(
+            AutomationAction.CanCommand(
+                bus = bus,
+                propertyId = propertyId,
+                operation = operation,
+                value = value,
+                valueKey = valueKey,
+            ),
+        )
+    }
 
     private fun JSONObject.requireObject(key: String): JSONObject =
         optJSONObject(key) ?: throw IllegalArgumentException("Missing object: $key")
