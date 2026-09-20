@@ -680,6 +680,44 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun setHuScreenBrightness_acceptsLevel1to10() {
+        val ok = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 8,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(ok).isEmpty())
+
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".intValue") },
+        )
+    }
+
+    @Test
+    fun setHuScreenAutoBrightness_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS,
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
     fun setAutomationTriggerWidgetAction_blankId_isRejected() {
         val definition = validDefinition(
             actions = listOf(

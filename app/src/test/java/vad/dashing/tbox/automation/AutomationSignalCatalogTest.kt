@@ -455,4 +455,31 @@ class AutomationSignalCatalogTest {
         )
         assertTrue(descriptor.valueHint().contains("авто-день"))
     }
+
+    @Test
+    fun huScreenBrightness_isAppOnlyNumericAndAutoBinary() {
+        val brightness = AutomationSignalCatalog.get(AutomationSignalId.HU_SCREEN_BRIGHTNESS)
+        assertEquals(AutomationSignalValueType.NUMBER, brightness.id.valueType)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(brightness.id),
+        )
+        assertEquals(
+            "Яркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+        )
+        assertTrue(brightness.valueHint().contains("1…10"))
+        assertTrue(brightness.valueHint().contains("Не путать"))
+
+        val auto = AutomationSignalCatalog.get(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS)
+        assertEquals(listOf("off", "on"), auto.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(auto.id),
+        )
+        assertEquals(
+            "Автояркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
+        )
+    }
 }

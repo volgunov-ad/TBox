@@ -17,6 +17,7 @@ import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.CarDataRepository
+import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MEDIA_AUTOMATION_SOURCE_HOLD_MS
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -448,6 +449,47 @@ class AutomationActionExecutor(
 
         AutomationBuiltinActionType.WIFI_MODEM_REBOOT ->
             serviceActions.rebootWifiModem()
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Яркость экрана ГУ недоступна")
+            } else {
+                val level = action.intValue.coerceIn(1, 10)
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeBrightnessUiLevel(appContext, level)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Яркость экрана ГУ: $level"
+                    } else {
+                        "Не удалось установить яркость экрана ГУ"
+                    },
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Автояркость экрана ГУ недоступна")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeAutoBrightness(appContext, action.boolValue)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        if (action.boolValue) {
+                            "Автояркость экрана ГУ включена"
+                        } else {
+                            "Автояркость экрана ГУ выключена"
+                        }
+                    } else {
+                        "Не удалось изменить автояркость экрана ГУ"
+                    },
+                )
+            }
+        }
 
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
             val triggerId = action.stringValue.trim()
