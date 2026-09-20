@@ -51,6 +51,8 @@ object AdbRepository {
         val vendorId: Int,
         val productId: Int,
         val hasPermission: Boolean,
+        /** Same USB device also carries RNDIS/CDC-net (typical TBox). */
+        val sharesNetworkWithHost: Boolean = false,
     )
 
     private const val MAX_LOG_LINES = 500
@@ -86,6 +88,9 @@ object AdbRepository {
                                 setError(TransportType.USB, device.deviceName, "USB device disconnected")
                             }
                         }
+                    } else if (device != null && AdbUsbTransport.sharesNetworkWithHost(device)) {
+                        // Physical unplug — parked usbfs handle is stale.
+                        AdbUsbTransport.discardParkedNetworkConnection(device.deviceId)
                     }
                 }
                 ACTION_USB_PERMISSION -> {
@@ -128,7 +133,11 @@ object AdbRepository {
         if (!initialized) return
         _usbCandidates.value = usbManager.deviceList.values
             .filter(AdbUsbTransport::isAdbDevice)
-            .sortedBy { it.deviceName }
+            // Prefer dedicated ADB gadgets over TBox RNDIS+ADB composites.
+            .sortedWith(
+                compareBy<UsbDevice> { AdbUsbTransport.sharesNetworkWithHost(it) }
+                    .thenBy { it.deviceName },
+            )
             .map {
                 UsbCandidate(
                     deviceId = it.deviceId,
@@ -136,6 +145,7 @@ object AdbRepository {
                     vendorId = it.vendorId,
                     productId = it.productId,
                     hasPermission = usbManager.hasPermission(it),
+                    sharesNetworkWithHost = AdbUsbTransport.sharesNetworkWithHost(it),
                 )
             }
     }
@@ -201,8 +211,15 @@ object AdbRepository {
             mutex.withLock {
                 closeConnection()
                 val endpoint = usbDisplayName(device)
+                val sharesNetwork = AdbUsbTransport.sharesNetworkWithHost(device)
                 _state.value = State(Phase.CONNECTING, TransportType.USB, endpoint)
                 appendLog("Connecting to USB $endpoint")
+                if (sharesNetwork) {
+                    appendLog(
+                        "Note: composite USB with RNDIS (TBox). " +
+                            "Keeping USB handle across disconnect so RNDIS is not unbound.",
+                    )
+                }
                 runCatching {
                     val transport = AdbUsbTransport.open(usbManager, device)
                     connectTransport(transport, TransportType.USB, endpoint, deviceId)

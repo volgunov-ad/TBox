@@ -89,6 +89,8 @@
     <string name="adb_console">Console</string>
     <string name="adb_clear_log">Clear console</string>
     <string name="adb_authorization_hint">Approve this RSA key on the target device if prompted.</string>
+    <string name="adb_usb_network_device_label">RNDIS / network (TBox)</string>
+    <string name="adb_usb_tbox_rndis_warning">TBox composite USB (RNDIS+ADB). On disconnect the app keeps the USB handle open (Bugjaeger-style) so the RNDIS link to TBox is not unbound.</string>
     <string name="tab_geoposition">Location</string>
     <string name="location_section_source">Source</string>
     <string name="location_section_usb_gnss">USB GNSS</string>
