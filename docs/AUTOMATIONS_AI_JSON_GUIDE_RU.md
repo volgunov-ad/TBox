@@ -588,6 +588,7 @@
 | Перезагрузить TBox | `restart_tbox` | значения по умолчанию |
 | Переключить день/ночь приложения | `toggle_app_day_night_theme` | значения по умолчанию |
 | Включить автоматическую тему ГУ | `enable_head_unit_auto_theme` | значения по умолчанию |
+| Тема день/ночь ГУ | `set_hu_day_night_theme` | `stringValue`: `light` / `dark` / `auto` (как Car Settings → Экраны) |
 | Переключить режим регулировки зеркал | `toggle_mirror_adjust_mode` | значения по умолчанию |
 | Временная видимость плавающих панелей | `toggle_hide_floating_panels` | `intValue`: 0 переключить, 1 скрыть, 2 показать; `stringValue`: `""` для всех или ID одной панели |
 | Сохранённое включение плавающих панелей | `toggle_floating_panels_enabled` | `intValue`: 0 переключить, 1 включить, 2 выключить; `stringValue`: `""` для всех или ID одной панели |
@@ -599,6 +600,10 @@
 | Следующий трек | `media_next` | `stringValue`: package name медиаплеера |
 | Поставить/снять «Нравится» | `media_toggle_like` | `stringValue`: package name медиаплеера |
 | Установить громкость медиа | `set_media_volume` | `intValue`: `0..31` |
+| Установить громкость телефона | `set_phone_volume` | `intValue`: `1..31` |
+| Установить громкость навигатора | `set_navi_volume` | `intValue`: `0..10` |
+| Установить громкость голоса | `set_voice_volume` | `intValue`: `2..10` |
+| Динамик подголовника | `set_headrest_speaker` | `stringValue`: `only` / `assist` / `off` |
 | Следующий режим подмены геопозиции | `cycle_mock_location_mode` | значения по умолчанию |
 | Перезапустить GNSS-модуль | `gnss_module_reboot` | значения по умолчанию |
 | Симулировать потерю геоисточника | `set_simulated_location_source_loss` | `boolValue`: включить/выключить |
@@ -668,9 +673,13 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Есл
 | `hvac_temperature_right` | `head_unit` | °C |
 | `hvac_fan_speed` | `head_unit` | 0..7 |
 | `hud_height` | `head_unit` | 1..10 |
-| `hud_brightness` | `head_unit` | 1..10 |
-| `icm_brightness` | `head_unit` | 1..10 |
+| `hud_brightness` | `head_unit` | 1..10 — яркость проекции HUD (не экран ГУ / не ICM) |
+| `icm_brightness` | `head_unit` | 1..10 — яркость приборной панели / ICM (не экран ГУ / не HUD) |
 | `hu_screen_brightness` | `app` | 1..10 — яркость экрана ГУ (не HUD/ICM); A9 Settings / A10 Adayo backlight |
+| `hu_media_volume` | `app` | 0..31 — микшер ГУ медиа (не mbCAN EQ) |
+| `hu_phone_volume` | `app` | 1..31 — микшер ГУ телефон |
+| `hu_navi_volume` | `app` | 0..10 — микшер ГУ навигатор |
+| `hu_voice_volume` | `app` | 2..10 — микшер ГУ голос/TTS |
 | `overspeed_alarm` | `head_unit` | км/ч, 30..230 с шагом 5 |
 | `audio_key_tone_volume` | `head_unit` | 0..3, только A9/mbCAN |
 | `audio_eq_bass` | `head_unit` | -7..7, только A9/mbCAN |
@@ -732,6 +741,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Есл
 | `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 | `hu_screen_auto_brightness` | `app` | `on`, `off` — автояркость экрана ГУ (Car Settings → Экраны) |
+| `hu_headrest_speaker` | `app` | `only`, `assist`, `off` — динамик подголовника (Car Settings → Аудио) |
 
 Следующие сигналы имеют только значения `off` / `on`:
 

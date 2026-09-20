@@ -270,6 +270,8 @@ object AutomationSignalStateEncoding {
         "open" -> "Открыто"
         "tilt" -> "Откинут"
         "vent" -> "Щель"
+        "only" -> "Только подголовник"
+        "assist" -> "Подголовник + основные"
         "heat_1" -> "Подогрев 1"
         "heat_2" -> "Подогрев 2"
         "heat_3" -> "Подогрев 3"

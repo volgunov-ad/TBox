@@ -58,7 +58,7 @@ object AutomationParameterLabels {
         MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS -> "Яркость HUD"
         MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE -> "Режим HUD"
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS -> "Автояркость HUD"
-        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE -> "Режим яркости приборной панели"
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE -> "Автояркость приборной панели"
         MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL -> "Яркость приборной панели"
         MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET -> "Предупреждение превышения скорости"
         MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION -> "Направление обдува"
@@ -251,5 +251,10 @@ object AutomationParameterLabels {
         AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
         AutomationSignalId.HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
         AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
+        AutomationSignalId.HU_MEDIA_VOLUME -> "Громкость медиа (микшер ГУ)"
+        AutomationSignalId.HU_PHONE_VOLUME -> "Громкость телефона (микшер ГУ)"
+        AutomationSignalId.HU_NAVI_VOLUME -> "Громкость навигатора (микшер ГУ)"
+        AutomationSignalId.HU_VOICE_VOLUME -> "Громкость голоса (микшер ГУ)"
+        AutomationSignalId.HU_HEADREST_SPEAKER -> "Динамик подголовника"
     }
 }

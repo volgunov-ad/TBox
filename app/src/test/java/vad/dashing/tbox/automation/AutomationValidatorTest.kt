@@ -718,6 +718,96 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun setHuDayNightTheme_acceptsLightDarkAuto() {
+        listOf("light", "dark", "auto").forEach { key ->
+            val ok = validDefinition(
+                actions = listOf(
+                    AutomationAction.Builtin(
+                        type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                        stringValue = key,
+                    ),
+                ),
+            )
+            assertTrue(AutomationValidator.validate(ok).isEmpty())
+        }
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                    stringValue = "manual",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
+    fun platformVolumeRanges_andHeadrestStates_areValidated() {
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 1,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_NAVI_VOLUME,
+                            intValue = 10,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 2,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "off",
+                        ),
+                    ),
+                ),
+            ).isEmpty(),
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 0,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 1,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "mute",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
     fun setAutomationTriggerWidgetAction_blankId_isRejected() {
         val definition = validDefinition(
             actions = listOf(
