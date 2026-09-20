@@ -469,7 +469,9 @@ class AutomationSignalCatalogTest {
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
         )
         assertTrue(brightness.valueHint().contains("1…10"))
-        assertTrue(brightness.valueHint().contains("Не путать"))
+        assertTrue(brightness.valueHint().contains("экран ГУ"))
+        assertTrue(brightness.valueHint().contains("HUD"))
+        assertTrue(brightness.valueHint().contains("ICM"))
 
         val auto = AutomationSignalCatalog.get(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS)
         assertEquals(listOf("off", "on"), auto.stateOptions)
@@ -480,6 +482,56 @@ class AutomationSignalCatalogTest {
         assertEquals(
             "Автояркость экрана ГУ",
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
+        )
+    }
+
+    @Test
+    fun threeBrightnessLabels_areDistinct() {
+        assertEquals(
+            "Яркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+        )
+        assertEquals(
+            "Яркость HUD",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
+        )
+        assertEquals(
+            "Яркость приборной панели",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
+        )
+        assertTrue(
+            AutomationSignalCatalog.get(AutomationSignalId.HUD_BRIGHTNESS)
+                .valueHint()
+                .contains("не экран ГУ"),
+        )
+        assertTrue(
+            AutomationSignalCatalog.get(AutomationSignalId.ICM_BRIGHTNESS)
+                .valueHint()
+                .contains("не экран ГУ"),
+        )
+    }
+
+    @Test
+    fun platformMixerVolumes_areAppOnlyWithHeadrestStates() {
+        listOf(
+            AutomationSignalId.HU_MEDIA_VOLUME,
+            AutomationSignalId.HU_PHONE_VOLUME,
+            AutomationSignalId.HU_NAVI_VOLUME,
+            AutomationSignalId.HU_VOICE_VOLUME,
+        ).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertEquals(AutomationSignalValueType.NUMBER, descriptor.id.valueType)
+            assertEquals(
+                AutomationSignalSource.APP,
+                AutomationSignalCatalog.preferredSource(descriptor.id),
+            )
+            assertTrue(descriptor.valueHint().contains("Микшер ГУ"))
+        }
+        val headrest = AutomationSignalCatalog.get(AutomationSignalId.HU_HEADREST_SPEAKER)
+        assertEquals(listOf("only", "assist", "off"), headrest.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(headrest.id),
         )
     }
 }

@@ -653,6 +653,47 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
             }
 
+            AutomationBuiltinActionType.SET_PHONE_VOLUME -> if (action.intValue !in 1..31) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость телефона должна быть 1–31",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_NAVI_VOLUME -> if (action.intValue !in 0..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость навигатора должна быть 0–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_VOICE_VOLUME -> if (action.intValue !in 2..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость голоса должна быть 2–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("light", "dark", "auto")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Тема: light / dark / auto",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("only", "assist", "off")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Подголовник: only / assist / off",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> if (action.intValue !in 1..10) {
                 issues += AutomationValidationIssue(
                     "$path.intValue",

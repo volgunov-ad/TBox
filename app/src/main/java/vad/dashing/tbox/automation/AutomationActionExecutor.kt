@@ -344,6 +344,36 @@ class AutomationActionExecutor(
             AutomationActionResult(ok, if (ok) "Автотема включена" else "Автотема недоступна")
         }
 
+        AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+            val key = action.stringValue.trim().lowercase()
+            val modeValue = when (key) {
+                "light" -> HeadUnitDayNightRepository.NIGHT_MODE_LIGHT_MANUAL
+                "dark" -> HeadUnitDayNightRepository.NIGHT_MODE_DARK_MANUAL
+                "auto" -> HeadUnitDayNightRepository.NIGHT_MODE_AUTO
+                else -> null
+            }
+            if (modeValue == null) {
+                AutomationActionResult.failure("Тема: light / dark / auto")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    if (modeValue == HeadUnitDayNightRepository.NIGHT_MODE_AUTO) {
+                        HeadUnitDayNightRepository.enableAutoMode(appContext)
+                    } else {
+                        HeadUnitDayNightRepository.writeAutoMode(appContext, modeValue)
+                    }
+                }
+                val label = when (key) {
+                    "light" -> "светлая"
+                    "dark" -> "тёмная"
+                    else -> "авто"
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) "Тема ГУ: $label" else "Не удалось установить тему ГУ",
+                )
+            }
+        }
+
         AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> {
             val ok = runCatching {
                 MirrorAdjustModeRepository.toggleMirrorAdjustMode(appContext)
@@ -405,12 +435,50 @@ class AutomationActionExecutor(
             SharedMediaControlService.toggleHeartRating(packages, preferred)
         }
 
-        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> {
-            val ok = PlatformAudioRepository.setVolume(
-                PlatformAudioDomain.VolumeChannel.Media,
-                action.intValue,
-            )
-            AutomationActionResult(ok, if (ok) "Громкость установлена" else "Ошибка громкости")
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Media,
+            action.intValue,
+            "медиа",
+        )
+
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Phone,
+            action.intValue,
+            "телефона",
+        )
+
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Navi,
+            action.intValue,
+            "навигатора",
+        )
+
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Voice,
+            action.intValue,
+            "голоса",
+        )
+
+        AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+            val ui = when (action.stringValue.trim().lowercase()) {
+                "only" -> PlatformAudioDomain.HEADREST_ONLY
+                "assist" -> PlatformAudioDomain.HEADREST_ASSIST
+                "off" -> PlatformAudioDomain.HEADREST_OFF
+                else -> null
+            }
+            if (ui == null) {
+                AutomationActionResult.failure("Подголовник: only / assist / off")
+            } else {
+                val ok = PlatformAudioRepository.setHeadrestMode(ui)
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Динамик подголовника установлен"
+                    } else {
+                        "Не удалось установить динамик подголовника"
+                    },
+                )
+            }
         }
 
         AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> {
@@ -548,6 +616,18 @@ class AutomationActionExecutor(
                 AutomationActionResult.ok("Сообщение закрыто")
             }
         }
+    }
+
+    private fun setPlatformVolume(
+        channel: PlatformAudioDomain.VolumeChannel,
+        value: Int,
+        label: String,
+    ): AutomationActionResult {
+        val ok = PlatformAudioRepository.setVolume(channel, value)
+        return AutomationActionResult(
+            ok,
+            if (ok) "Громкость $label установлена" else "Ошибка громкости $label",
+        )
     }
 
     private suspend fun mediaAction(

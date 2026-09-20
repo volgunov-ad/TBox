@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -18,6 +19,8 @@ import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.PlatformAudioDomain
+import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -155,6 +158,19 @@ class AutomationSignalProvider(
                 AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
                 AutomationSignalId.HU_SCREEN_BRIGHTNESS -> huScreenBrightnessFlow()
                 AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> huScreenAutoBrightnessFlow()
+                AutomationSignalId.HU_MEDIA_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.mediaVolume,
+                )
+                AutomationSignalId.HU_PHONE_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.phoneVolume,
+                )
+                AutomationSignalId.HU_NAVI_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.naviVolume,
+                )
+                AutomationSignalId.HU_VOICE_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.voiceVolume,
+                )
+                AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -307,6 +323,53 @@ private fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
         awaitClose {
             job.cancel()
             HeadUnitBrightnessRepository.stopObserving(context)
+        }
+    }.distinctUntilChanged()
+}
+
+private fun platformVolumeFlow(
+    volume: StateFlow<Int?>,
+): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        PlatformAudioRepository.startObserving(context)
+        val job = launch {
+            volume.collect { level ->
+                trySend(
+                    level?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            PlatformAudioRepository.stopObserving()
+        }
+    }.distinctUntilChanged()
+}
+
+private fun platformHeadrestFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        PlatformAudioRepository.startObserving(context)
+        val job = launch {
+            PlatformAudioRepository.headrestMode.collect { mode ->
+                val key = when (mode) {
+                    PlatformAudioDomain.HEADREST_ONLY -> "only"
+                    PlatformAudioDomain.HEADREST_ASSIST -> "assist"
+                    PlatformAudioDomain.HEADREST_OFF -> "off"
+                    else -> null
+                }
+                trySend(
+                    key?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            PlatformAudioRepository.stopObserving()
         }
     }.distinctUntilChanged()
 }

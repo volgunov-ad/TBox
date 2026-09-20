@@ -200,7 +200,14 @@ enum class AutomationSignalId(
     /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
     HU_SCREEN_BRIGHTNESS("hu_screen_brightness"),
     /** Head-unit screen auto-brightness on/off. */
-    HU_SCREEN_AUTO_BRIGHTNESS("hu_screen_auto_brightness", AutomationSignalValueType.STATE);
+    HU_SCREEN_AUTO_BRIGHTNESS("hu_screen_auto_brightness", AutomationSignalValueType.STATE),
+    /** Platform mixer volumes (Car Settings → Аудио), not mbCAN EQ. */
+    HU_MEDIA_VOLUME("hu_media_volume"),
+    HU_PHONE_VOLUME("hu_phone_volume"),
+    HU_NAVI_VOLUME("hu_navi_volume"),
+    HU_VOICE_VOLUME("hu_voice_volume"),
+    /** Headrest speaker: `only` / `assist` / `off`. */
+    HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -533,6 +540,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     RESTART_TBOX("restart_tbox"),
     TOGGLE_APP_DAY_NIGHT_THEME("toggle_app_day_night_theme"),
     ENABLE_HEAD_UNIT_AUTO_THEME("enable_head_unit_auto_theme"),
+    /** Explicit day/night like Car Settings: stringValue `light` / `dark` / `auto`. */
+    SET_HU_DAY_NIGHT_THEME("set_hu_day_night_theme"),
     TOGGLE_MIRROR_ADJUST_MODE("toggle_mirror_adjust_mode"),
     TOGGLE_HIDE_FLOATING_PANELS("toggle_hide_floating_panels"),
     TOGGLE_FLOATING_PANELS_ENABLED("toggle_floating_panels_enabled"),
@@ -545,6 +554,11 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     MEDIA_NEXT("media_next"),
     MEDIA_TOGGLE_LIKE("media_toggle_like"),
     SET_MEDIA_VOLUME("set_media_volume"),
+    SET_PHONE_VOLUME("set_phone_volume"),
+    SET_NAVI_VOLUME("set_navi_volume"),
+    SET_VOICE_VOLUME("set_voice_volume"),
+    /** stringValue: `only` / `assist` / `off` (shared UI 1/2/3). */
+    SET_HEADREST_SPEAKER("set_headrest_speaker"),
     CYCLE_MOCK_LOCATION_MODE("cycle_mock_location_mode"),
     GNSS_MODULE_REBOOT("gnss_module_reboot"),
     SET_SIMULATED_LOCATION_SOURCE_LOSS("set_simulated_location_source_loss"),

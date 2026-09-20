@@ -22,7 +22,8 @@
 | Headrest speaker | Car Settings → Аудио | A9 audio **37** (0/1/2); A10 SettingsSvc **1/2/3** |
 | Volume vs speed | Car Settings → Аудио | A10 **1–4**; A9 **0–3** ↔ shared UI 1–4 |
 | Day/night панелей | Themes (`.tboxtheme`) | ≠ SystemSettings theme |
-| Экран ГУ: яркость / авто / day-night | Car Settings → Экраны; автоматизации `hu_screen_brightness` / `set_hu_screen_*` | A9 `screen_brightness` 10…100 и `auto_bright` 2/1; A10 runtime Binder `adayo.setting.v2.0`: `get/setSysBacklight`, `get/setDayNightMode` (1 auto, 4 manual) |
+| Экран ГУ: яркость / авто / day-night | Car Settings → Экраны; автоматизации `hu_screen_brightness` / `set_hu_screen_*` / `set_hu_day_night_theme` | A9 `screen_brightness` 10…100 и `auto_bright` 2/1; A10 runtime Binder `adayo.setting.v2.0`: `get/setSysBacklight`, `get/setDayNightMode` (1 auto, 4 manual) |
+| Микшер ГУ: медиа/телефон/нави/голос / подголовник | Car Settings → Аудио; автоматизации `hu_*_volume` / `set_*_volume` / `set_headrest_speaker` | A9 OpenOS volume groups + mbCAN audio 37; A10 SettingsSvc streams + `get/setHeadrestSpeakerMode` |
 
 ## CERT для Car Settings (CAN/VHAL)
 

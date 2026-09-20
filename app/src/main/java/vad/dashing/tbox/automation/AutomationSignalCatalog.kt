@@ -590,7 +590,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
             "",
             headUnitOnly,
-            typicalRange = "Уровень 1…10",
+            typicalRange = "Уровень 1…10 — яркость проекции HUD (не экран ГУ и не приборка).",
         ),
         state(
             AutomationSignalId.HUD_DISPLAY_MODE,
@@ -610,7 +610,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
             "",
             headUnitOnly,
-            typicalRange = "Уровень 1…10",
+            typicalRange = "Уровень 1…10 — яркость комбинации приборов / ICM (не экран ГУ и не HUD).",
         ),
         number(
             AutomationSignalId.OVERSPEED_ALARM,
@@ -770,7 +770,8 @@ object AutomationSignalCatalog {
                 "приложения, если оно отвязано от системы), auto_day / auto_night — штатный " +
                 "авто день/ночь ГУ с текущим разрешением. Один триггер «любой день/ночь» — " +
                 "сигнал app_theme. Тот же режим, что у переключателя темы и действий " +
-                "toggle_app_day_night_theme / enable_head_unit_auto_theme.",
+                "toggle_app_day_night_theme / enable_head_unit_auto_theme / " +
+                "set_hu_day_night_theme (light/dark/auto).",
         ),
         state(
             AutomationSignalId.APP_THEME,
@@ -786,17 +787,52 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
             "",
             appOnly,
-            typicalRange = "Только приложение. Уровень 1…10 (как Car Settings → Экраны). " +
-                "A9: Settings.System screen_brightness 10…100; A10: Adayo getSysBacklight. " +
-                "Не путать с яркостию HUD/приборки.",
+            typicalRange = "Только приложение. Уровень 1…10 — подсветка экрана ГУ " +
+                "(Car Settings → Экраны). Три яркости: экран ГУ / HUD / приборка (ICM) — " +
+                "разные сигналы. A9: Settings.System screen_brightness; A10: Adayo getSysBacklight.",
         ),
         state(
             AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS,
             AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
             appOnly,
             binaryStates,
-            typicalRange = "on/off. A9: Settings.Global auto_bright 2/1; A10: getDayNightMode " +
-                "1=auto / 4=manual (яркость, не тема).",
+            typicalRange = "on/off — автоподсветка экрана ГУ (не тема день/ночь, не HUD/ICM). " +
+                "A9: auto_bright; A10: getDayNightMode 1=auto / 4=manual для яркости.",
+        ),
+        number(
+            AutomationSignalId.HU_MEDIA_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_MEDIA_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 0…31 (не mbCAN EQ). Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_PHONE_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_PHONE_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 1…31. Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_NAVI_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_NAVI_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 0…10. Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_VOICE_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_VOICE_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 2…10 (TTS). Car Settings → Аудио.",
+        ),
+        state(
+            AutomationSignalId.HU_HEADREST_SPEAKER,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_HEADREST_SPEAKER),
+            appOnly,
+            listOf("only", "assist", "off"),
+            typicalRange = "only / assist / off (UI 1/2/3). A9 mbCAN audio 37; A10 SettingsSvc.",
         ),
     )
 

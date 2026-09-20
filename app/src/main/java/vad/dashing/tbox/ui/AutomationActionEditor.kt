@@ -37,6 +37,7 @@ import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
 import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
@@ -489,6 +490,10 @@ private fun BuiltinActionFields(
                     type = type,
                     intValue = when (type) {
                         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
+                        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
+                        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
+                        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
+                        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
                         else -> 0
                     },
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
@@ -500,6 +505,8 @@ private fun BuiltinActionFields(
                             apps.firstOrNull()?.packageName.orEmpty()
                         type == AutomationBuiltinActionType.WIFI_CONNECT ->
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
+                        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
+                        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
                         else -> ""
                     },
                 ),
@@ -557,10 +564,53 @@ private fun BuiltinActionFields(
         )
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> AutomationIntField(
-            label = "Громкость",
+            label = "Громкость медиа (0–31)",
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> AutomationIntField(
+            label = "Громкость телефона (1–31)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> AutomationIntField(
+            label = "Громкость навигатора (0–10)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> AutomationIntField(
+            label = "Громкость голоса (2–10)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> AutomationDropdown(
+            label = "Динамик подголовника",
+            value = action.stringValue.trim().lowercase().ifEmpty { "assist" },
+            options = listOf("only", "assist", "off"),
+            optionLabel = AutomationSignalStateEncoding::stateOptionLabel,
+            onValueChange = { onChange(action.copy(stringValue = it)) },
+        )
+
+        AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> AutomationDropdown(
+            label = "Тема день/ночь ГУ",
+            value = action.stringValue.trim().lowercase().ifEmpty { "auto" },
+            options = listOf("light", "dark", "auto"),
+            optionLabel = { key ->
+                when (key) {
+                    "light" -> "Светлая"
+                    "dark" -> "Тёмная"
+                    else -> "Авто"
+                }
+            },
+            onValueChange = { onChange(action.copy(stringValue = it)) },
         )
 
         AutomationBuiltinActionType.SET_GEO_DEBUG_LOG,
@@ -828,6 +878,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.RESTART_TBOX -> "Перезагрузить TBox"
     AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> "Переключить день/ночь"
     AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> "Включить автоматическую тему ГУ"
+    AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "Тема день/ночь ГУ (светлая/тёмная/авто)"
     AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> "Переключить регулировку зеркал"
     AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> "Плавающие панели — видимость"
     AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> "Плавающие панели — включение"
@@ -840,6 +891,10 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.MEDIA_NEXT -> "Следующий трек"
     AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> "Поставить/снять «Нравится»"
     AutomationBuiltinActionType.SET_MEDIA_VOLUME -> "Установить громкость медиа"
+    AutomationBuiltinActionType.SET_PHONE_VOLUME -> "Установить громкость телефона"
+    AutomationBuiltinActionType.SET_NAVI_VOLUME -> "Установить громкость навигатора"
+    AutomationBuiltinActionType.SET_VOICE_VOLUME -> "Установить громкость голоса"
+    AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "Динамик подголовника"
     AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> "Следующий режим подмены геопозиции"
     AutomationBuiltinActionType.GNSS_MODULE_REBOOT -> "Перезапустить GNSS-модуль"
     AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->

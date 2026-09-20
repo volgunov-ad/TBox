@@ -154,16 +154,30 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 разрешённая авто-режимом. Триггер «День» по `app_theme` срабатывает и на ручной, и на
 авто-день; «Ночь» — и на ручную, и на авто-ночь. Источник у обоих сигналов тот же,
 что у переключателя темы и действий `toggle_app_day_night_theme` /
-`enable_head_unit_auto_theme`, поэтому readback после этих действий приходит сразу.
+`enable_head_unit_auto_theme` / `set_hu_day_night_theme` (`light` / `dark` / `auto`),
+поэтому readback после этих действий приходит сразу.
 Пока наблюдатель темы не запущен, значений нет.
 
 **Яркость экрана ГУ** (`hu_screen_brightness`, `hu_screen_auto_brightness`) — только источник
 «Приложение», тот же канал что **Car Settings → Экраны** (`HeadUnitBrightnessRepository`):
-уровень **1…10** и автояркость `on`/`off`. Это **не** яркость HUD и **не** приборки (ICM).
+уровень **1…10** и автояркость `on`/`off`. Три разные яркости в меню/автоматизациях:
+
+| Сигнал | Что это |
+|--------|---------|
+| `hu_screen_brightness` | Экран головного устройства |
+| `hud_brightness` | Проекция HUD |
+| `icm_brightness` | Комбинация приборов (приборка) |
+
 A9: `Settings.System screen_brightness` / `Settings.Global auto_bright`; A10: Adayo
 `get/setSysBacklight` и `get/setDayNightMode` (1 auto / 4 manual для яркости). Пока нет
 подписки на сигнал, значения `Unavailable`. Действия: `set_hu_screen_brightness`
 (`intValue` 1…10) и `set_hu_screen_auto_brightness` (`boolValue`).
+
+**Микшер ГУ** (`hu_media_volume`, `hu_phone_volume`, `hu_navi_volume`, `hu_voice_volume`,
+`hu_headrest_speaker`) — тот же канал что **Car Settings → Аудио** (`PlatformAudioRepository`),
+не mbCAN EQ. Диапазоны: медиа 0…31, телефон 1…31, навигатор 0…10, голос 2…10;
+подголовник `only` / `assist` / `off`. Действия: `set_media_volume`, `set_phone_volume`,
+`set_navi_volume`, `set_voice_volume`, `set_headrest_speaker`.
 
 **Wi-Fi** — клиент ГУ (`wlan0`). Точка доступа самого ГУ (SoftAP /
 `wlan1`) не входит. Состояния всегда явные, без `Unavailable`:
@@ -354,7 +368,8 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
   а для бинарных CAN — `on` / `off` (legacy int A9 остаётся валидным и ремапится на A10);
   список значений в редакторе зависит от текущего backend ГУ, при сохранении portable-ключ
   пишется в экспорт;
-- действия TBox Monitor (поездка, моточасы, тема, **яркость экрана ГУ** 1…10 и автояркость,
+- действия TBox Monitor (поездка, моточасы, тема light/dark/auto, **яркость экрана ГУ** 1…10 и автояркость,
+  микшер медиа/телефон/навигатор/голос и подголовник, Wi‑Fi, toast/alert, …);
   **плавающие панели — видимость/включение**
   для всех панелей или одной выбранной: переключить / скрыть / показать и
   переключить / включить / выключить, ESP-реле, **Wi-Fi** вкл/выкл / подключение к
