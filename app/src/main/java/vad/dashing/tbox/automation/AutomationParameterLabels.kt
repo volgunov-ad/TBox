@@ -249,5 +249,7 @@ object AutomationParameterLabels {
         AutomationSignalId.FOREGROUND_APP -> "Приложение на экране"
         AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
         AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
+        AutomationSignalId.HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
+        AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
     }
 }

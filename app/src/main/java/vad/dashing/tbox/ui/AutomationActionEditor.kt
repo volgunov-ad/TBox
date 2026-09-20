@@ -487,8 +487,13 @@ private fun BuiltinActionFields(
             onChange(
                 AutomationAction.Builtin(
                     type = type,
+                    intValue = when (type) {
+                        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
+                        else -> 0
+                    },
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
                         type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
+                        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ->
@@ -616,6 +621,20 @@ private fun BuiltinActionFields(
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> AutomationIntField(
+            label = "Яркость экрана ГУ (1–10)",
+            value = action.intValue.coerceIn(1, 10),
+            onValueChange = { onChange(action.copy(intValue = it.coerceIn(1, 10))) },
+        )
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> AutomationDropdown(
+            label = "Автояркость экрана ГУ",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Включить" else "Выключить" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> Column(
@@ -831,6 +850,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
     AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> "Wi‑Fi модем: данные вкл/выкл"
     AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
+    AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
+    AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
     AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"

@@ -608,6 +608,8 @@
 | Отключиться от текущей Wi-Fi-сети | `wifi_disconnect` | значения по умолчанию; радио остаётся включённым |
 | Wi‑Fi модем: данные | `wifi_modem_set_data` | `boolValue`: включить/выключить mobile data; нужен источник модема Wi‑Fi HTTP |
 | Wi‑Fi модем: перезагрузка | `wifi_modem_reboot` | значения по умолчанию; нужен источник модема Wi‑Fi HTTP |
+| Яркость экрана ГУ | `set_hu_screen_brightness` | `intValue`: `1..10` (как Car Settings → Экраны; не HUD/ICM) |
+| Автояркость экрана ГУ | `set_hu_screen_auto_brightness` | `boolValue`: включить/выключить |
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
@@ -668,6 +670,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Есл
 | `hud_height` | `head_unit` | 1..10 |
 | `hud_brightness` | `head_unit` | 1..10 |
 | `icm_brightness` | `head_unit` | 1..10 |
+| `hu_screen_brightness` | `app` | 1..10 — яркость экрана ГУ (не HUD/ICM); A9 Settings / A10 Adayo backlight |
 | `overspeed_alarm` | `head_unit` | км/ч, 30..230 с шагом 5 |
 | `audio_key_tone_volume` | `head_unit` | 0..3, только A9/mbCAN |
 | `audio_eq_bass` | `head_unit` | -7..7, только A9/mbCAN |
@@ -728,6 +731,7 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Есл
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
 | `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
+| `hu_screen_auto_brightness` | `app` | `on`, `off` — автояркость экрана ГУ (Car Settings → Экраны) |
 
 Следующие сигналы имеют только значения `off` / `on`:
 

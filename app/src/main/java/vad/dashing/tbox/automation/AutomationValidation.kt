@@ -653,6 +653,13 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
             }
 
+            AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> if (action.intValue !in 1..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Яркость экрана ГУ должна быть 1–10",
+                )
+            }
+
             AutomationBuiltinActionType.WIFI_CONNECT -> {
                 if (WifiStaSsid.normalize(action.stringValue) == null) {
                     issues += AutomationValidationIssue(

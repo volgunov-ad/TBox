@@ -781,6 +781,23 @@ object AutomationSignalCatalog {
                 "ручная или разрешённая авто-режимом. Триггер «День» срабатывает и на ручной, " +
                 "и на авто-день; «Ночь» — и на ручную, и на авто-ночь.",
         ),
+        number(
+            AutomationSignalId.HU_SCREEN_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+            "",
+            appOnly,
+            typicalRange = "Только приложение. Уровень 1…10 (как Car Settings → Экраны). " +
+                "A9: Settings.System screen_brightness 10…100; A10: Adayo getSysBacklight. " +
+                "Не путать с яркостию HUD/приборки.",
+        ),
+        state(
+            AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off. A9: Settings.Global auto_bright 2/1; A10: getDayNightMode " +
+                "1=auto / 4=manual (яркость, не тема).",
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

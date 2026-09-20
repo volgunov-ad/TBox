@@ -157,6 +157,14 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 `enable_head_unit_auto_theme`, поэтому readback после этих действий приходит сразу.
 Пока наблюдатель темы не запущен, значений нет.
 
+**Яркость экрана ГУ** (`hu_screen_brightness`, `hu_screen_auto_brightness`) — только источник
+«Приложение», тот же канал что **Car Settings → Экраны** (`HeadUnitBrightnessRepository`):
+уровень **1…10** и автояркость `on`/`off`. Это **не** яркость HUD и **не** приборки (ICM).
+A9: `Settings.System screen_brightness` / `Settings.Global auto_bright`; A10: Adayo
+`get/setSysBacklight` и `get/setDayNightMode` (1 auto / 4 manual для яркости). Пока нет
+подписки на сигнал, значения `Unavailable`. Действия: `set_hu_screen_brightness`
+(`intValue` 1…10) и `set_hu_screen_auto_brightness` (`boolValue`).
+
 **Wi-Fi** — клиент ГУ (`wlan0`). Точка доступа самого ГУ (SoftAP /
 `wlan1`) не входит. Состояния всегда явные, без `Unavailable`:
 
@@ -346,7 +354,8 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
   а для бинарных CAN — `on` / `off` (legacy int A9 остаётся валидным и ремапится на A10);
   список значений в редакторе зависит от текущего backend ГУ, при сохранении portable-ключ
   пишется в экспорт;
-- действия TBox Monitor (поездка, моточасы, тема, **плавающие панели — видимость/включение**
+- действия TBox Monitor (поездка, моточасы, тема, **яркость экрана ГУ** 1…10 и автояркость,
+  **плавающие панели — видимость/включение**
   для всех панелей или одной выбранной: переключить / скрыть / показать и
   переключить / включить / выключить, ESP-реле, **Wi-Fi** вкл/выкл / подключение к
   сохранённой сети / отключение от текущей, **Wi‑Fi модем** данные вкл/выкл / перезагрузка,

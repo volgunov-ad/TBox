@@ -196,7 +196,11 @@ enum class AutomationSignalId(
     MODEM_SIM_STATUS("modem_sim_status", AutomationSignalValueType.STATE),
     FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
-    APP_THEME("app_theme", AutomationSignalValueType.STATE);
+    APP_THEME("app_theme", AutomationSignalValueType.STATE),
+    /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
+    HU_SCREEN_BRIGHTNESS("hu_screen_brightness"),
+    /** Head-unit screen auto-brightness on/off. */
+    HU_SCREEN_AUTO_BRIGHTNESS("hu_screen_auto_brightness", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -550,6 +554,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     WIFI_DISCONNECT("wifi_disconnect"),
     WIFI_MODEM_SET_DATA("wifi_modem_set_data"),
     WIFI_MODEM_REBOOT("wifi_modem_reboot"),
+    SET_HU_SCREEN_BRIGHTNESS("set_hu_screen_brightness"),
+    SET_HU_SCREEN_AUTO_BRIGHTNESS("set_hu_screen_auto_brightness"),
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert"),
     SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget");

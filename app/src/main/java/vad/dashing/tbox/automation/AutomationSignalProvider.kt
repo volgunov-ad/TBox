@@ -4,7 +4,9 @@ import android.os.SystemClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -14,6 +16,7 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
@@ -150,6 +153,8 @@ class AutomationSignalProvider(
                     }.distinctUntilChanged()
                 AutomationSignalId.APP_THEME_MODE -> appThemeModeFlow()
                 AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
+                AutomationSignalId.HU_SCREEN_BRIGHTNESS -> huScreenBrightnessFlow()
+                AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> huScreenAutoBrightnessFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -265,6 +270,46 @@ private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
         }
         value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }.distinctUntilChanged()
+
+private fun huScreenBrightnessFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        HeadUnitBrightnessRepository.startObserving(context)
+        val job = launch {
+            HeadUnitBrightnessRepository.brightnessUiLevel.collect { level ->
+                trySend(
+                    level?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            HeadUnitBrightnessRepository.stopObserving(context)
+        }
+    }.distinctUntilChanged()
+}
+
+private fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        HeadUnitBrightnessRepository.startObserving(context)
+        val job = launch {
+            HeadUnitBrightnessRepository.autoBrightness.collect { enabled ->
+                trySend(
+                    enabled?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            HeadUnitBrightnessRepository.stopObserving(context)
+        }
+    }.distinctUntilChanged()
+}
 
 private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     val context = AppContextHolder.appContextOrNull
