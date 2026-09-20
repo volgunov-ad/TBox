@@ -240,7 +240,7 @@ object AutomationSignalStateEncoding {
     }
 
     fun stateOptionLabel(raw: String): String = when (raw.trim().lowercase()) {
-                "on" -> "Включено"
+        "on" -> "Включено"
         "off" -> "Выключено"
         "standby" -> "Ожидание"
         "active" -> "Активен"
