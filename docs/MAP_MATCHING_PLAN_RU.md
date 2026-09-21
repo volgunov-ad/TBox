@@ -437,7 +437,7 @@ E+ (после симуляций НН/Москва):
 (`currentLimitKmh` / `nextLimitKmh` / `nextLimitDistanceM` / `nextLimitHidden`).
 Каталог и UI виджета — отдельный шаг. Подробнее: [TBOXROADS_FORMAT_RU.md](TBOXROADS_FORMAT_RU.md).
 
-- [x] Плитка «Ограничение по карте» (`osmSpeedLimitWidget`): текущий/следующий
+- [x] Плитка «Ограничения скорости по картам, камеры и радары» (`osmSpeedLimitWidget`): текущий / камера / следующий
       лимит из `RoadMatchAnchorState`; demand уже поднимал matcher без коррекции позы.
 
 ### Этап F — Виджет карты привязки (после B+C)
