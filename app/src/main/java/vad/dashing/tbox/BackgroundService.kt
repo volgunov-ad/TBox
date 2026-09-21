@@ -31,7 +31,14 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
+import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
+import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.SpeedCamUiState
+import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.obd.Elm327Manager
+import vad.dashing.tbox.obd.ObdInterestAggregator
+import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
@@ -115,6 +122,7 @@ import vad.dashing.tbox.fuel.FuelCoordinates
 import vad.dashing.tbox.fuel.FuelCostAccounting
 import vad.dashing.tbox.fuel.FuelPriceClient
 import vad.dashing.tbox.fuel.FuelPriceResult
+import vad.dashing.tbox.fuel.RefuelPriceRefresh
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.fuel.REFUEL_AMBIENT_TEMP_DEFAULT_C
 import vad.dashing.tbox.fuel.RefuelRecord
@@ -173,6 +181,9 @@ class BackgroundService : Service() {
     private lateinit var huInternetProbeEnabled: StateFlow<Boolean>
     private var huInternetMonitor: HuInternetMonitor? = null
     private lateinit var espCompanionEnabled: StateFlow<Boolean>
+    private lateinit var elm327Enabled: StateFlow<Boolean>
+    private lateinit var elm327DeviceAddress: StateFlow<String>
+    private lateinit var elm327PairingPin: StateFlow<String>
     private lateinit var usbGnssDeviceId: StateFlow<String>
     private lateinit var usbGnssBaud: StateFlow<Int>
     private lateinit var usbGnssRequestVtg: StateFlow<Boolean>
@@ -184,6 +195,8 @@ class BackgroundService : Service() {
     private var espCompanionManager: EspCompanionManager? = null
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
+    private var elm327Manager: Elm327Manager? = null
+    private var elm327StartJob: Job? = null
     private var androidLocationSource: AndroidLocationSource? = null
     private var usbNmeaLocationSource: UsbNmeaLocationSource? = null
     /** Polls until selected GNSS is connected — avoids USB Host churn and retries deny/open fail. */
@@ -215,6 +228,7 @@ class BackgroundService : Service() {
     private var roadMatchController: RoadMatchController? = null
     private var mockLocationJob: MockLocationJob? = null
     private var constantDrAutoCalibJob: vad.dashing.tbox.location.ConstantDrAutoCalibJob? = null
+    private var speedCamTickerJob: Job? = null
     /** Last live-usable source point for GeoDisplay when mock is off (junk discarded). */
     @Volatile private var lastUsableLocForDisplay: LocValues? = null
     private lateinit var floatingDashboards: StateFlow<List<FloatingDashboardConfig>>
@@ -234,6 +248,7 @@ class BackgroundService : Service() {
     private lateinit var trackRefuelsSetting: StateFlow<Boolean>
     private lateinit var wheelPressurePersistAcrossStopsSetting: StateFlow<Boolean>
     private val fuelPriceClient by lazy { FuelPriceClient() }
+    private val refreshRefuelPricesInFlight = AtomicBoolean(false)
 
     private val serverPort = 50047
     private var themeObserver: ThemeObserver? = null
@@ -491,6 +506,8 @@ class BackgroundService : Service() {
         const val ACTION_RELOAD_TRIPS_FROM_STORE = "vad.dashing.tbox.RELOAD_TRIPS_FROM_STORE"
         /** Обучение калибровки уровня топлива по одной записи заправки ([EXTRA_REFUEL_ID]). */
         const val ACTION_FUEL_CALIBRATION_TRAIN = "vad.dashing.tbox.FUEL_CALIBRATION_TRAIN"
+        /** Manual Multigo price refresh for one refuel ([EXTRA_REFUEL_ID]). */
+        const val ACTION_REFRESH_REFUEL_PRICES = "vad.dashing.tbox.REFRESH_REFUEL_PRICES"
         const val EXTRA_REFUEL_ID = "vad.dashing.tbox.EXTRA_REFUEL_ID"
         /**
          * Bring [MainActivity] to the foreground (singleTask). Optional delay via [EXTRA_OPEN_MAIN_DELAY_MS].
@@ -552,6 +569,8 @@ class BackgroundService : Service() {
         const val ACTION_GEO_DEBUG_LOG_STOP = "vad.dashing.tbox.GEO_DEBUG_LOG_STOP"
         const val ACTION_COMPANION_LOG_START = "vad.dashing.tbox.COMPANION_LOG_START"
         const val ACTION_COMPANION_LOG_STOP = "vad.dashing.tbox.COMPANION_LOG_STOP"
+        const val ACTION_APP_LOG_START = "vad.dashing.tbox.APP_LOG_START"
+        const val ACTION_APP_LOG_STOP = "vad.dashing.tbox.APP_LOG_STOP"
         const val ACTION_ESP_CAN_TX = "vad.dashing.tbox.ESP_CAN_TX"
         const val ACTION_ESP_CAN_BAUD = "vad.dashing.tbox.ESP_CAN_BAUD"
         const val ACTION_ESP_CAN_FILTER = "vad.dashing.tbox.ESP_CAN_FILTER"
@@ -640,6 +659,12 @@ class BackgroundService : Service() {
         private const val USB_GNSS_POST_STARTUP_SETTLE_MS = 3_000L
         /** Extra settle after [ServiceLifecyclePhase.Running] before claiming companion USB CDC. */
         private const val USB_COMPANION_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Extra settle after [ServiceLifecyclePhase.Running] before ELM327 RFCOMM. */
+        private const val ELM327_POST_STARTUP_SETTLE_MS = 3_000L
+        /** Max wait for mbCAN/VHAL availability to leave Unknown before ELM327 start. */
+        private const val ELM327_CAN_WAIT_MS = 20_000L
+        /** Wait for BluetoothAdapter.STATE_ON after enable() during ELM327 start. */
+        private const val ELM327_BT_ENABLE_TIMEOUT_MS = 20_000L
         /**
          * Extra settle after [ServiceLifecyclePhase.Running] before usage-stats force-show may
          * mount floating overlays (maps/nav AppWidget panels crash on fragile HU if opened mid-startup).
@@ -697,6 +722,14 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, settingsSnap.huInternetProbeEnabled)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.espCompanionEnabled)
+            // Eagerly: service starts ELM after Running via .value; WhileSubscribed would
+            // leave boot snapshot stale if collectors race with deferred start.
+            elm327Enabled = settingsManager.elm327EnabledFlow
+                .stateIn(scope, eager, settingsSnap.elm327Enabled)
+            elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+                .stateIn(scope, eager, settingsSnap.elm327DeviceAddress)
+            elm327PairingPin = settingsManager.elm327PairingPinFlow
+                .stateIn(scope, eager, settingsSnap.elm327PairingPin)
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, settingsSnap.usbGnssDeviceId)
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -828,6 +861,12 @@ class BackgroundService : Service() {
                 .stateIn(scope, warmOnCollect, true)
             espCompanionEnabled = settingsManager.espCompanionEnabledFlow
                 .stateIn(scope, warmOnCollect, false)
+            elm327Enabled = settingsManager.elm327EnabledFlow
+                .stateIn(scope, eager, false)
+            elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+                .stateIn(scope, eager, "")
+            elm327PairingPin = settingsManager.elm327PairingPinFlow
+                .stateIn(scope, eager, "")
             usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
                 .stateIn(scope, warmOnCollect, "")
             usbGnssBaud = settingsManager.usbGnssBaudFlow
@@ -1247,6 +1286,14 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("WARN", "Fuel calibration", "train: пустой refuel id")
                 }
             }
+            ACTION_REFRESH_REFUEL_PRICES -> {
+                val refuelId = intent.getStringExtra(EXTRA_REFUEL_ID)?.trim().orEmpty()
+                if (refuelId.isNotEmpty()) {
+                    refreshRefuelPrice(refuelId)
+                } else {
+                    TboxRepository.addLog("WARN", "Fuel price", "refresh: пустой refuel id")
+                }
+            }
             ACTION_STOP -> performServiceStopIfRunning()
             ACTION_SEND_AT -> {
                 val atCmd = intent.getStringExtra(EXTRA_AT_CMD) ?: "ATI"
@@ -1557,6 +1604,12 @@ class BackgroundService : Service() {
                     espCompanionManager?.endCanLight()
                 }
             }
+            ACTION_APP_LOG_START -> {
+                AppLogFileRecorder.start()
+            }
+            ACTION_APP_LOG_STOP -> {
+                AppLogFileRecorder.stop(auto = false)
+            }
             ACTION_ESP_CAN_CONSOLE_OPEN -> espCompanionManager?.beginCanLight()
             ACTION_ESP_CAN_CONSOLE_CLOSE -> espCompanionManager?.endCanLight()
             ACTION_ESP_CAN_BAUD -> {
@@ -1720,6 +1773,7 @@ class BackgroundService : Service() {
         stopAndroidLocationSource()
         stopUsbNmeaLocationSource()
         stopEspCompanion()
+        stopElm327()
         stopNetUpdater()
         stopAPNUpdater()
         stopCheckConnection()
@@ -2014,6 +2068,7 @@ class BackgroundService : Service() {
                 }
                 startWheelPulseFeatureWatcher()
                 startMockLocationJob()
+                startSpeedCamTicker()
                 vad.dashing.tbox.location.GeoDebugLogRecorder.attach(
                     context = this@BackgroundService,
                     scope = scope,
@@ -2038,6 +2093,10 @@ class BackgroundService : Service() {
                     ),
                 )
                 vad.dashing.tbox.esp.CompanionProtocolLogRecorder.attach(
+                    context = this@BackgroundService,
+                    scope = scope,
+                )
+                AppLogFileRecorder.attach(
                     context = this@BackgroundService,
                     scope = scope,
                 )
@@ -2959,6 +3018,97 @@ class BackgroundService : Service() {
             )
             maybePersistTrips(force = true)
             showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+        }
+    }
+
+    /**
+     * Manual refresh (F-01): re-fetch Multigo price for one refuel using stored
+     * coordinates (or a live fix if the row has none) and apply trip cost delta.
+     */
+    private fun refreshRefuelPrice(refuelId: String) {
+        if (!refreshRefuelPricesInFlight.compareAndSet(false, true)) {
+            showRefuelToast(getString(R.string.toast_refuel_price_refresh_busy))
+            return
+        }
+        scope.launch {
+            try {
+                val refuel = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+                if (refuel == null) {
+                    showRefuelToast(getString(R.string.toast_refuel_price_refresh_not_found))
+                    return@launch
+                }
+                val liveCoords = currentFuelCoordinatesOrNull()
+                val coordinates = RefuelPriceRefresh.coordinatesOf(refuel) ?: liveCoords
+                if (coordinates == null) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Fuel price",
+                        "Refresh skip $refuelId: no coordinates",
+                    )
+                    showRefuelToast(getString(R.string.toast_refuel_coordinates_not_found))
+                    return@launch
+                }
+                showRefuelToast(getString(R.string.toast_refuel_searching_fuel_price))
+                val price = try {
+                    withContext(Dispatchers.IO) {
+                        fuelPriceClient.fetchPrice(coordinates, refuel.fuelId)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    TboxRepository.addLog(
+                        "WARN",
+                        "Fuel price",
+                        "Refresh fetch failed $refuelId: ${e.message}",
+                    )
+                    null
+                }
+                if (price == null) {
+                    showRefuelToast(getString(R.string.toast_refuel_fuel_price_not_found))
+                    return@launch
+                }
+                val previousCost = refuel.costRub
+                val newCost = FuelCostAccounting.refuelCostRub(
+                    refuel.actualLiters,
+                    price.pricePerLiterRub,
+                )
+                val latest = RefuelRepository.refuels.value.firstOrNull { it.id == refuelId }
+                    ?: return@launch
+                RefuelRepository.replaceRefuel(
+                    latest.copy(
+                        latitude = coordinates.latitude,
+                        longitude = coordinates.longitude,
+                        pricePerLiterRub = price.pricePerLiterRub,
+                        priceSourceName = price.sourceName,
+                        costRub = newCost,
+                    )
+                )
+                maybePersistRefuels(force = true)
+                val tripId = latest.tripId
+                if (tripId != null) {
+                    val trip = TripRepository.trips.value.firstOrNull { it.id == tripId }
+                    if (trip != null) {
+                        val delta = FuelCostAccounting.tripFuelCostDeltaRub(previousCost, newCost)
+                        if (delta != 0f) {
+                            TripRepository.replaceTrip(
+                                trip.copy(
+                                    fuelRefueledCostRub =
+                                        (trip.fuelRefueledCostRub + delta).coerceAtLeast(0f),
+                                )
+                            )
+                            maybePersistTrips(force = true)
+                        }
+                    }
+                }
+                TboxRepository.addLog(
+                    "INFO",
+                    "Fuel price",
+                    "Refresh $refuelId: ${price.pricePerLiterRub} RUB/L (${price.sourceName})",
+                )
+                showRefuelToast(getString(R.string.toast_refuel_fuel_cost_saved))
+            } finally {
+                refreshRefuelPricesInFlight.set(false)
+            }
         }
     }
 
@@ -3996,6 +4146,140 @@ class BackgroundService : Service() {
         espCompanionManager = null
     }
 
+    private fun startElm327() {
+        if (elm327Manager != null) return
+        if (elm327StartJob?.isActive == true) return
+        if (!::elm327Enabled.isInitialized || !elm327Enabled.value) return
+        if (!::elm327DeviceAddress.isInitialized) return
+        val address = elm327DeviceAddress.value.trim()
+        if (address.isEmpty()) {
+            ObdRepository.setStatus("no_device")
+            ObdRepository.setLastError("no_device")
+            return
+        }
+        elm327StartJob = scope.launch {
+            var loggedStartupWait = false
+            while (isActive && servicePhase == ServiceLifecyclePhase.Starting) {
+                if (!loggedStartupWait) {
+                    loggedStartupWait = true
+                    TboxRepository.addLog(
+                        "INFO",
+                        "ELM327",
+                        "defer connect until service startup finishes",
+                    )
+                    ObdRepository.setStatus("starting")
+                }
+                delay(200)
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value
+            ) {
+                return@launch
+            }
+
+            TboxRepository.addLog(
+                "INFO",
+                "ELM327",
+                "wait mbCAN/VHAL availability up to ${ELM327_CAN_WAIT_MS}ms",
+            )
+            withTimeoutOrNull(ELM327_CAN_WAIT_MS) {
+                UniversalCanRepository.availability.first { availability ->
+                    availability !is vad.dashing.tbox.mbcan.MbCanAvailability.Unknown
+                }
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value
+            ) {
+                return@launch
+            }
+
+            TboxRepository.addLog(
+                "INFO",
+                "ELM327",
+                "post-startup settle ${ELM327_POST_STARTUP_SETTLE_MS}ms before RFCOMM",
+            )
+            delay(ELM327_POST_STARTUP_SETTLE_MS)
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value ||
+                elm327Manager != null
+            ) {
+                return@launch
+            }
+
+            val mac = elm327DeviceAddress.value.trim()
+            if (mac.isEmpty()) {
+                ObdRepository.setStatus("no_device")
+                ObdRepository.setLastError("no_device")
+                return@launch
+            }
+
+            if (!vad.dashing.tbox.obd.Elm327BluetoothPower.isEnabled()) {
+                ObdRepository.setStatus("enabling_bt")
+                TboxRepository.addLog(
+                    "INFO",
+                    "ELM327",
+                    "Bluetooth off — requesting enable",
+                )
+                val btOn = vad.dashing.tbox.obd.Elm327BluetoothPower.ensureEnabled(
+                    this@BackgroundService,
+                    timeoutMs = ELM327_BT_ENABLE_TIMEOUT_MS,
+                )
+                if (!btOn) {
+                    ObdRepository.setLastError("Bluetooth disabled")
+                    ObdRepository.setStatus("disconnected")
+                    TboxRepository.addLog(
+                        "WARN",
+                        "ELM327",
+                        "Bluetooth still off after enable request",
+                    )
+                    // Manager still starts: reconnect loop will retry enable+connect.
+                }
+            }
+            if (!isActive ||
+                servicePhase != ServiceLifecyclePhase.Running ||
+                !elm327Enabled.value ||
+                elm327Manager != null
+            ) {
+                return@launch
+            }
+
+            val manager = Elm327Manager(context = this@BackgroundService, scope = scope)
+            elm327Manager = manager
+            ObdInterestAggregator.attach(manager)
+            manager.onPidDiscoverySuccess = { pids, atMs ->
+                settingsManager.saveElm327PidDiscoveryResult(pids, atMs)
+            }
+            manager.onPairingPinResolved = { pin ->
+                settingsManager.saveElm327PairingPinSetting(pin)
+            }
+            if (::elm327PairingPin.isInitialized) {
+                manager.setPairingPin(elm327PairingPin.value)
+            }
+            TboxRepository.addLog("INFO", "ELM327", "starting manager for $mac")
+            manager.start(mac)
+        }
+    }
+
+    private fun stopElm327() {
+        elm327StartJob?.cancel()
+        elm327StartJob = null
+        ObdInterestAggregator.attach(null)
+        elm327Manager?.stop()
+        elm327Manager = null
+        ObdRepository.resetConnectionState()
+        ObdRepository.setStatus("stopped")
+    }
+
+    private fun restartElm327IfNeeded() {
+        stopElm327()
+        if (::elm327Enabled.isInitialized && elm327Enabled.value) {
+            startElm327()
+        }
+    }
+
     private var wheelPulseFeatureWatchJob: Job? = null
 
     /**
@@ -4347,6 +4631,58 @@ class BackgroundService : Service() {
             gnssBearingDeg = display.bearingDeg,
             gnssVisible = display.locateStatus,
         )
+    }
+
+    /**
+     * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any SpeedCam tile
+     * is present. Uses the shared pack index from [SpeedCamPackManagerHolder].
+     */
+    private fun startSpeedCamTicker() {
+        if (speedCamTickerJob != null) return
+        if (!::dashboardWidgets.isInitialized ||
+            !::floatingDashboards.isInitialized ||
+            !::mainScreenDashboards.isInitialized
+        ) {
+            return
+        }
+        speedCamTickerJob = scope.launch {
+            val manager = SpeedCamPackManagerHolder.get(this@BackgroundService, settingsManager)
+            runCatching { manager.ensureLoaded() }
+            combine(
+                GeoDisplayRepository.state,
+                manager.snapshot,
+                combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
+                    Triple(dash, floating, main)
+                },
+            ) { display, snap, widgets -> Triple(display, snap, widgets) }
+                .collect { (display, snap, widgets) ->
+                    val (dash, floating, main) = widgets
+                    val agg = SpeedCamWidgetPresence.aggregate(dash, floating, main)
+                    if (agg == null) {
+                        if (SpeedCamRepository.state.value != SpeedCamUiState.EMPTY) {
+                            SpeedCamRepository.clear()
+                        }
+                        return@collect
+                    }
+                    val carSpeed = TripTelemetryRepository.accountingCarSpeed()
+                    val speed = when {
+                        display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
+                        carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
+                        else -> 0f
+                    }
+                    SpeedCamRepository.updateFromPose(
+                        index = manager.currentIndex(),
+                        installedMeta = snap,
+                        lat = display.latitude,
+                        lon = display.longitude,
+                        bearingDeg = display.bearingDeg,
+                        vehicleSpeedKmh = speed,
+                        radiusM = agg.radiusM,
+                        overageKmh = agg.overageKmh,
+                        showMapMarkers = agg.showOnMap,
+                    )
+                }
+        }
     }
 
     private fun startConstantDrAutoCalibJob() {
@@ -4967,6 +5303,60 @@ class BackgroundService : Service() {
                     } else {
                         stopEspCompanion()
                     }
+                }
+            }
+
+
+            launch {
+                combine(
+                    modemSource,
+                    wifiModemModel,
+                    wifiModemHost,
+                    wifiModemPassword,
+                    wifiModemPollIntervalSec,
+                ) { source, model, host, password, intervalSec ->
+                    listOf(source, model, host, password, intervalSec)
+                }
+                    .drop(1)
+                    .collect {
+                        applyModemDataSource()
+                    }
+            }
+
+            launch {
+                combine(
+                    huInternetProbeUrl,
+                    huInternetProbeIntervalSec,
+                    huInternetProbeEnabled,
+                ) { url, intervalSec, enabled ->
+                    Triple(url, intervalSec, enabled)
+                }
+                    .collect {
+                        applyHuInternetMonitor()
+                    }
+            }
+
+            launch {
+                elm327Enabled.collect { enabled ->
+                    if (enabled) {
+                        startElm327()
+                    } else {
+                        stopElm327()
+                    }
+                }
+            }
+
+            launch {
+                elm327DeviceAddress.collect {
+                    if (::elm327Enabled.isInitialized && elm327Enabled.value) {
+                        restartElm327IfNeeded()
+                    }
+                }
+            }
+
+            launch {
+                elm327PairingPin.collect { pin ->
+                    elm327Manager?.setPairingPin(pin)
                 }
             }
 
@@ -6272,6 +6662,13 @@ class BackgroundService : Service() {
                 return
             }
             val delaySeconds = settingsManager.mainScreenOpenOnBootDelaySecondsFlow.first()
+            // Keep the user-configured delay inside the episode budget: pending deadline is
+            // marked at BOOT_COMPLETED (+30 s only), so delays > 30 s would expire the episode
+            // before the first attempt without this extension.
+            MainScreenBootOpenStore.extendDeadlineTo(
+                this@BackgroundService,
+                MainScreenBootOpenPolicy.newDeadlineWithInitialDelayMs(delaySeconds * 1000L),
+            )
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
             val source = MainScreenBootOpenStore.sourceAction(this@BackgroundService)
                 .ifBlank { "?" }

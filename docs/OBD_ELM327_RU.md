@@ -1,0 +1,73 @@
+# ELM327 / OBD-II (Bluetooth SPP)
+
+Подключение классического Bluetooth-адаптера **ELM327** (RFCOMM/SPP) для чтения live-параметров OBD-II Mode 01, freeze frame (Mode 02) и кодов ошибок (Mode 03 / 07).
+
+## Возможности
+
+- Вкладка меню **ELM327** с тремя разделами (`HorizontalSectionTabRow`): **Подключение** (вкл/выкл ELM, Bluetooth, статус шины ATDP/ATDPN, BT/MAC/PIN), **Диагностика** (снимок, мониторы, DTC, VIN, freeze frame), **PID** (discovery).
+- Старт ELM после завершения инициализации фоновой службы (`Running`) и появления mbCAN/VHAL (не Unknown), с короткой паузой; при выключенном Bluetooth — `enable()` и ожидание `STATE_ON`.
+- **Discovery PID** по кнопке + сброс; сохранение в DataStore; в dropdown виджета пометка «нет в ECU» без фильтрации списка.
+- **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 0A (permanent), Mode 04 clear с подтверждением.
+- **VIN**: Mode 09 `0902`.
+- **Полный снимок**: кнопка читает мониторы + DTC (03/07/0A) + freeze frame + VIN и сохраняет txt в Загрузки.
+- **Расшифровка DTC**: общий SAE-каталог в `assets/obd/dtc_*.tsv` (~3000 кодов). Flavor `ru` → `dtc_ru.tsv`, `en` → `dtc_en.tsv` (MIT mytrile + glossary RU). Коды производителя могут отсутствовать.
+- **Статус мониторов**: Mode 01 PID `01` / `41` — MIL, число DTC, readiness (spark/compression).
+- **Freeze frame (Mode 02)**: по кнопке — DTC-причина (`0202`), support bitfield (`0200`…), затем известные PID с теми же формулами, что Mode 01. Сбрасывается вместе с Mode 04.
+- **Экспорт DTC**: кнопка / полный снимок → `Downloads/tbox_obd_dtc_*.txt`.
+- Виджет **«Параметр OBD»** (`obdMetricWidget`): полный список Mode 01 PID + ATRV.
+
+## Ограничения
+
+- Только classic Bluetooth (не BLE / Wi‑Fi ELM).
+- Расшифровки DTC: `ru` — русский каталог, `en` — английский; OEM-коды без записи показываются как «нет в каталоге».
+
+## Подключение
+
+1. DataStore: `elm327_enabled`, `elm327_device_address`, `elm327_pairing_pin`,
+   `elm327_supported_pids`, `elm327_discovery_at_ms`.
+2. `BackgroundService` стартует `Elm327Manager` при enable + непустом MAC.
+3. При отсутствии bond (типично API ≤ 30 / ГУ Android 9): `Elm327BtPairing` пробует `createBond` с PIN (сохранённый или 1234/0000/6789/8888). Сработавший при переборе PIN записывается в `elm327_pairing_pin`.
+4. RFCOMM: insecure SPP UUID → secure SPP → reflection channel 1; таймаут connect 15 с; `stop` закрывает сокет, чтобы сорвать зависший connect.
+5. AT-init: `ATZ ATE0 ATL0 ATS0 ATH0 ATSP0`, далее poll только interested PID + ATRV при интересе вкладки/виджета.
+
+## Discovery поддерживаемых PID
+
+- Виджет **всегда** показывает полный enum PID (не фильтруется).
+- Во вкладке ELM327: кнопки **«Опросить PID»** / **«Сбросить»**.
+- Опрос по кнопке: `0100` → при необходимости `0120` / `0140`…; результат = множество Mode 01 байт + timestamp в DataStore.
+- Сброс очищает сохранённый снимок. Poll виджетов **не** ограничивается discovery.
+
+## Архитектура
+
+| Класс | Роль |
+|-------|------|
+| `obd/Elm327BluetoothSession` | RFCOMM сокет, line IO, connect timeout/fallback |
+| `obd/Elm327BtPairing` | createBond + PIN |
+| `obd/Elm327Protocol` | AT-init, parse Mode 01 / 02 / 09 VIN / ATRV / DTC / monitor status |
+| `obd/Elm327Manager` | reconnect, poll interested PIDs, Mode 01 monitors / 02 / 03 / 04 / 07 / 09 / 0A, diag pack |
+| `obd/ObdDtcCatalog` | TSV lookup for DTC descriptions (`assets/obd/dtc_{ru,en}.tsv`) |
+| `obd/ObdRepository` | StateFlow для UI / виджетов |
+| `obd/ObdInterestAggregator` | объединяет PID с панелей |
+
+Служба: `BackgroundService` стартует manager при `elm327Enabled` + непустом MAC.
+
+## Настройки DataStore
+
+- `elm327_enabled` (default false)
+- `elm327_device_address` (MAC)
+- `elm327_pairing_pin` (опционально)
+- `elm327_supported_pids` (CSV hex Mode 01, пусто = нет discovery)
+- `elm327_discovery_at_ms` (0 = сброшено / не выполнялось)
+
+## Виджет
+
+- `dataKey`: `obdMetricWidget`
+- конфиг: `obdPidId` (например `rpm`, `coolant_temp`)
+- панели публикуют interest через `publishObdInterest` → опрашиваются только видимые PID
+
+## Разрешения
+
+- `BLUETOOTH` / `BLUETOOTH_ADMIN` (API ≤ 30)
+- `BLUETOOTH_CONNECT` (API 31+)
+- `BLUETOOTH_SCAN` + location (только для кнопки сканирования во вкладке)
+- `uses-feature bluetooth` optional

@@ -74,6 +74,7 @@ object WidgetTypeSections {
             "tempInOutWidget",
             "fuelLevelWidget",
             "airQualityWidget",
+            OBD_METRIC_WIDGET_DATA_KEY,
         )
 
         putAll(
@@ -102,6 +103,7 @@ object WidgetTypeSections {
             MOCK_LOCATION_MODE_WIDGET_DATA_KEY,
             GNSS_DEBUG_WIDGET_DATA_KEY,
             OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
+            vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
             "netWidget",
             "netWidgetNew",
             "netWidgetColored",
@@ -151,9 +153,13 @@ object WidgetTypeSections {
             TJA_ICA_WIDGET_DATA_KEY,
             HMA_WIDGET_DATA_KEY,
             HIGH_BEAM_WIDGET_DATA_KEY,
+            EPB_PARK_LAMP_WIDGET_DATA_KEY,
+            ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+            BRAKE_FLUID_WIDGET_DATA_KEY,
             "cruiseSetSpeed",
             ACC_CRUISE_WIDGET_DATA_KEY,
             CRUISE_STATUS_WIDGET_DATA_KEY,
+            FRM_DX_TAR_OBJ_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
         )

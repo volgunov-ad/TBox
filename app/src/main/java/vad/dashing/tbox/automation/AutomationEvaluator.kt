@@ -115,6 +115,13 @@ class AutomationEvaluator(
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
+    fun onHardKey(keyCode: Int, keyStatus: AutomationHardKeyStatus): AutomationTriggerFire? {
+        val trigger = definition.triggers.firstOrNull {
+            it is AutomationTrigger.HardKey && it.keyCode == keyCode && it.keyStatus == keyStatus
+        } ?: return null
+        return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
+    }
+
     fun onSignalSample(sample: AutomationSignalSample): AutomationTriggerFire? {
         if (sample.value == AutomationSignalValue.Unavailable) {
             latestSamples.remove(sample.key)
@@ -217,6 +224,7 @@ class AutomationEvaluator(
         return when (trigger) {
             is AutomationTrigger.SystemEvent,
             is AutomationTrigger.WidgetPressed,
+            is AutomationTrigger.HardKey,
             is AutomationTrigger.Interval,
             is AutomationTrigger.Time,
             is AutomationTrigger.Solar,
@@ -618,6 +626,7 @@ private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalVal
 private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (this) {
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.WidgetPressed,
+    is AutomationTrigger.HardKey,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     -> null
@@ -632,6 +641,7 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
     return when (this) {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
+        is AutomationTrigger.HardKey,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -662,6 +672,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
     return when (this) {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
+        is AutomationTrigger.HardKey,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -692,6 +703,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.WidgetPressed,
+    is AutomationTrigger.HardKey,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     is AutomationTrigger.Solar,
@@ -704,6 +716,7 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {
     is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.WidgetPressed -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.HardKey -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.Interval -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior

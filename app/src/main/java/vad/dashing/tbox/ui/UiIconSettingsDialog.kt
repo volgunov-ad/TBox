@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -30,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -63,18 +63,23 @@ fun UiIconSettingsDialog(
 
     val context = LocalContext.current
     val revision by settingsViewModel.uiIconRevision.collectAsStateWithLifecycle()
+    val preserveColors by settingsViewModel.uiIconPreserveColors.collectAsStateWithLifecycle()
     val lookup = rememberLauncherAppIconLookup(settingsViewModel)
     var filter by rememberSaveable { mutableStateOf("") }
     var pendingIconKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingVariantOrdinal by rememberSaveable { mutableStateOf(0) }
     val canPickImage = remember(context) {
         Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             .resolveActivity(context.packageManager) != null
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         val iconKey = pendingIconKey
+        val variant = UiIconPaths.Variant.entries.getOrElse(pendingVariantOrdinal) {
+            UiIconPaths.Variant.Day
+        }
         pendingIconKey = null
         if (uri == null || iconKey == null) return@rememberLauncherForActivityResult
-        settingsViewModel.setCustomUiIconFromUri(iconKey, uri) { result ->
+        settingsViewModel.setCustomUiIconFromUri(iconKey, uri, variant) { result ->
             val messageRes = when (result) {
                 SetLauncherAppCustomIconResult.Success -> R.string.ui_icons_saved
                 SetLauncherAppCustomIconResult.DimensionsTooLarge ->
@@ -86,6 +91,19 @@ fun UiIconSettingsDialog(
                 SetLauncherAppCustomIconResult.InvalidPackage -> R.string.ui_icons_invalid_key
             }
             Toast.makeText(context, messageRes, Toast.LENGTH_LONG).show()
+        }
+    }
+    fun launchPicker(iconKey: String, variant: UiIconPaths.Variant) {
+        if (canPickImage) {
+            pendingIconKey = iconKey
+            pendingVariantOrdinal = variant.ordinal
+            picker.launch("image/*")
+        } else {
+            Toast.makeText(
+                context,
+                R.string.settings_main_screen_wallpaper_no_picker,
+                Toast.LENGTH_LONG,
+            ).show()
         }
     }
     val localizedEntries = UiIconCatalog.entries.map { entry ->
@@ -138,23 +156,22 @@ fun UiIconSettingsDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(filteredEntries, key = { it.entry.key }) { localized ->
+                        val preserve = localized.entry.key in preserveColors
                         UiIconSettingsRow(
                             localized = localized,
                             filesDirLookup = lookup,
                             revision = revision,
-                            onChoose = {
-                                if (canPickImage) {
-                                    pendingIconKey = localized.entry.key
-                                    picker.launch("image/*")
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        R.string.settings_main_screen_wallpaper_no_picker,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
+                            preserveColors = preserve,
+                            onPreserveColorsChange = { enabled ->
+                                settingsViewModel.setUiIconPreserveColors(localized.entry.key, enabled)
                             },
-                            onReset = {
+                            onChoose = { variant ->
+                                launchPicker(localized.entry.key, variant)
+                            },
+                            onResetVariant = { variant ->
+                                settingsViewModel.clearCustomUiIconVariant(localized.entry.key, variant)
+                            },
+                            onResetAll = {
                                 settingsViewModel.clearCustomUiIcon(localized.entry.key)
                             },
                         )
@@ -180,24 +197,49 @@ private fun UiIconSettingsRow(
     localized: LocalizedUiIconEntry,
     filesDirLookup: LauncherAppIconPaths.Lookup,
     revision: Int,
-    onChoose: () -> Unit,
-    onReset: () -> Unit,
+    preserveColors: Boolean,
+    onPreserveColorsChange: (Boolean) -> Unit,
+    onChoose: (UiIconPaths.Variant) -> Unit,
+    onResetVariant: (UiIconPaths.Variant) -> Unit,
+    onResetAll: () -> Unit,
 ) {
     val context = LocalContext.current
     val entry = localized.entry
-    val resolvedFile = remember(entry.key, filesDirLookup, revision) {
-        UiIconPaths.resolveIconFile(context.filesDir, entry.key, filesDirLookup)
+    val dayFile = remember(entry.key, filesDirLookup, revision) {
+        UiIconPaths.resolveVariantFile(
+            context.filesDir,
+            entry.key,
+            filesDirLookup,
+            UiIconPaths.Variant.Day,
+        )
     }
+    val nightFile = remember(entry.key, filesDirLookup, revision) {
+        UiIconPaths.resolveVariantFile(
+            context.filesDir,
+            entry.key,
+            filesDirLookup,
+            UiIconPaths.Variant.Night,
+        )
+    }
+    val hasAny = dayFile != null || nightFile != null
     val sourceText = when {
-        UiIconPaths.hasThemeCacheIcon(context.filesDir, entry.key, filesDirLookup) ->
-            stringResource(R.string.ui_icons_source_theme)
-        resolvedFile != null -> stringResource(R.string.ui_icons_source_local)
+        UiIconPaths.hasThemeCacheIcon(context.filesDir, entry.key, filesDirLookup) ||
+            UiIconPaths.hasThemeCacheIcon(
+                context.filesDir,
+                entry.key,
+                filesDirLookup,
+                UiIconPaths.Variant.Night,
+            ) -> stringResource(R.string.ui_icons_source_theme)
+        hasAny -> stringResource(R.string.ui_icons_source_local)
         else -> stringResource(R.string.ui_icons_source_builtin)
     }
-    val description = if (entry.category == UiIconCategory.NAVIGATION) {
-        stringResource(R.string.ui_icons_navigation_description, localized.title)
-    } else {
-        stringResource(R.string.ui_icons_widget_description, localized.title)
+    val description = when (entry.category) {
+        UiIconCategory.NAVIGATION ->
+            stringResource(R.string.ui_icons_navigation_description, localized.title)
+        UiIconCategory.MAIN_SCREEN ->
+            stringResource(R.string.ui_icons_main_screen_description, localized.title)
+        else ->
+            stringResource(R.string.ui_icons_widget_description, localized.title)
     }
 
     Surface(
@@ -207,11 +249,12 @@ private fun UiIconSettingsRow(
     ) {
         Row(
             modifier = Modifier.padding(vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             UiIconCatalogPreview(
                 entry = entry,
+                preserveColors = preserveColors,
                 modifier = Modifier.size(48.dp),
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -232,16 +275,64 @@ private fun UiIconSettingsRow(
                     style = MaterialTheme.typography.tboxCaption,
                     color = MaterialTheme.colorScheme.primary,
                 )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                OutlinedButton(onClick = rememberWrappedOnClick(onChoose)) {
-                    Text(stringResource(R.string.ui_icons_choose), style = MaterialTheme.typography.tboxCaption)
-                }
-                OutlinedButton(
-                    onClick = rememberWrappedOnClick(onReset),
-                    enabled = resolvedFile != null,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp),
                 ) {
-                    Text(stringResource(R.string.ui_icons_reset), style = MaterialTheme.typography.tboxCaption)
+                    Checkbox(
+                        checked = preserveColors,
+                        onCheckedChange = onPreserveColorsChange,
+                    )
+                    Text(
+                        text = stringResource(R.string.ui_icons_preserve_colors),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                if (preserveColors) {
+                    Text(
+                        text = stringResource(R.string.ui_icons_preserve_colors_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        UiIconVariantButtons(
+                            label = stringResource(R.string.ui_icons_day),
+                            hasFile = dayFile != null,
+                            onChoose = { onChoose(UiIconPaths.Variant.Day) },
+                            onReset = { onResetVariant(UiIconPaths.Variant.Day) },
+                        )
+                        UiIconVariantButtons(
+                            label = stringResource(R.string.ui_icons_night),
+                            hasFile = nightFile != null,
+                            onChoose = { onChoose(UiIconPaths.Variant.Night) },
+                            onReset = { onResetVariant(UiIconPaths.Variant.Night) },
+                        )
+                    }
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        OutlinedButton(onClick = rememberWrappedOnClick {
+                            onChoose(UiIconPaths.Variant.Day)
+                        }) {
+                            Text(
+                                stringResource(R.string.ui_icons_choose),
+                                style = MaterialTheme.typography.tboxCaption,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick(onResetAll),
+                            enabled = hasAny,
+                        ) {
+                            Text(
+                                stringResource(R.string.ui_icons_reset),
+                                style = MaterialTheme.typography.tboxCaption,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -249,21 +340,63 @@ private fun UiIconSettingsRow(
 }
 
 @Composable
+private fun UiIconVariantButtons(
+    label: String,
+    hasFile: Boolean,
+    onChoose: () -> Unit,
+    onReset: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(onClick = rememberWrappedOnClick(onChoose)) {
+            Text(
+                stringResource(
+                    if (hasFile) R.string.ui_icons_replace_variant else R.string.ui_icons_choose,
+                ),
+                style = MaterialTheme.typography.tboxCaption,
+            )
+        }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick(onReset),
+            enabled = hasFile,
+        ) {
+            Text(stringResource(R.string.ui_icons_reset), style = MaterialTheme.typography.tboxCaption)
+        }
+    }
+}
+
+@Composable
 private fun UiIconCatalogPreview(
     entry: UiIconCatalogEntry,
+    preserveColors: Boolean,
     modifier: Modifier,
 ) {
     val tint = MaterialTheme.colorScheme.onSurface
     val drawable = entry.drawableRes
     if (drawable != null) {
-        CustomizableUiImage(
-            iconKey = entry.key,
-            drawableRes = drawable,
-            contentDescription = null,
-            modifier = modifier,
-            contentScale = ContentScale.Fit,
-            colorFilter = ColorFilter.tint(tint),
-        )
+        if (preserveColors) {
+            CustomizableUiTintedImage(
+                iconKey = entry.key,
+                drawableRes = drawable,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier,
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            CustomizableUiImage(
+                iconKey = entry.key,
+                drawableRes = drawable,
+                contentDescription = null,
+                modifier = modifier,
+                contentScale = ContentScale.Fit,
+                colorFilter = uiIconColorFilter(entry.key, tint),
+            )
+        }
         return
     }
     val field = LeftMenuTabField.entries.firstOrNull { it.iconKey == entry.key } ?: return

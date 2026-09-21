@@ -31,11 +31,13 @@ import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
+import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationMainScreenTarget
+import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
 import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
@@ -279,7 +281,7 @@ private fun CanCommandFields(
                     propertyId = selected.propertyId,
                     operation = operation,
                     value = selected.defaultValueFor(canMode),
-                ),
+                ).let(AutomationCanValueCodec::withPortableKey),
             )
         },
     )
@@ -301,7 +303,11 @@ private fun CanCommandFields(
                     AutomationCanOperation.TRUNK_PULSE -> "Импульс открыть/закрыть"
                 }
             },
-            onValueChange = { onChange(action.copy(operation = it)) },
+            onValueChange = {
+                onChange(
+                    AutomationCanValueCodec.withPortableKey(action.copy(operation = it, valueKey = null)),
+                )
+            },
             modifier = Modifier.weight(1f),
         )
         if (action.operation != AutomationCanOperation.TOGGLE) {
@@ -313,13 +319,21 @@ private fun CanCommandFields(
                 entry.allowedValuesFor(canMode)
             }
             if (values.isNotEmpty()) {
-                val options = if (action.value in values) values else listOf(action.value) + values
+                val currentValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
+                    ?: action.value
+                val options = if (currentValue in values) values else listOf(currentValue) + values
                 AutomationDropdown(
                     label = "Значение",
-                    value = action.value,
+                    value = currentValue,
                     options = options,
                     optionLabel = { entry.valueLabel(it, canMode) },
-                    onValueChange = { onChange(action.copy(value = it)) },
+                    onValueChange = { selectedValue ->
+                        onChange(
+                            AutomationCanValueCodec.withPortableKey(
+                                action.copy(value = selectedValue, valueKey = null),
+                            ),
+                        )
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -474,14 +488,25 @@ private fun BuiltinActionFields(
             onChange(
                 AutomationAction.Builtin(
                     type = type,
+                    intValue = when (type) {
+                        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> 8
+                        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> 10
+                        AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
+                        AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
+                        AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
+                        else -> 0
+                    },
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
                         type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
+                        type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ->
                             apps.firstOrNull()?.packageName.orEmpty()
                         type == AutomationBuiltinActionType.WIFI_CONNECT ->
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
+                        type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
+                        type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
                         else -> ""
                     },
                 ),
@@ -539,10 +564,53 @@ private fun BuiltinActionFields(
         )
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> AutomationIntField(
-            label = "Громкость",
+            label = "Громкость медиа (0–31)",
             value = action.intValue,
             onValueChange = { onChange(action.copy(intValue = it)) },
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> AutomationIntField(
+            label = "Громкость телефона (1–31)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> AutomationIntField(
+            label = "Громкость навигатора (0–10)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> AutomationIntField(
+            label = "Громкость голоса (2–10)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> AutomationDropdown(
+            label = "Динамик подголовника",
+            value = action.stringValue.trim().lowercase().ifEmpty { "assist" },
+            options = listOf("only", "assist", "off"),
+            optionLabel = AutomationSignalStateEncoding::stateOptionLabel,
+            onValueChange = { onChange(action.copy(stringValue = it)) },
+        )
+
+        AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> AutomationDropdown(
+            label = "Тема день/ночь ГУ",
+            value = action.stringValue.trim().lowercase().ifEmpty { "auto" },
+            options = listOf("light", "dark", "auto"),
+            optionLabel = { key ->
+                when (key) {
+                    "light" -> "Светлая"
+                    "dark" -> "Тёмная"
+                    else -> "Авто"
+                }
+            },
+            onValueChange = { onChange(action.copy(stringValue = it)) },
         )
 
         AutomationBuiltinActionType.SET_GEO_DEBUG_LOG,
@@ -603,6 +671,20 @@ private fun BuiltinActionFields(
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> AutomationIntField(
+            label = "Яркость экрана ГУ (1–10)",
+            value = action.intValue.coerceIn(1, 10),
+            onValueChange = { onChange(action.copy(intValue = it.coerceIn(1, 10))) },
+        )
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> AutomationDropdown(
+            label = "Автояркость экрана ГУ",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Включить" else "Выключить" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
         )
 
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> Column(
@@ -756,7 +838,7 @@ private fun defaultAction(
                 entry.allowedOperations.first()
             },
             value = entry.defaultValueFor(canMode),
-        )
+        ).let(AutomationCanValueCodec::withPortableKey)
     }
 
     ActionUiKind.BUILTIN ->
@@ -796,6 +878,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.RESTART_TBOX -> "Перезагрузить TBox"
     AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> "Переключить день/ночь"
     AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> "Включить автоматическую тему ГУ"
+    AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "Тема день/ночь ГУ (светлая/тёмная/авто)"
     AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> "Переключить регулировку зеркал"
     AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS -> "Плавающие панели — видимость"
     AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED -> "Плавающие панели — включение"
@@ -808,6 +891,10 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.MEDIA_NEXT -> "Следующий трек"
     AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> "Поставить/снять «Нравится»"
     AutomationBuiltinActionType.SET_MEDIA_VOLUME -> "Установить громкость медиа"
+    AutomationBuiltinActionType.SET_PHONE_VOLUME -> "Установить громкость телефона"
+    AutomationBuiltinActionType.SET_NAVI_VOLUME -> "Установить громкость навигатора"
+    AutomationBuiltinActionType.SET_VOICE_VOLUME -> "Установить громкость голоса"
+    AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "Динамик подголовника"
     AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> "Следующий режим подмены геопозиции"
     AutomationBuiltinActionType.GNSS_MODULE_REBOOT -> "Перезапустить GNSS-модуль"
     AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
@@ -818,6 +905,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
     AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> "Wi‑Fi модем: данные вкл/выкл"
     AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
+    AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
+    AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
     AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"

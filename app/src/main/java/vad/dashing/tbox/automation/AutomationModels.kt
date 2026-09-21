@@ -24,6 +24,9 @@ const val AUTOMATION_GEOFENCE_RADIUS_GAP_M = 10.0
 const val AUTOMATION_GEOFENCE_DEFAULT_ZONE_RADIUS_M = 50.0
 const val AUTOMATION_GEOFENCE_MAX_RADIUS_M = 1_000_000.0
 const val AUTOMATION_SOLAR_MAX_OFFSET_MINUTES = 180
+const val AUTOMATION_HARD_KEY_MIN_CODE = 0
+const val AUTOMATION_HARD_KEY_MAX_CODE = 1023
+const val AUTOMATION_HARD_KEY_DEBOUNCE_MS = 120L
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
@@ -68,9 +71,12 @@ enum class AutomationSignalId(
     CRUISE_SET_SPEED("cruise_set_speed"),
     GEAR_MODE("gear_mode", AutomationSignalValueType.STATE),
     ACC_STATUS("acc_status", AutomationSignalValueType.STATE),
+    ACC_CRUISE_STATE("acc_cruise_state", AutomationSignalValueType.STATE),
+    CCS_CRUISE_STATE("ccs_cruise_state", AutomationSignalValueType.STATE),
     GAS_PEDAL("gas_pedal"),
     BRAKE_PEDAL("brake_pedal", AutomationSignalValueType.STATE),
     CURRENT_GEAR("current_gear"),
+    TARGET_GEAR("target_gear"),
     FRONT_LEFT_WHEEL_PRESSURE("front_left_wheel_pressure"),
     FRONT_RIGHT_WHEEL_PRESSURE("front_right_wheel_pressure"),
     REAR_LEFT_WHEEL_PRESSURE("rear_left_wheel_pressure"),
@@ -86,6 +92,10 @@ enum class AutomationSignalId(
     WIPER_STS("wiper_sts", AutomationSignalValueType.STATE),
     RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     HIGH_BEAM("high_beam", AutomationSignalValueType.STATE),
+    EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
+    ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
+    BRAKE_FLUID("brake_fluid", AutomationSignalValueType.STATE),
+    FRM_DX_TAR_OBJ("frm_dx_tar_obj"),
     SUNSHADE("sunshade", AutomationSignalValueType.STATE),
     SUNROOF("sunroof", AutomationSignalValueType.STATE),
     WINDOW_FRONT_LEFT("window_front_left", AutomationSignalValueType.STATE),
@@ -176,7 +186,28 @@ enum class AutomationSignalId(
     WIFI_ASSOCIATED("wifi_associated", AutomationSignalValueType.STATE),
     WIFI_SSID("wifi_ssid", AutomationSignalValueType.STATE),
     HU_INTERNET_STATUS("hu_internet_status", AutomationSignalValueType.STATE),
-    FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE);
+    /** HTTP link to Wi‑Fi modem admin when source is WIFI_HTTP; [idle] for TBox / poller off. */
+    WIFI_MODEM_LINK_STATUS("wifi_modem_link_status", AutomationSignalValueType.STATE),
+    /** Mobile data / PPP from [TboxRepository.apnStatus] (TBox or Wi‑Fi modem sink). */
+    MODEM_MOBILE_DATA("modem_mobile_data", AutomationSignalValueType.STATE),
+    /** Cellular RAT from [TboxRepository.netState] (`2g`/`3g`/`4g`/`none`). */
+    MODEM_NET_TYPE("modem_net_type", AutomationSignalValueType.STATE),
+    /** SIM readiness from [TboxRepository.netState.simStatus]. */
+    MODEM_SIM_STATUS("modem_sim_status", AutomationSignalValueType.STATE),
+    FOREGROUND_APP("foreground_app", AutomationSignalValueType.STATE),
+    APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
+    APP_THEME("app_theme", AutomationSignalValueType.STATE),
+    /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
+    HU_SCREEN_BRIGHTNESS("hu_screen_brightness"),
+    /** Head-unit screen auto-brightness on/off. */
+    HU_SCREEN_AUTO_BRIGHTNESS("hu_screen_auto_brightness", AutomationSignalValueType.STATE),
+    /** Platform mixer volumes (Car Settings → Аудио), not mbCAN EQ. */
+    HU_MEDIA_VOLUME("hu_media_volume"),
+    HU_PHONE_VOLUME("hu_phone_volume"),
+    HU_NAVI_VOLUME("hu_navi_volume"),
+    HU_VOICE_VOLUME("hu_voice_volume"),
+    /** Headrest speaker: `only` / `assist` / `off`. */
+    HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -192,6 +223,19 @@ enum class AutomationSystemEvent(val storageKey: String) {
     companion object {
         fun fromStorageKey(raw: String?): AutomationSystemEvent? =
             entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+/** A9 mbCAN hardkey keyStatus: 0 = нажата, 1 = отпущена. */
+enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int) {
+    PRESSED("pressed", 0),
+    RELEASED("released", 1);
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationHardKeyStatus? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+
+        fun fromRawValue(raw: Int): AutomationHardKeyStatus? = entries.firstOrNull { it.rawValue == raw }
     }
 }
 
@@ -320,6 +364,18 @@ sealed interface AutomationTrigger {
     data class WidgetPressed(
         override val id: String = "1",
         val triggerId: String,
+    ) : AutomationTrigger
+
+    /**
+     * Fired by OEM A9 mbCAN hardkey events (steering wheel keys, door buttons).
+     * Verified [keyCode] values are listed in docs/MBCAN_VHAL_PARAMETERS_RU.md and
+     * [vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat.mbCanKeyName]; the backend is
+     * available only when the head unit runs the Android 9 mbCAN CAN stack.
+     */
+    data class HardKey(
+        override val id: String = "1",
+        val keyCode: Int,
+        val keyStatus: AutomationHardKeyStatus = AutomationHardKeyStatus.PRESSED,
     ) : AutomationTrigger
 
     data class Interval(
@@ -484,6 +540,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     RESTART_TBOX("restart_tbox"),
     TOGGLE_APP_DAY_NIGHT_THEME("toggle_app_day_night_theme"),
     ENABLE_HEAD_UNIT_AUTO_THEME("enable_head_unit_auto_theme"),
+    /** Explicit day/night like Car Settings: stringValue `light` / `dark` / `auto`. */
+    SET_HU_DAY_NIGHT_THEME("set_hu_day_night_theme"),
     TOGGLE_MIRROR_ADJUST_MODE("toggle_mirror_adjust_mode"),
     TOGGLE_HIDE_FLOATING_PANELS("toggle_hide_floating_panels"),
     TOGGLE_FLOATING_PANELS_ENABLED("toggle_floating_panels_enabled"),
@@ -496,6 +554,11 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     MEDIA_NEXT("media_next"),
     MEDIA_TOGGLE_LIKE("media_toggle_like"),
     SET_MEDIA_VOLUME("set_media_volume"),
+    SET_PHONE_VOLUME("set_phone_volume"),
+    SET_NAVI_VOLUME("set_navi_volume"),
+    SET_VOICE_VOLUME("set_voice_volume"),
+    /** stringValue: `only` / `assist` / `off` (shared UI 1/2/3). */
+    SET_HEADREST_SPEAKER("set_headrest_speaker"),
     CYCLE_MOCK_LOCATION_MODE("cycle_mock_location_mode"),
     GNSS_MODULE_REBOOT("gnss_module_reboot"),
     SET_SIMULATED_LOCATION_SOURCE_LOSS("set_simulated_location_source_loss"),
@@ -505,6 +568,8 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     WIFI_DISCONNECT("wifi_disconnect"),
     WIFI_MODEM_SET_DATA("wifi_modem_set_data"),
     WIFI_MODEM_REBOOT("wifi_modem_reboot"),
+    SET_HU_SCREEN_BRIGHTNESS("set_hu_screen_brightness"),
+    SET_HU_SCREEN_AUTO_BRIGHTNESS("set_hu_screen_auto_brightness"),
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert"),
     SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget");
@@ -529,12 +594,17 @@ sealed interface AutomationAction {
     /**
      * The persisted property id is accepted only when [AutomationCanCatalog] exposes it.
      * Users never enter arbitrary ids; codec validation blocks hand-edited unsafe values.
+     *
+     * [value] is the legacy / A9-canonical raw int. Optional [valueKey] (`on`/`off`,
+     * `close`/`open`/`vent`, …) makes binary and window actions portable across A9/A10;
+     * see [AutomationCanValueCodec].
      */
     data class CanCommand(
         val bus: AutomationCanBus = AutomationCanBus.VEHICLE,
         val propertyId: Int,
         val operation: AutomationCanOperation,
         val value: Int = 0,
+        val valueKey: String? = null,
     ) : AutomationAction
 
     data class LaunchApplication(

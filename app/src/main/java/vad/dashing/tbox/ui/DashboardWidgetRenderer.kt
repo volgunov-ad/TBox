@@ -31,6 +31,7 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
 import vad.dashing.tbox.TRIP_METRIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.OBD_METRIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
@@ -90,6 +91,9 @@ import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
@@ -629,6 +633,48 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        EPB_PARK_LAMP_WIDGET_DATA_KEY -> {
+            DashboardEpbParkLampWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY -> {
+            DashboardEngineOilPressureWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        BRAKE_FLUID_WIDGET_DATA_KEY -> {
+            DashboardBrakeFluidWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
         HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> {
             DashboardHvacCustomModeCycleWidgetItem(
                 onClick = onClick,
@@ -681,6 +727,22 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+            )
+        }
+
+        vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY -> {
+            DashboardSpeedCamWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                activeColor = controlAppearance.activeContent,
+                overageKmh = widgetConfig.speedCamOverageKmh,
+                radiusM = widgetConfig.speedCamRadiusM,
             )
         }
 
@@ -1481,10 +1543,41 @@ fun DashboardWidgetRenderer(
         }
 
         TRIP_METRIC_WIDGET_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardTripMetricWidgetItem(
                 appDataViewModel = appDataViewModel,
                 tripWidgetSource = widgetConfig.tripWidgetSource,
                 tripMetricFieldId = widgetConfig.tripMetricFieldId,
+                valueAccuracy = widgetConfig.valueAccuracy,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showUnit = widgetConfig.showUnit,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
+                    }
+                },
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+            )
+        }
+
+        OBD_METRIC_WIDGET_DATA_KEY -> {
+            DashboardObdMetricWidgetItem(
+                obdPidId = widgetConfig.obdPidId,
                 valueAccuracy = widgetConfig.valueAccuracy,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
@@ -1625,6 +1718,50 @@ fun DashboardWidgetRenderer(
             DashboardWidgetItem(
                 widget = if (widgetConfig.useMbCanVhal) {
                     widget.copy(dataKey = GEAR_BOX_MODE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "gearBoxCurrentGear" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "gearBoxPreparedGear" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY)
                 } else {
                     widget
                 },

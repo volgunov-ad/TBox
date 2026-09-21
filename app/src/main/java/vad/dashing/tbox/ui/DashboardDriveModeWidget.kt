@@ -208,7 +208,7 @@ private fun DriveModeLabelContent(
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().scale(iconScale),
-            colorFilter = ColorFilter.tint(iconColor),
+            colorFilter = uiIconColorFilter(driveModeWidgetLabelIconRes(mode), iconColor),
         )
     }
 }

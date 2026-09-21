@@ -44,6 +44,8 @@ import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
+import vad.dashing.tbox.isMbCanVhalGearBoxCurrentGearEnabled
+import vad.dashing.tbox.isMbCanVhalGearBoxPreparedGearEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
@@ -124,6 +126,11 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalGearBoxMode = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
     }
+    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs) {
+        widgetConfigs.any {
+            it.isMbCanVhalGearBoxCurrentGearEnabled() || it.isMbCanVhalGearBoxPreparedGearEnabled()
+        }
+    }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
     }
@@ -167,6 +174,18 @@ internal fun DashboardPanelGridAndFrames(
             onDispose {
                 UniversalCanRepository.enqueueClearSource(mbCanInterestSourceId)
             }
+        }
+    }
+    LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+        if (!heavySubscriptionsEnabled) {
+            vad.dashing.tbox.obd.clearObdInterest(mbCanInterestSourceId)
+            return@LaunchedEffect
+        }
+        vad.dashing.tbox.obd.publishObdInterest(mbCanInterestSourceId, widgetConfigs)
+    }
+    DisposableEffect(mbCanInterestSourceId) {
+        onDispose {
+            vad.dashing.tbox.obd.clearObdInterest(mbCanInterestSourceId)
         }
     }
     if (panelNeedsMbCanVhalEngineRpm) {
@@ -222,6 +241,20 @@ internal fun DashboardPanelGridAndFrames(
         DisposableEffect(mbCanInterestSourceId) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-gear-box-mode")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalGearNumbers) {
+        LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
+            if (!heavySubscriptionsEnabled) return@LaunchedEffect
+            UniversalCanRepository.setSourceSignals(
+                "$mbCanInterestSourceId-gear-numbers",
+                setOf(MbCanSignal.GearNumbers)
+            )
+        }
+        DisposableEffect(mbCanInterestSourceId) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-gear-numbers")
             }
         }
     }

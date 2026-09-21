@@ -70,6 +70,11 @@ object MbCanEngineFacade {
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
+    /** Shared OEM hardkey proxy; fans out to production + diagnostic listeners. */
+    private var hardKeyListenerProxy: Any? = null
+    private val hardKeyListenersLock = Any()
+    private val hardKeyListeners = mutableListOf<(keyCode: Int, keyStatus: Int, keyType: Int) -> Unit>()
+    @Volatile private var onHardKeyDiagnosticEvent: ((keyCode: Int, keyStatus: Int, keyType: Int) -> Unit)? = null
     /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
     @Volatile private var vehicleListenerWantSteer = false
     @Volatile private var vehicleListenerWantTurnLights = false
@@ -464,6 +469,20 @@ object MbCanEngineFacade {
                         if (highBeamRaw != null) {
                             MbCanRepository.scheduleHighBeamPush(highBeamRaw)
                         }
+                        val epbParkLampRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getEPBParkLampSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (epbParkLampRaw != null) {
+                            MbCanRepository.scheduleEpbParkLampPush(epbParkLampRaw)
+                        }
+                        val gearShiftPosRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getGSM_GearShiftPos")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (gearShiftPosRaw != null) {
+                            MbCanRepository.scheduleCurrentGearNumberPush(gearShiftPosRaw)
+                        }
                         val bodyComfort = runCatching { parseBcmBodyComfort(bcm) }.getOrNull()
                         if (bodyComfort != null) {
                             MbCanRepository.scheduleBodyComfortBcmPush(bodyComfort)
@@ -823,6 +842,67 @@ object MbCanEngineFacade {
             val light = bcmCls.getMethod("getLightStatus").invoke(bcmObj) ?: return null
             val raw = (light.javaClass.getMethod("getHighBeamSts").invoke(light) as? Number)?.toInt() ?: return null
             HighBeamDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * EPB park lamp from [MBCanVehicleBcmStatus.getEPBParkLampSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readEpbParkLampOn(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getEPBParkLampSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            EpbParkLampDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    data class IcmDriverWarningLamps(
+        val engineOilWarning: Boolean?,
+        val brakeFluidWarning: Boolean?,
+    )
+
+    /**
+     * ICM engine-oil / brake-fluid warning lamps from [MBCanVehicleIcmDriverInfo].
+     * Data type **44** (`eMBCAN_VEHICLE_ICM_DRIVE_INFO`). OEM settings dispatch is empty —
+     * pull / JobManager poll only.
+     */
+    fun readIcmDriverWarningLamps(): IcmDriverWarningLamps? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmDriverInfo")
+            val icmObj = getMbCanData.invoke(inst, 44, icmCls) ?: return null
+            val oilRaw = (icmCls.getMethod("getICM_EngineOil").invoke(icmObj) as? Number)?.toInt()
+            val brakeRaw = (icmCls.getMethod("getICM_Brakefluid").invoke(icmObj) as? Number)?.toInt()
+            IcmDriverWarningLamps(
+                engineOilWarning = oilRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+                brakeFluidWarning = brakeRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Current gear number from [MBCanVehicleBcmStatus.getGSM_GearShiftPos].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readCurrentGearNumber(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getGSM_GearShiftPos").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            GearNumberDomain.decode(raw)
         }.getOrNull()
     }
 
@@ -1272,6 +1352,125 @@ object MbCanEngineFacade {
         }.getOrDefault(false)
     }
 
+    /**
+     * Register a production hardkey listener (A9 `IMBHardKeyListener`).
+     * Shares one OEM subscription with diagnostics; safe to call repeatedly.
+     */
+    @Synchronized
+    fun addHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            if (hardKeyListeners.none { it === listener }) {
+                hardKeyListeners.add(listener)
+            }
+        }
+        return ensureHardKeyOemRegistered()
+    }
+
+    /** Remove a production hardkey listener; OEM unregisters only when nobody remains. */
+    @Synchronized
+    fun removeHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            hardKeyListeners.removeAll { it === listener }
+        }
+        return maybeUnregisterHardKeyOem()
+    }
+
+    @Synchronized
+    fun startHardKeyDiagnostics(
+        onEvent: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        onHardKeyDiagnosticEvent = onEvent
+        return ensureHardKeyOemRegistered()
+    }
+
+    @Synchronized
+    fun stopHardKeyDiagnostics(): Result<Unit> {
+        onHardKeyDiagnosticEvent = null
+        return maybeUnregisterHardKeyOem()
+    }
+
+    private fun hardKeyHasConsumers(): Boolean {
+        if (onHardKeyDiagnosticEvent != null) return true
+        synchronized(hardKeyListenersLock) {
+            return hardKeyListeners.isNotEmpty()
+        }
+    }
+
+    private fun dispatchHardKey(keyCode: Int, keyStatus: Int, keyType: Int) {
+        val snapshot: List<(Int, Int, Int) -> Unit>
+        synchronized(hardKeyListenersLock) {
+            snapshot = hardKeyListeners.toList()
+        }
+        for (listener in snapshot) {
+            oemSafe("hardKeyListener") { listener(keyCode, keyStatus, keyType) }
+        }
+        oemSafe("hardKeyDiagnostic") {
+            onHardKeyDiagnosticEvent?.invoke(keyCode, keyStatus, keyType)
+        }
+    }
+
+    private fun ensureHardKeyOemRegistered(): Result<Unit> {
+        if (hardKeyListenerProxy != null) return Result.success(Unit)
+        val availability = ensureInitialized()
+        if (availability !is MbCanAvailability.Available) {
+            return Result.failure(
+                IllegalStateException(
+                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "mbCAN unavailable",
+                ),
+            )
+        }
+        val inst = engineInstance
+            ?: return Result.failure(IllegalStateException("MBCanEngine instance is null"))
+        return runCatching {
+            val iface = Class.forName("com.mengbo.mbCan.interfaces.IMBHardKeyListener")
+            val proxy = Proxy.newProxyInstance(
+                iface.classLoader,
+                arrayOf(iface),
+            ) { proxyObj, method, args ->
+                when {
+                    method.declaringClass == Any::class.java && method.name == "hashCode" ->
+                        System.identityHashCode(proxyObj)
+                    method.declaringClass == Any::class.java && method.name == "equals" ->
+                        proxyObj === args?.getOrNull(0)
+                    method.declaringClass == Any::class.java && method.name == "toString" ->
+                        "IMBHardKeyListenerProxy@" + Integer.toHexString(System.identityHashCode(proxyObj))
+                    method.name == "onHardKey" -> {
+                        oemSafe(method.name) {
+                            val keyCode = (args?.getOrNull(0) as? Number)?.toInt() ?: return@oemSafe
+                            val keyStatus = (args.getOrNull(1) as? Number)?.toInt() ?: return@oemSafe
+                            val keyType = (args.getOrNull(2) as? Number)?.toInt() ?: return@oemSafe
+                            dispatchHardKey(keyCode, keyStatus, keyType)
+                        }
+                        null
+                    }
+                    else -> null
+                }
+            }
+            val register = inst.javaClass.getMethod("registHardKeyListener", iface)
+            nativeCallLock.withLock { register.invoke(inst, proxy) }
+            hardKeyListenerProxy = proxy
+        }.onFailure {
+            hardKeyListenerProxy = null
+        }
+    }
+
+    private fun maybeUnregisterHardKeyOem(): Result<Unit> {
+        if (hardKeyHasConsumers()) return Result.success(Unit)
+        val inst = engineInstance
+        val proxy = hardKeyListenerProxy
+        hardKeyListenerProxy = null
+        if (inst == null || proxy == null) return Result.success(Unit)
+        return runCatching {
+            nativeCallLock.withLock {
+                inst.javaClass.getMethod("unRegistHardKeyListener").invoke(inst)
+            }
+        }
+    }
+
     @Synchronized
     fun syncLkaSlaStatusListener(active: Boolean) {
         if (!active) {
@@ -1361,6 +1560,13 @@ object MbCanEngineFacade {
                         info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
                     }.getOrNull()?.toInt()
                     MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+                    val dxTarObj = runCatching {
+                        info.javaClass.getMethod("getFRM_3_DxTarObj").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    val objValid = runCatching {
+                        info.javaClass.getMethod("getFRM_3_ObjValid").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleFrmDxTarObjPush(dxRaw = dxTarObj, objValidRaw = objValid)
                 }
             }
             null

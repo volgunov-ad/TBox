@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.WiperStsDomain
@@ -167,6 +168,23 @@ object AutomationSignalCatalog {
             typicalRange = "Android 9: AccStatus 4=ACC ON, 5=ON, 0…3=выкл. " +
                 "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
         ),
+        state(
+            AutomationSignalId.ACC_CRUISE_STATE,
+            "Состояние ACC (круиз)",
+            headUnitOnly,
+            AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Off/Standby/Active/Override/Fault из ACCMode: " +
+                "0=off; 1,2,6=standby; 3,4,5=active; 7=override (газ перебивает ACC); 9=fault. " +
+                "Не путать со «Статус ACC (ключ)» (acc_status).",
+        ),
+        state(
+            AutomationSignalId.CCS_CRUISE_STATE,
+            "Состояние CCS (круиз)",
+            headUnitOnly,
+            AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS,
+            typicalRange = "Только ГУ. Off/Standby/Active из CruiseControlStatus: " +
+                "0=off; 1=active; 2=standby. Fault нет (только у ACC).",
+        ),
         number(
             AutomationSignalId.GAS_PEDAL,
             "Педаль газа",
@@ -179,15 +197,24 @@ object AutomationSignalCatalog {
             "Педаль тормоза",
             headUnitOnly,
             binaryStates,
-            typicalRange = "Только ГУ. BrakePedalSts: 2=нажата (on), 1=отпущена (off). " +
-                "0 и прочие — нет значения. Не CEM 1-bit.",
+            typicalRange = "Только ГУ. A9 BrakePedalSts: 2=нажата (on), 1=отпущена (off); " +
+                "A10 VHAL: 1=нажата, 0=отпущена. Прочие — нет значения.",
         ),
         number(
             AutomationSignalId.CURRENT_GEAR,
             "Текущая передача",
             "",
-            tboxOnly,
-            typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0",
+            bothSources,
+            typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0. " +
+                "A9 BCM getGSM_GearShiftPos / A10 VHAL GSM_GearShiftPos; TBox gearBoxCurrentGear.",
+        ),
+        number(
+            AutomationSignalId.TARGET_GEAR,
+            "Целевая передача",
+            "",
+            bothSources,
+            typicalRange = "Подготовленная / целевая передача. " +
+                "A10 VHAL EMS_TargetGearPosition; на A9 mbCAN обычно нет (null). TBox gearBoxPreparedGear.",
         ),
         number(
             AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
@@ -291,6 +318,40 @@ object AutomationSignalCatalog {
             typicalRange = "Только ГУ. Бинарный статус: включён/выключен. " +
                 "A9 BCM stLightSts.nHighBeamSts, A10 R_0404_CEM_2_HighBeamSts (CEM 1-bit). " +
                 "Не режим LIGHTCONTROL 1…4.",
+        ),
+        state(
+            AutomationSignalId.EPB_PARK_LAMP,
+            "Лампа EPB (паркинг)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус лампы EPB. " +
+                "A9 BCM getEPBParkLampSts (предположена шкала CEM-switch 2=on); " +
+                "A10 VHAL R_0900_ICM_7_EPBWarningLampSts (прокси, CEM 1-bit) — уточнить на машине.",
+        ),
+        state(
+            AutomationSignalId.ENGINE_OIL_PRESSURE,
+            "Давление масла (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_EngineOil (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Engine_Oil_Pressure (CEM 1-bit, TBD на машине).",
+        ),
+        state(
+            AutomationSignalId.BRAKE_FLUID,
+            "Тормозная жидкость (предупреждение)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. on = предупреждение (проблема), off = норма. " +
+                "A9 ICM drive info getICM_Brakefluid (type 44, только poll); " +
+                "A10 VHAL R_0900_ICM_4_Brake_Fuel_Level (CEM 1-bit, TBD на машине).",
+        ),
+        number(
+            AutomationSignalId.FRM_DX_TAR_OBJ,
+            "FRM DxTarObj",
+            "",
+            headUnitOnly,
+            typicalRange = "Только ГУ. Сырое FRM_3_DxTarObj при ObjValid=1; иначе нет значения.",
         ),
         state(
             AutomationSignalId.SUNSHADE,
@@ -529,7 +590,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
             "",
             headUnitOnly,
-            typicalRange = "Уровень 1…10",
+            typicalRange = "Уровень 1…10 — яркость проекции HUD (не экран ГУ и не приборка).",
         ),
         state(
             AutomationSignalId.HUD_DISPLAY_MODE,
@@ -549,7 +610,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
             "",
             headUnitOnly,
-            typicalRange = "Уровень 1…10",
+            typicalRange = "Уровень 1…10 — яркость комбинации приборов / ICM (не экран ГУ и не HUD).",
         ),
         number(
             AutomationSignalId.OVERSPEED_ALARM,
@@ -661,6 +722,36 @@ object AutomationSignalCatalog {
                 "checking почти не публикуется (чтобы не дёргать автоматизации).",
         ),
         state(
+            AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+            "Wi‑Fi модем: связь",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.LINK_OPTIONS,
+            typicalRange = "HTTP-связь с админкой Wi‑Fi модема при источнике «Wi‑Fi HTTP»: " +
+                "ok / auth_failed / unreachable / error; idle — источник TBox или поллер не запущен.",
+        ),
+        state(
+            AutomationSignalId.MODEM_MOBILE_DATA,
+            "Модем: передача данных",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off по apnStatus (TBox MDC или Wi‑Fi модем). " +
+                "То же readback, что после действия wifi_modem_set_data.",
+        ),
+        state(
+            AutomationSignalId.MODEM_NET_TYPE,
+            "Модем: тип сети",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.NET_TYPE_OPTIONS,
+            typicalRange = "2g / 3g / 4g / none из netStatus вкладки «Модем» (TBox или Wi‑Fi HTTP).",
+        ),
+        state(
+            AutomationSignalId.MODEM_SIM_STATUS,
+            "Модем: SIM",
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.SIM_OPTIONS,
+            typicalRange = "none / ready / pin / error / unknown из simStatus вкладки «Модем».",
+        ),
+        state(
             AutomationSignalId.FOREGROUND_APP,
             "Приложение на экране",
             appOnly,
@@ -669,6 +760,79 @@ object AutomationSignalCatalog {
                 "Пакет самого TBox учитывается, только если открыт главный экран. Без разрешения " +
                 "сигнала нет. Камера 360 com.mengbo.avm учитывается по штатному оверлею " +
                 "(Settings.Global avm_state), даже если UsageStats держит предыдущее приложение.",
+        ),
+        state(
+            AutomationSignalId.APP_THEME_MODE,
+            "Тема приложения: режим",
+            appOnly,
+            listOf("manual_day", "manual_night", "auto_day", "auto_night"),
+            typicalRange = "manual_day / manual_night — ручная тема (ГУ или локальная тема " +
+                "приложения, если оно отвязано от системы), auto_day / auto_night — штатный " +
+                "авто день/ночь ГУ с текущим разрешением. Один триггер «любой день/ночь» — " +
+                "сигнал app_theme. Тот же режим, что у переключателя темы и действий " +
+                "toggle_app_day_night_theme / enable_head_unit_auto_theme / " +
+                "set_hu_day_night_theme (light/dark/auto).",
+        ),
+        state(
+            AutomationSignalId.APP_THEME,
+            "Тема приложения: сейчас",
+            appOnly,
+            listOf("day", "night"),
+            typicalRange = "Эффективная тема в моменте: day — светлая, night — тёмная, " +
+                "ручная или разрешённая авто-режимом. Триггер «День» срабатывает и на ручной, " +
+                "и на авто-день; «Ночь» — и на ручную, и на авто-ночь.",
+        ),
+        number(
+            AutomationSignalId.HU_SCREEN_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+            "",
+            appOnly,
+            typicalRange = "Только приложение. Уровень 1…10 — подсветка экрана ГУ " +
+                "(Car Settings → Экраны). Три яркости: экран ГУ / HUD / приборка (ICM) — " +
+                "разные сигналы. A9: Settings.System screen_brightness; A10: Adayo getSysBacklight.",
+        ),
+        state(
+            AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off — автоподсветка экрана ГУ (не тема день/ночь, не HUD/ICM). " +
+                "A9: auto_bright; A10: getDayNightMode 1=auto / 4=manual для яркости.",
+        ),
+        number(
+            AutomationSignalId.HU_MEDIA_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_MEDIA_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 0…31 (не mbCAN EQ). Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_PHONE_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_PHONE_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 1…31. Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_NAVI_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_NAVI_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 0…10. Car Settings → Аудио.",
+        ),
+        number(
+            AutomationSignalId.HU_VOICE_VOLUME,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_VOICE_VOLUME),
+            "",
+            appOnly,
+            typicalRange = "Микшер ГУ 2…10 (TTS). Car Settings → Аудио.",
+        ),
+        state(
+            AutomationSignalId.HU_HEADREST_SPEAKER,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_HEADREST_SPEAKER),
+            appOnly,
+            listOf("only", "assist", "off"),
+            typicalRange = "only / assist / off (UI 1/2/3). A9 mbCAN audio 37; A10 SettingsSvc.",
         ),
     )
 

@@ -33,4 +33,22 @@ class MainScreenBootOpenStoreTest {
         assertFalse(MainScreenBootOpenStore.isPending(context))
         assertEquals("", MainScreenBootOpenStore.sourceAction(context))
     }
+
+    @Test
+    fun extendDeadlineTo_extendsButNeverShortens() {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        MainScreenBootOpenStore.clearPending(context)
+        MainScreenBootOpenStore.markPending(context, "boot")
+        val base = MainScreenBootOpenStore.deadlineElapsedRealtimeMs(context)
+        assertTrue(base > 0L)
+
+        MainScreenBootOpenStore.extendDeadlineTo(context, base + 60_000L)
+        assertEquals(base + 60_000L, MainScreenBootOpenStore.deadlineElapsedRealtimeMs(context))
+
+        // Earlier value is a no-op.
+        MainScreenBootOpenStore.extendDeadlineTo(context, base + 1_000L)
+        assertEquals(base + 60_000L, MainScreenBootOpenStore.deadlineElapsedRealtimeMs(context))
+
+        MainScreenBootOpenStore.clearPending(context)
+    }
 }

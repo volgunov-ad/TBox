@@ -4,7 +4,10 @@ import android.os.SystemClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -14,6 +17,10 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
+import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.PlatformAudioDomain
+import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
@@ -123,6 +130,47 @@ class AutomationSignalProvider(
                             vad.dashing.tbox.internet.HuInternetStatusLogic.automationStateKey(status),
                         )
                     }.distinctUntilChanged()
+                AutomationSignalId.WIFI_MODEM_LINK_STATUS ->
+                    TboxRepository.wifiModemLinkStatus.map { status ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_MOBILE_DATA ->
+                    TboxRepository.apnStatus.map { up ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.mobileDataKey(up),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_NET_TYPE ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.netTypeKey(net.netStatus),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_SIM_STATUS ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.simStatusKey(net.simStatus),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.APP_THEME_MODE -> appThemeModeFlow()
+                AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
+                AutomationSignalId.HU_SCREEN_BRIGHTNESS -> huScreenBrightnessFlow()
+                AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> huScreenAutoBrightnessFlow()
+                AutomationSignalId.HU_MEDIA_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.mediaVolume,
+                )
+                AutomationSignalId.HU_PHONE_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.phoneVolume,
+                )
+                AutomationSignalId.HU_NAVI_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.naviVolume,
+                )
+                AutomationSignalId.HU_VOICE_VOLUME -> platformVolumeFlow(
+                    PlatformAudioRepository.voiceVolume,
+                )
+                AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
                 else -> null
             }
@@ -153,6 +201,7 @@ class AutomationSignalProvider(
         }
 
         AutomationSignalId.CURRENT_GEAR -> CanDataRepository.gearBoxCurrentGear.numberFlow()
+        AutomationSignalId.TARGET_GEAR -> CanDataRepository.gearBoxPreparedGear.numberFlow()
         AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
             CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel1)
 
@@ -209,6 +258,121 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual -> "manual_day"
+            HeadUnitDayNightRepository.Mode.DarkManual -> "manual_night"
+            HeadUnitDayNightRepository.Mode.LightAuto -> "auto_day"
+            HeadUnitDayNightRepository.Mode.DarkAuto -> "auto_night"
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
+    HeadUnitDayNightRepository.modeState.map { mode ->
+        val value = when (mode) {
+            HeadUnitDayNightRepository.Mode.LightManual,
+            HeadUnitDayNightRepository.Mode.LightAuto,
+            -> "day"
+
+            HeadUnitDayNightRepository.Mode.DarkManual,
+            HeadUnitDayNightRepository.Mode.DarkAuto,
+            -> "night"
+
+            null -> null
+        }
+        value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun huScreenBrightnessFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        HeadUnitBrightnessRepository.startObserving(context)
+        val job = launch {
+            HeadUnitBrightnessRepository.brightnessUiLevel.collect { level ->
+                trySend(
+                    level?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            HeadUnitBrightnessRepository.stopObserving(context)
+        }
+    }.distinctUntilChanged()
+}
+
+private fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        HeadUnitBrightnessRepository.startObserving(context)
+        val job = launch {
+            HeadUnitBrightnessRepository.autoBrightness.collect { enabled ->
+                trySend(
+                    enabled?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            HeadUnitBrightnessRepository.stopObserving(context)
+        }
+    }.distinctUntilChanged()
+}
+
+private fun platformVolumeFlow(
+    volume: StateFlow<Int?>,
+): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        PlatformAudioRepository.startObserving(context)
+        val job = launch {
+            volume.collect { level ->
+                trySend(
+                    level?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+                        ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            PlatformAudioRepository.stopObserving()
+        }
+    }.distinctUntilChanged()
+}
+
+private fun platformHeadrestFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return callbackFlow {
+        PlatformAudioRepository.startObserving(context)
+        val job = launch {
+            PlatformAudioRepository.headrestMode.collect { mode ->
+                val key = when (mode) {
+                    PlatformAudioDomain.HEADREST_ONLY -> "only"
+                    PlatformAudioDomain.HEADREST_ASSIST -> "assist"
+                    PlatformAudioDomain.HEADREST_OFF -> "off"
+                    else -> null
+                }
+                trySend(
+                    key?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable,
+                )
+            }
+        }
+        awaitClose {
+            job.cancel()
+            PlatformAudioRepository.stopObserving()
+        }
+    }.distinctUntilChanged()
+}
 
 private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     val context = AppContextHolder.appContextOrNull

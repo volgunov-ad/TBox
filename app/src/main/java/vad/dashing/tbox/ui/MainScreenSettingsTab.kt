@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -275,12 +276,41 @@ fun MainScreenSettingsTab(
     val newMainPanelDefaultName = stringResource(R.string.floating_dashboard_new_panel_default)
     val scrollState = rememberScrollState()
 
+    val sections = MainScreenSettingsSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
+        Text(
+            text = stringResource(R.string.tab_main_screen_settings),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        MainScreenSettingsSection.COMMON -> R.string.settings_tab_common
+                        MainScreenSettingsSection.PANELS -> R.string.settings_tab_panels
+                        MainScreenSettingsSection.BUTTONS -> R.string.settings_tab_buttons
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+        ) {
+            when (selectedSection) {
+                MainScreenSettingsSection.COMMON -> {
         SettingSwitch(
             isMainScreenOpenOnBootEnabled,
             { enabled ->
@@ -602,98 +632,34 @@ fun MainScreenSettingsTab(
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_main_screen_corner_buttons_title))
-        Text(
-            text = stringResource(R.string.settings_main_screen_corner_buttons_size, mainScreenCornerButtonSizeDp),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+        SettingSliderInt(
+            value = mainScreenPanelsLayoutSnapDp,
+            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
+            text = stringResource(
+                R.string.settings_main_screen_layout_snap_step_title,
+                mainScreenPanelsLayoutSnapDp,
+            ),
+            description = stringResource(R.string.settings_main_screen_layout_snap_step_desc),
+            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
+            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
         )
-        Text(
-            text = stringResource(R.string.settings_main_screen_corner_buttons_size_hint),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp)
+        SettingSwitch(
+            mainScreenPanelsLayoutSnapEnabled,
+            { enabled -> settingsViewModel.saveMainScreenPanelsLayoutSnapEnabled(enabled) },
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_title),
+            stringResource(R.string.settings_main_screen_layout_snap_enabled_desc),
+            true,
         )
-        Slider(
-            value = mainScreenCornerButtonSizeDp.toFloat(),
-            onValueChange = { v ->
-                settingsViewModel.saveMainScreenCornerButtonSizeDp(v.roundToInt().coerceIn(10, 100))
-            },
-            valueRange = 10f..100f,
-            steps = 89,
-            modifier = Modifier.padding(bottom = 12.dp)
+        SettingSwitch(
+            mainScreenShowLayoutGrid,
+            { enabled -> settingsViewModel.saveMainScreenShowLayoutGrid(enabled) },
+            stringResource(R.string.settings_main_screen_show_layout_grid_title),
+            stringResource(R.string.settings_main_screen_show_layout_grid_desc),
+            true,
         )
-        WidgetColorThemeSegmentRow(
-            selectedSegment = cornerColorSegment,
-            onSegmentSelected = { cornerColorSegment = it },
-            enabled = true
-        )
-        if (cornerColorSegment == 0) {
-            WidgetColorSetting(
-                title = stringResource(R.string.settings_main_screen_corner_buttons_bg_light),
-                colorValue = mainScreenCornerBtnBgLight,
-                enabled = true,
-                onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundLight(it) },
-                presetSlots = widgetColorPresetSlots,
-                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-            )
-            WidgetColorSetting(
-                title = stringResource(R.string.settings_main_screen_corner_buttons_icon_light),
-                colorValue = mainScreenCornerBtnIconLight,
-                enabled = true,
-                onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconLight(it) },
-                presetSlots = widgetColorPresetSlots,
-                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-            )
-        } else {
-            WidgetColorSetting(
-                title = stringResource(R.string.settings_main_screen_corner_buttons_bg_dark),
-                colorValue = mainScreenCornerBtnBgDark,
-                enabled = true,
-                onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundDark(it) },
-                presetSlots = widgetColorPresetSlots,
-                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-            )
-            WidgetColorSetting(
-                title = stringResource(R.string.settings_main_screen_corner_buttons_icon_dark),
-                colorValue = mainScreenCornerBtnIconDark,
-                enabled = true,
-                onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconDark(it) },
-                presetSlots = widgetColorPresetSlots,
-                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    settingsViewModel.saveMainScreenCornerButtonSizeDp(32)
-                    settingsViewModel.saveMainScreenCornerButtonBackgroundLight(0x00000000)
-                    settingsViewModel.saveMainScreenCornerButtonBackgroundDark(0x00000000)
-                    settingsViewModel.saveMainScreenCornerButtonIconLight(
-                        DEFAULT_WIDGET_TEXT_COLOR_LIGHT
-                    )
-                    settingsViewModel.saveMainScreenCornerButtonIconDark(
-                        DEFAULT_WIDGET_TEXT_COLOR_DARK
-                    )
-                },
-                modifier = Modifier.weight(1f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-            ) {
-                Text(
-                    stringResource(R.string.settings_main_screen_corner_buttons_reset),
-                    style = MaterialTheme.typography.tboxBody,
-                    maxLines = 2
-                )
-            }
-        }
+                }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                MainScreenSettingsSection.PANELS -> {
         SettingsTitle(stringResource(R.string.settings_main_screen_panels_title))
         if (hasMainScreenPanels) {
             MainScreenPanelEditor(
@@ -877,31 +843,109 @@ fun MainScreenSettingsTab(
             modifier = Modifier.padding(top = 8.dp),
             enabled = hasMainScreenPanels
         )
-        SettingSliderInt(
-            value = mainScreenPanelsLayoutSnapDp,
-            onValueChange = { settingsViewModel.saveMainScreenPanelsLayoutSnapDp(it) },
-            text = stringResource(
-                R.string.settings_main_screen_layout_snap_step_title,
-                mainScreenPanelsLayoutSnapDp,
-            ),
-            description = stringResource(R.string.settings_main_screen_layout_snap_step_desc),
-            minValue = MIN_PANEL_LAYOUT_SNAP_DP,
-            maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+                }
+
+                MainScreenSettingsSection.BUTTONS -> {
+        Text(
+            text = stringResource(R.string.settings_main_screen_corner_buttons_size, mainScreenCornerButtonSizeDp),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
         )
-        SettingSwitch(
-            mainScreenPanelsLayoutSnapEnabled,
-            { enabled -> settingsViewModel.saveMainScreenPanelsLayoutSnapEnabled(enabled) },
-            stringResource(R.string.settings_main_screen_layout_snap_enabled_title),
-            stringResource(R.string.settings_main_screen_layout_snap_enabled_desc),
-            true,
+        Text(
+            text = stringResource(R.string.settings_main_screen_corner_buttons_size_hint),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
-        SettingSwitch(
-            mainScreenShowLayoutGrid,
-            { enabled -> settingsViewModel.saveMainScreenShowLayoutGrid(enabled) },
-            stringResource(R.string.settings_main_screen_show_layout_grid_title),
-            stringResource(R.string.settings_main_screen_show_layout_grid_desc),
-            true,
+        Text(
+            text = stringResource(R.string.settings_main_screen_corner_buttons_applies_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp)
         )
+        Slider(
+            value = mainScreenCornerButtonSizeDp.toFloat(),
+            onValueChange = { v ->
+                settingsViewModel.saveMainScreenCornerButtonSizeDp(v.roundToInt().coerceIn(10, 100))
+            },
+            valueRange = 10f..100f,
+            steps = 89,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+        WidgetColorThemeSegmentRow(
+            selectedSegment = cornerColorSegment,
+            onSegmentSelected = { cornerColorSegment = it },
+            enabled = true
+        )
+        if (cornerColorSegment == 0) {
+            WidgetColorSetting(
+                title = stringResource(R.string.settings_main_screen_corner_buttons_bg_light),
+                colorValue = mainScreenCornerBtnBgLight,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundLight(it) },
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+            )
+            WidgetColorSetting(
+                title = stringResource(R.string.settings_main_screen_corner_buttons_icon_light),
+                colorValue = mainScreenCornerBtnIconLight,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconLight(it) },
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+            )
+        } else {
+            WidgetColorSetting(
+                title = stringResource(R.string.settings_main_screen_corner_buttons_bg_dark),
+                colorValue = mainScreenCornerBtnBgDark,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCornerButtonBackgroundDark(it) },
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+            )
+            WidgetColorSetting(
+                title = stringResource(R.string.settings_main_screen_corner_buttons_icon_dark),
+                colorValue = mainScreenCornerBtnIconDark,
+                enabled = true,
+                onColorChange = { settingsViewModel.saveMainScreenCornerButtonIconDark(it) },
+                presetSlots = widgetColorPresetSlots,
+                onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.saveMainScreenCornerButtonSizeDp(32)
+                    settingsViewModel.saveMainScreenCornerButtonBackgroundLight(0x00000000)
+                    settingsViewModel.saveMainScreenCornerButtonBackgroundDark(0x00000000)
+                    settingsViewModel.saveMainScreenCornerButtonIconLight(
+                        DEFAULT_WIDGET_TEXT_COLOR_LIGHT
+                    )
+                    settingsViewModel.saveMainScreenCornerButtonIconDark(
+                        DEFAULT_WIDGET_TEXT_COLOR_DARK
+                    )
+                },
+                modifier = Modifier.weight(1f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+            ) {
+                Text(
+                    stringResource(R.string.settings_main_screen_corner_buttons_reset),
+                    style = MaterialTheme.typography.tboxBody,
+                    maxLines = 2
+                )
+            }
+        }
+                }
+            }
+        }
+    }
+
         if (showMainScreenPanelOrderDialog) {
             PanelOrderConfigDialog(
                 visible = true,
@@ -928,5 +972,4 @@ fun MainScreenSettingsTab(
                 },
             )
         }
-    }
 }

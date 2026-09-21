@@ -63,6 +63,7 @@ import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX
 import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,7 +73,10 @@ import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
+import vad.dashing.tbox.ui.theme.TextSizeRole
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -778,6 +782,103 @@ fun SettingAppFontFamily(
         }
     }
 }
+
+@Composable
+fun SettingTextSizeScales(
+    scales: TboxTextSizeScales,
+    onScalesChange: (TboxTextSizeScales) -> Unit,
+    enabled: Boolean = true,
+) {
+    val roles = TextSizeRole.entries
+    val steps = ((TboxTextSizeScales.MAX - TboxTextSizeScales.MIN) / TboxTextSizeScales.STEP).roundToInt() - 1
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_text_size_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_text_size_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        roles.forEach { role ->
+            val value = scales.scaleFor(role)
+            val previewStyle = when (role) {
+                TextSizeRole.Caption -> MaterialTheme.typography.tboxCaption
+                TextSizeRole.Body -> MaterialTheme.typography.tboxBody
+                TextSizeRole.Button -> MaterialTheme.typography.tboxButton
+                TextSizeRole.Title -> MaterialTheme.typography.tboxTitle
+                TextSizeRole.Headline -> MaterialTheme.typography.tboxHeadline
+                TextSizeRole.TabLabel -> MaterialTheme.typography.tboxTabLabel
+                TextSizeRole.WidgetTitle -> LocalTboxTextStyles.current.WidgetTitle
+                TextSizeRole.WidgetValue -> LocalTboxTextStyles.current.WidgetValue
+                TextSizeRole.WidgetUnit -> LocalTboxTextStyles.current.WidgetUnit
+            }
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = textSizeRoleLabel(role),
+                        style = previewStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_text_size_value,
+                            value,
+                        ),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = value,
+                    onValueChange = { onScalesChange(scales.withRole(role, it)) },
+                    valueRange = TboxTextSizeScales.MIN..TboxTextSizeScales.MAX,
+                    steps = steps.coerceAtLeast(0),
+                    enabled = enabled,
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { onScalesChange(TboxTextSizeScales.Default) },
+            enabled = enabled && scales != TboxTextSizeScales.Default,
+            modifier = Modifier.padding(top = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_text_size_reset),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+    }
+}
+
+@Composable
+private fun textSizeRoleLabel(role: TextSizeRole): String = stringResource(
+    when (role) {
+        TextSizeRole.Caption -> R.string.settings_text_size_caption
+        TextSizeRole.Body -> R.string.settings_text_size_body
+        TextSizeRole.Button -> R.string.settings_text_size_button
+        TextSizeRole.Title -> R.string.settings_text_size_title_role
+        TextSizeRole.Headline -> R.string.settings_text_size_headline
+        TextSizeRole.TabLabel -> R.string.settings_text_size_tab_label
+        TextSizeRole.WidgetTitle -> R.string.settings_text_size_widget_title
+        TextSizeRole.WidgetValue -> R.string.settings_text_size_widget_value
+        TextSizeRole.WidgetUnit -> R.string.settings_text_size_widget_unit
+    },
+)
 
 @Composable
 fun <T> GenericDropdownSelector(
@@ -1522,6 +1623,9 @@ fun FloatingDashboardPositionSizeSettings(
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
     val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
     val floatingDashboardStartY by settingsViewModel.floatingDashboardStartY.collectAsStateWithLifecycle()
+    val allowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val originMin = if (allowBeyondScreen) FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX else 0
 
     GeometryWhxyCommitBlock(
         widthLabel = stringResource(R.string.floating_panel_width_px),
@@ -1534,8 +1638,8 @@ fun FloatingDashboardPositionSizeSettings(
         savedY = floatingDashboardStartY,
         minWidth = MIN_FLOATING_PANEL_SIZE_PX,
         minHeight = MIN_FLOATING_PANEL_SIZE_PX,
-        minX = 0,
-        minY = 0,
+        minX = originMin,
+        minY = originMin,
         enabled = enabled,
         modifier = modifier,
         onCommit = { w, h, x, y ->

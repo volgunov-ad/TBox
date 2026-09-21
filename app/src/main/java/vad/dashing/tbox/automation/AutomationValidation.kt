@@ -1,8 +1,10 @@
 package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 
 data class AutomationValidationIssue(
@@ -150,6 +152,22 @@ object AutomationValidator {
                     issues += AutomationValidationIssue(
                         "$path.triggerId",
                         "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                    )
+                }
+            }
+            is AutomationTrigger.HardKey -> {
+                if (trigger.keyCode !in AUTOMATION_HARD_KEY_MIN_CODE..AUTOMATION_HARD_KEY_MAX_CODE) {
+                    issues += AutomationValidationIssue(
+                        "$path.keyCode",
+                        "Код кнопки должен быть от $AUTOMATION_HARD_KEY_MIN_CODE " +
+                            "до $AUTOMATION_HARD_KEY_MAX_CODE",
+                    )
+                }
+                if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Триггер «Кнопка на руле/двери» работает только на ГУ Android 9 (mbCAN). " +
+                            "На Android 10 замените на плитку «Триггер автоматизации»",
                     )
                 }
             }
@@ -545,6 +563,20 @@ object AutomationValidator {
             is AutomationAction.CanCommand -> {
                 if (!AutomationCanCatalog.isAllowed(action)) {
                     issues += AutomationValidationIssue(path, "CAN-команда отсутствует в безопасном каталоге")
+                } else {
+                    val canMode = UniversalCanRepository.mode.value
+                    val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                    if (entry != null && !entry.supports(canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "CAN-действие не подтверждено для текущего backend ГУ",
+                        )
+                    } else if (!AutomationCanValueCodec.isResolvable(action, canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "Значение CAN недоступно на текущем backend ГУ",
+                        )
+                    }
                 }
             }
 
@@ -619,6 +651,54 @@ object AutomationValidator {
 
             AutomationBuiltinActionType.SET_MEDIA_VOLUME -> if (action.intValue !in 0..31) {
                 issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
+            }
+
+            AutomationBuiltinActionType.SET_PHONE_VOLUME -> if (action.intValue !in 1..31) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость телефона должна быть 1–31",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_NAVI_VOLUME -> if (action.intValue !in 0..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость навигатора должна быть 0–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_VOICE_VOLUME -> if (action.intValue !in 2..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость голоса должна быть 2–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("light", "dark", "auto")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Тема: light / dark / auto",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("only", "assist", "off")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Подголовник: only / assist / off",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> if (action.intValue !in 1..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Яркость экрана ГУ должна быть 1–10",
+                )
             }
 
             AutomationBuiltinActionType.WIFI_CONNECT -> {

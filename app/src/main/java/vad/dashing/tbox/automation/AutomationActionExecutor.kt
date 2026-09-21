@@ -17,6 +17,7 @@ import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.CarDataRepository
+import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MEDIA_AUTOMATION_SOURCE_HOLD_MS
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -126,8 +127,19 @@ class AutomationActionExecutor(
                         "Недопустимая операция или значение CAN",
                     )
                 }
+                val writeValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
+                    ?: return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
                 if (action.operation == AutomationCanOperation.SET &&
-                    action.value !in entry.allowedValuesFor(canMode)
+                    writeValue !in entry.allowedValuesFor(canMode)
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (action.operation == AutomationCanOperation.TRUNK_PULSE &&
+                    writeValue !in setOf(1, 2)
                 ) {
                     return@withLock AutomationActionResult.failure(
                         "Недопустимая операция или значение CAN",
@@ -141,18 +153,18 @@ class AutomationActionExecutor(
                 val command = when (action.bus) {
                     AutomationCanBus.VEHICLE -> when (action.operation) {
                         AutomationCanOperation.SET ->
-                            MbCanCommand.SetProperty(action.propertyId, action.value)
+                            MbCanCommand.SetProperty(action.propertyId, writeValue)
 
                         AutomationCanOperation.TOGGLE ->
                             MbCanCommand.ToggleProperty(action.propertyId)
 
                         AutomationCanOperation.TRUNK_PULSE ->
-                            MbCanCommand.TrunkPulse(action.value)
+                            MbCanCommand.TrunkPulse(writeValue)
                     }
 
                     AutomationCanBus.AUDIO -> when (action.operation) {
                         AutomationCanOperation.SET ->
-                            MbCanCommand.SetAudioProperty(action.propertyId, action.value)
+                            MbCanCommand.SetAudioProperty(action.propertyId, writeValue)
 
                         AutomationCanOperation.TOGGLE ->
                             MbCanCommand.ToggleAudioProperty(action.propertyId)
@@ -332,6 +344,36 @@ class AutomationActionExecutor(
             AutomationActionResult(ok, if (ok) "Автотема включена" else "Автотема недоступна")
         }
 
+        AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+            val key = action.stringValue.trim().lowercase()
+            val modeValue = when (key) {
+                "light" -> HeadUnitDayNightRepository.NIGHT_MODE_LIGHT_MANUAL
+                "dark" -> HeadUnitDayNightRepository.NIGHT_MODE_DARK_MANUAL
+                "auto" -> HeadUnitDayNightRepository.NIGHT_MODE_AUTO
+                else -> null
+            }
+            if (modeValue == null) {
+                AutomationActionResult.failure("Тема: light / dark / auto")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    if (modeValue == HeadUnitDayNightRepository.NIGHT_MODE_AUTO) {
+                        HeadUnitDayNightRepository.enableAutoMode(appContext)
+                    } else {
+                        HeadUnitDayNightRepository.writeAutoMode(appContext, modeValue)
+                    }
+                }
+                val label = when (key) {
+                    "light" -> "светлая"
+                    "dark" -> "тёмная"
+                    else -> "авто"
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) "Тема ГУ: $label" else "Не удалось установить тему ГУ",
+                )
+            }
+        }
+
         AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> {
             val ok = runCatching {
                 MirrorAdjustModeRepository.toggleMirrorAdjustMode(appContext)
@@ -393,12 +435,50 @@ class AutomationActionExecutor(
             SharedMediaControlService.toggleHeartRating(packages, preferred)
         }
 
-        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> {
-            val ok = PlatformAudioRepository.setVolume(
-                PlatformAudioDomain.VolumeChannel.Media,
-                action.intValue,
-            )
-            AutomationActionResult(ok, if (ok) "Громкость установлена" else "Ошибка громкости")
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Media,
+            action.intValue,
+            "медиа",
+        )
+
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Phone,
+            action.intValue,
+            "телефона",
+        )
+
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Navi,
+            action.intValue,
+            "навигатора",
+        )
+
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Voice,
+            action.intValue,
+            "голоса",
+        )
+
+        AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+            val ui = when (action.stringValue.trim().lowercase()) {
+                "only" -> PlatformAudioDomain.HEADREST_ONLY
+                "assist" -> PlatformAudioDomain.HEADREST_ASSIST
+                "off" -> PlatformAudioDomain.HEADREST_OFF
+                else -> null
+            }
+            if (ui == null) {
+                AutomationActionResult.failure("Подголовник: only / assist / off")
+            } else {
+                val ok = PlatformAudioRepository.setHeadrestMode(ui)
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Динамик подголовника установлен"
+                    } else {
+                        "Не удалось установить динамик подголовника"
+                    },
+                )
+            }
         }
 
         AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> {
@@ -437,6 +517,47 @@ class AutomationActionExecutor(
 
         AutomationBuiltinActionType.WIFI_MODEM_REBOOT ->
             serviceActions.rebootWifiModem()
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Яркость экрана ГУ недоступна")
+            } else {
+                val level = action.intValue.coerceIn(1, 10)
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeBrightnessUiLevel(appContext, level)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Яркость экрана ГУ: $level"
+                    } else {
+                        "Не удалось установить яркость экрана ГУ"
+                    },
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Автояркость экрана ГУ недоступна")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeAutoBrightness(appContext, action.boolValue)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        if (action.boolValue) {
+                            "Автояркость экрана ГУ включена"
+                        } else {
+                            "Автояркость экрана ГУ выключена"
+                        }
+                    } else {
+                        "Не удалось изменить автояркость экрана ГУ"
+                    },
+                )
+            }
+        }
 
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
             val triggerId = action.stringValue.trim()
@@ -495,6 +616,18 @@ class AutomationActionExecutor(
                 AutomationActionResult.ok("Сообщение закрыто")
             }
         }
+    }
+
+    private fun setPlatformVolume(
+        channel: PlatformAudioDomain.VolumeChannel,
+        value: Int,
+        label: String,
+    ): AutomationActionResult {
+        val ok = PlatformAudioRepository.setVolume(channel, value)
+        return AutomationActionResult(
+            ok,
+            if (ok) "Громкость $label установлена" else "Ошибка громкости $label",
+        )
     }
 
     private suspend fun mediaAction(

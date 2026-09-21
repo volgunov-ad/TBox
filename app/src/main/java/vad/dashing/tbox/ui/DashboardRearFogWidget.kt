@@ -70,7 +70,7 @@ fun DashboardRearFogWidgetItem(
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().scale(iconScale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_rear_fog, iconColor)
                 )
             }
         }

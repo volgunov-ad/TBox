@@ -99,7 +99,6 @@ fun LocationCalibrationEntryButtons(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
-        WheelPulseCalibrationSection(settingsViewModel = settingsViewModel)
     }
 
     if (showGyroHub) {

@@ -1,0 +1,1201 @@
+package vad.dashing.tbox.ui
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import vad.dashing.tbox.R
+import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.obd.Elm327BluetoothPower
+import vad.dashing.tbox.obd.Elm327Protocol
+import vad.dashing.tbox.obd.ObdDtc
+import vad.dashing.tbox.obd.ObdDtcCatalog
+import vad.dashing.tbox.obd.ObdDtcExport
+import vad.dashing.tbox.obd.ObdInterestAggregator
+import vad.dashing.tbox.obd.ObdMonitorItem
+import vad.dashing.tbox.obd.ObdMonitorStatus
+import vad.dashing.tbox.obd.ObdPid
+import vad.dashing.tbox.obd.ObdRepository
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.valueToString
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+
+private enum class Elm327Section {
+    Connection,
+    Diagnostics,
+    Pid,
+}
+
+@Composable
+fun Elm327Tab(
+    settingsViewModel: SettingsViewModel,
+) {
+    Elm327TabContent(settingsViewModel = settingsViewModel)
+}
+
+@Composable
+fun Elm327TabContent(
+    settingsViewModel: SettingsViewModel,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val enabled by settingsViewModel.elm327Enabled.collectAsStateWithLifecycle()
+    val selectedAddress by settingsViewModel.elm327DeviceAddress.collectAsStateWithLifecycle()
+    val savedPin by settingsViewModel.elm327PairingPin.collectAsStateWithLifecycle()
+    val supportedPidsRaw by settingsViewModel.elm327SupportedPids.collectAsStateWithLifecycle()
+    val discoveryAtMs by settingsViewModel.elm327DiscoveryAtMs.collectAsStateWithLifecycle()
+    val connected by ObdRepository.connected.collectAsStateWithLifecycle()
+    val status by ObdRepository.statusText.collectAsStateWithLifecycle()
+    val lastError by ObdRepository.lastError.collectAsStateWithLifecycle()
+    val adapterVoltage by ObdRepository.adapterVoltage.collectAsStateWithLifecycle()
+    val adapterVersion by ObdRepository.adapterVersion.collectAsStateWithLifecycle()
+    val protocolDescription by ObdRepository.protocolDescription.collectAsStateWithLifecycle()
+    val protocolNumber by ObdRepository.protocolNumber.collectAsStateWithLifecycle()
+    val lastResponseMs by ObdRepository.lastResponseMs.collectAsStateWithLifecycle()
+    val busErrors by ObdRepository.busErrors.collectAsStateWithLifecycle()
+    val dtcCodes by ObdRepository.dtcCodes.collectAsStateWithLifecycle()
+    val pendingDtcCodes by ObdRepository.pendingDtcCodes.collectAsStateWithLifecycle()
+    val permanentDtcCodes by ObdRepository.permanentDtcCodes.collectAsStateWithLifecycle()
+    val dtcReading by ObdRepository.dtcReading.collectAsStateWithLifecycle()
+    val dtcClearing by ObdRepository.dtcClearing.collectAsStateWithLifecycle()
+    val dtcLastReadAtMs by ObdRepository.dtcLastReadAtMs.collectAsStateWithLifecycle()
+    val pendingDtcLastReadAtMs by ObdRepository.pendingDtcLastReadAtMs.collectAsStateWithLifecycle()
+    val permanentDtcLastReadAtMs by ObdRepository.permanentDtcLastReadAtMs.collectAsStateWithLifecycle()
+    val dtcError by ObdRepository.dtcError.collectAsStateWithLifecycle()
+    val dtcReadEverSucceeded by ObdRepository.dtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val pendingDtcReadEverSucceeded by ObdRepository.pendingDtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val permanentDtcReadEverSucceeded by ObdRepository.permanentDtcReadEverSucceeded.collectAsStateWithLifecycle()
+    val vin by ObdRepository.vin.collectAsStateWithLifecycle()
+    val vinLastReadAtMs by ObdRepository.vinLastReadAtMs.collectAsStateWithLifecycle()
+    val vinReadEverSucceeded by ObdRepository.vinReadEverSucceeded.collectAsStateWithLifecycle()
+    val vinError by ObdRepository.vinError.collectAsStateWithLifecycle()
+    val diagPackRunning by ObdRepository.diagPackRunning.collectAsStateWithLifecycle()
+    val diagPackError by ObdRepository.diagPackError.collectAsStateWithLifecycle()
+    val diagPackLastCompletedAtMs by ObdRepository.diagPackLastCompletedAtMs.collectAsStateWithLifecycle()
+    val discoveryRunning by ObdRepository.discoveryRunning.collectAsStateWithLifecycle()
+    val discoveryError by ObdRepository.discoveryError.collectAsStateWithLifecycle()
+    val freezeFrameReading by ObdRepository.freezeFrameReading.collectAsStateWithLifecycle()
+    val freezeFrameError by ObdRepository.freezeFrameError.collectAsStateWithLifecycle()
+    val freezeFrameDtc by ObdRepository.freezeFrameDtc.collectAsStateWithLifecycle()
+    val freezeFrameValues by ObdRepository.freezeFrameValues.collectAsStateWithLifecycle()
+    val freezeFrameLastReadAtMs by ObdRepository.freezeFrameLastReadAtMs.collectAsStateWithLifecycle()
+    val freezeFrameReadEverSucceeded by ObdRepository.freezeFrameReadEverSucceeded.collectAsStateWithLifecycle()
+    val monitorReading by ObdRepository.monitorReading.collectAsStateWithLifecycle()
+    val monitorError by ObdRepository.monitorError.collectAsStateWithLifecycle()
+    val monitorSinceCleared by ObdRepository.monitorSinceCleared.collectAsStateWithLifecycle()
+    val monitorThisCycle by ObdRepository.monitorThisCycle.collectAsStateWithLifecycle()
+    val monitorLastReadAtMs by ObdRepository.monitorLastReadAtMs.collectAsStateWithLifecycle()
+    val monitorReadEverSucceeded by ObdRepository.monitorReadEverSucceeded.collectAsStateWithLifecycle()
+
+    val supportedMode01Pids = remember(supportedPidsRaw) {
+        Elm327Protocol.decodeSupportedPids(supportedPidsRaw)
+    }
+    val discoveryDone = discoveryAtMs > 0L
+    var showClearDtcConfirm by remember { mutableStateOf(false) }
+    var bondedRefreshToken by remember { mutableIntStateOf(0) }
+    val bondedDevices = remember(bondedRefreshToken) {
+        loadBondedBluetoothDevices(context)
+    }
+    val foundDevices = remember { mutableStateListOf<BtDeviceEntry>() }
+    var scanning by remember { mutableStateOf(false) }
+    var manualMac by remember { mutableStateOf("") }
+    var pinInput by remember(savedPin) { mutableStateOf(savedPin) }
+    var dtcCatalogReady by remember { mutableStateOf(ObdDtcCatalog.isLoaded()) }
+    var exportAfterDiagPack by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            runCatching { ObdDtcCatalog.ensureLoaded(context) }
+        }
+        dtcCatalogReady = ObdDtcCatalog.isLoaded()
+    }
+
+    LaunchedEffect(diagPackRunning, diagPackLastCompletedAtMs) {
+        if (!exportAfterDiagPack) return@LaunchedEffect
+        if (diagPackRunning) return@LaunchedEffect
+        if (diagPackLastCompletedAtMs <= 0L) return@LaunchedEffect
+        exportAfterDiagPack = false
+        val result = withContext(Dispatchers.IO) {
+            runCatching { ObdDtcExport.writeToDownloads() }
+        }
+        if (result.isSuccess) {
+            Toast.makeText(
+                context,
+                context.getString(
+                    R.string.toast_saved_to,
+                    result.getOrNull()?.absolutePath.orEmpty(),
+                ),
+                Toast.LENGTH_LONG,
+            ).show()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(
+                    R.string.elm327_dtc_export_error,
+                    result.exceptionOrNull()?.message.orEmpty(),
+                ),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+
+    val discoveryReceiver = remember {
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    BluetoothAdapter.ACTION_DISCOVERY_STARTED -> scanning = true
+                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> scanning = false
+                    BluetoothDevice.ACTION_FOUND -> {
+                        val device = intent.getBluetoothDeviceExtra() ?: return
+                        val address = device.address.orEmpty()
+                        if (address.isBlank()) return
+                        val name = runCatching { device.name }.getOrNull().orEmpty()
+                        if (foundDevices.none { it.address.equals(address, ignoreCase = true) }) {
+                            foundDevices += BtDeviceEntry(name = name, address = address)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        val filter = IntentFilter().apply {
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            addAction(BluetoothDevice.ACTION_FOUND)
+        }
+        ContextCompat.registerReceiver(
+            context,
+            discoveryReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        onDispose { context.unregisterReceiver(discoveryReceiver) }
+    }
+
+    DisposableEffect(Unit) {
+        ObdInterestAggregator.setSourcePids("elm327_tab", setOf(ObdPid.ADAPTER_VOLTAGE.id))
+        onDispose { ObdInterestAggregator.clearSource("elm327_tab") }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        bondedRefreshToken++
+    }
+
+    fun missingPermissions(permissions: Array<String>): Array<String> =
+        permissions.filter {
+            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+    fun ensureBtPermissionAndRefresh() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val missing = missingPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT))
+            if (missing.isNotEmpty()) {
+                permissionLauncher.launch(missing)
+                return
+            }
+        }
+        bondedRefreshToken++
+    }
+
+    fun startDiscovery() {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return
+        if (!adapter.isEnabled) return
+        foundDevices.clear()
+        scanning = adapter.startDiscovery()
+    }
+
+    fun ensureScanPermissionsAndScan() {
+        val needed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN,
+            )
+        } else {
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        val missing = missingPermissions(needed)
+        if (missing.isNotEmpty()) {
+            permissionLauncher.launch(missing)
+            return
+        }
+        startDiscovery()
+    }
+
+    val bluetoothEnabled by remember {
+        Elm327BluetoothPower.enabledFlow(context)
+    }.collectAsStateWithLifecycle(initialValue = Elm327BluetoothPower.isEnabled())
+    val canToggleBluetooth = remember {
+        Elm327BluetoothPower.canToggleBluetooth(context)
+    }
+
+    val statusLabel = when {
+        !enabled -> stringResource(R.string.elm327_status_stopped)
+        selectedAddress.isBlank() -> stringResource(R.string.elm327_status_no_device)
+        !bluetoothEnabled && status != "enabling_bt" ->
+            stringResource(R.string.elm327_status_bt_off)
+        status == "enabling_bt" -> stringResource(R.string.elm327_status_enabling_bt)
+        connected -> stringResource(R.string.elm327_status_connected)
+        status == "pairing" -> stringResource(R.string.elm327_status_pairing)
+        status == "connecting" || status == "starting" ->
+            stringResource(R.string.elm327_status_connecting)
+        status == "reconnecting" -> stringResource(R.string.elm327_status_reconnecting)
+        else -> stringResource(R.string.elm327_status_disconnected)
+    }
+
+    val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+
+    val sections = Elm327Section.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.tab_elm327),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        Elm327Section.Connection -> R.string.elm327_tab_connection
+                        Elm327Section.Diagnostics -> R.string.elm327_tab_diagnostics
+                        Elm327Section.Pid -> R.string.elm327_tab_pid
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (selectedSection) {
+                Elm327Section.Connection -> {
+                    SettingSwitch(
+                        isChecked = enabled,
+                        onCheckedChange = { settingsViewModel.saveElm327EnabledSetting(it) },
+                        text = stringResource(R.string.elm327_enabled_title),
+                        description = stringResource(R.string.elm327_enabled_desc),
+                        enabled = true,
+                    )
+                    SettingSwitch(
+                        isChecked = bluetoothEnabled,
+                        onCheckedChange = { on ->
+                            Elm327BluetoothPower.setEnabled(context, on)
+                        },
+                        text = stringResource(R.string.elm327_bluetooth_title),
+                        description = stringResource(R.string.elm327_bluetooth_desc),
+                        enabled = canToggleBluetooth,
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_status_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    StatusRow(stringResource(R.string.elm327_status_title), statusLabel)
+                    StatusRow(
+                        stringResource(R.string.elm327_bluetooth_title),
+                        if (bluetoothEnabled) {
+                            stringResource(R.string.elm327_bluetooth_on)
+                        } else {
+                            stringResource(R.string.elm327_bluetooth_off)
+                        },
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_adapter_voltage),
+                        adapterVoltage?.let { "${valueToString(it, accuracy = 1)} V" } ?: "—",
+                    )
+                    if (!adapterVersion.isNullOrBlank()) {
+                        StatusRow(stringResource(R.string.elm327_adapter_version), adapterVersion!!)
+                    }
+                    StatusRow(
+                        stringResource(R.string.elm327_protocol_desc),
+                        protocolDescription?.ifBlank { "—" } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_protocol_num),
+                        protocolNumber?.ifBlank { "—" } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_last_response_ms),
+                        lastResponseMs?.let { stringResource(R.string.elm327_ms_fmt, it) } ?: "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_bus_errors),
+                        busErrors.toString(),
+                    )
+                    StatusRow(
+                        stringResource(R.string.elm327_last_error),
+                        lastError?.ifBlank { "—" } ?: "—",
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_device_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { ensureBtPermissionAndRefresh() }) {
+                            Text(stringResource(R.string.elm327_device_refresh))
+                        }
+                        Button(
+                            onClick = { ensureScanPermissionsAndScan() },
+                            enabled = !scanning,
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (scanning) {
+                                        R.string.elm327_device_scanning
+                                    } else {
+                                        R.string.elm327_device_scan
+                                    },
+                                ),
+                            )
+                        }
+                    }
+                    val knownDevices = (bondedDevices + foundDevices)
+                        .distinctBy { it.address.uppercase(Locale.US) }
+                        .sortedBy { it.name.ifBlank { it.address }.lowercase(Locale.US) }
+                    if (knownDevices.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.elm327_device_none),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = stringResource(R.string.elm327_bt_permission_needed),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        knownDevices.forEach { device ->
+                            val selected = device.address.equals(selectedAddress, ignoreCase = true)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        settingsViewModel.saveElm327DeviceAddressSetting(device.address)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = {
+                                        settingsViewModel.saveElm327DeviceAddressSetting(device.address)
+                                    },
+                                )
+                                Column(modifier = Modifier.padding(start = 8.dp)) {
+                                    Text(
+                                        text = device.name.ifBlank { device.address },
+                                        style = MaterialTheme.typography.tboxBody,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = device.address,
+                                        style = MaterialTheme.typography.tboxCaption,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    val macRegex = remember { Regex("^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$") }
+                    val manualMacValid = macRegex.matches(manualMac)
+                    OutlinedTextField(
+                        value = manualMac,
+                        onValueChange = { value ->
+                            manualMac = value.filter { it.isLetterOrDigit() || it == ':' }.take(17)
+                        },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.elm327_device_manual_mac)) },
+                        isError = manualMac.isNotEmpty() && !manualMacValid,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (manualMac.isNotEmpty() && !manualMacValid) {
+                        Text(
+                            text = stringResource(R.string.elm327_device_manual_hint),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            settingsViewModel.saveElm327DeviceAddressSetting(manualMac.uppercase(Locale.US))
+                        },
+                        enabled = manualMacValid,
+                    ) {
+                        Text(stringResource(R.string.elm327_device_use))
+                    }
+
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = { value -> pinInput = value.filter { it.isDigit() }.take(16) },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.elm327_pairing_pin_label)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_pairing_pin_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { settingsViewModel.saveElm327PairingPinSetting(pinInput) },
+                        enabled = pinInput.trim() != savedPin,
+                    ) {
+                        Text(stringResource(R.string.elm327_pairing_pin_save))
+                    }
+
+                }
+                Elm327Section.Diagnostics -> {
+                    Text(
+                        text = stringResource(R.string.elm327_monitor_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_monitor_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val dtcBusy =
+                        dtcReading || dtcClearing || discoveryRunning || freezeFrameReading ||
+                            monitorReading || diagPackRunning
+                    Button(
+                        onClick = {
+                            exportAfterDiagPack = true
+                            ObdInterestAggregator.requestDiagPack()
+                        },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (diagPackRunning) {
+                                stringResource(R.string.elm327_diag_pack_running)
+                            } else {
+                                stringResource(R.string.elm327_diag_pack_button)
+                            },
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_diag_pack_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (diagPackError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_diag_pack_error, diagPackError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestMonitorStatus() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (monitorReading) {
+                                stringResource(R.string.elm327_monitor_reading)
+                            } else {
+                                stringResource(R.string.elm327_monitor_read_button)
+                            },
+                        )
+                    }
+                    if (monitorError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_monitor_error, monitorError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (monitorLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(monitorLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        monitorReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_monitor_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !monitorReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_monitor_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        else -> {
+                            MonitorStatusBlock(
+                                title = stringResource(R.string.elm327_monitor_since_cleared_title),
+                                status = monitorSinceCleared,
+                            )
+                            MonitorStatusBlock(
+                                title = stringResource(R.string.elm327_monitor_this_cycle_title),
+                                status = monitorThisCycle,
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_desc_note),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { ObdInterestAggregator.requestStoredDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (dtcReading) {
+                                stringResource(R.string.elm327_dtc_reading)
+                            } else {
+                                stringResource(R.string.elm327_dtc_read_button)
+                            },
+                        )
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestPendingDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_read_pending_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestPermanentDtcs() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_read_permanent_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestVin() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_vin_read_button))
+                    }
+                    Button(
+                        onClick = { ObdInterestAggregator.requestFreezeFrame() },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (freezeFrameReading) {
+                                stringResource(R.string.elm327_ff_reading)
+                            } else {
+                                stringResource(R.string.elm327_ff_read_button)
+                            },
+                        )
+                    }
+                    Button(
+                        onClick = { showClearDtcConfirm = true },
+                        enabled = enabled && connected && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (dtcClearing) {
+                                stringResource(R.string.elm327_dtc_clearing)
+                            } else {
+                                stringResource(R.string.elm327_dtc_clear_button)
+                            },
+                        )
+                    }
+                    val canExportDtc =
+                        dtcReadEverSucceeded ||
+                            pendingDtcReadEverSucceeded ||
+                            permanentDtcReadEverSucceeded ||
+                            freezeFrameReadEverSucceeded ||
+                            monitorReadEverSucceeded ||
+                            vinReadEverSucceeded
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    runCatching { ObdDtcExport.writeToDownloads() }
+                                }
+                                if (result.isSuccess) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(
+                                            R.string.toast_saved_to,
+                                            result.getOrNull()?.absolutePath.orEmpty(),
+                                        ),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(
+                                            R.string.elm327_dtc_export_error,
+                                            result.exceptionOrNull()?.message.orEmpty(),
+                                        ),
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                        enabled = canExportDtc && !dtcBusy,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.elm327_dtc_export_button))
+                    }
+                    if (dtcError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_dtc_error, dtcError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_stored_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (dtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(dtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        dtcReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        dtcReadEverSucceeded && dtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            dtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_pending_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (pendingDtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(pendingDtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_pending_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        pendingDtcReadEverSucceeded && pendingDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_pending_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            pendingDtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_dtc_permanent_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (permanentDtcLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(permanentDtcLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_permanent_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        permanentDtcReadEverSucceeded && permanentDtcCodes.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_dtc_permanent_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            permanentDtcCodes.forEach { dtc ->
+                                DtcCodeRow(dtc = dtc, catalogReady = dtcCatalogReady)
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_vin_section_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    if (vinError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_vin_error, vinError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (vinLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(vinLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        !vinReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_vin_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        vin.isNullOrBlank() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_vin_none),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = vin!!,
+                                style = MaterialTheme.typography.tboxTitle,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.elm327_ff_section_title),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_ff_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (freezeFrameError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_ff_error, freezeFrameError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (freezeFrameLastReadAtMs > 0L) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_dtc_last_read,
+                                timeFormat.format(Date(freezeFrameLastReadAtMs)),
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    when {
+                        freezeFrameReading -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_reading),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        !freezeFrameReadEverSucceeded -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_not_read_yet),
+                                style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        freezeFrameDtc == null && freezeFrameValues.isEmpty() -> {
+                            Text(
+                                text = stringResource(R.string.elm327_ff_empty),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                        }
+                        else -> {
+                            StatusRow(
+                                stringResource(R.string.elm327_ff_dtc_label),
+                                freezeFrameDtc?.code ?: "—",
+                            )
+                            freezeFrameDtc?.let { dtc ->
+                                val desc = if (dtcCatalogReady) ObdDtcCatalog.description(dtc.code) else null
+                                Text(
+                                    text = desc ?: stringResource(R.string.elm327_dtc_desc_missing),
+                                    style = MaterialTheme.typography.tboxCaption,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
+                            ObdPid.entries.forEach { pid ->
+                                val raw = freezeFrameValues[pid.id] ?: return@forEach
+                                val unit = pid.unitRes?.let { " " + stringResource(it) }.orEmpty()
+                                StatusRow(
+                                    stringResource(pid.labelRes),
+                                    valueToString(raw, accuracy = pid.defaultAccuracy) + unit,
+                                )
+                            }
+                        }
+                    }
+
+                }
+                Elm327Section.Pid -> {
+                    Text(
+                        text = stringResource(R.string.elm327_discovery_section_title),
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.elm327_discovery_section_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { ObdInterestAggregator.requestPidDiscovery() },
+                            enabled = enabled && connected && !discoveryRunning && !dtcReading && !dtcClearing && !freezeFrameReading && !monitorReading && !diagPackRunning,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                if (discoveryRunning) {
+                                    stringResource(R.string.elm327_discovery_running)
+                                } else {
+                                    stringResource(R.string.elm327_discovery_button)
+                                },
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                ObdRepository.setDiscoveryError(null)
+                                settingsViewModel.clearElm327PidDiscoveryResult()
+                            },
+                            enabled = discoveryDone || supportedMode01Pids.isNotEmpty() || discoveryError != null,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(stringResource(R.string.elm327_discovery_reset))
+                        }
+                    }
+                    if (discoveryError != null) {
+                        Text(
+                            text = stringResource(R.string.elm327_discovery_error, discoveryError!!),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (discoveryDone) {
+                        Text(
+                            text = stringResource(
+                                R.string.elm327_discovery_last,
+                                timeFormat.format(Date(discoveryAtMs)),
+                                supportedMode01Pids.size,
+                            ),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.elm327_discovery_not_run),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    ObdPid.entries.forEach { pid ->
+                        val modePid = pid.mode01Pid
+                        val statusText = when {
+                            modePid == null -> stringResource(R.string.elm327_discovery_status_adapter)
+                            !discoveryDone -> stringResource(R.string.elm327_discovery_status_unknown)
+                            modePid in supportedMode01Pids ->
+                                stringResource(R.string.elm327_discovery_status_supported)
+                            else -> stringResource(R.string.elm327_discovery_status_unsupported)
+                        }
+                        val label = stringResource(pid.labelRes)
+                        val pidHex = modePid?.let { "%02X".format(it) } ?: "ATRV"
+                        StatusRow("$label ($pidHex)", statusText)
+                    }
+
+                }
+            }
+        }
+    }
+
+    if (showClearDtcConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearDtcConfirm = false },
+            title = { AppAlertDialogTitle(stringResource(R.string.elm327_dtc_clear_confirm_title)) },
+            text = { AppAlertDialogText(stringResource(R.string.elm327_dtc_clear_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDtcConfirm = false
+                        ObdInterestAggregator.requestClearDtcs()
+                    },
+                ) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.elm327_dtc_clear_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDtcConfirm = false }) {
+                    AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun DtcCodeRow(dtc: ObdDtc, catalogReady: Boolean) {
+    val desc = if (catalogReady) ObdDtcCatalog.description(dtc.code) else null
+    Column(modifier = Modifier.padding(vertical = 2.dp)) {
+        Text(
+            text = dtc.code,
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = desc ?: stringResource(R.string.elm327_dtc_desc_missing),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun MonitorStatusBlock(title: String, status: ObdMonitorStatus?) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    if (status == null) {
+        Text(
+            text = stringResource(R.string.elm327_monitor_state_na),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    StatusRow(
+        stringResource(R.string.elm327_monitor_mil),
+        if (status.milOn) {
+            stringResource(R.string.elm327_monitor_mil_on)
+        } else {
+            stringResource(R.string.elm327_monitor_mil_off)
+        },
+    )
+    StatusRow(
+        stringResource(R.string.elm327_monitor_dtc_count),
+        status.confirmedDtcCount.toString(),
+    )
+    StatusRow(
+        stringResource(R.string.elm327_monitor_ignition),
+        if (status.sparkIgnition) {
+            stringResource(R.string.elm327_monitor_ignition_spark)
+        } else {
+            stringResource(R.string.elm327_monitor_ignition_compression)
+        },
+    )
+    status.monitors.forEach { item ->
+        StatusRow(monitorLabel(item), monitorStateLabel(item))
+    }
+}
+
+@Composable
+private fun monitorLabel(item: ObdMonitorItem): String {
+    val res = when (item.id) {
+        ObdMonitorStatus.SPARK_MISFIRE -> R.string.elm327_monitor_misfire
+        ObdMonitorStatus.SPARK_FUEL -> R.string.elm327_monitor_fuel_system
+        ObdMonitorStatus.SPARK_COMPONENTS -> R.string.elm327_monitor_components
+        ObdMonitorStatus.SPARK_CATALYST -> R.string.elm327_monitor_catalyst
+        ObdMonitorStatus.SPARK_HEATED_CATALYST -> R.string.elm327_monitor_heated_catalyst
+        ObdMonitorStatus.SPARK_EVAP -> R.string.elm327_monitor_evap
+        ObdMonitorStatus.SPARK_SECONDARY_AIR -> R.string.elm327_monitor_secondary_air
+        ObdMonitorStatus.SPARK_AC_REFRIGERANT -> R.string.elm327_monitor_ac_refrigerant
+        ObdMonitorStatus.SPARK_O2 -> R.string.elm327_monitor_oxygen_sensor
+        ObdMonitorStatus.SPARK_O2_HEATER -> R.string.elm327_monitor_oxygen_sensor_heater
+        ObdMonitorStatus.SPARK_EGR -> R.string.elm327_monitor_egr
+        ObdMonitorStatus.COMP_NMHC -> R.string.elm327_monitor_nmhc_catalyst
+        ObdMonitorStatus.COMP_NOX -> R.string.elm327_monitor_nox_scr
+        ObdMonitorStatus.COMP_BOOST -> R.string.elm327_monitor_boost_pressure
+        ObdMonitorStatus.COMP_EXHAUST_SENSOR -> R.string.elm327_monitor_exhaust_gas_sensor
+        ObdMonitorStatus.COMP_PM_FILTER -> R.string.elm327_monitor_pm_filter
+        ObdMonitorStatus.COMP_EGR_VVT -> R.string.elm327_monitor_egr_vvt
+        else -> null
+    }
+    return if (res != null) stringResource(res) else item.id
+}
+
+@Composable
+private fun monitorStateLabel(item: ObdMonitorItem): String = when {
+    !item.available -> stringResource(R.string.elm327_monitor_state_na)
+    item.complete -> stringResource(R.string.elm327_monitor_state_complete)
+    else -> stringResource(R.string.elm327_monitor_state_incomplete)
+}
+
+private data class BtDeviceEntry(
+    val name: String,
+    val address: String,
+)
+
+@Suppress("DEPRECATION")
+private fun Intent.getBluetoothDeviceExtra(): BluetoothDevice? =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+    } else {
+        getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+    }
+
+@SuppressLint("MissingPermission")
+private fun loadBondedBluetoothDevices(context: Context): List<BtDeviceEntry> {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.BLUETOOTH_CONNECT,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) return emptyList()
+    }
+    val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
+    val bonded: Set<BluetoothDevice> = runCatching { adapter.bondedDevices }.getOrNull()
+        ?: return emptyList()
+    return bonded
+        .map { device ->
+            BtDeviceEntry(
+                name = runCatching { device.name }.getOrNull().orEmpty(),
+                address = device.address.orEmpty(),
+            )
+        }
+        .filter { it.address.isNotBlank() }
+        .sortedBy { it.name.ifBlank { it.address }.lowercase(Locale.US) }
+}

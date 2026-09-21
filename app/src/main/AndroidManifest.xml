@@ -3,6 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="vad.dashing.tbox">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- App List widget: required since Android 9 for ACTION_UNINSTALL_PACKAGE / ACTION_DELETE. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
@@ -312,6 +320,7 @@
             android:exported="true">
             <intent-filter android:priority="998">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="vad.dashing.tbox.DEBUG_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>

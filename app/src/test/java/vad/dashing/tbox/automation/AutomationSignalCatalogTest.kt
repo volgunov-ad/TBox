@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.AccCruiseDomain
 
 class AutomationSignalCatalogTest {
     @Test
@@ -106,6 +107,30 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("ign"))
         assertTrue(hint, hint.contains("Android 9"))
         assertTrue(hint, hint.contains("Android 10"))
+    }
+
+    @Test
+    fun accAndCcsCruiseState_areHeadUnitOnlyLogicalStates() {
+        val acc = AutomationSignalCatalog.get(AutomationSignalId.ACC_CRUISE_STATE)
+        val ccs = AutomationSignalCatalog.get(AutomationSignalId.CCS_CRUISE_STATE)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in acc.sources)
+        assertFalse(AutomationSignalSource.TBOX in acc.sources)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in ccs.sources)
+        assertFalse(AutomationSignalSource.TBOX in ccs.sources)
+        assertEquals(AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS, acc.stateOptions)
+        assertEquals(AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS, ccs.stateOptions)
+        val accHint = acc.valueHint()
+        assertTrue(accHint, accHint.contains("standby"))
+        assertTrue(accHint, accHint.contains("active"))
+        assertTrue(accHint, accHint.contains("fault"))
+        assertTrue(accHint, accHint.contains("acc_status"))
+        val ccsHint = ccs.valueHint()
+        assertTrue(ccsHint, ccsHint.contains("standby"))
+        assertTrue(ccsHint, ccsHint.contains("active"))
+        assertFalse(ccsHint.contains("fault"))
+        assertEquals("Ожидание", AutomationSignalCatalog.stateOptionLabel("standby"))
+        assertEquals("Активен", AutomationSignalCatalog.stateOptionLabel("active"))
+        assertEquals("Ошибка", AutomationSignalCatalog.stateOptionLabel("fault"))
     }
 
     @Test
@@ -373,6 +398,140 @@ class AutomationSignalCatalogTest {
         assertEquals(
             "Нет",
             AutomationSignalCatalog.stateOptionLabel("offline"),
+        )
+    }
+
+    @Test
+    fun modemSignals_areAppOnlyWithExplicitStates() {
+        val link = AutomationSignalCatalog.get(AutomationSignalId.WIFI_MODEM_LINK_STATUS)
+        val data = AutomationSignalCatalog.get(AutomationSignalId.MODEM_MOBILE_DATA)
+        val net = AutomationSignalCatalog.get(AutomationSignalId.MODEM_NET_TYPE)
+        val sim = AutomationSignalCatalog.get(AutomationSignalId.MODEM_SIM_STATUS)
+        assertEquals(
+            listOf("idle", "ok", "auth_failed", "unreachable", "error"),
+            link.stateOptions,
+        )
+        assertEquals(listOf("off", "on"), data.stateOptions)
+        assertEquals(listOf("none", "2g", "3g", "4g"), net.stateOptions)
+        assertEquals(listOf("none", "ready", "pin", "error", "unknown"), sim.stateOptions)
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(link.id))
+        assertTrue(link.valueHint().contains("Wi‑Fi HTTP"))
+        assertTrue(data.valueHint().contains("apnStatus"))
+        assertEquals("Связь OK", AutomationSignalCatalog.stateOptionLabel("ok"))
+        assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
+        assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
+    }
+
+    @Test
+    fun appThemeMode_isAppOnlyWithExplicitStates() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME_MODE)
+        assertEquals(listOf("manual_day", "manual_night", "auto_day", "auto_night"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: режим",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME_MODE),
+        )
+        assertEquals("День (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_day"))
+        assertEquals("Ночь (вручную)", AutomationSignalCatalog.stateOptionLabel("manual_night"))
+        assertEquals("День (авто)", AutomationSignalCatalog.stateOptionLabel("auto_day"))
+        assertEquals("Ночь (авто)", AutomationSignalCatalog.stateOptionLabel("auto_night"))
+        assertTrue(descriptor.valueHint().isNotBlank())
+    }
+
+    @Test
+    fun appTheme_effectiveThemeIsAppOnlyDayOrNight() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME)
+        assertEquals(listOf("day", "night"), descriptor.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(descriptor.id),
+        )
+        assertEquals(
+            "Тема приложения: сейчас",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.APP_THEME),
+        )
+        assertTrue(descriptor.valueHint().contains("авто-день"))
+    }
+
+    @Test
+    fun huScreenBrightness_isAppOnlyNumericAndAutoBinary() {
+        val brightness = AutomationSignalCatalog.get(AutomationSignalId.HU_SCREEN_BRIGHTNESS)
+        assertEquals(AutomationSignalValueType.NUMBER, brightness.id.valueType)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(brightness.id),
+        )
+        assertEquals(
+            "Яркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+        )
+        assertTrue(brightness.valueHint().contains("1…10"))
+        assertTrue(brightness.valueHint().contains("экран ГУ"))
+        assertTrue(brightness.valueHint().contains("HUD"))
+        assertTrue(brightness.valueHint().contains("ICM"))
+
+        val auto = AutomationSignalCatalog.get(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS)
+        assertEquals(listOf("off", "on"), auto.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(auto.id),
+        )
+        assertEquals(
+            "Автояркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS),
+        )
+    }
+
+    @Test
+    fun threeBrightnessLabels_areDistinct() {
+        assertEquals(
+            "Яркость экрана ГУ",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HU_SCREEN_BRIGHTNESS),
+        )
+        assertEquals(
+            "Яркость HUD",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
+        )
+        assertEquals(
+            "Яркость приборной панели",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ICM_BRIGHTNESS),
+        )
+        assertTrue(
+            AutomationSignalCatalog.get(AutomationSignalId.HUD_BRIGHTNESS)
+                .valueHint()
+                .contains("не экран ГУ"),
+        )
+        assertTrue(
+            AutomationSignalCatalog.get(AutomationSignalId.ICM_BRIGHTNESS)
+                .valueHint()
+                .contains("не экран ГУ"),
+        )
+    }
+
+    @Test
+    fun platformMixerVolumes_areAppOnlyWithHeadrestStates() {
+        listOf(
+            AutomationSignalId.HU_MEDIA_VOLUME,
+            AutomationSignalId.HU_PHONE_VOLUME,
+            AutomationSignalId.HU_NAVI_VOLUME,
+            AutomationSignalId.HU_VOICE_VOLUME,
+        ).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertEquals(AutomationSignalValueType.NUMBER, descriptor.id.valueType)
+            assertEquals(
+                AutomationSignalSource.APP,
+                AutomationSignalCatalog.preferredSource(descriptor.id),
+            )
+            assertTrue(descriptor.valueHint().contains("Микшер ГУ"))
+        }
+        val headrest = AutomationSignalCatalog.get(AutomationSignalId.HU_HEADREST_SPEAKER)
+        assertEquals(listOf("only", "assist", "off"), headrest.stateOptions)
+        assertEquals(
+            AutomationSignalSource.APP,
+            AutomationSignalCatalog.preferredSource(headrest.id),
         )
     }
 }

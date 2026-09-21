@@ -31,6 +31,10 @@ class AutomationEngine(
         data class Signal(val sample: AutomationSignalSample) : EngineEvent
         data class System(val event: AutomationSystemEvent) : EngineEvent
         data class WidgetPress(val triggerId: String) : EngineEvent
+        data class HardKey(
+            val keyCode: Int,
+            val keyStatus: AutomationHardKeyStatus,
+        ) : EngineEvent
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data class RunNow(val automationId: String) : EngineEvent
@@ -98,6 +102,11 @@ class AutomationEngine(
                 events.send(EngineEvent.WidgetPress(triggerId))
             }
         }
+        scope.launch {
+            AutomationTriggerHardKeyEventBus.events.collect { event ->
+                events.send(EngineEvent.HardKey(event.keyCode, event.keyStatus))
+            }
+        }
         if (initial.loadError != null) {
             TboxRepository.addLog("ERROR", LOG_TAG, "Configuration: ${initial.loadError}")
         }
@@ -149,6 +158,7 @@ class AutomationEngine(
             requestStop()
             engineJob.join()
             signalProvider.stop()
+            AutomationHardKeyTracking.setInterestRequired(false)
             AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())
             loopGuard.clear()
@@ -168,10 +178,19 @@ class AutomationEngine(
     /** Sync CAN / foreground-app release when [stop] cannot run (service [android.app.Service.onDestroy]). */
     fun releaseInterests() {
         signalProvider.stop()
+        AutomationHardKeyTracking.setInterestRequired(false)
     }
 
     private fun refreshPeriodicTickNeeded() {
         periodicTickNeeded = evaluators.values.any { it.needsPeriodicTick() }
+    }
+
+    private fun refreshHardKeyInterest() {
+        val required = definitions.values.any { definition ->
+            AutomationValidator.isRunnable(definition) &&
+                definition.triggers.any { it is AutomationTrigger.HardKey }
+        }
+        AutomationHardKeyTracking.setInterestRequired(required)
     }
 
     private fun installInitialDefinitions(snapshot: AutomationStoreSnapshot) {
@@ -189,6 +208,7 @@ class AutomationEngine(
         AutomationRuntimeState.retainAutomationIds(definitions.keys)
         dispatchGuard.retain(definitions.keys)
         refreshPeriodicTickNeeded()
+        refreshHardKeyInterest()
     }
 
     private suspend fun eventLoop() {
@@ -198,6 +218,7 @@ class AutomationEngine(
                     is EngineEvent.Signal -> handleSignal(event.sample)
                     is EngineEvent.System -> handleSystemEvent(event.event)
                     is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId)
+                    is EngineEvent.HardKey -> handleHardKey(event.keyCode, event.keyStatus)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
@@ -242,6 +263,14 @@ class AutomationEngine(
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
             val fire = evaluator.onWidgetPress(triggerId) ?: return@forEach
+            dispatch(definition, evaluator, fire)
+        }
+    }
+
+    private suspend fun handleHardKey(keyCode: Int, keyStatus: AutomationHardKeyStatus) {
+        definitions.values.forEach { definition ->
+            val evaluator = evaluators[definition.id] ?: return@forEach
+            val fire = evaluator.onHardKey(keyCode, keyStatus) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -332,6 +361,7 @@ class AutomationEngine(
         if (serviceReady) {
             signalProvider.replaceInterests(interests)
         }
+        refreshHardKeyInterest()
     }
 
     private suspend fun dispatch(
@@ -465,7 +495,7 @@ class AutomationEngine(
                 startedAtEpochMillis = context.firedAtEpochMillis,
             )
             TboxRepository.addLog(
-                "INFO",
+                "DEBUG",
                 LOG_TAG,
                 "${definition.name}: started trigger=${context.triggerId}" +
                     if (skipConditions) " (run now)" else "",
@@ -501,7 +531,7 @@ class AutomationEngine(
                         signalSnapshot = { latestSamples.toMap() },
                     )
                     TboxRepository.addLog(
-                        if (result.success) "INFO" else "ERROR",
+                        if (result.success) "DEBUG" else "ERROR",
                         LOG_TAG,
                         "${definition.name}: ${result.message}",
                     )
@@ -611,6 +641,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
         when (trigger) {
             is AutomationTrigger.SystemEvent -> Unit
             is AutomationTrigger.WidgetPressed -> Unit
+            is AutomationTrigger.HardKey -> Unit
             is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))

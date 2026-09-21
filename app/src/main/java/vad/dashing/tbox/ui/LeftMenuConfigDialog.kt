@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -66,8 +67,10 @@ import vad.dashing.tbox.SettingsViewModel
 fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.MODEM -> ImageVector.vectorResource(R.drawable.menu_icon_modem)
     LeftMenuTabField.AT_COMMANDS -> ImageVector.vectorResource(R.drawable.menu_icon_at)
+    LeftMenuTabField.ADB -> ImageVector.vectorResource(R.drawable.ic_menu_adb)
     LeftMenuTabField.GEOPOSITION -> Icons.Filled.Place
     LeftMenuTabField.ESP_COMPANION -> Icons.Filled.Phone
+    LeftMenuTabField.ELM327 -> ImageVector.vectorResource(R.drawable.ic_menu_elm327)
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)

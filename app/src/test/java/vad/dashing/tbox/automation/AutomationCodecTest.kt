@@ -387,6 +387,52 @@ class AutomationCodecTest {
     }
 
     @Test
+    fun roundTrip_preservesModemStateTriggersAndConditions() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "modem-1",
+            name = "Modem states",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "unreachable",
+                ),
+                AutomationTrigger.StateEquals(
+                    id = "2",
+                    signal = AutomationSignalId.MODEM_MOBILE_DATA,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "off",
+                ),
+            ),
+            conditions = listOf(
+                AutomationCondition.State(
+                    signal = AutomationSignalId.MODEM_NET_TYPE,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "4g",
+                ),
+                AutomationCondition.State(
+                    signal = AutomationSignalId.MODEM_SIM_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "ready",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_MODEM_SET_DATA,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_MODEM_REBOOT),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
     fun roundTrip_preservesWidgetPressedTriggerAndBuiltin() {
         val definition = AutomationDefinition.newDraft().copy(
             id = "widget-1",
@@ -410,5 +456,42 @@ class AutomationCodecTest {
         ).getOrThrow()
         assertEquals(definition, decoded.automations.single())
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesHardKeyTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "hardkey-1",
+            name = "HardKey",
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 115),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "нажато",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decodeHardKeyTrigger_unknownStatus_isRejected() {
+        val raw = """
+            {"formatVersion":1,"automations":[{"id":"a","name":"A","description":"","enabled":false,
+            "triggers":[{"type":"hard_key","id":"1","keyCode":115,"keyStatus":"held"}],
+            "actions":[],"runMode":"single","maxRuns":1,"conditionWaitMillis":0}]}
+        """.trimIndent()
+        assertTrue(AutomationCodec.decode(raw).isFailure)
     }
 }

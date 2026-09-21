@@ -76,8 +76,8 @@ fun DashboardMediaVolumeWidgetItem(
         adjustIconStyle = stepperAdjustIconStyle,
         controlsActive = !muted,
         centerIcon = { contentColor ->
-            Icon(
-                painter = customizableUiPainter(id = centerIconRes),
+            CustomizableUiIcon(
+                drawableRes = centerIconRes,
                 contentDescription = stringResource(R.string.widget_media_volume_action_mute),
                 tint = contentColor,
                 modifier = Modifier.fillMaxSize(),

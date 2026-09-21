@@ -153,7 +153,7 @@ fun DashboardTrunkDoorWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_trunk, iconColor)
                     )
                 }
             }

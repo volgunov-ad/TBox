@@ -3,6 +3,7 @@ package vad.dashing.tbox.automation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import vad.dashing.tbox.mbcan.FcwSensitivity
+import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
@@ -35,11 +36,21 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.ACC_CRUISE_STATE -> UniversalCanRepository.accCruiseMode.map { mode ->
+        AccCruiseDomain.accAutomationState(mode)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.CCS_CRUISE_STATE -> UniversalCanRepository.ccsCruiseStatus.map { status ->
+        AccCruiseDomain.ccsAutomationState(status)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.GAS_PEDAL -> UniversalCanRepository.gasPedalPercentState.numberFlow()
     AutomationSignalId.BRAKE_PEDAL -> UniversalCanRepository.brakePedalPressedState.map {
         it?.let { pressed -> AutomationSignalValue.State(if (pressed) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.CURRENT_GEAR -> UniversalCanRepository.currentGearNumberState.numberFlow()
+    AutomationSignalId.TARGET_GEAR -> UniversalCanRepository.targetGearNumberState.numberFlow()
     AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel1)
     AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel2)
     AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel3)
@@ -64,6 +75,19 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.EPB_PARK_LAMP -> UniversalCanRepository.epbParkLampOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.ENGINE_OIL_PRESSURE -> UniversalCanRepository.engineOilPressureWarningState.map {
+        it?.let { warning -> AutomationSignalValue.State(if (warning) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.BRAKE_FLUID -> UniversalCanRepository.brakeFluidWarningState.map {
+        it?.let { warning -> AutomationSignalValue.State(if (warning) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.FRM_DX_TAR_OBJ -> UniversalCanRepository.frmDxTarObjState.numberFlow()
     AutomationSignalId.SUNSHADE ->
         UniversalCanRepository.bodyComfortRaw.shadeRoofStateFlow({ it.sunshade }, allowTilt = false)
     AutomationSignalId.SUNROOF ->
@@ -161,7 +185,7 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
             }
         }?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
-    AutomationSignalId.FRONT_WINDSCREEN_HEAT -> UniversalCanRepository.hvacDefrosterFrontState.binaryFlow()
+    AutomationSignalId.FRONT_WINDSCREEN_HEAT -> UniversalCanRepository.frontWindscreenHeatState.binaryFlow()
     AutomationSignalId.HVAC_REAR_DEFROSTER -> UniversalCanRepository.hvacDefrosterState.binaryFlow()
     AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED -> UniversalCanRepository.hvacAcCleanWhenLockedState.binaryFlow()
     AutomationSignalId.HVAC_ANION_PURIFY -> UniversalCanRepository.hvacAnionPurifyState.binaryFlow()
@@ -263,6 +287,9 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.CRUISE_SET_SPEED -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise
     AutomationSignalId.GEAR_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear
     AutomationSignalId.ACC_STATUS -> vad.dashing.tbox.mbcan.MbCanSignal.AccStatus
+    AutomationSignalId.ACC_CRUISE_STATE,
+    AutomationSignalId.CCS_CRUISE_STATE,
+    -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise
     AutomationSignalId.GAS_PEDAL -> vad.dashing.tbox.mbcan.MbCanSignal.GasPedal
     AutomationSignalId.BRAKE_PEDAL -> vad.dashing.tbox.mbcan.MbCanSignal.BrakePedal
     AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
@@ -282,6 +309,13 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
     AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
+    AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp
+    AutomationSignalId.ENGINE_OIL_PRESSURE -> vad.dashing.tbox.mbcan.MbCanSignal.EngineOilPressure
+    AutomationSignalId.BRAKE_FLUID -> vad.dashing.tbox.mbcan.MbCanSignal.BrakeFluid
+    AutomationSignalId.FRM_DX_TAR_OBJ -> vad.dashing.tbox.mbcan.MbCanSignal.FrmTargetDistance
+    AutomationSignalId.CURRENT_GEAR,
+    AutomationSignalId.TARGET_GEAR,
+    -> vad.dashing.tbox.mbcan.MbCanSignal.GearNumbers
     AutomationSignalId.SUNSHADE,
     AutomationSignalId.SUNROOF,
     AutomationSignalId.WINDOW_FRONT_LEFT,

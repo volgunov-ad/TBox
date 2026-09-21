@@ -31,13 +31,22 @@ internal object FloatingOverlayOpenPlan {
     /**
      * Expanded bounds from saved layout (collapse ignored — same as pre-collapse planning).
      */
-    fun expandedBoundsFromConfig(config: FloatingDashboardConfig): PanelPxBounds =
-        PanelPxBounds(
-            x = config.startX.coerceAtLeast(0),
-            y = config.startY.coerceAtLeast(0),
+    fun expandedBoundsFromConfig(
+        config: FloatingDashboardConfig,
+        allowBeyondScreen: Boolean = false,
+    ): PanelPxBounds {
+        val origin = clampFloatingPanelOrigin(
+            x = config.startX,
+            y = config.startY,
+            allowBeyondScreen = allowBeyondScreen,
+        )
+        return PanelPxBounds(
+            x = origin.x,
+            y = origin.y,
             width = config.width.coerceAtLeast(1),
             height = config.height.coerceAtLeast(1),
         )
+    }
 
     /**
      * Panels that should mount, in dashboard config order (stable z-order when opened sequentially).
@@ -54,6 +63,9 @@ internal object FloatingOverlayOpenPlan {
     /**
      * Bounds map for every visible panel (used for final z-order remount check).
      */
-    fun boundsByIdForVisible(visibleConfigs: List<FloatingDashboardConfig>): Map<String, PanelPxBounds> =
-        visibleConfigs.associate { cfg -> cfg.id to expandedBoundsFromConfig(cfg) }
+    fun boundsByIdForVisible(
+        visibleConfigs: List<FloatingDashboardConfig>,
+        allowBeyondScreen: Boolean = false,
+    ): Map<String, PanelPxBounds> =
+        visibleConfigs.associate { cfg -> cfg.id to expandedBoundsFromConfig(cfg, allowBeyondScreen) }
 }

@@ -34,6 +34,7 @@ import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -217,6 +218,11 @@ data class FloatingDashboardWidgetConfig(
      */
     val tripMetricFieldId: String = "distance",
     /**
+     * PID id for [OBD_METRIC_WIDGET_DATA_KEY] ([vad.dashing.tbox.obd.ObdPid.id]).
+     * Ignored for other data keys.
+     */
+    val obdPidId: String = "rpm",
+    /**
      * Average fuel-consumption tile source:
      * [AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL] (default),
      * [AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP], or
@@ -301,6 +307,21 @@ data class FloatingDashboardWidgetConfig(
      * Only used when [roadMatchMapKitBasemap] is true.
      */
     val roadMatchBasemapTransparencyPercent: Int = 0,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: allowed overspeed (km/h) before alert color.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH].
+     */
+    val speedCamOverageKmh: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: alert / map search radius in metres.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M].
+     */
+    val speedCamRadiusM: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M,
+    /**
+     * [SPEED_CAM_WIDGET_DATA_KEY]: draw nearby cameras on the road-match map tile.
+     * Default off.
+     */
+    val speedCamShowOnMap: Boolean = false,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -517,6 +538,19 @@ data class BackgroundServiceSettingsSnapshot(
     val huInternetProbeEnabled: Boolean,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
+    /** Classic Bluetooth ELM327 OBD-II adapter session; off by default. */
+    val elm327Enabled: Boolean,
+    /** Bonded adapter MAC address (empty = none selected). */
+    val elm327DeviceAddress: String,
+    /** User-provided legacy pairing PIN for the ELM327 adapter (empty = auto candidates). */
+    val elm327PairingPin: String,
+    /**
+     * Last Mode 01 PID-support discovery result: comma-separated hex PID bytes (`04,0C,0D`).
+     * Empty when never discovered or reset.
+     */
+    val elm327SupportedPids: String,
+    /** Epoch ms of last successful PID discovery; 0 = none / reset. */
+    val elm327DiscoveryAtMs: Long,
     /**
      * When true, do not connect to TBox / tbox-proxy (HU-only mode).
      * Default false preserves legacy connect behavior.
@@ -693,6 +727,16 @@ class SettingsManager(private val context: Context) {
         private val HU_INTERNET_PROBE_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
+        private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
+        private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
+        private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
+        private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
+        private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
+        private val ELM327_SUPPORTED_PIDS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}elm327_supported_pids")
+        private val ELM327_DISCOVERY_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}elm327_discovery_at_ms")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
         private val USB_GNSS_REQUEST_VTG_KEY =
@@ -756,6 +800,9 @@ class SettingsManager(private val context: Context) {
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
+        /** JSON manifest of installed SpeedCamOnline iGO pack. */
+        private val SPEED_CAM_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}speed_cam_installed_json")
         /** Optional override for Yandex MapKit API key; blank → [BuildConfig.MAPKIT_API_KEY]. */
         private val MAPKIT_API_KEY_KEY =
             stringPreferencesKey("${KEY_PREFIX}mapkit_api_key")
@@ -862,6 +909,13 @@ class SettingsManager(private val context: Context) {
         private val UI_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}ui_icon_revision")
 
+        /**
+         * JSON object of iconKey → true for UI icons that must keep original colors
+         * (no day/night or active/inactive tint).
+         */
+        private val UI_ICON_PRESERVE_COLORS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}ui_icon_preserve_colors_json")
+
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}tile_background_image_revision")
@@ -901,6 +955,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
@@ -927,6 +983,10 @@ class SettingsManager(private val context: Context) {
         /** App-local day/night (`1` light / `2` dark) used when [FOLLOW_SYSTEM_DAY_NIGHT_KEY] is false. */
         private val APP_DAY_NIGHT_THEME_KEY = intPreferencesKey("${KEY_PREFIX}app_day_night_theme")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
+
+        /** JSON of per-role text size scales (see [vad.dashing.tbox.ui.theme.TboxTextSizeScales]). */
+        private val APP_TEXT_SIZE_SCALES_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}app_text_size_scales_json")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
@@ -1373,8 +1433,6 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true }
         .distinctUntilChanged()
 
-        .distinctUntilChanged()
-
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
@@ -1382,6 +1440,38 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val adbLastHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_LAST_HOST_KEY]?.takeIf { it.isNotBlank() } ?: "127.0.0.1" }
+        .distinctUntilChanged()
+
+    val adbLastPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> (preferences[ADB_LAST_PORT_KEY] ?: 5555).coerceIn(1, 65535) }
+        .distinctUntilChanged()
+
+    val adbModeFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_MODE_KEY]?.takeIf { it == "usb" } ?: "tcp" }
+        .distinctUntilChanged()
+
+    val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val elm327DeviceAddressFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327PairingPinFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_PAIRING_PIN_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327SupportedPidsFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_SUPPORTED_PIDS_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327DiscoveryAtMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_DISCOVERY_AT_MS_KEY] ?: 0L }
         .distinctUntilChanged()
 
     val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
@@ -1671,6 +1761,12 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[UI_ICON_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
+    val uiIconPreserveColorsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parseUiIconPreserveColorsJson(preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty())
+        }
+        .distinctUntilChanged()
+
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
@@ -1769,6 +1865,10 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
+        .distinctUntilChanged()
+
     val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             normalizePanelLayoutSnapDp(
@@ -1852,6 +1952,12 @@ class SettingsManager(private val context: Context) {
     val appFontFamilyIdFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             TboxFontFamily.fromId(preferences[APP_FONT_FAMILY_ID_KEY] ?: TboxFontFamily.Default.id).id
+        }
+        .distinctUntilChanged()
+
+    val appTextSizeScalesFlow: Flow<TboxTextSizeScales> = context.settingsDataStore.data
+        .map { preferences ->
+            TboxTextSizeScales.fromJson(preferences[APP_TEXT_SIZE_SCALES_JSON_KEY])
         }
         .distinctUntilChanged()
 
@@ -1974,6 +2080,11 @@ class SettingsManager(private val context: Context) {
             ),
             huInternetProbeEnabled = preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            elm327Enabled = preferences[ELM327_ENABLED_KEY] ?: false,
+            elm327DeviceAddress = preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty(),
+            elm327PairingPin = preferences[ELM327_PAIRING_PIN_KEY].orEmpty(),
+            elm327SupportedPids = preferences[ELM327_SUPPORTED_PIDS_KEY].orEmpty(),
+            elm327DiscoveryAtMs = preferences[ELM327_DISCOVERY_AT_MS_KEY] ?: 0L,
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
             usbGnssBaud = run {
@@ -2216,6 +2327,16 @@ class SettingsManager(private val context: Context) {
     suspend fun saveRoadMapsInstalledJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadSpeedCamInstalledJson(): String {
+        return context.settingsDataStore.data.first()[SPEED_CAM_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveSpeedCamInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPEED_CAM_INSTALLED_JSON_KEY] = json
         }
     }
 
@@ -2872,6 +2993,57 @@ class SettingsManager(private val context: Context) {
         return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
             preferences[WIFI_MODEM_MODEL_KEY]
         )
+    }
+
+    suspend fun saveAdbLastHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveAdbLastPortSetting(port: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_PORT_KEY] = port.coerceIn(1, 65535)
+        }
+    }
+
+    suspend fun saveAdbModeSetting(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_MODE_KEY] = if (mode == "usb") "usb" else "tcp"
+        }
+    }
+
+    suspend fun saveElm327EnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveElm327DeviceAddressSetting(address: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_DEVICE_ADDRESS_KEY] = address.trim().uppercase()
+        }
+    }
+
+    suspend fun saveElm327PairingPinSetting(pin: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_PAIRING_PIN_KEY] = pin.trim()
+        }
+    }
+
+    suspend fun saveElm327PidDiscoveryResult(pids: Set<Int>, atMs: Long) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_SUPPORTED_PIDS_KEY] =
+                vad.dashing.tbox.obd.Elm327Protocol.encodeSupportedPids(pids)
+            preferences[ELM327_DISCOVERY_AT_MS_KEY] = atMs.coerceAtLeast(0L)
+        }
+    }
+
+    suspend fun clearElm327PidDiscoveryResult() {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_SUPPORTED_PIDS_KEY] = ""
+            preferences[ELM327_DISCOVERY_AT_MS_KEY] = 0L
+        }
     }
 
     suspend fun saveExpertModeSetting(enabled: Boolean) {
@@ -3536,16 +3708,83 @@ class SettingsManager(private val context: Context) {
     suspend fun hasCustomUiIcon(iconKey: String): Boolean =
         withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            UiIconPaths.hasResolvableIcon(context.filesDir, iconKey, lookup)
+            val preserve = uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+            UiIconPaths.hasResolvableIcon(
+                filesDir = context.filesDir,
+                iconKey = iconKey,
+                lookup = lookup,
+                preserveColors = preserve,
+            )
         }
 
     suspend fun clearCustomUiIcon(iconKey: String) {
         withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)) {
+            val deleted = UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)
+            val clearedFlag = setUiIconPreserveColors(iconKey, enabled = false, bumpRevision = false)
+            if (deleted || clearedFlag) {
                 bumpUiIconRevision()
             }
         }
+    }
+
+    suspend fun clearCustomUiIconVariant(iconKey: String, variant: UiIconPaths.Variant) {
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup, variant)) {
+                bumpUiIconRevision()
+            }
+        }
+    }
+
+    suspend fun isUiIconPreserveColors(iconKey: String): Boolean =
+        uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+
+    /**
+     * @return true when the stored flag changed
+     */
+    suspend fun setUiIconPreserveColors(
+        iconKey: String,
+        enabled: Boolean,
+        bumpRevision: Boolean = true,
+    ): Boolean {
+        val key = iconKey.trim()
+        if (!UiIconPaths.isValidKey(key)) return false
+        var changed = false
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            changed = if (enabled) current.add(key) else current.remove(key)
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (changed && bumpRevision) bumpUiIconRevision()
+        return changed
+    }
+
+    /**
+     * When a theme with UI icons activates, merge preserve-color flags for [themeKeys]:
+     * keys listed in [preserveColorsKeys] become true; other [themeKeys] become false.
+     * Keys not present in [themeKeys] are left unchanged.
+     */
+    suspend fun mergeUiIconPreserveColorsFromTheme(
+        themeKeys: Collection<String>,
+        preserveColorsKeys: Collection<String>,
+        bumpRevision: Boolean = true,
+    ) {
+        val themeKeySet = themeKeys.map { it.trim() }.filter { UiIconPaths.isValidKey(it) }.toSet()
+        if (themeKeySet.isEmpty()) return
+        val preserveSet = preserveColorsKeys.map { it.trim() }.filter { it in themeKeySet }.toSet()
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            themeKeySet.forEach { key ->
+                if (key in preserveSet) current.add(key) else current.remove(key)
+            }
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (bumpRevision) bumpUiIconRevision()
     }
 
     suspend fun clearSharedUiIconsFolder() {
@@ -3555,6 +3794,9 @@ class SettingsManager(private val context: Context) {
                 dir.listFiles()?.forEach { file ->
                     if (file.isFile) file.delete()
                 }
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = "{}"
             }
             bumpUiIconRevision()
         }
@@ -3941,17 +4183,18 @@ class SettingsManager(private val context: Context) {
     suspend fun setCustomUiIconFromUri(
         iconKey: String,
         sourceUri: Uri?,
+        variant: UiIconPaths.Variant = UiIconPaths.Variant.Day,
     ): SetLauncherAppCustomIconResult {
         if (!UiIconPaths.isValidKey(iconKey)) {
             return SetLauncherAppCustomIconResult.InvalidPackage
         }
         return withContext(Dispatchers.IO) {
             val lookup = launcherAppIconLookup()
-            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup)
+            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup, variant)
                 ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                clearCustomUiIcon(iconKey)
+                clearCustomUiIconVariant(iconKey, variant)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {
@@ -4062,6 +4305,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
         }
     }
 
@@ -4205,6 +4454,23 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveAppTextSizeScales(scales: TboxTextSizeScales) {
+        val normalized = TboxTextSizeScales(
+            caption = TboxTextSizeScales.normalize(scales.caption),
+            body = TboxTextSizeScales.normalize(scales.body),
+            button = TboxTextSizeScales.normalize(scales.button),
+            title = TboxTextSizeScales.normalize(scales.title),
+            headline = TboxTextSizeScales.normalize(scales.headline),
+            tabLabel = TboxTextSizeScales.normalize(scales.tabLabel),
+            widgetTitle = TboxTextSizeScales.normalize(scales.widgetTitle),
+            widgetValue = TboxTextSizeScales.normalize(scales.widgetValue),
+            widgetUnit = TboxTextSizeScales.normalize(scales.widgetUnit),
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_TEXT_SIZE_SCALES_JSON_KEY] = normalized.toJsonString()
+        }
+    }
+
     suspend fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
         context.settingsDataStore.edit { preferences ->
             preferences[UPDATE_CHANNEL_KEY] = channel.storageValue
@@ -4285,6 +4551,30 @@ class SettingsManager(private val context: Context) {
         } catch (_: Exception) {
             MainScreenSettingsButtonPosition.Default
         }
+    }
+
+    private fun parseUiIconPreserveColorsJson(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+        return try {
+            val obj = JSONObject(raw)
+            val out = linkedSetOf<String>()
+            obj.keys().forEach { key ->
+                if (obj.optBoolean(key, false) && UiIconPaths.isValidKey(key)) {
+                    out.add(key.trim())
+                }
+            }
+            out
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun serializeUiIconPreserveColors(keys: Set<String>): String {
+        val obj = JSONObject()
+        keys.sorted().forEach { key ->
+            if (UiIconPaths.isValidKey(key)) obj.put(key, true)
+        }
+        return obj.toString()
     }
 
     private fun parseMainScreenAddButtonJson(raw: String): MainScreenAddButtonPosition {

@@ -87,8 +87,9 @@ data class AutomationCanCatalogEntry(
         if (action.operation !in allowedOperations) return false
         return when (action.operation) {
             AutomationCanOperation.TOGGLE -> true
-            AutomationCanOperation.TRUNK_PULSE -> action.value in setOf(1, 2)
-            AutomationCanOperation.SET -> action.value in allowedValues
+            AutomationCanOperation.TRUNK_PULSE,
+            AutomationCanOperation.SET,
+            -> AutomationCanValueCodec.isResolvable(action, mode = null)
         }
     }
 

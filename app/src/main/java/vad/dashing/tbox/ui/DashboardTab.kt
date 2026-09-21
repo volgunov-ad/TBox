@@ -212,6 +212,14 @@ fun MainDashboardTab(
             }
         }
     }
+    LaunchedEffect(widgetConfigs) {
+        vad.dashing.tbox.obd.publishObdInterest("dashboard-tab-main", widgetConfigs)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            vad.dashing.tbox.obd.clearObdInterest("dashboard-tab-main")
+        }
+    }
     if (panelNeedsMbCanVhalEngineRpm) {
         LaunchedEffect(widgetConfigs) {
             UniversalCanRepository.setSourceSignals(

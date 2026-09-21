@@ -14,11 +14,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
+import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DEBOUNCE_MS
 import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
+import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalValueType
@@ -27,6 +31,8 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
+import vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
 import vad.dashing.tbox.automation.instant
@@ -91,6 +97,7 @@ internal fun AutomationTriggerEditor(
             when (trigger) {
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
                 is AutomationTrigger.WidgetPressed -> WidgetPressedTriggerFields(trigger, onChange)
+                is AutomationTrigger.HardKey -> HardKeyTriggerFields(trigger, onChange)
                 is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
@@ -126,6 +133,81 @@ private fun WidgetPressedTriggerFields(
             onChange(trigger.copy(triggerId = normalizeAutomationTriggerId(raw)))
         },
         label = "ID триггера виджета",
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** Verified A9 mbCAN key codes (docs/MBCAN_VHAL_PARAMETERS_RU.md). */
+private val HARD_KEY_PICKER_CODES = listOf(
+    29, 30, 31, 32, 316,
+    115, 114, 163, 165, 158, 582,
+    210, 211, 212,
+)
+
+private fun hardKeyCodeLabel(keyCode: Int): String {
+    val name = KeyPressDiagnosticFormat.mbCanKeyName(keyCode)
+    return if (name == "UNKNOWN") {
+        "$keyCode (не из справочника)"
+    } else {
+        "$keyCode · $name"
+    }
+}
+
+@Composable
+private fun HardKeyTriggerFields(
+    trigger: AutomationTrigger.HardKey,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    val options = remember(trigger.keyCode) {
+        if (trigger.keyCode in HARD_KEY_PICKER_CODES) {
+            HARD_KEY_PICKER_CODES
+        } else {
+            HARD_KEY_PICKER_CODES + trigger.keyCode
+        }
+    }
+    AutomationDropdown(
+        label = "Кнопка",
+        value = trigger.keyCode,
+        options = options,
+        optionLabel = ::hardKeyCodeLabel,
+        onValueChange = { onChange(trigger.copy(keyCode = it)) },
+    )
+    AutomationIntField(
+        label = "Код кнопки вручную (верхняя левая кнопка руля зависит от комплектации)",
+        value = trigger.keyCode,
+        onValueChange = { onChange(trigger.copy(keyCode = it)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    AutomationDropdown(
+        label = "Событие кнопки",
+        value = trigger.keyStatus,
+        options = AutomationHardKeyStatus.entries,
+        optionLabel = { status ->
+            when (status) {
+                AutomationHardKeyStatus.PRESSED -> "Нажатие"
+                AutomationHardKeyStatus.RELEASED -> "Отпускание"
+            }
+        },
+        onValueChange = { onChange(trigger.copy(keyStatus = it)) },
+    )
+    val canMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
+    val available = canMode != HeadUnitCanMode.Android10Vhal
+    Text(
+        text = "Коды кнопок — в окне «Диагностика клавиш» и в документации MBCAN/VHAL. " +
+            "Повторные события одной кнопки подавляются в течение " +
+            "${AUTOMATION_HARD_KEY_DEBOUNCE_MS} мс." +
+            if (available) {
+                ""
+            } else {
+                " На этом ГУ (Android 10 / VHAL) события кнопок не приходят: " +
+                    "триггер работает только на Android 9 (mbCAN)."
+            },
+        style = MaterialTheme.typography.tboxCaption,
+        color = if (available) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.error
+        },
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -593,6 +675,7 @@ private fun StartupBehaviorField(
 private enum class TriggerUiKind {
     SYSTEM_EVENT,
     WIDGET_PRESS,
+    HARD_KEY,
     INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
@@ -603,6 +686,7 @@ private enum class TriggerUiKind {
     fun label(): String = when (this) {
         SYSTEM_EVENT -> "Событие программы"
         WIDGET_PRESS -> "Нажатие виджета-триггера"
+        HARD_KEY -> "Кнопка на руле / двери (A9)"
         INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
@@ -615,6 +699,7 @@ private enum class TriggerUiKind {
 private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (trigger) {
     is AutomationTrigger.SystemEvent -> TriggerUiKind.SYSTEM_EVENT
     is AutomationTrigger.WidgetPressed -> TriggerUiKind.WIDGET_PRESS
+    is AutomationTrigger.HardKey -> TriggerUiKind.HARD_KEY
     is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
@@ -632,6 +717,11 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
     TriggerUiKind.WIDGET_PRESS -> AutomationTrigger.WidgetPressed(
         id = id,
         triggerId = "",
+    )
+
+    TriggerUiKind.HARD_KEY -> AutomationTrigger.HardKey(
+        id = id,
+        keyCode = 115,
     )
 
     TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
@@ -674,6 +764,7 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
 private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this) {
     is AutomationTrigger.SystemEvent -> copy(id = id)
     is AutomationTrigger.WidgetPressed -> copy(id = id)
+    is AutomationTrigger.HardKey -> copy(id = id)
     is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)

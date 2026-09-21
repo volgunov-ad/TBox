@@ -80,4 +80,22 @@ class FloatingOverlayOpenPlanTest {
         )
         assertEquals(listOf(listOf("a"), listOf("b"), listOf("c")), batches.map { b -> b.map { it.id } })
     }
+
+    @Test
+    fun expandedBoundsFromConfig_floorsOriginByDefault() {
+        val config = cfg("a").copy(startX = -20, startY = -5, width = 80, height = 60)
+        val bounds = FloatingOverlayOpenPlan.expandedBoundsFromConfig(config)
+        assertEquals(0, bounds.x)
+        assertEquals(0, bounds.y)
+        assertEquals(80, bounds.width)
+        assertEquals(60, bounds.height)
+    }
+
+    @Test
+    fun expandedBoundsFromConfig_keepsNegativeWhenBeyondAllowed() {
+        val config = cfg("a").copy(startX = -20, startY = -5, width = 80, height = 60)
+        val bounds = FloatingOverlayOpenPlan.expandedBoundsFromConfig(config, allowBeyondScreen = true)
+        assertEquals(-20, bounds.x)
+        assertEquals(-5, bounds.y)
+    }
 }

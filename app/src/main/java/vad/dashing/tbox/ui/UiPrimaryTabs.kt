@@ -801,6 +801,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
 
@@ -832,6 +833,7 @@ fun SettingsTabContent(
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
     var showUiIconSettingsDialog by remember { mutableStateOf(false) }
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
+    var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -854,31 +856,42 @@ fun SettingsTabContent(
         }
     }
 
+    val sections = SettingsSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        Button(
-            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_permissions_button),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
         Text(
-            text = stringResource(R.string.settings_permissions_button_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.tab_settings),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp),
         )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        SettingsSection.CAR -> R.string.settings_tab_car
+                        SettingsSection.TRIPS -> R.string.settings_tab_trips
+                        SettingsSection.INTERFACE -> R.string.settings_tab_interface
+                        SettingsSection.SYSTEM -> R.string.settings_tab_system
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+        ) {
+            when (selectedSection) {
+                SettingsSection.CAR -> {
         SettingsTitle(stringResource(R.string.settings_hu_type_title))
         Text(
             text = stringResource(R.string.settings_hu_type_desc),
@@ -1009,6 +1022,32 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
+        SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
+            },
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
+            isGetCanFrameEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCanFrameSetting(enabled)
+            },
+            stringResource(R.string.settings_get_can_data_title),
+            "",
+            !noTboxConnect
+        )
+                }
+
+                SettingsSection.INTERFACE -> {
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -1073,31 +1112,6 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
-        SettingSwitch(
-            noTboxConnect,
-            { enabled ->
-                if (enabled) {
-                    showNoTboxConnectCanDialog = true
-                } else {
-                    settingsViewModel.saveNoTboxConnectSetting(false)
-                }
-            },
-            stringResource(R.string.settings_no_tbox_connect_title),
-            stringResource(R.string.settings_no_tbox_connect_desc),
-            true
-        )
-        SettingSwitch(
-            isGetCanFrameEnabled,
-            { enabled ->
-                settingsViewModel.saveGetCanFrameSetting(enabled)
-            },
-            stringResource(R.string.settings_get_can_data_title),
-            "",
-            !noTboxConnect
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_left_menu_title))
         Button(
             onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
@@ -1122,9 +1136,29 @@ fun SettingsTabContent(
             enabled = true,
             selectorWidth = 250.dp
         )
+        SettingTextSizeScales(
+            scales = appTextSizeScales,
+            onScalesChange = { settingsViewModel.saveAppTextSizeScales(it) },
+        )
+        SettingSwitch(
+            uiClickSoundsEnabled,
+            { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
+            stringResource(R.string.settings_ui_click_sounds_title),
+            stringResource(R.string.settings_ui_click_sounds_desc),
+            true
+        )
+        SettingSwitch(
+            followSystemDayNight,
+            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
+            stringResource(R.string.settings_follow_system_day_night_title),
+            stringResource(R.string.settings_follow_system_day_night_desc),
+            true
+        )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_misc_title))
+                }
+
+                SettingsSection.TRIPS -> {
+        SettingsTitle(stringResource(R.string.settings_trips_fuel_title))
         CalibrationIntCommitField(
             title = stringResource(R.string.settings_fuel_tank_liters_title),
             description = stringResource(R.string.refuels_calibration_tank_hint),
@@ -1161,20 +1195,40 @@ fun SettingsTabContent(
             stringResource(R.string.settings_wheel_pressure_persist_desc),
             true
         )
-        SettingSwitch(
-            uiClickSoundsEnabled,
-            { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
-            stringResource(R.string.settings_ui_click_sounds_title),
-            stringResource(R.string.settings_ui_click_sounds_desc),
-            true
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        WheelPulseCalibrationSection(settingsViewModel = settingsViewModel)
+                }
+
+                SettingsSection.SYSTEM -> {
+        Button(
+            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_permissions_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_permissions_button_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
         )
-        SettingSwitch(
-            followSystemDayNight,
-            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
-            stringResource(R.string.settings_follow_system_day_night_title),
-            stringResource(R.string.settings_follow_system_day_night_desc),
-            true
-        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_expert_section_title))
+        Button(
+            onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.key_press_diagnostics_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -1309,6 +1363,85 @@ fun SettingsTabContent(
             )
         }
 
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Button(
+            onClick = rememberWrappedOnClick {
+                if (backgroundServiceRestartButtonEnabled) {
+                    backgroundServiceRestartButtonEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_RESTART,
+                        "",
+                        "",
+                    )
+                }
+            },
+            enabled = backgroundServiceRestartButtonEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.button_restart_background_service),
+                style = MaterialTheme.typography.tboxButton,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (restartButtonEnabled) {
+                        restartButtonEnabled = false
+                        onTboxRestartClick()
+                    }
+                },
+                enabled = restartButtonEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_tbox),
+                    style = MaterialTheme.typography.tboxButton,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (huRebootButtonEnabled) {
+                        huRebootButtonEnabled = false
+                        sendSetMbCanProperty(
+                            context,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                        )
+                    }
+                },
+                enabled = huRebootButtonEnabled &&
+                    mbCanAvailable &&
+                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_hu),
+                    style = MaterialTheme.typography.tboxButton,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+                }
+            }
+        }
+    }
+
         if (showNoTboxConnectCanDialog) {
             AlertDialog(
                 onDismissRequest = { showNoTboxConnectCanDialog = false },
@@ -1430,82 +1563,11 @@ fun SettingsTabContent(
             visible = showUiIconSettingsDialog,
             onDismiss = { showUiIconSettingsDialog = false },
         )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        Button(
-            onClick = rememberWrappedOnClick {
-                if (backgroundServiceRestartButtonEnabled) {
-                    backgroundServiceRestartButtonEnabled = false
-                    onServiceCommand(
-                        BackgroundService.ACTION_RESTART,
-                        "",
-                        "",
-                    )
-                }
-            },
-            enabled = backgroundServiceRestartButtonEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.button_restart_background_service),
-                style = MaterialTheme.typography.tboxButton,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (restartButtonEnabled) {
-                        restartButtonEnabled = false
-                        onTboxRestartClick()
-                    }
-                },
-                enabled = restartButtonEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.button_reboot_tbox),
-                    style = MaterialTheme.typography.tboxButton,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (huRebootButtonEnabled) {
-                        huRebootButtonEnabled = false
-                        sendSetMbCanProperty(
-                            context,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
-                        )
-                    }
-                },
-                enabled = huRebootButtonEnabled &&
-                    mbCanAvailable &&
-                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.button_reboot_hu),
-                    style = MaterialTheme.typography.tboxButton,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
+        KeyPressDiagnosticsDialog(
+            visible = showKeyPressDiagnosticsDialog,
+            mode = headUnitCanMode,
+            onDismiss = { showKeyPressDiagnosticsDialog = false },
+        )
 }
 
 @Composable
@@ -1524,6 +1586,8 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
     val floatingPanelsLayoutSnapDp by
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val floatingPanelsAllowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -1535,13 +1599,40 @@ fun FloatingPanelsSettingsTabContent(
     var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
     var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
 
+    val sections = FloatingPanelsSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp),
     ) {
-        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
+        Text(
+            text = stringResource(R.string.tab_floating_panels_settings),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        FloatingPanelsSection.PANELS -> R.string.settings_tab_panels
+                        FloatingPanelsSection.COMMON -> R.string.settings_tab_common
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState),
+        ) {
+            when (selectedSection) {
+                FloatingPanelsSection.PANELS -> {
         if (hasFloatingPanels) {
             FloatingDashboardPanelEditor(
                 panels = floatingDashboardsList,
@@ -1724,8 +1815,9 @@ fun FloatingPanelsSettingsTabContent(
             Modifier,
             enabled = hasFloatingPanels,
         )
+                }
 
-
+                FloatingPanelsSection.COMMON -> {
         SettingSliderInt(
             value = floatingPanelsLayoutSnapDp,
             onValueChange = { settingsViewModel.saveFloatingPanelsLayoutSnapDp(it) },
@@ -1736,6 +1828,13 @@ fun FloatingPanelsSettingsTabContent(
             description = stringResource(R.string.settings_panel_layout_snap_desc),
             minValue = MIN_PANEL_LAYOUT_SNAP_DP,
             maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+        )
+        SettingSwitch(
+            floatingPanelsAllowBeyondScreen,
+            { enabled -> settingsViewModel.saveFloatingPanelsAllowBeyondScreen(enabled) },
+            stringResource(R.string.settings_floating_allow_beyond_screen_title),
+            stringResource(R.string.settings_floating_allow_beyond_screen_desc),
+            true,
         )
 
         Text(
@@ -1762,6 +1861,9 @@ fun FloatingPanelsSettingsTabContent(
                 text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
                 style = MaterialTheme.typography.tboxButton,
             )
+        }
+                }
+            }
         }
     }
 
@@ -1877,9 +1979,28 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
 }
 
 
+private enum class SettingsSection {
+    CAR,
+    TRIPS,
+    INTERFACE,
+    SYSTEM,
+}
+
+private enum class FloatingPanelsSection {
+    PANELS,
+    COMMON,
+}
+
+enum class MainScreenSettingsSection {
+    COMMON,
+    PANELS,
+    BUTTONS,
+}
+
 private enum class LocationSection {
     General,
     Mock,
+    Cameras,
     DataDebug,
 }
 
@@ -2064,6 +2185,7 @@ fun LocationTabContent(
                     when (section) {
                         LocationSection.General -> R.string.location_tab_general
                         LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.Cameras -> R.string.location_tab_cameras
                         LocationSection.DataDebug -> R.string.location_tab_data_debug
                     },
                 )
@@ -2859,6 +2981,11 @@ fun LocationTabContent(
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
                 } // Mock
+                LocationSection.Cameras -> {
+            item {
+                SpeedCamCamerasSection(settingsViewModel = settingsViewModel)
+            }
+                } // Cameras
                 LocationSection.DataDebug -> {
             item {
                 StatusRow(

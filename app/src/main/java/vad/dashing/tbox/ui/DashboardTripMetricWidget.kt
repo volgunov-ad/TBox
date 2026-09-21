@@ -46,6 +46,7 @@ fun DashboardTripMetricWidgetItem(
     showUnit: Boolean = true,
     onClick: () -> Unit = {},
     onLongClick: () -> Unit = {},
+    onDoubleClick: () -> Unit = {},
     elevation: Dp = 4.dp,
     shape: Dp = 12.dp,
     textColor: Color? = null,
@@ -73,6 +74,7 @@ fun DashboardTripMetricWidgetItem(
     DashboardWidgetScaffold(
         onClick = onClick,
         onLongClick = onLongClick,
+        onDoubleClick = onDoubleClick,
         elevation = elevation,
         shape = shape,
         textColor = textColor,

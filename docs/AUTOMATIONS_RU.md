@@ -103,7 +103,7 @@ JSON числовые условия, числовые триггеры (`numeri
 
 **Педаль газа** (`gas_pedal`) и **педаль тормоза** (`brake_pedal`) — только ГУ (mbCAN/VHAL).
 Газ — число 0…100 % (невалидный EMS-флаг или вне диапазона → нет значения). Тормоз —
-состояние `on`/`off` по `BrakePedalSts`: **2** = нажата, **1** = отпущена (0 и прочие → нет значения).
+состояние `on`/`off` по `BrakePedalSts`: A9 — **2** = нажата, **1** = отпущена (0 и прочие → нет значения); A10 VHAL — **1** = нажата, **0** = отпущена.
 Те же сигналы, что у виджета «Газ/тормоз»;
 TBox UDP `breakingForce` сюда не входит.
 
@@ -146,6 +146,39 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 Для неё тот же триггер смотрит штатный `Settings.Global avm_state` (и `SHOW_AVM_EVENT`),
 а не UsageStats. Новый тип триггера не нужен — в правиле по-прежнему выбирается пакет AVM.
 
+**Тема приложения: режим** (`app_theme_mode`) — только источник «Приложение». Четыре
+состояния: `manual_day` / `manual_night` — ручная тема (ГУ или локальная тема приложения,
+когда оно отвязано от системы), `auto_day` / `auto_night` — штатный авто день/ночь ГУ
+с текущим разрешением. «Включён авто-режим» = `auto_day` OR `auto_night` (два OR-триггера).
+**Тема сейчас** (`app_theme`) — эффективная тема в моменте: `day` / `night`, ручная или
+разрешённая авто-режимом. Триггер «День» по `app_theme` срабатывает и на ручной, и на
+авто-день; «Ночь» — и на ручную, и на авто-ночь. Источник у обоих сигналов тот же,
+что у переключателя темы и действий `toggle_app_day_night_theme` /
+`enable_head_unit_auto_theme` / `set_hu_day_night_theme` (`light` / `dark` / `auto`),
+поэтому readback после этих действий приходит сразу.
+Пока наблюдатель темы не запущен, значений нет.
+
+**Яркость экрана ГУ** (`hu_screen_brightness`, `hu_screen_auto_brightness`) — только источник
+«Приложение», тот же канал что **Car Settings → Экраны** (`HeadUnitBrightnessRepository`):
+уровень **1…10** и автояркость `on`/`off`. Три разные яркости в меню/автоматизациях:
+
+| Сигнал | Что это |
+|--------|---------|
+| `hu_screen_brightness` | Экран головного устройства |
+| `hud_brightness` | Проекция HUD |
+| `icm_brightness` | Комбинация приборов (приборка) |
+
+A9: `Settings.System screen_brightness` / `Settings.Global auto_bright`; A10: Adayo
+`get/setSysBacklight` и `get/setDayNightMode` (1 auto / 4 manual для яркости). Пока нет
+подписки на сигнал, значения `Unavailable`. Действия: `set_hu_screen_brightness`
+(`intValue` 1…10) и `set_hu_screen_auto_brightness` (`boolValue`).
+
+**Микшер ГУ** (`hu_media_volume`, `hu_phone_volume`, `hu_navi_volume`, `hu_voice_volume`,
+`hu_headrest_speaker`) — тот же канал что **Car Settings → Аудио** (`PlatformAudioRepository`),
+не mbCAN EQ. Диапазоны: медиа 0…31, телефон 1…31, навигатор 0…10, голос 2…10;
+подголовник `only` / `assist` / `off`. Действия: `set_media_volume`, `set_phone_volume`,
+`set_navi_volume`, `set_voice_volume`, `set_headrest_speaker`.
+
 **Wi-Fi** — клиент ГУ (`wlan0`). Точка доступа самого ГУ (SoftAP /
 `wlan1`) не входит. Состояния всегда явные, без `Unavailable`:
 
@@ -155,6 +188,10 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` (процент, не кома
 | **Wi-Fi: подключение к сети** (`wifi_associated`) | `on` — есть ассоциация с любой сетью; `off` — нет ассоциации **или радио выключено** |
 | **Wi-Fi: точка доступа** (`wifi_ssid`) | SSID текущей сети или `none`, если радио выключено / ассоциации нет |
 | **Интернет ГУ** (`hu_internet_status`) | `online` / `offline` / `unknown` (/ `checking`) — HTTP(S) probe URL с вкладки «Модем». `online` сразу после удачной проверки; `offline` только после **двух** подряд неудачных |
+| **Wi‑Fi модем: связь** (`wifi_modem_link_status`) | `idle` / `ok` / `auth_failed` / `unreachable` / `error` — HTTP к админке при источнике «Wi‑Fi HTTP»; `idle` для TBox / без поллера |
+| **Модем: передача данных** (`modem_mobile_data`) | `on` / `off` — `apnStatus` (TBox MDC или Wi‑Fi модем) |
+| **Модем: тип сети** (`modem_net_type`) | `2g` / `3g` / `4g` / `none` — из `netStatus` вкладки «Модем» |
+| **Модем: SIM** (`modem_sim_status`) | `none` / `ready` / `pin` / `error` / `unknown` — из `simStatus` |
 
 SSID выбирается из **сохранённых** сетей ГУ.
 Отдельного триггера «отвалились именно от X» нет: для отключения от любой сети —
@@ -163,8 +200,17 @@ SSID выбирается из **сохранённых** сетей ГУ.
 Действия: включить/выключить радио; подключиться к сохранённой сети (пароль не хранится;
 если радио выключено — сначала включает его); отключиться от текущей сети, не выключая
 радио (`disableNetwork` текущего netId + `disconnect` — иначе ГУ сразу вернётся в ту же сеть).
-На API 29+ эти действия из обычного приложения недоступны. ADB по Wi-Fi при выключении
-радио оборвётся.
+Если у ГУ включена **своя точка доступа (SoftAP / раздача)**, `setWifiEnabled` часто
+отклоняется системой — действие сначала пытается выключить SoftAP и повторить переключение.
+Запасной путь: запись `Settings.Global.WIFI_ON` при выданном `WRITE_SECURE_SETTINGS`
+(`adb shell pm grant … android.permission.WRITE_SECURE_SETTINGS`).
+На «чистом» AOSP API 29+ с targetSdk ≥ 29 `setWifiEnabled` из обычного приложения
+недоступен; на ГУ Adayo/API 28 обычно работает. ADB по Wi-Fi при выключении радио оборвётся.
+
+**Wi‑Fi модем (HTTP):** действия `wifi_modem_set_data` (вкл/выкл передачи данных) и
+`wifi_modem_reboot` — только при источнике модема «Wi‑Fi HTTP» и запущенном поллере.
+Состояния выше (`wifi_modem_link_status`, `modem_*`) доступны в условиях и триггерах;
+`modem_mobile_data` / `modem_net_type` / `modem_sim_status` работают и для источника TBox.
 
 ### Геопозиция
 
@@ -292,6 +338,8 @@ SSID выбирается из **сохранённых** сетей ГУ.
 пункты: AEB, safe distance, wireless charge, pulse складывания зеркал, все стёкла разом,
 PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source station.
 
+Состояние круиза доступно двумя отдельными сигналами ГУ: `acc_cruise_state` (адаптивный ACC: `off`/`standby`/`active`/`fault`) и `ccs_cruise_state` (обычный CCS: `off`/`standby`/`active`). Их не следует путать с `acc_status` (ключ зажигания). Уставка — `cruise_set_speed`.
+
 Условия верхнего уровня объединяются через `И`. Один параметр **«Ждать условие, с»**
 относится ко всей этой группе, не к каждому условию отдельно: `0` — если на момент
 триггера группа ложна, запуск сразу пропускается; `> 0` — ждать до таймаута, пока
@@ -315,8 +363,14 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 - все CAN-настройки из безопасного каталога; значения в списке подписаны
   (подогрев/вентиляция сидений, режимы фар, температура в °C, шторка/люк/стёкла и т.п.),
   а не сырыми кодами. Шторка **1…11** (закрыто…открыто), люк **1…11** и **12** (откинуть)
-  одинаково на A9 и A10. Стёкла: A9 **0 / 20 / 80 / 100** (машина не держит промежуточные), A10 **1** закрыть / **2** открыть / **3** щель;
-- действия TBox Monitor (поездка, моточасы, тема, **плавающие панели — видимость/включение**
+  одинаково на A9 и A10. Стёкла: A9 **0 / 20 / 80 / 100**, A10 **1** закрыть / **2** открыть /
+  **3** щель; в JSON предпочтительны семантики `close` / `open` / `vent` / `comfort_open`,
+  а для бинарных CAN — `on` / `off` (legacy int A9 остаётся валидным и ремапится на A10);
+  список значений в редакторе зависит от текущего backend ГУ, при сохранении portable-ключ
+  пишется в экспорт;
+- действия TBox Monitor (поездка, моточасы, тема light/dark/auto, **яркость экрана ГУ** 1…10 и автояркость,
+  микшер медиа/телефон/навигатор/голос и подголовник, Wi‑Fi, toast/alert, …);
+  **плавающие панели — видимость/включение**
   для всех панелей или одной выбранной: переключить / скрыть / показать и
   переключить / включить / выключить, ESP-реле, **Wi-Fi** вкл/выкл / подключение к
   сохранённой сети / отключение от текущей, **Wi‑Fi модем** данные вкл/выкл / перезагрузка,
@@ -366,7 +420,14 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 
 Шторка (**46**) и люк (**45**) пишутся через `canSetVehicleParam` / VHAL с теми же сырыми
 значениями на обеих ГУ. Стёкла на A9 идут через `canSetWindowStatus` (не property 47/55–58);
-на A10 — четыре `WindowCon_Req`. Список значений в редакторе зависит от текущего backend ГУ.
+на A10 — четыре `WindowCon_Req`. Список значений в редакторе зависит от текущего backend ГУ;
+при выполнении legacy A9↔A10 ints и семантики `close`/`open`/`vent` ремапятся
+(`AutomationCanValueCodec` / `BodyComfortWrite.remapWindowValueForMode`). Бинарные
+`SetProperty` на A10 перекодируются из шкалы mbCAN через `VhalBinaryToggleCodec`.
+
+Триггер `hard_key` на ГУ Android 10 (VHAL) помечается невалидным при проверке — замените на
+плитку «Триггер автоматизации». A9-only CAN (аудио EQ, аромат и т.п.) на A10 также
+отклоняется валидатором.
 
 Все записи выполняются только через `UniversalCanRepository`, поэтому сохраняются backend
 mapping, ограничения значений, JNI-сериализация, post-command refresh и диагностика.
@@ -389,7 +450,7 @@ mapping, ограничения значений, JNI-сериализация, 
 
 | Слой | Основные файлы |
 |------|----------------|
-| Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt` |
+| Модель / JSON / валидация | `automation/AutomationModels.kt`, `AutomationCodec.kt`, `AutomationValidation.kt`, `AutomationIntervalLogic.kt`, `AutomationCanValueCodec.kt` |
 | Сигналы / evaluator | `AutomationSignalCatalog.kt`, `AutomationSignalProvider.kt`, `AutomationEvaluator.kt` |
 | Интернет ГУ (сигнал `hu_internet_status`) | `internet/HuInternetMonitor.kt`, `TboxRepository.huInternetStatus` |
 | Runtime | `AutomationEngine.kt`, `AutomationActionExecutor.kt`, `AutomationDispatchGuard.kt`, `AutomationRuntimeState.kt`, `AutomationSystemEventBus.kt` |

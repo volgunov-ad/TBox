@@ -6,6 +6,7 @@ import vad.dashing.tbox.R
 
 enum class UiIconCategory {
     NAVIGATION,
+    MAIN_SCREEN,
     VEHICLE,
     CLIMATE,
     SEAT,
@@ -34,7 +35,8 @@ data class UiIconCatalogEntry(
 )
 
 /**
- * Stable semantic keys for every replaceable icon rendered by the left menu and dashboard widgets.
+ * Stable semantic keys for every replaceable icon rendered by the left menu, main-screen corner
+ * buttons, and dashboard widgets.
  *
  * Keys describe the visual/state rather than a widget instance, so one sidecar override is shared
  * everywhere that visual is used.
@@ -44,6 +46,13 @@ object UiIconCatalog {
     const val MENU_CLOSE = "navigation.menu.close"
     const val MENU_HOME = "navigation.home"
     const val MENU_UPDATE = "navigation.update"
+
+    const val MAIN_SCREEN_SETTINGS = "main_screen.button.settings"
+    const val MAIN_SCREEN_ADD = "main_screen.button.add"
+    const val MAIN_SCREEN_WALLPAPER_PREV = "main_screen.button.wallpaper.prev"
+    const val MAIN_SCREEN_WALLPAPER_NEXT = "main_screen.button.wallpaper.next"
+    const val MAIN_SCREEN_WINDOW_EXIT = "main_screen.button.window.exit"
+    const val MAIN_SCREEN_WINDOW_RESTORE = "main_screen.button.window.restore"
 
     private val catalogEntries: List<UiIconCatalogEntry> = buildList {
         fun addIcon(
@@ -71,8 +80,10 @@ object UiIconCatalog {
         addIcon(MENU_UPDATE, UiIconCategory.NAVIGATION, R.string.update_menu_available, R.drawable.ic_menu_update)
         addIcon("menu.tab.modem", UiIconCategory.NAVIGATION, R.string.tab_modem, R.drawable.menu_icon_modem)
         addIcon("menu.tab.at_commands", UiIconCategory.NAVIGATION, R.string.tab_at_commands, R.drawable.menu_icon_at)
+        addIcon("menu.tab.adb", UiIconCategory.NAVIGATION, R.string.tab_adb, R.drawable.ic_menu_adb)
         addIcon("menu.tab.geoposition", UiIconCategory.NAVIGATION, R.string.tab_geoposition)
         addIcon("menu.tab.esp_companion", UiIconCategory.NAVIGATION, R.string.tab_esp_companion)
+        addIcon("menu.tab.elm327", UiIconCategory.NAVIGATION, R.string.tab_elm327, R.drawable.ic_menu_elm327)
         addIcon("menu.tab.car_data", UiIconCategory.NAVIGATION, R.string.tab_car_data)
         addIcon("menu.tab.trips", UiIconCategory.NAVIGATION, R.string.tab_trips)
         addIcon("menu.tab.refuels", UiIconCategory.NAVIGATION, R.string.tab_refuels, R.drawable.ic_menu_refuels)
@@ -100,6 +111,43 @@ object UiIconCatalog {
             UiIconCategory.NAVIGATION,
             R.string.tab_car_settings,
             R.drawable.ic_tab_car_settings,
+        )
+
+        addIcon(
+            MAIN_SCREEN_SETTINGS,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_settings,
+            R.drawable.ic_main_open_console,
+        )
+        addIcon(
+            MAIN_SCREEN_ADD,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_add,
+            R.drawable.ic_main_screen_add,
+        )
+        addIcon(
+            MAIN_SCREEN_WALLPAPER_PREV,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_wallpaper_prev,
+            R.drawable.ic_main_screen_arrow_left,
+        )
+        addIcon(
+            MAIN_SCREEN_WALLPAPER_NEXT,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_wallpaper_next,
+            R.drawable.ic_main_screen_arrow_right,
+        )
+        addIcon(
+            MAIN_SCREEN_WINDOW_EXIT,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_window_exit,
+            R.drawable.ic_main_screen_close,
+        )
+        addIcon(
+            MAIN_SCREEN_WINDOW_RESTORE,
+            UiIconCategory.MAIN_SCREEN,
+            R.string.ui_icon_main_screen_window_restore,
+            R.drawable.ic_main_screen_window_restore,
         )
 
         addIcon(
@@ -176,6 +224,24 @@ object UiIconCatalog {
             R.string.data_title_high_beam_widget,
             R.drawable.ic_widget_high_beam_auto,
             "HMA",
+        )
+        addIcon(
+            "dashboard.vehicle.epb_park_lamp",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_epb_park_lamp_widget,
+            R.drawable.ic_widget_epb_park_lamp,
+        )
+        addIcon(
+            "dashboard.vehicle.engine_oil_pressure",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_engine_oil_pressure_widget,
+            R.drawable.ic_widget_engine_oil_pressure,
+        )
+        addIcon(
+            "dashboard.vehicle.brake_fluid",
+            UiIconCategory.VEHICLE,
+            R.string.data_title_brake_fluid_widget,
+            R.drawable.ic_widget_brake_fluid,
         )
 
         listOf(
@@ -387,6 +453,43 @@ object UiIconCatalog {
                 drawable,
                 label,
                 R.string.dashboard_loc_content_desc,
+            )
+        }
+
+        listOf(
+            Triple("fixed", R.drawable.ic_widget_speed_cam_fixed, R.string.speed_cam_icon_fixed),
+            Triple(
+                "traffic_light",
+                R.drawable.ic_widget_speed_cam_traffic_light,
+                R.string.speed_cam_icon_traffic_light,
+            ),
+            Triple("section", R.drawable.ic_widget_speed_cam_section, R.string.speed_cam_icon_section),
+            Triple("mobile", R.drawable.ic_widget_speed_cam_mobile, R.string.speed_cam_icon_mobile),
+            Triple(
+                "police_post",
+                R.drawable.ic_widget_speed_cam_police_post,
+                R.string.speed_cam_icon_police_post,
+            ),
+            Triple("railway", R.drawable.ic_widget_speed_cam_railway, R.string.speed_cam_icon_railway),
+            Triple("dummy", R.drawable.ic_widget_speed_cam_dummy, R.string.speed_cam_icon_dummy),
+            Triple("other", R.drawable.ic_widget_speed_cam_other, R.string.speed_cam_icon_other),
+            Triple(
+                "arrow.same",
+                R.drawable.ic_widget_speed_cam_arrow_same,
+                R.string.speed_cam_icon_arrow_same,
+            ),
+            Triple(
+                "arrow.oncoming",
+                R.drawable.ic_widget_speed_cam_arrow_oncoming,
+                R.string.speed_cam_icon_arrow_oncoming,
+            ),
+        ).forEach { (state, drawable, nameRes) ->
+            addIcon(
+                "dashboard.speedcam.$state",
+                UiIconCategory.LOCATION,
+                nameRes,
+                drawable,
+                descriptionRes = R.string.speed_cam_icon_catalog_desc,
             )
         }
 

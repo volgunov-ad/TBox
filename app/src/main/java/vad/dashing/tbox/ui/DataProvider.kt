@@ -19,6 +19,7 @@ import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
 import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
@@ -62,6 +63,8 @@ const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 const val GEAR_BOX_MODE_CAN_FLOW_KEY = "gearBoxMode_can"
+const val GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY = "gearBoxCurrentGear_can"
+const val GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY = "gearBoxPreparedGear_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
@@ -295,7 +298,13 @@ class TboxDataProvider(
                 valueToString(it, eff(0))
             }
             "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY ->
+                UniversalCanRepository.currentGearNumberState.mapState { valueToString(it, eff(1)) }
             "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY ->
+                UniversalCanRepository.targetGearNumberState.mapState { valueToString(it, eff(1)) }
+            FRM_DX_TAR_OBJ_WIDGET_DATA_KEY ->
+                UniversalCanRepository.frmDxTarObjState.mapState { valueToString(it, eff(1)) }
             "gearBoxChangeGear" -> canViewModel.gearBoxChangeGear.mapState {
                 valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
             }

@@ -594,7 +594,7 @@ private fun SeatActionButton(
             modifier = Modifier
                 .fillMaxSize()
                 .scale(iconScale),
-            colorFilter = ColorFilter.tint(iconColor),
+            colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat, iconColor),
             contentScale = ContentScale.Fit,
         )
         if (side == SeatSide.BackLeft) {
@@ -604,7 +604,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_back_left, iconColor),
                 contentScale = ContentScale.Fit,
             )
         }
@@ -615,7 +615,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_back_right, iconColor),
                 contentScale = ContentScale.Fit,
             )
         }
@@ -627,7 +627,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) heatOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_1, if (level in listOf(1, 2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -636,7 +636,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) heatOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_2, if (level in listOf(2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -645,7 +645,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level == 3) heatOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_3, if (level == 3) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         } else if (modeType == "vent") {
@@ -655,7 +655,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_0, if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -664,7 +664,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_1, if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -673,7 +673,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) ventOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_2, if (level in listOf(2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
@@ -682,7 +682,7 @@ private fun SeatActionButton(
                 modifier = Modifier
                     .fillMaxSize()
                     .scale(iconScale),
-                colorFilter = ColorFilter.tint(if (level == 3) ventOn else iconColor),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_3, if (level == 3) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

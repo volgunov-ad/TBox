@@ -88,9 +88,14 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
     const val VHAL_FRM_ACC_MODE = 289_415_689 // R_0B00_FRM_3_ACCMode
     const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
+    const val VHAL_FRM_DX_TAR_OBJ = 289_415_681 // R_0B00_FRM_3_DxTarObj
+    const val VHAL_FRM_OBJ_VALID = 289_415_683 // R_0B00_FRM_3_ObjValid
     /** Conventional CCS status (2-bit); A9 Gasped [nCruiseControlStatus] analog. */
     const val VHAL_EMS_CRUISE_CONTROL_STATUS = 289_414_945 // R_0900_EMS_1_CruiseControlStatus
-    /** EMS accelerator pedal position (percent 0…100). */
+    /**
+     * EMS accelerator pedal position — **raw 0…255** (not percent).
+     * Decode: `% = raw × 100 / 255` via [PedalDomain.decodeVhalGasPedalPercent].
+     */
     const val VHAL_EMS_GAS_PEDAL_POSITION = 289_414_943 // R_0900_EMS_1_GasPedalPosition
     /** EMS accelerator invalid flag; 0 = valid. */
     const val VHAL_EMS_GAS_PEDAL_POSITION_INVALID = 289_414_944 // R_0900_EMS_1_GasPedalPositionInvalidData
@@ -102,6 +107,25 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CEM_RAIN_DETECTED = 289_412_139 // R_0400_CEM_2_RainDetected
     /** CEM high beam status 1-bit (1 on / 0 off). */
     const val VHAL_CEM_HIGH_BEAM_STS = 289_412_252 // R_0404_CEM_2_HighBeamSts
+    /**
+     * ICM EPB warning lamp status — best-effort A10 proxy for A9 BCM EPB park lamp.
+     * Scale assumed CEM 1-bit (1 on / 0 off); confirm on car.
+     */
+    const val VHAL_ICM_EPB_WARNING_LAMP_STS = 289_414_965 // R_0900_ICM_7_EPBWarningLampSts
+    /**
+     * ICM engine oil pressure warning lamp.
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_ENGINE_OIL_PRESSURE = 289_414_935 // R_0900_ICM_4_Engine_Oil_Pressure
+    /**
+     * ICM brake fluid level warning lamp (OEM typo Fuel=Fluid).
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_BRAKE_FLUID_LEVEL = 289_414_936 // R_0900_ICM_4_Brake_Fuel_Level
+    /** GSM current gear shift position (numeric gear). */
+    const val VHAL_GSM_GEAR_SHIFT_POS = 289_414_947 // R_0900_GSM_GearShiftPos (verify name on HU)
+    /** EMS target / prepared gear position. */
+    const val VHAL_EMS_TARGET_GEAR_POSITION = 289_414_953 // R_0900_EMS_TargetGearPosition
     const val VHAL_SUNSHADE_CMD_STS = 289_412_302 // R_0402_CEM_Abat_VentCMDSts
     const val VHAL_SUNROOF_CMD_STS = 289_412_303 // R_0402_CEM_PSRFCMDSts
     const val VHAL_FL_WIN_POSITION = 289_412_305 // R_0402_CEM_4_FL_WIN_Position

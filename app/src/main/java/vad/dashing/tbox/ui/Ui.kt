@@ -101,6 +101,7 @@ fun TboxApp(
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
@@ -126,8 +127,8 @@ fun TboxApp(
         )
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        UiIconRuntimeProvider(settingsViewModel) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
             MainScreen(
@@ -419,6 +420,7 @@ fun TboxScreen(
                 when (selectedTab) {
                     LeftMenuTabField.MODEM.id -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.ADB.id -> AdbTab(settingsViewModel)
                     LeftMenuTabField.GEOPOSITION.id -> LocationTab(
                         viewModel,
                         settingsViewModel,
@@ -426,6 +428,7 @@ fun TboxScreen(
                         onMockLocationSettingChanged,
                     )
                     LeftMenuTabField.ESP_COMPANION.id -> EspCompanionTab(settingsViewModel)
+                    LeftMenuTabField.ELM327.id -> Elm327Tab(settingsViewModel)
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -638,6 +641,13 @@ fun CanTab(
         canViewModel = canViewModel,
         onSaveToFile = onSaveToFile
     )
+}
+
+@Composable
+fun AdbTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    AdbTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

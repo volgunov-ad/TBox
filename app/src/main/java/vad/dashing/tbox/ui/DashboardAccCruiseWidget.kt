@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.CcsRememberedSetpoint
 import vad.dashing.tbox.mbcan.CruiseLogicalState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
@@ -77,9 +79,13 @@ fun DashboardAccCruiseWidgetItem(
     titleOverride: String = "",
     iconScale: Float = 1f,
 ) {
+    LaunchedEffect(Unit) {
+        CcsRememberedSetpoint.ensureStarted()
+    }
     val accMode by UniversalCanRepository.accCruiseMode.collectAsStateWithLifecycle()
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
+    val ccsRemembered by CcsRememberedSetpoint.kmh.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
     val accEver by UniversalCanRepository.accModeEverNonZero.collectAsStateWithLifecycle()
     val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
@@ -102,6 +108,7 @@ fun DashboardAccCruiseWidgetItem(
         accMode = accMode,
         vSetDisKmh = vSetDis,
         ccsStatus = ccsStatus,
+        rememberedSetpointKmh = ccsRemembered,
         vehicleSpeedKmh = vehicleSpeed,
         targetKmh = target,
     )
@@ -182,7 +189,7 @@ fun DashboardAccCruiseWidgetItem(
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize().scale(iconScale),
-                        colorFilter = ColorFilter.tint(iconColor),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_acc_cruise, iconColor),
                     )
                     Text(
                         text = target.toString(),

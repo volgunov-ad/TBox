@@ -50,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -71,6 +70,7 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
+import vad.dashing.tbox.speedcam.SpeedCamRepository
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
@@ -119,6 +119,7 @@ fun DashboardRoadMatchMapWidgetItem(
 ) {
     val live by RoadMatchOverlayRepository.state.collectAsStateWithLifecycle()
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    val speedCam by SpeedCamRepository.state.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_road_match_map_widget)
     val title = titleOverride.trim().ifBlank { defaultTitle }
@@ -149,6 +150,8 @@ fun DashboardRoadMatchMapWidgetItem(
     }
     var displayedHeading by remember { mutableFloatStateOf(0f) }
     var displayedAheadFrac by remember { mutableFloatStateOf(0f) }
+    var displayedLat by remember { mutableDoubleStateOf(Double.NaN) }
+    var displayedLon by remember { mutableDoubleStateOf(Double.NaN) }
     var followCameraReady by remember { mutableStateOf(false) }
     var setRotationDeg by remember { mutableFloatStateOf(0f) }
 
@@ -216,6 +219,9 @@ fun DashboardRoadMatchMapWidgetItem(
     val targetAheadLatest by rememberUpdatedState(
         if (headingUp) RoadMatchCanvasProjection.HEADING_UP_AHEAD_FRACTION else 0f,
     )
+    val targetLatLatest by rememberUpdatedState(displayState.shadow.lat)
+    val targetLonLatest by rememberUpdatedState(displayState.shadow.lon)
+    val shadowVisibleLatest by rememberUpdatedState(displayState.shadow.visible)
     LaunchedEffect(setMode) {
         if (setMode) {
             followCameraReady = false
@@ -230,13 +236,21 @@ fun DashboardRoadMatchMapWidgetItem(
                     ((now - lastNs).toDouble() / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 }
                 lastNs = now
+                if (!shadowVisibleLatest) {
+                    followCameraReady = false
+                    return@withFrameNanos
+                }
                 val targetHalf = targetHalfLatest
                 val targetHeading = targetHeadingLatest
                 val targetAhead = targetAheadLatest
+                val targetLat = targetLatLatest
+                val targetLon = targetLonLatest
                 if (!followCameraReady) {
                     displayedHalfHeight = targetHalf
                     displayedHeading = targetHeading
                     displayedAheadFrac = targetAhead
+                    displayedLat = targetLat
+                    displayedLon = targetLon
                     followCameraReady = true
                     return@withFrameNanos
                 }
@@ -247,6 +261,10 @@ fun DashboardRoadMatchMapWidgetItem(
                 val headT = RoadMatchCanvasProjection.followBlendT(
                     dt,
                     RoadMatchCanvasProjection.FOLLOW_HEADING_TAU_SEC,
+                )
+                val posT = RoadMatchCanvasProjection.followBlendT(
+                    dt,
+                    RoadMatchCanvasProjection.FOLLOW_POS_TAU_SEC,
                 )
                 displayedHalfHeight = RoadMatchCanvasProjection.lerpSpan(
                     displayedHalfHeight,
@@ -259,6 +277,26 @@ fun DashboardRoadMatchMapWidgetItem(
                     headT,
                 )
                 displayedAheadFrac += (targetAhead - displayedAheadFrac) * headT
+                val jumpM = RoadMatchCanvasProjection.approxDistanceM(
+                    displayedLat,
+                    displayedLon,
+                    targetLat,
+                    targetLon,
+                )
+                if (jumpM >= RoadMatchCanvasProjection.FOLLOW_POS_SNAP_M) {
+                    displayedLat = targetLat
+                    displayedLon = targetLon
+                } else {
+                    val blended = RoadMatchCanvasProjection.lerpLatLon(
+                        displayedLat,
+                        displayedLon,
+                        targetLat,
+                        targetLon,
+                        posT.toDouble(),
+                    )
+                    displayedLat = blended.lat
+                    displayedLon = blended.lon
+                }
             }
         }
     }
@@ -277,6 +315,8 @@ fun DashboardRoadMatchMapWidgetItem(
             halfHeightM = displayedHalfHeight,
             headingDeg = displayedHeading,
             aheadFraction = displayedAheadFrac,
+            followLat = displayedLat,
+            followLon = displayedLon,
         )
     }
 
@@ -444,8 +484,16 @@ fun DashboardRoadMatchMapWidgetItem(
                         rotationDeg = setRotationDeg,
                     )
                 }
+                // Follow: pin the pose to the smoothed follow base so it stays fixed on
+                // screen while roads/GNSS (true geo) slide under the chase camera.
+                // Set-mode: pose is already the viewport center (draft).
+                val poseForDraw = if (setMode || !displayedLat.isFinite() || !displayedLon.isFinite()) {
+                    displayState.shadow
+                } else {
+                    displayState.shadow.copy(lat = displayedLat, lon = displayedLon)
+                }
                 drawPoseMarker(
-                    marker = displayState.shadow,
+                    marker = poseForDraw,
                     viewport = vp,
                     color = Color(0xFF35C46A),
                     radiusPx = 6.dp.toPx(),
@@ -458,14 +506,29 @@ fun DashboardRoadMatchMapWidgetItem(
                         radiusPx = 7.dp.toPx(),
                     )
                 }
+                speedCam.nearbyForMap.forEach { cam ->
+                    val center = toOffset(cam.lat, cam.lon, vp)
+                    val r = if (cam.isAlertTarget) 5.5.dp.toPx() else 3.5.dp.toPx()
+                    val color = if (cam.isAlertTarget) {
+                        Color(0xFFE53935)
+                    } else {
+                        Color(0xFFB0BEC5)
+                    }
+                    drawCircle(color = Color.Black.copy(alpha = 0.35f), radius = r + 1.5f, center = center)
+                    drawCircle(color = color, radius = r, center = center)
+                }
             }
 
             if (showTitle) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
+                ).copy(fontWeight = FontWeight.SemiBold)
                 Text(
                     text = title,
                     color = resolvedTextColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = titleStyle,
                     maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -473,10 +536,14 @@ fun DashboardRoadMatchMapWidgetItem(
                 )
             }
             if (!displayState.shadow.visible) {
+                val noDataStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.UNIT,
+                )
                 Text(
                     text = noData,
                     color = resolvedTextColor.copy(alpha = 0.72f),
-                    fontSize = 11.sp,
+                    style = noDataStyle,
                     maxLines = 2,
                     modifier = Modifier
                         .align(Alignment.Center)

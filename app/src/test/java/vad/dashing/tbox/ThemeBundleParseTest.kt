@@ -68,6 +68,20 @@ class ThemeBundleParseTest {
     }
 
     @Test
+    fun parseBundleBytes_readsUiIconDarkVariant() {
+        val day = byteArrayOf(1, 2)
+        val night = byteArrayOf(3, 4)
+        val bytes = zipOf(
+            "theme.json" to MINIMAL_THEME_JSON.toByteArray(),
+            "assets/ui_icons/menu.tab.modem" to day,
+            "assets/ui_icons/menu.tab.modem.dark" to night,
+        )
+        val parsed = ThemeBundleExport.parseBundleBytes(bytes).getOrThrow()
+        assertEquals(day.toList(), parsed.uiIcons["menu.tab.modem"]?.toList())
+        assertEquals(night.toList(), parsed.uiIcons["menu.tab.modem.dark"]?.toList())
+    }
+
+    @Test
     fun parseBundleBytes_rejectsNonZip() {
         val result = ThemeBundleExport.parseBundleBytes("not a zip".toByteArray())
         assertTrue(result.isFailure)

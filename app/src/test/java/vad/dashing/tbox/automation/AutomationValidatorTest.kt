@@ -1,11 +1,14 @@
 package vad.dashing.tbox.automation
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 class AutomationValidatorTest {
     @Test
@@ -621,6 +624,48 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun hardKeyTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 158),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun hardKeyTrigger_rejectedOnAndroid10Vhal() = runBlocking {
+        UniversalCanRepository.setMode(HeadUnitCanMode.Android10Vhal)
+        try {
+            val definition = validDefinition(
+                triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 115)),
+            )
+            assertTrue(
+                AutomationValidator.validate(definition).any {
+                    it.message.contains("Android 9")
+                },
+            )
+        } finally {
+            UniversalCanRepository.setMode(HeadUnitCanMode.Android9MbCan)
+        }
+    }
+
+    @Test
+    fun hardKeyTrigger_outOfRangeKeyCode_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 5000)),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".keyCode") },
+        )
+    }
+
+    @Test
     fun setAutomationTriggerWidgetAction_isAccepted() {
         val definition = validDefinition(
             actions = listOf(
@@ -632,6 +677,134 @@ class AutomationValidatorTest {
             ),
         )
         assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun setHuScreenBrightness_acceptsLevel1to10() {
+        val ok = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 8,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(ok).isEmpty())
+
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".intValue") },
+        )
+    }
+
+    @Test
+    fun setHuScreenAutoBrightness_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS,
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun setHuDayNightTheme_acceptsLightDarkAuto() {
+        listOf("light", "dark", "auto").forEach { key ->
+            val ok = validDefinition(
+                actions = listOf(
+                    AutomationAction.Builtin(
+                        type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                        stringValue = key,
+                    ),
+                ),
+            )
+            assertTrue(AutomationValidator.validate(ok).isEmpty())
+        }
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                    stringValue = "manual",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
+    fun platformVolumeRanges_andHeadrestStates_areValidated() {
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 1,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_NAVI_VOLUME,
+                            intValue = 10,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 2,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "off",
+                        ),
+                    ),
+                ),
+            ).isEmpty(),
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 0,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 1,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "mute",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
     }
 
     @Test

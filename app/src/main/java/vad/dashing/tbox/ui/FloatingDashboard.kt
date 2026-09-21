@@ -88,6 +88,7 @@ import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.clampFloatingPanelOrigin
 import vad.dashing.tbox.collapsedPanelBounds
 import vad.dashing.tbox.collapsedPanelInteractionBounds
 import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
@@ -142,6 +143,7 @@ fun FloatingDashboardUI(
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId)
@@ -158,8 +160,8 @@ fun FloatingDashboardUI(
         }
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        UiIconRuntimeProvider(settingsViewModel) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
             CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -216,6 +218,8 @@ fun FloatingDashboard(
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
     val floatingPanelsLayoutSnapDp by
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val floatingPanelsAllowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
     val layoutSnapDp = normalizePanelLayoutSnapDp(floatingPanelsLayoutSnapDp)
     val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
     val widgetConfigs = panelConfig.widgetsConfig
@@ -283,10 +287,16 @@ fun FloatingDashboard(
         panelConfig.startY,
         panelConfig.width,
         panelConfig.height,
+        floatingPanelsAllowBeyondScreen,
     ) {
+        val origin = clampFloatingPanelOrigin(
+            x = panelConfig.startX,
+            y = panelConfig.startY,
+            allowBeyondScreen = floatingPanelsAllowBeyondScreen,
+        )
         PanelPxBounds(
-            x = panelConfig.startX.coerceAtLeast(0),
-            y = panelConfig.startY.coerceAtLeast(0),
+            x = origin.x,
+            y = origin.y,
             width = panelConfig.width.coerceAtLeast(1),
             height = panelConfig.height.coerceAtLeast(1),
         )
@@ -512,15 +522,20 @@ fun FloatingDashboard(
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         if (isDraggingMode) {
-                                            val newX = snapToGrid(
+                                            val snappedX = snapToGrid(
                                                 windowParams.x + dragAmount.x,
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(0)
-                                            val newY = snapToGrid(
+                                            ).toInt()
+                                            val snappedY = snapToGrid(
                                                 windowParams.y + dragAmount.y,
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(-100)
-                                            onUpdateWindowPosition(panelId, newX, newY)
+                                            ).toInt()
+                                            val origin = clampFloatingPanelOrigin(
+                                                x = snappedX,
+                                                y = snappedY,
+                                                allowBeyondScreen = floatingPanelsAllowBeyondScreen,
+                                            )
+                                            onUpdateWindowPosition(panelId, origin.x, origin.y)
                                         } else if (isResizingMode) {
                                             val newWidth = snapToGrid(
                                                 (windowParams.width + dragAmount.x)

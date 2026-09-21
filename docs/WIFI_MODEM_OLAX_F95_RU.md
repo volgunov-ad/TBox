@@ -3,6 +3,11 @@
 Источник данных: HAR `OlaxF95.har` + `OlaxF95_on_off_connection.har` с реального устройства
 (админка `http://192.168.0.1`, папка [Модемы на Яндекс.Диске](https://disk.yandex.ru/d/9oqTGVdLADEycA)).
 
+Идея: виджет сигнала (`netWidget*`) и вкладка **Модем** могут брать данные не только с TBox (MDC UDP),
+а с внешнего 4G MiFi/роутера, к которому ГУ подключена по Wi‑Fi. Пользователь задаёт IP, логин/пароль
+и модель; приложение опрашивает HTTP API модема.
+Аналогия по архитектуре — **источник геопозиции** (`LocationSource` + fan-in в `TboxRepository`).
+
 ## Статус
 
 | Этап | Состояние |
@@ -67,6 +72,17 @@ goformId=LOGIN&password=<Base64(plaintext)>
 | Включить данные | `notCallback=true&goformId=CONNECT_NETWORK` | `{"result":"success"}` |
 | Перезагрузка | `goformId=REBOOT_DEVICE` | (часто пустой / обрыв) |
 
+## Автоматизации
+
+Состояния модема (источник «Приложение»):
+`wifi_modem_link_status`, `modem_mobile_data`, `modem_net_type`, `modem_sim_status`.
+Действия: `wifi_modem_set_data`, `wifi_modem_reboot` (нужен источник Wi‑Fi HTTP).
+См. [AUTOMATIONS_RU.md](./AUTOMATIONS_RU.md).
+
+Android-нюанс: при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
+запросы к `192.168.x.x` биндятся к Wi‑Fi Network (`ConnectivityManager.bindProcessToNetwork`
+или per-socket `Network.bindSocket`).
+
 ## Код
 
 | Файл | Роль |
@@ -75,6 +91,7 @@ goformId=LOGIN&password=<Base64(plaintext)>
 | `wifimodem/OlaxReqprocStatusCmds.kt` | списки `cmd=` для poll |
 | `wifimodem/ZteReqprocAuth.kt` | Base64 LOGIN (`Dialect.BASE64_PASSWORD`) |
 | `wifimodem/ZteReqprocStatusMapper.kt` | JSON → `NetState` (общие имена полей) |
+| `wifimodem/ModemSource.kt` | `TBOX` / `WIFI_HTTP` |
 | `WifiModemModel.OLAX_F95` | модель в настройках |
 | `app/src/test/resources/wifimodem/olax_f95/` | обезличенные фикстуры из HAR |
 
