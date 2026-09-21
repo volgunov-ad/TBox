@@ -70,6 +70,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.adb.HuAdbControl
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -771,6 +772,8 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
+    val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
@@ -817,6 +820,20 @@ fun SettingsTabContent(
     LaunchedEffect(headUnitCanMode) {
         UniversalCanRepository.setMode(headUnitCanMode)
         UniversalCanRepository.warmUpAvailabilityForUi()
+    }
+
+    LaunchedEffect(isExpertModeEnabled) {
+        if (isExpertModeEnabled) {
+            settingsViewModel.refreshHuAdbState()
+        }
+    }
+
+    val huAdbErrorTitle = stringResource(R.string.settings_adb_apply_error_title)
+    LaunchedEffect(huAdbError) {
+        if (huAdbError != null) {
+            showAlertDialog(huAdbErrorTitle, huAdbError!!, context)
+            settingsViewModel.consumeHuAdbError()
+        }
     }
 
     var restartButtonEnabled by remember { mutableStateOf(true) }
@@ -1255,6 +1272,24 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_diagnostics_title),
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
                 true
+            )
+            SettingSwitch(
+                huAdbState.tcpEnabled,
+                { enabled ->
+                    settingsViewModel.setHuAdbTcpEnabled(enabled)
+                },
+                stringResource(R.string.settings_adb_tcp_title),
+                stringResource(R.string.settings_adb_tcp_desc),
+                !huAdbState.readFailed
+            )
+            SettingSwitch(
+                huAdbState.usbEnabled,
+                { enabled ->
+                    settingsViewModel.setHuAdbUsbEnabled(enabled)
+                },
+                stringResource(R.string.settings_adb_usb_title),
+                stringResource(R.string.settings_adb_usb_desc),
+                !huAdbState.readFailed
             )
             CalibrationIntCommitField(
                 title = stringResource(R.string.settings_can_frames_count_title),

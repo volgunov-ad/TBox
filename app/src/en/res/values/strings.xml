@@ -1352,6 +1352,11 @@
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
     <string name="settings_mbcan_diagnostics_title">CAN diagnostics (mbCAN/VHAL)</string>
     <string name="settings_mbcan_diagnostics_desc">One switch for MBCAN_TMP and VHAL_A10 logs. Enabled only for the current background service session and not persisted.</string>
+    <string name="settings_adb_tcp_title">Enable ADB TCP on HU</string>
+    <string name="settings_adb_tcp_desc">Port 5555; adbd restarts after changing the setting</string>
+    <string name="settings_adb_usb_title">Enable ADB USB on HU</string>
+    <string name="settings_adb_usb_desc">Switches the HU USB port between peripheral and host mode</string>
+    <string name="settings_adb_apply_error_title">ADB configuration error</string>
     <string name="settings_mock_location_title">System location mock</string>
     <string name="settings_mock_power_off_short">Off</string>
     <string name="settings_mock_power_when_no_fix_short">No fix</string>

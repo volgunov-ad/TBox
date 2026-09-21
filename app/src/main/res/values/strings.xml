@@ -1363,6 +1363,11 @@
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
     <string name="settings_mbcan_diagnostics_title">Диагностика CAN (mbCAN/VHAL)</string>
     <string name="settings_mbcan_diagnostics_desc">Единая опция для логов MBCAN_TMP и VHAL_A10. Включается только на текущую сессию фоновой службы и не сохраняется</string>
+    <string name="settings_adb_tcp_title">Включить ADB TCP на ГУ</string>
+    <string name="settings_adb_tcp_desc">Порт 5555; после изменения перезапускается adbd</string>
+    <string name="settings_adb_usb_title">Включить ADB USB на ГУ</string>
+    <string name="settings_adb_usb_desc">Переключает USB-порт ГУ в режим периферии или хоста</string>
+    <string name="settings_adb_apply_error_title">Ошибка настройки ADB</string>
     <string name="settings_mock_location_title">Подмена системной геопозиции</string>
     <string name="settings_mock_power_off_short">Откл.</string>
     <string name="settings_mock_power_when_no_fix_short">Нет фикса</string>

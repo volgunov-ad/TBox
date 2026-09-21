@@ -2166,6 +2166,28 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun refreshHuAdbState() {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+        }
+    }
+
+    fun setHuAdbTcpEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.setTcpEnabled(enabled)
+        }
+    }
+
+    fun setHuAdbUsbEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(enabled)
+        }
+    }
+
+    fun consumeHuAdbError() {
+        vad.dashing.tbox.adb.HuAdbControl.consumeError()
+    }
+
     fun openPermissionsDialog() {
         _showPermissionsDialog.value = true
     }
