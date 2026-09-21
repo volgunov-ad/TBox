@@ -5306,6 +5306,36 @@ class BackgroundService : Service() {
                 }
             }
 
+
+            launch {
+                combine(
+                    modemSource,
+                    wifiModemModel,
+                    wifiModemHost,
+                    wifiModemPassword,
+                    wifiModemPollIntervalSec,
+                ) { source, model, host, password, intervalSec ->
+                    listOf(source, model, host, password, intervalSec)
+                }
+                    .drop(1)
+                    .collect {
+                        applyModemDataSource()
+                    }
+            }
+
+            launch {
+                combine(
+                    huInternetProbeUrl,
+                    huInternetProbeIntervalSec,
+                    huInternetProbeEnabled,
+                ) { url, intervalSec, enabled ->
+                    Triple(url, intervalSec, enabled)
+                }
+                    .collect {
+                        applyHuInternetMonitor()
+                    }
+            }
+
             launch {
                 elm327Enabled.collect { enabled ->
                     if (enabled) {

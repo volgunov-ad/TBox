@@ -1,0 +1,1 @@
+network_type,sub_network_type,rssi,lte_rscp,lte_rsrp,nv_rsrq,nv_sinr,lte_band,cell_id

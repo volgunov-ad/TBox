@@ -7,7 +7,7 @@ import java.util.Base64
 /**
  * Password encoding helpers for ZTE-lineage `/reqproc` LOGIN variants.
  *
- * F95 exact dialect is unverified until a live capture; see
+ * Olax F95 uses [Dialect.BASE64_PASSWORD] (VERIFIED from HAR); see
  * [docs/WIFI_MODEM_OLAX_F95_RU.md].
  */
 object ZteReqprocAuth {

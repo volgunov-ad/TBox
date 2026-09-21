@@ -31,6 +31,7 @@ class WifiModemPoller(
     private var job: Job? = null
     private var zteClient: ZteGoformClient? = null
     private var huaweiClient: HuaweiHilinkClient? = null
+    private var olaxClient: OlaxReqprocClient? = null
     private var activeModel: WifiModemModel? = null
     private var previousSnapshot: WifiModemSnapshot? = null
     private var consecutiveFailures: Int = 0
@@ -57,19 +58,17 @@ class WifiModemPoller(
                     WifiModemModel.ZTE_MF79U -> {
                         zteClient = ZteGoformClient(host = effectiveHost, password = password)
                         huaweiClient = null
+                        olaxClient = null
                     }
                     WifiModemModel.HUAWEI_E3372 -> {
                         huaweiClient = HuaweiHilinkClient(host = effectiveHost)
                         zteClient = null
+                        olaxClient = null
                     }
                     WifiModemModel.OLAX_F95 -> {
-                        Log.w(TAG, "Model ${model.storageId} has no HTTP driver yet; poller not started")
-                        TboxRepository.addLog(
-                            "WARN",
-                            "Wi‑Fi modem",
-                            "Модель ${model.displayName} пока без драйвера HTTP",
-                        )
-                        return@withLock
+                        olaxClient = OlaxReqprocClient(host = effectiveHost, password = password)
+                        zteClient = null
+                        huaweiClient = null
                     }
                 }
                 activeModel = model
@@ -120,7 +119,12 @@ class WifiModemPoller(
                                 ?: throw IllegalStateException("Huawei client not running")
                             client.setMobileDataEnabled(enabled)
                         }
-                        else -> throw IllegalStateException("No controllable Wi‑Fi modem active")
+                        WifiModemModel.OLAX_F95 -> {
+                            val client = olaxClient
+                                ?: throw IllegalStateException("Olax client not running")
+                            client.setMobileDataEnabled(enabled)
+                        }
+                        null -> throw IllegalStateException("No controllable Wi‑Fi modem active")
                     }
                     TboxRepository.addLog(
                         "INFO",
@@ -161,7 +165,13 @@ class WifiModemPoller(
                             client.rebootDevice()
                             rebootIssued = true
                         }
-                        else -> throw IllegalStateException("No controllable Wi‑Fi modem active")
+                        WifiModemModel.OLAX_F95 -> {
+                            val client = olaxClient
+                                ?: throw IllegalStateException("Olax client not running")
+                            client.rebootDevice()
+                            rebootIssued = true
+                        }
+                        null -> throw IllegalStateException("No controllable Wi‑Fi modem active")
                     }
                     TboxRepository.addLog("INFO", "Wi‑Fi modem", "Перезагрузка модема")
                 } catch (e: Exception) {
@@ -204,16 +214,23 @@ class WifiModemPoller(
         val host = lastHost.ifBlank { model.defaultHost }
         zteClient?.invalidateSession()
         huaweiClient?.invalidateSession()
+        olaxClient?.invalidateSession()
         when (model) {
             WifiModemModel.ZTE_MF79U -> {
                 zteClient = ZteGoformClient(host = host, password = lastPassword)
                 huaweiClient = null
+                olaxClient = null
             }
             WifiModemModel.HUAWEI_E3372 -> {
                 huaweiClient = HuaweiHilinkClient(host = host)
                 zteClient = null
+                olaxClient = null
             }
-            WifiModemModel.OLAX_F95 -> Unit
+            WifiModemModel.OLAX_F95 -> {
+                olaxClient = OlaxReqprocClient(host = host, password = lastPassword)
+                zteClient = null
+                huaweiClient = null
+            }
         }
     }
 
@@ -227,6 +244,8 @@ class WifiModemPoller(
         zteClient = null
         huaweiClient?.invalidateSession()
         huaweiClient = null
+        olaxClient?.invalidateSession()
+        olaxClient = null
         activeModel = null
         previousSnapshot = null
         recoveryUntilElapsedMs = 0L
@@ -257,7 +276,16 @@ class WifiModemPoller(
                         active.fetchStatus(previousSnapshot)
                     }
                 }
-                WifiModemModel.OLAX_F95 -> return
+                WifiModemModel.OLAX_F95 -> {
+                    val active = olaxClient ?: return
+                    val fields = try {
+                        active.fetchStatus()
+                    } catch (first: OlaxReqprocException) {
+                        active.invalidateSession()
+                        active.fetchStatus()
+                    }
+                    ZteReqprocStatusMapper.map(fields, previousSnapshot)
+                }
             }
             previousSnapshot = snap
             consecutiveFailures = 0
@@ -278,6 +306,7 @@ class WifiModemPoller(
             // otherwise leaves tokens that block recovery until a full source switch.
             zteClient?.invalidateSession()
             huaweiClient?.invalidateSession()
+            olaxClient?.invalidateSession()
             if (inRebootRecovery() || consecutiveFailures <= 2) {
                 // Recreate OkHttp clients to flush dead keep-alive sockets after reboot.
                 recreateClientsLocked()

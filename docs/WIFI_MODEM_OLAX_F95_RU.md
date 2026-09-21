@@ -1,166 +1,98 @@
-# Wi‑Fi модем как источник сети (Olax F95)
+# Wi‑Fi модем Olax F95 (reqproc)
+
+Источник данных: HAR `OlaxF95.har` + `OlaxF95_on_off_connection.har` с реального устройства
+(админка `http://192.168.0.1`, папка [Модемы на Яндекс.Диске](https://disk.yandex.ru/d/9oqTGVdLADEycA)).
 
 Идея: виджет сигнала (`netWidget*`) и вкладка **Модем** могут брать данные не только с TBox (MDC UDP),
 а с внешнего 4G MiFi/роутера, к которому ГУ подключена по Wi‑Fi. Пользователь задаёт IP, логин/пароль
 и модель; приложение опрашивает HTTP API модема.
-
 Аналогия по архитектуре — **источник геопозиции** (`LocationSource` + fan-in в `TboxRepository`).
 
 ## Статус
 
 | Этап | Состояние |
 |------|-----------|
-| Исследование API семейства Olax / ZTE `reqproc` | сделано (по открытым источникам) |
-| Живая проверка на физическом **Olax F95** | **нет** — нужен захват DevTools / HAR |
-| Живая проверка на **ZTE MF79U** (goform) | **да** — HAR разобран (статус + data on/off + reboot), см. [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md) |
-| HAR **Huawei E3372-325** (HiLink XML) | **да** — исследование, см. [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md) |
-| Каркас парсера / маппинга / unit-тесты | в коде (`wifimodem/`) |
-| Settings UX, поллер, переключение источника | ещё не подключено |
+| Живая проверка на физическом **Olax F95** | **да** — HAR разобран (статус + data on/off + reboot) |
+| Логин | **VERIFIED** — Base64 пароля |
+| Поллер / UI / управление | в коде (`OlaxReqprocClient`, `WifiModemPoller`) |
 
-## Что уже есть в приложении
-
-- Сигнал и вкладка «Модем» → только `TboxRepository.netState` / `netValues` / `APN*` из MDC (`BackgroundService`).
-- Гео уже multi-source: `LocationSource` (TBOX / ESP32 / ANDROID / USB).
-- HTTP-клиент с basic/digest есть у `HttpRequestWidget`, но он **не парсит ответ** и не пишет в net-state.
-- `usesCleartextTraffic=true` — HTTP к `192.168.x.x` допустим.
-
-## Olax F95 — что известно
-
-Продукт: компактный **4G USB dongle / MiFi** с dual-band Wi‑Fi (2.4 + 5.8), внешние антенны CRC9.
-Типичный доступ к веб-UI у линейки Olax: `http://192.168.0.1` или `192.168.1.1` / `192.168.8.1`,
-логин/пароль часто `admin` / `admin` (на части моделей только пароль).
-
-**Точный диалект прошивки F95 не подтверждён без устройства.** По смежным Olax/ZTE MiFi почти
-наверняка используется тот же стек, что и у веб-UI:
+## API
 
 | | |
 |--|--|
-| Чтение | `GET /reqproc/proc_get?isTest=false&multi_data=1&cmd=a,b,c` → JSON |
-| Запись | `POST /reqproc/proc_post` (`application/x-www-form-urlencoded`), `goformId=…` |
-| Заголовок | `Referer: http://<host>/` (часто обязателен) |
+| Чтение | `GET /reqproc/proc_get?multi_data=1&cmd=a,b,c` → JSON |
+| Запись | `POST /reqproc/proc_post` (`application/x-www-form-urlencoded`) |
+| Referer | `http://<host>/index.html` |
+| Origin | `http://<host>` (для POST) |
 
-### Полезные `cmd=` для виджета / вкладки «Модем»
+Это **не** ZTE UFI goform (`/goform/…`), а классический Demo-Webs **`/reqproc`**.
 
-| Поле API | Назначение | Маппинг в приложение |
-|----------|------------|----------------------|
-| `signalbar` (0–5) | полоски UI модема | → `NetState.signalLevel` 0–4 (5→4) |
-| `rssi` | dBm | → оценка CSQ ≈ `(rssi+113)/2`, clamp 0..31 |
-| `network_type` / `sub_network_type` | LTE / WCDMA / GSM… | → `2G` / `3G` / `4G` |
-| `network_provider` | оператор (строка) | → `NetValues.operator` |
-| `imei`, `sim_imsi` / `imsi`, `ziccid` / `iccid` | идентификаторы | → `NetValues` |
-| `ppp_status` | `ppp_connected` и др. | → `apnStatus` / `APNState.apnStatus` |
-| `modem_main_state` | готовность модема/SIM | → `simStatus` |
+## Логин (VERIFIED)
+
+`POST /reqproc/proc_post` с телом:
+
+```
+goformId=LOGIN&password=<Base64(plaintext)>
+```
+
+На захваченной прошивке `PASSWORD_ENCODE=true` (`js/set.js`). Успех: `{"result":"0"}` или `"4"`.
+
+Сессия IP-bound; cookie в HAR нет. Последующие `proc_get` с того же клиента.
+
+## Опрос статуса
+
+Полный poll делает **два** `multi_data` запроса: `HOME` (полоски, PPP, `realtime_*_thrpt`) и
+`RADIO`+`DEVICE` (RSSI/RSRP, IMEI). Поля thrpt и радиометрики на F95 живут на разных страницах UI.
+
+| `cmd` | Назначение | Маппинг |
+|-------|------------|---------|
+| `signalbar` | 0–5 полосок | → `NetState.signalLevel` 0–4 |
+| `rssi`, `lte_rsrp` | dBm | → `NetState.signalDbm`, CSQ |
+| `network_type` / `sub_network_type` | `LTE` / `FDD_LTE`… | → `4G`/`3G`/`2G` |
+| `network_provider` | оператор | → `NetValues.operator` |
+| `imei`, `sim_imsi`, `ziccid` | идентификаторы | → `NetValues` |
+| `ppp_status` | `ppp_connected` / … | → `apnStatus` |
+| `modem_main_state` | готовность | → `simStatus` |
 | `simcard_roam` | `Home` / `Roaming` | → `regStatus` |
-| `lte_rsrp`, `nv_rsrq`/`lte_rsrq`, `nv_sinr`/`lte_snr`, `lte_band`, `cell_id` | расширенная радиометрика | пока только в `WifiModemSnapshot` (для будущей вкладки) |
-| `wan_ipaddr` / DHCP LAN | IP | → `APNState.apnIP` при наличии |
+| `realtime_rx_thrpt`, `realtime_tx_thrpt` | скорость ↓/↑, байт/с | → `downloadSpeedBps` / `uploadSpeedBps` |
+| `wan_ipaddr` | WAN IP | → `APNState.apnIP` |
+| `cr_version`, `hw_version` | прошивка | → `WifiModemSnapshot.firmware` |
+| `nv_rsrq`, `nv_sinr`, `lte_band`, `cell_id` | радиометрика | snapshot |
 
-### Диалекты логина (нужен probe на F95)
+Пример из HAR (LTE / BeeLine): `signalbar=5`, `rssi=-83`, `lte_rsrp=-83`,
+`realtime_rx_thrpt=368304`, `cr_version=F95SW1.0_FE_OLAX_SL_…`.
 
-Разные прошивки ZTE/Olax делают `LOGIN` по-разному:
+## Управление (VERIFIED)
 
-1. **Base64 пароля** (Olax M100 / часть USB Olax):  
-   `password = base64(plaintext)`, без username; сессия часто привязана к IP клиента, cookie нет.
-2. **LD/RD/AD challenge** (классический ZTE): хеш с токенами `LD`/`RD`/`AD`.
-3. **Nonce SHA-256** (новые CPE / ZLT):  
-   `get_random_login` → `password = base64(sha256_hex(nonce + plaintext))`, иногда `username=base64(user)`, cookie `random`.
+В отличие от ZTE MF79U goform, **AD/RD не нужны**.
 
-Каркас умеет кодировать варианты 1 и 3; вариант 2 и точный выбор для F95 — после захвата с устройства.
+| Действие | Body | Ответ |
+|----------|------|-------|
+| Отключить данные | `notCallback=true&goformId=DISCONNECT_NETWORK` | `{"result":"success"}` |
+| Включить данные | `notCallback=true&goformId=CONNECT_NETWORK` | `{"result":"success"}` |
+| Перезагрузка | `goformId=REBOOT_DEVICE` | (часто пустой / обрыв) |
 
-Управление (фаза 2+): `CONNECT_NETWORK` / `DISCONNECT_NETWORK`, `REBOOT_DEVICE`, `SET_BEARER_PREFERENCE`
-(аналог режимов ON / flight / OFF на вкладке Модем — семантика другая, не AT+CFUN).
+## Автоматизации
 
-## Предлагаемая архитектура
-
-```
-ModemSource: TBOX | WIFI_HTTP
-WifiModemModel: OLAX_F95 | … (драйверы)
-
-Settings: host, username, password, model, poll interval
-  → BackgroundService: start/stop WifiModemPoller vs MDC net/APN updaters
-  → драйвер пишет в TboxRepository.netState / netValues / apn* / apnStatus
-     (как geo → locValues)
-
-Виджеты и вкладка Модем остаются на тех же StateFlow.
-requiresTboxConnection для netWidget* нужно ослабить, если источник WIFI_HTTP.
-```
-
-Отдельно от PPP/статуса модема на вкладке «Модем» есть **проверка интернета ГУ**:
-HTTP(S) probe по настраиваемому URL (по умолчанию `https://yandex.ru`) с отдельным интервалом.
-`online` публикуется сразу после удачной проверки; `offline` — только после **двух** подряд
-неудачных (одиночный сбой статус не сбрасывает). Реализация: `internet/HuInternetMonitor` →
-`TboxRepository.huInternetStatus`. Тот же статус доступен в автоматизациях как сигнал
-`hu_internet_status` (триггер «Состояние» / условие «Состояние»).
-
-Состояния модема для автоматизаций (источник «Приложение»):
+Состояния модема (источник «Приложение»):
 `wifi_modem_link_status`, `modem_mobile_data`, `modem_net_type`, `modem_sim_status`.
 Действия: `wifi_modem_set_data`, `wifi_modem_reboot` (нужен источник Wi‑Fi HTTP).
 См. [AUTOMATIONS_RU.md](./AUTOMATIONS_RU.md).
 
-Android-нюанс (как у Routspan): при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
-запросы к `192.168.x.x` надо **биндить к Wi‑Fi Network** (`ConnectivityManager.bindProcessToNetwork`
+Android-нюанс: при «Wi‑Fi без интернета» ГУ может уводить HTTP на mobile —
+запросы к `192.168.x.x` биндятся к Wi‑Fi Network (`ConnectivityManager.bindProcessToNetwork`
 или per-socket `Network.bindSocket`).
-
-## Инструкция: захват API Olax F95 (один раз)
-
-Нужен ПК с Chrome (или Edge) и модем с Wi‑Fi. Достаточно **одного HAR-файла**.
-
-### Шаги
-
-1. Подключите ПК к Wi‑Fi модема (SSID/пароль на наклейке). VPN выключите.
-2. В браузере откройте админку — обычно один из адресов:
-   `http://192.168.0.1` · `http://192.168.1.1` · `http://192.168.8.1`
-3. **До логина** нажмите `F12` → вкладка **Network** / **Сеть**.
-4. Включите **Preserve log** / «Сохранять журнал». Список запросов очистите (🚫).
-5. Залогиньтесь (часто `admin` / `admin`).
-6. Покликайте основные разделы админки: главная/статус, мобильная сеть, SIM/о устройстве,
-   Wi‑Fi — чтобы UI сам запросил нужные поля. 20–30 секунд достаточно.
-7. В панели Network: ПКМ по списку запросов → **Save all as HAR with content**  
-   → файл `olax_f95.har`.
-
-Этого файла хватает: в нём и логин, и опросы статуса, URL, заголовки и тела ответов.
-
-### Перед отправкой (желательно)
-
-Откройте `.har` в блокноте и замените на `***` (поиск по файлу):
-
-- свой недефолтный пароль (если меняли);
-- IMEI / IMSI / ICCID / номер телефона — если не хотите светить SIM.
-
-Имена полей (`signalbar`, `ppp_status`, `goformId=LOGIN` и т.п.) трогать не нужно.
-
-### Что прислать
-
-Один файл: **`olax_f95.har`**.  
-По желанию одной строкой: какой IP открылся и логин/пароль по умолчанию или свой.
-
-В репозитории после разбора обезличенные куски попадут в  
-`app/src/test/resources/wifimodem/olax_f95/`, диалект в этом документе — **VERIFIED**.
-
-### Если админка только с телефона
-
-С телефона HAR снять неудобно — лучше ПК в той же Wi‑Fi. Запасной вариант: прокси
-(`mitmproxy` / Charles) на ПК и браузер телефона через него.
-
-Референсы протокола (не F95): [routspan Olax M100](https://github.com/ajshovon/routspan/blob/main/docs/olax-m100-api.md),
-[zltrouter reqproc](https://github.com/exbyte-dev/zltrouter/blob/master/docs/protocol.md).
-
-## План внедрения
-
-1. **Сейчас:** документ + чистый маппинг JSON → `NetState`/`NetValues` + unit-тесты + enum источника/модели.
-2. OkHttp-клиент `ZteReqprocClient` + авто-probe логина + poller.
-3. Prefs + UI на вкладке Модем / в настройках сети (IP, user, pass, модель).
-4. Переключение `ModemSource`, ослабление `requiresTboxConnection` для net-виджетов.
-5. Управление: data on/off, reboot; позже — расширенные поля (RSRP/SINR) на вкладке.
-6. После live-capture — пометить диалект F95 как VERIFIED и добавить фикстуры с реального устройства.
 
 ## Код
 
 | Файл | Роль |
 |------|------|
+| `wifimodem/OlaxReqprocClient.kt` | login / status / data / reboot |
+| `wifimodem/OlaxReqprocStatusCmds.kt` | списки `cmd=` для poll |
+| `wifimodem/ZteReqprocAuth.kt` | Base64 LOGIN (`Dialect.BASE64_PASSWORD`) |
+| `wifimodem/ZteReqprocStatusMapper.kt` | JSON → `NetState` (общие имена полей) |
 | `wifimodem/ModemSource.kt` | `TBOX` / `WIFI_HTTP` |
-| `wifimodem/ModemConnectionCheck.kt` | здоровье канала + Offline интернета ГУ для авто-восстановления |
-| `wifimodem/WifiModemModel.kt` | каталог моделей (`OLAX_F95`) |
-| `wifimodem/ZteReqprocAuth.kt` | кодирование пароля (base64 / sha256-nonce) |
-| `wifimodem/ZteReqprocStatusMapper.kt` | JSON → snapshot / Net* |
-| `wifimodem/WifiModemSnapshot.kt` | богатый снимок для UI |
-| тесты `wifimodem/*Test.kt` | регрессия маппинга без устройства |
+| `WifiModemModel.OLAX_F95` | модель в настройках |
+| `app/src/test/resources/wifimodem/olax_f95/` | обезличенные фикстуры из HAR |
+
+См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md).
