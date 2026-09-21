@@ -1543,6 +1543,7 @@ fun DashboardWidgetRenderer(
         }
 
         TRIP_METRIC_WIDGET_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardTripMetricWidgetItem(
                 appDataViewModel = appDataViewModel,
                 tripWidgetSource = widgetConfig.tripWidgetSource,
@@ -1553,6 +1554,20 @@ fun DashboardWidgetRenderer(
                 showUnit = widgetConfig.showUnit,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = {
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
+                    }
+                },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
