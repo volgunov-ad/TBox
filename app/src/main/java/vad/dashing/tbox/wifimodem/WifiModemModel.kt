@@ -11,6 +11,10 @@ enum class WifiModemModel(
     /** Typical factory LAN IP (user may override). */
     val defaultHost: String,
 ) {
+    /**
+     * Olax F95 — HTTP `/reqproc` API at LAN IP.
+     * Auth/status/control verified from a real device HAR (see docs/WIFI_MODEM_OLAX_F95_RU.md).
+     */
     OLAX_F95(
         storageId = "olax_f95",
         displayName = "Olax F95",

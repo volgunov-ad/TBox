@@ -1,0 +1,11 @@
+{
+  "network_type": "LTE",
+  "sub_network_type": "FDD_LTE",
+  "rssi": "-83",
+  "lte_rscp": "",
+  "lte_rsrp": "-83",
+  "nv_rsrq": "13",
+  "nv_sinr": "6",
+  "lte_band": "20",
+  "cell_id": "197387779"
+}

@@ -49,7 +49,9 @@ object ZteReqprocStatusMapper {
         val signalBar = fields["signalbar"]?.toIntOrNull()
         // Tolerant parse (plain "-84" or "-84dBm"); home multi_data often omits radio keys.
         val rssi = HuaweiSignalMetric.parseInt(fields["rssi"])
-        val rscp = HuaweiSignalMetric.parseInt(fields["rscp"])
+        val rscp = HuaweiSignalMetric.parseInt(
+            firstNonBlank(fields, "rscp", "lte_rscp"),
+        )
         val lteRssi = HuaweiSignalMetric.parseInt(fields["lte_rssi"])
         val rsrp = HuaweiSignalMetric.parseInt(
             firstNonBlank(fields, "lte_rsrp", "Z5g_rsrp"),
@@ -78,7 +80,7 @@ object ZteReqprocStatusMapper {
         val imsi = firstNonBlank(fields, "sim_imsi", "imsi").ifBlank { "-" }
         val iccid = firstNonBlank(fields, "ziccid", "iccid").ifBlank { "-" }
         val wanIp = firstNonBlank(fields, "wan_ipaddr", "wan_ip")
-        val firmware = firstNonBlank(fields, "cr_version", "wa_inner_version")
+        val firmware = firstNonBlank(fields, "cr_version", "wa_inner_version", "hw_version")
 
         val prevNet = previous?.netState
         val connectionChangeTime = when {
