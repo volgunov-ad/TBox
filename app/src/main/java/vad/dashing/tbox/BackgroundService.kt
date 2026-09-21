@@ -26,11 +26,16 @@ import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockHeadingSource
 import vad.dashing.tbox.location.MockLocationJob
+import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchWidgetPresence
+import vad.dashing.tbox.location.roadmatch.RoadGraphStore
+import vad.dashing.tbox.speedcam.SpeedCamLookahead
+import vad.dashing.tbox.speedcam.SpeedCamPackManager
 import vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder
 import vad.dashing.tbox.speedcam.SpeedCamRepository
 import vad.dashing.tbox.speedcam.SpeedCamUiState
@@ -4634,8 +4639,8 @@ class BackgroundService : Service() {
     }
 
     /**
-     * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any SpeedCam tile
-     * is present. Uses the shared pack index from [SpeedCamPackManagerHolder].
+     * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any unified
+     * maps/cameras/radars tile (`osmSpeedLimitWidget`) is present.
      */
     private fun startSpeedCamTicker() {
         if (speedCamTickerJob != null) return
@@ -4654,9 +4659,15 @@ class BackgroundService : Service() {
                 combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                     Triple(dash, floating, main)
                 },
-            ) { display, snap, widgets -> Triple(display, snap, widgets) }
-                .collect { (display, snap, widgets) ->
-                    val (dash, floating, main) = widgets
+                RoadMatchAnchorRepository.state,
+            ) { display, snap, widgets, anchor ->
+                SpeedCamTickInput(display, snap, widgets, anchor)
+            }
+                .collect { input ->
+                    val display = input.display
+                    val snap = input.snap
+                    val (dash, floating, main) = input.widgets
+                    val anchor = input.anchor
                     val agg = SpeedCamWidgetPresence.aggregate(dash, floating, main)
                     if (agg == null) {
                         if (SpeedCamRepository.state.value != SpeedCamUiState.EMPTY) {
@@ -4664,11 +4675,26 @@ class BackgroundService : Service() {
                         }
                         return@collect
                     }
+                    ensureRoadMatchController().maxLookaheadDistanceM = agg.radiusM.toDouble()
                     val carSpeed = TripTelemetryRepository.accountingCarSpeed()
                     val speed = when {
                         display.speedKmh.isFinite() && display.speedKmh > 0f -> display.speedKmh
                         carSpeed != null && carSpeed.isFinite() && carSpeed > 0f -> carSpeed
                         else -> 0f
+                    }
+                    val roadHint = if (anchor.edgeId != null &&
+                        anchor.alongTrackM != null &&
+                        anchor.travelAgainstCoords != null
+                    ) {
+                        SpeedCamLookahead.RoadMatchHint(
+                            graphs = RoadGraphStore.cachedGraphs(),
+                            regionId = anchor.regionId,
+                            edgeId = anchor.edgeId,
+                            alongTrackM = anchor.alongTrackM,
+                            travelAgainstCoords = anchor.travelAgainstCoords,
+                        )
+                    } else {
+                        null
                     }
                     SpeedCamRepository.updateFromPose(
                         index = manager.currentIndex(),
@@ -4680,10 +4706,23 @@ class BackgroundService : Service() {
                         radiusM = agg.radiusM,
                         overageKmh = agg.overageKmh,
                         showMapMarkers = agg.showOnMap,
+                        roadHint = roadHint,
+                        radarHoldDistanceM = agg.radarHoldDistanceM,
                     )
                 }
         }
     }
+
+    private data class SpeedCamTickInput(
+        val display: GeoDisplayState,
+        val snap: SpeedCamPackManager.Snapshot,
+        val widgets: Triple<
+            List<FloatingDashboardWidgetConfig>,
+            List<FloatingDashboardConfig>,
+            List<MainScreenPanelConfig>,
+            >,
+        val anchor: RoadMatchAnchorState,
+    )
 
     private fun startConstantDrAutoCalibJob() {
         if (constantDrAutoCalibJob != null) return

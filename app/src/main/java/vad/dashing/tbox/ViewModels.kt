@@ -19,7 +19,6 @@ import java.util.Locale
 import vad.dashing.tbox.ui.theme.DARK_THEME_ON_SURFACE_COLOR_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_ON_SURFACE_COLOR_INT
 import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
-import vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY
 import kotlin.Boolean
 import kotlin.collections.List
 
@@ -470,7 +469,6 @@ object WidgetsRepository {
         CRUISE_STATUS_WIDGET_DATA_KEY to DataTitle(R.string.data_title_cruise_status_widget),
         SLA_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_sla_speed_limit_widget),
         OSM_SPEED_LIMIT_WIDGET_DATA_KEY to DataTitle(R.string.data_title_osm_speed_limit_widget),
-        SPEED_CAM_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_cam_widget),
         SPEED_LIMITER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_speed_limiter_widget),
         "frontWindscreenHeatWidget" to DataTitle(R.string.data_title_front_windscreen_heat_widget),
         "rearWindowMirrorsDefrostWidget" to DataTitle(R.string.data_title_rear_window_mirrors_defrost_widget),
@@ -747,9 +745,6 @@ object WidgetsRepository {
         OSM_SPEED_LIMIT_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_osm_speed_limit,
         ),
-        SPEED_CAM_WIDGET_DATA_KEY to WidgetDescription(
-            R.string.widget_desc_speed_cam,
-        ),
         SPEED_LIMITER_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_speed_limiter,
             R.string.widget_actions_speed_limiter,
@@ -1012,7 +1007,6 @@ object WidgetsRepository {
             FRM_DX_TAR_OBJ_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
-            SPEED_CAM_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",
@@ -1137,7 +1131,6 @@ object WidgetsRepository {
             CRUISE_STATUS_WIDGET_DATA_KEY,
             SLA_SPEED_LIMIT_WIDGET_DATA_KEY,
             OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
-            SPEED_CAM_WIDGET_DATA_KEY,
             SPEED_LIMITER_WIDGET_DATA_KEY,
             "frontWindscreenHeatWidget",
             "rearWindowMirrorsDefrostWidget",

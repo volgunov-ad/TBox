@@ -101,12 +101,18 @@ import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
+import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.MAX_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.MAX_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.MIN_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.MIN_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.normalizeMapsCamLookaheadM
+import vad.dashing.tbox.normalizeMapsCamRadarHoldM
 import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
-import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M
-import vad.dashing.tbox.speedcam.isSpeedCamWidgetDataKey
 import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
-import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
@@ -379,21 +385,37 @@ internal class WidgetSelectionDialogState(
         },
     )
     var speedCamOverageKmh by mutableIntStateOf(
-        if (isSpeedCamWidgetDataKey(initialConfig.dataKey)) {
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
             normalizeSpeedCamOverageKmh(initialConfig.speedCamOverageKmh)
         } else {
             DEFAULT_SPEED_CAM_OVERAGE_KMH
         },
     )
-    var speedCamRadiusM by mutableIntStateOf(
-        if (isSpeedCamWidgetDataKey(initialConfig.dataKey)) {
-            normalizeSpeedCamRadiusM(initialConfig.speedCamRadiusM)
+    var mapsCamLookaheadDistanceM by mutableIntStateOf(
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
+            normalizeMapsCamLookaheadM(initialConfig.mapsCamLookaheadDistanceM)
         } else {
-            DEFAULT_SPEED_CAM_RADIUS_M
+            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+        },
+    )
+    var mapsCamRadarHoldDistanceM by mutableIntStateOf(
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
+            normalizeMapsCamRadarHoldM(initialConfig.mapsCamRadarHoldDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_RADAR_HOLD_M
         },
     )
     var speedCamShowOnMap by mutableStateOf(
-        isSpeedCamWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
+        isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
+    )
+    var mapsCamShowCameras by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowCameras,
+    )
+    var mapsCamShowCurrentLimit by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowCurrentLimit,
+    )
+    var mapsCamShowAheadLimit by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowAheadLimit,
     )
     var mediaShowLikeButton by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
@@ -875,10 +897,14 @@ internal class WidgetSelectionDialogState(
             roadMatchMapKitBasemap = false
             roadMatchBasemapTransparencyPercent = 0
         }
-        if (!isSpeedCamWidgetDataKey(key)) {
+        if (!isOsmSpeedLimitWidgetDataKey(key)) {
             speedCamOverageKmh = DEFAULT_SPEED_CAM_OVERAGE_KMH
-            speedCamRadiusM = DEFAULT_SPEED_CAM_RADIUS_M
+            mapsCamLookaheadDistanceM = DEFAULT_MAPS_CAM_LOOKAHEAD_M
+            mapsCamRadarHoldDistanceM = DEFAULT_MAPS_CAM_RADAR_HOLD_M
             speedCamShowOnMap = false
+            mapsCamShowCameras = true
+            mapsCamShowCurrentLimit = true
+            mapsCamShowAheadLimit = true
         }
         if (supportsMusicControlsHeightSetting(key)) {
             val previousDefault = if (supportsMusicControlsHeightSetting(previousKey)) {
@@ -1208,17 +1234,32 @@ internal class WidgetSelectionDialogState(
             } else {
                 0
             },
-            speedCamOverageKmh = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+            speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
                 normalizeSpeedCamOverageKmh(speedCamOverageKmh)
             } else {
                 DEFAULT_SPEED_CAM_OVERAGE_KMH
             },
-            speedCamRadiusM = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
-                normalizeSpeedCamRadiusM(speedCamRadiusM)
+            speedCamRadiusM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamLookaheadM(mapsCamLookaheadDistanceM)
             } else {
-                DEFAULT_SPEED_CAM_RADIUS_M
+                DEFAULT_MAPS_CAM_LOOKAHEAD_M
             },
-            speedCamShowOnMap = isSpeedCamWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
+            speedCamShowOnMap = isOsmSpeedLimitWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
+            mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || mapsCamShowCameras,
+            mapsCamShowCurrentLimit = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) ||
+                mapsCamShowCurrentLimit,
+            mapsCamShowAheadLimit = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) ||
+                mapsCamShowAheadLimit,
+            mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamLookaheadM(mapsCamLookaheadDistanceM)
+            } else {
+                DEFAULT_MAPS_CAM_LOOKAHEAD_M
+            },
+            mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamRadarHoldM(mapsCamRadarHoldDistanceM)
+            } else {
+                DEFAULT_MAPS_CAM_RADAR_HOLD_M
+            },
         )
     }
 
@@ -1507,17 +1548,27 @@ internal class WidgetSelectionDialogState(
         } else {
             0
         }
-        speedCamOverageKmh = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
+        speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
             normalizeSpeedCamOverageKmh(cfg.speedCamOverageKmh)
         } else {
             DEFAULT_SPEED_CAM_OVERAGE_KMH
         }
-        speedCamRadiusM = if (isSpeedCamWidgetDataKey(selectedDataKey)) {
-            normalizeSpeedCamRadiusM(cfg.speedCamRadiusM)
+        mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+            normalizeMapsCamLookaheadM(cfg.mapsCamLookaheadDistanceM)
         } else {
-            DEFAULT_SPEED_CAM_RADIUS_M
+            DEFAULT_MAPS_CAM_LOOKAHEAD_M
         }
-        speedCamShowOnMap = isSpeedCamWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
+        mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+            normalizeMapsCamRadarHoldM(cfg.mapsCamRadarHoldDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_RADAR_HOLD_M
+        }
+        speedCamShowOnMap = isOsmSpeedLimitWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
+        mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCameras
+        mapsCamShowCurrentLimit =
+            !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCurrentLimit
+        mapsCamShowAheadLimit =
+            !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowAheadLimit
         controlAppearanceEpoch++
     }
 
@@ -2762,7 +2813,56 @@ internal fun WidgetSelectionDialogForm(
                             )
                         }
                     }
-                    if (isSpeedCamWidgetDataKey(state.selectedDataKey)) {
+                    if (isOsmSpeedLimitWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowCameras,
+                            onCheckedChange = { state.mapsCamShowCameras = it },
+                            text = stringResource(R.string.maps_cam_show_cameras_title),
+                            description = stringResource(R.string.maps_cam_show_cameras_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowCurrentLimit,
+                            onCheckedChange = { state.mapsCamShowCurrentLimit = it },
+                            text = stringResource(R.string.maps_cam_show_current_title),
+                            description = stringResource(R.string.maps_cam_show_current_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowAheadLimit,
+                            onCheckedChange = { state.mapsCamShowAheadLimit = it },
+                            text = stringResource(R.string.maps_cam_show_ahead_title),
+                            description = stringResource(R.string.maps_cam_show_ahead_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSliderInt(
+                            value = state.mapsCamLookaheadDistanceM,
+                            onValueChange = {
+                                state.mapsCamLookaheadDistanceM = normalizeMapsCamLookaheadM(it)
+                            },
+                            text = stringResource(
+                                R.string.maps_cam_lookahead_title,
+                                state.mapsCamLookaheadDistanceM,
+                            ),
+                            description = stringResource(R.string.maps_cam_lookahead_desc),
+                            minValue = MIN_MAPS_CAM_LOOKAHEAD_M,
+                            maxValue = MAX_MAPS_CAM_LOOKAHEAD_M,
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSliderInt(
+                            value = state.mapsCamRadarHoldDistanceM,
+                            onValueChange = {
+                                state.mapsCamRadarHoldDistanceM = normalizeMapsCamRadarHoldM(it)
+                            },
+                            text = stringResource(
+                                R.string.maps_cam_radar_hold_title,
+                                state.mapsCamRadarHoldDistanceM,
+                            ),
+                            description = stringResource(R.string.maps_cam_radar_hold_desc),
+                            minValue = MIN_MAPS_CAM_RADAR_HOLD_M,
+                            maxValue = MAX_MAPS_CAM_RADAR_HOLD_M,
+                            enabled = state.togglesEnabled,
+                        )
                         SettingSliderInt(
                             value = state.speedCamOverageKmh,
                             onValueChange = {
@@ -2775,20 +2875,6 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.speed_cam_overage_desc),
                             minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
                             maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
-                            enabled = state.togglesEnabled,
-                        )
-                        SettingSliderInt(
-                            value = state.speedCamRadiusM,
-                            onValueChange = {
-                                state.speedCamRadiusM = normalizeSpeedCamRadiusM(it)
-                            },
-                            text = stringResource(
-                                R.string.speed_cam_radius_title,
-                                state.speedCamRadiusM,
-                            ),
-                            description = stringResource(R.string.speed_cam_radius_desc),
-                            minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_RADIUS_M,
-                            maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_RADIUS_M,
                             enabled = state.togglesEnabled,
                         )
                         SettingSwitch(

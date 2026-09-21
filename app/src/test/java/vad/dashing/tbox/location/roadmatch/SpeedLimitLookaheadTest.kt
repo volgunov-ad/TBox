@@ -51,7 +51,7 @@ class SpeedLimitLookaheadTest {
             east(2, 200.0, 600.0, 1, 2, 60),
             east(3, 600.0, 700.0, 2, 3, 40),
         )
-        val result = look(graph, alongM = 20.0)
+        val result = look(graph, alongM = 20.0, maxDistanceM = 500.0)
         assertEquals(60, result.currentKmh)
         assertNull(result.nextKmh)
         assertFalse(result.nextHidden)
@@ -63,7 +63,7 @@ class SpeedLimitLookaheadTest {
             east(1, 0.0, 800.0, 0, 1, 60),
             east(2, 800.0, 900.0, 1, 2, 40),
         )
-        val result = look(graph, alongM = 20.0)
+        val result = look(graph, alongM = 20.0, maxDistanceM = 500.0)
         assertEquals(60, result.currentKmh)
         assertNull(result.nextKmh)
     }
@@ -322,6 +322,7 @@ class SpeedLimitLookaheadTest {
             alongTrackM = 20.0,
             travelAgainstCoords = false,
             nowElapsedMs = 1_000L,
+            maxDistanceM = 500.0,
         )
         assertEquals(0, tracker.walkCount)
         assertNull(far.nextKmh)
@@ -332,6 +333,7 @@ class SpeedLimitLookaheadTest {
             alongTrackM = 350.0,
             travelAgainstCoords = false,
             nowElapsedMs = 2_000L,
+            maxDistanceM = 500.0,
         )
         assertEquals(1, tracker.walkCount)
         assertEquals(40, near.nextKmh)
@@ -372,6 +374,7 @@ class SpeedLimitLookaheadTest {
         against: Boolean = false,
         allowAgainstOneway: Boolean = false,
         edgeId: Long = 1L,
+        maxDistanceM: Double = SpeedLimitLookahead.MAX_DISTANCE_M,
     ): SpeedLimitLookahead.Result = SpeedLimitLookahead.compute(
         graphs = listOf(graph),
         regionId = graph.regionId,
@@ -379,6 +382,7 @@ class SpeedLimitLookaheadTest {
         alongTrackM = alongM,
         travelAgainstCoords = against,
         allowAgainstOneway = allowAgainstOneway,
+        maxDistanceM = maxDistanceM,
     )
 
     private fun graph(vararg edges: RoadEdge): RoadGraph = RoadGraph(

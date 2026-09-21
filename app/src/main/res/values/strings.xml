@@ -99,7 +99,7 @@
     <string name="location_section_debug">Отладка</string>
     <string name="location_tab_general">Общие</string>
     <string name="location_tab_mock">Подмена</string>
-    <string name="location_tab_cameras">Камеры</string>
+    <string name="location_tab_cameras">Карты, камеры и радары</string>
     <string name="location_tab_data_debug">Данные и отладка</string>
     <string name="unit_byte">Б</string>
     <string name="unit_kilobyte">КБ</string>
@@ -1908,8 +1908,18 @@
     <string name="data_title_acc_cruise_widget">Уставка круиз-контроля</string>
     <string name="data_title_cruise_status_widget">Статус круиз-контроля</string>
     <string name="data_title_sla_speed_limit_widget">Ограничение по знаку</string>
-    <string name="data_title_osm_speed_limit_widget">Ограничение по карте</string>
+    <string name="data_title_osm_speed_limit_widget">Ограничения скорости по картам, камеры и радары</string>
     <string name="data_title_speed_cam_widget">Камера</string>
+    <string name="maps_cam_show_cameras_title">Показывать камеры/радары</string>
+    <string name="maps_cam_show_cameras_desc">Колонка с иконкой камеры/радара впереди и расстоянием до неё</string>
+    <string name="maps_cam_show_current_title">Показывать текущее ограничение скорости</string>
+    <string name="maps_cam_show_current_desc">Центральный знак: лимит с карты OSM, иначе с последнего радара в зоне удержания</string>
+    <string name="maps_cam_show_ahead_title">Показывать ограничение скорости впереди</string>
+    <string name="maps_cam_show_ahead_desc">Колонка со следующим лимитом по дороге или камере/радару и расстоянием до него</string>
+    <string name="maps_cam_lookahead_title">Дальность впереди: %1$d м</string>
+    <string name="maps_cam_lookahead_desc">На сколько метров смотреть вперёд по дороге за ограничением скорости и камерами/радарами (300–3000 м)</string>
+    <string name="maps_cam_radar_hold_title">Удержание лимита радара: %1$d м</string>
+    <string name="maps_cam_radar_hold_desc">Если на карте нет текущего лимита — показывать лимит последнего радара/камеры, пока не отоедем дальше этого расстояния</string>
     <string name="data_title_speed_limiter_widget">Ограничитель скорости</string>
     <string name="sla_speed_limit_no_sign">—</string>
     <string name="osm_speed_limit_unknown">—</string>
@@ -2242,7 +2252,7 @@
     <string name="widget_acc_cruise_decrease_interval_title">Интервал уменьшения, мс</string>
     <string name="widget_acc_cruise_decrease_interval_desc">Пауза между шагами −1 км/ч (50–1500).</string>
     <string name="widget_desc_sla_speed_limit">Текущее ограничение скорости, распознанное системой SLA/TSR.</string>
-    <string name="widget_desc_osm_speed_limit">Ограничение с дорожной карты OSM: текущий лимит на matched-ребре и следующий впереди (до 500 м), если он однозначен.</string>
+    <string name="widget_desc_osm_speed_limit">Ограничения скорости по картам OSM, камеры и радары SpeedCamOnline: текущий лимит, камера/радар впереди и следующий лимит по пути (дальность настраивается). Колонки можно отключать в доп. настройках.</string>
     <string name="widget_desc_speed_cam">Ближайшая камера по курсу из базы SpeedCamOnline: иконка, направление (↑ попутно / ↓ навстречу) и дистанция. Настраиваемые допуск превышения и дальность.</string>
     <string name="widget_desc_speed_limiter">Ограничитель скорости: уставка с CAN VALUESET (253); без данных — «—», первый ± пишет 30.</string>
     <string name="widget_actions_speed_limiter">Свайп вверх/вниз или кнопки ± — изменить скорость; двойное нажатие — включить; одиночное — выключить.</string>

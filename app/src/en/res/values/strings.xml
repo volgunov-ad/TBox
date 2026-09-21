@@ -99,7 +99,7 @@
     <string name="location_section_debug">Debug</string>
     <string name="location_tab_general">General</string>
     <string name="location_tab_mock">Spoofing</string>
-    <string name="location_tab_cameras">Cameras</string>
+    <string name="location_tab_cameras">Maps, cameras and radars</string>
     <string name="location_tab_data_debug">Data and debug</string>
     <string name="unit_byte">B</string>
     <string name="unit_kilobyte">KB</string>
@@ -1903,8 +1903,18 @@
     <string name="data_title_acc_cruise_widget">Cruise control setpoint</string>
     <string name="data_title_cruise_status_widget">Cruise control status</string>
     <string name="data_title_sla_speed_limit_widget">Sign speed limit</string>
-    <string name="data_title_osm_speed_limit_widget">Map speed limit</string>
+    <string name="data_title_osm_speed_limit_widget">Map speed limits, cameras and radars</string>
     <string name="data_title_speed_cam_widget">Camera</string>
+    <string name="maps_cam_show_cameras_title">Show cameras/radars</string>
+    <string name="maps_cam_show_cameras_desc">Column with the ahead camera/radar icon and distance</string>
+    <string name="maps_cam_show_current_title">Show current speed limit</string>
+    <string name="maps_cam_show_current_desc">Center sign: OSM map limit, otherwise last radar limit within hold distance</string>
+    <string name="maps_cam_show_ahead_title">Show speed limit ahead</string>
+    <string name="maps_cam_show_ahead_desc">Column with the next limit along the road or from a camera/radar, plus distance</string>
+    <string name="maps_cam_lookahead_title">Lookahead range: %1$d m</string>
+    <string name="maps_cam_lookahead_desc">How far ahead along the road to look for speed limits and cameras/radars (300–3000 m)</string>
+    <string name="maps_cam_radar_hold_title">Radar limit hold: %1$d m</string>
+    <string name="maps_cam_radar_hold_desc">If the map has no current limit, keep the last radar/camera limit until you drive farther than this distance</string>
     <string name="data_title_speed_limiter_widget">Speed limiter</string>
     <string name="sla_speed_limit_no_sign">—</string>
     <string name="osm_speed_limit_unknown">—</string>
@@ -2221,7 +2231,7 @@
     <string name="widget_acc_cruise_decrease_interval_title">Decrease step interval, ms</string>
     <string name="widget_acc_cruise_decrease_interval_desc">Delay between −1 km/h steps (50–1500).</string>
     <string name="widget_desc_sla_speed_limit">Current speed limit recognized by SLA/TSR.</string>
-    <string name="widget_desc_osm_speed_limit">Posted OSM speed on the matched road edge, plus the next unambiguous limit ahead (up to 500 m).</string>
+    <string name="widget_desc_osm_speed_limit">OSM map speed limits plus SpeedCamOnline cameras/radars: current limit, ahead camera/radar, and next limit along the path (range configurable). Columns can be toggled in Advanced settings.</string>
     <string name="widget_desc_speed_cam">Nearest SpeedCamOnline camera ahead: icon, direction (↑ same way / ↓ oncoming) and distance. Configurable overage allowance and range.</string>
     <string name="widget_desc_speed_limiter">Speed limiter: setpoint from CAN VALUESET (253); no data shows “—”, first ± writes 30.</string>
     <string name="widget_actions_speed_limiter">Swipe up/down or ± buttons — change speed; double tap — enable; single tap — disable.</string>

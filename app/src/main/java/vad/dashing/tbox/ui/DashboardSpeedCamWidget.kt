@@ -143,7 +143,7 @@ fun DashboardSpeedCamWidgetItem(
 }
 
 @Composable
-private fun SpeedCamTypeIcon(
+internal fun SpeedCamTypeIcon(
     category: SpeedCamCategory,
     relative: SpeedCamRelativeDirection,
     speedKmh: Int,

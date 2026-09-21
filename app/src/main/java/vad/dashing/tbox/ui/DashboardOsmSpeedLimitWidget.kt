@@ -2,16 +2,13 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -20,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -28,24 +26,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.MapsCamerasRadarsLogic
 import vad.dashing.tbox.R
+import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
+import vad.dashing.tbox.speedcam.SpeedCamLookahead
+import vad.dashing.tbox.speedcam.SpeedCamRepository
+import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
 import vad.dashing.tbox.ui.theme.scaledWidgetText
+import java.util.Locale
 
 /** Red ring of a round speed-limit road sign (same visual language as SLA tile). */
 private val OsmSignRingColor = Color(0xFFE53935)
 private val OsmSignFaceColor = Color.White
 private val OsmSignTextColor = Color.Black
 private const val OsmInactiveAlpha = 0.4f
-/** Fixed red ring thickness (not proportional to diameter). */
 private val OsmSignRingWidth = 8.dp
-/** Upcoming sign diameter relative to the current sign (layout only; not text scale). */
-private const val OsmNextSignDiameterFraction = 0.5f
 
 /**
- * OSM posted speed from the matched road edge + optional "next" limit ahead
- * ([RoadMatchAnchorState] / [vad.dashing.tbox.location.roadmatch.SpeedLimitLookahead]).
+ * Unified maps / cameras / radars speed-limit tile (`osmSpeedLimitWidget`).
+ *
+ * Layout (when all columns enabled): three equal columns —
+ * left camera+distance, center current limit, right ahead limit+distance.
+ * Disabled columns collapse; remaining stretch.
  */
 @Composable
 fun DashboardOsmSpeedLimitWidgetItem(
@@ -57,13 +63,38 @@ fun DashboardOsmSpeedLimitWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
+    activeColor: Color = WidgetActiveColors.Danger,
+    showCameras: Boolean = true,
+    showCurrentLimit: Boolean = true,
+    showAheadLimit: Boolean = true,
+    overageKmh: Int = DEFAULT_SPEED_CAM_OVERAGE_KMH,
+    radarHoldDistanceM: Int = vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M,
 ) {
     val anchor by RoadMatchAnchorRepository.state.collectAsStateWithLifecycle()
+    val camState by SpeedCamRepository.state.collectAsStateWithLifecycle()
+    val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_osm_speed_limit_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val dashLabel = stringResource(R.string.osm_speed_limit_unknown)
+    val packMissing = stringResource(R.string.speed_cam_pack_missing)
     val context = LocalContext.current
-    val display = OsmSpeedLimitDisplay.from(anchor)
+    val isRu = LocalConfiguration.current.locales[0]?.language.equals("ru", ignoreCase = true) ||
+        Locale.getDefault().language.equals("ru", ignoreCase = true)
+    val tileOverage = normalizeSpeedCamOverageKmh(overageKmh)
+    val display = MapsCamerasRadarsDisplay.from(
+        anchor = anchor,
+        camAlert = camState.alert,
+        camInstalled = camState.installed,
+        lastRadar = SpeedCamRepository.lastRadarLimit(),
+        vehicleLat = geo.latitude,
+        vehicleLon = geo.longitude,
+        vehicleSpeedKmh = geo.speedKmh,
+        overageKmh = tileOverage,
+        holdDistanceM = radarHoldDistanceM,
+        showCameras = showCameras,
+        showCurrentLimit = showCurrentLimit,
+        showAheadLimit = showAheadLimit,
+    )
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -82,60 +113,57 @@ fun DashboardOsmSpeedLimitWidgetItem(
                 .fillMaxSize()
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
-            // Main digits: VALUE + widget text scale. Next / distance: half of that size.
             val mainTextStyle = calculateResponsiveTextStyle(
                 containerHeight = availableHeight,
                 textType = TextType.VALUE,
             )
-            val nextTextStyle = mainTextStyle.scaledWidgetText(0.5f)
-
-            BoxWithConstraints(modifier = contentModifier.fillMaxSize()) {
-                val gap = 8.dp
-                // Diameters follow the tile box only (not text scale).
-                val mainDiameter = if (display.showNext) {
-                    minOf(
-                        maxHeight,
-                        (maxWidth - gap) / (1f + OsmNextSignDiameterFraction),
-                    )
-                } else {
-                    minOf(maxWidth, maxHeight)
-                }
-                val nextDiameter = mainDiameter * OsmNextSignDiameterFraction
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    Box(modifier = Modifier.size(mainDiameter)) {
-                        OsmSpeedLimitSign(
-                            label = display.currentLabel ?: dashLabel,
-                            textStyle = mainTextStyle,
-                            alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
-                        )
-                    }
-                    if (display.showNext) {
-                        Spacer(modifier = Modifier.width(gap))
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
+            val sideTextStyle = mainTextStyle.scaledWidgetText(0.55f)
+            val distStyle = mainTextStyle.scaledWidgetText(0.4f)
+            val columns = mutableListOf<MapsCamColumn>()
+            if (display.showCamerasColumn) columns.add(MapsCamColumn.Cameras)
+            if (display.showCurrentColumn) columns.add(MapsCamColumn.Current)
+            if (display.showAheadColumn) columns.add(MapsCamColumn.Ahead)
+            if (columns.isEmpty()) {
+                Text(
+                    text = dashLabel,
+                    color = resolvedTextColor.copy(alpha = 0.5f),
+                    style = mainTextStyle,
+                    modifier = contentModifier.fillMaxSize(),
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Row(modifier = contentModifier.fillMaxSize()) {
+                    for (col in columns) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Box(modifier = Modifier.size(nextDiameter)) {
-                                OsmSpeedLimitSign(
-                                    label = display.nextLabel ?: dashLabel,
-                                    textStyle = nextTextStyle,
-                                    alpha = 1f,
+                            when (col) {
+                                MapsCamColumn.Cameras -> MapsCamCameraColumn(
+                                    display = display,
+                                    dashLabel = dashLabel,
+                                    packMissing = packMissing,
+                                    isRu = isRu,
+                                    resolvedTextColor = resolvedTextColor,
+                                    activeColor = activeColor,
+                                    iconTextStyle = sideTextStyle,
+                                    distStyle = distStyle,
                                 )
-                            }
-                            val distanceText = display.nextDistanceLabel(context)
-                            if (distanceText != null) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = distanceText,
-                                    color = resolvedTextColor.copy(alpha = 0.85f),
-                                    fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.Center,
-                                    style = nextTextStyle,
-                                    maxLines = 1,
+                                MapsCamColumn.Current -> OsmSpeedLimitSign(
+                                    label = display.currentLabel ?: dashLabel,
+                                    textStyle = mainTextStyle,
+                                    alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
+                                    modifier = Modifier.fillMaxSize(0.9f),
+                                )
+                                MapsCamColumn.Ahead -> MapsCamAheadColumn(
+                                    display = display,
+                                    dashLabel = dashLabel,
+                                    context = context,
+                                    resolvedTextColor = resolvedTextColor,
+                                    signTextStyle = sideTextStyle,
+                                    distStyle = distStyle,
                                 )
                             }
                         }
@@ -146,15 +174,139 @@ fun DashboardOsmSpeedLimitWidgetItem(
     }
 }
 
+private enum class MapsCamColumn { Cameras, Current, Ahead }
+
+@Composable
+private fun MapsCamCameraColumn(
+    display: MapsCamerasRadarsDisplay,
+    dashLabel: String,
+    packMissing: String,
+    isRu: Boolean,
+    resolvedTextColor: Color,
+    activeColor: Color,
+    iconTextStyle: TextStyle,
+    distStyle: TextStyle,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(2f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (display.cameraAlert == null) {
+                val emptyLabel = if (!display.camInstalled) packMissing else dashLabel
+                Text(
+                    text = emptyLabel,
+                    color = resolvedTextColor.copy(alpha = 0.5f),
+                    style = iconTextStyle.scaledWidgetText(if (!display.camInstalled) 0.85f else 1f),
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                val accent = if (display.cameraOverLimit) activeColor else resolvedTextColor
+                BoxWithConstraints(modifier = Modifier.fillMaxSize(0.85f)) {
+                    val iconSize = minOf(maxWidth, maxHeight)
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        SpeedCamTypeIcon(
+                            category = display.cameraAlert.point.category,
+                            relative = display.cameraAlert.relative,
+                            speedKmh = display.cameraAlert.point.speedKmh,
+                            color = accent,
+                            speedTextStyle = iconTextStyle.scaledWidgetText(0.7f),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val dist = display.cameraDistanceM
+            val text = when {
+                dist == null -> dashLabel
+                isRu -> SpeedCamLookahead.formatDistanceM(dist)
+                else -> SpeedCamLookahead.formatDistanceMEn(dist)
+            }
+            val accent = if (display.cameraOverLimit) activeColor else resolvedTextColor
+            Text(
+                text = text,
+                color = if (dist != null) accent else resolvedTextColor.copy(alpha = 0.5f),
+                style = distStyle,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MapsCamAheadColumn(
+    display: MapsCamerasRadarsDisplay,
+    dashLabel: String,
+    context: android.content.Context,
+    resolvedTextColor: Color,
+    signTextStyle: TextStyle,
+    distStyle: TextStyle,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(2f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize(0.85f)) {
+                OsmSpeedLimitSign(
+                    label = display.aheadLabel ?: dashLabel,
+                    textStyle = signTextStyle,
+                    alpha = if (display.aheadLabel != null) 1f else OsmInactiveAlpha,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            val distText = display.aheadDistanceM?.let {
+                OsmSpeedLimitDisplay.formatDistanceAhead(context, it)
+            } ?: dashLabel
+            Text(
+                text = distText,
+                color = if (display.aheadDistanceM != null) {
+                    resolvedTextColor.copy(alpha = 0.85f)
+                } else {
+                    resolvedTextColor.copy(alpha = 0.5f)
+                },
+                style = distStyle,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 @Composable
 private fun OsmSpeedLimitSign(
     label: String,
     textStyle: TextStyle,
     alpha: Float,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
+        modifier = modifier
             .border(
                 width = OsmSignRingWidth,
                 color = OsmSignRingColor.copy(alpha = alpha),
@@ -174,7 +326,81 @@ private fun OsmSpeedLimitSign(
     }
 }
 
-/** Pure display model for the OSM speed-limit tile (unit-testable). */
+/** Pure display model for the unified maps/cameras/radars tile (unit-testable). */
+data class MapsCamerasRadarsDisplay(
+    val showCamerasColumn: Boolean,
+    val showCurrentColumn: Boolean,
+    val showAheadColumn: Boolean,
+    val camInstalled: Boolean,
+    val cameraAlert: vad.dashing.tbox.speedcam.SpeedCamAlert?,
+    val cameraDistanceM: Double?,
+    val cameraOverLimit: Boolean,
+    val currentLabel: String?,
+    val aheadLabel: String?,
+    val aheadDistanceM: Double?,
+) {
+    companion object {
+        fun from(
+            anchor: RoadMatchAnchorState,
+            camAlert: vad.dashing.tbox.speedcam.SpeedCamAlert?,
+            camInstalled: Boolean,
+            lastRadar: vad.dashing.tbox.LastRadarLimit?,
+            vehicleLat: Double,
+            vehicleLon: Double,
+            vehicleSpeedKmh: Float,
+            overageKmh: Int,
+            holdDistanceM: Int,
+            showCameras: Boolean,
+            showCurrentLimit: Boolean,
+            showAheadLimit: Boolean,
+        ): MapsCamerasRadarsDisplay {
+            val currentKmh = MapsCamerasRadarsLogic.resolveCurrentLimitKmh(
+                osmCurrentKmh = anchor.currentLimitKmh,
+                lastRadar = lastRadar,
+                vehicleLat = vehicleLat,
+                vehicleLon = vehicleLon,
+                holdDistanceM = holdDistanceM,
+            )
+            val osmAhead = if (!anchor.nextLimitHidden &&
+                anchor.nextLimitKmh != null &&
+                anchor.nextLimitKmh > 0 &&
+                anchor.nextLimitDistanceM != null
+            ) {
+                MapsCamerasRadarsLogic.AheadCandidate(
+                    limitKmh = anchor.nextLimitKmh,
+                    distanceM = anchor.nextLimitDistanceM,
+                )
+            } else {
+                null
+            }
+            val camAhead = camAlert?.takeIf { it.point.hasSpeedLimit }?.let {
+                MapsCamerasRadarsLogic.AheadCandidate(
+                    limitKmh = it.point.speedKmh,
+                    distanceM = it.distanceM,
+                )
+            }
+            val ahead = MapsCamerasRadarsLogic.pickAhead(osmAhead, camAhead)
+            val overLimit = camAlert != null &&
+                camAlert.point.hasSpeedLimit &&
+                vehicleSpeedKmh.isFinite() &&
+                vehicleSpeedKmh > camAlert.point.speedKmh + overageKmh
+            return MapsCamerasRadarsDisplay(
+                showCamerasColumn = showCameras,
+                showCurrentColumn = showCurrentLimit,
+                showAheadColumn = showAheadLimit,
+                camInstalled = camInstalled,
+                cameraAlert = camAlert,
+                cameraDistanceM = camAlert?.distanceM,
+                cameraOverLimit = overLimit,
+                currentLabel = currentKmh?.toString(),
+                aheadLabel = ahead.limitKmh?.toString(),
+                aheadDistanceM = ahead.distanceM,
+            )
+        }
+    }
+}
+
+/** Pure display helpers retained for distance formatting tests. */
 data class OsmSpeedLimitDisplay(
     val currentLabel: String?,
     val nextLabel: String?,
@@ -210,7 +436,7 @@ data class OsmSpeedLimitDisplay(
                 val text = if (km >= 10.0) {
                     km.toInt().toString()
                 } else {
-                    String.format(java.util.Locale.US, "%.1f", km)
+                    String.format(Locale.US, "%.1f", km)
                 }
                 context.getString(R.string.osm_speed_limit_distance_km, text)
             } else {

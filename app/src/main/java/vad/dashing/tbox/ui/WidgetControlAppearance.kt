@@ -64,6 +64,7 @@ import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
+import vad.dashing.tbox.OSM_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isStepperWidgetDataKey
@@ -176,7 +177,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         EPB_PARK_LAMP_WIDGET_DATA_KEY,
         ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
         BRAKE_FLUID_WIDGET_DATA_KEY,
-        vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
+        OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Alert
 
         MUSIC_WIDGET_DATA_KEY,

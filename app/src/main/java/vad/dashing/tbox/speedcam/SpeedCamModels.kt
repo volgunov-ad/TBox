@@ -69,6 +69,8 @@ data class SpeedCamUiState(
     val alert: SpeedCamAlert? = null,
     /** All points in the current radius (for optional map markers). */
     val nearbyForMap: List<SpeedCamMapMarker> = emptyList(),
+    /** Last passed radar/camera speed limit while still within hold distance (for current fallback). */
+    val lastRadarLimitKmh: Int? = null,
 ) {
     companion object {
         val EMPTY = SpeedCamUiState()
