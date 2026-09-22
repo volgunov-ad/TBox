@@ -244,7 +244,8 @@ private fun EspBleBtnTriggerFields(
         onValueChange = { onChange(trigger.copy(act = it)) },
     )
     Text(
-        text = "Shelly Blu RC Button 4 через компаньон ESP32 (вкладка «Компаньон»: BLE → Обучить).",
+        text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
+            "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4.",
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),

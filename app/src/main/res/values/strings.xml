@@ -942,7 +942,7 @@
     <string name="esp_mag_fs">|H|</string>
     <string name="esp_ble_title">Shelly Blu / BLE</string>
     <string name="esp_ble_scan">Сканировать BLE</string>
-    <string name="esp_ble_scan_desc">Пассивный приём BTHome (Shelly Blu RC Button 4). По умолчанию выкл.</string>
+    <string name="esp_ble_scan_desc">Пассивный приём BTHome (Shelly Blu Button 1 и RC Button 4). По умолчанию выкл.</string>
     <string name="esp_ble_learn">Обучить пульт</string>
     <string name="esp_ble_learn_cancel">Отменить обучение</string>
     <string name="esp_ble_learn_hint">Нажмите любую кнопку на пульте в течение 30 с</string>

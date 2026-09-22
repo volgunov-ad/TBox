@@ -934,7 +934,7 @@
     <string name="esp_mag_fs">|H|</string>
     <string name="esp_ble_title">Shelly Blu / BLE</string>
     <string name="esp_ble_scan">Scan BLE</string>
-    <string name="esp_ble_scan_desc">Passive BTHome receive (Shelly Blu RC Button 4). Off by default.</string>
+    <string name="esp_ble_scan_desc">Passive BTHome receive (Shelly Blu Button 1 and RC Button 4). Off by default.</string>
     <string name="esp_ble_learn">Learn remote</string>
     <string name="esp_ble_learn_cancel">Cancel learn</string>
     <string name="esp_ble_learn_hint">Press any button on the remote within 30 s</string>

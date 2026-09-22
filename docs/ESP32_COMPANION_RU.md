@@ -146,13 +146,20 @@ MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двуна�
 
 Магнитометр (fw **0.7.0+**): I2C 400 кГц, GPIO 5/6. Поддерживаются **RM3100**, **MMC5983**, **IST8310**, **HMC5883L**, **HMC5983**, **QMC5883L** — автоопределение по ID-регистрам, без выбора в UI. Модуль на кабеле 20–50 см. `heading` = atan2(hy, hx), ось X вперёд. Калибровка DR — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md).
 
-### Shelly Blu RC Button 4 (fw **0.8.0+**)
+### Shelly Blu (Button 1 / RC Button 4) (fw **0.8.0+**)
 
-Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пулит **не** перепрошивается — заводской BTHome без encryption. На вкладке «Компаньон»:
+Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пульты **не** перепрошиваются — заводской BTHome без encryption.
+
+Поддерживаются:
+
+- **Shelly Blu Button 1** — одна физическая кнопка → в протоколе всегда `btn:1`
+- **Shelly Blu RC Button 4** — четыре кнопки → `btn` 1…4
+
+На вкладке «Компаньон»:
 
 1. Включить **«Сканировать BLE»** (`bleSet on`).
-2. **«Обучить пульт»** → нажать любую кнопку на RC4 в течение ~30 с → MAC в allowlist (до 4).
-3. Дальше `bleBtn` с `btn` 1…4 и `act` press/double/triple/long/hold.
+2. **«Обучить пульт»** → нажать кнопку на пульте в течение ~30 с → MAC в allowlist (до 4 устройств).
+3. Дальше `bleBtn` с `act` press/double/triple/long/hold.
 
 Магнитометр при BLE **не** останавливается (маг на кабеле). Encryption BTHome на MVP игнорируется. Автоматизации: триггер «Кнопка Shelly Blu (компаньон)»; сигналы `esp_ble_bound` / `esp_ble_battery`.
 

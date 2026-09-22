@@ -241,7 +241,7 @@ enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int) {
     }
 }
 
-/** Shelly Blu RC Button 4 / BTHome button action from companion `bleBtn.act`. */
+/** Shelly Blu / BTHome button action from companion `bleBtn.act`. */
 enum class AutomationEspBleBtnAction(val storageKey: String) {
     PRESS("press"),
     DOUBLE("double"),
@@ -398,8 +398,8 @@ sealed interface AutomationTrigger {
     ) : AutomationTrigger
 
     /**
-     * Fired by ESP companion `bleBtn` (Shelly Blu RC Button 4 / BTHome).
-     * [btn] is 1…4; [act] is press / double / triple / long / hold.
+     * Fired by ESP companion `bleBtn` (Shelly Blu Button 1 / RC Button 4 / BTHome).
+     * [btn] is 1…4 (Button 1 uses only 1); [act] is press / double / triple / long / hold.
      */
     data class EspBleBtn(
         override val id: String = "1",
