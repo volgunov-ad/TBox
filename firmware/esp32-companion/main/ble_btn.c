@@ -114,7 +114,7 @@ static bool save_nvs(void)
     nvs_set_u8(h, NVS_KEY_ON, s_on ? 1 : 0);
     nvs_set_u8(h, NVS_KEY_COUNT, (uint8_t)s_mac_count);
     for (int i = 0; i < BLE_BTN_MAX_MACS; i++) {
-        char key[4];
+        char key[8];
         snprintf(key, sizeof(key), "m%d", i);
         if (i < s_mac_count) {
             nvs_set_blob(h, key, s_macs[i], 6);
@@ -143,7 +143,7 @@ static void load_nvs(void)
     s_mac_count = 0;
     if (n > BLE_BTN_MAX_MACS) n = BLE_BTN_MAX_MACS;
     for (int i = 0; i < n; i++) {
-        char key[4];
+        char key[8];
         snprintf(key, sizeof(key), "m%d", i);
         size_t len = 6;
         if (nvs_get_blob(h, key, s_macs[s_mac_count], &len) == ESP_OK && len == 6) {
