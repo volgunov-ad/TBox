@@ -22,6 +22,19 @@ data class EspDeviceInfo(
     val magChip: String = "",
     val magSeen: List<String> = emptyList(),
     val magSupported: Boolean = false,
+    val ble: Boolean = false,
+    val bleOn: Boolean = false,
+    val bleMacs: List<String> = emptyList(),
+)
+
+data class EspBleBtnEvent(
+    val mac: String,
+    val btn: Int,
+    val act: String,
+    val bat: Int = -1,
+    val rssi: Int = 0,
+    val ms: Long = 0L,
+    val atMs: Long = System.currentTimeMillis(),
 )
 
 data class EspMagSample(
@@ -101,6 +114,24 @@ object EspCompanionRepository {
     private val _lastMagAtMs = MutableStateFlow(0L)
     val lastMagAtMs: StateFlow<Long> = _lastMagAtMs.asStateFlow()
 
+    private val _bleOn = MutableStateFlow(false)
+    val bleOn: StateFlow<Boolean> = _bleOn.asStateFlow()
+
+    private val _bleLearnActive = MutableStateFlow(false)
+    val bleLearnActive: StateFlow<Boolean> = _bleLearnActive.asStateFlow()
+
+    private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
+    val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
+
+    private val _lastBleBtn = MutableStateFlow<EspBleBtnEvent?>(null)
+    val lastBleBtn: StateFlow<EspBleBtnEvent?> = _lastBleBtn.asStateFlow()
+
+    private val _bleBattery = MutableStateFlow<Int?>(null)
+    val bleBattery: StateFlow<Int?> = _bleBattery.asStateFlow()
+
+    private val _bleLastRssi = MutableStateFlow(0)
+    val bleLastRssi: StateFlow<Int> = _bleLastRssi.asStateFlow()
+
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
@@ -168,11 +199,51 @@ object EspCompanionRepository {
             _lastMessageAtMs.value = 0L
             _connectedAtMs.value = 0L
             _canLightActive.value = false
+            _bleOn.value = false
+            _bleLearnActive.value = false
+            _bleMacs.value = emptyList()
+            _lastBleBtn.value = null
+            _bleBattery.value = null
+            _bleLastRssi.value = 0
         }
     }
 
     fun updateDeviceInfo(info: EspDeviceInfo) {
         _deviceInfo.value = info
+        if (info.ble) {
+            _bleOn.value = info.bleOn
+            _bleMacs.value = info.bleMacs
+        }
+    }
+
+    fun applyBleStatus(
+        on: Boolean,
+        learn: Boolean,
+        macs: List<String>,
+        lastBat: Int = -1,
+        lastRssi: Int = 0,
+    ) {
+        _bleOn.value = on
+        _bleLearnActive.value = learn
+        _bleMacs.value = macs
+        if (lastBat in 0..100) _bleBattery.value = lastBat
+        if (lastRssi != 0) _bleLastRssi.value = lastRssi
+        val info = _deviceInfo.value
+        if (info.ble) {
+            _deviceInfo.value = info.copy(bleOn = on, bleMacs = macs)
+        }
+        touchMessage()
+    }
+
+    fun applyBleBtn(event: EspBleBtnEvent) {
+        _lastBleBtn.value = event
+        if (event.bat in 0..100) _bleBattery.value = event.bat
+        _bleLastRssi.value = event.rssi
+        touchMessage()
+    }
+
+    fun setBleLearnActive(active: Boolean) {
+        _bleLearnActive.value = active
     }
 
     fun updateLocValues(values: LocValues) {

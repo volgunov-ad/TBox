@@ -10,6 +10,7 @@
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
 
+#include "ble_btn.h"
 #include "gnss_detect.h"
 #include "gpio_io.h"
 #include "mag.h"
@@ -244,6 +245,7 @@ void app_main(void)
     protocol_set_um980_baud_for_hello(um980_uart_get_baud());
     gpio_io_init();
     mag_init();
+    ble_btn_init();
 
     s_can_present = mcp2515_init(MCP2515_DEFAULT_BAUD, MCP2515_DEFAULT_XTAL_HZ);
     if (s_can_present) {
@@ -321,6 +323,7 @@ void app_main(void)
                 protocol_send_gpio(gpio_io_read_inputs(), now_ms);
                 last_gpio_ms = now_ms;
             }
+            ble_btn_poll(now_ms);
         }
 
         vTaskDelay(pdMS_TO_TICKS(protocol_can_light_active() ? 5 : 20));

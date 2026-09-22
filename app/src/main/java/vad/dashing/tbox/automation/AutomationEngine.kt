@@ -35,6 +35,10 @@ class AutomationEngine(
             val keyCode: Int,
             val keyStatus: AutomationHardKeyStatus,
         ) : EngineEvent
+        data class EspBleBtn(
+            val btn: Int,
+            val act: AutomationEspBleBtnAction,
+        ) : EngineEvent
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data class RunNow(val automationId: String) : EngineEvent
@@ -105,6 +109,12 @@ class AutomationEngine(
         scope.launch {
             AutomationTriggerHardKeyEventBus.events.collect { event ->
                 events.send(EngineEvent.HardKey(event.keyCode, event.keyStatus))
+            }
+        }
+        scope.launch {
+            AutomationTriggerEspBleBtnEventBus.events.collect { event ->
+                val act = AutomationEspBleBtnAction.fromStorageKey(event.act) ?: return@collect
+                events.send(EngineEvent.EspBleBtn(event.btn, act))
             }
         }
         if (initial.loadError != null) {
@@ -219,6 +229,7 @@ class AutomationEngine(
                     is EngineEvent.System -> handleSystemEvent(event.event)
                     is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId)
                     is EngineEvent.HardKey -> handleHardKey(event.keyCode, event.keyStatus)
+                    is EngineEvent.EspBleBtn -> handleEspBleBtn(event.btn, event.act)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
@@ -271,6 +282,14 @@ class AutomationEngine(
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
             val fire = evaluator.onHardKey(keyCode, keyStatus) ?: return@forEach
+            dispatch(definition, evaluator, fire)
+        }
+    }
+
+    private suspend fun handleEspBleBtn(btn: Int, act: AutomationEspBleBtnAction) {
+        definitions.values.forEach { definition ->
+            val evaluator = evaluators[definition.id] ?: return@forEach
+            val fire = evaluator.onEspBleBtn(btn, act) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -642,6 +661,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
             is AutomationTrigger.SystemEvent -> Unit
             is AutomationTrigger.WidgetPressed -> Unit
             is AutomationTrigger.HardKey -> Unit
+            is AutomationTrigger.EspBleBtn -> Unit
             is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))

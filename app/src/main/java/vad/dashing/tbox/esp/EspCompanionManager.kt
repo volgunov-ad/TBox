@@ -19,6 +19,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.automation.AutomationEspBleBtnEvent
+import vad.dashing.tbox.automation.AutomationTriggerEspBleBtnEventBus
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import java.io.File
@@ -579,6 +581,37 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeMagChipSet(id))
     }
 
+    fun setBleOn(on: Boolean) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE set on=$on")
+        writeLine(EspCompanionProtocol.encodeBleSet(on))
+    }
+
+    fun beginBleLearn(timeoutMs: Long = 30_000L) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs")
+        EspCompanionRepository.setBleLearnActive(true)
+        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs))
+    }
+
+    fun endBleLearn() {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE learn end")
+        writeLine(EspCompanionProtocol.encodeBleLearnEnd())
+    }
+
+    fun forgetBleMac(mac: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE forget mac=$mac")
+        writeLine(EspCompanionProtocol.encodeBleForget(mac))
+    }
+
+    fun forgetAllBleMacs() {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE forget all")
+        writeLine(EspCompanionProtocol.encodeBleForgetAll())
+    }
+
     fun setCanFilterAcceptAll() {
         if (EspCompanionRepository.otaBusy.value) return
         writeLine(EspCompanionProtocol.encodeCanFilter(acceptAll = true))
@@ -909,6 +942,9 @@ class EspCompanionManager(
                         magChip = msg.magChip.orEmpty(),
                         magSeen = msg.magSeen,
                         magSupported = msg.magSupported,
+                        ble = msg.ble,
+                        bleOn = msg.bleOn,
+                        bleMacs = msg.bleMacs,
                     )
                 )
                 EspCompanionRepository.updateHeartbeat(0L)
@@ -1045,6 +1081,57 @@ class EspCompanionManager(
                 } else {
                     Log.w(TAG, "mag chip rejected: ${msg.chip}")
                     EspCompanionRepository.updateLastError("mag chip rejected: ${msg.chip}")
+                }
+            }
+            is EspMessage.BleBtn -> {
+                if (msg.btn !in 1..4 || msg.act.isEmpty()) return
+                val event = EspBleBtnEvent(
+                    mac = msg.mac,
+                    btn = msg.btn,
+                    act = msg.act,
+                    bat = msg.bat,
+                    rssi = msg.rssi,
+                    ms = msg.ms,
+                )
+                EspCompanionRepository.applyBleBtn(event)
+                AutomationTriggerEspBleBtnEventBus.publish(
+                    AutomationEspBleBtnEvent(
+                        btn = msg.btn,
+                        act = msg.act,
+                    ),
+                )
+                Log.i(TAG, "bleBtn mac=${msg.mac} btn=${msg.btn} act=${msg.act} bat=${msg.bat}")
+            }
+            is EspMessage.BleStatus -> {
+                EspCompanionRepository.applyBleStatus(
+                    on = msg.on,
+                    learn = msg.learn,
+                    macs = msg.macs,
+                    lastBat = msg.lastBat,
+                    lastRssi = msg.lastRssi,
+                )
+            }
+            is EspMessage.BleSeen -> {
+                Log.i(TAG, "bleSeen mac=${msg.mac} rssi=${msg.rssi}")
+            }
+            is EspMessage.BleAck -> {
+                when (msg.phase) {
+                    "learnBegin" -> {
+                        if (msg.ok) EspCompanionRepository.setBleLearnActive(true)
+                        else {
+                            EspCompanionRepository.setBleLearnActive(false)
+                            EspCompanionRepository.updateLastError(msg.err ?: "ble learn begin")
+                        }
+                    }
+                    "learnEnd" -> EspCompanionRepository.setBleLearnActive(false)
+                    else -> {
+                        if (!msg.ok) {
+                            Log.w(TAG, "bleAck phase=${msg.phase} err=${msg.err}")
+                            EspCompanionRepository.updateLastError(
+                                msg.err ?: "ble ${msg.phase} failed",
+                            )
+                        }
+                    }
                 }
             }
         }

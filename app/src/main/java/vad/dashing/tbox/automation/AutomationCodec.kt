@@ -133,6 +133,12 @@ object AutomationCodec {
                 .put("keyCode", trigger.keyCode)
                 .put("keyStatus", trigger.keyStatus.storageKey)
 
+            is AutomationTrigger.EspBleBtn -> JSONObject()
+                .put(KEY_TYPE, "esp_ble_btn")
+                .put("id", trigger.id)
+                .put("btn", trigger.btn)
+                .put("act", trigger.act.storageKey)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -207,6 +213,14 @@ object AutomationCodec {
                 keyStatus = AutomationHardKeyStatus.fromStorageKey(
                     json.requireNonBlankString("keyStatus"),
                 ) ?: throw IllegalArgumentException("Unknown hard key status"),
+            )
+
+            "esp_ble_btn" -> AutomationTrigger.EspBleBtn(
+                id = json.requireNonBlankString("id"),
+                btn = json.requireInt("btn"),
+                act = AutomationEspBleBtnAction.fromStorageKey(
+                    json.requireNonBlankString("act"),
+                ) ?: throw IllegalArgumentException("Unknown esp ble btn act"),
             )
 
             "interval" -> AutomationTrigger.Interval(

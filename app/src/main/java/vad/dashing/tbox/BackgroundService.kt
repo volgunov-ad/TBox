@@ -555,6 +555,14 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
         const val ACTION_ESP_MAG_CHIP = "vad.dashing.tbox.ESP_MAG_CHIP"
         const val EXTRA_ESP_MAG_CHIP = "esp_mag_chip"
+        const val ACTION_ESP_BLE_SET = "vad.dashing.tbox.ESP_BLE_SET"
+        const val EXTRA_ESP_BLE_ON = "esp_ble_on"
+        const val ACTION_ESP_BLE_LEARN_BEGIN = "vad.dashing.tbox.ESP_BLE_LEARN_BEGIN"
+        const val ACTION_ESP_BLE_LEARN_END = "vad.dashing.tbox.ESP_BLE_LEARN_END"
+        const val EXTRA_ESP_BLE_LEARN_TIMEOUT_MS = "esp_ble_learn_timeout_ms"
+        const val ACTION_ESP_BLE_FORGET = "vad.dashing.tbox.ESP_BLE_FORGET"
+        const val EXTRA_ESP_BLE_MAC = "esp_ble_mac"
+        const val EXTRA_ESP_BLE_FORGET_ALL = "esp_ble_forget_all"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
@@ -1569,6 +1577,27 @@ class BackgroundService : Service() {
                 val chip = intent.getStringExtra(EXTRA_ESP_MAG_CHIP).orEmpty()
                 if (chip.isNotBlank()) {
                     espCompanionManager?.setMagChip(chip)
+                }
+            }
+            ACTION_ESP_BLE_SET -> {
+                val on = intent.getBooleanExtra(EXTRA_ESP_BLE_ON, false)
+                espCompanionManager?.setBleOn(on)
+            }
+            ACTION_ESP_BLE_LEARN_BEGIN -> {
+                val timeout = intent.getLongExtra(EXTRA_ESP_BLE_LEARN_TIMEOUT_MS, 30_000L)
+                espCompanionManager?.beginBleLearn(timeout.coerceIn(5_000L, 120_000L))
+            }
+            ACTION_ESP_BLE_LEARN_END -> {
+                espCompanionManager?.endBleLearn()
+            }
+            ACTION_ESP_BLE_FORGET -> {
+                if (intent.getBooleanExtra(EXTRA_ESP_BLE_FORGET_ALL, false)) {
+                    espCompanionManager?.forgetAllBleMacs()
+                } else {
+                    val mac = intent.getStringExtra(EXTRA_ESP_BLE_MAC).orEmpty()
+                    if (mac.isNotBlank()) {
+                        espCompanionManager?.forgetBleMac(mac)
+                    }
                 }
             }
             ACTION_GNSS_MODULE_REBOOT -> {

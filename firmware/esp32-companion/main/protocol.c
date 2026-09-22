@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ble_btn.h"
 #include "esp_crc.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -261,14 +262,29 @@ void protocol_send_hello(void)
         json_escape_append(model_esc, sizeof(model_esc), &mpos, s_hello_gnss_model);
         model_esc[mpos] = '\0';
     }
+    char macs_json[128];
+    char macs[ESP_COMPANION_BLE_MAX_MACS][18];
+    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
+    size_t mp = 0;
+    macs_json[mp++] = '[';
+    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
+        if (i > 0) macs_json[mp++] = ',';
+        macs_json[mp++] = '"';
+        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
+        macs_json[mp++] = '"';
+    }
+    macs_json[mp++] = ']';
+    macs_json[mp] = '\0';
+
     const bool um980_flag = gnss_is_um980();
-    char buf[640];
+    char buf[768];
     if (s_hello_can) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
-                 "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
+                 "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -281,12 +297,15 @@ void protocol_send_hello(void)
                  s_can_light_mode ? "true" : "false",
                  s_hello_mag ? "true" : "false",
                  s_hello_mag_chip,
-                 seen);
+                 seen,
+                 ble_btn_is_on() ? "true" : "false",
+                 macs_json);
     } else {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
-                 "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s}\n",
+                 "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -297,7 +316,96 @@ void protocol_send_hello(void)
                  s_hello_baud,
                  s_hello_mag ? "true" : "false",
                  s_hello_mag_chip,
-                 seen);
+                 seen,
+                 ble_btn_is_on() ? "true" : "false",
+                 macs_json);
+    }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_btn(const char *mac, int btn, const char *act,
+                           int bat, int rssi, uint32_t ms)
+{
+    if (protocol_ota_active()) return;
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"bleBtn\",\"mac\":\"%s\",\"btn\":%d,\"act\":\"%s\","
+             "\"bat\":%d,\"rssi\":%d,\"ms\":%lu}\n",
+             mac && mac[0] ? mac : "",
+             btn,
+             act && act[0] ? act : "press",
+             bat,
+             rssi,
+             (unsigned long)ms);
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_status(void)
+{
+    char macs[ESP_COMPANION_BLE_MAX_MACS][18];
+    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
+    char macs_json[128];
+    size_t mp = 0;
+    macs_json[mp++] = '[';
+    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
+        if (i > 0) macs_json[mp++] = ',';
+        macs_json[mp++] = '"';
+        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
+        macs_json[mp++] = '"';
+    }
+    macs_json[mp++] = ']';
+    macs_json[mp] = '\0';
+    char last_mac[18];
+    ble_btn_last_mac(last_mac);
+    char buf[320];
+    if (last_mac[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"macs\":%s,"
+                 "\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
+                 ble_btn_is_on() ? "true" : "false",
+                 ble_btn_is_learn() ? "true" : "false",
+                 macs_json,
+                 ble_btn_last_bat(),
+                 ble_btn_last_rssi(),
+                 last_mac);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"macs\":%s,"
+                 "\"lastBat\":%d,\"lastRssi\":%d}\n",
+                 ble_btn_is_on() ? "true" : "false",
+                 ble_btn_is_learn() ? "true" : "false",
+                 macs_json,
+                 ble_btn_last_bat(),
+                 ble_btn_last_rssi());
+    }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms)
+{
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"bleSeen\",\"mac\":\"%s\",\"rssi\":%d,\"ms\":%lu}\n",
+             mac && mac[0] ? mac : "",
+             rssi,
+             (unsigned long)ms);
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_ack(const char *phase, bool ok, const char *err)
+{
+    char buf[160];
+    if (err && err[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\"}\n",
+                 phase ? phase : "",
+                 ok ? "true" : "false",
+                 err);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s}\n",
+                 phase ? phase : "",
+                 ok ? "true" : "false");
     }
     cdc_write_str(buf);
 }
@@ -928,6 +1036,56 @@ static void handle_line(const char *line)
         } else {
             protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
         }
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleSet\"") || strstr(line, "\"t\": \"bleSet\"")) {
+        bool on = extract_json_bool(line, "on", false);
+        bool ok = ble_btn_set_on(on);
+        protocol_send_ble_ack("set", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleLearnBegin\"") || strstr(line, "\"t\": \"bleLearnBegin\"")) {
+        bool found = false;
+        uint32_t timeout = extract_json_u32(line, "timeoutMs", &found);
+        if (!found) timeout = BLE_BTN_LEARN_DEFAULT_MS;
+        bool ok = ble_btn_learn_begin(timeout);
+        protocol_send_ble_ack("learnBegin", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleLearnEnd\"") || strstr(line, "\"t\": \"bleLearnEnd\"")) {
+        ble_btn_learn_end();
+        protocol_send_ble_ack("learnEnd", true, NULL);
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleAllow\"") || strstr(line, "\"t\": \"bleAllow\"")) {
+        char mac[24];
+        if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
+            protocol_send_ble_ack("allow", false, "missing mac");
+            return;
+        }
+        bool ok = ble_btn_allow(mac);
+        protocol_send_ble_ack("allow", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleForget\"") || strstr(line, "\"t\": \"bleForget\"")) {
+        if (extract_json_bool(line, "all", false)) {
+            bool ok = ble_btn_forget_all();
+            protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
+            protocol_send_ble_status();
+            return;
+        }
+        char mac[24];
+        if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
+            protocol_send_ble_ack("forget", false, "missing mac");
+            return;
+        }
+        bool ok = ble_btn_forget(mac);
+        protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
         return;
     }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {

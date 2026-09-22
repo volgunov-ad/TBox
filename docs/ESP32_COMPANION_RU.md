@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.7.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.8.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -20,13 +20,17 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше |
+| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]`, `ble?`, `bleOn?`, `bleMacs?` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше. `ble:true` (fw **0.8+**) — NimBLE observer для Shelly Blu / BTHome |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `mag` | `chip`, `hx`, `hy`, `hz`, `heading`, `fs`, `ok` | магнитометр ~10 Гц (µT, магнитный курс 0…360, \|H\|); не слать во время OTA/bridge |
 | `gpio` | `mask`, `ms` | bitmask входов |
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |
+| `bleBtn` | `mac`, `btn` (1…4), `act` (`press`/`double`/`triple`/`long`/`hold`), `bat`, `rssi`, `ms` | Shelly Blu / BTHome (fw **0.8+**); только allowlisted MAC |
+| `bleStatus` | `on`, `learn`, `macs[]`, `lastBat?`, `lastRssi?`, `lastMac?` | снимок BLE |
+| `bleSeen` | `mac`, `rssi`, `ms` | кандидат во время learn |
+| `bleAck` | `phase`=`set`/`learnBegin`/`learnEnd`/`allow`/`forget`, `ok`, `err?` | подтверждения BLE |
 | `um980Rsp` | `cmd`, `lines[]`, `ok` | ответ на Unicore-команду (не-NMEA) |
 | `um980Baud` | `baud`, `ok` | подтверждение смены UART baud |
 | `rebootAck` | — | перед `esp_restart()` |
@@ -56,6 +60,11 @@
 | `canLightBegin` | — | поток компактных бинарных CAN-кадров |
 | `canLightEnd` | — | выйти из light-режима |
 | `magChipSet` | `chip` | *(отладка)* принудительный выбор магнитометра; в штатном режиме чип определяется автоматически |
+| `bleSet` | `on` | вкл/выкл BLE-сканер (NVS; по умолчанию выкл.) |
+| `bleLearnBegin` | `timeoutMs?` (default 30000) | окно обучения: первый BTHome-пульт с кнопкой → allowlist |
+| `bleLearnEnd` | — | отменить learn |
+| `bleAllow` | `mac` | добавить MAC в allowlist (до 4) |
+| `bleForget` | `mac` **или** `all:true` | удалить MAC / очистить allowlist |
 
 После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
 
@@ -136,6 +145,16 @@ UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, 
 MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двунаправленный преобразователь уровня (например EM-409) на SCK/SI/SO/CS. INT не подключать (опрос в прошивке). Кварц по умолчанию **8 МГц**, битрейт **500 кбит/с**.
 
 Магнитометр (fw **0.7.0+**): I2C 400 кГц, GPIO 5/6. Поддерживаются **RM3100**, **MMC5983**, **IST8310**, **HMC5883L**, **HMC5983**, **QMC5883L** — автоопределение по ID-регистрам, без выбора в UI. Модуль на кабеле 20–50 см. `heading` = atan2(hy, hx), ось X вперёд. Калибровка DR — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md).
+
+### Shelly Blu RC Button 4 (fw **0.8.0+**)
+
+Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пулит **не** перепрошивается — заводской BTHome без encryption. На вкладке «Компаньон»:
+
+1. Включить **«Сканировать BLE»** (`bleSet on`).
+2. **«Обучить пульт»** → нажать любую кнопку на RC4 в течение ~30 с → MAC в allowlist (до 4).
+3. Дальше `bleBtn` с `btn` 1…4 и `act` press/double/triple/long/hold.
+
+Магнитометр при BLE **не** останавливается (маг на кабеле). Encryption BTHome на MVP игнорируется. Автоматизации: триггер «Кнопка Shelly Blu (компаньон)»; сигналы `esp_ble_bound` / `esp_ble_battery`.
 
 GNSS (fw **0.7.0+**): UART GPIO 17/18. Автоопределение **UM980** (VERSIONA), **u-blox/NEO-M8N** (UBX-MON-VER) или generic **NMEA** с перебором baud (115200, 9600, …). NEO-M8N и аналоги: питание 3.3 V, общий GND.
 

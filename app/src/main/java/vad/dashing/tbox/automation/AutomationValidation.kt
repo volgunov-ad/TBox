@@ -171,6 +171,15 @@ object AutomationValidator {
                     )
                 }
             }
+            is AutomationTrigger.EspBleBtn -> {
+                if (trigger.btn !in AUTOMATION_ESP_BLE_BTN_MIN..AUTOMATION_ESP_BLE_BTN_MAX) {
+                    issues += AutomationValidationIssue(
+                        "$path.btn",
+                        "Номер кнопки должен быть от $AUTOMATION_ESP_BLE_BTN_MIN " +
+                            "до $AUTOMATION_ESP_BLE_BTN_MAX",
+                    )
+                }
+            }
             is AutomationTrigger.Interval -> {
                 if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
                     issues += AutomationValidationIssue(

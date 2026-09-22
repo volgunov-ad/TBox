@@ -358,6 +358,7 @@ class AutomationSignalCatalogTest {
             AutomationSignalId.ESP_GPIO_IN_3,
             AutomationSignalId.ESP_RELAY_0,
             AutomationSignalId.ESP_RELAY_1,
+            AutomationSignalId.ESP_BLE_BOUND,
         ).forEach { id ->
             val descriptor = AutomationSignalCatalog.get(id)
             assertTrue(id.name, AutomationSignalSource.APP in descriptor.sources)
@@ -366,6 +367,9 @@ class AutomationSignalCatalogTest {
             assertTrue(hint, hint.contains("Выключено"))
             assertTrue(hint, hint.contains("Включено"))
         }
+        val bat = AutomationSignalCatalog.get(AutomationSignalId.ESP_BLE_BATTERY)
+        assertEquals("%", bat.unit)
+        assertTrue(AutomationSignalSource.APP in bat.sources)
     }
 
     @Test

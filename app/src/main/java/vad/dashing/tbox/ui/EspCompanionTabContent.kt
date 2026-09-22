@@ -91,6 +91,11 @@ fun EspCompanionTabContent(
     val otaProgress by EspCompanionRepository.otaProgress.collectAsStateWithLifecycle()
     val otaError by EspCompanionRepository.otaError.collectAsStateWithLifecycle()
     val um980ConfigBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
+    val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
+    val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
+    val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
+    val lastBle by EspCompanionRepository.lastBleBtn.collectAsStateWithLifecycle()
+    val bleBat by EspCompanionRepository.bleBattery.collectAsStateWithLifecycle()
 
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -316,6 +321,140 @@ fun EspCompanionTabContent(
                 "—"
             },
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.esp_ble_title))
+        if (!info.ble) {
+            Text(
+                text = stringResource(R.string.esp_ble_need_fw),
+                style = MaterialTheme.typography.tboxCaption,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        } else {
+            val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
+            val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
+            val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
+            val lastBle by EspCompanionRepository.lastBleBtn.collectAsStateWithLifecycle()
+            val bleBat by EspCompanionRepository.bleBattery.collectAsStateWithLifecycle()
+            SettingSwitch(
+                isChecked = bleOn,
+                onCheckedChange = { enabled ->
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_ESP_BLE_SET
+                            putExtra(BackgroundService.EXTRA_ESP_BLE_ON, enabled)
+                        },
+                    )
+                },
+                text = stringResource(R.string.esp_ble_scan),
+                description = stringResource(R.string.esp_ble_scan_desc),
+                enabled = controlsEnabled,
+            )
+            StatusRow(
+                stringResource(R.string.esp_ble_battery),
+                bleBat?.let { "$it%" } ?: "—",
+            )
+            StatusRow(
+                stringResource(R.string.esp_ble_last_event),
+                lastBle?.let { "btn${it.btn} ${it.act} rssi=${it.rssi}" } ?: "—",
+            )
+            StatusRow(
+                stringResource(R.string.esp_ble_bound_macs),
+                if (bleMacs.isEmpty()) "—" else bleMacs.joinToString("\n"),
+            )
+            if (bleLearn) {
+                Text(
+                    text = stringResource(R.string.esp_ble_learning),
+                    style = MaterialTheme.typography.tboxBody,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+                Text(
+                    text = stringResource(R.string.esp_ble_learn_hint),
+                    style = MaterialTheme.typography.tboxCaption,
+                    modifier = Modifier.padding(bottom = 4.dp),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = rememberWrappedOnClick {
+                        context.startService(
+                            Intent(context, BackgroundService::class.java).apply {
+                                action = if (bleLearn) {
+                                    BackgroundService.ACTION_ESP_BLE_LEARN_END
+                                } else {
+                                    BackgroundService.ACTION_ESP_BLE_LEARN_BEGIN
+                                }
+                            },
+                        )
+                    },
+                    enabled = controlsEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (bleLearn) R.string.esp_ble_learn_cancel else R.string.esp_ble_learn,
+                        ),
+                        style = MaterialTheme.typography.tboxCaption,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (bleMacs.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_BLE_FORGET
+                                    putExtra(BackgroundService.EXTRA_ESP_BLE_FORGET_ALL, true)
+                                },
+                            )
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.esp_ble_forget_all),
+                            style = MaterialTheme.typography.tboxCaption,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            for (mac in bleMacs) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = mac,
+                        style = MaterialTheme.typography.tboxCaption,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = rememberWrappedOnClick {
+                            context.startService(
+                                Intent(context, BackgroundService::class.java).apply {
+                                    action = BackgroundService.ACTION_ESP_BLE_FORGET
+                                    putExtra(BackgroundService.EXTRA_ESP_BLE_MAC, mac)
+                                },
+                            )
+                        },
+                        enabled = controlsEnabled,
+                    ) {
+                        Text(stringResource(R.string.esp_ble_forget))
+                    }
+                }
+            }
+        }
+
         StatusRow(stringResource(R.string.location_fixation), if (loc.locateStatus) yesLabel else noLabel)
         StatusRow(stringResource(R.string.location_latitude), loc.latitude.toString())
         StatusRow(stringResource(R.string.location_longitude), loc.longitude.toString())

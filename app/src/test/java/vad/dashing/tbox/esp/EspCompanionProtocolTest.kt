@@ -418,4 +418,48 @@ class EspCompanionProtocolTest {
         assertTrue(EspCompanionProtocol.parseHexData("")!!.isEmpty())
         assertNull(EspCompanionProtocol.parseHexData("1"))
     }
+
+    @Test
+    fun parseHelloBleCaps() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.8.0","gpioIn":4,"relays":2,"um980":false,"baud":115200,""" +
+                """"ble":true,"bleOn":true,"bleMacs":["aa:bb:cc:dd:ee:ff"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.ble)
+        assertTrue(hello.bleOn)
+        assertEquals(listOf("aa:bb:cc:dd:ee:ff"), hello.bleMacs)
+    }
+
+    @Test
+    fun parseAndEncodeBleMessages() {
+        val btn = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleBtn","mac":"AA:BB:CC:DD:EE:FF","btn":2,"act":"double",""" +
+                """"bat":87,"rssi":-62,"ms":1001}""",
+        ) as EspMessage.BleBtn
+        assertEquals("aa:bb:cc:dd:ee:ff", btn.mac)
+        assertEquals(2, btn.btn)
+        assertEquals("double", btn.act)
+        assertEquals(87, btn.bat)
+        assertEquals(-62, btn.rssi)
+
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"macs":["11:22:33:44:55:66"],""" +
+                """"lastBat":50,"lastRssi":-70,"lastMac":"11:22:33:44:55:66"}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.on)
+        assertFalse(status.learn)
+        assertEquals(listOf("11:22:33:44:55:66"), status.macs)
+        assertEquals(50, status.lastBat)
+
+        val set = EspCompanionProtocol.encodeBleSet(true)
+        assertTrue(set.contains("\"t\":\"bleSet\""))
+        assertTrue(set.contains("\"on\":true"))
+        val learn = EspCompanionProtocol.encodeBleLearnBegin(15_000L)
+        assertTrue(learn.contains("bleLearnBegin"))
+        assertTrue(learn.contains("15000"))
+        val forget = EspCompanionProtocol.encodeBleForgetAll()
+        assertTrue(forget.contains("\"all\":true"))
+    }
 }

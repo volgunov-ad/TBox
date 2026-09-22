@@ -1,6 +1,7 @@
 # ESP32-S3 companion firmware
 
 Target: **ESP32-S3-DevKitC-1** (N16R8 or N8R8).  
+Firmware version: see `ESP_COMPANION_FW_VERSION` in `main/protocol.h` (**0.8.0+** adds Shelly Blu / BTHome BLE observer).  
 Stack: ESP-IDF 5.x + TinyUSB CDC (USB Device).
 
 ## Build

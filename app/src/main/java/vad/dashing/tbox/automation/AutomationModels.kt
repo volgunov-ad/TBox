@@ -182,6 +182,8 @@ enum class AutomationSignalId(
     ESP_GPIO_IN_3("esp_gpio_in_3", AutomationSignalValueType.STATE),
     ESP_RELAY_0("esp_relay_0", AutomationSignalValueType.STATE),
     ESP_RELAY_1("esp_relay_1", AutomationSignalValueType.STATE),
+    ESP_BLE_BOUND("esp_ble_bound", AutomationSignalValueType.STATE),
+    ESP_BLE_BATTERY("esp_ble_battery"),
     WIFI_ENABLED("wifi_enabled", AutomationSignalValueType.STATE),
     WIFI_ASSOCIATED("wifi_associated", AutomationSignalValueType.STATE),
     WIFI_SSID("wifi_ssid", AutomationSignalValueType.STATE),
@@ -238,6 +240,23 @@ enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int) {
         fun fromRawValue(raw: Int): AutomationHardKeyStatus? = entries.firstOrNull { it.rawValue == raw }
     }
 }
+
+/** Shelly Blu RC Button 4 / BTHome button action from companion `bleBtn.act`. */
+enum class AutomationEspBleBtnAction(val storageKey: String) {
+    PRESS("press"),
+    DOUBLE("double"),
+    TRIPLE("triple"),
+    LONG("long"),
+    HOLD("hold");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationEspBleBtnAction? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
+const val AUTOMATION_ESP_BLE_BTN_MIN = 1
+const val AUTOMATION_ESP_BLE_BTN_MAX = 4
 
 enum class AutomationGeofenceDirection(val storageKey: String) {
     ENTER("enter"),
@@ -376,6 +395,16 @@ sealed interface AutomationTrigger {
         override val id: String = "1",
         val keyCode: Int,
         val keyStatus: AutomationHardKeyStatus = AutomationHardKeyStatus.PRESSED,
+    ) : AutomationTrigger
+
+    /**
+     * Fired by ESP companion `bleBtn` (Shelly Blu RC Button 4 / BTHome).
+     * [btn] is 1…4; [act] is press / double / triple / long / hold.
+     */
+    data class EspBleBtn(
+        override val id: String = "1",
+        val btn: Int = 1,
+        val act: AutomationEspBleBtnAction = AutomationEspBleBtnAction.PRESS,
     ) : AutomationTrigger
 
     data class Interval(

@@ -4,11 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.7.0"
+#define ESP_COMPANION_FW_VERSION "0.8.0"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
 #define ESP_COMPANION_DEFAULT_UM980_BAUD 115200
+#define ESP_COMPANION_BLE_MAX_MACS 4
 
 /** OTA / light-bridge binary frame: 0xA5 0x5A | u16be len | payload | u32be crc32(payload) */
 #define OTA_FRAME_MAGIC0 0xA5
@@ -67,6 +68,13 @@ void protocol_set_mag_for_hello(bool mag, const char *chip,
 
 /** GNSS autodetect caps for hello. */
 void protocol_set_gnss_for_hello(bool present, const char *chip, const char *model, int baud);
+
+/** Shelly Blu / BTHome BLE button observer (fw 0.8+). */
+void protocol_send_ble_btn(const char *mac, int btn, const char *act,
+                           int bat, int rssi, uint32_t ms);
+void protocol_send_ble_status(void);
+void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms);
+void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
 
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);

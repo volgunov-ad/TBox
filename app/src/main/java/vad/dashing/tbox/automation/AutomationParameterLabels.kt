@@ -238,6 +238,8 @@ object AutomationParameterLabels {
         AutomationSignalId.ESP_GPIO_IN_3 -> "ESP-вход 3"
         AutomationSignalId.ESP_RELAY_0 -> "ESP-реле 0"
         AutomationSignalId.ESP_RELAY_1 -> "ESP-реле 1"
+        AutomationSignalId.ESP_BLE_BOUND -> "ESP BLE пульт привязан"
+        AutomationSignalId.ESP_BLE_BATTERY -> "ESP BLE батарея пульта"
         AutomationSignalId.WIFI_ENABLED -> "Wi-Fi"
         AutomationSignalId.WIFI_ASSOCIATED -> "Wi-Fi: подключение к сети"
         AutomationSignalId.WIFI_SSID -> "Wi-Fi: точка доступа"
