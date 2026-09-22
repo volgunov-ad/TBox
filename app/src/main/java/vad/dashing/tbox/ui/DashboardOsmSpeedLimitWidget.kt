@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -25,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.MapsCamerasRadarsLogic
 import vad.dashing.tbox.R
@@ -151,12 +153,24 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                     iconTextStyle = sideTextStyle,
                                     distStyle = distStyle,
                                 )
-                                MapsCamColumn.Current -> OsmSpeedLimitSign(
-                                    label = display.currentLabel ?: dashLabel,
-                                    textStyle = mainTextStyle,
-                                    alpha = if (display.currentLabel != null) 1f else OsmInactiveAlpha,
-                                    modifier = Modifier.fillMaxSize(0.9f),
-                                )
+                                MapsCamColumn.Current -> {
+                                    BoxWithConstraints(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        val diameter = min(maxWidth, maxHeight) * 0.9f
+                                        OsmSpeedLimitSign(
+                                            label = display.currentLabel ?: dashLabel,
+                                            textStyle = mainTextStyle,
+                                            alpha = if (display.currentLabel != null) {
+                                                1f
+                                            } else {
+                                                OsmInactiveAlpha
+                                            },
+                                            modifier = Modifier.size(diameter),
+                                        )
+                                    }
+                                }
                                 MapsCamColumn.Ahead -> MapsCamAheadColumn(
                                     display = display,
                                     dashLabel = dashLabel,
@@ -205,21 +219,20 @@ private fun MapsCamCameraColumn(
                 )
             } else {
                 val accent = if (display.cameraOverLimit) activeColor else resolvedTextColor
-                BoxWithConstraints(modifier = Modifier.fillMaxSize(0.85f)) {
-                    val iconSize = minOf(maxWidth, maxHeight)
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        SpeedCamTypeIcon(
-                            category = display.cameraAlert.point.category,
-                            relative = display.cameraAlert.relative,
-                            speedKmh = display.cameraAlert.point.speedKmh,
-                            color = accent,
-                            speedTextStyle = iconTextStyle.scaledWidgetText(0.7f),
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize(0.85f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val iconSize = min(maxWidth, maxHeight)
+                    SpeedCamTypeIcon(
+                        category = display.cameraAlert.point.category,
+                        relative = display.cameraAlert.relative,
+                        // Block 1 shows icon/arrow only — speed digits live in blocks 3/4.
+                        speedKmh = 0,
+                        color = accent,
+                        speedTextStyle = iconTextStyle.scaledWidgetText(0.7f),
+                        modifier = Modifier.size(iconSize),
+                    )
                 }
             }
         }
@@ -264,12 +277,16 @@ private fun MapsCamAheadColumn(
                 .fillMaxWidth(),
             contentAlignment = Alignment.Center,
         ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxSize(0.85f)) {
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize(0.85f),
+                contentAlignment = Alignment.Center,
+            ) {
+                val diameter = min(maxWidth, maxHeight)
                 OsmSpeedLimitSign(
                     label = display.aheadLabel ?: dashLabel,
                     textStyle = signTextStyle,
                     alpha = if (display.aheadLabel != null) 1f else OsmInactiveAlpha,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.size(diameter),
                 )
             }
         }
