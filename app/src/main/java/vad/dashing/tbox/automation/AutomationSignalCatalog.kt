@@ -689,6 +689,14 @@ object AutomationSignalCatalog {
         state(AutomationSignalId.ESP_GPIO_IN_3, "ESP-вход 3", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_0, "ESP-реле 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_1, "ESP-реле 1", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_BLE_BOUND, "ESP BLE пульт привязан", appOnly, binaryStates),
+        number(
+            AutomationSignalId.ESP_BLE_BATTERY,
+            "ESP BLE батарея пульта",
+            "%",
+            appOnly,
+            typicalRange = "0…100 %, последнее значение с allowlisted Shelly Blu",
+        ),
         state(
             AutomationSignalId.WIFI_ENABLED,
             "Wi-Fi",

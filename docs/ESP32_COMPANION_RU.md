@@ -2,7 +2,7 @@
 
 Компаньон на **ESP32-S3** (рекомендуется Espressif **ESP32-S3-DevKitC-1** N16R8/N8R8) подключается к ГУ Jetour по USB Host. К ГУ — разъём **ESP32-S3 USB** (native OTG, GPIO19/20), не USB‑UART bridge.
 
-Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.7.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
+Прошивка: [`firmware/esp32-companion/`](../firmware/esp32-companion/) (версия **0.8.0+**). Таблица разделов: A/B OTA (`ota_0` / `ota_1` по 1.5 MB) — см. `partitions.csv`.
 
 Команды UM980 сверяются с **Unicore Reference Commands Manual For N4 High Precision Products V2 EN R1.14** (локальная PDF в `docs/`, в git не кладётся).
 
@@ -10,7 +10,7 @@
 
 > **Важно (USB Host):** команды UM980 раньше обрабатывались в main loop и глушили heartbeat ~1.2 с/команду. Android watchdog закрывал CDC посреди `bulkTransfer` и мог клинить весь USB Host ГУ (вместе с TBox). С 0.4.1+ UM980/baud уходят в отдельный FreeRTOS task; OTA держит редкий `hb` (5 с), reboot после OTA — из main loop (не из CDC RX). На Android: нет `close()` по heartbeat timeout; reconnect/close блокируются во время UM980/OTA; USB OUT на одном потоке. Поиск компаньона — **только Espressif VID `0x303A`** (без CDC-fallback на другие устройства); иначе reconnect мог захватить RNDIS TBox. DETACH закрывает сессию только для текущего компаньона.
 
-В приложении: вкладка **«Компаньон»** (в левом меню **по умолчанию скрыта** — включить в настройках состава меню) — переключатель **«Подключаться к компаньону»** (по умолчанию выкл., USB не открывается), статус USB/GPIO/реле, время последнего сообщения, перезагрузка, **обновление прошивки с ГУ**, настройки UM980. Пока опция включена, приложение само периодически пытается восстановить USB-сессию при обрыве (ждёт появления Espressif). Вкладка **«Геопозиция»** — источник (**TBox** / **Компаньон** / **Android** / **USB**) и координаты. Источник **Компаньон** можно выбрать только если на USB есть Espressif и включён переключатель «Подключаться к компаньону» (автоматически сессию не включает — иначе на ГУ кратковременно падает RNDIS TBox). Источник **USB** — отдельный путь: пользователь выбирает CDC/UART-мост из списка и читает NMEA напрямую (без компаньона); Espressif в этом списке не показывается; USB-сессия открывается только когда выбранное устройство реально на шине.
+В приложении: вкладка **«Компаньон»** (в левом меню **по умолчанию скрыта** — включить в настройках состава меню) с горизонтальными разделами **«Настройки»** / **«Данные и отладка»** / **«BLE»**. В **«Настройки»** — переключатель **«Подключаться к компаньону»** (по умолчанию выкл., USB не открывается), статус USB/прошивки, перезагрузка, **обновление прошивки с ГУ**, настройки UM980/CAN. В **«Данные и отладка»** — GPIO/реле, GNSS/маг live, протокол-лог. В **«BLE»** — Shelly Blu. Пока опция подключения включена, приложение само периодически пытается восстановить USB-сессию при обрыве (ждёт появления Espressif). Вкладка **«Геопозиция»** — источник (**TBox** / **Компаньон** / **Android** / **USB**) и координаты. Источник **Компаньон** можно выбрать только если на USB есть Espressif и включён переключатель «Подключаться к компаньону» (автоматически сессию не включает — иначе на ГУ кратковременно падает RNDIS TBox). Источник **USB** — отдельный путь: пользователь выбирает CDC/UART-мост из списка и читает NMEA напрямую (без компаньона); Espressif в этом списке не показывается; USB-сессия открывается только когда выбранное устройство реально на шине.
 
 ## Протокол NDJSON v1
 
@@ -20,13 +20,17 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше |
+| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]`, `ble?`, `bleOn?`, `bleMacs?` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше. `ble:true` (fw **0.8+**) — NimBLE observer для Shelly Blu / BTHome |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `mag` | `chip`, `hx`, `hy`, `hz`, `heading`, `fs`, `ok` | магнитометр ~10 Гц (µT, магнитный курс 0…360, \|H\|); не слать во время OTA/bridge |
 | `gpio` | `mask`, `ms` | bitmask входов |
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |
+| `bleBtn` | `mac`, `btn` (1…4), `act` (`press`/`double`/`triple`/`long`/`hold`), `bat`, `rssi`, `ms` | Shelly Blu / BTHome (fw **0.8+**); только allowlisted MAC |
+| `bleStatus` | `on`, `learn`, `macs[]`, `lastBat?`, `lastRssi?`, `lastMac?` | снимок BLE |
+| `bleSeen` | `mac`, `rssi`, `ms` | кандидат во время learn |
+| `bleAck` | `phase`=`set`/`learnBegin`/`learnEnd`/`allow`/`forget`, `ok`, `err?` | подтверждения BLE |
 | `um980Rsp` | `cmd`, `lines[]`, `ok` | ответ на Unicore-команду (не-NMEA) |
 | `um980Baud` | `baud`, `ok` | подтверждение смены UART baud |
 | `rebootAck` | — | перед `esp_restart()` |
@@ -56,6 +60,11 @@
 | `canLightBegin` | — | поток компактных бинарных CAN-кадров |
 | `canLightEnd` | — | выйти из light-режима |
 | `magChipSet` | `chip` | *(отладка)* принудительный выбор магнитометра; в штатном режиме чип определяется автоматически |
+| `bleSet` | `on` | вкл/выкл BLE-сканер (NVS; по умолчанию выкл.) |
+| `bleLearnBegin` | `timeoutMs?` (default 30000) | окно обучения: первый BTHome-пульт с кнопкой → allowlist |
+| `bleLearnEnd` | — | отменить learn |
+| `bleAllow` | `mac` | добавить MAC в allowlist (до 4) |
+| `bleForget` | `mac` **или** `all:true` | удалить MAC / очистить allowlist |
 
 После `um980Cmd` прошивка ~0.5–1.5 с собирает не-NMEA строки (`$command` / `#…` / `OK`) в один `um980Rsp`. NMEA по-прежнему уходит как `gps`.
 
@@ -136,6 +145,23 @@ UM980: питание **3.3 V** (не 5 V на VCC чипа), UART LVTTL 3.3 V, 
 MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двунаправленный преобразователь уровня (например EM-409) на SCK/SI/SO/CS. INT не подключать (опрос в прошивке). Кварц по умолчанию **8 МГц**, битрейт **500 кбит/с**.
 
 Магнитометр (fw **0.7.0+**): I2C 400 кГц, GPIO 5/6. Поддерживаются **RM3100**, **MMC5983**, **IST8310**, **HMC5883L**, **HMC5983**, **QMC5883L** — автоопределение по ID-регистрам, без выбора в UI. Модуль на кабеле 20–50 см. `heading` = atan2(hy, hx), ось X вперёд. Калибровка DR — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md).
+
+### Shelly Blu (Button 1 / RC Button 4) (fw **0.8.0+**)
+
+Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пульты **не** перепрошиваются — заводской BTHome без encryption.
+
+Поддерживаются:
+
+- **Shelly Blu Button 1** — одна физическая кнопка → в протоколе всегда `btn:1`
+- **Shelly Blu RC Button 4** — четыре кнопки → `btn` 1…4
+
+На вкладке «Компаньон» → раздел **«BLE»**:
+
+1. Включить **«Сканировать BLE»** (`bleSet on`).
+2. **«Обучить пульт»** → нажать кнопку на пульте в течение ~30 с → MAC в allowlist (до 4 устройств).
+3. Дальше `bleBtn` с `act` press/double/triple/long/hold.
+
+Магнитометр при BLE **не** останавливается (маг на кабеле). Encryption BTHome на MVP игнорируется. Автоматизации: триггер «Кнопка Shelly Blu (компаньон)»; сигналы `esp_ble_bound` / `esp_ble_battery`.
 
 GNSS (fw **0.7.0+**): UART GPIO 17/18. Автоопределение **UM980** (VERSIONA), **u-blox/NEO-M8N** (UBX-MON-VER) или generic **NMEA** с перебором baud (115200, 9600, …). NEO-M8N и аналоги: питание 3.3 V, общий GND.
 

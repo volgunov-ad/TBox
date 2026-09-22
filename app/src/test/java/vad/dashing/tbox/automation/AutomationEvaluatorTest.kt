@@ -764,6 +764,33 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun espBleBtnTrigger_firesOnExactBtnAndAct() {
+        val evaluator = evaluator(
+            AutomationTrigger.EspBleBtn(
+                id = "b1",
+                btn = 1,
+                act = AutomationEspBleBtnAction.PRESS,
+            ),
+            AutomationTrigger.EspBleBtn(
+                id = "b2d",
+                btn = 2,
+                act = AutomationEspBleBtnAction.DOUBLE,
+            ),
+        )
+        assertEquals(
+            "b1",
+            evaluator.onEspBleBtn(1, AutomationEspBleBtnAction.PRESS)?.triggerId,
+        )
+        assertEquals(
+            "b2d",
+            evaluator.onEspBleBtn(2, AutomationEspBleBtnAction.DOUBLE)?.triggerId,
+        )
+        assertNull(evaluator.onEspBleBtn(1, AutomationEspBleBtnAction.DOUBLE))
+        assertNull(evaluator.onEspBleBtn(3, AutomationEspBleBtnAction.PRESS))
+        assertTrue(evaluator.triggerStillMatching("b1"))
+    }
+
+    @Test
     fun timeCondition_usesInjectedWallClock() {
         val night = AutomationCondition.Time(
             after = AutomationTimeOfDay(22, 0),

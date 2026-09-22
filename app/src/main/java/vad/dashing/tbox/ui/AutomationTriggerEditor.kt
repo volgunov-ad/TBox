@@ -17,10 +17,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
+import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MAX
+import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MIN
 import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DEBOUNCE_MS
 import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
+import vad.dashing.tbox.automation.AutomationEspBleBtnAction
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationSignalCatalog
@@ -98,6 +101,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.SystemEvent -> SystemEventFields(trigger, onChange)
                 is AutomationTrigger.WidgetPressed -> WidgetPressedTriggerFields(trigger, onChange)
                 is AutomationTrigger.HardKey -> HardKeyTriggerFields(trigger, onChange)
+                is AutomationTrigger.EspBleBtn -> EspBleBtnTriggerFields(trigger, onChange)
                 is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
@@ -208,6 +212,42 @@ private fun HardKeyTriggerFields(
         } else {
             MaterialTheme.colorScheme.error
         },
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun EspBleBtnTriggerFields(
+    trigger: AutomationTrigger.EspBleBtn,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationDropdown(
+        label = "Кнопка пульта",
+        value = trigger.btn,
+        options = (AUTOMATION_ESP_BLE_BTN_MIN..AUTOMATION_ESP_BLE_BTN_MAX).toList(),
+        optionLabel = { "Кнопка $it" },
+        onValueChange = { onChange(trigger.copy(btn = it)) },
+    )
+    AutomationDropdown(
+        label = "Действие",
+        value = trigger.act,
+        options = AutomationEspBleBtnAction.entries,
+        optionLabel = { act ->
+            when (act) {
+                AutomationEspBleBtnAction.PRESS -> "Нажатие"
+                AutomationEspBleBtnAction.DOUBLE -> "Двойное"
+                AutomationEspBleBtnAction.TRIPLE -> "Тройное"
+                AutomationEspBleBtnAction.LONG -> "Долгое"
+                AutomationEspBleBtnAction.HOLD -> "Удержание"
+            }
+        },
+        onValueChange = { onChange(trigger.copy(act = it)) },
+    )
+    Text(
+        text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
+            "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -676,6 +716,7 @@ private enum class TriggerUiKind {
     SYSTEM_EVENT,
     WIDGET_PRESS,
     HARD_KEY,
+    ESP_BLE_BTN,
     INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
@@ -687,6 +728,7 @@ private enum class TriggerUiKind {
         SYSTEM_EVENT -> "Событие программы"
         WIDGET_PRESS -> "Нажатие виджета-триггера"
         HARD_KEY -> "Кнопка на руле / двери (A9)"
+        ESP_BLE_BTN -> "Кнопка Shelly Blu (компаньон)"
         INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
@@ -700,6 +742,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.SystemEvent -> TriggerUiKind.SYSTEM_EVENT
     is AutomationTrigger.WidgetPressed -> TriggerUiKind.WIDGET_PRESS
     is AutomationTrigger.HardKey -> TriggerUiKind.HARD_KEY
+    is AutomationTrigger.EspBleBtn -> TriggerUiKind.ESP_BLE_BTN
     is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
@@ -722,6 +765,12 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
     TriggerUiKind.HARD_KEY -> AutomationTrigger.HardKey(
         id = id,
         keyCode = 115,
+    )
+
+    TriggerUiKind.ESP_BLE_BTN -> AutomationTrigger.EspBleBtn(
+        id = id,
+        btn = 1,
+        act = AutomationEspBleBtnAction.PRESS,
     )
 
     TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
@@ -765,6 +814,7 @@ private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this
     is AutomationTrigger.SystemEvent -> copy(id = id)
     is AutomationTrigger.WidgetPressed -> copy(id = id)
     is AutomationTrigger.HardKey -> copy(id = id)
+    is AutomationTrigger.EspBleBtn -> copy(id = id)
     is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)

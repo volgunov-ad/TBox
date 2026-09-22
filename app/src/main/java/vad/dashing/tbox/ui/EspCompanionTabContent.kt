@@ -31,10 +31,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,10 +64,17 @@ import vad.dashing.tbox.location.LocationIncomingBitRate
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private enum class EspCompanionSection {
+    Settings,
+    Data,
+    Ble,
+}
 
 @Composable
 fun EspCompanionTabContent(
@@ -91,6 +100,16 @@ fun EspCompanionTabContent(
     val otaProgress by EspCompanionRepository.otaProgress.collectAsStateWithLifecycle()
     val otaError by EspCompanionRepository.otaError.collectAsStateWithLifecycle()
     val um980ConfigBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
+    val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
+    val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
+    val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
+    val lastBle by EspCompanionRepository.lastBleBtn.collectAsStateWithLifecycle()
+    val bleBat by EspCompanionRepository.bleBattery.collectAsStateWithLifecycle()
+    val companionLog by CompanionProtocolLogRecorder.uiState.collectAsStateWithLifecycle()
+
+    val sections = EspCompanionSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -151,351 +170,508 @@ fun EspCompanionTabContent(
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val utcText = loc.utcTime?.formatDateTime().orEmpty()
+    val gpioBits = (if (info.gpioInCount > 0) info.gpioInCount else 4).coerceIn(1, 16)
+    val relayBits = (if (info.relayCount > 0) info.relayCount else 2).coerceIn(1, 8)
+    val companionIncomingBps = remember(nowMs) {
+        LocationIncomingBitRate.formatBitsPerSec(
+            LocationIncomingBitRate.bitsPerSec(LocationSource.ESP32),
+        )
+    }
+    val magFresh = lastMagAt > 0L && nowMs - lastMagAt <= 1_500L
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp),
     ) {
-        SettingSwitch(
-            isChecked = companionEnabled,
-            onCheckedChange = { enabled ->
-                settingsViewModel.saveEspCompanionEnabledSetting(enabled)
-            },
-            text = stringResource(R.string.esp_connect_enabled_title),
-            description = stringResource(R.string.esp_connect_enabled_desc),
-            enabled = true,
+        Text(
+            text = stringResource(R.string.tab_esp_companion),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
         )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_status_title))
-        StatusRow(
-            stringResource(R.string.esp_usb_status),
-            if (connected) stringResource(R.string.esp_connected) else stringResource(R.string.esp_disconnected),
-        )
-        StatusRow(stringResource(R.string.esp_firmware), info.firmwareVersion.ifBlank { "—" })
-        StatusRow(
-            stringResource(R.string.esp_um980_version),
-            snapshot.um980Version?.ifBlank { "—" } ?: "—",
-        )
-        StatusRow(stringResource(R.string.esp_last_error), lastError?.ifBlank { "—" } ?: "—")
-        StatusRow(
-            stringResource(R.string.esp_last_message_at),
-            if (lastMsgAt > 0L) timeFormat.format(Date(lastMsgAt)) else "—",
-        )
-        val companionIncomingBps = remember(nowMs) {
-            LocationIncomingBitRate.formatBitsPerSec(
-                LocationIncomingBitRate.bitsPerSec(LocationSource.ESP32),
-            )
-        }
-        StatusRow(
-            stringResource(R.string.location_incoming_bitrate),
-            companionIncomingBps,
-        )
-        StatusRow(
-            stringResource(R.string.esp_can_status),
-            if (info.can) yesLabel else noLabel,
-        )
-        if (info.can) {
-            StatusRow(
-                stringResource(R.string.esp_can_backend),
-                info.canBackend.ifBlank { "mcp2515" },
-            )
-        }
-        val gpioBits = (if (info.gpioInCount > 0) info.gpioInCount else 4).coerceIn(1, 16)
-        val relayBits = (if (info.relayCount > 0) info.relayCount else 2).coerceIn(1, 8)
-        StatusRow(
-            stringResource(R.string.esp_gpio_inputs),
-            Integer.toBinaryString(gpioMask).padStart(gpioBits, '0'),
-        )
-        StatusRow(
-            stringResource(R.string.esp_relays),
-            Integer.toBinaryString(relayMask).padStart(relayBits, '0'),
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            for (ch in 0 until relayBits) {
-                val on = (relayMask and (1 shl ch)) != 0
-                OutlinedButton(
-                    onClick = rememberWrappedOnClick {
-                        context.startService(
-                            Intent(context, BackgroundService::class.java).apply {
-                                action = BackgroundService.ACTION_ESP_RELAY_TOGGLE
-                                putExtra(BackgroundService.EXTRA_ESP_RELAY_CHANNEL, ch)
-                            },
-                        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        EspCompanionSection.Settings -> R.string.esp_tab_settings
+                        EspCompanionSection.Data -> R.string.esp_tab_data
+                        EspCompanionSection.Ble -> R.string.esp_tab_ble
                     },
-                    enabled = controlsEnabled,
-                    modifier = Modifier.weight(1f),
-                ) {
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            when (selectedSection) {
+                EspCompanionSection.Settings -> {
+                    SettingSwitch(
+                        isChecked = companionEnabled,
+                        onCheckedChange = { enabled ->
+                            settingsViewModel.saveEspCompanionEnabledSetting(enabled)
+                        },
+                        text = stringResource(R.string.esp_connect_enabled_title),
+                        description = stringResource(R.string.esp_connect_enabled_desc),
+                        enabled = true,
+                    )
+                    SettingsTitle(stringResource(R.string.esp_status_title))
+                    StatusRow(
+                        stringResource(R.string.esp_usb_status),
+                        if (connected) {
+                            stringResource(R.string.esp_connected)
+                        } else {
+                            stringResource(R.string.esp_disconnected)
+                        },
+                    )
+                    StatusRow(stringResource(R.string.esp_firmware), info.firmwareVersion.ifBlank { "—" })
+                    StatusRow(
+                        stringResource(R.string.esp_um980_version),
+                        snapshot.um980Version?.ifBlank { "—" } ?: "—",
+                    )
+                    StatusRow(stringResource(R.string.esp_last_error), lastError?.ifBlank { "—" } ?: "—")
+                    StatusRow(
+                        stringResource(R.string.esp_last_message_at),
+                        if (lastMsgAt > 0L) timeFormat.format(Date(lastMsgAt)) else "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.location_incoming_bitrate),
+                        companionIncomingBps,
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_can_status),
+                        if (info.can) yesLabel else noLabel,
+                    )
+                    if (info.can) {
+                        StatusRow(
+                            stringResource(R.string.esp_can_backend),
+                            info.canBackend.ifBlank { "mcp2515" },
+                        )
+                    }
+                    StatusRow(
+                        stringResource(R.string.esp_gnss_status),
+                        if (info.gnss) yesLabel else noLabel,
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_gnss_chip),
+                        info.gnssChip.ifBlank { "—" },
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_gnss_model),
+                        info.gnssModel.ifBlank { "—" },
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_gnss_baud),
+                        if (info.um980Baud > 0) info.um980Baud.toString() else "—",
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_mag_status),
+                        if (!info.magSupported) {
+                            stringResource(R.string.esp_mag_chip_need_fw_short)
+                        } else if (info.mag) {
+                            yesLabel
+                        } else {
+                            noLabel
+                        },
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_mag_chip_status),
+                        info.magChip.ifBlank { "—" },
+                    )
+                    if (info.um980) {
+                        val baudOptions = EspCompanionProtocol.UM980_BAUD_OPTIONS.map {
+                            BaudOption(it, it.toString())
+                        }
+                        val selectedBaud = baudOptions.firstOrNull { it.baud == info.um980Baud }
+                            ?: baudOptions.first { it.baud == 115200 }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedBaud,
+                            onValueChange = { opt ->
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_ESP_UM980_BAUD
+                                        putExtra(BackgroundService.EXTRA_ESP_UM980_BAUD, opt.baud)
+                                    },
+                                )
+                            },
+                            text = stringResource(R.string.esp_um980_baud),
+                            description = stringResource(R.string.esp_um980_baud_desc),
+                            enabled = controlsEnabled,
+                            options = baudOptions,
+                            selectorWidth = 300.dp,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick { showRebootConfirm = true },
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(stringResource(R.string.esp_reboot), style = MaterialTheme.typography.tboxButton)
+                    }
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            otaPicker.launch(arrayOf("application/octet-stream", "*/*"))
+                        },
+                        enabled = controlsEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp),
+                    ) {
+                        Text(stringResource(R.string.esp_ota_update), style = MaterialTheme.typography.tboxButton)
+                    }
+                    if (otaBusy || otaProgress > 0) {
+                        Text(
+                            text = stringResource(R.string.esp_ota_progress, otaProgress),
+                            style = MaterialTheme.typography.tboxBody,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        LinearProgressIndicator(
+                            progress = { otaProgress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp),
+                        )
+                    }
+                    if (!otaBusy && !otaError.isNullOrBlank()) {
+                        Text(
+                            text = otaErrorMessage(context, otaError),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
+                    if (info.can) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        Button(
+                            onClick = rememberWrappedOnClick { showCanConsole = true },
+                            enabled = controlsEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_can_open),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.esp_can_open_desc),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (info.um980) {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        SettingsTitle(stringResource(R.string.esp_um980_settings_title))
+                        Button(
+                            onClick = rememberWrappedOnClick { showUm980Settings = true },
+                            enabled = controlsEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_um980_open_settings),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.esp_um980_open_settings_desc),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                EspCompanionSection.Data -> {
+                    StatusRow(
+                        stringResource(R.string.esp_gpio_inputs),
+                        Integer.toBinaryString(gpioMask).padStart(gpioBits, '0'),
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_relays),
+                        Integer.toBinaryString(relayMask).padStart(relayBits, '0'),
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        for (ch in 0 until relayBits) {
+                            val on = (relayMask and (1 shl ch)) != 0
+                            OutlinedButton(
+                                onClick = rememberWrappedOnClick {
+                                    context.startService(
+                                        Intent(context, BackgroundService::class.java).apply {
+                                            action = BackgroundService.ACTION_ESP_RELAY_TOGGLE
+                                            putExtra(BackgroundService.EXTRA_ESP_RELAY_CHANNEL, ch)
+                                        },
+                                    )
+                                },
+                                enabled = controlsEnabled,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.esp_relay_n, ch) + if (on) " ●" else " ○",
+                                    style = MaterialTheme.typography.tboxCaption,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+                    StatusRow(
+                        stringResource(R.string.esp_gnss_online),
+                        if (um980Online) yesLabel else noLabel,
+                    )
+                    StatusRow(stringResource(R.string.location_fixation), if (loc.locateStatus) yesLabel else noLabel)
+                    StatusRow(stringResource(R.string.location_latitude), loc.latitude.toString())
+                    StatusRow(stringResource(R.string.location_longitude), loc.longitude.toString())
+                    StatusRow(stringResource(R.string.location_used_satellites), loc.usingSatellites.toString())
+                    StatusRow(stringResource(R.string.location_visible_satellites), loc.visibleSatellites.toString())
+                    StatusRow(
+                        stringResource(R.string.location_speed),
+                        String.format(Locale.getDefault(), "%.1f", loc.speed),
+                    )
+                    StatusRow(stringResource(R.string.location_utc), utcText)
+                    StatusRow(
+                        stringResource(R.string.location_last_change),
+                        loc.updateTime?.let { timeFormat.format(it) }.orEmpty(),
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_mag_seen),
+                        if (info.magSeen.isEmpty()) "—" else info.magSeen.joinToString(", "),
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_mag_heading),
+                        if (magFresh && lastMag.ok) {
+                            String.format(Locale.getDefault(), "%.1f°", lastMag.headingDeg)
+                        } else {
+                            "—"
+                        },
+                    )
+                    StatusRow(
+                        stringResource(R.string.esp_mag_fs),
+                        if (magFresh && lastMag.ok) {
+                            String.format(Locale.getDefault(), "%.1f µT", lastMag.fs)
+                        } else {
+                            "—"
+                        },
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    SettingsTitle(stringResource(R.string.esp_companion_log_title))
                     Text(
-                        text = stringResource(R.string.esp_relay_n, ch) + if (on) " ●" else " ○",
-                        style = MaterialTheme.typography.tboxCaption,
-                        textAlign = TextAlign.Center,
+                        text = stringResource(R.string.esp_companion_log_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            }
-        }
-        StatusRow(
-            stringResource(R.string.esp_gnss_status),
-            if (info.gnss) yesLabel else noLabel,
-        )
-        StatusRow(
-            stringResource(R.string.esp_gnss_chip),
-            info.gnssChip.ifBlank { "—" },
-        )
-        StatusRow(
-            stringResource(R.string.esp_gnss_model),
-            info.gnssModel.ifBlank { "—" },
-        )
-        StatusRow(
-            stringResource(R.string.esp_gnss_baud),
-            if (info.um980Baud > 0) info.um980Baud.toString() else "—",
-        )
-        StatusRow(
-            stringResource(R.string.esp_gnss_online),
-            if (um980Online) yesLabel else noLabel,
-        )
-        if (info.um980) {
-            val baudOptions = EspCompanionProtocol.UM980_BAUD_OPTIONS.map { BaudOption(it, it.toString()) }
-            val selectedBaud = baudOptions.firstOrNull { it.baud == info.um980Baud }
-                ?: baudOptions.first { it.baud == 115200 }
-            SettingDropdownGeneric(
-                selectedValue = selectedBaud,
-                onValueChange = { opt ->
-                    context.startService(
-                        Intent(context, BackgroundService::class.java).apply {
-                            action = BackgroundService.ACTION_ESP_UM980_BAUD
-                            putExtra(BackgroundService.EXTRA_ESP_UM980_BAUD, opt.baud)
+                    Text(
+                        text = if (companionLog.recording) {
+                            stringResource(R.string.esp_companion_log_recording, companionLog.events)
+                        } else {
+                            stringResource(R.string.esp_companion_log_idle)
+                        },
+                        style = MaterialTheme.typography.tboxBody,
+                        color = if (companionLog.recording) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
-                },
-                text = stringResource(R.string.esp_um980_baud),
-                description = stringResource(R.string.esp_um980_baud_desc),
-                enabled = controlsEnabled,
-                options = baudOptions,
-                selectorWidth = 300.dp,
-            )
-        }
-        StatusRow(
-            stringResource(R.string.esp_mag_status),
-            if (!info.magSupported) {
-                stringResource(R.string.esp_mag_chip_need_fw_short)
-            } else if (info.mag) {
-                yesLabel
-            } else {
-                noLabel
-            },
-        )
-        StatusRow(
-            stringResource(R.string.esp_mag_chip_status),
-            info.magChip.ifBlank { "—" },
-        )
-        StatusRow(
-            stringResource(R.string.esp_mag_seen),
-            if (info.magSeen.isEmpty()) "—" else info.magSeen.joinToString(", "),
-        )
-        val magFresh = lastMagAt > 0L && nowMs - lastMagAt <= 1_500L
-        StatusRow(
-            stringResource(R.string.esp_mag_heading),
-            if (magFresh && lastMag.ok) {
-                String.format(Locale.getDefault(), "%.1f°", lastMag.headingDeg)
-            } else {
-                "—"
-            },
-        )
-        StatusRow(
-            stringResource(R.string.esp_mag_fs),
-            if (magFresh && lastMag.ok) {
-                String.format(Locale.getDefault(), "%.1f µT", lastMag.fs)
-            } else {
-                "—"
-            },
-        )
-        StatusRow(stringResource(R.string.location_fixation), if (loc.locateStatus) yesLabel else noLabel)
-        StatusRow(stringResource(R.string.location_latitude), loc.latitude.toString())
-        StatusRow(stringResource(R.string.location_longitude), loc.longitude.toString())
-        StatusRow(stringResource(R.string.location_used_satellites), loc.usingSatellites.toString())
-        StatusRow(stringResource(R.string.location_visible_satellites), loc.visibleSatellites.toString())
-        StatusRow(
-            stringResource(R.string.location_speed),
-            String.format(Locale.getDefault(), "%.1f", loc.speed),
-        )
-        StatusRow(stringResource(R.string.location_utc), utcText)
-        StatusRow(
-            stringResource(R.string.location_last_change),
-            loc.updateTime?.let { timeFormat.format(it) }.orEmpty(),
-        )
-
-        OutlinedButton(
-            onClick = rememberWrappedOnClick { showRebootConfirm = true },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-        ) {
-            Text(stringResource(R.string.esp_reboot), style = MaterialTheme.typography.tboxButton)
-        }
-        Button(
-            onClick = rememberWrappedOnClick {
-                otaPicker.launch(arrayOf("application/octet-stream", "*/*"))
-            },
-            enabled = controlsEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(stringResource(R.string.esp_ota_update), style = MaterialTheme.typography.tboxButton)
-        }
-        if (otaBusy || otaProgress > 0) {
-            Text(
-                text = stringResource(R.string.esp_ota_progress, otaProgress),
-                style = MaterialTheme.typography.tboxBody,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-            LinearProgressIndicator(
-                progress = { otaProgress / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-            )
-        }
-        if (!otaBusy && !otaError.isNullOrBlank()) {
-            Text(
-                text = otaErrorMessage(context, otaError),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.esp_companion_log_title))
-        val companionLog by CompanionProtocolLogRecorder.uiState.collectAsStateWithLifecycle()
-        Text(
-            text = stringResource(R.string.esp_companion_log_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        Text(
-            text = if (companionLog.recording) {
-                stringResource(R.string.esp_companion_log_recording, companionLog.events)
-            } else {
-                stringResource(R.string.esp_companion_log_idle)
-            },
-            style = MaterialTheme.typography.tboxBody,
-            color = if (companionLog.recording) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.padding(bottom = 8.dp),
-        )
-        SettingSwitch(
-            isChecked = companionLog.huMarksEnabled,
-            onCheckedChange = { enabled ->
-                if (!enabled && CompanionProtocolLogRecorder.isRecording() &&
-                    CompanionProtocolLogRecorder.isHuMarksEnabled()
-                ) {
-                    CompanionProtocolLogRecorder.appendMark("META", "huMarks=off")
-                }
-                CompanionProtocolLogRecorder.setHuMarksEnabled(enabled)
-                if (enabled && CompanionProtocolLogRecorder.isRecording()) {
-                    CompanionProtocolLogRecorder.appendMark("META", "huMarks=on")
-                }
-            },
-            text = stringResource(R.string.esp_companion_log_hu_marks_title),
-            description = stringResource(R.string.esp_companion_log_hu_marks_desc),
-            enabled = companionEnabled,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    context.startService(
-                        Intent(context, BackgroundService::class.java).apply {
-                            action = BackgroundService.ACTION_COMPANION_LOG_START
+                    SettingSwitch(
+                        isChecked = companionLog.huMarksEnabled,
+                        onCheckedChange = { enabled ->
+                            if (!enabled && CompanionProtocolLogRecorder.isRecording() &&
+                                CompanionProtocolLogRecorder.isHuMarksEnabled()
+                            ) {
+                                CompanionProtocolLogRecorder.appendMark("META", "huMarks=off")
+                            }
+                            CompanionProtocolLogRecorder.setHuMarksEnabled(enabled)
+                            if (enabled && CompanionProtocolLogRecorder.isRecording()) {
+                                CompanionProtocolLogRecorder.appendMark("META", "huMarks=on")
+                            }
                         },
+                        text = stringResource(R.string.esp_companion_log_hu_marks_title),
+                        description = stringResource(R.string.esp_companion_log_hu_marks_desc),
+                        enabled = companionEnabled,
                     )
-                },
-                enabled = companionEnabled && !companionLog.recording,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    stringResource(R.string.esp_companion_log_start),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    context.startService(
-                        Intent(context, BackgroundService::class.java).apply {
-                            action = BackgroundService.ACTION_COMPANION_LOG_STOP
-                        },
-                    )
-                },
-                enabled = companionLog.recording,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    stringResource(R.string.esp_companion_log_stop),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = rememberWrappedOnClick {
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_COMPANION_LOG_START
+                                    },
+                                )
+                            },
+                            enabled = companionEnabled && !companionLog.recording,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_companion_log_start),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick {
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_COMPANION_LOG_STOP
+                                    },
+                                )
+                            },
+                            enabled = companionLog.recording,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                stringResource(R.string.esp_companion_log_stop),
+                                style = MaterialTheme.typography.tboxButton,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
 
-        if (info.can) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Button(
-                onClick = rememberWrappedOnClick { showCanConsole = true },
-                enabled = controlsEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                Text(
-                    stringResource(R.string.esp_can_open),
-                    style = MaterialTheme.typography.tboxButton,
-                )
+                EspCompanionSection.Ble -> {
+                    SettingsTitle(stringResource(R.string.esp_ble_title))
+                    if (!info.ble) {
+                        Text(
+                            text = stringResource(R.string.esp_ble_need_fw),
+                            style = MaterialTheme.typography.tboxCaption,
+                        )
+                    } else {
+                        SettingSwitch(
+                            isChecked = bleOn,
+                            onCheckedChange = { enabled ->
+                                context.startService(
+                                    Intent(context, BackgroundService::class.java).apply {
+                                        action = BackgroundService.ACTION_ESP_BLE_SET
+                                        putExtra(BackgroundService.EXTRA_ESP_BLE_ON, enabled)
+                                    },
+                                )
+                            },
+                            text = stringResource(R.string.esp_ble_scan),
+                            description = stringResource(R.string.esp_ble_scan_desc),
+                            enabled = controlsEnabled,
+                        )
+                        StatusRow(
+                            stringResource(R.string.esp_ble_battery),
+                            bleBat?.let { "$it%" } ?: "—",
+                        )
+                        StatusRow(
+                            stringResource(R.string.esp_ble_last_event),
+                            lastBle?.let { "btn${it.btn} ${it.act} rssi=${it.rssi}" } ?: "—",
+                        )
+                        StatusRow(
+                            stringResource(R.string.esp_ble_bound_macs),
+                            if (bleMacs.isEmpty()) "—" else bleMacs.joinToString("\n"),
+                        )
+                        if (bleLearn) {
+                            Text(
+                                text = stringResource(R.string.esp_ble_learning),
+                                style = MaterialTheme.typography.tboxBody,
+                            )
+                            Text(
+                                text = stringResource(R.string.esp_ble_learn_hint),
+                                style = MaterialTheme.typography.tboxCaption,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OutlinedButton(
+                                onClick = rememberWrappedOnClick {
+                                    context.startService(
+                                        Intent(context, BackgroundService::class.java).apply {
+                                            action = if (bleLearn) {
+                                                BackgroundService.ACTION_ESP_BLE_LEARN_END
+                                            } else {
+                                                BackgroundService.ACTION_ESP_BLE_LEARN_BEGIN
+                                            }
+                                        },
+                                    )
+                                },
+                                enabled = controlsEnabled,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (bleLearn) R.string.esp_ble_learn_cancel else R.string.esp_ble_learn,
+                                    ),
+                                    style = MaterialTheme.typography.tboxCaption,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            if (bleMacs.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = rememberWrappedOnClick {
+                                        context.startService(
+                                            Intent(context, BackgroundService::class.java).apply {
+                                                action = BackgroundService.ACTION_ESP_BLE_FORGET
+                                                putExtra(BackgroundService.EXTRA_ESP_BLE_FORGET_ALL, true)
+                                            },
+                                        )
+                                    },
+                                    enabled = controlsEnabled,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.esp_ble_forget_all),
+                                        style = MaterialTheme.typography.tboxCaption,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
+                        for (mac in bleMacs) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = mac,
+                                    style = MaterialTheme.typography.tboxCaption,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                TextButton(
+                                    onClick = rememberWrappedOnClick {
+                                        context.startService(
+                                            Intent(context, BackgroundService::class.java).apply {
+                                                action = BackgroundService.ACTION_ESP_BLE_FORGET
+                                                putExtra(BackgroundService.EXTRA_ESP_BLE_MAC, mac)
+                                            },
+                                        )
+                                    },
+                                    enabled = controlsEnabled,
+                                ) {
+                                    Text(stringResource(R.string.esp_ble_forget))
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            Text(
-                text = stringResource(R.string.esp_can_open_desc),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-
-        if (info.um980) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            SettingsTitle(stringResource(R.string.esp_um980_settings_title))
-            Button(
-                onClick = rememberWrappedOnClick { showUm980Settings = true },
-                enabled = controlsEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-            ) {
-                Text(
-                    stringResource(R.string.esp_um980_open_settings),
-                    style = MaterialTheme.typography.tboxButton,
-                )
-            }
-            Text(
-                text = stringResource(R.string.esp_um980_open_settings_desc),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
         }
     }
 

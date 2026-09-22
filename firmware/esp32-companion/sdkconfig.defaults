@@ -8,3 +8,14 @@ CONFIG_TINYUSB_CDC_TX_BUFSIZE=512
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
 # Avoid GCC ICE on esp_lcd rgb panel with -Og (xtensa-esp-elf 14.2).
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Shelly Blu RC Button 4 — NimBLE (passive scan / observer)
+# Keep default NimBLE roles: stripping peripheral/broadcaster breaks IDF 5.3.2 ble_gap.c
+# (-Werror=implicit-function-declaration on ble_gap_call_conn_event_cb / adv_active_instance).
+CONFIG_BT_ENABLED=y
+CONFIG_BT_CONTROLLER_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=n
+CONFIG_BT_NIMBLE_NVS_PERSIST=n
+CONFIG_BT_NIMBLE_SM_LEGACY=n
+CONFIG_BT_NIMBLE_SM_SC=n

@@ -494,4 +494,35 @@ class AutomationCodecTest {
         """.trimIndent()
         assertTrue(AutomationCodec.decode(raw).isFailure)
     }
+
+    @Test
+    fun roundTrip_preservesEspBleBtnTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "ble-1",
+            name = "Shelly",
+            triggers = listOf(
+                AutomationTrigger.EspBleBtn(
+                    id = "1",
+                    btn = 1,
+                    act = AutomationEspBleBtnAction.PRESS,
+                ),
+                AutomationTrigger.EspBleBtn(
+                    id = "2",
+                    btn = 3,
+                    act = AutomationEspBleBtnAction.DOUBLE,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "ble",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
 }

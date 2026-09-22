@@ -115,6 +115,8 @@ class AutomationSignalProvider(
                 AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
+                AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()
+                AutomationSignalId.ESP_BLE_BATTERY -> espBleBatteryFlow()
                 AutomationSignalId.WIFI_ENABLED -> wifiSnapshotFlow().map { snap ->
                     AutomationSignalValue.State(snap.radioState())
                 }.distinctUntilChanged()
@@ -246,6 +248,33 @@ private fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalValu
     mask.map { value ->
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
+
+private fun espBleBoundFlow(): Flow<AutomationSignalValue> =
+    combine(
+        EspCompanionRepository.connected,
+        EspCompanionRepository.bleOn,
+        EspCompanionRepository.bleMacs,
+    ) { connected, bleOn, macs ->
+        if (!connected) {
+            AutomationSignalValue.Unavailable
+        } else {
+            AutomationSignalValue.State(
+                if (bleOn && macs.isNotEmpty()) "on" else "off",
+            )
+        }
+    }.distinctUntilChanged()
+
+private fun espBleBatteryFlow(): Flow<AutomationSignalValue> =
+    combine(
+        EspCompanionRepository.connected,
+        EspCompanionRepository.bleBattery,
+    ) { connected, bat ->
+        when {
+            !connected -> AutomationSignalValue.Unavailable
+            bat == null -> AutomationSignalValue.Unavailable
+            else -> AutomationSignalValue.Number(bat.toDouble())
+        }
+    }.distinctUntilChanged()
 
 private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
     ForegroundAppMonitor.packageName
