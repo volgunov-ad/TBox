@@ -905,6 +905,9 @@
     <string name="settings_gnss_reboot_um980_offline">Нет связи с UM980 через компаньон</string>
     <string name="settings_mock_location_android_disabled">При источнике Android подмена недоступна (петля)</string>
     <string name="esp_status_title">Компаньон</string>
+    <string name="esp_tab_settings">Настройки</string>
+    <string name="esp_tab_data">Данные и отладка</string>
+    <string name="esp_tab_ble">BLE</string>
     <string name="esp_connect_enabled_title">Подключаться к компаньону</string>
     <string name="esp_connect_enabled_desc">USB-сессия с компаньоном. Выключено по умолчанию — включайте только если компаньон установлен</string>
     <string name="esp_connected">Подключено</string>

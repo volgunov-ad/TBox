@@ -897,6 +897,9 @@
     <string name="settings_gnss_reboot_um980_offline">UM980 is offline on the companion</string>
     <string name="settings_mock_location_android_disabled">Mock location is disabled when source is Android (feedback loop)</string>
     <string name="esp_status_title">Companion</string>
+    <string name="esp_tab_settings">Settings</string>
+    <string name="esp_tab_data">Data and debug</string>
+    <string name="esp_tab_ble">BLE</string>
     <string name="esp_connect_enabled_title">Connect to companion</string>
     <string name="esp_connect_enabled_desc">USB session with the companion. Off by default — enable only if you have the companion hardware</string>
     <string name="esp_connected">Connected</string>
