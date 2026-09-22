@@ -1,6 +1,5 @@
 package vad.dashing.tbox.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -43,8 +42,6 @@ import java.util.Locale
 
 /** Red ring of a round speed-limit road sign (same visual language as SLA tile). */
 private val OsmSignRingColor = Color(0xFFE53935)
-private val OsmSignFaceColor = Color.White
-private val OsmSignTextColor = Color.Black
 private const val OsmInactiveAlpha = 0.4f
 private val OsmSignRingWidth = 8.dp
 
@@ -173,7 +170,7 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                             digitColor = if (display.currentLabel != null) {
                                                 currentAccent
                                             } else {
-                                                OsmSignTextColor
+                                                resolvedTextColor
                                             },
                                             alpha = if (display.currentLabel != null) {
                                                 1f
@@ -297,7 +294,7 @@ private fun MapsCamAheadColumn(
                 OsmSpeedLimitSign(
                     label = display.aheadLabel ?: dashLabel,
                     textStyle = signTextStyle,
-                    digitColor = if (display.aheadLabel != null) accentColor else OsmSignTextColor,
+                    digitColor = if (display.aheadLabel != null) accentColor else emptyTextColor,
                     alpha = if (display.aheadLabel != null) 1f else OsmInactiveAlpha,
                     modifier = Modifier.size(diameter),
                 )
@@ -333,7 +330,7 @@ private fun OsmSpeedLimitSign(
     label: String,
     textStyle: TextStyle,
     alpha: Float,
-    digitColor: Color = OsmSignTextColor,
+    digitColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -342,8 +339,7 @@ private fun OsmSpeedLimitSign(
                 width = OsmSignRingWidth,
                 color = OsmSignRingColor.copy(alpha = alpha),
                 shape = CircleShape,
-            )
-            .background(color = OsmSignFaceColor.copy(alpha = alpha), shape = CircleShape),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(

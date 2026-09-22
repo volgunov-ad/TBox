@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,11 +29,8 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /** Red ring of a round speed-limit road sign (R.3 / 3.24). */
 private val SlaSignRingColor = Color(0xFFE53935)
-private val SlaSignFaceColor = Color.White
-private val SlaSignTextColor = Color.Black
 /** End-of-restriction (release) sign — grey circle + slash. */
 private val SlaEndRestrictionColor = Color(0xFF9E9E9E)
-private val SlaEndRestrictionFaceColor = Color(0xFFF5F5F5)
 /** Dimmed inactive sign opacity. */
 private const val SlaInactiveAlpha = 0.4f
 /** Fixed ring thickness (same as OSM speed-limit tile). */
@@ -88,8 +84,7 @@ fun DashboardSlaSpeedLimitWidgetItem(
                             SlaSpeedLimitSign(
                                 label = state.kmh.toString(),
                                 ringColor = SlaSignRingColor,
-                                faceColor = SlaSignFaceColor,
-                                textColor = SlaSignTextColor,
+                                textColor = resolvedTextColor,
                                 textStyle = mainTextStyle,
                                 alpha = 1f,
                             )
@@ -101,8 +96,7 @@ fun DashboardSlaSpeedLimitWidgetItem(
                             SlaSpeedLimitSign(
                                 label = dashLabel,
                                 ringColor = SlaSignRingColor,
-                                faceColor = SlaSignFaceColor,
-                                textColor = SlaSignTextColor,
+                                textColor = resolvedTextColor,
                                 textStyle = mainTextStyle,
                                 alpha = SlaInactiveAlpha,
                             )
@@ -118,7 +112,6 @@ fun DashboardSlaSpeedLimitWidgetItem(
 private fun SlaSpeedLimitSign(
     label: String,
     ringColor: Color,
-    faceColor: Color,
     textColor: Color,
     textStyle: TextStyle,
     alpha: Float,
@@ -130,8 +123,7 @@ private fun SlaSpeedLimitSign(
                 width = SlaSignRingWidth,
                 color = ringColor.copy(alpha = alpha),
                 shape = CircleShape,
-            )
-            .background(color = faceColor.copy(alpha = alpha), shape = CircleShape),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -151,8 +143,7 @@ private fun SlaEndOfRestrictionSign() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .border(width = SlaSignRingWidth, color = SlaEndRestrictionColor, shape = CircleShape)
-                .background(color = SlaEndRestrictionFaceColor, shape = CircleShape),
+                .border(width = SlaSignRingWidth, color = SlaEndRestrictionColor, shape = CircleShape),
         )
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = SlaSignRingWidth.toPx()

@@ -14,16 +14,43 @@ import vad.dashing.tbox.snapMapsCamDistanceM
 class SpeedCamMapCoverageTest {
 
     @Test
-    fun oneWayProducesPrimaryTrapezoid() {
+    fun oneWayBeamPointsAtApproachNotTravel() {
+        // DIRECTION=90 (eastbound travel) → look/approach beam toward west (270°)
         val beams = SpeedCamMapCoverage.beamsFor(
             lat = 55.75,
             lon = 37.65,
             dirType = 1,
             directionDeg = 90,
+            lengthM = 100.0,
+            halfWidthM = 1.0,
         )
         assertEquals(1, beams.size)
         assertEquals(SpeedCamMapCoverage.BeamKind.PRIMARY, beams[0].kind)
-        assertEquals(4, beams[0].points.size)
+        assertEquals(270f, SpeedCamMapCoverage.lookBearingDeg(90), 0.01f)
+        // Tip of trapezoid is the midpoint of the far edge (points 1 and 2)
+        val tipLat = (beams[0].points[1].lat + beams[0].points[2].lat) / 2.0
+        val tipLon = (beams[0].points[1].lon + beams[0].points[2].lon) / 2.0
+        // West of origin → lon decreases
+        assertTrue(tipLon < 37.65)
+        assertEquals(55.75, tipLat, 0.002)
+    }
+
+    @Test
+    fun gaidarSwCameraBeamFacesMagnitApproach() {
+        // cam 75303: DIRECTION=210 (SW travel). Approach from Magnit = NE ≈ 30°.
+        assertEquals(30f, SpeedCamMapCoverage.lookBearingDeg(210), 0.01f)
+        val beams = SpeedCamMapCoverage.beamsFor(
+            lat = 56.2476633,
+            lon = 43.4445308,
+            dirType = 1,
+            directionDeg = 210,
+            lengthM = 110.0,
+            halfWidthM = 1.0,
+        )
+        val tipLat = (beams[0].points[1].lat + beams[0].points[2].lat) / 2.0
+        val tipLon = (beams[0].points[1].lon + beams[0].points[2].lon) / 2.0
+        assertTrue("approach tip should be north of camera", tipLat > 56.2476633)
+        assertTrue("approach tip should be east of camera", tipLon > 43.4445308)
     }
 
     @Test

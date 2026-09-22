@@ -6,8 +6,9 @@ import vad.dashing.tbox.location.roadmatch.RoadMapMatcher
 /**
  * Geometric coverage beams for SpeedCam map markers (direction + area of action).
  *
- * Not road-snapped: a short trapezoid along [directionDeg] (and opposite for dirType=2).
- * Closest visual match to typical SCO / Yandex overlay beams without a per-cam road walk.
+ * SCO/iGO [directionDeg] is the **monitored travel** azimuth. The drawn sector is the
+ * approach / look zone = [directionDeg] + 180° (and the reverse for dirType=2).
+ * Not road-snapped: a short trapezoid along that look bearing.
  */
 object SpeedCamMapCoverage {
     const val BEAM_LENGTH_M = 110.0
@@ -17,9 +18,9 @@ object SpeedCamMapCoverage {
     data class LatLon(val lat: Double, val lon: Double)
 
     enum class BeamKind {
-        /** Single monitored direction (dirType 1) or primary of both-ways. */
+        /** Approach zone for the primary monitored travel direction. */
         PRIMARY,
-        /** Opposite direction for dirType 2. */
+        /** Approach zone for the opposite travel direction (dirType 2). */
         OPPOSITE,
         /** Omnidirectional (dirType 0): filled disk. */
         ALL,
@@ -32,6 +33,13 @@ object SpeedCamMapCoverage {
         val radiusM: Double = 0.0,
     )
 
+    /**
+     * Look / approach bearing for a monitored travel [directionDeg] (SCO DIRECTION).
+     * Sector on the map points this way — toward cars before they reach the camera.
+     */
+    fun lookBearingDeg(directionDeg: Int): Float =
+        RoadMapMatcher.normalizeDeg(directionDeg + 180f)
+
     fun beamsFor(
         lat: Double,
         lon: Double,
@@ -43,14 +51,29 @@ object SpeedCamMapCoverage {
         if (!lat.isFinite() || !lon.isFinite()) return emptyList()
         return when (dirType) {
             1 -> listOf(
-                trapezoidBeam(lat, lon, directionDeg.toFloat(), lengthM, halfWidthM, BeamKind.PRIMARY),
-            )
-            2 -> listOf(
-                trapezoidBeam(lat, lon, directionDeg.toFloat(), lengthM, halfWidthM, BeamKind.PRIMARY),
                 trapezoidBeam(
                     lat,
                     lon,
-                    RoadMapMatcher.normalizeDeg(directionDeg + 180f),
+                    lookBearingDeg(directionDeg),
+                    lengthM,
+                    halfWidthM,
+                    BeamKind.PRIMARY,
+                ),
+            )
+            2 -> listOf(
+                trapezoidBeam(
+                    lat,
+                    lon,
+                    lookBearingDeg(directionDeg),
+                    lengthM,
+                    halfWidthM,
+                    BeamKind.PRIMARY,
+                ),
+                trapezoidBeam(
+                    lat,
+                    lon,
+                    // Opposite travel = directionDeg + 180 → look = directionDeg
+                    directionDeg.toFloat().let { RoadMapMatcher.normalizeDeg(it) },
                     lengthM,
                     halfWidthM,
                     BeamKind.OPPOSITE,
