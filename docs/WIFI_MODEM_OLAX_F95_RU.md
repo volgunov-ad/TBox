@@ -95,4 +95,4 @@ Android-нюанс: при «Wi‑Fi без интернета» ГУ может
 | `WifiModemModel.OLAX_F95` | модель в настройках |
 | `app/src/test/resources/wifimodem/olax_f95/` | обезличенные фикстуры из HAR |
 
-См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md).
+См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_HUAWEI_E3372_RU.md](./WIFI_MODEM_HUAWEI_E3372_RU.md), [WIFI_MODEM_CANDIDATES_RU.md](./WIFI_MODEM_CANDIDATES_RU.md).
