@@ -1,14 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SpeedCam SECTION: ring + horizontal bar. -->
+<!-- SpeedCam SECTION: average-speed pair of posts + road (tintable white). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Left post -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,2.5C6.75,2.5 2.5,6.75 2.5,12S6.75,21.5 12,21.5 21.5,17.25 21.5,12 17.25,2.5 12,2.5zM12,4.7c4.03,0 7.3,3.27 7.3,7.3s-3.27,7.3 -7.3,7.3 -7.3,-3.27 -7.3,-7.3 3.27,-7.3 7.3,-7.3z"/>
+        android:pathData="M4.2,4.5h1.6v14.0H4.2z"/>
+    <!-- Left camera head -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M7.6,11.05h8.8v1.9H7.6z"/>
+        android:pathData="M3.0,4.0h4.0v3.2H3.0z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7.0,4.8 L9.4,3.6 V7.6 L7.0,6.4 Z"/>
+    <!-- Right post -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M18.2,4.5h1.6v14.0h-1.6z"/>
+    <!-- Right camera head -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M17.0,4.0h4.0v3.2h-4.0z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M17.0,4.8 L14.6,3.6 V7.6 L17.0,6.4 Z"/>
+    <!-- Road dashes (section span) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M10.0,12.0h1.8v1.5H10.0z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12.9,12.0h1.8v1.5h-1.8z"/>
+    <!-- Bases -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M2.6,18.5h4.8v1.5H2.6z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M16.6,18.5h4.8v1.5h-4.8z"/>
 </vector>

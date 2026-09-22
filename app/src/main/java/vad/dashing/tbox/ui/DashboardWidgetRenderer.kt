@@ -727,22 +727,13 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-            )
-        }
-
-        vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY -> {
-            DashboardSpeedCamWidgetItem(
-                onClick = onClick,
-                onLongClick = onLongClick,
-                elevation = elevation,
-                shape = shape,
-                textColor = widgetTextColor,
-                backgroundColor = widgetBackgroundColor,
-                showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride,
                 activeColor = controlAppearance.activeContent,
+                inactiveColor = controlAppearance.inactiveContent,
+                showCameras = widgetConfig.mapsCamShowCameras,
+                showCurrentLimit = widgetConfig.mapsCamShowCurrentLimit,
+                showAheadLimit = widgetConfig.mapsCamShowAheadLimit,
                 overageKmh = widgetConfig.speedCamOverageKmh,
-                radiusM = widgetConfig.speedCamRadiusM,
+                radarHoldDistanceM = widgetConfig.mapsCamRadarHoldDistanceM,
             )
         }
 

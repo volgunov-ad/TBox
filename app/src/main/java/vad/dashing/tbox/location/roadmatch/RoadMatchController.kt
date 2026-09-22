@@ -14,6 +14,10 @@ class RoadMatchController(
     internal val runtime = RoadMatchRuntime(mapsDir = mapsDir)
     internal val lookahead = SpeedLimitLookahead.Tracker()
 
+    /** Horizon for [SpeedLimitLookahead]; updated from widget aggregate. */
+    @Volatile
+    var maxLookaheadDistanceM: Double = SpeedLimitLookahead.MAX_DISTANCE_M
+
     /**
      * @return corrected pose when a match ran, even if the caller should not apply it.
      * Null means skip / low confidence / no coverage (caller keeps previous pose).
@@ -100,6 +104,7 @@ class RoadMatchController(
             allowAgainstOneway = allowAgainstOneway,
             nowElapsedMs = nowElapsedMs,
             pose = pose,
+            maxDistanceM = maxLookaheadDistanceM,
         )
         RoadMatchAnchorRepository.publish(
             RoadMatchAnchorState.from(

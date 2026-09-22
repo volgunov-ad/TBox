@@ -1001,7 +1001,9 @@ fun SettingInt(
 }
 
 /**
- * Integer setting controlled by a Material3 [Slider] (1-unit steps), same title/hint layout as scale.
+ * Integer setting controlled by a Material3 [Slider].
+ *
+ * [step] is the value increment (default 1). Title/hint layout matches other setting rows.
  */
 @Composable
 fun SettingSliderInt(
@@ -1012,10 +1014,17 @@ fun SettingSliderInt(
     minValue: Int,
     maxValue: Int,
     enabled: Boolean = true,
+    step: Int = 1,
 ) {
+    val safeStep = step.coerceAtLeast(1)
     val safeMin = minOf(minValue, maxValue)
     val safeMax = maxOf(minValue, maxValue)
-    val steps = (safeMax - safeMin - 1).coerceAtLeast(0)
+    val rangeSpan = safeMax - safeMin
+    val steps = if (safeStep <= 1) {
+        (rangeSpan - 1).coerceAtLeast(0)
+    } else {
+        ((rangeSpan / safeStep) - 1).coerceAtLeast(0)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1035,7 +1044,14 @@ fun SettingSliderInt(
         }
         Slider(
             value = value.coerceIn(safeMin, safeMax).toFloat(),
-            onValueChange = { onValueChange(it.roundToInt().coerceIn(safeMin, safeMax)) },
+            onValueChange = { raw ->
+                val snapped = if (safeStep <= 1) {
+                    raw.roundToInt()
+                } else {
+                    ((raw / safeStep).roundToInt() * safeStep)
+                }.coerceIn(safeMin, safeMax)
+                onValueChange(snapped)
+            },
             valueRange = safeMin.toFloat()..safeMax.toFloat(),
             steps = steps,
             enabled = enabled,

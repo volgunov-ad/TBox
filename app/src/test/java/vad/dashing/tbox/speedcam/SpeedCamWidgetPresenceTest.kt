@@ -6,102 +6,116 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import vad.dashing.tbox.FloatingDashboardConfig
+import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
-import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.OSM_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 
 class SpeedCamWidgetPresenceTest {
+
     @Test
-    fun aggregateNullWhenAbsent() {
-        assertNull(
-            SpeedCamWidgetPresence.aggregate(
-                dashboardWidgets = emptyList(),
+    fun isPresentWhenOsmWidgetOnDashboard() {
+        assertTrue(
+            SpeedCamWidgetPresence.isPresent(
+                dashboardWidgets = listOf(
+                    FloatingDashboardWidgetConfig(dataKey = OSM_SPEED_LIMIT_WIDGET_DATA_KEY),
+                ),
                 floatingPanels = emptyList(),
                 mainScreenPanels = emptyList(),
             ),
         )
-        assertFalse(
-            SpeedCamWidgetPresence.isPresent(emptyList(), emptyList(), emptyList()),
+    }
+
+    @Test
+    fun isPresentWhenMapWantsShowOnMap() {
+        assertTrue(
+            SpeedCamWidgetPresence.isPresent(
+                dashboardWidgets = listOf(
+                    FloatingDashboardWidgetConfig(
+                        dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+                        speedCamShowOnMap = true,
+                    ),
+                ),
+                floatingPanels = emptyList(),
+                mainScreenPanels = emptyList(),
+            ),
         )
     }
 
     @Test
-    fun aggregateMaxRadiusMinOverageAnyMap() {
-        val dash = listOf(
-            FloatingDashboardWidgetConfig(
-                dataKey = SPEED_CAM_WIDGET_DATA_KEY,
-                speedCamOverageKmh = 18,
-                speedCamRadiusM = 400,
-                speedCamShowOnMap = false,
-            ),
-        )
-        val floating = listOf(
-            floatingPanel(
-                enabled = true,
-                widgets = listOf(
-                    FloatingDashboardWidgetConfig(
-                        dataKey = SPEED_CAM_WIDGET_DATA_KEY,
-                        speedCamOverageKmh = 10,
-                        speedCamRadiusM = 900,
-                        speedCamShowOnMap = true,
-                    ),
+    fun aggregateUsesMaxLookaheadAndMinOverage() {
+        val agg = SpeedCamWidgetPresence.aggregate(
+            dashboardWidgets = listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
+                    mapsCamLookaheadDistanceM = 400,
+                    speedCamOverageKmh = 20,
+                    mapsCamRadarHoldDistanceM = 300,
+                ),
+                FloatingDashboardWidgetConfig(
+                    dataKey = OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
+                    mapsCamLookaheadDistanceM = 900,
+                    speedCamOverageKmh = 10,
+                    mapsCamRadarHoldDistanceM = 700,
+                ),
+                FloatingDashboardWidgetConfig(
+                    dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+                    speedCamShowOnMap = true,
                 ),
             ),
+            floatingPanels = emptyList(),
+            mainScreenPanels = emptyList(),
         )
-        val agg = SpeedCamWidgetPresence.aggregate(dash, floating, emptyList())
         assertNotNull(agg)
         assertEquals(900, agg!!.radiusM)
         assertEquals(10, agg.overageKmh)
         assertTrue(agg.showOnMap)
-        assertTrue(SpeedCamWidgetPresence.isPresent(dash, floating, emptyList()))
+        assertEquals(700, agg.radarHoldDistanceM)
     }
 
     @Test
-    fun ignoresDisabledPanels() {
-        val panels = listOf(
-            mainPanel(
-                enabled = false,
-                widgets = listOf(
-                    FloatingDashboardWidgetConfig(dataKey = SPEED_CAM_WIDGET_DATA_KEY),
-                ),
+    fun aggregateShowOnMapFalseWithoutMapToggle() {
+        val agg = SpeedCamWidgetPresence.aggregate(
+            dashboardWidgets = listOf(
+                FloatingDashboardWidgetConfig(dataKey = OSM_SPEED_LIMIT_WIDGET_DATA_KEY),
+                FloatingDashboardWidgetConfig(dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY),
             ),
+            floatingPanels = emptyList(),
+            mainScreenPanels = emptyList(),
         )
-        assertNull(SpeedCamWidgetPresence.aggregate(emptyList(), emptyList(), panels))
+        assertNotNull(agg)
+        assertFalse(agg!!.showOnMap)
     }
 
-    private fun floatingPanel(
-        enabled: Boolean,
-        widgets: List<FloatingDashboardWidgetConfig>,
-    ) = FloatingDashboardConfig(
-        id = "f1",
-        name = "Float",
-        enabled = enabled,
-        widgetsConfig = widgets,
-        rows = 1,
-        cols = 1,
-        width = 100,
-        height = 100,
-        startX = 0,
-        startY = 0,
-        background = false,
-        clickAction = false,
-    )
+    @Test
+    fun aggregateMapOnlyUsesDefaults() {
+        val agg = SpeedCamWidgetPresence.aggregate(
+            dashboardWidgets = listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+                    speedCamShowOnMap = true,
+                ),
+            ),
+            floatingPanels = emptyList(),
+            mainScreenPanels = emptyList(),
+        )
+        assertNotNull(agg)
+        assertTrue(agg!!.showOnMap)
+        assertEquals(DEFAULT_MAPS_CAM_LOOKAHEAD_M, agg.radiusM)
+        assertEquals(DEFAULT_SPEED_CAM_OVERAGE_KMH, agg.overageKmh)
+    }
 
-    private fun mainPanel(
-        enabled: Boolean,
-        widgets: List<FloatingDashboardWidgetConfig>,
-    ) = MainScreenPanelConfig(
-        id = "p1",
-        name = "Main",
-        enabled = enabled,
-        widgetsConfig = widgets,
-        rows = 1,
-        cols = 1,
-        relX = 0f,
-        relY = 0f,
-        relWidth = 0.5f,
-        relHeight = 0.5f,
-        background = false,
-        clickAction = false,
-    )
+    @Test
+    fun aggregateNullWithoutOsmWidgetOrMapMarkers() {
+        assertNull(
+            SpeedCamWidgetPresence.aggregate(
+                dashboardWidgets = listOf(
+                    FloatingDashboardWidgetConfig(dataKey = SPEED_CAM_WIDGET_DATA_KEY),
+                    FloatingDashboardWidgetConfig(dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY),
+                ),
+                floatingPanels = emptyList(),
+                mainScreenPanels = emptyList(),
+            ),
+        )
+    }
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SpeedCam direction: same travel way (up). -->
+<!-- SpeedCam direction: same travel way (chevron up). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
@@ -7,5 +7,5 @@
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,5 L17.5,14.5 H6.5 Z"/>
+        android:pathData="M12,4.0 L20.0,14.5 H15.2 V20.0 H8.8 V14.5 H4.0 Z"/>
 </vector>

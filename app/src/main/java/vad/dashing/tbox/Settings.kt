@@ -308,20 +308,35 @@ data class FloatingDashboardWidgetConfig(
      */
     val roadMatchBasemapTransparencyPercent: Int = 0,
     /**
-     * [SPEED_CAM_WIDGET_DATA_KEY]: allowed overspeed (km/h) before alert color.
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: allowed overspeed (km/h) before camera alert color.
      * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH].
      */
     val speedCamOverageKmh: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH,
     /**
-     * [SPEED_CAM_WIDGET_DATA_KEY]: alert / map search radius in metres.
-     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M].
+     * Legacy JSON field; prefer [mapsCamLookaheadDistanceM]. Still decoded for old backups.
      */
-    val speedCamRadiusM: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M,
+    val speedCamRadiusM: Int = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
     /**
-     * [SPEED_CAM_WIDGET_DATA_KEY]: draw nearby cameras on the road-match map tile.
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: draw nearby SpeedCamOnline cameras/radars on this map tile.
      * Default off.
      */
     val speedCamShowOnMap: Boolean = false,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show camera/radar column (blocks 1–2). Default on. */
+    val mapsCamShowCameras: Boolean = true,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show current speed-limit sign (block 3). Default on. */
+    val mapsCamShowCurrentLimit: Boolean = true,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show ahead limit column (blocks 4–5). Default on. */
+    val mapsCamShowAheadLimit: Boolean = true,
+    /**
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: how far ahead to look for limits / cameras (m).
+     * Default [DEFAULT_MAPS_CAM_LOOKAHEAD_M].
+     */
+    val mapsCamLookaheadDistanceM: Int = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
+    /**
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: keep last radar/camera limit as current fallback (m).
+     * Default [DEFAULT_MAPS_CAM_RADAR_HOLD_M].
+     */
+    val mapsCamRadarHoldDistanceM: Int = DEFAULT_MAPS_CAM_RADAR_HOLD_M,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */

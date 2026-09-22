@@ -3000,16 +3000,6 @@ fun LocationTabContent(
                             enabled = true,
                         )
                     }
-                    RoadMapsEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = true,
-                    )
-                } else {
-                    // Maps can be downloaded even when mock power is off.
-                    RoadMapsEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = mockEnabledForSource,
-                    )
                 }
             }
             item {
@@ -3017,6 +3007,12 @@ fun LocationTabContent(
             }
                 } // Mock
                 LocationSection.Cameras -> {
+            item {
+                RoadMapsEntryButton(
+                    settingsViewModel = settingsViewModel,
+                    enabled = true,
+                )
+            }
             item {
                 SpeedCamCamerasSection(settingsViewModel = settingsViewModel)
             }

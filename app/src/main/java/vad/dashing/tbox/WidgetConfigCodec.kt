@@ -5,11 +5,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-import vad.dashing.tbox.speedcam.isSpeedCamWidgetDataKey
 import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
-import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
 import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
-import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_RADIUS_M
 import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
@@ -20,6 +17,8 @@ private val REMOVED_WIDGET_DATA_KEYS = setOf(
     "wirelessChargingWidget",
     // Speed limiter widget: not offered until fully debugged (also commented out in WidgetsRepository).
     SPEED_LIMITER_WIDGET_DATA_KEY,
+    // Merged into osmSpeedLimitWidget (maps / cameras / radars).
+    vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
 )
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
@@ -410,18 +409,31 @@ fun serializeWidgetConfigsToJsonArray(
             if (transparency != 0) {
                 obj.put("roadMatchBasemapTransparencyPercent", transparency)
             }
+            if (config.speedCamShowOnMap) {
+                obj.put("speedCamShowOnMap", true)
+            }
         }
-        if (isSpeedCamWidgetDataKey(config.dataKey)) {
+        if (isOsmSpeedLimitWidgetDataKey(config.dataKey)) {
             val overage = normalizeSpeedCamOverageKmh(config.speedCamOverageKmh)
             if (overage != DEFAULT_SPEED_CAM_OVERAGE_KMH) {
                 obj.put("speedCamOverageKmh", overage)
             }
-            val radius = normalizeSpeedCamRadiusM(config.speedCamRadiusM)
-            if (radius != DEFAULT_SPEED_CAM_RADIUS_M) {
-                obj.put("speedCamRadiusM", radius)
+            if (!config.mapsCamShowCameras) {
+                obj.put("mapsCamShowCameras", false)
             }
-            if (config.speedCamShowOnMap) {
-                obj.put("speedCamShowOnMap", true)
+            if (!config.mapsCamShowCurrentLimit) {
+                obj.put("mapsCamShowCurrentLimit", false)
+            }
+            if (!config.mapsCamShowAheadLimit) {
+                obj.put("mapsCamShowAheadLimit", false)
+            }
+            val lookahead = normalizeMapsCamLookaheadM(config.mapsCamLookaheadDistanceM)
+            if (lookahead != DEFAULT_MAPS_CAM_LOOKAHEAD_M) {
+                obj.put("mapsCamLookaheadDistanceM", lookahead)
+            }
+            val hold = normalizeMapsCamRadarHoldM(config.mapsCamRadarHoldDistanceM)
+            if (hold != DEFAULT_MAPS_CAM_RADAR_HOLD_M) {
+                obj.put("mapsCamRadarHoldDistanceM", hold)
             }
         }
         array.put(obj)
@@ -862,22 +874,51 @@ private fun parseWidgetConfigsFromJsonArray(
                             } else {
                                 0
                             },
-                        speedCamOverageKmh = if (isSpeedCamWidgetDataKey(dataKey)) {
+                        speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
                             normalizeSpeedCamOverageKmh(
                                 item.optInt("speedCamOverageKmh", DEFAULT_SPEED_CAM_OVERAGE_KMH),
                             )
                         } else {
                             DEFAULT_SPEED_CAM_OVERAGE_KMH
                         },
-                        speedCamRadiusM = if (isSpeedCamWidgetDataKey(dataKey)) {
-                            normalizeSpeedCamRadiusM(
-                                item.optInt("speedCamRadiusM", DEFAULT_SPEED_CAM_RADIUS_M),
+                        speedCamRadiusM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamLookaheadM(
+                                item.optInt(
+                                    "mapsCamLookaheadDistanceM",
+                                    item.optInt("speedCamRadiusM", DEFAULT_MAPS_CAM_LOOKAHEAD_M),
+                                ),
                             )
                         } else {
-                            DEFAULT_SPEED_CAM_RADIUS_M
+                            DEFAULT_MAPS_CAM_LOOKAHEAD_M
                         },
-                        speedCamShowOnMap = isSpeedCamWidgetDataKey(dataKey) &&
+                        speedCamShowOnMap = isRoadMatchMapWidgetDataKey(dataKey) &&
                             item.optBoolean("speedCamShowOnMap", false),
+                        mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowCameras", true),
+                        mapsCamShowCurrentLimit = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowCurrentLimit", true),
+                        mapsCamShowAheadLimit = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowAheadLimit", true),
+                        mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamLookaheadM(
+                                item.optInt(
+                                    "mapsCamLookaheadDistanceM",
+                                    item.optInt("speedCamRadiusM", DEFAULT_MAPS_CAM_LOOKAHEAD_M),
+                                ),
+                            )
+                        } else {
+                            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+                        },
+                        mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamRadarHoldM(
+                                item.optInt(
+                                    "mapsCamRadarHoldDistanceM",
+                                    DEFAULT_MAPS_CAM_RADAR_HOLD_M,
+                                ),
+                            )
+                        } else {
+                            DEFAULT_MAPS_CAM_RADAR_HOLD_M
+                        },
                     )
                 )
             }

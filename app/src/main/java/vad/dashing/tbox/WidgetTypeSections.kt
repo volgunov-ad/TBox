@@ -103,7 +103,6 @@ object WidgetTypeSections {
             MOCK_LOCATION_MODE_WIDGET_DATA_KEY,
             GNSS_DEBUG_WIDGET_DATA_KEY,
             OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
-            vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
             "netWidget",
             "netWidgetNew",
             "netWidgetColored",

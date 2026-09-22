@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SpeedCam POLICE_POST: ring + shield. -->
+<!-- SpeedCam POLICE_POST: shield badge (tintable white). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- Shield outline -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,2.5C6.75,2.5 2.5,6.75 2.5,12S6.75,21.5 12,21.5 21.5,17.25 21.5,12 17.25,2.5 12,2.5zM12,4.7c4.03,0 7.3,3.27 7.3,7.3s-3.27,7.3 -7.3,7.3 -7.3,-3.27 -7.3,-7.3 3.27,-7.3 7.3,-7.3z"/>
+        android:fillType="evenOdd"
+        android:pathData="M12,2.2 L19.2,5.0 V11.2 C19.2,15.8 16.1,19.6 12,21.4 C7.9,19.6 4.8,15.8 4.8,11.2 V5.0 Z M12,4.3 L6.5,6.4 V11.2 C6.5,14.8 8.9,17.9 12,19.4 C15.1,17.9 17.5,14.8 17.5,11.2 V6.4 Z"/>
+    <!-- Star -->
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,7.4 L16.1,9.1 V12.4 C16.1,14.7 14.4,16.7 12,17.4 C9.6,16.7 7.9,14.7 7.9,12.4 V9.1 Z"/>
+        android:pathData="M12,7.2 L13.1,10.0 H16.1 L13.7,11.7 L14.7,14.6 L12,12.9 L9.3,14.6 L10.3,11.7 L7.9,10.0 H10.9 Z"/>
 </vector>
