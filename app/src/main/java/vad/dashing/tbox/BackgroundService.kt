@@ -4640,7 +4640,8 @@ class BackgroundService : Service() {
 
     /**
      * Keeps [SpeedCamRepository] in sync with [GeoDisplayRepository] while any unified
-     * maps/cameras/radars tile (`osmSpeedLimitWidget`) is present.
+     * maps/cameras/radars tile (`osmSpeedLimitWidget`) is present, or a road-match map tile
+     * requests camera markers (`speedCamShowOnMap`).
      */
     private fun startSpeedCamTicker() {
         if (speedCamTickerJob != null) return

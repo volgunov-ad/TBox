@@ -6,6 +6,7 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
+import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.normalizeMapsCamLookaheadM
 import vad.dashing.tbox.normalizeMapsCamRadarHoldM
 
@@ -34,9 +35,12 @@ fun normalizeSpeedCamRadiusM(raw: Int): Int =
     normalizeMapsCamLookaheadM(raw)
 
 /**
- * Aggregated demand from unified maps/cameras/radars tiles (`osmSpeedLimitWidget`).
- * [radiusM] is the max lookahead so search covers every tile; [overageKmh] is the min
- * (strictest); [radarHoldDistanceM] is the max hold for current-limit fallback.
+ * Aggregated SpeedCam demand from dashboard tiles.
+ *
+ * Lookahead / overage / radar-hold come from `osmSpeedLimitWidget` tiles.
+ * [showOnMap] comes from `roadMatchMapWidget` tiles (`speedCamShowOnMap`).
+ * Map-only demand (markers without an OSM limit tile) still keeps the ticker alive
+ * with default radius/overage so nearby points can be published.
  */
 data class SpeedCamAggregateConfig(
     val radiusM: Int,
@@ -58,7 +62,7 @@ object SpeedCamWidgetPresence {
         if (mainScreenPanels.any { it.enabled && it.widgetsConfig.any { w -> isOsmSpeedLimitWidgetDataKey(w.dataKey) } }) {
             return true
         }
-        return false
+        return anyMapWantsShowOnMap(dashboardWidgets, floatingPanels, mainScreenPanels)
     }
 
     fun aggregate(
@@ -76,12 +80,44 @@ object SpeedCamWidgetPresence {
             if (!panel.enabled) continue
             panel.widgetsConfig.filterTo(configs) { isOsmSpeedLimitWidgetDataKey(it.dataKey) }
         }
-        if (configs.isEmpty()) return null
+        val showOnMap = anyMapWantsShowOnMap(dashboardWidgets, floatingPanels, mainScreenPanels)
+        if (configs.isEmpty()) {
+            if (!showOnMap) return null
+            return SpeedCamAggregateConfig(
+                radiusM = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
+                overageKmh = DEFAULT_SPEED_CAM_OVERAGE_KMH,
+                showOnMap = true,
+                radarHoldDistanceM = DEFAULT_MAPS_CAM_RADAR_HOLD_M,
+            )
+        }
         return SpeedCamAggregateConfig(
             radiusM = configs.maxOf { normalizeMapsCamLookaheadM(it.mapsCamLookaheadDistanceM) },
             overageKmh = configs.minOf { normalizeSpeedCamOverageKmh(it.speedCamOverageKmh) },
-            showOnMap = configs.any { it.speedCamShowOnMap },
+            showOnMap = showOnMap,
             radarHoldDistanceM = configs.maxOf { normalizeMapsCamRadarHoldM(it.mapsCamRadarHoldDistanceM) },
         )
+    }
+
+    private fun anyMapWantsShowOnMap(
+        dashboardWidgets: List<FloatingDashboardWidgetConfig>,
+        floatingPanels: List<FloatingDashboardConfig>,
+        mainScreenPanels: List<MainScreenPanelConfig>,
+    ): Boolean {
+        if (dashboardWidgets.any { isRoadMatchMapWidgetDataKey(it.dataKey) && it.speedCamShowOnMap }) {
+            return true
+        }
+        if (floatingPanels.any { panel ->
+                panel.enabled && panel.widgetsConfig.any { w ->
+                    isRoadMatchMapWidgetDataKey(w.dataKey) && w.speedCamShowOnMap
+                }
+            }
+        ) {
+            return true
+        }
+        return mainScreenPanels.any { panel ->
+            panel.enabled && panel.widgetsConfig.any { w ->
+                isRoadMatchMapWidgetDataKey(w.dataKey) && w.speedCamShowOnMap
+            }
+        }
     }
 }

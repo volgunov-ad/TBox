@@ -1162,8 +1162,8 @@
     <string name="speed_cam_overage_desc">When speed exceeds the camera limit plus this allowance, ahead distance and limit text use the active color. When speed exceeds the current limit plus this allowance, the current-sign digits use the active color</string>
     <string name="speed_cam_radius_title">Range: %1$d m</string>
     <string name="speed_cam_radius_desc">Search for the nearest camera ahead within this radius (300–1000 m)</string>
-    <string name="speed_cam_show_on_map_title">Show on map</string>
-    <string name="speed_cam_show_on_map_desc">Draw nearby cameras on the road-match map tile (off by default)</string>
+    <string name="speed_cam_show_on_map_title">Show cameras and radars</string>
+    <string name="speed_cam_show_on_map_desc">Draw nearby SpeedCamOnline cameras/radars on this tile (off by default; pack must be installed)</string>
     <string name="speed_cam_no_target">—</string>
     <string name="speed_cam_pack_missing">No DB</string>
     <string name="speed_cam_icon_catalog_desc">Camera/radar icon (SpeedCamOnline) for the maps speed-limit widget</string>

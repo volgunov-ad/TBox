@@ -317,7 +317,7 @@ data class FloatingDashboardWidgetConfig(
      */
     val speedCamRadiusM: Int = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
     /**
-     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: draw nearby cameras on the road-match map tile.
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: draw nearby SpeedCamOnline cameras/radars on this map tile.
      * Default off.
      */
     val speedCamShowOnMap: Boolean = false,

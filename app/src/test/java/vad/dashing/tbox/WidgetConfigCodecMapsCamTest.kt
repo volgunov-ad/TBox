@@ -36,7 +36,6 @@ class WidgetConfigCodecMapsCamTest {
                     mapsCamShowCameras = false,
                     mapsCamShowCurrentLimit = false,
                     mapsCamShowAheadLimit = true,
-                    speedCamShowOnMap = true,
                 ),
             ),
         ).toString()
@@ -45,7 +44,7 @@ class WidgetConfigCodecMapsCamTest {
         assertTrue(json.contains("\"mapsCamRadarHoldDistanceM\":800"))
         assertTrue(json.contains("\"mapsCamShowCameras\":false"))
         assertTrue(json.contains("\"mapsCamShowCurrentLimit\":false"))
-        assertTrue(json.contains("\"speedCamShowOnMap\":true"))
+        assertFalse(json.contains("speedCamShowOnMap"))
         val parsed = parseWidgetConfigsFromString(json)
         assertEquals(1, parsed.size)
         assertEquals(12, parsed[0].speedCamOverageKmh)
@@ -54,7 +53,29 @@ class WidgetConfigCodecMapsCamTest {
         assertFalse(parsed[0].mapsCamShowCameras)
         assertFalse(parsed[0].mapsCamShowCurrentLimit)
         assertTrue(parsed[0].mapsCamShowAheadLimit)
+        assertFalse(parsed[0].speedCamShowOnMap)
+    }
+
+    @Test
+    fun encodeAndDecodeShowOnMapOnRoadMatchMap() {
+        val json = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = ROAD_MATCH_MAP_WIDGET_DATA_KEY,
+                    speedCamShowOnMap = true,
+                ),
+            ),
+        ).toString()
+        assertTrue(json.contains("\"speedCamShowOnMap\":true"))
+        val parsed = parseWidgetConfigsFromString(json)
         assertTrue(parsed[0].speedCamShowOnMap)
+    }
+
+    @Test
+    fun legacyShowOnMapOnOsmWidgetIsIgnored() {
+        val raw = """[{"dataKey":"osmSpeedLimitWidget","speedCamShowOnMap":true}]"""
+        val parsed = parseWidgetConfigsFromString(raw)
+        assertFalse(parsed[0].speedCamShowOnMap)
     }
 
     @Test

@@ -1170,8 +1170,8 @@
     <string name="speed_cam_overage_desc">Если скорость больше лимита камеры плюс допуск — текст расстояния и ограничения впереди подсвечивается активным цветом. Если скорость больше текущего лимита плюс допуск — цифры текущего знака подсвечиваются активным цветом</string>
     <string name="speed_cam_radius_title">Дальность: %1$d м</string>
     <string name="speed_cam_radius_desc">Искать ближайшую камеру по курсу в этом радиусе (300–1000 м)</string>
-    <string name="speed_cam_show_on_map_title">Показывать на карте</string>
-    <string name="speed_cam_show_on_map_desc">Рисовать ближайшие камеры на плитке «Карта привязки к дорогам» (по умолчанию выкл.)</string>
+    <string name="speed_cam_show_on_map_title">Показывать камеры и радары</string>
+    <string name="speed_cam_show_on_map_desc">Рисовать ближайшие камеры/радары SpeedCamOnline на этой плитке (по умолчанию выкл.; нужна установленная база)</string>
     <string name="speed_cam_no_target">—</string>
     <string name="speed_cam_pack_missing">Нет базы</string>
     <string name="speed_cam_icon_catalog_desc">Иконка камеры/радара (SpeedCamOnline) для виджета ограничений по картам</string>

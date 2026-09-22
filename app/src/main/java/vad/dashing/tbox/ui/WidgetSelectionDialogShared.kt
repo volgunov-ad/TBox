@@ -406,7 +406,7 @@ internal class WidgetSelectionDialogState(
         },
     )
     var speedCamShowOnMap by mutableStateOf(
-        isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
+        isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
     )
     var mapsCamShowCameras by mutableStateOf(
         !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowCameras,
@@ -896,12 +896,12 @@ internal class WidgetSelectionDialogState(
             roadMatchHeadingUp = false
             roadMatchMapKitBasemap = false
             roadMatchBasemapTransparencyPercent = 0
+            speedCamShowOnMap = false
         }
         if (!isOsmSpeedLimitWidgetDataKey(key)) {
             speedCamOverageKmh = DEFAULT_SPEED_CAM_OVERAGE_KMH
             mapsCamLookaheadDistanceM = DEFAULT_MAPS_CAM_LOOKAHEAD_M
             mapsCamRadarHoldDistanceM = DEFAULT_MAPS_CAM_RADAR_HOLD_M
-            speedCamShowOnMap = false
             mapsCamShowCameras = true
             mapsCamShowCurrentLimit = true
             mapsCamShowAheadLimit = true
@@ -1244,7 +1244,7 @@ internal class WidgetSelectionDialogState(
             } else {
                 DEFAULT_MAPS_CAM_LOOKAHEAD_M
             },
-            speedCamShowOnMap = isOsmSpeedLimitWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
+            speedCamShowOnMap = isRoadMatchMapWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
             mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || mapsCamShowCameras,
             mapsCamShowCurrentLimit = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) ||
                 mapsCamShowCurrentLimit,
@@ -1563,7 +1563,7 @@ internal class WidgetSelectionDialogState(
         } else {
             DEFAULT_MAPS_CAM_RADAR_HOLD_M
         }
-        speedCamShowOnMap = isOsmSpeedLimitWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
+        speedCamShowOnMap = isRoadMatchMapWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
         mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCameras
         mapsCamShowCurrentLimit =
             !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCurrentLimit
@@ -2769,6 +2769,15 @@ internal fun WidgetSelectionDialogForm(
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
+                    if (isRoadMatchMapWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            isChecked = state.speedCamShowOnMap,
+                            onCheckedChange = { state.speedCamShowOnMap = it },
+                            text = stringResource(R.string.speed_cam_show_on_map_title),
+                            description = stringResource(R.string.speed_cam_show_on_map_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                    }
                     if (BuildConfig.MAPKIT_ENABLED &&
                         isRoadMatchMapWidgetDataKey(state.selectedDataKey)
                     ) {
@@ -2875,13 +2884,6 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.speed_cam_overage_desc),
                             minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
                             maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
-                            enabled = state.togglesEnabled,
-                        )
-                        SettingSwitch(
-                            isChecked = state.speedCamShowOnMap,
-                            onCheckedChange = { state.speedCamShowOnMap = it },
-                            text = stringResource(R.string.speed_cam_show_on_map_title),
-                            description = stringResource(R.string.speed_cam_show_on_map_desc),
                             enabled = state.togglesEnabled,
                         )
                     }

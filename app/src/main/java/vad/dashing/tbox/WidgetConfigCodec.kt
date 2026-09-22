@@ -409,14 +409,14 @@ fun serializeWidgetConfigsToJsonArray(
             if (transparency != 0) {
                 obj.put("roadMatchBasemapTransparencyPercent", transparency)
             }
+            if (config.speedCamShowOnMap) {
+                obj.put("speedCamShowOnMap", true)
+            }
         }
         if (isOsmSpeedLimitWidgetDataKey(config.dataKey)) {
             val overage = normalizeSpeedCamOverageKmh(config.speedCamOverageKmh)
             if (overage != DEFAULT_SPEED_CAM_OVERAGE_KMH) {
                 obj.put("speedCamOverageKmh", overage)
-            }
-            if (config.speedCamShowOnMap) {
-                obj.put("speedCamShowOnMap", true)
             }
             if (!config.mapsCamShowCameras) {
                 obj.put("mapsCamShowCameras", false)
@@ -891,7 +891,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             DEFAULT_MAPS_CAM_LOOKAHEAD_M
                         },
-                        speedCamShowOnMap = isOsmSpeedLimitWidgetDataKey(dataKey) &&
+                        speedCamShowOnMap = isRoadMatchMapWidgetDataKey(dataKey) &&
                             item.optBoolean("speedCamShowOnMap", false),
                         mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
                             item.optBoolean("mapsCamShowCameras", true),
