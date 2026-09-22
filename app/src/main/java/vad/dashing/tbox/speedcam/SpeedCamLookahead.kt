@@ -284,6 +284,8 @@ object SpeedCamLookahead {
                 category = p.category,
                 speedKmh = p.speedKmh,
                 isAlertTarget = alertId != null && p.id == alertId,
+                dirType = p.dirType,
+                directionDeg = p.directionDeg,
             )
         }
     }

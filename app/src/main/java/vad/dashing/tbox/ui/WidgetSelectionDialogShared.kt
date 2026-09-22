@@ -105,6 +105,7 @@ import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.MAPS_CAM_DISTANCE_STEP_M
 import vad.dashing.tbox.MAX_MAPS_CAM_LOOKAHEAD_M
 import vad.dashing.tbox.MAX_MAPS_CAM_RADAR_HOLD_M
 import vad.dashing.tbox.MIN_MAPS_CAM_LOOKAHEAD_M
@@ -2857,6 +2858,7 @@ internal fun WidgetSelectionDialogForm(
                             minValue = MIN_MAPS_CAM_LOOKAHEAD_M,
                             maxValue = MAX_MAPS_CAM_LOOKAHEAD_M,
                             enabled = state.togglesEnabled,
+                            step = MAPS_CAM_DISTANCE_STEP_M,
                         )
                         SettingSliderInt(
                             value = state.mapsCamRadarHoldDistanceM,
@@ -2871,6 +2873,7 @@ internal fun WidgetSelectionDialogForm(
                             minValue = MIN_MAPS_CAM_RADAR_HOLD_M,
                             maxValue = MAX_MAPS_CAM_RADAR_HOLD_M,
                             enabled = state.togglesEnabled,
+                            step = MAPS_CAM_DISTANCE_STEP_M,
                         )
                         SettingSliderInt(
                             value = state.speedCamOverageKmh,
@@ -2885,6 +2888,7 @@ internal fun WidgetSelectionDialogForm(
                             minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
                             maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
                             enabled = state.togglesEnabled,
+                            step = 1,
                         )
                     }
                     if (isCruiseWidgetDataKey(state.selectedDataKey)) {

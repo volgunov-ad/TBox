@@ -7,6 +7,7 @@ import kotlin.math.abs
 const val DEFAULT_MAPS_CAM_LOOKAHEAD_M = 1000
 const val MIN_MAPS_CAM_LOOKAHEAD_M = 300
 const val MAX_MAPS_CAM_LOOKAHEAD_M = 3000
+const val MAPS_CAM_DISTANCE_STEP_M = 10
 
 /** How long a passed radar/camera limit stays as current-limit fallback (m). */
 const val DEFAULT_MAPS_CAM_RADAR_HOLD_M = 500
@@ -20,10 +21,18 @@ const val AHEAD_CLOSE_DISTANCE_M = 50.0
 const val RADAR_PASS_CAPTURE_M = 100.0
 
 fun normalizeMapsCamLookaheadM(raw: Int): Int =
-    raw.coerceIn(MIN_MAPS_CAM_LOOKAHEAD_M, MAX_MAPS_CAM_LOOKAHEAD_M)
+    snapMapsCamDistanceM(raw, MIN_MAPS_CAM_LOOKAHEAD_M, MAX_MAPS_CAM_LOOKAHEAD_M)
 
 fun normalizeMapsCamRadarHoldM(raw: Int): Int =
-    raw.coerceIn(MIN_MAPS_CAM_RADAR_HOLD_M, MAX_MAPS_CAM_RADAR_HOLD_M)
+    snapMapsCamDistanceM(raw, MIN_MAPS_CAM_RADAR_HOLD_M, MAX_MAPS_CAM_RADAR_HOLD_M)
+
+/** Round to [MAPS_CAM_DISTANCE_STEP_M] and clamp. */
+fun snapMapsCamDistanceM(raw: Int, minM: Int, maxM: Int): Int {
+    val clamped = raw.coerceIn(minM, maxM)
+    val step = MAPS_CAM_DISTANCE_STEP_M
+    val snapped = ((clamped + step / 2) / step) * step
+    return snapped.coerceIn(minM, maxM)
+}
 
 /**
  * Pure helpers for the unified maps/cameras/radars speed-limit tile.

@@ -63,6 +63,7 @@ import vad.dashing.tbox.location.roadmatch.OverlayPoseMarker
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
 import vad.dashing.tbox.location.roadmatch.RoadMatchCanvasProjection
 import vad.dashing.tbox.location.roadmatch.RoadMatchCanvasViewport
+import vad.dashing.tbox.location.roadmatch.RoadMatchLeashMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeed
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
@@ -70,6 +71,8 @@ import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
+import vad.dashing.tbox.speedcam.SpeedCamMapCoverage
+import vad.dashing.tbox.speedcam.SpeedCamMapMarker
 import vad.dashing.tbox.speedcam.SpeedCamRepository
 import kotlin.math.abs
 import kotlin.math.cos
@@ -507,6 +510,9 @@ fun DashboardRoadMatchMapWidgetItem(
                     )
                 }
                 speedCam.nearbyForMap.forEach { cam ->
+                    drawSpeedCamCoverage(cam = cam, viewport = vp)
+                }
+                speedCam.nearbyForMap.forEach { cam ->
                     val center = toOffset(cam.lat, cam.lon, vp)
                     val r = if (cam.isAlertTarget) 5.5.dp.toPx() else 3.5.dp.toPx()
                     val color = if (cam.isAlertTarget) {
@@ -769,6 +775,54 @@ private suspend fun PointerInputScope.detectRoadMatchSetGestures(
                 }
             }
         } while (event.changes.any { it.pressed })
+    }
+}
+
+private val SPEED_CAM_BEAM_PRIMARY = Color(0xFFE53935)
+private val SPEED_CAM_BEAM_OPPOSITE = Color(0xFF5C6BC0)
+private val SPEED_CAM_BEAM_ALL = Color(0xFFAB47BC)
+
+private fun DrawScope.drawSpeedCamCoverage(
+    cam: SpeedCamMapMarker,
+    viewport: RoadMatchCanvasViewport,
+) {
+    val beams = SpeedCamMapCoverage.beamsFor(
+        lat = cam.lat,
+        lon = cam.lon,
+        dirType = cam.dirType,
+        directionDeg = cam.directionDeg,
+    )
+    for (beam in beams) {
+        val fill = when (beam.kind) {
+            SpeedCamMapCoverage.BeamKind.PRIMARY -> SPEED_CAM_BEAM_PRIMARY.copy(alpha = 0.34f)
+            SpeedCamMapCoverage.BeamKind.OPPOSITE -> SPEED_CAM_BEAM_OPPOSITE.copy(alpha = 0.34f)
+            SpeedCamMapCoverage.BeamKind.ALL -> SPEED_CAM_BEAM_ALL.copy(alpha = 0.28f)
+        }
+        when (beam.kind) {
+            SpeedCamMapCoverage.BeamKind.ALL -> {
+                val center = beam.points.firstOrNull() ?: continue
+                val c = toOffset(center.lat, center.lon, viewport)
+                val edge = RoadMatchLeashMath.destination(
+                    center.lat,
+                    center.lon,
+                    0f,
+                    beam.radiusM,
+                )
+                val edgePx = toOffset(edge.first, edge.second, viewport)
+                val radiusPx = (edgePx - c).getDistance().coerceAtLeast(4f)
+                drawCircle(color = fill, radius = radiusPx, center = c)
+            }
+            else -> {
+                if (beam.points.size < 3) continue
+                val path = Path()
+                beam.points.forEachIndexed { index, point ->
+                    val p = toOffset(point.lat, point.lon, viewport)
+                    if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                }
+                path.close()
+                drawPath(path = path, color = fill)
+            }
+        }
     }
 }
 
