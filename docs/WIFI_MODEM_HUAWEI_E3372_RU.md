@@ -46,4 +46,4 @@
 
 После **reboot** poller пересоздаёт HTTP-клиент/сессию и в течение ~2 минут не затирает зеркало net/APN на временных ошибках недоступности, чтобы данные снова появились без переключения источника модема.
 
-См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md).
+См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md), [WIFI_MODEM_CANDIDATES_RU.md](./WIFI_MODEM_CANDIDATES_RU.md).
