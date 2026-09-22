@@ -1159,7 +1159,7 @@
     <string name="speed_cam_error_download">Could not download camera database</string>
     <string name="speed_cam_status_installed">Points: %1$d · %2$s</string>
     <string name="speed_cam_overage_title">Overage allowance: %1$d km/h</string>
-    <string name="speed_cam_overage_desc">When speed exceeds the camera limit plus this allowance, distance and icon use the active color</string>
+    <string name="speed_cam_overage_desc">When speed exceeds the camera limit plus this allowance, ahead distance and limit text use the active color. When speed exceeds the current limit plus this allowance, the current-sign digits use the active color</string>
     <string name="speed_cam_radius_title">Range: %1$d m</string>
     <string name="speed_cam_radius_desc">Search for the nearest camera ahead within this radius (300–1000 m)</string>
     <string name="speed_cam_show_on_map_title">Show on map</string>

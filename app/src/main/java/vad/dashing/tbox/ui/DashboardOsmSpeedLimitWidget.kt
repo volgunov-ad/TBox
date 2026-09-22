@@ -54,6 +54,11 @@ private val OsmSignRingWidth = 8.dp
  * Layout (when all columns enabled): three equal columns —
  * left camera+distance, center current limit, right ahead limit+distance.
  * Disabled columns collapse; remaining stretch.
+ *
+ * Overspeed highlighting uses control active/inactive content colors:
+ * - camera ahead overspeed → text in blocks 2 / 4 / 5
+ * - current limit overspeed → digits in block 3
+ * Block 1 icon keeps resource colors (no tint).
  */
 @Composable
 fun DashboardOsmSpeedLimitWidgetItem(
@@ -66,6 +71,7 @@ fun DashboardOsmSpeedLimitWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     activeColor: Color = WidgetActiveColors.Danger,
+    inactiveColor: Color = textColor,
     showCameras: Boolean = true,
     showCurrentLimit: Boolean = true,
     showAheadLimit: Boolean = true,
@@ -97,6 +103,8 @@ fun DashboardOsmSpeedLimitWidgetItem(
         showCurrentLimit = showCurrentLimit,
         showAheadLimit = showAheadLimit,
     )
+    val cameraAccent = if (display.cameraOverLimit) activeColor else inactiveColor
+    val currentAccent = if (display.currentOverLimit) activeColor else inactiveColor
 
     DashboardWidgetScaffold(
         onClick = onClick,
@@ -148,8 +156,8 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                     dashLabel = dashLabel,
                                     packMissing = packMissing,
                                     isRu = isRu,
-                                    resolvedTextColor = resolvedTextColor,
-                                    activeColor = activeColor,
+                                    emptyTextColor = resolvedTextColor,
+                                    distanceColor = cameraAccent,
                                     iconTextStyle = sideTextStyle,
                                     distStyle = distStyle,
                                 )
@@ -162,6 +170,11 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                         OsmSpeedLimitSign(
                                             label = display.currentLabel ?: dashLabel,
                                             textStyle = mainTextStyle,
+                                            digitColor = if (display.currentLabel != null) {
+                                                currentAccent
+                                            } else {
+                                                OsmSignTextColor
+                                            },
                                             alpha = if (display.currentLabel != null) {
                                                 1f
                                             } else {
@@ -175,7 +188,8 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                     display = display,
                                     dashLabel = dashLabel,
                                     context = context,
-                                    resolvedTextColor = resolvedTextColor,
+                                    emptyTextColor = resolvedTextColor,
+                                    accentColor = cameraAccent,
                                     signTextStyle = sideTextStyle,
                                     distStyle = distStyle,
                                 )
@@ -196,8 +210,8 @@ private fun MapsCamCameraColumn(
     dashLabel: String,
     packMissing: String,
     isRu: Boolean,
-    resolvedTextColor: Color,
-    activeColor: Color,
+    emptyTextColor: Color,
+    distanceColor: Color,
     iconTextStyle: TextStyle,
     distStyle: TextStyle,
 ) {
@@ -212,13 +226,12 @@ private fun MapsCamCameraColumn(
                 val emptyLabel = if (!display.camInstalled) packMissing else dashLabel
                 Text(
                     text = emptyLabel,
-                    color = resolvedTextColor.copy(alpha = 0.5f),
+                    color = emptyTextColor.copy(alpha = 0.5f),
                     style = iconTextStyle.scaledWidgetText(if (!display.camInstalled) 0.85f else 1f),
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                 )
             } else {
-                val accent = if (display.cameraOverLimit) activeColor else resolvedTextColor
                 BoxWithConstraints(
                     modifier = Modifier.fillMaxSize(0.85f),
                     contentAlignment = Alignment.Center,
@@ -227,9 +240,9 @@ private fun MapsCamCameraColumn(
                     SpeedCamTypeIcon(
                         category = display.cameraAlert.point.category,
                         relative = display.cameraAlert.relative,
-                        // Block 1 shows icon/arrow only — speed digits live in blocks 3/4.
                         speedKmh = 0,
-                        color = accent,
+                        // Keep drawable/theme colors — do not tint on overspeed.
+                        color = Color.Unspecified,
                         speedTextStyle = iconTextStyle.scaledWidgetText(0.7f),
                         modifier = Modifier.size(iconSize),
                     )
@@ -248,10 +261,9 @@ private fun MapsCamCameraColumn(
                 isRu -> SpeedCamLookahead.formatDistanceM(dist)
                 else -> SpeedCamLookahead.formatDistanceMEn(dist)
             }
-            val accent = if (display.cameraOverLimit) activeColor else resolvedTextColor
             Text(
                 text = text,
-                color = if (dist != null) accent else resolvedTextColor.copy(alpha = 0.5f),
+                color = if (dist != null) distanceColor else emptyTextColor.copy(alpha = 0.5f),
                 style = distStyle,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
@@ -266,7 +278,8 @@ private fun MapsCamAheadColumn(
     display: MapsCamerasRadarsDisplay,
     dashLabel: String,
     context: android.content.Context,
-    resolvedTextColor: Color,
+    emptyTextColor: Color,
+    accentColor: Color,
     signTextStyle: TextStyle,
     distStyle: TextStyle,
 ) {
@@ -285,6 +298,7 @@ private fun MapsCamAheadColumn(
                 OsmSpeedLimitSign(
                     label = display.aheadLabel ?: dashLabel,
                     textStyle = signTextStyle,
+                    digitColor = if (display.aheadLabel != null) accentColor else OsmSignTextColor,
                     alpha = if (display.aheadLabel != null) 1f else OsmInactiveAlpha,
                     modifier = Modifier.size(diameter),
                 )
@@ -302,9 +316,9 @@ private fun MapsCamAheadColumn(
             Text(
                 text = distText,
                 color = if (display.aheadDistanceM != null) {
-                    resolvedTextColor.copy(alpha = 0.85f)
+                    accentColor
                 } else {
-                    resolvedTextColor.copy(alpha = 0.5f)
+                    emptyTextColor.copy(alpha = 0.5f)
                 },
                 style = distStyle,
                 fontWeight = FontWeight.SemiBold,
@@ -320,6 +334,7 @@ private fun OsmSpeedLimitSign(
     label: String,
     textStyle: TextStyle,
     alpha: Float,
+    digitColor: Color = OsmSignTextColor,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -334,7 +349,7 @@ private fun OsmSpeedLimitSign(
     ) {
         Text(
             text = label,
-            color = OsmSignTextColor.copy(alpha = alpha),
+            color = digitColor.copy(alpha = alpha),
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             style = textStyle,
@@ -352,6 +367,7 @@ data class MapsCamerasRadarsDisplay(
     val cameraAlert: vad.dashing.tbox.speedcam.SpeedCamAlert?,
     val cameraDistanceM: Double?,
     val cameraOverLimit: Boolean,
+    val currentOverLimit: Boolean,
     val currentLabel: String?,
     val aheadLabel: String?,
     val aheadDistanceM: Double?,
@@ -397,10 +413,14 @@ data class MapsCamerasRadarsDisplay(
                 )
             }
             val ahead = MapsCamerasRadarsLogic.pickAhead(osmAhead, camAhead)
-            val overLimit = camAlert != null &&
+            val cameraOverLimit = camAlert != null &&
                 camAlert.point.hasSpeedLimit &&
                 vehicleSpeedKmh.isFinite() &&
                 vehicleSpeedKmh > camAlert.point.speedKmh + overageKmh
+            val currentOverLimit = currentKmh != null &&
+                currentKmh > 0 &&
+                vehicleSpeedKmh.isFinite() &&
+                vehicleSpeedKmh > currentKmh + overageKmh
             return MapsCamerasRadarsDisplay(
                 showCamerasColumn = showCameras,
                 showCurrentColumn = showCurrentLimit,
@@ -408,7 +428,8 @@ data class MapsCamerasRadarsDisplay(
                 camInstalled = camInstalled,
                 cameraAlert = camAlert,
                 cameraDistanceM = camAlert?.distanceM,
-                cameraOverLimit = overLimit,
+                cameraOverLimit = cameraOverLimit,
+                currentOverLimit = currentOverLimit,
                 currentLabel = currentKmh?.toString(),
                 aheadLabel = ahead.limitKmh?.toString(),
                 aheadDistanceM = ahead.distanceM,

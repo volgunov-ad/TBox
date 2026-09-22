@@ -728,6 +728,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 activeColor = controlAppearance.activeContent,
+                inactiveColor = controlAppearance.inactiveContent,
                 showCameras = widgetConfig.mapsCamShowCameras,
                 showCurrentLimit = widgetConfig.mapsCamShowCurrentLimit,
                 showAheadLimit = widgetConfig.mapsCamShowAheadLimit,

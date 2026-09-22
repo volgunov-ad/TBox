@@ -1167,7 +1167,7 @@
     <string name="speed_cam_error_download">Не удалось скачать базу камер</string>
     <string name="speed_cam_status_installed">Точек: %1$d · %2$s</string>
     <string name="speed_cam_overage_title">Допуск превышения: %1$d км/ч</string>
-    <string name="speed_cam_overage_desc">Если скорость больше лимита камеры плюс допуск — расстояние и иконка подсвечиваются активным цветом</string>
+    <string name="speed_cam_overage_desc">Если скорость больше лимита камеры плюс допуск — текст расстояния и ограничения впереди подсвечивается активным цветом. Если скорость больше текущего лимита плюс допуск — цифры текущего знака подсвечиваются активным цветом</string>
     <string name="speed_cam_radius_title">Дальность: %1$d м</string>
     <string name="speed_cam_radius_desc">Искать ближайшую камеру по курсу в этом радиусе (300–1000 м)</string>
     <string name="speed_cam_show_on_map_title">Показывать на карте</string>
