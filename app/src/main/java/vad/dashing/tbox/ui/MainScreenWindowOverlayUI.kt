@@ -22,7 +22,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
-import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.MainScreenWindowModeExitButtonPosition
 import vad.dashing.tbox.R
@@ -42,6 +41,9 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
  * display size in **pixel** constraints and placed so the activity-space viewport origin
  * maps to overlay (0,0) — no Dp round-trip and no RTL-mirrored [Modifier.offset].
  * Exit buttons stay in overlay-local coordinates so they remain visible.
+ *
+ * Does not host [AppListDialog]: overlay windows use FLAG_NOT_FOCUSABLE, so Compose Dialog
+ * crashes here. [openAppListDialog] exits to fullscreen and shows the dialog in MainActivity.
  */
 @Composable
 fun MainScreenWindowOverlayUI(
@@ -64,7 +66,6 @@ fun MainScreenWindowOverlayUI(
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
-    val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
     val overlayLayout by MainScreenWindowOverlayLayout.state.collectAsStateWithLifecycle()
     val cropEnabled = overlayLayout.cropEnabled
 
@@ -229,13 +230,6 @@ fun MainScreenWindowOverlayUI(
                     )
                 }
             }
-        }
-        if (showAppListDialog) {
-            AppListDialog(
-                visible = true,
-                settingsViewModel = settingsViewModel,
-                onDismiss = { AppListDialogRequestBus.dismiss() },
-            )
         }
     }
 }

@@ -151,11 +151,19 @@ internal fun openMainActivityFromWidget(context: Context) {
     MainActivityIntentHelper.bringToFront(context)
 }
 
-/** Opens the shared app-list dialog; brings MainActivity forward when invoked from an overlay. */
+/**
+ * Opens the shared app-list dialog in [vad.dashing.tbox.MainActivity].
+ *
+ * Window-mode main-screen overlay cannot host a Compose Dialog (non-focusable overlay),
+ * so exit to fullscreen first, then request the dialog once MainActivity is restored.
+ * From a floating overlay (no window mode), still bring MainActivity to the front.
+ */
 internal fun openAppListDialog(context: Context) {
-    AppListDialogRequestBus.requestShow()
-    if (context !is android.app.Activity) {
-        MainActivityIntentHelper.bringToFront(context)
+    FreeformLaunchHelper.runAfterExitingWindowModeToFullscreen(context) {
+        AppListDialogRequestBus.requestShow()
+        if (context !is android.app.Activity) {
+            MainActivityIntentHelper.bringToFront(context)
+        }
     }
 }
 
