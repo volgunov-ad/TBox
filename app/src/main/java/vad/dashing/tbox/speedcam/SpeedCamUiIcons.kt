@@ -5,7 +5,8 @@ import vad.dashing.tbox.R
 
 /**
  * Semantic UI-icon keys and default drawables for [SpeedCamCategory] / direction arrows.
- * Overrides go through «Настроить иконки…» / theme `uiIcons`.
+ * Registered in [vad.dashing.tbox.ui.UiIconCatalog] (category LOCATION).
+ * Overrides and «preserve colors» go through «Настроить иконки…» / theme `uiIcons`.
  */
 object SpeedCamUiIcons {
     const val KEY_FIXED = "dashboard.speedcam.fixed"
