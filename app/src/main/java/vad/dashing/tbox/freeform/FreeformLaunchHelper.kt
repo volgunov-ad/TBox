@@ -255,6 +255,24 @@ object FreeformLaunchHelper {
      * overlay does not stay on top of the newly launched app.
      */
     fun runAfterExitingWindowMode(context: Context, action: () -> Unit) {
+        runAfterExitingWindowMode(context, restoreMainActivity = false, action = action)
+    }
+
+    /**
+     * Like [runAfterExitingWindowMode], but restores [vad.dashing.tbox.MainActivity] after teardown.
+     *
+     * Used for UI that needs a focusable Activity (Compose [androidx.compose.ui.window.Dialog]),
+     * e.g. the app-list dialog — TYPE_APPLICATION_OVERLAY with FLAG_NOT_FOCUSABLE cannot host it.
+     */
+    fun runAfterExitingWindowModeToFullscreen(context: Context, action: () -> Unit) {
+        runAfterExitingWindowMode(context, restoreMainActivity = true, action = action)
+    }
+
+    private fun runAfterExitingWindowMode(
+        context: Context,
+        restoreMainActivity: Boolean,
+        action: () -> Unit,
+    ) {
         val appContext = context.applicationContext
         val needsExit = FreeformCompanionSession.isActive ||
             exitInProgress ||
@@ -266,7 +284,8 @@ object FreeformLaunchHelper {
         pendingAppContext = appContext
         pendingAfterExit = PendingAfterExit.Action(action)
         dbg(
-            "queue action after full exit exitInProgress=$exitInProgress " +
+            "queue action after full exit restoreMain=$restoreMainActivity " +
+                "exitInProgress=$exitInProgress " +
                 "session=${FreeformCompanionSession.isActive} " +
                 "anchor=${FreeformInvisibleAnchorActivity.isRunning}",
         )
@@ -274,7 +293,7 @@ object FreeformLaunchHelper {
             beginExitWindowMode(
                 appContext,
                 EXIT_DEFER_FROM_CLICK_MS,
-                restoreMainActivity = false,
+                restoreMainActivity = restoreMainActivity,
             )
         }
     }
