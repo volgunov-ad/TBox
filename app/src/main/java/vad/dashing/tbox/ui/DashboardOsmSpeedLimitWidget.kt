@@ -58,7 +58,7 @@ private val OsmSignRingWidth = 8.dp
  * Overspeed highlighting uses control active/inactive content colors:
  * - camera ahead overspeed → text in blocks 2 / 4 / 5
  * - current limit overspeed → digits in block 3
- * Block 1 icon keeps resource colors (no tint).
+ * Block 1 type icon always uses inactiveColor (never overspeed tint).
  */
 @Composable
 fun DashboardOsmSpeedLimitWidgetItem(
@@ -157,6 +157,7 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                     packMissing = packMissing,
                                     isRu = isRu,
                                     emptyTextColor = resolvedTextColor,
+                                    iconColor = inactiveColor,
                                     distanceColor = cameraAccent,
                                     iconTextStyle = sideTextStyle,
                                     distStyle = distStyle,
@@ -211,6 +212,7 @@ private fun MapsCamCameraColumn(
     packMissing: String,
     isRu: Boolean,
     emptyTextColor: Color,
+    iconColor: Color,
     distanceColor: Color,
     iconTextStyle: TextStyle,
     distStyle: TextStyle,
@@ -241,8 +243,8 @@ private fun MapsCamCameraColumn(
                         category = display.cameraAlert.point.category,
                         relative = display.cameraAlert.relative,
                         speedKmh = 0,
-                        // Keep drawable/theme colors — do not tint on overspeed.
-                        color = Color.Unspecified,
+                        // White-fill vectors need iconColor; never overspeed tint.
+                        color = iconColor,
                         speedTextStyle = iconTextStyle.scaledWidgetText(0.7f),
                         modifier = Modifier.size(iconSize),
                     )
