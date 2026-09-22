@@ -331,11 +331,6 @@ fun EspCompanionTabContent(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
         } else {
-            val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
-            val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
-            val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
-            val lastBle by EspCompanionRepository.lastBleBtn.collectAsStateWithLifecycle()
-            val bleBat by EspCompanionRepository.bleBattery.collectAsStateWithLifecycle()
             SettingSwitch(
                 isChecked = bleOn,
                 onCheckedChange = { enabled ->
