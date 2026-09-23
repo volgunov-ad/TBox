@@ -65,6 +65,7 @@ import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxHeadline
+import vad.dashing.tbox.ui.theme.tboxTitle
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -74,6 +75,26 @@ private enum class EspCompanionSection {
     Settings,
     Data,
     Ble,
+}
+
+/** Subsection header inside a Companion horizontal section (same as ELM327 / Modem). */
+@Composable
+private fun CompanionSectionHeader(text: String) {
+    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.tboxTitle,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+@Composable
+private fun CompanionHelperText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -223,7 +244,7 @@ fun EspCompanionTabContent(
                         description = stringResource(R.string.esp_connect_enabled_desc),
                         enabled = true,
                     )
-                    SettingsTitle(stringResource(R.string.esp_status_title))
+                    CompanionSectionHeader(stringResource(R.string.esp_status_title))
                     StatusRow(
                         stringResource(R.string.esp_usb_status),
                         if (connected) {
@@ -351,7 +372,7 @@ fun EspCompanionTabContent(
                         )
                     }
                     if (info.can) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        CompanionSectionHeader(stringResource(R.string.esp_can_open))
                         Button(
                             onClick = rememberWrappedOnClick { showCanConsole = true },
                             enabled = controlsEnabled,
@@ -364,15 +385,10 @@ fun EspCompanionTabContent(
                                 style = MaterialTheme.typography.tboxButton,
                             )
                         }
-                        Text(
-                            text = stringResource(R.string.esp_can_open_desc),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        CompanionHelperText(stringResource(R.string.esp_can_open_desc))
                     }
                     if (info.um980) {
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                        SettingsTitle(stringResource(R.string.esp_um980_settings_title))
+                        CompanionSectionHeader(stringResource(R.string.esp_um980_settings_title))
                         Button(
                             onClick = rememberWrappedOnClick { showUm980Settings = true },
                             enabled = controlsEnabled,
@@ -385,15 +401,12 @@ fun EspCompanionTabContent(
                                 style = MaterialTheme.typography.tboxButton,
                             )
                         }
-                        Text(
-                            text = stringResource(R.string.esp_um980_open_settings_desc),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        CompanionHelperText(stringResource(R.string.esp_um980_open_settings_desc))
                     }
                 }
 
                 EspCompanionSection.Data -> {
+                    CompanionSectionHeader(stringResource(R.string.esp_gpio_inputs))
                     StatusRow(
                         stringResource(R.string.esp_gpio_inputs),
                         Integer.toBinaryString(gpioMask).padStart(gpioBits, '0'),
@@ -424,12 +437,13 @@ fun EspCompanionTabContent(
                             ) {
                                 Text(
                                     text = stringResource(R.string.esp_relay_n, ch) + if (on) " ●" else " ○",
-                                    style = MaterialTheme.typography.tboxCaption,
+                                    style = MaterialTheme.typography.tboxButton,
                                     textAlign = TextAlign.Center,
                                 )
                             }
                         }
                     }
+                    CompanionSectionHeader(stringResource(R.string.esp_gnss_status))
                     StatusRow(
                         stringResource(R.string.esp_gnss_online),
                         if (um980Online) yesLabel else noLabel,
@@ -448,6 +462,7 @@ fun EspCompanionTabContent(
                         stringResource(R.string.location_last_change),
                         loc.updateTime?.let { timeFormat.format(it) }.orEmpty(),
                     )
+                    CompanionSectionHeader(stringResource(R.string.esp_mag_status))
                     StatusRow(
                         stringResource(R.string.esp_mag_seen),
                         if (info.magSeen.isEmpty()) "—" else info.magSeen.joinToString(", "),
@@ -468,13 +483,8 @@ fun EspCompanionTabContent(
                             "—"
                         },
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    SettingsTitle(stringResource(R.string.esp_companion_log_title))
-                    Text(
-                        text = stringResource(R.string.esp_companion_log_desc),
-                        style = MaterialTheme.typography.tboxBody,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    CompanionSectionHeader(stringResource(R.string.esp_companion_log_title))
+                    CompanionHelperText(stringResource(R.string.esp_companion_log_desc))
                     Text(
                         text = if (companionLog.recording) {
                             stringResource(R.string.esp_companion_log_recording, companionLog.events)
@@ -547,12 +557,9 @@ fun EspCompanionTabContent(
                 }
 
                 EspCompanionSection.Ble -> {
-                    SettingsTitle(stringResource(R.string.esp_ble_title))
+                    CompanionSectionHeader(stringResource(R.string.esp_ble_title))
                     if (!info.ble) {
-                        Text(
-                            text = stringResource(R.string.esp_ble_need_fw),
-                            style = MaterialTheme.typography.tboxCaption,
-                        )
+                        CompanionHelperText(stringResource(R.string.esp_ble_need_fw))
                     } else {
                         SettingSwitch(
                             isChecked = bleOn,
@@ -584,11 +591,9 @@ fun EspCompanionTabContent(
                             Text(
                                 text = stringResource(R.string.esp_ble_learning),
                                 style = MaterialTheme.typography.tboxBody,
+                                color = MaterialTheme.colorScheme.primary,
                             )
-                            Text(
-                                text = stringResource(R.string.esp_ble_learn_hint),
-                                style = MaterialTheme.typography.tboxCaption,
-                            )
+                            CompanionHelperText(stringResource(R.string.esp_ble_learn_hint))
                         }
                         Row(
                             modifier = Modifier
@@ -615,7 +620,7 @@ fun EspCompanionTabContent(
                                     text = stringResource(
                                         if (bleLearn) R.string.esp_ble_learn_cancel else R.string.esp_ble_learn,
                                     ),
-                                    style = MaterialTheme.typography.tboxCaption,
+                                    style = MaterialTheme.typography.tboxButton,
                                     textAlign = TextAlign.Center,
                                 )
                             }
@@ -634,7 +639,7 @@ fun EspCompanionTabContent(
                                 ) {
                                     Text(
                                         text = stringResource(R.string.esp_ble_forget_all),
-                                        style = MaterialTheme.typography.tboxCaption,
+                                        style = MaterialTheme.typography.tboxButton,
                                         textAlign = TextAlign.Center,
                                     )
                                 }
@@ -652,6 +657,7 @@ fun EspCompanionTabContent(
                                     text = mac,
                                     style = MaterialTheme.typography.tboxCaption,
                                     fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f),
                                 )
                                 TextButton(
@@ -665,7 +671,10 @@ fun EspCompanionTabContent(
                                     },
                                     enabled = controlsEnabled,
                                 ) {
-                                    Text(stringResource(R.string.esp_ble_forget))
+                                    Text(
+                                        stringResource(R.string.esp_ble_forget),
+                                        style = MaterialTheme.typography.tboxButton,
+                                    )
                                 }
                             }
                         }
@@ -962,7 +971,8 @@ private fun CanCompanionDialog(
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text(
                         text = stringResource(R.string.esp_can_recent_title),
-                        style = MaterialTheme.typography.tboxBody,
+                        style = MaterialTheme.typography.tboxTitle,
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                     val newestFirst = remember(frames) { frames.asReversed().take(80) }

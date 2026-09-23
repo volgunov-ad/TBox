@@ -896,7 +896,7 @@
     <string name="settings_gnss_reboot_unknown_module">Probe the GNSS module first</string>
     <string name="settings_gnss_reboot_um980_offline">UM980 is offline on the companion</string>
     <string name="settings_mock_location_android_disabled">Mock location is disabled when source is Android (feedback loop)</string>
-    <string name="esp_status_title">Companion</string>
+    <string name="esp_status_title">Status</string>
     <string name="esp_tab_settings">Settings</string>
     <string name="esp_tab_data">Data and debug</string>
     <string name="esp_tab_ble">BLE</string>
