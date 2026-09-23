@@ -118,13 +118,17 @@ class LeftMenuLayoutTest {
     }
 
     @Test
-    fun applyNoTboxConnectDisable_disablesAtCanCarDataKeepsModem() {
-        val withModem = LeftMenuLayout(
+    fun applyNoTboxConnectDisable_disablesAtCanCarDataAndEnablesModem() {
+        val withModemOff = LeftMenuLayout(
             LeftMenuTabField.defaultOrder().map { field ->
-                LeftMenuLayout.Row(field, enabled = true)
+                LeftMenuLayout.Row(
+                    field,
+                    enabled = field != LeftMenuTabField.MODEM,
+                )
             },
         )
-        val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModem)
+        assertFalse(withModemOff.rows.first { it.field == LeftMenuTabField.MODEM }.enabled)
+        val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModemOff)
         for (field in listOf(
             LeftMenuTabField.AT_COMMANDS,
             LeftMenuTabField.CAN,

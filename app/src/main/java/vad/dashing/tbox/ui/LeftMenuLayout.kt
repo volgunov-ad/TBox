@@ -145,16 +145,17 @@ data class LeftMenuLayout(
                 field == LeftMenuTabField.CAR_DATA
 
         /**
-         * Disables AT/CAN/car_data tabs. Does not re-enable them when [noTboxConnect] is false.
+         * Disables AT/CAN/car_data tabs and enables [LeftMenuTabField.MODEM] (Wi‑Fi modem
+         * works without TBox). Does not re-enable AT/CAN/car_data when [noTboxConnect] is false.
          */
         fun applyNoTboxConnectDisable(layout: LeftMenuLayout): LeftMenuLayout =
             LeftMenuLayout(
                 enforceLocked(
                     layout.rows.map { row ->
-                        if (isDisabledByNoTboxConnect(row.field)) {
-                            row.copy(enabled = false)
-                        } else {
-                            row
+                        when {
+                            isDisabledByNoTboxConnect(row.field) -> row.copy(enabled = false)
+                            row.field == LeftMenuTabField.MODEM -> row.copy(enabled = true)
+                            else -> row
                         }
                     },
                 ),

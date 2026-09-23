@@ -844,7 +844,7 @@
 
     <string name="settings_data_from_tbox_title">Receiving data from TBox</string>
     <string name="settings_no_tbox_connect_title">Do not connect to TBox</string>
-    <string name="settings_no_tbox_connect_desc">No UDP / tbox-proxy: use head-unit CAN (mbCAN/VHAL). Disables Modem, AT, CAN, and Car data tabs.</string>
+    <string name="settings_no_tbox_connect_desc">No UDP / tbox-proxy: use head-unit CAN (mbCAN/VHAL). Disables AT, CAN, and Car data tabs. Modem tab stays available for a Wi‑Fi modem.</string>
     <string name="settings_no_tbox_connect_can_dialog_title">Use CAN</string>
     <string name="settings_no_tbox_connect_can_dialog_message">Enable “Work via CAN” on all eligible main-screen and floating-panel tiles?</string>
     <string name="settings_no_tbox_connect_can_dialog_yes">Yes</string>
