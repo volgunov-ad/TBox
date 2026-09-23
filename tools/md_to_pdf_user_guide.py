@@ -50,6 +50,13 @@ CSS = """
   ul, ol { padding-left: 1.35em; }
   li { margin: 0.2em 0; }
   strong { font-weight: 700; }
+  blockquote {
+    margin: 0.8em 0 1em;
+    padding: 0.55em 0.8em;
+    border-left: 3px solid #555;
+    background: #f5f5f5;
+  }
+  blockquote p { margin: 0.35em 0; }
   hr { border: none; border-top: 1px solid #ddd; margin: 1.2em 0; }
   table {
     width: 100%;
