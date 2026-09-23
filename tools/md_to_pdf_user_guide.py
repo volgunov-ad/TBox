@@ -72,22 +72,26 @@ CSS = """
     border-radius: 2px;
   }
   a { color: #1a1a1a; text-decoration: none; }
+  /* Оглавление — список сразу после первого h2 «Содержание» */
+  h2 + ol { margin-top: 0.3em; }
 """
 
 
-def soften_links(md_text: str) -> str:
+def strip_external_links(md_text: str) -> str:
+    """Убрать markdown-ссылки на файлы/URL; оставить только текст подписи."""
+
     def repl(match: re.Match[str]) -> str:
-        label, target = match.group(1), match.group(2)
-        if target.endswith(".md") or "/" in target:
-            return f"{label} ({target})"
-        return match.group(0)
+        label, target = match.group(1), match.group(2).strip()
+        if target.startswith("#"):
+            return match.group(0)
+        return label
 
     return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", repl, md_text)
 
 
 def build_html(md_text: str) -> str:
     body = markdown.markdown(
-        soften_links(md_text),
+        strip_external_links(md_text),
         extensions=["tables", "fenced_code", "sane_lists", "smarty"],
     )
     return (
