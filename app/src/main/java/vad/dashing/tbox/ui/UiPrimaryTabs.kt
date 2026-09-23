@@ -310,16 +310,22 @@ fun ModemTabContent(
 
                 ModemSection.Settings -> {
                     item {
-                        val sourceOptions = listOf(
-                            ModemSourceOption(
-                                ModemSource.TBOX,
-                                stringResource(R.string.settings_modem_source_tbox),
-                            ),
-                            ModemSourceOption(
-                                ModemSource.WIFI_HTTP,
-                                stringResource(R.string.settings_modem_source_wifi_http),
-                            ),
-                        )
+                        val sourceOptions = buildList {
+                            if (!noTboxConnect) {
+                                add(
+                                    ModemSourceOption(
+                                        ModemSource.TBOX,
+                                        stringResource(R.string.settings_modem_source_tbox),
+                                    ),
+                                )
+                            }
+                            add(
+                                ModemSourceOption(
+                                    ModemSource.WIFI_HTTP,
+                                    stringResource(R.string.settings_modem_source_wifi_http),
+                                ),
+                            )
+                        }
                         val selectedSource = sourceOptions.firstOrNull { it.source == modemSource }
                             ?: sourceOptions.first()
                         SettingDropdownGeneric(

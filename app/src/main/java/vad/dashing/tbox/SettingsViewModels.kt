@@ -31,6 +31,7 @@ import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import vad.dashing.tbox.wifimodem.ModemSource
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -1423,6 +1424,19 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 _showPermissionsDialog.value = true
             }
         }
+        // Users who enabled «Не подключаться к TBox» before Modem stayed available may still
+        // have the Modem tab off / TBox modem source — re-apply menu + source constraints once.
+        viewModelScope.launch {
+            if (!settingsManager.noTboxConnectFlow.first()) return@launch
+            val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
+            val fixed = LeftMenuLayout.applyNoTboxConnectDisable(layout)
+            if (LeftMenuLayout.serialize(fixed) != LeftMenuLayout.serialize(layout)) {
+                settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(fixed))
+            }
+            if (settingsManager.modemSourceFlow.first() == ModemSource.TBOX) {
+                settingsManager.saveModemSourceSetting(ModemSource.WIFI_HTTP)
+            }
+        }
         viewModelScope.launch {
             val storedConfigs = settingsManager.floatingDashboardsFlow.first()
             selectedFloatingDashboardIdState.value =
@@ -1924,7 +1938,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     /**
      * Enable or disable «Не подключаться к TBox».
-     * When enabling: disables TBox menu tabs, forces Android geo if source was TBox,
+     * When enabling: disables AT/CAN/car_data menu tabs, enables Modem (Wi‑Fi),
+     * forces Android geo if source was TBox, switches modem source to Wi‑Fi if it was TBox,
      * optionally bulk-enables [FloatingDashboardWidgetConfig.useMbCanVhal] on eligible tiles.
      * When disabling: only clears the flag (does not re-enable menu tabs or reset useMbCanVhal).
      */
@@ -1951,6 +1966,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     settingsManager.saveLocationSourceSetting(
                         vad.dashing.tbox.esp.LocationSource.ANDROID,
                     )
+                }
+                if (settingsManager.modemSourceFlow.first() == ModemSource.TBOX) {
+                    settingsManager.saveModemSourceSetting(ModemSource.WIFI_HTTP)
                 }
             }
             settingsManager.saveNoTboxConnectSetting(enabled)
