@@ -52,12 +52,17 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.embeddedWidgetSizeHintsMatch
+import vad.dashing.tbox.forceNotifyEmbeddedWidgetSizeOptions
 import vad.dashing.tbox.isExternalAppWidgetCellReady
 import vad.dashing.tbox.mergeAppWidgetSizeOptions
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.refreshEmbeddedAppWidgetHostSize
 
 private const val EXTERNAL_WIDGET_SIZE_OPTIONS_DEBOUNCE_MS = 200L
+
+/** One remount after createView so HostView picks RemoteViews built for the cell size. */
+private const val EXTERNAL_WIDGET_REMOUNT_FALLBACK_MS = 400L
 
 private suspend fun awaitAppWidgetInfo(
     appWidgetManager: AppWidgetManager,
@@ -124,7 +129,10 @@ fun ExternalAppWidgetItem(
     }
     var cellWidthDp by remember(appWidgetId) { mutableIntStateOf(0) }
     var cellHeightDp by remember(appWidgetId) { mutableIntStateOf(0) }
-    LaunchedEffect(appWidgetId, appWidgetInfo, appWidgetHost) {
+    // 0 = first mount; 1 = single remount after settle (createView with cell-sized RemoteViews).
+    var remountAttempt by remember(appWidgetId) { mutableIntStateOf(0) }
+    var wasEditMode by remember(appWidgetId) { mutableStateOf(false) }
+    LaunchedEffect(appWidgetId, appWidgetInfo, appWidgetHost, remountAttempt) {
         val info = appWidgetInfo
         val host = appWidgetHost
         if (
@@ -141,7 +149,11 @@ fun ExternalAppWidgetItem(
             .first { (widthDp, heightDp) -> isExternalAppWidgetCellReady(widthDp, heightDp) }
         val widthDp = cellWidthDp
         val heightDp = cellHeightDp
-        hostView = null
+        // First mount: clear so the tile shows a quiet placeholder. Remount: keep the old
+        // HostView until createView finishes to avoid a blank flash.
+        if (remountAttempt == 0) {
+            hostView = null
+        }
         val merged = mergeAppWidgetSizeOptions(
             appWidgetManager,
             appWidgetId,
@@ -153,7 +165,7 @@ fun ExternalAppWidgetItem(
             appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
         }
         delay(ExternalWidgetHostManager.DEFER_HOST_VIEW_MOUNT_MS)
-        hostView = try {
+        val created = try {
             host.createView(context, appWidgetId, info).apply {
                 setAppWidget(appWidgetId, info)
                 setPadding(0, 0, 0, 0)
@@ -161,6 +173,40 @@ fun ExternalAppWidgetItem(
         } catch (_: Exception) {
             null
         }
+        if (created != null) {
+            hostView = created
+            // Identical-options no-op: pre-createView already wrote the same hints; nudge so the
+            // provider re-emits RemoteViews for this cell instead of stretching the default layout.
+            refreshEmbeddedAppWidgetHostSize(
+                hostView = created,
+                appWidgetManager = appWidgetManager,
+                appWidgetId = appWidgetId,
+                widthDp = widthDp,
+                heightDp = heightDp,
+            )
+            if (remountAttempt == 0) {
+                delay(EXTERNAL_WIDGET_REMOUNT_FALLBACK_MS)
+                remountAttempt = 1
+            }
+        } else if (remountAttempt == 0) {
+            hostView = null
+        }
+    }
+    // Entering panel edit mode often "fixes" stretch via a side-effect size change; do it explicitly.
+    LaunchedEffect(isEditMode, hostView, cellWidthDp, cellHeightDp, appWidgetId) {
+        val enteringEdit = isEditMode && !wasEditMode
+        wasEditMode = isEditMode
+        if (!enteringEdit) return@LaunchedEffect
+        val view = hostView ?: return@LaunchedEffect
+        if (!isExternalAppWidgetCellReady(cellWidthDp, cellHeightDp)) return@LaunchedEffect
+        if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return@LaunchedEffect
+        refreshEmbeddedAppWidgetHostSize(
+            hostView = view,
+            appWidgetManager = appWidgetManager,
+            appWidgetId = appWidgetId,
+            widthDp = cellWidthDp,
+            heightDp = cellHeightDp,
+        )
     }
     var forceSizeOptionsRefresh by remember(appWidgetId, hostView) { mutableStateOf(true) }
 
@@ -334,7 +380,26 @@ fun ExternalAppWidgetItem(
                                             minHeight
                                         )
                                         val existing = appWidgetManager.getAppWidgetOptions(appWidgetId)
-                                        if (forceRefresh || !embeddedWidgetSizeHintsMatch(existing, merged)) {
+                                        if (forceRefresh) {
+                                            // Nudge even when hints already match (common after pre-createView).
+                                            val view = hostView
+                                            if (view != null) {
+                                                refreshEmbeddedAppWidgetHostSize(
+                                                    hostView = view,
+                                                    appWidgetManager = appWidgetManager,
+                                                    appWidgetId = appWidgetId,
+                                                    widthDp = minWidth,
+                                                    heightDp = minHeight,
+                                                )
+                                            } else {
+                                                forceNotifyEmbeddedWidgetSizeOptions(
+                                                    appWidgetManager,
+                                                    appWidgetId,
+                                                    minWidth,
+                                                    minHeight,
+                                                )
+                                            }
+                                        } else if (!embeddedWidgetSizeHintsMatch(existing, merged)) {
                                             appWidgetManager.updateAppWidgetOptions(appWidgetId, merged)
                                         }
                                         if (forceRefresh) {
