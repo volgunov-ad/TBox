@@ -904,7 +904,7 @@
     <string name="settings_gnss_reboot_unknown_module">Сначала опросите модуль GNSS</string>
     <string name="settings_gnss_reboot_um980_offline">Нет связи с UM980 через компаньон</string>
     <string name="settings_mock_location_android_disabled">При источнике Android подмена недоступна (петля)</string>
-    <string name="esp_status_title">Компаньон</string>
+    <string name="esp_status_title">Состояние</string>
     <string name="esp_tab_settings">Настройки</string>
     <string name="esp_tab_data">Данные и отладка</string>
     <string name="esp_tab_ble">BLE</string>
