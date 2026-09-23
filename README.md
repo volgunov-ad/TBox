@@ -87,7 +87,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 
 | Файл | Содержание |
 |------|------------|
-| [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (интерфейс, TBox, настройки) |
+| [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) | Руководство пользователя (коротко: интерфейс, панели, основные шаги) |
 | [docs/ESP32_COMPANION_FLASH_PC_RU.md](docs/ESP32_COMPANION_FLASH_PC_RU.md) | Прошивка компаньона ESP32-S3 с компьютера |
 | [docs/ESP32_COMPANION_WIRING_RU.md](docs/ESP32_COMPANION_WIRING_RU.md) | Схема подключений устройств компаньона (GNSS, компас, CAN, GPIO) |
 | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md) | Обмен с TBox по UDP через tbox-proxy, протокол, модули |

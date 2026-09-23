@@ -273,4 +273,4 @@ flowchart TB
 | CAN-консоль / лог | + MCP2515 (+ EM-409 при 5 V) → CANH/CANL |
 | Автоматизации / виджеты GPIO | + входы 1–4 и/или реле 9–10 |
 
-Связанные документы: протокол [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md), прошивка с ПК [ESP32_COMPANION_FLASH_PC_RU.md](ESP32_COMPANION_FLASH_PC_RU.md), компас [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md), пользовательский гайд [USER_GUIDE_RU.md](USER_GUIDE_RU.md) (вкладка «Компаньон»).
+Связанные документы: протокол [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md), прошивка с ПК [ESP32_COMPANION_FLASH_PC_RU.md](ESP32_COMPANION_FLASH_PC_RU.md), компас [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md), пользовательский гайд [USER_GUIDE_RU.md](USER_GUIDE_RU.md).

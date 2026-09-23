@@ -254,7 +254,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 
 ## См. также
 
-- [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — интерфейс, программы TBox, перезагрузки
+- [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — интерфейс и предотвращение лишних перезагрузок TBox
 - [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) — mbCAN и VHAL на ГУ
 - [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) — формулы пересчёта сырых значений
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки и источники данных
