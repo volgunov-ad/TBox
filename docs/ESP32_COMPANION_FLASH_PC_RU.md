@@ -129,7 +129,7 @@ idf.py -p PORT flash monitor    # кабель в USB-UART
 3. В приложении: пункт меню **«Компаньон»** (если скрыт) → **«Подключаться к компаньону»**.
 4. Должны появиться USB-статус и версия `fw` из `hello`.
 
-Подробнее: [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §«Вкладка Компаньон», [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md).
+Подробнее: [ESP32_COMPANION_RU.md](ESP32_COMPANION_RU.md); кратко в приложении — [USER_GUIDE_RU.md](USER_GUIDE_RU.md).
 
 ## Типичные проблемы
 
