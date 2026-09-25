@@ -491,6 +491,12 @@ object WidgetsRepository {
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_adjust_mode_widget),
         MIRROR_FOLD_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_fold_widget),
         DAY_NIGHT_THEME_WIDGET_DATA_KEY to DataTitle(R.string.data_title_day_night_theme_widget),
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_main_screen_page_selector_widget_horizontal
+        ),
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_main_screen_page_selector_widget_vertical
+        ),
         "frontLeftSeatHeatVentWidget" to DataTitle(R.string.data_title_front_left_seat_heat_vent_widget),
         "frontRightSeatHeatVentWidget" to DataTitle(R.string.data_title_front_right_seat_heat_vent_widget),
         FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY to DataTitle(
@@ -833,6 +839,14 @@ object WidgetsRepository {
             R.string.widget_desc_day_night_theme,
             R.string.widget_actions_day_night_theme,
         ),
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_main_screen_page_selector_horizontal,
+            R.string.widget_actions_main_screen_page_selector,
+        ),
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_main_screen_page_selector_vertical,
+            R.string.widget_actions_main_screen_page_selector,
+        ),
         "frontLeftSeatHeatVentWidget" to WidgetDescription(
             R.string.widget_desc_front_left_seat_heat_vent,
             R.string.widget_actions_seat_heat_vent_dual,
@@ -960,6 +974,13 @@ object WidgetsRepository {
         return keys.filter { isWidgetOfferedWhenNoTbox(it) }
     }
 
+    /**
+     * Types offered in the main «Плитки» tab picker. Main-screen page selectors are only useful
+     * on main-screen / floating panels (they switch [SettingsViewModel] current page).
+     */
+    fun isOfferedOnMainDashboardTab(dataKey: String): Boolean =
+        !isMainScreenPageSelectorWidgetDataKey(dataKey)
+
     @StringRes
     fun getDescriptionResForDataKey(dataKey: String): Int? {
         return widgetDescriptions[dataKey]?.descriptionRes
@@ -1029,6 +1050,8 @@ object WidgetsRepository {
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
             "frontRightSeatHeatVentWidget",
             FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY,
@@ -1153,6 +1176,8 @@ object WidgetsRepository {
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,
             DRIVE_MODE_CYCLE_WIDGET_DATA_KEY,
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
