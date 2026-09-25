@@ -699,7 +699,7 @@ class SettingsManager(private val context: Context) {
         const val UPDATE_TAB_KEY = "update"
 
         /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
-        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
+        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 15
 
         /** Dropdown options 1…[DASHBOARD_PANEL_MAX_GRID_DIMENSION] for panel grid settings. */
         val DASHBOARD_PANEL_GRID_OPTIONS: List<Int> =
