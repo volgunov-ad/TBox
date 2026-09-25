@@ -125,6 +125,7 @@ internal fun AppListDialog(
     if (!visible) return
 
     val context = LocalContext.current
+    val uninstallFailedToast = stringResource(R.string.app_list_uninstall_failed)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val hiddenPackages by settingsViewModel.appListHiddenPackages.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
@@ -243,7 +244,7 @@ internal fun AppListDialog(
                         if (!requestSystemUninstall(context, packageName)) {
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.app_list_uninstall_failed),
+                                uninstallFailedToast,
                                 Toast.LENGTH_SHORT,
                             ).show()
                         }
