@@ -1,6 +1,7 @@
 package vad.dashing.tbox.location
 
 import android.content.Context
+import android.location.Criteria
 import android.location.Location
 import android.location.LocationManager
 import android.location.provider.ProviderProperties
@@ -74,8 +75,8 @@ class LocationMockManager(context: Context) {
             true,  // supportsAltitude
             true,  // supportsSpeed
             true,  // supportsBearing
-            1,     // powerRequirement: 1 = POWER_LOW
-            1,     // accuracy: 1 = ACCURACY_FINE
+            Criteria.POWER_LOW,
+            Criteria.ACCURACY_FINE,
         )
         locationManager.setTestProviderEnabled(providerName, true)
     }

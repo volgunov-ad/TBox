@@ -15,6 +15,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
@@ -1097,13 +1098,12 @@ class BackgroundService : Service() {
         }
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                // API 33+
-                registerReceiver(broadcastReceiver, filter, Context.RECEIVER_EXPORTED)
-            } else {
-                // API < 33
-                registerReceiver(broadcastReceiver, filter)
-            }
+            ContextCompat.registerReceiver(
+                this,
+                broadcastReceiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED,
+            )
 
             Log.d("Background Service", "TboxBroadcastReceiver registered")
         } catch (e: Exception) {
