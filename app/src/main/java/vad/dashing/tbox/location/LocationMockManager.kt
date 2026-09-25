@@ -1,7 +1,6 @@
 package vad.dashing.tbox.location
 
 import android.content.Context
-import android.location.Criteria
 import android.location.Location
 import android.location.LocationManager
 import android.location.provider.ProviderProperties
@@ -64,8 +63,11 @@ class LocationMockManager(context: Context) {
         locationManager.setTestProviderEnabled(providerName, true)
     }
 
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION", "WrongConstant")
     private fun setupMockProviderLegacy(providerName: String) {
+        // IntDef on newer SDK stubs wants ProviderProperties.*; those classes are API 31+
+        // and must not be referenced on this legacy path (HU is API 28). Values match
+        // Criteria.POWER_LOW / Criteria.ACCURACY_FINE (== POWER_USAGE_LOW / ACCURACY_FINE).
         locationManager.addTestProvider(
             providerName,
             false, // requiresNetwork
@@ -75,8 +77,8 @@ class LocationMockManager(context: Context) {
             true,  // supportsAltitude
             true,  // supportsSpeed
             true,  // supportsBearing
-            Criteria.POWER_LOW,
-            Criteria.ACCURACY_FINE,
+            1,     // powerRequirement: POWER_LOW
+            1,     // accuracy: ACCURACY_FINE
         )
         locationManager.setTestProviderEnabled(providerName, true)
     }
