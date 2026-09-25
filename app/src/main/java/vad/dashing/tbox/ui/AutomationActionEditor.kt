@@ -357,12 +357,16 @@ private fun LaunchApplicationFields(
     AutomationDropdown(
         label = "Режим запуска",
         value = action.launchMode,
-        options = AppLauncherLaunchMode.entries,
+        options = AppLauncherLaunchMode.entries.filter {
+            it != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
+                action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+        },
         optionLabel = {
             when (it) {
                 AppLauncherLaunchMode.FULLSCREEN -> "Обычный полноэкранный"
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
                 AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"
+                AppLauncherLaunchMode.VIRTUAL_DISPLAY -> "В виртуальном дисплее (ADB)"
             }
         },
         onValueChange = { onChange(action.copy(launchMode = it)) },

@@ -628,6 +628,13 @@ internal class WidgetSelectionDialogState(
         initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
             initialConfig.launcherFreeformOverlayCrop,
     )
+    var launcherVirtualDisplayId by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayId
+        } else {
+            null
+        },
+    )
     var httpRequestYaml by mutableStateOf(
         if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -1076,6 +1083,14 @@ internal class WidgetSelectionDialogState(
                 selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM &&
                     launcherFreeformOverlayCrop,
+            launcherVirtualDisplayId =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayId?.takeIf { it >= 0 }
+                } else {
+                    null
+                },
             httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
             } else {
@@ -1438,6 +1453,11 @@ internal class WidgetSelectionDialogState(
         }
         launcherFreeformOverlayCrop =
             selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY && cfg.launcherFreeformOverlayCrop
+        launcherVirtualDisplayId = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayId
+        } else {
+            null
+        }
         httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
         } else {
@@ -1662,7 +1682,14 @@ internal class WidgetSelectionDialogState(
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isDriveModeCycleWidgetSelected ->
                 normalizeDriveModeCycleSelection(selectedDriveModes).isNotEmpty()
-            isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            isAppLauncherWidgetSelected -> {
+                val displayId = launcherVirtualDisplayId
+                launcherAppPackage.isNotBlank() &&
+                    (
+                        launcherLaunchMode != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
+                            (displayId != null && displayId >= 0)
+                        )
+            }
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)

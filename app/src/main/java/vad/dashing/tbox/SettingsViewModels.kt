@@ -522,6 +522,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val adbMode = settingsManager.adbModeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "tcp")
 
+    val huVirtualDisplaysJson = settingsManager.huVirtualDisplaysJsonFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    private val _huVirtualDisplaysRefreshing = MutableStateFlow(false)
+    val huVirtualDisplaysRefreshing: StateFlow<Boolean> = _huVirtualDisplaysRefreshing.asStateFlow()
+
     val elm327Enabled = settingsManager.elm327EnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -2204,6 +2210,58 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun consumeHuAdbError() {
         vad.dashing.tbox.adb.HuAdbControl.consumeError()
+    }
+
+    /**
+     * Refreshes the global HU display cache via localhost ADB (restores previous TCP state).
+     * [onDone] runs on the main thread.
+     */
+    fun refreshHuVirtualDisplays(
+        context: android.content.Context,
+        onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome) -> Unit,
+    ) {
+        if (_huVirtualDisplaysRefreshing.value) return
+        viewModelScope.launch {
+            _huVirtualDisplaysRefreshing.value = true
+            val outcome = try {
+                val result = withContext(Dispatchers.IO) {
+                    vad.dashing.tbox.adb.VirtualDisplayAdb.refreshDisplayList(context)
+                }
+                if (result is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success) {
+                    settingsManager.saveHuVirtualDisplaysJson(
+                        vad.dashing.tbox.adb.HuDisplayInfo.listToJson(result.displays),
+                    )
+                }
+                result
+            } finally {
+                _huVirtualDisplaysRefreshing.value = false
+            }
+            onDone(outcome)
+        }
+    }
+
+    /**
+     * Launches [packageName] on [displayId] via localhost ADB; leaves ADB TCP enabled.
+     * [onDone] runs on the main thread.
+     */
+    fun launchAppOnVirtualDisplay(
+        context: android.content.Context,
+        packageName: String,
+        displayId: Int,
+        onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.adb.VirtualDisplayAdb.launchOnDisplay(
+                    context = context,
+                    packageName = packageName,
+                    displayId = displayId,
+                )
+            }
+            // Refresh expert TCP toggle state if we left TCP on.
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+            onDone(outcome)
+        }
     }
 
     fun openPermissionsDialog() {

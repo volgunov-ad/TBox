@@ -61,6 +61,27 @@ class WidgetConfigCodecFreeformTest {
     }
 
     @Test
+    fun roundTrip_virtualDisplayMode() {
+        val original = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
+                launcherAppPackage = "ru.yandex.yandexmaps",
+                launcherLaunchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+                launcherVirtualDisplayId = 5,
+            ),
+        )
+        val json = serializeWidgetConfigs(original)
+        val obj = JSONArray(json).getJSONObject(0)
+        assertEquals("virtual_display", obj.getString("launcherLaunchMode"))
+        assertEquals(5, obj.getInt("launcherVirtualDisplayId"))
+        assertFalse(obj.has("launcherFreeformEnabled"))
+        val cfg = parseWidgetConfigsFromString(json).single()
+        assertEquals(AppLauncherLaunchMode.VIRTUAL_DISPLAY, cfg.launcherLaunchMode)
+        assertEquals(5, cfg.launcherVirtualDisplayId)
+        assertFalse(cfg.launcherFreeformEnabled)
+    }
+
+    @Test
     fun decode_legacyFreeformEnabled_withoutLaunchMode() {
         val json = JSONArray()
             .put(

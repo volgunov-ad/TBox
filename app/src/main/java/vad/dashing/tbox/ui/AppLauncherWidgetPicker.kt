@@ -191,6 +191,7 @@ internal fun AppLauncherWidgetSettingsSection(
                     add(AppLauncherLaunchMode.STOCK_WINDOW)
                 }
                 add(AppLauncherLaunchMode.FREEFORM)
+                add(AppLauncherLaunchMode.VIRTUAL_DISPLAY)
             }
         }
         LaunchedEffect(showStockWindowMode, state.launcherLaunchMode) {
@@ -298,6 +299,11 @@ internal fun AppLauncherWidgetSettingsSection(
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
+            )
+        } else if (state.launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+            VirtualDisplayLaunchSettings(
+                state = state,
+                settingsViewModel = settingsViewModel,
             )
         }
         Text(
@@ -449,4 +455,97 @@ private data class FreeformSideDropdownOption(
     val label: String,
 ) {
     override fun toString(): String = label
+}
+
+private data class VirtualDisplayDropdownOption(
+    val displayId: Int?,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+@Composable
+private fun VirtualDisplayLaunchSettings(
+    state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
+) {
+    val context = LocalContext.current
+    val displaysJson by settingsViewModel.huVirtualDisplaysJson.collectAsStateWithLifecycle()
+    val refreshing by settingsViewModel.huVirtualDisplaysRefreshing.collectAsStateWithLifecycle()
+    val cachedDisplays = remember(displaysJson) {
+        vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(displaysJson)
+    }
+    val noneLabel = stringResource(R.string.widget_app_launcher_virtual_display_none)
+    val options = remember(cachedDisplays, state.launcherVirtualDisplayId, noneLabel) {
+        buildList {
+            add(VirtualDisplayDropdownOption(null, noneLabel))
+            val ids = cachedDisplays.map { it.displayId }.toSet()
+            cachedDisplays.forEach { info ->
+                add(VirtualDisplayDropdownOption(info.displayId, info.label()))
+            }
+            val selected = state.launcherVirtualDisplayId
+            if (selected != null && selected >= 0 && selected !in ids) {
+                add(
+                    VirtualDisplayDropdownOption(
+                        selected,
+                        context.getString(
+                            R.string.widget_app_launcher_virtual_display_unknown,
+                            selected,
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+    val selectedOption = options.firstOrNull { it.displayId == state.launcherVirtualDisplayId }
+        ?: options.first()
+    SettingDropdownGeneric(
+        selectedValue = selectedOption,
+        onValueChange = { state.launcherVirtualDisplayId = it.displayId },
+        text = stringResource(R.string.widget_app_launcher_virtual_display),
+        description = stringResource(R.string.widget_app_launcher_virtual_display_desc),
+        enabled = state.togglesEnabled && !refreshing,
+        options = options,
+        selectorWidth = WidgetDialogDropdownSelectorWidth,
+    )
+    OutlinedButton(
+        onClick = rememberWrappedOnClick {
+            settingsViewModel.refreshHuVirtualDisplays(context) { outcome ->
+                val msg = when (outcome) {
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success ->
+                        context.getString(
+                            R.string.widget_app_launcher_virtual_display_refresh_ok,
+                            outcome.displays.size,
+                        )
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
+                        context.getString(
+                            R.string.widget_app_launcher_virtual_display_refresh_fail,
+                            outcome.reason.name,
+                        )
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        },
+        enabled = state.togglesEnabled && !refreshing,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(
+                if (refreshing) {
+                    R.string.widget_app_launcher_virtual_display_refreshing
+                } else {
+                    R.string.widget_app_launcher_virtual_display_refresh
+                },
+            ),
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    Text(
+        text = stringResource(R.string.widget_app_launcher_virtual_display_hint),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
 }

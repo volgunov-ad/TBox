@@ -230,6 +230,11 @@ fun serializeWidgetConfigsToJsonArray(
                     obj.put("launcherFreeformOverlayCrop", true)
                 }
             }
+            if (launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+                config.launcherVirtualDisplayId?.let { id ->
+                    if (id >= 0) obj.put("launcherVirtualDisplayId", id)
+                }
+            }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
@@ -658,6 +663,15 @@ private fun parseWidgetConfigsFromJsonArray(
                         launcherFreeformOverlayCrop =
                             dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                                 item.optBoolean("launcherFreeformOverlayCrop", false),
+                        launcherVirtualDisplayId =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayId")
+                            ) {
+                                item.optInt("launcherVirtualDisplayId")
+                                    .takeIf { it >= 0 }
+                            } else {
+                                null
+                            },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }

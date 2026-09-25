@@ -242,6 +242,11 @@ class AutomationActionExecutor(
                     if (launched) "Приложение запущено" else "Запуск приложения не удался",
                 )
             }
+
+            AppLauncherLaunchMode.VIRTUAL_DISPLAY ->
+                AutomationActionResult.failure(
+                    "Запуск в виртуальном дисплее доступен только в виджете «Ярлык приложения»",
+                )
         }
     }
 

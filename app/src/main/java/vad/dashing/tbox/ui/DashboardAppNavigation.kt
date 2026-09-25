@@ -133,6 +133,28 @@ internal fun launchAppFromWidget(
                 launchAppFullscreen(context, packageName)
             }
         }
+        AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
+            val displayId = config.launcherVirtualDisplayId
+            if (displayId == null || displayId < 0) return
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                settingsViewModel.launchAppOnVirtualDisplay(
+                    context = context,
+                    packageName = packageName,
+                    displayId = displayId,
+                ) { outcome ->
+                    if (outcome is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed) {
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(
+                                vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
+                                outcome.reason.name,
+                            ),
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            }
+        }
     }
 }
 
