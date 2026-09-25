@@ -71,6 +71,8 @@ internal fun DashboardHttpRequestWidgetItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val invalidYamlTemplate = stringResource(R.string.widget_http_request_invalid_yaml)
+    val requestFailedTemplate = stringResource(R.string.widget_http_request_failed)
     var blockedUntilMs by remember { mutableLongStateOf(0L) }
     var flashColor by remember { mutableStateOf<Color?>(null) }
     var flashDurationMs by remember { mutableIntStateOf(0) }
@@ -117,7 +119,7 @@ internal fun DashboardHttpRequestWidgetItem(
                 }.onFailure { e ->
                     android.widget.Toast.makeText(
                         context,
-                        context.getString(R.string.widget_http_request_invalid_yaml, e.message.orEmpty()),
+                        invalidYamlTemplate.format(e.message.orEmpty()),
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }
@@ -128,7 +130,7 @@ internal fun DashboardHttpRequestWidgetItem(
                 blockedUntilMs = now + HTTP_REQUEST_POST_ACTION_BLOCK_MS
                 android.widget.Toast.makeText(
                     context,
-                    context.getString(R.string.widget_http_request_invalid_yaml, e.message.orEmpty()),
+                    invalidYamlTemplate.format(e.message.orEmpty()),
                     android.widget.Toast.LENGTH_LONG
                 ).show()
                 flashColor = Color(0xFFB3261E)
@@ -147,10 +149,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     is HttpRequestWidgetResult.Failure -> {
                         android.widget.Toast.makeText(
                             context,
-                            context.getString(
-                                R.string.widget_http_request_failed,
-                                httpRequestWidgetErrorMessage(result)
-                            ),
+                            requestFailedTemplate.format(httpRequestWidgetErrorMessage(result)),
                             android.widget.Toast.LENGTH_LONG
                         ).show()
                         flashColor = Color(0xFFB3261E)

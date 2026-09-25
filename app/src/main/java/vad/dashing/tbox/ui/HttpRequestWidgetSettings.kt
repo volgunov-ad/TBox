@@ -71,6 +71,11 @@ internal fun HttpRequestWidgetSettingsSection(
             .resolveActivity(context.packageManager) != null
     }
     var pendingIconKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val iconSavedToast = stringResource(R.string.widget_app_launcher_icon_saved)
+    val iconTooLargeToast = stringResource(R.string.widget_app_launcher_icon_too_large)
+    val iconInvalidToast = stringResource(R.string.widget_app_launcher_icon_invalid)
+    val iconCopyFailedToast = stringResource(R.string.widget_app_launcher_icon_copy_failed)
+    val wallpaperNoPickerToast = stringResource(R.string.settings_main_screen_wallpaper_no_picker)
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -79,14 +84,10 @@ internal fun HttpRequestWidgetSettingsSection(
         if (uri == null) return@rememberLauncherForActivityResult
         settingsViewModel.setCustomHttpRequestIconFromUri(key, uri) { result ->
             val msg = when (result) {
-                SetLauncherAppCustomIconResult.Success ->
-                    context.getString(R.string.widget_app_launcher_icon_saved)
-                SetLauncherAppCustomIconResult.DimensionsTooLarge ->
-                    context.getString(R.string.widget_app_launcher_icon_too_large)
-                SetLauncherAppCustomIconResult.NotImageOrUnreadable ->
-                    context.getString(R.string.widget_app_launcher_icon_invalid)
-                SetLauncherAppCustomIconResult.CopyFailed ->
-                    context.getString(R.string.widget_app_launcher_icon_copy_failed)
+                SetLauncherAppCustomIconResult.Success -> iconSavedToast
+                SetLauncherAppCustomIconResult.DimensionsTooLarge -> iconTooLargeToast
+                SetLauncherAppCustomIconResult.NotImageOrUnreadable -> iconInvalidToast
+                SetLauncherAppCustomIconResult.CopyFailed -> iconCopyFailedToast
                 SetLauncherAppCustomIconResult.InvalidPackage -> null
             }
             if (msg != null) Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -241,7 +242,7 @@ internal fun HttpRequestWidgetSettingsSection(
                     } else {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                            wallpaperNoPickerToast,
                             Toast.LENGTH_LONG
                         ).show()
                     }

@@ -107,7 +107,7 @@ fun UiIconSettingsDialog(
         }
     }
     val localizedEntries = UiIconCatalog.entries.map { entry ->
-        val base = context.getString(entry.nameSource.resourceId)
+        val base = stringResource(entry.nameSource.resourceId)
         val title = entry.nameSource.variantLabel.takeIf { it.isNotBlank() }
             ?.let { "$base — $it" }
             ?: base

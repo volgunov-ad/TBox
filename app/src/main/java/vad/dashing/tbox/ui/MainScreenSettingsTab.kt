@@ -230,6 +230,9 @@ fun MainScreenSettingsTab(
     val canOpenDocumentTree = remember {
         openDocumentTreeIntent.resolveActivity(context.packageManager) != null
     }
+    val wallpaperNoPickerToast = stringResource(R.string.settings_main_screen_wallpaper_no_picker)
+    val wallpaperPathInvalidToast =
+        stringResource(R.string.settings_main_screen_wallpaper_path_invalid)
     fun launchLightWallpaperPicker() {
         if (canOpenDocumentTree) {
             pickWallpaperLightFolder.launch(null)
@@ -245,7 +248,7 @@ fun MainScreenSettingsTab(
             } else {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    wallpaperNoPickerToast,
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -266,7 +269,7 @@ fun MainScreenSettingsTab(
             } else {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                    wallpaperNoPickerToast,
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -493,7 +496,7 @@ fun MainScreenSettingsTab(
                     } else {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            wallpaperPathInvalidToast,
                             Toast.LENGTH_LONG
                         ).show()
                     }
@@ -567,7 +570,7 @@ fun MainScreenSettingsTab(
                     } else {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.settings_main_screen_wallpaper_path_invalid),
+                            wallpaperPathInvalidToast,
                             Toast.LENGTH_LONG
                         ).show()
                     }
