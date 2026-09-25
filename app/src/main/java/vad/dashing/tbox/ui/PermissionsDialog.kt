@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -43,6 +44,7 @@ import vad.dashing.tbox.AppPermissionId
 import vad.dashing.tbox.AppPermissionStatus
 import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.R
+import vad.dashing.tbox.adb.WriteSecureSettingsAutoGrant
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -57,6 +59,7 @@ fun PermissionsDialog(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var refreshTick by remember { mutableIntStateOf(0) }
+    var autoGrantRunning by remember { mutableStateOf(false) }
 
     val runtimeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -83,6 +86,13 @@ fun PermissionsDialog(
     val items = remember(refreshTick) { AppPermissions.snapshot(context) }
     val copiedToast = stringResource(R.string.permissions_adb_copied)
     val openFailedToast = stringResource(R.string.permissions_open_settings_failed)
+    val autoGrantOk = stringResource(R.string.permissions_write_secure_auto_ok)
+    val autoGrantAlready = stringResource(R.string.permissions_write_secure_auto_already)
+    val failTcpEnable = stringResource(R.string.permissions_write_secure_auto_fail_tcp_enable)
+    val failTcpReady = stringResource(R.string.permissions_write_secure_auto_fail_tcp_ready)
+    val failAdb = stringResource(R.string.permissions_write_secure_auto_fail_adb)
+    val failGrant = stringResource(R.string.permissions_write_secure_auto_fail_grant)
+    val failMissing = stringResource(R.string.permissions_write_secure_auto_fail_missing)
 
     fun openSettingsFor(id: AppPermissionId) {
         val intent = AppPermissions.createGrantIntent(context, id) ?: return
@@ -103,6 +113,41 @@ fun PermissionsDialog(
             return
         }
         runtimeLauncher.launch(perms)
+    }
+
+    fun messageFor(outcome: WriteSecureSettingsAutoGrant.Outcome): String {
+        return when (outcome) {
+            WriteSecureSettingsAutoGrant.Outcome.AlreadyGranted -> autoGrantAlready
+            WriteSecureSettingsAutoGrant.Outcome.Success -> autoGrantOk
+            is WriteSecureSettingsAutoGrant.Outcome.Failed -> {
+                val base = when (outcome.reason) {
+                    WriteSecureSettingsAutoGrant.Reason.TcpEnableFailed -> failTcpEnable
+                    WriteSecureSettingsAutoGrant.Reason.TcpNotReady -> failTcpReady
+                    WriteSecureSettingsAutoGrant.Reason.AdbConnectFailed -> failAdb
+                    WriteSecureSettingsAutoGrant.Reason.GrantCommandFailed -> failGrant
+                    WriteSecureSettingsAutoGrant.Reason.StillMissingAfterGrant -> failMissing
+                }
+                if (outcome.detail.isBlank()) base else "$base: ${outcome.detail}"
+            }
+        }
+    }
+
+    fun runAutoGrantWriteSecure() {
+        if (autoGrantRunning) return
+        autoGrantRunning = true
+        scope.launch {
+            val outcome = runCatching {
+                WriteSecureSettingsAutoGrant.grant(context)
+            }.getOrElse { error ->
+                WriteSecureSettingsAutoGrant.Outcome.Failed(
+                    WriteSecureSettingsAutoGrant.Reason.AdbConnectFailed,
+                    error.message ?: error.javaClass.simpleName,
+                )
+            }
+            autoGrantRunning = false
+            refreshTick++
+            Toast.makeText(context, messageFor(outcome), Toast.LENGTH_LONG).show()
+        }
     }
 
     AlertDialog(
@@ -131,6 +176,7 @@ fun PermissionsDialog(
                     }
                     PermissionRow(
                         item = item,
+                        autoGrantRunning = autoGrantRunning,
                         onGrantClick = {
                             when (item.grantKind) {
                                 AppPermissionGrantKind.OpenSettings -> openSettingsFor(item.id)
@@ -146,6 +192,7 @@ fun PermissionsDialog(
                             }
                             Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                         },
+                        onAutoGrantClick = ::runAutoGrantWriteSecure,
                     )
                 }
             }
@@ -161,8 +208,10 @@ fun PermissionsDialog(
 @Composable
 private fun PermissionRow(
     item: AppPermissionStatus,
+    autoGrantRunning: Boolean,
     onGrantClick: () -> Unit,
     onCopyAdbClick: () -> Unit,
+    onAutoGrantClick: () -> Unit,
 ) {
     val statusText = if (item.granted) {
         stringResource(R.string.permissions_status_granted)
@@ -223,8 +272,33 @@ private fun PermissionRow(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 4.dp),
                     )
+                    if (item.id == AppPermissionId.WriteSecureSettings) {
+                        Text(
+                            text = stringResource(R.string.permissions_write_secure_auto_hint),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                        Button(
+                            onClick = rememberWrappedOnClick(onAutoGrantClick),
+                            enabled = !autoGrantRunning,
+                            modifier = Modifier.padding(top = 4.dp),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    if (autoGrantRunning) {
+                                        R.string.permissions_write_secure_auto_grant_running
+                                    } else {
+                                        R.string.permissions_write_secure_auto_grant
+                                    },
+                                ),
+                                style = MaterialTheme.typography.tboxButton,
+                            )
+                        }
+                    }
                     OutlinedButton(
                         onClick = rememberWrappedOnClick(onCopyAdbClick),
+                        enabled = !autoGrantRunning,
                         modifier = Modifier.padding(top = 4.dp),
                     ) {
                         Text(

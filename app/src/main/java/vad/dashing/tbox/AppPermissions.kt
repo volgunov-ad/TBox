@@ -160,8 +160,12 @@ object AppPermissions {
         }
     }
 
+    fun buildWriteSecureSettingsShellCommand(packageName: String): String {
+        return "pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
+    }
+
     fun buildWriteSecureSettingsAdbCommand(packageName: String): String {
-        return "adb shell pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
+        return "adb shell ${buildWriteSecureSettingsShellCommand(packageName)}"
     }
 
     private fun hasWriteSecureSettings(context: Context): Boolean {
