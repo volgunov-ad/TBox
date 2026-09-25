@@ -137,6 +137,14 @@ class WidgetControlAppearanceCodecTest {
             controlAppearanceKindForDataKey(GNSS_DEBUG_WIDGET_DATA_KEY),
         )
         assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        assertEquals(
+            ControlAppearanceKind.Climate,
+            controlAppearanceKindForDataKey(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY),
+        )
+        assertEquals(
             ControlAppearanceKind.Heat,
             controlAppearanceKindForDataKey(ESP_OFF_WIDGET_DATA_KEY),
         )
@@ -242,6 +250,8 @@ class WidgetControlAppearanceCodecTest {
         assertEquals(0, defaultControlPaddingDpForDataKey(MUSIC_BUTTONS_WIDGET_HORIZONTAL_DATA_KEY))
         assertEquals(6, defaultControlPaddingDpForDataKey(HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY))
         assertEquals(6, defaultControlPaddingDpForDataKey(HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY))
+        assertEquals(6, defaultControlPaddingDpForDataKey(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY))
+        assertEquals(6, defaultControlPaddingDpForDataKey(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY))
         assertEquals(4, defaultControlPaddingDpForDataKey("hvacAcWidget"))
         assertEquals(4, defaultControlPaddingDpForDataKey(GNSS_DEBUG_WIDGET_DATA_KEY))
     }

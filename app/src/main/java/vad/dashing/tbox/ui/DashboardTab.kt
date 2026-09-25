@@ -64,6 +64,7 @@ import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
@@ -690,6 +691,7 @@ fun WidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
+                dataKeyFilter = WidgetsRepository::isOfferedOnMainDashboardTab,
                 widgetIndex = widgetIndex,
                 currentWidgetConfigs = currentWidgetConfigs,
                 tileBackgroundPanelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,

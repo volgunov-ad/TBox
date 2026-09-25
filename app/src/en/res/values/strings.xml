@@ -1978,6 +1978,9 @@
     <string name="data_title_trunk_door_widget">Trunk</string>
     <string name="data_title_mirror_adjust_mode_widget">Mirror adjustment</string>
     <string name="data_title_day_night_theme_widget">Day/night theme (dark/light)</string>
+    <string name="data_title_main_screen_page_selector_widget">Main screen page selector</string>
+    <string name="data_title_main_screen_page_selector_widget_horizontal">Main screen page selector (horizontal)</string>
+    <string name="data_title_main_screen_page_selector_widget_vertical">Main screen page selector (vertical)</string>
     <string name="data_title_mirror_fold_widget">Mirror fold</string>
     <string name="widget_hvac_fan_decrease">Decrease fan speed</string>
     <string name="widget_hvac_fan_increase">Increase fan speed</string>
@@ -2205,6 +2208,8 @@
     <string name="widget_desc_mirror_adjust_mode">Mirror adjustment mode status.</string>
     <string name="widget_desc_mirror_fold">Exterior mirror folding control.</string>
     <string name="widget_desc_day_night_theme">Current day or night mode (head unit, or app-only when follow-system is off).</string>
+    <string name="widget_desc_main_screen_page_selector_horizontal">Horizontal main-screen page picker (1…N buttons from the page-count setting).</string>
+    <string name="widget_desc_main_screen_page_selector_vertical">Vertical main-screen page picker (1…N buttons from the page-count setting).</string>
     <string name="widget_desc_front_left_seat_heat_vent">Separate driver seat heating and ventilation controls.</string>
     <string name="widget_desc_front_right_seat_heat_vent">Separate front passenger seat heating and ventilation controls.</string>
     <string name="widget_desc_front_left_seat_heat_vent_single">Driver seat heating and ventilation with one button.</string>
@@ -2286,6 +2291,7 @@
     <string name="widget_actions_mirror_adjust_mode">On a home or floating panel: single tap — enable or disable adjustment mode.</string>
     <string name="widget_actions_mirror_fold">Single tap — fold/unfold (toggles from the last command in this session); double tap — fold only.</string>
     <string name="widget_actions_day_night_theme">Single tap — switch theme; double tap — enable HU auto mode (or re-enable follow-system when follow is off).</string>
+    <string name="widget_actions_main_screen_page_selector">Tap a number — switch the main screen to that page (in window mode — the overlay page; tapping the active page does nothing).</string>
     <string name="widget_actions_seat_heat_vent_dual">Single tap a zone — next level; double tap — maximum level.</string>
     <string name="widget_actions_seat_heat_vent_single">Single tap — next level; double tap — maximum; swipe — switch heating and ventilation.</string>
     <string name="widget_actions_rear_seat_heat">Single tap — next level; double tap — maximum level.</string>

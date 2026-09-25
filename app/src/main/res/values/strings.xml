@@ -1983,6 +1983,9 @@
     <string name="data_title_trunk_door_widget">Багажник</string>
     <string name="data_title_mirror_adjust_mode_widget">Регулировка зеркал</string>
     <string name="data_title_day_night_theme_widget">Тема день/ночь (темная/светлая)</string>
+    <string name="data_title_main_screen_page_selector_widget">Выбор страницы главного экрана</string>
+    <string name="data_title_main_screen_page_selector_widget_horizontal">Выбор страницы главного экрана (горизонтально)</string>
+    <string name="data_title_main_screen_page_selector_widget_vertical">Выбор страницы главного экрана (вертикально)</string>
     <string name="data_title_mirror_fold_widget">Складывание зеркал</string>
     <string name="widget_hvac_fan_decrease">Уменьшить скорость вентилятора</string>
     <string name="widget_hvac_fan_increase">Увеличить скорость вентилятора</string>
@@ -2226,6 +2229,8 @@
     <string name="widget_desc_mirror_adjust_mode">Состояние режима регулировки зеркал.</string>
     <string name="widget_desc_mirror_fold">Управление складыванием наружных зеркал.</string>
     <string name="widget_desc_day_night_theme">Текущий дневной или ночной режим (ГУ или приложение, если слежение выключено).</string>
+    <string name="widget_desc_main_screen_page_selector_horizontal">Горизонтальная панель выбора страницы главного экрана (1…N кнопок по числу страниц в настройках).</string>
+    <string name="widget_desc_main_screen_page_selector_vertical">Вертикальная панель выбора страницы главного экрана (1…N кнопок по числу страниц в настройках).</string>
     <string name="widget_desc_front_left_seat_heat_vent">Раздельное управление обогревом и вентиляцией сиденья водителя.</string>
     <string name="widget_desc_front_right_seat_heat_vent">Раздельное управление обогревом и вентиляцией переднего пассажирского сиденья.</string>
     <string name="widget_desc_front_left_seat_heat_vent_single">Обогрев и вентиляция сиденья водителя одной кнопкой.</string>
@@ -2307,6 +2312,7 @@
     <string name="widget_actions_mirror_adjust_mode">На главной или плавающей панели: одиночное нажатие — включить или выключить режим регулировки.</string>
     <string name="widget_actions_mirror_fold">Одиночное нажатие — сложить/разложить (чередование по последней команде в сессии); двойное — только сложить.</string>
     <string name="widget_actions_day_night_theme">Одиночное нажатие — сменить тему; двойное — авто ГУ (или снова включить слежение за системой, если слежение выключено).</string>
+    <string name="widget_actions_main_screen_page_selector">Нажатие на номер — переключить главную на эту страницу (в оконном режиме — страницу overlay; повторное нажатие на активную страницу ничего не делает).</string>
     <string name="widget_actions_seat_heat_vent_dual">Одиночное нажатие на зону — следующий уровень; двойное — максимальный уровень.</string>
     <string name="widget_actions_seat_heat_vent_single">Одиночное нажатие — следующий уровень; двойное — максимальный; свайп — переключить обогрев и вентиляцию.</string>
     <string name="widget_actions_rear_seat_heat">Одиночное нажатие — следующий уровень; двойное — максимальный уровень.</string>
