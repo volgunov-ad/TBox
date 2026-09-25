@@ -621,6 +621,13 @@
     <string name="settings_permissions_button_desc">Статус специальных доступов Android и подсказки по выдаче через ADB</string>
     <string name="permissions_dialog_title">Разрешения приложения</string>
     <string name="permissions_dialog_intro">Выдайте нужные доступы для используемых функций. Статус обновляется после возврата из настроек Android. Необязательные пункты можно пропустить и открыть этот список позже из «Настройки».</string>
+    <string name="permissions_auto_grant_all">Выдать все автоматически</string>
+    <string name="permissions_auto_grant_all_running">Выдача всех…</string>
+    <string name="permissions_auto_grant_all_hint">Одной сессией localhost ADB выдаёт недостающие доступы из списка (appops / pm grant / notification listener). При необходимости кратко включает ADB TCP :5555 и возвращает его. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
+    <string name="permissions_auto_grant_all_ok">Все разрешения выданы (%1$d)</string>
+    <string name="permissions_auto_grant_all_already">Все разрешения уже выданы</string>
+    <string name="permissions_auto_grant_all_partial">Выдано %1$d, осталось без доступа: %2$d</string>
+    <string name="permissions_auto_grant_all_none">Не удалось выдать ни одного разрешения</string>
     <string name="permissions_status_granted">Выдано</string>
     <string name="permissions_status_missing">Нет</string>
     <string name="permissions_action_grant">Выдать / открыть настройки</string>
