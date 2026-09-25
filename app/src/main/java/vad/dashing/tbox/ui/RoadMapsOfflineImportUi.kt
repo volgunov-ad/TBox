@@ -59,6 +59,9 @@ fun RoadMapsUsbInstallSection(
     val importer = remember(downloadManager) {
         RoadMapOfflineImportManager(context.applicationContext, downloadManager)
     }
+    val nothingSelectedMsg = stringResource(R.string.road_maps_usb_nothing_selected)
+    val doneOkTemplate = stringResource(R.string.road_maps_usb_done_ok)
+    val doneFailTemplate = stringResource(R.string.road_maps_usb_done_fail)
     var catalogUri by remember { mutableStateOf<Uri?>(null) }
     var folderUri by remember { mutableStateOf<Uri?>(null) }
     var catalog by remember { mutableStateOf<RoadMapOfflineCatalog?>(null) }
@@ -156,7 +159,7 @@ fun RoadMapsUsbInstallSection(
                 val catUri = catalogUri
                 if (cat == null || catUri == null) return@RoadMapsOfflineImportDialog
                 if (selected.isEmpty()) {
-                    doneMessage = context.getString(R.string.road_maps_usb_nothing_selected)
+                    doneMessage = nothingSelectedMsg
                     return@RoadMapsOfflineImportDialog
                 }
                 importing = true
@@ -176,12 +179,11 @@ fun RoadMapsUsbInstallSection(
                     progress = null
                     downloadManager.ensureLoaded()
                     refreshStates(cat, catUri, folderUri)
-                    val ok = context.getString(R.string.road_maps_usb_done_ok, summary.succeeded.size)
+                    val ok = doneOkTemplate.format(summary.succeeded.size)
                     val fail = if (summary.failed.isEmpty()) {
                         null
                     } else {
-                        context.getString(
-                            R.string.road_maps_usb_done_fail,
+                        doneFailTemplate.format(
                             summary.failed.joinToString { "${it.first}: ${it.second}" },
                         )
                     }

@@ -80,6 +80,12 @@ private fun RoadMatchTuningDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val toastImportReadError = stringResource(R.string.toast_road_match_tuning_import_read_error)
+    val toastImportOk = stringResource(R.string.toast_road_match_tuning_import_ok)
+    val toastImportErrorFormat = stringResource(R.string.toast_road_match_tuning_import_error_format)
+    val toastImportError = stringResource(R.string.toast_road_match_tuning_import_error)
+    val toastSavedTo = stringResource(R.string.toast_saved_to)
+    val toastExportError = stringResource(R.string.toast_road_match_tuning_export_error)
     val persisted by settingsViewModel.mockRoadMatchTuning.collectAsStateWithLifecycle()
     var tuning by remember(persisted) { mutableStateOf(persisted) }
     var group by remember { mutableStateOf(RoadMatchTuningGroup.COMMON) }
@@ -106,7 +112,7 @@ private fun RoadMatchTuningDialog(
             if (text.isBlank()) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_road_match_tuning_import_read_error),
+                    toastImportReadError,
                     Toast.LENGTH_LONG,
                 ).show()
                 return@launch
@@ -116,16 +122,15 @@ private fun RoadMatchTuningDialog(
                 tuning = result.getOrNull() ?: tuning
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_road_match_tuning_import_ok),
+                    toastImportOk,
                     Toast.LENGTH_LONG,
                 ).show()
             } else {
                 val msg = when (result.exceptionOrNull()?.message) {
                     "unsupported_format", "unsupported_kind", "missing_tuning" ->
-                        context.getString(R.string.toast_road_match_tuning_import_error_format)
+                        toastImportErrorFormat
                     else ->
-                        context.getString(
-                            R.string.toast_road_match_tuning_import_error,
+                        toastImportError.format(
                             result.exceptionOrNull()?.message.orEmpty(),
                         )
                 }
@@ -148,8 +153,7 @@ private fun RoadMatchTuningDialog(
                             if (result.isSuccess) {
                                 Toast.makeText(
                                     context,
-                                    context.getString(
-                                        R.string.toast_saved_to,
+                                    toastSavedTo.format(
                                         result.getOrNull().orEmpty(),
                                     ),
                                     Toast.LENGTH_LONG,
@@ -157,8 +161,7 @@ private fun RoadMatchTuningDialog(
                             } else {
                                 Toast.makeText(
                                     context,
-                                    context.getString(
-                                        R.string.toast_road_match_tuning_export_error,
+                                    toastExportError.format(
                                         result.exceptionOrNull()?.message.orEmpty(),
                                     ),
                                     Toast.LENGTH_LONG,

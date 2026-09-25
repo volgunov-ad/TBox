@@ -92,6 +92,8 @@ fun Elm327TabContent(
     settingsViewModel: SettingsViewModel,
 ) {
     val context = LocalContext.current
+    val toastSavedTo = stringResource(R.string.toast_saved_to)
+    val toastExportError = stringResource(R.string.elm327_dtc_export_error)
     val scope = rememberCoroutineScope()
     val enabled by settingsViewModel.elm327Enabled.collectAsStateWithLifecycle()
     val selectedAddress by settingsViewModel.elm327DeviceAddress.collectAsStateWithLifecycle()
@@ -175,19 +177,13 @@ fun Elm327TabContent(
         if (result.isSuccess) {
             Toast.makeText(
                 context,
-                context.getString(
-                    R.string.toast_saved_to,
-                    result.getOrNull()?.absolutePath.orEmpty(),
-                ),
+                toastSavedTo.format(result.getOrNull()?.absolutePath.orEmpty()),
                 Toast.LENGTH_LONG,
             ).show()
         } else {
             Toast.makeText(
                 context,
-                context.getString(
-                    R.string.elm327_dtc_export_error,
-                    result.exceptionOrNull()?.message.orEmpty(),
-                ),
+                toastExportError.format(result.exceptionOrNull()?.message.orEmpty()),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -706,19 +702,13 @@ fun Elm327TabContent(
                                 if (result.isSuccess) {
                                     Toast.makeText(
                                         context,
-                                        context.getString(
-                                            R.string.toast_saved_to,
-                                            result.getOrNull()?.absolutePath.orEmpty(),
-                                        ),
+                                        toastSavedTo.format(result.getOrNull()?.absolutePath.orEmpty()),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        context.getString(
-                                            R.string.elm327_dtc_export_error,
-                                            result.exceptionOrNull()?.message.orEmpty(),
-                                        ),
+                                        toastExportError.format(result.exceptionOrNull()?.message.orEmpty()),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 }

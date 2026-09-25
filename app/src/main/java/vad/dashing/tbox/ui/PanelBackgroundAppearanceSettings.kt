@@ -65,6 +65,10 @@ internal fun PanelBackgroundAppearanceSettingsSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val toastImageTooLarge = stringResource(R.string.widget_tile_background_image_too_large)
+    val toastImageInvalid = stringResource(R.string.widget_tile_background_image_invalid)
+    val toastImageCopyFailed = stringResource(R.string.widget_tile_background_image_copy_failed)
+    val toastNoPicker = stringResource(R.string.settings_main_screen_wallpaper_no_picker)
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val panelRevision by settingsViewModel.panelBackgroundImageRevision.collectAsStateWithLifecycle()
     val darkSegment = colorThemeSegment == 1
@@ -109,19 +113,19 @@ internal fun PanelBackgroundAppearanceSettingsSection(
                 SetTileBackgroundImageResult.DimensionsTooLarge ->
                     Toast.makeText(
                         context,
-                        context.getString(R.string.widget_tile_background_image_too_large),
+                        toastImageTooLarge,
                         Toast.LENGTH_LONG,
                     ).show()
                 SetTileBackgroundImageResult.NotImageOrUnreadable ->
                     Toast.makeText(
                         context,
-                        context.getString(R.string.widget_tile_background_image_invalid),
+                        toastImageInvalid,
                         Toast.LENGTH_LONG,
                     ).show()
                 SetTileBackgroundImageResult.CopyFailed ->
                     Toast.makeText(
                         context,
-                        context.getString(R.string.widget_tile_background_image_copy_failed),
+                        toastImageCopyFailed,
                         Toast.LENGTH_LONG,
                     ).show()
             }
@@ -187,7 +191,7 @@ internal fun PanelBackgroundAppearanceSettingsSection(
                         } else {
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                                toastNoPicker,
                                 Toast.LENGTH_LONG,
                             ).show()
                         }
