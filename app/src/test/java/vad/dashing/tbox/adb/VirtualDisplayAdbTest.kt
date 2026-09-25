@@ -121,17 +121,17 @@ class VirtualDisplayAdbTest {
             return probes >= openAfterProbes
         }
 
-        override fun runAdbShell(
+        override fun <T> withShellSession(
             host: String,
             port: Int,
-            command: String,
             connectTimeoutMs: Int,
             sessionTimeoutMs: Int,
             keysDir: File,
             clientName: String,
-        ): AdbShellResult {
+            block: (execute: (String) -> AdbShellResult) -> T,
+        ): T = block { command ->
             shellCommands += command
-            return onShell()
+            onShell()
         }
     }
 }

@@ -154,7 +154,6 @@ class WriteSecureSettingsAutoGrantTest {
             tcpEnabled = false,
             openAfterProbes = Int.MAX_VALUE,
         )
-        // setTcp(true) flips tcpEnabled, but port never opens.
         var now = 0L
         val outcome = WriteSecureSettingsAutoGrant.grantWith(
             gateway = gateway,
@@ -243,7 +242,7 @@ class WriteSecureSettingsAutoGrantTest {
         }
         private var probes = 0
 
-        override suspend fun isPermissionGranted(): Boolean = permissionGranted
+        override fun isPermissionGranted(): Boolean = permissionGranted
 
         override suspend fun refreshHuAdb() = Unit
 
@@ -261,17 +260,17 @@ class WriteSecureSettingsAutoGrantTest {
             return probes >= openAfterProbes
         }
 
-        override fun runAdbShell(
+        override fun <T> withShellSession(
             host: String,
             port: Int,
-            command: String,
             connectTimeoutMs: Int,
             sessionTimeoutMs: Int,
             keysDir: File,
             clientName: String,
-        ): AdbShellResult {
+            block: (execute: (String) -> AdbShellResult) -> T,
+        ): T = block { command ->
             shellCommands += command
-            return onShell()
+            onShell()
         }
     }
 }

@@ -88,13 +88,17 @@ internal fun CollapsiblePanelFrame(
 
     Box(modifier = modifier) {
         if (collapsed) {
+            // Collapsed: only the strip color is drawn (no panel/tile underlay behind it).
+            // Fully transparent stripColor → nothing visible; the touch zone still receives gestures.
             Box(modifier = Modifier.fillMaxSize()) {
-                Box(
-                    modifier = Modifier
-                        .align(stripOuterAlignment)
-                        .then(collapseStripSizeModifier(edge, stripThicknessDp))
-                        .background(stripColor),
-                )
+                if (stripColor.alpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(stripOuterAlignment)
+                            .then(collapseStripSizeModifier(edge, stripThicknessDp))
+                            .background(stripColor),
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -111,12 +115,14 @@ internal fun CollapsiblePanelFrame(
             ) {
                 // Strip is flush with the panel's outer edge; the extra touch-zone
                 // thickness (touchZoneDp - stripThicknessDp) grows inward, toward the content.
-                Box(
-                    modifier = Modifier
-                        .align(zoneAlignment)
-                        .then(collapseStripSizeModifier(edge, stripThicknessDp))
-                        .background(stripExpandedColor),
-                )
+                if (stripExpandedColor.alpha > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .align(zoneAlignment)
+                            .then(collapseStripSizeModifier(edge, stripThicknessDp))
+                            .background(stripExpandedColor),
+                    )
+                }
             }
         }
     }

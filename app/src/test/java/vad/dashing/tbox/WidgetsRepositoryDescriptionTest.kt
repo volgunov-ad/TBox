@@ -119,4 +119,45 @@ class WidgetsRepositoryDescriptionTest {
         assertFalse(WidgetsRepository.supportsUseMbCanVhal(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
     }
+
+    @Test
+    fun mainScreenPageSelectorWidgetsAreCatalogedButHiddenFromTilesTab() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY))
+        assertTrue(keys.contains(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY))
+        assertNotNull(
+            WidgetsRepository.getDescriptionResForDataKey(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
+        assertNotNull(
+            WidgetsRepository.getActionsDescriptionResForDataKey(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.isOfferedOnMainDashboardTab(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.isOfferedOnMainDashboardTab(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertTrue(WidgetsRepository.isOfferedOnMainDashboardTab(DAY_NIGHT_THEME_WIDGET_DATA_KEY))
+        assertFalse(
+            WidgetsRepository.supportsShowUnit(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        assertFalse(
+            WidgetsRepository.supportsValueAccuracy(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.requiresTboxConnection(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
+    }
 }

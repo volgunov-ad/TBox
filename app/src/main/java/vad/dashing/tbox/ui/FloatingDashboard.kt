@@ -613,12 +613,16 @@ fun FloatingDashboard(
                         .fillMaxSize()
                         .clip(RoundedCornerShape(panelShapeDp))
                 ) {
-                DashboardPanelBackgroundUnderlay(
-                    relPath = panelBgImagePath,
-                    backgroundColor = panelBgColor,
-                    shapeDp = panelShapeDp,
-                    settingsViewModel = settingsViewModel,
-                )
+                // Collapsed strip must not show panel/tile background through it (or beyond it
+                // when the touch zone is thicker than the strip).
+                if (!effectiveCollapsed) {
+                    DashboardPanelBackgroundUnderlay(
+                        relPath = panelBgImagePath,
+                        backgroundColor = panelBgColor,
+                        shapeDp = panelShapeDp,
+                        settingsViewModel = settingsViewModel,
+                    )
+                }
                 CollapsiblePanelFrame(
                     edge = collapseEdge,
                     collapsed = effectiveCollapsed,

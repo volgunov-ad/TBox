@@ -1,6 +1,5 @@
 package vad.dashing.tbox.adb
 
-import android.content.Context
 import android.os.Build
 import java.io.File
 import java.net.InetSocketAddress
@@ -11,14 +10,16 @@ import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Short-lived localhost ADB shell sessions on the head unit (`127.0.0.1:5555`).
+ * Short-lived localhost ADB session against the head unit's own adbd.
  *
- * Shared by [WriteSecureSettingsAutoGrant] and virtual-display app launches:
- * snapshot ADB TCP → enable if needed → wait for port → connect → one shell command →
- * disconnect → optionally restore previous TCP state.
+ * Snapshot ADB TCP → enable :5555 if needed → wait ≤3s → connect once →
+ * run shell commands → disconnect → optionally restore previous TCP state.
+ *
+ * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], and
+ * [VirtualDisplayAdb].
  */
-object LocalhostAdbSession {
-    private const val TAG = "LOCALHOST_ADB"
+internal object LocalhostAdbSession {
+    private const val TAG = "LOCAL_ADB"
     const val LOCAL_HOST = "127.0.0.1"
     const val TCP_READY_TIMEOUT_MS = 3_000L
     const val TCP_PROBE_TIMEOUT_MS = 250
@@ -30,18 +31,10 @@ object LocalhostAdbSession {
     private val mutex = Mutex()
 
     enum class AfterSession {
-        /** If this session turned TCP on, turn it back off. */
+        /** If this session turned TCP on, turn it back off (permission grants). */
         RestorePreviousTcp,
-        /** Keep ADB TCP enabled after disconnect (even if we enabled it). */
+        /** Keep ADB TCP enabled after disconnect (virtual-display app launch). */
         LeaveTcpEnabled,
-    }
-
-    sealed class Outcome {
-        data class Success(val shell: AdbShellResult) : Outcome()
-        data class Failed(
-            val reason: Reason,
-            val detail: String = "",
-        ) : Outcome()
     }
 
     enum class Reason {
@@ -50,32 +43,29 @@ object LocalhostAdbSession {
         AdbConnectFailed,
     }
 
+    sealed class Result<out T> {
+        data class Ok<T>(val value: T) : Result<T>()
+        data class Failed(val reason: Reason, val detail: String = "") : Result<Nothing>()
+    }
+
     interface Gateway {
         suspend fun refreshHuAdb()
         suspend fun isTcpEnabled(): Boolean
         suspend fun setTcpEnabled(enabled: Boolean)
         fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean
-        fun runAdbShell(
+        fun <T> withShellSession(
             host: String,
             port: Int,
-            command: String,
             connectTimeoutMs: Int,
             sessionTimeoutMs: Int,
             keysDir: File,
             clientName: String,
-        ): AdbShellResult
+            block: (execute: (String) -> AdbShellResult) -> T,
+        ): T
     }
 
-    fun androidGateway(): Gateway = AndroidGateway()
-
-    fun keysDir(context: Context): File = context.applicationContext.filesDir.resolve("adb")
-
-    fun clientName(): String = "tbox@${Build.MODEL}"
-
-    suspend fun execute(
+    suspend fun <T> run(
         gateway: Gateway,
-        command: String,
-        afterSession: AfterSession,
         keysDir: File,
         clientName: String,
         host: String = LOCAL_HOST,
@@ -83,7 +73,9 @@ object LocalhostAdbSession {
         readyTimeoutMs: Long = TCP_READY_TIMEOUT_MS,
         nowMs: () -> Long = { System.currentTimeMillis() },
         delayMs: suspend (Long) -> Unit = { delay(it) },
-    ): Outcome = mutex.withLock {
+        afterSession: AfterSession = AfterSession.RestorePreviousTcp,
+        block: (execute: (String) -> AdbShellResult) -> T,
+    ): Result<T> = mutex.withLock {
         gateway.refreshHuAdb()
         val tcpWasEnabled = gateway.isTcpEnabled()
         var enabledByUs = false
@@ -95,7 +87,7 @@ object LocalhostAdbSession {
                 if (!gateway.isTcpEnabled() &&
                     !gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
                 ) {
-                    return@withLock Outcome.Failed(Reason.TcpEnableFailed)
+                    return@withLock Result.Failed(Reason.TcpEnableFailed)
                 }
                 enabledByUs = true
             }
@@ -111,32 +103,31 @@ object LocalhostAdbSession {
                 delayMs = delayMs,
             )
             if (!ready) {
-                return@withLock Outcome.Failed(Reason.TcpNotReady)
+                return@withLock Result.Failed(Reason.TcpNotReady)
             }
 
-            val shellResult = try {
-                gateway.runAdbShell(
+            try {
+                val value = gateway.withShellSession(
                     host = host,
                     port = port,
-                    command = command,
                     connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
                     sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
                     keysDir = keysDir,
                     clientName = clientName,
+                    block = block,
                 )
+                Result.Ok(value)
             } catch (e: Exception) {
                 TboxRepository.addLog(
                     level = "ERROR",
                     tag = TAG,
-                    message = "ADB connect/shell failed: ${e.message ?: e.javaClass.simpleName}",
+                    message = "ADB session failed: ${e.message ?: e.javaClass.simpleName}",
                 )
-                return@withLock Outcome.Failed(
+                Result.Failed(
                     Reason.AdbConnectFailed,
                     e.message ?: e.javaClass.simpleName,
                 )
             }
-
-            Outcome.Success(shellResult)
         } finally {
             val shouldRestore =
                 enabledByUs && afterSession == AfterSession.RestorePreviousTcp
@@ -161,7 +152,7 @@ object LocalhostAdbSession {
         }
     }
 
-    internal suspend fun waitUntilTcpReady(
+    suspend fun waitUntilTcpReady(
         host: String,
         port: Int,
         readyTimeoutMs: Long,
@@ -180,7 +171,7 @@ object LocalhostAdbSession {
         }
     }
 
-    private class AndroidGateway : Gateway {
+    class AndroidGateway : Gateway {
         override suspend fun refreshHuAdb() {
             HuAdbControl.refresh()
         }
@@ -202,15 +193,15 @@ object LocalhostAdbSession {
             }
         }
 
-        override fun runAdbShell(
+        override fun <T> withShellSession(
             host: String,
             port: Int,
-            command: String,
             connectTimeoutMs: Int,
             sessionTimeoutMs: Int,
             keysDir: File,
             clientName: String,
-        ): AdbShellResult {
+            block: (execute: (String) -> AdbShellResult) -> T,
+        ): T {
             val transport = AdbTcpTransport.connect(
                 host,
                 port,
@@ -223,9 +214,11 @@ object LocalhostAdbSession {
                     clientName,
                 ).use { connection ->
                     connection.connect()
-                    connection.execute(command)
+                    block { command -> connection.execute(command) }
                 }
             }
         }
     }
+
+    fun defaultClientName(): String = "tbox@${Build.MODEL}"
 }

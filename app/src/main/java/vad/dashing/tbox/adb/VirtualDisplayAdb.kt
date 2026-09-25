@@ -8,7 +8,7 @@ import vad.dashing.tbox.TboxRepository
 /**
  * Lists HU displays and launches apps onto a chosen display via localhost ADB.
  *
- * - [refreshDisplayList]: restore ADB TCP to the previous state after the dump (like WSS grant).
+ * - [refreshDisplayList]: restore ADB TCP to the previous state after the dump (like permission grants).
  * - [launchOnDisplay]: leave ADB TCP enabled after `am start --display`.
  */
 object VirtualDisplayAdb {
@@ -44,9 +44,9 @@ object VirtualDisplayAdb {
     suspend fun refreshDisplayList(context: Context): RefreshOutcome {
         val appContext = context.applicationContext
         return refreshDisplayListWith(
-            gateway = LocalhostAdbSession.androidGateway(),
-            keysDir = LocalhostAdbSession.keysDir(appContext),
-            clientName = LocalhostAdbSession.clientName(),
+            gateway = LocalhostAdbSession.AndroidGateway(),
+            keysDir = appContext.filesDir.resolve("adb"),
+            clientName = LocalhostAdbSession.defaultClientName(),
         )
     }
 
@@ -61,10 +61,8 @@ object VirtualDisplayAdb {
         nowMs: () -> Long = { System.currentTimeMillis() },
         delayMs: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
     ): RefreshOutcome {
-        val session = LocalhostAdbSession.execute(
+        val session = LocalhostAdbSession.run(
             gateway = gateway,
-            command = dumpCommand,
-            afterSession = LocalhostAdbSession.AfterSession.RestorePreviousTcp,
             keysDir = keysDir,
             clientName = clientName,
             host = host,
@@ -72,21 +70,25 @@ object VirtualDisplayAdb {
             readyTimeoutMs = readyTimeoutMs,
             nowMs = nowMs,
             delayMs = delayMs,
-        )
+            afterSession = LocalhostAdbSession.AfterSession.RestorePreviousTcp,
+        ) { execute ->
+            execute(dumpCommand)
+        }
         return when (session) {
-            is LocalhostAdbSession.Outcome.Failed ->
+            is LocalhostAdbSession.Result.Failed ->
                 RefreshOutcome.Failed(mapSessionReason(session.reason), session.detail)
-            is LocalhostAdbSession.Outcome.Success -> {
-                val dump = listOf(session.shell.stdout, session.shell.stderr)
+            is LocalhostAdbSession.Result.Ok -> {
+                val shell = session.value
+                val dump = listOf(shell.stdout, shell.stderr)
                     .firstOrNull { it.isNotBlank() }
                     .orEmpty()
-                if (session.shell.exitCode != null &&
-                    session.shell.exitCode != 0 &&
+                if (shell.exitCode != null &&
+                    shell.exitCode != 0 &&
                     dump.isBlank()
                 ) {
                     return RefreshOutcome.Failed(
                         Reason.ShellCommandFailed,
-                        "exit ${session.shell.exitCode}",
+                        "exit ${shell.exitCode}",
                     )
                 }
                 val displays = HuDisplayDumpParser.parse(dump)
@@ -94,7 +96,7 @@ object VirtualDisplayAdb {
                     TboxRepository.addLog(
                         level = "WARN",
                         tag = TAG,
-                        message = "dumpsys display parsed 0 displays (stdout ${session.shell.stdout.length} chars)",
+                        message = "dumpsys display parsed 0 displays (stdout ${shell.stdout.length} chars)",
                     )
                     return RefreshOutcome.Failed(Reason.DumpParseEmpty)
                 }
@@ -120,9 +122,9 @@ object VirtualDisplayAdb {
             return LaunchOutcome.Failed(Reason.InvalidDisplayId)
         }
         return launchOnDisplayWith(
-            gateway = LocalhostAdbSession.androidGateway(),
-            keysDir = LocalhostAdbSession.keysDir(appContext),
-            clientName = LocalhostAdbSession.clientName(),
+            gateway = LocalhostAdbSession.AndroidGateway(),
+            keysDir = appContext.filesDir.resolve("adb"),
+            clientName = LocalhostAdbSession.defaultClientName(),
             displayId = displayId,
             component = component,
         )
@@ -141,10 +143,8 @@ object VirtualDisplayAdb {
         delayMs: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
     ): LaunchOutcome {
         val command = buildAmStartOnDisplayCommand(displayId, component)
-        val session = LocalhostAdbSession.execute(
+        val session = LocalhostAdbSession.run(
             gateway = gateway,
-            command = command,
-            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
             keysDir = keysDir,
             clientName = clientName,
             host = host,
@@ -152,12 +152,15 @@ object VirtualDisplayAdb {
             readyTimeoutMs = readyTimeoutMs,
             nowMs = nowMs,
             delayMs = delayMs,
-        )
+            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+        ) { execute ->
+            execute(command)
+        }
         return when (session) {
-            is LocalhostAdbSession.Outcome.Failed ->
+            is LocalhostAdbSession.Result.Failed ->
                 LaunchOutcome.Failed(mapSessionReason(session.reason), session.detail)
-            is LocalhostAdbSession.Outcome.Success -> {
-                val shell = session.shell
+            is LocalhostAdbSession.Result.Ok -> {
+                val shell = session.value
                 if (shell.exitCode != null && shell.exitCode != 0) {
                     val detail = listOf(shell.stderr, shell.stdout)
                         .firstOrNull { it.isNotBlank() }
