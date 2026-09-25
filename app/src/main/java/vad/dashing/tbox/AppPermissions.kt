@@ -168,14 +168,82 @@ object AppPermissions {
         return "adb shell ${buildWriteSecureSettingsShellCommand(packageName)}"
     }
 
-    private fun hasWriteSecureSettings(context: Context): Boolean {
+    /**
+     * Shell commands that grant [id] via adbd (same set as `scripts/hu-device-test`).
+     * Empty when the id needs a prior `settings get` (notification listener) or is unknown.
+     */
+    fun buildAutoGrantShellCommands(
+        id: AppPermissionId,
+        packageName: String,
+        sdkInt: Int = Build.VERSION.SDK_INT,
+    ): List<String> {
+        return when (id) {
+            AppPermissionId.Overlay -> listOf(
+                "appops set $packageName SYSTEM_ALERT_WINDOW allow",
+            )
+            AppPermissionId.WriteSettings -> listOf(
+                "appops set $packageName WRITE_SETTINGS allow",
+            )
+            AppPermissionId.WriteSecureSettings -> listOf(
+                buildWriteSecureSettingsShellCommand(packageName),
+            )
+            AppPermissionId.UsageStats -> listOf(
+                "appops set $packageName GET_USAGE_STATS allow",
+            )
+            AppPermissionId.NotificationListener -> emptyList()
+            AppPermissionId.InstallPackages -> {
+                if (sdkInt >= Build.VERSION_CODES.O) {
+                    listOf("appops set $packageName REQUEST_INSTALL_PACKAGES allow")
+                } else {
+                    emptyList()
+                }
+            }
+            AppPermissionId.Storage -> {
+                if (sdkInt >= Build.VERSION_CODES.R) {
+                    listOf("appops set $packageName MANAGE_EXTERNAL_STORAGE allow")
+                } else {
+                    listOf(
+                        "pm grant $packageName android.permission.READ_EXTERNAL_STORAGE",
+                        "pm grant $packageName android.permission.WRITE_EXTERNAL_STORAGE",
+                    )
+                }
+            }
+            AppPermissionId.Location -> buildList {
+                add("pm grant $packageName android.permission.ACCESS_FINE_LOCATION")
+                add("pm grant $packageName android.permission.ACCESS_COARSE_LOCATION")
+                if (sdkInt >= Build.VERSION_CODES.Q) {
+                    add("pm grant $packageName android.permission.ACCESS_BACKGROUND_LOCATION")
+                }
+            }
+        }
+    }
+
+    fun notificationListenerComponent(packageName: String): String =
+        "$packageName/$packageName.MediaControlNotificationListenerService"
+
+    /** Empty if [component] is already listed; otherwise a single `settings put` command. */
+    fun buildNotificationListenerEnableCommand(
+        component: String,
+        currentListeners: String,
+    ): String? {
+        val current = currentListeners.trim()
+        if (current.contains(component)) return null
+        val value = if (current.isBlank() || current == "null") {
+            component
+        } else {
+            "$current:$component"
+        }
+        return "settings put secure enabled_notification_listeners $value"
+    }
+
+    fun hasWriteSecureSettings(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.WRITE_SECURE_SETTINGS,
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun hasNotificationListenerAccess(context: Context): Boolean {
+    fun hasNotificationListenerAccess(context: Context): Boolean {
         val expected = ComponentName(
             context,
             MediaControlNotificationListenerService::class.java,
@@ -191,7 +259,7 @@ object AppPermissions {
             .any { it == expected }
     }
 
-    private fun hasStorageAccess(context: Context): Boolean {
+    fun hasStorageAccess(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
@@ -206,7 +274,7 @@ object AppPermissions {
         }
     }
 
-    private fun hasLocationAccess(context: Context): Boolean {
+    fun hasLocationAccess(context: Context): Boolean {
         return ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION,

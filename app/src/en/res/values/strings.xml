@@ -618,6 +618,13 @@
     <string name="settings_permissions_button_desc">Status of Android special access and hints for granting via ADB</string>
     <string name="permissions_dialog_title">App permissions</string>
     <string name="permissions_dialog_intro">Grant the accesses you need for the features you use. Status refreshes after you return from Android settings. Optional items can be skipped; open this list later from Settings.</string>
+    <string name="permissions_auto_grant_all">Grant all automatically</string>
+    <string name="permissions_auto_grant_all_running">Granting all…</string>
+    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener). Briefly enables ADB TCP :5555 if needed and restores it. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_auto_grant_all_ok">All permissions granted (%1$d)</string>
+    <string name="permissions_auto_grant_all_already">All permissions already granted</string>
+    <string name="permissions_auto_grant_all_partial">Granted %1$d, still missing: %2$d</string>
+    <string name="permissions_auto_grant_all_none">Could not grant any permission</string>
     <string name="permissions_status_granted">Granted</string>
     <string name="permissions_status_missing">Missing</string>
     <string name="permissions_action_grant">Grant / open settings</string>
