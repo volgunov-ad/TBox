@@ -154,6 +154,7 @@ fun AutomationsTab(
             apps = apps,
             floatingPanels = floatingPanels,
             pageCount = pageCount,
+            settingsViewModel = settingsViewModel,
             isSaved = snapshot.document.automations.any { it.id == draft?.id },
             onChange = automationViewModel::updateDraft,
             onCancel = automationViewModel::closeEditor,
@@ -502,6 +503,7 @@ private fun AutomationDefinitionEditor(
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
+    settingsViewModel: SettingsViewModel,
     isSaved: Boolean,
     onChange: (AutomationDefinition) -> Unit,
     onCancel: () -> Unit,
@@ -746,6 +748,7 @@ private fun AutomationDefinitionEditor(
                 apps = apps,
                 floatingPanels = floatingPanels,
                 pageCount = pageCount,
+                settingsViewModel = settingsViewModel,
                 onChange = { onChange(definition.copy(actions = it)) },
             )
         }

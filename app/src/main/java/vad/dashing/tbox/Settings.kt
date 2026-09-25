@@ -154,6 +154,11 @@ data class FloatingDashboardWidgetConfig(
      * overlay window (viewport crop) instead of shrinking to the overlay size.
      */
     val launcherFreeformOverlayCrop: Boolean = false,
+    /**
+     * Target [android.view.Display.getDisplayId] when [launcherLaunchMode] is
+     * [AppLauncherLaunchMode.VIRTUAL_DISPLAY]. `null` — not chosen yet.
+     */
+    val launcherVirtualDisplayId: Int? = null,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
@@ -745,6 +750,9 @@ class SettingsManager(private val context: Context) {
         private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
         private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
         private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
+        /** Cached HU display list for app-launcher virtual-display mode (JSON array). */
+        private val HU_VIRTUAL_DISPLAYS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}hu_virtual_displays_json")
         private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
         private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
         private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
@@ -1467,6 +1475,11 @@ class SettingsManager(private val context: Context) {
 
     val adbModeFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ADB_MODE_KEY]?.takeIf { it == "usb" } ?: "tcp" }
+        .distinctUntilChanged()
+
+    /** Cached list from last «Refresh displays» (may be empty until the user refreshes). */
+    val huVirtualDisplaysJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_VIRTUAL_DISPLAYS_JSON_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -3026,6 +3039,16 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[ADB_MODE_KEY] = if (mode == "usb") "usb" else "tcp"
         }
+    }
+
+    suspend fun saveHuVirtualDisplaysJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_VIRTUAL_DISPLAYS_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadHuVirtualDisplaysJson(): String {
+        return context.settingsDataStore.data.first()[HU_VIRTUAL_DISPLAYS_JSON_KEY].orEmpty()
     }
 
     suspend fun saveElm327EnabledSetting(enabled: Boolean) {

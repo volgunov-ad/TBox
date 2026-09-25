@@ -13,7 +13,10 @@ import vad.dashing.tbox.TboxRepository
  * Short-lived localhost ADB session against the head unit's own adbd.
  *
  * Snapshot ADB TCP → enable :5555 if needed → wait ≤3s → connect once →
- * run shell commands → disconnect → restore previous TCP state.
+ * run shell commands → disconnect → optionally restore previous TCP state.
+ *
+ * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], and
+ * [VirtualDisplayAdb].
  */
 internal object LocalhostAdbSession {
     private const val TAG = "LOCAL_ADB"
@@ -26,6 +29,13 @@ internal object LocalhostAdbSession {
     const val ADB_SESSION_TIMEOUT_MS = 25_000
 
     private val mutex = Mutex()
+
+    enum class AfterSession {
+        /** If this session turned TCP on, turn it back off (permission grants). */
+        RestorePreviousTcp,
+        /** Keep ADB TCP enabled after disconnect (virtual-display app launch). */
+        LeaveTcpEnabled,
+    }
 
     enum class Reason {
         TcpEnableFailed,
@@ -63,6 +73,7 @@ internal object LocalhostAdbSession {
         readyTimeoutMs: Long = TCP_READY_TIMEOUT_MS,
         nowMs: () -> Long = { System.currentTimeMillis() },
         delayMs: suspend (Long) -> Unit = { delay(it) },
+        afterSession: AfterSession = AfterSession.RestorePreviousTcp,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): Result<T> = mutex.withLock {
         gateway.refreshHuAdb()
@@ -118,7 +129,9 @@ internal object LocalhostAdbSession {
                 )
             }
         } finally {
-            if (enabledByUs) {
+            val shouldRestore =
+                enabledByUs && afterSession == AfterSession.RestorePreviousTcp
+            if (shouldRestore) {
                 runCatching {
                     gateway.setTcpEnabled(false)
                     gateway.refreshHuAdb()
@@ -129,6 +142,12 @@ internal object LocalhostAdbSession {
                         message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
                     )
                 }
+            } else if (enabledByUs && afterSession == AfterSession.LeaveTcpEnabled) {
+                TboxRepository.addLog(
+                    level = "INFO",
+                    tag = TAG,
+                    message = "ADB TCP left enabled after localhost session",
+                )
             }
         }
     }

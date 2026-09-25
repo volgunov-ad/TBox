@@ -18,12 +18,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
 import vad.dashing.tbox.automation.AUTOMATION_MAX_DELAY_MS
 import vad.dashing.tbox.automation.AutomationAction
@@ -61,6 +63,7 @@ internal fun AutomationActionListEditor(
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
+    settingsViewModel: SettingsViewModel,
     onChange: (List<AutomationAction>) -> Unit,
     modifier: Modifier = Modifier,
     depth: Int = 0,
@@ -77,6 +80,7 @@ internal fun AutomationActionListEditor(
                 apps = apps,
                 floatingPanels = floatingPanels,
                 pageCount = pageCount,
+                settingsViewModel = settingsViewModel,
                 canMoveUp = index > 0,
                 canMoveDown = index < actions.lastIndex,
                 onChange = { changed ->
@@ -112,6 +116,7 @@ private fun AutomationActionEditor(
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
+    settingsViewModel: SettingsViewModel,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onChange: (AutomationAction) -> Unit,
@@ -162,16 +167,18 @@ private fun AutomationActionEditor(
                     apps = apps,
                     floatingPanels = floatingPanels,
                     pageCount = pageCount,
+                    settingsViewModel = settingsViewModel,
                     onChange = onChange,
                     depth = depth,
                 )
 
                 is AutomationAction.CanCommand -> CanCommandFields(action, onChange)
                 is AutomationAction.LaunchApplication -> LaunchApplicationFields(
-                    action,
-                    apps,
-                    pageCount,
-                    onChange,
+                    action = action,
+                    apps = apps,
+                    pageCount = pageCount,
+                    settingsViewModel = settingsViewModel,
+                    onChange = onChange,
                 )
 
                 is AutomationAction.OpenMainScreen -> OpenMainScreenFields(
@@ -198,6 +205,7 @@ private fun IfThenElseFields(
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
     pageCount: Int,
+    settingsViewModel: SettingsViewModel,
     onChange: (AutomationAction) -> Unit,
     depth: Int,
 ) {
@@ -224,6 +232,7 @@ private fun IfThenElseFields(
         apps = apps,
         floatingPanels = floatingPanels,
         pageCount = pageCount,
+        settingsViewModel = settingsViewModel,
         onChange = { onChange(action.copy(thenActions = it)) },
         modifier = Modifier.padding(start = 12.dp),
         depth = depth + 1,
@@ -239,6 +248,7 @@ private fun IfThenElseFields(
         apps = apps,
         floatingPanels = floatingPanels,
         pageCount = pageCount,
+        settingsViewModel = settingsViewModel,
         onChange = { onChange(action.copy(elseActions = it)) },
         modifier = Modifier.padding(start = 12.dp),
         depth = depth + 1,
@@ -346,8 +356,10 @@ private fun LaunchApplicationFields(
     action: AutomationAction.LaunchApplication,
     apps: List<LaunchableAppEntry>,
     pageCount: Int,
+    settingsViewModel: SettingsViewModel,
     onChange: (AutomationAction) -> Unit,
 ) {
+    val context = LocalContext.current
     AutomationPackagePicker(
         label = "Приложение",
         packageName = action.packageName,
@@ -363,6 +375,7 @@ private fun LaunchApplicationFields(
                 AppLauncherLaunchMode.FULLSCREEN -> "Обычный полноэкранный"
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
                 AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"
+                AppLauncherLaunchMode.VIRTUAL_DISPLAY -> "В виртуальном дисплее (ADB)"
             }
         },
         onValueChange = { onChange(action.copy(launchMode = it)) },
@@ -411,6 +424,62 @@ private fun LaunchApplicationFields(
             options = listOf(false, true),
             optionLabel = { if (it) "Обрезать по окну" else "Уместить целиком" },
             onValueChange = { onChange(action.copy(freeformOverlayCrop = it)) },
+        )
+    } else if (action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+        val displaysJson by settingsViewModel.huVirtualDisplaysJson.collectAsStateWithLifecycle()
+        val refreshing by settingsViewModel.huVirtualDisplaysRefreshing.collectAsStateWithLifecycle()
+        val cachedDisplays = remember(displaysJson) {
+            vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(displaysJson)
+        }
+        val options = remember(cachedDisplays, action.virtualDisplayId) {
+            buildList {
+                add(AutomationVirtualDisplayOption(null, "— не выбран —"))
+                val ids = cachedDisplays.map { it.displayId }.toSet()
+                cachedDisplays.forEach { info ->
+                    add(AutomationVirtualDisplayOption(info.displayId, info.label()))
+                }
+                val selected = action.virtualDisplayId
+                if (selected != null && selected >= 0 && selected !in ids) {
+                    add(AutomationVirtualDisplayOption(selected, "Дисплей $selected (нет в кэше)"))
+                }
+            }
+        }
+        val selectedOption = options.firstOrNull { it.id == action.virtualDisplayId }
+            ?: options.first()
+        AutomationDropdown(
+            label = "Виртуальный дисплей",
+            value = selectedOption,
+            options = options,
+            optionLabel = { it.label },
+            onValueChange = { onChange(action.copy(virtualDisplayId = it.id)) },
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick {
+                settingsViewModel.refreshHuVirtualDisplays(context) { outcome ->
+                    val msg = when (outcome) {
+                        is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success ->
+                            "Найдено дисплеев: ${outcome.displays.size}"
+                        is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
+                            "Не удалось обновить список (${outcome.reason.name})"
+                    }
+                    android.widget.Toast.makeText(
+                        context,
+                        msg,
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            },
+            enabled = !refreshing,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            AutomationButtonLabel(
+                if (refreshing) "Обновление…" else "Обновить список дисплеев",
+            )
+        }
+        Text(
+            text = "Список общий с ярлыками. Refresh возвращает TCP; запуск оставляет TCP включённым.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1035,3 +1104,8 @@ private fun FloatingPanelTargetFields(
         }
     }
 }
+
+private data class AutomationVirtualDisplayOption(
+    val id: Int?,
+    val label: String,
+)

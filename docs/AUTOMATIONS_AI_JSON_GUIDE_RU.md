@@ -515,18 +515,22 @@
   "freeformSide": "right",
   "freeformPercent": 50,
   "freeformOverlayPage": null,
-  "freeformOverlayCrop": false
+  "freeformOverlayCrop": false,
+  "virtualDisplayId": null
 }
 ```
 
 - `packageName` нужно получить от пользователя; пример выше не означает, что пакет установлен;
-- `launchMode`: `fullscreen`, `freeform`, `stock_window`;
+- `launchMode`: `fullscreen`, `freeform`, `stock_window`, `virtual_display`;
 - `stock_window` предназначен для штатного оконного лаунчера Adayo;
+- `virtual_display` — запуск через localhost ADB (`am start --display`); нужен `virtualDisplayId`
+  (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI);
+- `virtualDisplayId`: `null` или целое `>= 0`; обязателен при `launchMode = virtual_display`;
 - `freeformSide`: `left`, `right`, `top`, `bottom`;
 - `freeformPercent`: используй только `20`, `30`, `40`, `50`, `60`, `70`, `80` (декодер
   нормализует и другие числа, но полагаться на это нельзя);
 - `freeformOverlayPage`: `null` или `1..5`;
-- неиспользуемые freeform-поля всё равно оставляй с безопасными значениями из примера.
+- неиспользуемые freeform/virtualDisplay-поля всё равно оставляй с безопасными значениями из примера.
 
 ### Открытие страницы главного экрана
 

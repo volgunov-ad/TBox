@@ -1,6 +1,7 @@
 package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
@@ -592,6 +593,15 @@ object AutomationValidator {
             is AutomationAction.LaunchApplication -> {
                 if (action.packageName.isBlank()) {
                     issues += AutomationValidationIssue("$path.packageName", "Выберите приложение")
+                }
+                if (action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+                    val displayId = action.virtualDisplayId
+                    if (displayId == null || displayId < 0) {
+                        issues += AutomationValidationIssue(
+                            "$path.virtualDisplayId",
+                            "Выберите виртуальный дисплей",
+                        )
+                    }
                 }
             }
 
