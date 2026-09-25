@@ -643,6 +643,8 @@ sealed interface AutomationAction {
         val freeformPercent: Int = FreeformLaunchBounds.DEFAULT_PERCENT,
         val freeformOverlayPage: Int? = null,
         val freeformOverlayCrop: Boolean = false,
+        /** Target display for [AppLauncherLaunchMode.VIRTUAL_DISPLAY]; ignored otherwise. */
+        val virtualDisplayId: Int? = null,
     ) : AutomationAction
 
     data class OpenMainScreen(

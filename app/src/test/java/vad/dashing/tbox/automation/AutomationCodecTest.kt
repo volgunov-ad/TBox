@@ -128,6 +128,11 @@ class AutomationCodecTest {
                     freeformOverlayPage = 2,
                     freeformOverlayCrop = true,
                 ),
+                AutomationAction.LaunchApplication(
+                    packageName = "ru.yandex.yandexmaps",
+                    launchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+                    virtualDisplayId = 5,
+                ),
             ),
             runMode = AutomationRunMode.QUEUED,
             maxRuns = 3,

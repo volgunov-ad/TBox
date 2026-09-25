@@ -513,6 +513,7 @@ object AutomationCodec {
                 .put("freeformPercent", action.freeformPercent)
                 .putNullable("freeformOverlayPage", action.freeformOverlayPage)
                 .put("freeformOverlayCrop", action.freeformOverlayCrop)
+                .putNullable("virtualDisplayId", action.virtualDisplayId)
 
             is AutomationAction.OpenMainScreen -> JSONObject()
                 .put(KEY_TYPE, "open_main_screen")
@@ -561,6 +562,7 @@ object AutomationCodec {
                 ),
                 freeformOverlayPage = json.optNullableInt("freeformOverlayPage"),
                 freeformOverlayCrop = json.requireBoolean("freeformOverlayCrop"),
+                virtualDisplayId = json.optNullableInt("virtualDisplayId")?.takeIf { it >= 0 },
             )
 
             "open_main_screen" -> AutomationAction.OpenMainScreen(
