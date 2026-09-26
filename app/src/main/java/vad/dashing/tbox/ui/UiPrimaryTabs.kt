@@ -1629,6 +1629,8 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val floatingPanelsAllowBeyondScreen by
         settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val floatingPanelsShowOnServiceStartDelaySeconds by
+        settingsViewModel.floatingPanelsShowOnServiceStartDelaySeconds.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -1876,6 +1878,24 @@ fun FloatingPanelsSettingsTabContent(
             stringResource(R.string.settings_floating_allow_beyond_screen_title),
             stringResource(R.string.settings_floating_allow_beyond_screen_desc),
             true,
+        )
+        var floatingShowDelayDraft by remember {
+            mutableStateOf(floatingPanelsShowOnServiceStartDelaySeconds.toString())
+        }
+        LaunchedEffect(floatingPanelsShowOnServiceStartDelaySeconds) {
+            floatingShowDelayDraft = floatingPanelsShowOnServiceStartDelaySeconds.toString()
+        }
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_floating_show_on_service_start_delay_title),
+            description = stringResource(R.string.settings_floating_show_on_service_start_delay_desc),
+            draft = floatingShowDelayDraft,
+            onDraftChange = { floatingShowDelayDraft = it },
+            savedValue = floatingPanelsShowOnServiceStartDelaySeconds,
+            minValue = SettingsManager.MIN_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            maxValue = SettingsManager.MAX_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            onCommit = { value ->
+                settingsViewModel.saveFloatingPanelsShowOnServiceStartDelaySeconds(value)
+            },
         )
 
         Text(

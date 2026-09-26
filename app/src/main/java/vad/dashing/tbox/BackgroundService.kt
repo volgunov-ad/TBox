@@ -5901,7 +5901,12 @@ class BackgroundService : Service() {
         periodicJob = scope.launch {
             try {
                 Log.d("1s Job", "Start periodic job")
-                delay(5000)
+                val showDelaySeconds =
+                    settingsManager.floatingPanelsShowOnServiceStartDelaySecondsFlow.first()
+                val showDelayMs = FloatingPanelsShowOnServiceStartDelay.delayMs(showDelaySeconds)
+                if (showDelayMs > 0L) {
+                    delay(showDelayMs)
+                }
                 try {
                     // First show after service start (cold start / permission race).
                     overlayController.ensureFloatingDashboards(floatingDashboards.value)

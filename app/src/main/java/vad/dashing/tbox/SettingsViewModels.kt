@@ -736,6 +736,14 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val floatingPanelsShowOnServiceStartDelaySeconds =
+        settingsManager.floatingPanelsShowOnServiceStartDelaySecondsFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = SettingsManager.DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            )
+
     val floatingDashboardHeight = activeFloatingDashboardConfig
         .map { it.height }
         .stateIn(
@@ -3058,6 +3066,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveFloatingPanelsAllowBeyondScreen(enabled)
+        }
+    }
+
+    fun saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds)
         }
     }
 

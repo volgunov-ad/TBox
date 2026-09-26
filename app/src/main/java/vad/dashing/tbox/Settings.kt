@@ -980,6 +980,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
         private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
+        private val FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY =
+            intPreferencesKey("${KEY_PREFIX}floating_panels_show_on_service_start_delay_seconds")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
@@ -1127,6 +1129,12 @@ class SettingsManager(private val context: Context) {
         const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
         const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
         const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
+        const val MIN_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.MIN_SECONDS
+        const val MAX_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.MAX_SECONDS
+        const val DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.DEFAULT_SECONDS
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
@@ -1895,6 +1903,16 @@ class SettingsManager(private val context: Context) {
 
     val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Seconds to wait after periodic-job start before the first floating-panel ensure. */
+    val floatingPanelsShowOnServiceStartDelaySecondsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            FloatingPanelsShowOnServiceStartDelay.coerceSeconds(
+                preferences[FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY]
+                    ?: DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            )
+        }
         .distinctUntilChanged()
 
     val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
@@ -4349,6 +4367,13 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY] =
+                FloatingPanelsShowOnServiceStartDelay.coerceSeconds(delaySeconds)
         }
     }
 
