@@ -652,7 +652,8 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
                         type == AutomationBuiltinActionType.ADB_SET_TCP,
                     stringValue = when {
-                        type in MEDIA_PACKAGE_ACTION_TYPES ->
+                        type in MEDIA_PACKAGE_ACTION_TYPES ||
+                            type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
                             apps.firstOrNull()?.packageName.orEmpty()
                         type == AutomationBuiltinActionType.WIFI_CONNECT ->
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
@@ -863,6 +864,23 @@ private fun BuiltinActionFields(
             )
             Text(
                 text = stringResource(R.string.automation_adb_shell_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.ADB_FORCE_STOP -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationPackagePicker(
+                label = stringResource(R.string.automation_adb_force_stop_package_label),
+                packageName = action.stringValue,
+                apps = apps,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+            )
+            Text(
+                text = stringResource(R.string.automation_adb_force_stop_hint),
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1103,6 +1121,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
     AutomationBuiltinActionType.ADB_SET_TCP -> "ADB TCP: включить / выключить"
     AutomationBuiltinActionType.ADB_SHELL -> "ADB: выполнить shell-команду"
+    AutomationBuiltinActionType.ADB_FORCE_STOP -> "ADB: остановить приложение"
     AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
     AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"

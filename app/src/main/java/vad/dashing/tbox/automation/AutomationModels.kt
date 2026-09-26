@@ -605,6 +605,12 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * previous TCP only when this session turned it on ([vad.dashing.tbox.adb.LocalhostAdbSession]).
      */
     ADB_SHELL("adb_shell"),
+    /**
+     * Force-stop an application via localhost ADB (`am force-stop <package>`).
+     * [AutomationAction.Builtin.stringValue] is the package name.
+     * Same TCP restore semantics as [ADB_SHELL].
+     */
+    ADB_FORCE_STOP("adb_force_stop"),
     SET_HU_SCREEN_BRIGHTNESS("set_hu_screen_brightness"),
     SET_HU_SCREEN_AUTO_BRIGHTNESS("set_hu_screen_auto_brightness"),
     SHOW_TOAST("show_toast"),

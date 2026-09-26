@@ -76,6 +76,20 @@ class AdbAutomationActionsTest {
         assertTrue(result.message.contains("Permission denial"))
     }
 
+    @Test
+    fun forceStopCommand_enablesAndRestoresLikeShell() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
+        val result = AdbAutomationActions.runShellCommandWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb-fs"),
+            clientName = "test@hu",
+            command = PackageAdbActions.buildForceStopCommand("com.example"),
+        )
+        assertTrue(result.success)
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+        assertEquals(listOf("am force-stop com.example"), gateway.shellCommands)
+    }
+
     private class FakeGateway(
         var tcpEnabled: Boolean,
         var portOpen: Boolean,

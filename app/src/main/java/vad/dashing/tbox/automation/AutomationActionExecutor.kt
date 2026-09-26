@@ -571,6 +571,12 @@ class AutomationActionExecutor(
                 action.stringValue,
             )
 
+        AutomationBuiltinActionType.ADB_FORCE_STOP ->
+            vad.dashing.tbox.adb.AdbAutomationActions.forceStopPackage(
+                appContext,
+                action.stringValue,
+            )
+
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
             if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
                 AutomationActionResult.failure("Яркость экрана ГУ недоступна")
