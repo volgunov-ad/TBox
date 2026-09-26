@@ -17,7 +17,8 @@
 | Ядро (dmesk/kernel) | ~14.7 c |
 | `sys.boot_completed` | ~24 c |
 | Наш процесс поднят системой (биндинг `MediaControlNotificationListenerService`) | **до** BOOT_COMPLETED |
-| BOOT_COMPLETED → `BootCompleteReceiver` → `BackgroundService` FGS | ~24–35 c |
+| NLS `onListenerConnected` → `BackgroundService` FGS (`ACTION_START`, **без** boot-open Main) | сразу после bind NLS (если выдан доступ к уведомлениям) |
+| BOOT_COMPLETED → `BootCompleteReceiver` → `BackgroundService` FGS | ~24–35 c (если FGS уже от NLS — только markPending + эпизод Main, без повторного cold-start пайплайна) |
 | Собственный пайплайн (onCreate 17 мс + trips 33 мс + listeners 93 мс) | **131 мс** |
 | Плавающие панели (`FloatingOverlay.sync`) | +76–80 мс |
 
@@ -25,7 +26,8 @@
 
 Выводы:
 
-- **Ускорять в приложении нечего**: собственный вклад — ~0.2 с, вся задержка определяется прошивкой до `BOOT_COMPLETED`.
+- При выданном Notification Listener: `MediaControlNotificationListenerService.onListenerConnected` поднимает FGS **без** `EXTRA_START_FROM_BOOT` (панели — как при обычном старте службы; Main по boot-эпизоду только после BOOT/QUICKBOOT).
+- **Ускорять в приложении нечего** для ожидания самой прошивки: собственный вклад пайплайна — ~0.2 с; NLS лишь сдвигает старт FGS раньше доставки `BOOT_COMPLETED`, если OEM уже биндит listener.
 - На одной из загрузок `BackgroundService` отсутствовал ~3 мин после boot — вероятная причина: задержка/потеря доставки `BOOT_COMPLETED` из-за crash-storm `com.autopai.iottube` (см. §5). После отключения iottube воспроизведений не было.
 
 ## 3) Sticky-рестарт (`START_STICKY`)
