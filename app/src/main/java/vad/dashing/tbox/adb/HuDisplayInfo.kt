@@ -57,7 +57,8 @@ data class HuDisplayInfo(
 
 /**
  * Parses `dumpsys display` / `dumpsys activity displays` text for display id + size.
- * Keeps all displays (including id 0).
+ * Keeps all displays (including id 0) in the raw catalog; the virtual-display picker
+ * filters out 0 via [VirtualDisplayTargetResolver.forPicker].
  */
 object HuDisplayDumpParser {
     private val displayIdEquals = Regex("""\bmDisplayId\s*=\s*(\d+)""")

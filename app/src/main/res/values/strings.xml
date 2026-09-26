@@ -2058,7 +2058,7 @@
     <string name="widget_app_launcher_mode_virtual_display">В виртуальном дисплее (ADB)</string>
     <string name="widget_app_launcher_stock_window_hint">Приложение откроется в правой панели штатного лаунчера Adayo (ActivityView), как Media или Настройки. TBox уходит на фон. Не все приложения и проекции (CarPlay/AA) корректно работают в этом окне.</string>
     <string name="widget_app_launcher_virtual_display">Виртуальный дисплей</string>
-    <string name="widget_app_launcher_virtual_display_desc">Номер дисплея для am start --display. Список общий для всех ярлыков; обновите его кнопкой ниже.</string>
+    <string name="widget_app_launcher_virtual_display_desc">Целевой дисплей для am start --display (без дисплея 0). Список общий; сохраняется id и разрешение для remap после рестарта лаунчера.</string>
     <string name="widget_app_launcher_virtual_display_none">— не выбран —</string>
     <string name="widget_app_launcher_virtual_display_unknown">Дисплей %1$d (нет в кэше)</string>
     <string name="widget_app_launcher_virtual_display_refresh">Обновить список</string>
@@ -2066,7 +2066,12 @@
     <string name="widget_app_launcher_virtual_display_refresh_ok">Найдено дисплеев: %1$d</string>
     <string name="widget_app_launcher_virtual_display_refresh_fail">Не удалось обновить список (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Не удалось запустить на дисплее (%1$s)</string>
-    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP только если порт ещё не слушает, опрашивает дисплеи через localhost и возвращает TCP лишь если эта сессия его включала. При запуске ярлыка TCP остаётся включённым.</string>
+    <string name="widget_app_launcher_virtual_display_remapped">Дисплей %1$d → %2$d (%3$d×%4$d)</string>
+    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP только если порт ещё не слушает, опрашивает дисплеи через localhost и возвращает TCP лишь если эта сессия его включала. Дисплей 0 (панель) в списке скрыт. При запуске ярлыка id сверяется по сохранённому разрешению, TCP остаётся включённым.</string>
+    <string name="widget_app_launcher_vd_policy">Если приложение уже открыто</string>
+    <string name="widget_app_launcher_vd_policy_desc">Перенос закрывает процесс и открывает на выбранном дисплее; второй экземпляр — как freeform (multiple task).</string>
+    <string name="widget_app_launcher_vd_policy_relocate">Закрыть и открыть на этом дисплее</string>
+    <string name="widget_app_launcher_vd_policy_new_instance">Второй экземпляр (не закрывать)</string>
     <string name="widget_app_launcher_freeform_side">Сторона приложения</string>
     <string name="widget_app_launcher_freeform_side_left">Слева</string>
     <string name="widget_app_launcher_freeform_side_right">Справа</string>

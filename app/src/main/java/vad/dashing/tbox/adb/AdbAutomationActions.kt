@@ -45,7 +45,7 @@ object AdbAutomationActions {
         port: Int = HuAdbControl.TCP_ENABLED_PORT,
         readyTimeoutMs: Long = LocalhostAdbSession.TCP_READY_TIMEOUT_MS,
         nowMs: () -> Long = { System.currentTimeMillis() },
-        delayMs: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
+        delayMs: (suspend (Long) -> Unit)? = null,
     ): AutomationActionResult {
         val trimmed = command.trim()
         if (trimmed.isEmpty()) {

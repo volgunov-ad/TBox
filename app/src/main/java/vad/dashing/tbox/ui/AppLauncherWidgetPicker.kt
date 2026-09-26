@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
@@ -460,6 +461,15 @@ private data class FreeformSideDropdownOption(
 
 private data class VirtualDisplayDropdownOption(
     val displayId: Int?,
+    val widthPx: Int?,
+    val heightPx: Int?,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class VirtualDisplayPolicyDropdownOption(
+    val policy: VirtualDisplayLaunchPolicy,
     val label: String,
 ) {
     override fun toString(): String = label
@@ -476,6 +486,9 @@ private fun VirtualDisplayLaunchSettings(
     val cachedDisplays = remember(displaysJson) {
         vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(displaysJson)
     }
+    val pickerDisplays = remember(cachedDisplays) {
+        vad.dashing.tbox.adb.VirtualDisplayTargetResolver.forPicker(cachedDisplays)
+    }
     val noneLabel = stringResource(R.string.widget_app_launcher_virtual_display_none)
     val unknownDisplayTemplate =
         stringResource(R.string.widget_app_launcher_virtual_display_unknown)
@@ -484,45 +497,105 @@ private fun VirtualDisplayLaunchSettings(
     val refreshFailTemplate =
         stringResource(R.string.widget_app_launcher_virtual_display_refresh_fail)
     val options = remember(
-        cachedDisplays,
+        pickerDisplays,
         state.launcherVirtualDisplayId,
         noneLabel,
         unknownDisplayTemplate,
     ) {
         buildList {
-            add(VirtualDisplayDropdownOption(null, noneLabel))
-            val ids = cachedDisplays.map { it.displayId }.toSet()
-            cachedDisplays.forEach { info ->
-                add(VirtualDisplayDropdownOption(info.displayId, info.label()))
-            }
-            val selected = state.launcherVirtualDisplayId
-            if (selected != null && selected >= 0 && selected !in ids) {
+            add(VirtualDisplayDropdownOption(null, null, null, noneLabel))
+            val ids = pickerDisplays.map { it.displayId }.toSet()
+            pickerDisplays.forEach { info ->
                 add(
                     VirtualDisplayDropdownOption(
-                        selected,
-                        unknownDisplayTemplate.format(selected),
+                        info.displayId,
+                        info.widthPx,
+                        info.heightPx,
+                        info.label(),
                     ),
                 )
             }
+            val selected = state.launcherVirtualDisplayId
+            if (selected != null && selected > 0 && selected !in ids) {
+                val w = state.launcherVirtualDisplayWidthPx
+                val h = state.launcherVirtualDisplayHeightPx
+                val sizeSuffix = if (w != null && h != null && w > 0 && h > 0) {
+                    " · ${w}×${h}"
+                } else {
+                    ""
+                }
+                add(
+                    VirtualDisplayDropdownOption(
+                        selected,
+                        w,
+                        h,
+                        unknownDisplayTemplate.format(selected) + sizeSuffix,
+                    ),
+                )
+            }
+        }
+    }
+    // Remap selected id when cache refreshes and size is known.
+    LaunchedEffect(pickerDisplays, state.launcherVirtualDisplayId, state.launcherVirtualDisplayWidthPx) {
+        val preferredId = state.launcherVirtualDisplayId ?: return@LaunchedEffect
+        val resolved = vad.dashing.tbox.adb.VirtualDisplayTargetResolver.resolve(
+            preferredId = preferredId,
+            preferredWidth = state.launcherVirtualDisplayWidthPx,
+            preferredHeight = state.launcherVirtualDisplayHeightPx,
+            catalog = cachedDisplays,
+        )
+        if (resolved is vad.dashing.tbox.adb.VirtualDisplayTargetResolver.ResolveResult.Matched &&
+            resolved.remapped
+        ) {
+            state.launcherVirtualDisplayId = resolved.display.displayId
+            state.launcherVirtualDisplayWidthPx = resolved.display.widthPx
+            state.launcherVirtualDisplayHeightPx = resolved.display.heightPx
         }
     }
     val selectedOption = options.firstOrNull { it.displayId == state.launcherVirtualDisplayId }
         ?: options.first()
     SettingDropdownGeneric(
         selectedValue = selectedOption,
-        onValueChange = { state.launcherVirtualDisplayId = it.displayId },
+        onValueChange = {
+            state.launcherVirtualDisplayId = it.displayId
+            state.launcherVirtualDisplayWidthPx = it.widthPx
+            state.launcherVirtualDisplayHeightPx = it.heightPx
+        },
         text = stringResource(R.string.widget_app_launcher_virtual_display),
         description = stringResource(R.string.widget_app_launcher_virtual_display_desc),
         enabled = state.togglesEnabled && !refreshing,
         options = options,
         selectorWidth = WidgetDialogDropdownSelectorWidth,
     )
+    val policyOptions = VirtualDisplayLaunchPolicy.entries.map { policy ->
+        VirtualDisplayPolicyDropdownOption(
+            policy = policy,
+            label = stringResource(policy.labelRes),
+        )
+    }
+    val selectedPolicy = policyOptions.firstOrNull {
+        it.policy == state.launcherVirtualDisplayLaunchPolicy
+    } ?: policyOptions.first()
+    SettingDropdownGeneric(
+        selectedValue = selectedPolicy,
+        onValueChange = { state.launcherVirtualDisplayLaunchPolicy = it.policy },
+        text = stringResource(R.string.widget_app_launcher_vd_policy),
+        description = stringResource(R.string.widget_app_launcher_vd_policy_desc),
+        enabled = state.togglesEnabled,
+        options = policyOptions,
+        selectorWidth = WidgetDialogDropdownSelectorWidth,
+    )
     OutlinedButton(
         onClick = rememberWrappedOnClick {
             settingsViewModel.refreshHuVirtualDisplays(context) { outcome ->
                 val msg = when (outcome) {
-                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success ->
-                        refreshOkTemplate.format(outcome.displays.size)
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success -> {
+                        val pickerCount =
+                            vad.dashing.tbox.adb.VirtualDisplayTargetResolver
+                                .forPicker(outcome.displays)
+                                .size
+                        refreshOkTemplate.format(pickerCount)
+                    }
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
                         refreshFailTemplate.format(outcome.reason.name)
                 }

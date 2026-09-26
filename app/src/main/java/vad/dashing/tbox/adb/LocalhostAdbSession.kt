@@ -79,10 +79,11 @@ internal object LocalhostAdbSession {
         port: Int = HuAdbControl.TCP_ENABLED_PORT,
         readyTimeoutMs: Long = TCP_READY_TIMEOUT_MS,
         nowMs: () -> Long = { System.currentTimeMillis() },
-        delayMs: suspend (Long) -> Unit = { delay(it) },
+        delayMs: (suspend (Long) -> Unit)? = null,
         afterSession: AfterSession = AfterSession.RestorePreviousTcp,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): Result<T> = withContext(Dispatchers.IO) {
+        val delayFn: suspend (Long) -> Unit = delayMs ?: { ms -> delay(ms) }
         mutex.withLock {
             gateway.refreshHuAdb()
             val propsSayEnabled = gateway.isTcpEnabled()
@@ -117,7 +118,7 @@ internal object LocalhostAdbSession {
                     probeIntervalMs = TCP_PROBE_INTERVAL_MS,
                     isOpen = gateway::isTcpPortOpen,
                     nowMs = nowMs,
-                    delayMs = delayMs,
+                    delayMs = delayFn,
                 )
                 if (!ready) {
                     return@withLock Result.Failed(Reason.TcpNotReady)

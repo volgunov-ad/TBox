@@ -2250,20 +2250,38 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     /**
      * Launches [packageName] on [displayId] via localhost ADB; leaves ADB TCP enabled.
+     * Remaps by stored [displayWidthPx]×[displayHeightPx] when the launcher recreates VDs.
      * [onDone] runs on the main thread.
      */
     fun launchAppOnVirtualDisplay(
         context: android.content.Context,
         packageName: String,
         displayId: Int,
+        displayWidthPx: Int? = null,
+        displayHeightPx: Int? = null,
+        policy: VirtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.DEFAULT,
         onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome) -> Unit = {},
     ) {
         viewModelScope.launch {
+            val cached = vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(
+                settingsManager.huVirtualDisplaysJsonFlow.first(),
+            )
+            var refreshedDisplays: List<vad.dashing.tbox.adb.HuDisplayInfo>? = null
             val outcome = withContext(Dispatchers.IO) {
                 vad.dashing.tbox.adb.VirtualDisplayAdb.launchOnDisplay(
                     context = context,
                     packageName = packageName,
                     displayId = displayId,
+                    displayWidthPx = displayWidthPx,
+                    displayHeightPx = displayHeightPx,
+                    policy = policy,
+                    cachedDisplays = cached,
+                    onDisplaysRefreshed = { refreshedDisplays = it },
+                )
+            }
+            refreshedDisplays?.let { displays ->
+                settingsManager.saveHuVirtualDisplaysJson(
+                    vad.dashing.tbox.adb.HuDisplayInfo.listToJson(displays),
                 )
             }
             // Refresh expert TCP toggle state if we left TCP on.

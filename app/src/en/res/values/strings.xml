@@ -2045,7 +2045,7 @@
     <string name="widget_app_launcher_mode_virtual_display">On virtual display (ADB)</string>
     <string name="widget_app_launcher_stock_window_hint">Opens the app in the stock Adayo launcher’s right ActivityView panel (like Media or Settings). TBox goes to the background. Not all apps or projections (CarPlay/AA) work well in that window.</string>
     <string name="widget_app_launcher_virtual_display">Virtual display</string>
-    <string name="widget_app_launcher_virtual_display_desc">Display id for am start --display. The list is shared by all shortcuts; refresh it with the button below.</string>
+    <string name="widget_app_launcher_virtual_display_desc">Target display for am start --display (display 0 hidden). Shared list; id and resolution are stored for remap after launcher restart.</string>
     <string name="widget_app_launcher_virtual_display_none">— none —</string>
     <string name="widget_app_launcher_virtual_display_unknown">Display %1$d (not in cache)</string>
     <string name="widget_app_launcher_virtual_display_refresh">Refresh list</string>
@@ -2053,7 +2053,12 @@
     <string name="widget_app_launcher_virtual_display_refresh_ok">Displays found: %1$d</string>
     <string name="widget_app_launcher_virtual_display_refresh_fail">Could not refresh list (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Could not launch on display (%1$s)</string>
-    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP only if the port is not already listening, queries displays over localhost, then restores TCP only if this session turned it on. Shortcut launch leaves TCP enabled.</string>
+    <string name="widget_app_launcher_virtual_display_remapped">Display %1$d → %2$d (%3$d×%4$d)</string>
+    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP only if the port is not already listening, queries displays over localhost, then restores TCP only if this session turned it on. Display 0 (panel) is hidden from the list. Shortcut launch remaps id by stored resolution and leaves TCP enabled.</string>
+    <string name="widget_app_launcher_vd_policy">If the app is already open</string>
+    <string name="widget_app_launcher_vd_policy_desc">Relocate force-stops then opens on the chosen display; second instance uses freeform-style multiple-task flags.</string>
+    <string name="widget_app_launcher_vd_policy_relocate">Close and open on this display</string>
+    <string name="widget_app_launcher_vd_policy_new_instance">Second instance (keep first)</string>
     <string name="widget_app_launcher_freeform_side">App side</string>
     <string name="widget_app_launcher_freeform_side_left">Left</string>
     <string name="widget_app_launcher_freeform_side_right">Right</string>

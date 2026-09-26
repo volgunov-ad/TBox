@@ -516,16 +516,22 @@
   "freeformPercent": 50,
   "freeformOverlayPage": null,
   "freeformOverlayCrop": false,
-  "virtualDisplayId": null
+  "virtualDisplayId": null,
+  "virtualDisplayWidthPx": null,
+  "virtualDisplayHeightPx": null,
+  "virtualDisplayLaunchPolicy": "relocate"
 }
 ```
 
 - `packageName` нужно получить от пользователя; пример выше не означает, что пакет установлен;
 - `launchMode`: `fullscreen`, `freeform`, `stock_window`, `virtual_display`;
 - `stock_window` предназначен для штатного оконного лаунчера Adayo;
-- `virtual_display` — запуск через localhost ADB (`am start --display`); нужен `virtualDisplayId`
-  (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI);
-- `virtualDisplayId`: `null` или целое `>= 0`; обязателен при `launchMode = virtual_display`;
+- `virtual_display` — запуск через localhost ADB (`am start --display`); нужны `virtualDisplayId`
+  (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI; **display 0
+  в пикере скрыт**) и желательно `virtualDisplayWidthPx`/`HeightPx` для remap после рестарта лаунчера;
+- `virtualDisplayId`: `null` или целое `> 0`; обязателен при `launchMode = virtual_display`;
+- `virtualDisplayLaunchPolicy`: `relocate` (по умолчанию: `am force-stop` затем старт) или
+  `new_instance` (`--activity-multiple-task --activity-new-task`);
 - `freeformSide`: `left`, `right`, `top`, `bottom`;
 - `freeformPercent`: используй только `20`, `30`, `40`, `50`, `60`, `70`, `80` (декодер
   нормализует и другие числа, но полагаться на это нельзя);

@@ -3,6 +3,7 @@ package vad.dashing.tbox.automation
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
@@ -514,6 +515,12 @@ object AutomationCodec {
                 .putNullable("freeformOverlayPage", action.freeformOverlayPage)
                 .put("freeformOverlayCrop", action.freeformOverlayCrop)
                 .putNullable("virtualDisplayId", action.virtualDisplayId)
+                .putNullable("virtualDisplayWidthPx", action.virtualDisplayWidthPx)
+                .putNullable("virtualDisplayHeightPx", action.virtualDisplayHeightPx)
+                .put(
+                    "virtualDisplayLaunchPolicy",
+                    action.virtualDisplayLaunchPolicy.storageKey,
+                )
 
             is AutomationAction.OpenMainScreen -> JSONObject()
                 .put(KEY_TYPE, "open_main_screen")
@@ -562,7 +569,14 @@ object AutomationCodec {
                 ),
                 freeformOverlayPage = json.optNullableInt("freeformOverlayPage"),
                 freeformOverlayCrop = json.requireBoolean("freeformOverlayCrop"),
-                virtualDisplayId = json.optNullableInt("virtualDisplayId")?.takeIf { it >= 0 },
+                virtualDisplayId = json.optNullableInt("virtualDisplayId")?.takeIf { it > 0 },
+                virtualDisplayWidthPx =
+                    json.optNullableInt("virtualDisplayWidthPx")?.takeIf { it > 0 },
+                virtualDisplayHeightPx =
+                    json.optNullableInt("virtualDisplayHeightPx")?.takeIf { it > 0 },
+                virtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.fromStorageKey(
+                    json.optString("virtualDisplayLaunchPolicy", ""),
+                ),
             )
 
             "open_main_screen" -> AutomationAction.OpenMainScreen(
