@@ -54,6 +54,7 @@
 | `wifimodem/ZteGoformStatusCmds.kt` | списки `cmd=` для poll |
 | `wifimodem/ZteReqprocStatusMapper.kt` | общий маппинг JSON→`NetState` (поля совместимы) |
 | `WifiModemModel.ZTE_MF79U` | модель в настройках |
+| `WifiModemPoller` | опрос / зеркало net/APN; clear после **2** неудачных опросов (reboot grace ~2 мин) |
 | `app/src/test/resources/wifimodem/zte_mf79u/` | обезличенные фикстуры из HAR |
 
 ## Управление (VERIFIED, HAR `ZTE_MF79U-1.har`)

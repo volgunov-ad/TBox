@@ -312,6 +312,7 @@ class WifiModemPoller(
                 recreateClientsLocked()
             }
             TboxRepository.updateWifiModemLinkStatus(classifyFailure(e))
+            // Outside reboot grace: drop stale net/APN after CLEAR_AFTER_FAILURES misses.
             val clearAllowed = !inRebootRecovery()
             if (clearAllowed && consecutiveFailures >= CLEAR_AFTER_FAILURES) {
                 clearNetMirror()
@@ -406,7 +407,8 @@ class WifiModemPoller(
         const val DEFAULT_POLL_INTERVAL_MS = 5_000L
         const val MIN_POLL_INTERVAL_MS = 2_000L
         const val MAX_POLL_INTERVAL_MS = 60_000L
-        private const val CLEAR_AFTER_FAILURES = 3
+        /** Clear mirrored net/APN after this many consecutive poll failures (not reboot grace). */
+        private const val CLEAR_AFTER_FAILURES = 2
         /** Typical MiFi reboot + Wi‑Fi reassociation window. */
         private const val REBOOT_RECOVERY_GRACE_MS = 120_000L
     }

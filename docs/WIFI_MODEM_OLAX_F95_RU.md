@@ -14,7 +14,7 @@
 |------|-----------|
 | Живая проверка на физическом **Olax F95** | **да** — HAR разобран (статус + data on/off + reboot) |
 | Логин | **VERIFIED** — Base64 пароля |
-| Поллер / UI / управление | в коде (`OlaxReqprocClient`, `WifiModemPoller`) |
+| Поллер / UI / управление | в коде (`OlaxReqprocClient`, `WifiModemPoller`); зеркало net/APN чистится после **2** неудачных опросов подряд (после reboot — grace ~2 мин без clear) |
 
 ## API
 
