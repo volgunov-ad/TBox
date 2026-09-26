@@ -596,7 +596,7 @@ object AutomationValidator {
                 }
                 if (action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
                     val displayId = action.virtualDisplayId
-                    if (displayId == null || displayId < 0) {
+                    if (displayId == null || displayId <= 0) {
                         issues += AutomationValidationIssue(
                             "$path.virtualDisplayId",
                             "Выберите виртуальный дисплей",

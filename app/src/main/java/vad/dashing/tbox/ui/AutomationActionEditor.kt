@@ -26,6 +26,7 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
@@ -433,16 +434,41 @@ private fun LaunchApplicationFields(
         val cachedDisplays = remember(displaysJson) {
             vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(displaysJson)
         }
-        val options = remember(cachedDisplays, action.virtualDisplayId) {
+        val pickerDisplays = remember(cachedDisplays) {
+            vad.dashing.tbox.adb.VirtualDisplayTargetResolver.forPicker(cachedDisplays)
+        }
+        val options = remember(
+            pickerDisplays,
+            action.virtualDisplayId,
+            action.virtualDisplayWidthPx,
+            action.virtualDisplayHeightPx,
+        ) {
             buildList {
-                add(AutomationVirtualDisplayOption(null, "— не выбран —"))
-                val ids = cachedDisplays.map { it.displayId }.toSet()
-                cachedDisplays.forEach { info ->
-                    add(AutomationVirtualDisplayOption(info.displayId, info.label()))
+                add(AutomationVirtualDisplayOption(null, null, null, "— не выбран —"))
+                val ids = pickerDisplays.map { it.displayId }.toSet()
+                pickerDisplays.forEach { info ->
+                    add(
+                        AutomationVirtualDisplayOption(
+                            info.displayId,
+                            info.widthPx,
+                            info.heightPx,
+                            info.label(),
+                        ),
+                    )
                 }
                 val selected = action.virtualDisplayId
-                if (selected != null && selected >= 0 && selected !in ids) {
-                    add(AutomationVirtualDisplayOption(selected, "Дисплей $selected (нет в кэше)"))
+                if (selected != null && selected > 0 && selected !in ids) {
+                    val w = action.virtualDisplayWidthPx
+                    val h = action.virtualDisplayHeightPx
+                    val sizeSuffix = if (w != null && h != null) " · ${w}×${h}" else ""
+                    add(
+                        AutomationVirtualDisplayOption(
+                            selected,
+                            w,
+                            h,
+                            "Дисплей $selected (нет в кэше)$sizeSuffix",
+                        ),
+                    )
                 }
             }
         }
@@ -453,14 +479,40 @@ private fun LaunchApplicationFields(
             value = selectedOption,
             options = options,
             optionLabel = { it.label },
-            onValueChange = { onChange(action.copy(virtualDisplayId = it.id)) },
+            onValueChange = {
+                onChange(
+                    action.copy(
+                        virtualDisplayId = it.id,
+                        virtualDisplayWidthPx = it.widthPx,
+                        virtualDisplayHeightPx = it.heightPx,
+                    ),
+                )
+            },
+        )
+        AutomationDropdown(
+            label = "Если приложение уже открыто",
+            value = action.virtualDisplayLaunchPolicy,
+            options = VirtualDisplayLaunchPolicy.entries,
+            optionLabel = {
+                when (it) {
+                    VirtualDisplayLaunchPolicy.RELOCATE ->
+                        "Закрыть и открыть на этом дисплее"
+                    VirtualDisplayLaunchPolicy.NEW_INSTANCE ->
+                        "Второй экземпляр (не закрывать)"
+                }
+            },
+            onValueChange = { onChange(action.copy(virtualDisplayLaunchPolicy = it)) },
         )
         OutlinedButton(
             onClick = rememberWrappedOnClick {
                 settingsViewModel.refreshHuVirtualDisplays(context) { outcome ->
                     val msg = when (outcome) {
-                        is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success ->
-                            "Найдено дисплеев: ${outcome.displays.size}"
+                        is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success -> {
+                            val count = vad.dashing.tbox.adb.VirtualDisplayTargetResolver
+                                .forPicker(outcome.displays)
+                                .size
+                            "Найдено дисплеев: $count"
+                        }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
                             "Не удалось обновить список (${outcome.reason.name})"
                     }
@@ -479,7 +531,7 @@ private fun LaunchApplicationFields(
             )
         }
         Text(
-            text = "Список общий с ярлыками. Refresh возвращает TCP; запуск оставляет TCP включённым.",
+            text = "Список общий с ярлыками (без дисплея 0). Id сверяется по размеру после рестарта лаунчера. Refresh возвращает TCP; запуск оставляет TCP включённым.",
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1157,5 +1209,7 @@ private fun FloatingPanelTargetFields(
 
 private data class AutomationVirtualDisplayOption(
     val id: Int?,
+    val widthPx: Int?,
+    val heightPx: Int?,
     val label: String,
 )

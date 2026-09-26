@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.util.UUID
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -652,6 +653,11 @@ sealed interface AutomationAction {
         val freeformOverlayCrop: Boolean = false,
         /** Target display for [AppLauncherLaunchMode.VIRTUAL_DISPLAY]; ignored otherwise. */
         val virtualDisplayId: Int? = null,
+        /** Stored resolution for remapping [virtualDisplayId] after launcher recreates VDs. */
+        val virtualDisplayWidthPx: Int? = null,
+        val virtualDisplayHeightPx: Int? = null,
+        val virtualDisplayLaunchPolicy: VirtualDisplayLaunchPolicy =
+            VirtualDisplayLaunchPolicy.DEFAULT,
     ) : AutomationAction
 
     data class OpenMainScreen(

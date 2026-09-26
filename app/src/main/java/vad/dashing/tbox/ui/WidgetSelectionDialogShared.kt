@@ -56,6 +56,7 @@ import android.content.Context
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -635,6 +636,27 @@ internal class WidgetSelectionDialogState(
             null
         },
     )
+    var launcherVirtualDisplayWidthPx by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayWidthPx
+        } else {
+            null
+        },
+    )
+    var launcherVirtualDisplayHeightPx by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayHeightPx
+        } else {
+            null
+        },
+    )
+    var launcherVirtualDisplayLaunchPolicy by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayLaunchPolicy
+        } else {
+            VirtualDisplayLaunchPolicy.DEFAULT
+        },
+    )
     var httpRequestYaml by mutableStateOf(
         if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -1087,9 +1109,33 @@ internal class WidgetSelectionDialogState(
                 if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
-                    launcherVirtualDisplayId?.takeIf { it >= 0 }
+                    launcherVirtualDisplayId?.takeIf { it > 0 }
                 } else {
                     null
+                },
+            launcherVirtualDisplayWidthPx =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayWidthPx?.takeIf { it > 0 }
+                } else {
+                    null
+                },
+            launcherVirtualDisplayHeightPx =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayHeightPx?.takeIf { it > 0 }
+                } else {
+                    null
+                },
+            launcherVirtualDisplayLaunchPolicy =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayLaunchPolicy
+                } else {
+                    VirtualDisplayLaunchPolicy.DEFAULT
                 },
             httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -1458,6 +1504,21 @@ internal class WidgetSelectionDialogState(
         } else {
             null
         }
+        launcherVirtualDisplayWidthPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayWidthPx
+        } else {
+            null
+        }
+        launcherVirtualDisplayHeightPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayHeightPx
+        } else {
+            null
+        }
+        launcherVirtualDisplayLaunchPolicy = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayLaunchPolicy
+        } else {
+            VirtualDisplayLaunchPolicy.DEFAULT
+        }
         httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
         } else {
@@ -1687,7 +1748,7 @@ internal class WidgetSelectionDialogState(
                 launcherAppPackage.isNotBlank() &&
                     (
                         launcherLaunchMode != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
-                            (displayId != null && displayId >= 0)
+                            (displayId != null && displayId > 0)
                         )
             }
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess

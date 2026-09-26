@@ -245,24 +245,41 @@ class AutomationActionExecutor(
 
             AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
                 val displayId = action.virtualDisplayId
-                if (displayId == null || displayId < 0) {
+                if (displayId == null || displayId <= 0) {
                     return AutomationActionResult.failure("Не выбран виртуальный дисплей")
                 }
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
                     return AutomationActionResult.failure("Приложение не установлено")
                 }
                 awaitAfterWindowModeExit { true }
+                val cached = vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(
+                    settingsManager.huVirtualDisplaysJsonFlow.first(),
+                )
+                var refreshedDisplays: List<vad.dashing.tbox.adb.HuDisplayInfo>? = null
                 val outcome = withContext(Dispatchers.IO) {
                     vad.dashing.tbox.adb.VirtualDisplayAdb.launchOnDisplay(
                         context = appContext,
                         packageName = packageName,
                         displayId = displayId,
+                        displayWidthPx = action.virtualDisplayWidthPx,
+                        displayHeightPx = action.virtualDisplayHeightPx,
+                        policy = action.virtualDisplayLaunchPolicy,
+                        cachedDisplays = cached,
+                        onDisplaysRefreshed = { refreshedDisplays = it },
+                    )
+                }
+                refreshedDisplays?.let { displays ->
+                    settingsManager.saveHuVirtualDisplaysJson(
+                        vad.dashing.tbox.adb.HuDisplayInfo.listToJson(displays),
                     )
                 }
                 vad.dashing.tbox.adb.HuAdbControl.refresh()
                 when (outcome) {
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success ->
-                        AutomationActionResult.ok("Приложение запущено на дисплее $displayId")
+                        AutomationActionResult.ok(
+                            "Приложение запущено на дисплее ${outcome.displayId}" +
+                                if (outcome.remapped) " (было $displayId)" else "",
+                        )
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
                         AutomationActionResult.failure(
                             outcome.detail.ifBlank { outcome.reason.name },

@@ -234,6 +234,18 @@ fun serializeWidgetConfigsToJsonArray(
                 config.launcherVirtualDisplayId?.let { id ->
                     if (id >= 0) obj.put("launcherVirtualDisplayId", id)
                 }
+                config.launcherVirtualDisplayWidthPx?.let { w ->
+                    config.launcherVirtualDisplayHeightPx?.let { h ->
+                        if (w > 0 && h > 0) {
+                            obj.put("launcherVirtualDisplayWidthPx", w)
+                            obj.put("launcherVirtualDisplayHeightPx", h)
+                        }
+                    }
+                }
+                val policy = config.launcherVirtualDisplayLaunchPolicy
+                if (policy != VirtualDisplayLaunchPolicy.DEFAULT) {
+                    obj.put("launcherVirtualDisplayLaunchPolicy", policy.storageKey)
+                }
             }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
@@ -671,6 +683,32 @@ private fun parseWidgetConfigsFromJsonArray(
                                     .takeIf { it >= 0 }
                             } else {
                                 null
+                            },
+                        launcherVirtualDisplayWidthPx =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayWidthPx")
+                            ) {
+                                item.optInt("launcherVirtualDisplayWidthPx")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
+                        launcherVirtualDisplayHeightPx =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayHeightPx")
+                            ) {
+                                item.optInt("launcherVirtualDisplayHeightPx")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
+                        launcherVirtualDisplayLaunchPolicy =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                                VirtualDisplayLaunchPolicy.fromStorageKey(
+                                    item.optString("launcherVirtualDisplayLaunchPolicy", ""),
+                                )
+                            } else {
+                                VirtualDisplayLaunchPolicy.DEFAULT
                             },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
