@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -474,6 +475,32 @@ private fun LaunchApplicationFields(
         }
         val selectedOption = options.firstOrNull { it.id == action.virtualDisplayId }
             ?: options.first()
+        // Remap selected id when the shared display cache refreshes (same as widget picker).
+        LaunchedEffect(
+            pickerDisplays,
+            action.virtualDisplayId,
+            action.virtualDisplayWidthPx,
+            action.virtualDisplayHeightPx,
+        ) {
+            val preferredId = action.virtualDisplayId ?: return@LaunchedEffect
+            val resolved = vad.dashing.tbox.adb.VirtualDisplayTargetResolver.resolve(
+                preferredId = preferredId,
+                preferredWidth = action.virtualDisplayWidthPx,
+                preferredHeight = action.virtualDisplayHeightPx,
+                catalog = cachedDisplays,
+            )
+            if (resolved is vad.dashing.tbox.adb.VirtualDisplayTargetResolver.ResolveResult.Matched &&
+                resolved.remapped
+            ) {
+                onChange(
+                    action.copy(
+                        virtualDisplayId = resolved.display.displayId,
+                        virtualDisplayWidthPx = resolved.display.widthPx,
+                        virtualDisplayHeightPx = resolved.display.heightPx,
+                    ),
+                )
+            }
+        }
         AutomationDropdown(
             label = "Виртуальный дисплей",
             value = selectedOption,

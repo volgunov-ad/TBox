@@ -7,6 +7,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 
 @RunWith(RobolectricTestRunner::class)
@@ -132,6 +133,9 @@ class AutomationCodecTest {
                     packageName = "ru.yandex.yandexmaps",
                     launchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
                     virtualDisplayId = 5,
+                    virtualDisplayWidthPx = 1320,
+                    virtualDisplayHeightPx = 856,
+                    virtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.NEW_INSTANCE,
                 ),
             ),
             runMode = AutomationRunMode.QUEUED,
@@ -144,6 +148,79 @@ class AutomationCodecTest {
 
         assertEquals(document, decoded)
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
+        val vd = decoded.automations.single().actions
+            .filterIsInstance<AutomationAction.LaunchApplication>()
+            .single { it.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY }
+        assertEquals(5, vd.virtualDisplayId)
+        assertEquals(1320, vd.virtualDisplayWidthPx)
+        assertEquals(856, vd.virtualDisplayHeightPx)
+        assertEquals(VirtualDisplayLaunchPolicy.NEW_INSTANCE, vd.virtualDisplayLaunchPolicy)
+    }
+
+    @Test
+    fun launchApplication_virtualDisplay_defaultsRelocateAndOmitsLegacyDisplay0() {
+        val json = """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"vd",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{
+                  "type":"launch_application",
+                  "packageName":"com.example",
+                  "launchMode":"virtual_display",
+                  "freeformSide":"right",
+                  "freeformPercent":50,
+                  "freeformOverlayPage":null,
+                  "freeformOverlayCrop":false,
+                  "virtualDisplayId":5,
+                  "virtualDisplayWidthPx":1320,
+                  "virtualDisplayHeightPx":856
+                }],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+        """.trimIndent()
+        val decoded = AutomationCodec.decode(json).getOrThrow()
+        val action = decoded.automations.single().actions.single()
+            as AutomationAction.LaunchApplication
+        assertEquals(VirtualDisplayLaunchPolicy.RELOCATE, action.virtualDisplayLaunchPolicy)
+        assertEquals(5, action.virtualDisplayId)
+        assertEquals(1320, action.virtualDisplayWidthPx)
+        assertEquals(856, action.virtualDisplayHeightPx)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun launchApplication_virtualDisplay_rejectsDisplay0() {
+        val action = AutomationAction.LaunchApplication(
+            packageName = "com.example",
+            launchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+            virtualDisplayId = 0,
+        )
+        val issues = AutomationValidator.validate(
+            AutomationDocument(
+                automations = listOf(
+                    AutomationDefinition(
+                        id = "a",
+                        name = "x",
+                        triggers = listOf(
+                            AutomationTrigger.SystemEvent(
+                                id = "t",
+                                event = AutomationSystemEvent.MENU_OPENED,
+                            ),
+                        ),
+                        actions = listOf(action),
+                    ),
+                ),
+            ),
+        )
+        assertTrue(issues.any { it.path.contains("virtualDisplayId") })
     }
 
     @Test
