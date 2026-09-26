@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.app.Service
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
@@ -33,7 +34,7 @@ import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.MainScreenWindowOverlayLayout
 import kotlin.math.roundToInt
-
+import java.util.concurrent.atomic.AtomicLong
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
  * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
@@ -128,6 +129,13 @@ internal class FloatingOverlayController(
     /** Panels temporarily closed by the «hide other floating panels» tile; cleared on restore or global suspend. */
     private val hiddenFloatingPanelIds = mutableSetOf<String>()
     private var usageStatsOverlayRules: UsageStatsOverlayRulesState = UsageStatsOverlayRulesState.EMPTY
+    /**
+     * ElapsedRealtime after which new floating overlays may be mounted (service-start quiet period).
+     * [Long.MAX_VALUE] until [armFirstShowGate]; hide/close paths are never gated.
+     */
+    private val firstShowAllowedAfterElapsedMs = AtomicLong(
+        FloatingPanelsShowOnServiceStartDelay.UNARMED_ALLOWED_AFTER_ELAPSED_MS,
+    )
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
     private val overlaySyncMutex = Mutex()
@@ -197,6 +205,35 @@ internal class FloatingOverlayController(
             }
         }
     }
+
+    /**
+     * Arms the service-start quiet period. Call once per startup pipeline **before**
+     * Usage Stats / settings listeners can sync floating panels.
+     */
+    fun armFirstShowGate(allowedAfterElapsedRealtimeMs: Long) {
+        firstShowAllowedAfterElapsedMs.set(allowedAfterElapsedRealtimeMs)
+    }
+
+    /** Resets the gate to blocked (e.g. service stop) until the next [armFirstShowGate]. */
+    fun disarmFirstShowGate() {
+        firstShowAllowedAfterElapsedMs.set(
+            FloatingPanelsShowOnServiceStartDelay.UNARMED_ALLOWED_AFTER_ELAPSED_MS,
+        )
+    }
+
+    fun isFirstShowAllowed(
+        nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
+    ): Boolean = FloatingPanelsShowOnServiceStartDelay.isAllowed(
+        nowElapsedRealtimeMs,
+        firstShowAllowedAfterElapsedMs.get(),
+    )
+
+    fun remainingMsUntilFirstShowAllowed(
+        nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
+    ): Long = FloatingPanelsShowOnServiceStartDelay.remainingDelayMs(
+        nowElapsedRealtimeMs,
+        firstShowAllowedAfterElapsedMs.get(),
+    )
 
     fun suspendOverlays() {
         try {
@@ -845,6 +882,7 @@ internal class FloatingOverlayController(
     }
 
     private fun shouldQueueOverlayOpen(config: FloatingDashboardConfig, myPkg: String): Boolean {
+        if (!isFirstShowAllowed()) return false
         if (overlayOffIds.contains(config.id)) return false
         return true
     }
@@ -853,6 +891,7 @@ internal class FloatingOverlayController(
         config: FloatingDashboardConfig,
         myPkg: String,
     ): Boolean {
+        if (!isFirstShowAllowed()) return false
         if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) return false
         if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
             overlayOffIds.remove(config.id)
@@ -885,6 +924,10 @@ internal class FloatingOverlayController(
         )
 
     private suspend fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
+        if (!isFirstShowAllowed()) {
+            TboxRepository.addLog("DEBUG", TAG, "Deferred until service-start delay: ${config.id}")
+            return
+        }
         ensureWindowManager()
         if (windowManager == null) return
 

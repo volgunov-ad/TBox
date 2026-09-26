@@ -1825,6 +1825,7 @@ class BackgroundService : Service() {
             createNotification("Stop service")
         }
         startForeground(NOTIFICATION_ID, notification)
+        overlayController.disarmFirstShowGate()
         overlayController.closeAllOverlays()
         servicePhase = ServiceLifecyclePhase.Idle
     }
@@ -2081,6 +2082,18 @@ class BackgroundService : Service() {
                     startForeground(NOTIFICATION_ID, notification)
                 }
                 timingMark("startup_tbox_connected")
+                val showDelaySeconds =
+                    settingsManager.floatingPanelsShowOnServiceStartDelaySecondsFlow.first()
+                val showAllowedAfter = FloatingPanelsShowOnServiceStartDelay.allowedAfterElapsedRealtimeMs(
+                    delaySeconds = showDelaySeconds,
+                    nowElapsedRealtimeMs = SystemClock.elapsedRealtime(),
+                )
+                overlayController.armFirstShowGate(showAllowedAfter)
+                TboxRepository.addLog(
+                    "INFO",
+                    "Floating",
+                    "First-show gate armed delay=${showDelaySeconds}s",
+                )
                 startSettingsListener()
                 // ESP companion USB starts only when [espCompanionEnabled] is on (see settings listener).
                 // Load persisted DR calibration before the mock job reads it.
@@ -5901,14 +5914,12 @@ class BackgroundService : Service() {
         periodicJob = scope.launch {
             try {
                 Log.d("1s Job", "Start periodic job")
-                val showDelaySeconds =
-                    settingsManager.floatingPanelsShowOnServiceStartDelaySecondsFlow.first()
-                val showDelayMs = FloatingPanelsShowOnServiceStartDelay.delayMs(showDelaySeconds)
-                if (showDelayMs > 0L) {
-                    delay(showDelayMs)
+                val remainingMs = overlayController.remainingMsUntilFirstShowAllowed()
+                if (remainingMs > 0L) {
+                    delay(remainingMs)
                 }
                 try {
-                    // First show after service start (cold start / permission race).
+                    // First show after service-start quiet period (cold start / permission race).
                     overlayController.ensureFloatingDashboards(floatingDashboards.value)
                 } catch (e: CancellationException) {
                     throw e

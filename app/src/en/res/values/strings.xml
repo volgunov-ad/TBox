@@ -369,7 +369,7 @@
     <string name="settings_floating_allow_beyond_screen_title">Move beyond screen edges</string>
     <string name="settings_floating_allow_beyond_screen_desc">In edit mode, panels can be moved past the screen edges. Off by default; not included in themes</string>
     <string name="settings_floating_show_on_service_start_delay_title">Floating panels show delay, sec</string>
-    <string name="settings_floating_show_on_service_start_delay_desc">After the background service starts, before the first panel show (0–60; default 3)</string>
+    <string name="settings_floating_show_on_service_start_delay_desc">After the background service starts, panels stay hidden for this many seconds (0–60; default 3). Applies to normal show and Usage Stats</string>
     <string name="settings_main_screen_layout_snap_step_title">Grid step: %1$d dp</string>
     <string name="settings_main_screen_layout_snap_step_desc">Snap step for moving and resizing panels and corner buttons (1–50 dp). Snapping applies only when “Snap to grid” is on; not included in themes</string>
     <string name="settings_main_screen_layout_snap_enabled_title">Snap to grid</string>
