@@ -621,9 +621,29 @@ class AutomationValidatorTest {
                     type = AutomationBuiltinActionType.ADB_SHELL,
                     stringValue = "getprop persist.adb.tcp.port",
                 ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "com.example.app",
+                ),
             ),
         )
         assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun adbForceStopBlankPackage_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "  ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
     }
 
     @Test

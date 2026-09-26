@@ -625,6 +625,7 @@
 | Wi‑Fi модем: перезагрузка | `wifi_modem_reboot` | значения по умолчанию; нужен источник модема Wi‑Fi HTTP |
 | ADB TCP | `adb_set_tcp` | `boolValue`: включить/выключить ADB TCP на порту 5555 (`HuAdbControl`; перезапуск adbd) |
 | ADB shell | `adb_shell` | `stringValue`: непустая shell-команда до 4000 символов. Краткоживущая localhost-сессия `127.0.0.1:5555`: включает TCP только если порт ещё не слушает; после команды **возвращает TCP только если эта сессия его включала** (как auto-grant). Тот же уровень доступа, что shell во вкладке ADB |
+| ADB force-stop | `adb_force_stop` | `stringValue`: имя пакета. Выполняет `am force-stop <package>` через localhost ADB с той же семантикой восстановления TCP, что `adb_shell`. Гарантии остановки нет |
 | Яркость экрана ГУ | `set_hu_screen_brightness` | `intValue`: `1..10` (как Car Settings → Экраны; не HUD/ICM) |
 | Автояркость экрана ГУ | `set_hu_screen_auto_brightness` | `boolValue`: включить/выключить |
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
@@ -640,7 +641,8 @@ Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Есл
 
 `adb_shell` — произвольная shell-команда через localhost ADB (тот же уровень, что вкладка ADB).
 TCP :5555 включают только если порт ещё не слушает; после команды возвращают только если
-эта сессия его включала. `adb_set_tcp` пишет props и перезапускает adbd напрямую.
+эта сессия его включала. `adb_force_stop` — то же для `am force-stop <package>`
+(`stringValue` = пакет). `adb_set_tcp` пишет props и перезапускает adbd напрямую.
 
 ---
 

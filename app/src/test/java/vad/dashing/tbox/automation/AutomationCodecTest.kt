@@ -452,6 +452,10 @@ class AutomationCodecTest {
                     stringValue = "pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS",
                 ),
                 AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "com.example.app",
+                ),
+                AutomationAction.Builtin(
                     type = AutomationBuiltinActionType.ADB_SET_TCP,
                     boolValue = false,
                 ),

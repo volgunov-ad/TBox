@@ -744,6 +744,15 @@ object AutomationValidator {
                 }
             }
 
+            AutomationBuiltinActionType.ADB_FORCE_STOP -> {
+                if (action.stringValue.trim().isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите приложение",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
             AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
             -> {

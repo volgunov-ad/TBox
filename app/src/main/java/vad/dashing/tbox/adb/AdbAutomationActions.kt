@@ -26,6 +26,14 @@ object AdbAutomationActions {
         )
     }
 
+    suspend fun forceStopPackage(context: Context, packageName: String): AutomationActionResult {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) {
+            return AutomationActionResult.failure("Выберите приложение")
+        }
+        return runShellCommand(context, PackageAdbActions.buildForceStopCommand(pkg))
+    }
+
     suspend fun runShellCommand(context: Context, command: String): AutomationActionResult {
         val appContext = context.applicationContext
         return runShellCommandWith(
