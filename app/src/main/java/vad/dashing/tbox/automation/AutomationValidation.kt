@@ -729,6 +729,21 @@ object AutomationValidator {
                 }
             }
 
+            AutomationBuiltinActionType.ADB_SHELL -> {
+                val command = action.stringValue.trim()
+                if (command.isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Введите shell-команду",
+                    )
+                } else if (command.length > vad.dashing.tbox.adb.AdbAutomationActions.MAX_SHELL_COMMAND_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Команда длиннее ${vad.dashing.tbox.adb.AdbAutomationActions.MAX_SHELL_COMMAND_CHARS} символов",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
             AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
             -> {

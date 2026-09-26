@@ -545,6 +545,15 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.WIFI_MODEM_REBOOT ->
             serviceActions.rebootWifiModem()
 
+        AutomationBuiltinActionType.ADB_SET_TCP ->
+            vad.dashing.tbox.adb.AdbAutomationActions.setTcpEnabled(action.boolValue)
+
+        AutomationBuiltinActionType.ADB_SHELL ->
+            vad.dashing.tbox.adb.AdbAutomationActions.runShellCommand(
+                appContext,
+                action.stringValue,
+            )
+
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
             if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
                 AutomationActionResult.failure("Яркость экрана ГУ недоступна")

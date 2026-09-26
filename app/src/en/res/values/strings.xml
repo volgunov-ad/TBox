@@ -118,6 +118,9 @@
     <string name="toast_automations_imported">Imported automations: %1$d</string>
     <string name="toast_automations_import_read_error">Could not read the automation file</string>
     <string name="automations_invalid_rule_hint">Invalid; other rules still run. Fix: %1$s</string>
+    <string name="automation_adb_set_tcp_hint">Toggles ADB TCP on port 5555 on the head unit (same as the settings switch). Restarts adbd.</string>
+    <string name="automation_adb_shell_command_label">Shell command</string>
+    <string name="automation_adb_shell_hint">Same privilege level as the ADB tab shell. If :5555 is not listening yet, briefly enables ADB TCP, runs the command, and restores TCP only if this session turned it on. Does not disable an already-open port.</string>
     <string name="tab_settings">Settings</string>
     <string name="tab_floating_panels_settings">Floating panels settings</string>
     <string name="tab_themes">Themes</string>

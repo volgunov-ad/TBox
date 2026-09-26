@@ -17,8 +17,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.R
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
@@ -568,7 +570,8 @@ private fun BuiltinActionFields(
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
                         type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
                         type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
-                        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                        type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
+                        type == AutomationBuiltinActionType.ADB_SET_TCP,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ->
                             apps.firstOrNull()?.packageName.orEmpty()
@@ -741,6 +744,51 @@ private fun BuiltinActionFields(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        AutomationBuiltinActionType.ADB_SET_TCP -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "ADB TCP (:5555)",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = stringResource(R.string.automation_adb_set_tcp_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.ADB_SHELL -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = {
+                    onChange(
+                        action.copy(
+                            stringValue = it.take(
+                                vad.dashing.tbox.adb.AdbAutomationActions.MAX_SHELL_COMMAND_CHARS,
+                            ),
+                        ),
+                    )
+                },
+                label = stringResource(R.string.automation_adb_shell_command_label),
+                singleLine = false,
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.automation_adb_shell_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> AutomationIntField(
             label = "Яркость экрана ГУ (1–10)",
@@ -974,6 +1022,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.WIFI_DISCONNECT -> "Wi-Fi: отключиться от сети"
     AutomationBuiltinActionType.WIFI_MODEM_SET_DATA -> "Wi‑Fi модем: данные вкл/выкл"
     AutomationBuiltinActionType.WIFI_MODEM_REBOOT -> "Wi‑Fi модем: перезагрузка"
+    AutomationBuiltinActionType.ADB_SET_TCP -> "ADB TCP: включить / выключить"
+    AutomationBuiltinActionType.ADB_SHELL -> "ADB: выполнить shell-команду"
     AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
     AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> "Автояркость экрана ГУ"
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"

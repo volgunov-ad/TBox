@@ -361,6 +361,33 @@ class AutomationCodecTest {
     }
 
     @Test
+    fun roundTrip_preservesAdbTcpAndShellBuiltins() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "adb-1",
+            name = "ADB",
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = false,
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
     fun roundTrip_preservesHuInternetStatusTriggerAndCondition() {
         val definition = AutomationDefinition.newDraft().copy(
             id = "hu-net-1",

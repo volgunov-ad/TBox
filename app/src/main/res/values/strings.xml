@@ -118,6 +118,9 @@
     <string name="toast_automations_imported">Импортировано автоматизаций: %1$d</string>
     <string name="toast_automations_import_read_error">Не удалось прочитать файл автоматизации</string>
     <string name="automations_invalid_rule_hint">Недействительна, остальные правила работают. Исправьте: %1$s</string>
+    <string name="automation_adb_set_tcp_hint">Переключает ADB TCP на порту 5555 на головном устройстве (как тоггл в настройках). Перезапускает adbd.</string>
+    <string name="automation_adb_shell_command_label">Shell-команда</string>
+    <string name="automation_adb_shell_hint">Тот же уровень доступа, что shell во вкладке ADB. Если :5555 ещё не слушает — кратко включает ADB TCP, выполняет команду и возвращает TCP только если эта сессия его включала. Уже открытый порт не выключает.</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_floating_panels_settings">Настройки плавающих панелей</string>
     <string name="tab_themes">Темы</string>
