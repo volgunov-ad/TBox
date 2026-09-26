@@ -80,6 +80,10 @@ fun AutomationsTab(
     var confirmReset by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val importReadErrorToast = stringResource(R.string.toast_automations_import_read_error)
+    val importedTemplate = stringResource(R.string.toast_automations_imported)
+    val savedToTemplate = stringResource(R.string.toast_saved_to)
+    val saveErrorTemplate = stringResource(R.string.toast_save_error)
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -95,7 +99,7 @@ fun AutomationsTab(
             if (text.isBlank()) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_automations_import_read_error),
+                    importReadErrorToast,
                     Toast.LENGTH_LONG,
                 ).show()
                 return@launch
@@ -104,10 +108,7 @@ fun AutomationsTab(
             if (result.isSuccess) {
                 Toast.makeText(
                     context,
-                    context.getString(
-                        R.string.toast_automations_imported,
-                        result.getOrNull() ?: 0,
-                    ),
+                    importedTemplate.format(result.getOrNull() ?: 0),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -186,17 +187,13 @@ fun AutomationsTab(
                             if (result.isSuccess) {
                                 Toast.makeText(
                                     context,
-                                    context.getString(
-                                        R.string.toast_saved_to,
-                                        result.getOrNull().orEmpty(),
-                                    ),
+                                    savedToTemplate.format(result.getOrNull().orEmpty()),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             } else {
                                 Toast.makeText(
                                     context,
-                                    context.getString(
-                                        R.string.toast_save_error,
+                                    saveErrorTemplate.format(
                                         result.exceptionOrNull()?.message.orEmpty(),
                                     ),
                                     Toast.LENGTH_LONG,

@@ -59,10 +59,10 @@ object MockLocationUtils {
         }
     }
 
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION", "WrongConstant")
     private fun canAddTestProviderLegacy(locationManager: LocationManager, providerName: String): Boolean {
         return try {
-            // Для старых версий используем старый API
+            // IntDef wants ProviderProperties.* (API 31+); keep literals on legacy path (API 28 HU).
             locationManager.addTestProvider(
                 providerName,
                 false, // requiresNetwork
@@ -72,8 +72,8 @@ object MockLocationUtils {
                 true,  // supportsAltitude
                 true,  // supportsSpeed
                 true,  // supportsBearing
-                1,     // powerRequirement: 1 = POWER_LOW
-                1      // accuracy: 1 = ACCURACY_FINE
+                1,     // powerRequirement: POWER_LOW
+                1,     // accuracy: ACCURACY_FINE
             )
             locationManager.removeTestProvider(providerName)
             true

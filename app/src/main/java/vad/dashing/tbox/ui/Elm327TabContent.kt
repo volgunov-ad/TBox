@@ -92,6 +92,8 @@ fun Elm327TabContent(
     settingsViewModel: SettingsViewModel,
 ) {
     val context = LocalContext.current
+    val toastSavedTo = stringResource(R.string.toast_saved_to)
+    val toastExportError = stringResource(R.string.elm327_dtc_export_error)
     val scope = rememberCoroutineScope()
     val enabled by settingsViewModel.elm327Enabled.collectAsStateWithLifecycle()
     val selectedAddress by settingsViewModel.elm327DeviceAddress.collectAsStateWithLifecycle()
@@ -175,19 +177,13 @@ fun Elm327TabContent(
         if (result.isSuccess) {
             Toast.makeText(
                 context,
-                context.getString(
-                    R.string.toast_saved_to,
-                    result.getOrNull()?.absolutePath.orEmpty(),
-                ),
+                toastSavedTo.format(result.getOrNull()?.absolutePath.orEmpty()),
                 Toast.LENGTH_LONG,
             ).show()
         } else {
             Toast.makeText(
                 context,
-                context.getString(
-                    R.string.elm327_dtc_export_error,
-                    result.exceptionOrNull()?.message.orEmpty(),
-                ),
+                toastExportError.format(result.exceptionOrNull()?.message.orEmpty()),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -203,7 +199,11 @@ fun Elm327TabContent(
                         val device = intent.getBluetoothDeviceExtra() ?: return
                         val address = device.address.orEmpty()
                         if (address.isBlank()) return
-                        val name = runCatching { device.name }.getOrNull().orEmpty()
+                        val name = if (canReadBluetoothDeviceName(context)) {
+                            bluetoothDeviceNameOrEmpty(device)
+                        } else {
+                            ""
+                        }
                         if (foundDevices.none { it.address.equals(address, ignoreCase = true) }) {
                             foundDevices += BtDeviceEntry(name = name, address = address)
                         }
@@ -706,19 +706,13 @@ fun Elm327TabContent(
                                 if (result.isSuccess) {
                                     Toast.makeText(
                                         context,
-                                        context.getString(
-                                            R.string.toast_saved_to,
-                                            result.getOrNull()?.absolutePath.orEmpty(),
-                                        ),
+                                        toastSavedTo.format(result.getOrNull()?.absolutePath.orEmpty()),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 } else {
                                     Toast.makeText(
                                         context,
-                                        context.getString(
-                                            R.string.elm327_dtc_export_error,
-                                            result.exceptionOrNull()?.message.orEmpty(),
-                                        ),
+                                        toastExportError.format(result.exceptionOrNull()?.message.orEmpty()),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 }
@@ -1177,22 +1171,28 @@ private fun Intent.getBluetoothDeviceExtra(): BluetoothDevice? =
         getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
     }
 
+private fun canReadBluetoothDeviceName(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.BLUETOOTH_CONNECT,
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+@SuppressLint("MissingPermission")
+private fun bluetoothDeviceNameOrEmpty(device: BluetoothDevice): String =
+    runCatching { device.name }.getOrNull().orEmpty()
+
 @SuppressLint("MissingPermission")
 private fun loadBondedBluetoothDevices(context: Context): List<BtDeviceEntry> {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.BLUETOOTH_CONNECT,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) return emptyList()
-    }
+    if (!canReadBluetoothDeviceName(context)) return emptyList()
     val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
     val bonded: Set<BluetoothDevice> = runCatching { adapter.bondedDevices }.getOrNull()
         ?: return emptyList()
     return bonded
         .map { device ->
             BtDeviceEntry(
-                name = runCatching { device.name }.getOrNull().orEmpty(),
+                name = bluetoothDeviceNameOrEmpty(device),
                 address = device.address.orEmpty(),
             )
         }

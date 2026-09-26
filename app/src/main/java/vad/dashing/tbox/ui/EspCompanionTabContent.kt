@@ -105,6 +105,7 @@ fun EspCompanionTabContent(
     val scope = rememberCoroutineScope()
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
+    val toastOtaOk = stringResource(R.string.esp_ota_ok)
     val companionEnabled by settingsViewModel.espCompanionEnabled.collectAsStateWithLifecycle()
     val connected by EspCompanionRepository.connected.collectAsStateWithLifecycle()
     val info by EspCompanionRepository.deviceInfo.collectAsStateWithLifecycle()
@@ -185,7 +186,7 @@ fun EspCompanionTabContent(
 
     LaunchedEffect(otaBusy, otaError, otaProgress) {
         if (!otaBusy && otaProgress >= 100 && otaError == null) {
-            Toast.makeText(context, context.getString(R.string.esp_ota_ok), Toast.LENGTH_LONG).show()
+            Toast.makeText(context, toastOtaOk, Toast.LENGTH_LONG).show()
         }
     }
 

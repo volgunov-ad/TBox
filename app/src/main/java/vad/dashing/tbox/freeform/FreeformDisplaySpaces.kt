@@ -213,8 +213,8 @@ object FreeformDisplaySpaces {
         return try {
             val dm = context.getSystemService(DisplayManager::class.java) ?: return null
             val display = dm.getDisplay(displayId) ?: return null
-            // API 30+: window context typed for overlays is the correct multi-display host.
-            if (Build.VERSION.SDK_INT >= 30) {
+            // createWindowContext(Display, …) is API 31+; fall back to display context on 30.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 try {
                     val windowContext = context.createWindowContext(
                         display,
