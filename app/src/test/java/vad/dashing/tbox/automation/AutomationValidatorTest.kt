@@ -594,6 +594,39 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun adbShellBlankCommand_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "   ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun adbShellAndTcp_areAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "getprop persist.adb.tcp.port",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
     fun widgetPressedTrigger_isAccepted() {
         val definition = validDefinition(
             triggers = listOf(AutomationTrigger.WidgetPressed(id = "1", triggerId = "button1")),

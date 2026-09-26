@@ -597,6 +597,13 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     WIFI_DISCONNECT("wifi_disconnect"),
     WIFI_MODEM_SET_DATA("wifi_modem_set_data"),
     WIFI_MODEM_REBOOT("wifi_modem_reboot"),
+    /** Enable/disable head-unit ADB TCP (:5555) via [vad.dashing.tbox.adb.HuAdbControl]. */
+    ADB_SET_TCP("adb_set_tcp"),
+    /**
+     * Run a shell command over localhost ADB. Enables TCP if needed, then restores
+     * previous TCP only when this session turned it on ([vad.dashing.tbox.adb.LocalhostAdbSession]).
+     */
+    ADB_SHELL("adb_shell"),
     SET_HU_SCREEN_BRIGHTNESS("set_hu_screen_brightness"),
     SET_HU_SCREEN_AUTO_BRIGHTNESS("set_hu_screen_auto_brightness"),
     SHOW_TOAST("show_toast"),
