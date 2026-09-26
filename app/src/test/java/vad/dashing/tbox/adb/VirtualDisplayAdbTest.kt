@@ -32,19 +32,15 @@ class VirtualDisplayAdbTest {
             mDisplayId=5
             size 1320 x 856
         """.trimIndent()
-        val gateway = FakeGateway(tcpEnabled = false, openAfterProbes = 1)
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
         gateway.onShell = {
             AdbShellResult(stdout = dump, stderr = "", exitCode = 0, shellV2 = true)
         }
 
-        var now = 0L
         val outcome = VirtualDisplayAdb.refreshDisplayListWith(
             gateway = gateway,
             keysDir = tempFolder.newFolder("adb"),
             clientName = "test@hu",
-            readyTimeoutMs = 3_000L,
-            nowMs = { now },
-            delayMs = { delta -> now += delta },
         )
 
         assertTrue(outcome is VirtualDisplayAdb.RefreshOutcome.Success)
@@ -55,8 +51,29 @@ class VirtualDisplayAdbTest {
     }
 
     @Test
+    fun refresh_portAlreadyOpen_doesNotToggle() = runBlocking {
+        val dump = """
+            mDisplayId=0
+            size 1920 x 981
+        """.trimIndent()
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = true)
+        gateway.onShell = {
+            AdbShellResult(stdout = dump, stderr = "", exitCode = 0, shellV2 = true)
+        }
+
+        val outcome = VirtualDisplayAdb.refreshDisplayListWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+        )
+
+        assertTrue(outcome is VirtualDisplayAdb.RefreshOutcome.Success)
+        assertTrue(gateway.setTcpCalls.isEmpty())
+    }
+
+    @Test
     fun launch_leavesTcpEnabled() = runBlocking {
-        val gateway = FakeGateway(tcpEnabled = false, openAfterProbes = 1)
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
         gateway.onShell = {
             AdbShellResult(stdout = "Starting: Intent {}", stderr = "", exitCode = 0, shellV2 = true)
         }
@@ -79,7 +96,7 @@ class VirtualDisplayAdbTest {
 
     @Test
     fun launch_tcpAlreadyOn_doesNotToggle() = runBlocking {
-        val gateway = FakeGateway(tcpEnabled = true, openAfterProbes = 1)
+        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
         gateway.onShell = {
             AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
         }
@@ -98,14 +115,13 @@ class VirtualDisplayAdbTest {
 
     private class FakeGateway(
         var tcpEnabled: Boolean = false,
-        private val openAfterProbes: Int = 1,
+        var portOpen: Boolean = false,
     ) : LocalhostAdbSession.Gateway {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
         var onShell: () -> AdbShellResult = {
             AdbShellResult("", "", 0, true)
         }
-        private var probes = 0
 
         override suspend fun refreshHuAdb() = Unit
 
@@ -114,12 +130,10 @@ class VirtualDisplayAdbTest {
         override suspend fun setTcpEnabled(enabled: Boolean) {
             setTcpCalls += enabled
             tcpEnabled = enabled
+            portOpen = enabled
         }
 
-        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean {
-            probes++
-            return probes >= openAfterProbes
-        }
+        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = portOpen
 
         override fun <T> withShellSession(
             host: String,

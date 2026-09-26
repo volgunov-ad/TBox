@@ -161,28 +161,14 @@ object VirtualDisplayAdb {
                 LaunchOutcome.Failed(mapSessionReason(session.reason), session.detail)
             is LocalhostAdbSession.Result.Ok -> {
                 val shell = session.value
-                if (shell.exitCode != null && shell.exitCode != 0) {
-                    val detail = listOf(shell.stderr, shell.stdout)
-                        .firstOrNull { it.isNotBlank() }
-                        .orEmpty()
-                        .ifBlank { "exit ${shell.exitCode}" }
+                val shellFailure = AdbShellResults.failureDetail(shell)
+                if (shellFailure != null) {
                     TboxRepository.addLog(
                         level = "ERROR",
                         tag = TAG,
-                        message = "am start --display failed: $detail",
+                        message = "am start --display failed: $shellFailure",
                     )
-                    return LaunchOutcome.Failed(Reason.ShellCommandFailed, detail)
-                }
-                // Legacy shell may omit exit code; treat Error-like stdout as failure.
-                val combined = "${shell.stderr}\n${shell.stdout}"
-                if (combined.contains("Error:", ignoreCase = true) ||
-                    combined.contains("Exception", ignoreCase = true)
-                ) {
-                    val detail = combined.lineSequence()
-                        .map { it.trim() }
-                        .firstOrNull { it.isNotEmpty() }
-                        .orEmpty()
-                    return LaunchOutcome.Failed(Reason.ShellCommandFailed, detail)
+                    return LaunchOutcome.Failed(Reason.ShellCommandFailed, shellFailure)
                 }
                 TboxRepository.addLog(
                     level = "INFO",

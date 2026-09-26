@@ -158,6 +158,7 @@ fun PermissionsDialog(
                     PermissionsAutoGrant.Reason.TcpEnableFailed -> failTcpEnable
                     PermissionsAutoGrant.Reason.TcpNotReady -> failTcpReady
                     PermissionsAutoGrant.Reason.AdbConnectFailed -> failAdb
+                    PermissionsAutoGrant.Reason.ShellCommandFailed -> failGrant
                 }
                 if (outcome.detail.isBlank()) base else "$base: ${outcome.detail}"
             }

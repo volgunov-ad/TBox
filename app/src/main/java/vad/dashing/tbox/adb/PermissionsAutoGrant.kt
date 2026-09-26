@@ -34,7 +34,12 @@ object PermissionsAutoGrant {
         TcpEnableFailed,
         TcpNotReady,
         AdbConnectFailed,
+        ShellCommandFailed,
     }
+
+    data class ApplyGrantsResult(
+        val commandFailures: List<String> = emptyList(),
+    )
 
     internal interface Gateway : LocalhostAdbSession.Gateway {
         fun missingPermissionIds(): List<AppPermissionId>
@@ -98,6 +103,7 @@ object PermissionsAutoGrant {
                 stillMissing = missingBefore,
             )
             is LocalhostAdbSession.Result.Ok -> {
+                val applyResult = session.value
                 val stillMissing = gateway.refreshMissingPermissionIds()
                 val newlyGranted = missingBefore.filterNot { it in stillMissing }
                 when {
@@ -110,6 +116,19 @@ object PermissionsAutoGrant {
                         )
                         Outcome.Success(newlyGranted)
                     }
+                    newlyGranted.isEmpty() && applyResult.commandFailures.isNotEmpty() -> {
+                        val detail = applyResult.commandFailures.joinToString("; ")
+                        TboxRepository.addLog(
+                            level = "ERROR",
+                            tag = TAG,
+                            message = "Permission grant shell commands failed: $detail",
+                        )
+                        Outcome.Failed(
+                            reason = Reason.ShellCommandFailed,
+                            detail = detail,
+                            stillMissing = stillMissing,
+                        )
+                    }
                     newlyGranted.isEmpty() -> Outcome.Partial(
                         newlyGranted = emptyList(),
                         stillMissing = stillMissing,
@@ -119,7 +138,12 @@ object PermissionsAutoGrant {
                             level = "WARN",
                             tag = TAG,
                             message = "Partial permission grant: ok=${newlyGranted.map { it.name }}, " +
-                                "missing=${stillMissing.map { it.name }}",
+                                "missing=${stillMissing.map { it.name }}" +
+                                if (applyResult.commandFailures.isEmpty()) {
+                                    ""
+                                } else {
+                                    ", shellFailures=${applyResult.commandFailures}"
+                                },
                         )
                         Outcome.Partial(newlyGranted, stillMissing)
                     }
@@ -133,29 +157,39 @@ object PermissionsAutoGrant {
         packageName: String,
         sdkInt: Int,
         execute: (String) -> AdbShellResult,
-    ) {
+    ): ApplyGrantsResult {
+        val failures = mutableListOf<String>()
+        fun runChecked(command: String, requireSuccess: Boolean) {
+            val result = execute(command)
+            val detail = AdbShellResults.failureDetail(result)
+            if (detail != null && requireSuccess) {
+                failures += "$command → $detail"
+            }
+        }
+
         for (id in missing) {
             when (id) {
                 AppPermissionId.NotificationListener -> {
                     val component = AppPermissions.notificationListenerComponent(packageName)
-                    val current = execute("settings get secure enabled_notification_listeners")
-                        .stdout
-                        .trim()
+                    val getResult = execute("settings get secure enabled_notification_listeners")
+                    // Read failures are soft — still attempt put with empty/current stdout.
+                    val current = getResult.stdout.trim()
                     val put = AppPermissions.buildNotificationListenerEnableCommand(
                         component = component,
                         currentListeners = current,
                     )
                     if (put != null) {
-                        execute(put)
+                        runChecked(put, requireSuccess = true)
                     }
                 }
                 else -> {
                     for (command in AppPermissions.buildAutoGrantShellCommands(id, packageName, sdkInt)) {
-                        execute(command)
+                        runChecked(command, requireSuccess = true)
                     }
                 }
             }
         }
+        return ApplyGrantsResult(commandFailures = failures)
     }
 
     private class AndroidGateway(

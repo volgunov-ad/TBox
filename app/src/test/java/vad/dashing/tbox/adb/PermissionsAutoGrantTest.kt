@@ -27,7 +27,7 @@ class PermissionsAutoGrantTest {
             }
         }
 
-        PermissionsAutoGrant.applyGrants(
+        val result = PermissionsAutoGrant.applyGrants(
             missing = listOf(
                 AppPermissionId.Overlay,
                 AppPermissionId.WriteSettings,
@@ -43,6 +43,7 @@ class PermissionsAutoGrantTest {
             execute = execute,
         )
 
+        assertTrue(result.commandFailures.isEmpty())
         assertTrue(commands.any { it.contains("SYSTEM_ALERT_WINDOW") })
         assertTrue(commands.any { it.contains("WRITE_SETTINGS") })
         assertTrue(commands.any { it.contains("WRITE_SECURE_SETTINGS") })
@@ -58,6 +59,25 @@ class PermissionsAutoGrantTest {
                     it.contains("MediaControlNotificationListenerService")
             },
         )
+    }
+
+    @Test
+    fun applyGrants_recordsShellFailures() {
+        val result = PermissionsAutoGrant.applyGrants(
+            missing = listOf(AppPermissionId.Overlay, AppPermissionId.WriteSecureSettings),
+            packageName = "vad.dashing.tbox",
+            sdkInt = 28,
+            execute = { cmd ->
+                if (cmd.contains("WRITE_SECURE_SETTINGS")) {
+                    AdbShellResult("", "Permission denial", 255, true)
+                } else {
+                    AdbShellResult("", "", 0, true)
+                }
+            },
+        )
+        assertEquals(1, result.commandFailures.size)
+        assertTrue(result.commandFailures[0].contains("WRITE_SECURE_SETTINGS"))
+        assertTrue(result.commandFailures[0].contains("Permission denial"))
     }
 
     @Test
@@ -119,7 +139,7 @@ class PermissionsAutoGrantTest {
         val gateway = FakeGateway(
             missing = listOf(AppPermissionId.Overlay, AppPermissionId.Location),
             tcpEnabled = false,
-            openAfterProbes = 1,
+            portOpen = false,
         )
         gateway.afterShell = {
             gateway.missing = emptyList()
@@ -145,6 +165,59 @@ class PermissionsAutoGrantTest {
     }
 
     @Test
+    fun grantMissingWith_portOpenPropsOff_doesNotToggleTcp() = runBlocking {
+        val gateway = FakeGateway(
+            missing = listOf(AppPermissionId.Overlay),
+            tcpEnabled = false,
+            portOpen = true,
+        )
+        gateway.afterShell = { gateway.missing = emptyList() }
+
+        val outcome = PermissionsAutoGrant.grantMissingWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            packageName = "vad.dashing.tbox",
+            sdkInt = 28,
+        )
+
+        assertEquals(
+            PermissionsAutoGrant.Outcome.Success(listOf(AppPermissionId.Overlay)),
+            outcome,
+        )
+        assertTrue(gateway.setTcpCalls.isEmpty())
+    }
+
+    @Test
+    fun grantMissingWith_shellFailureWithNothingGranted_isFailed() = runBlocking {
+        val gateway = FakeGateway(
+            missing = listOf(AppPermissionId.WriteSecureSettings),
+            tcpEnabled = true,
+            portOpen = true,
+        )
+        gateway.onShell = { cmd ->
+            if (cmd.contains("pm grant")) {
+                AdbShellResult("", "Permission denial", 255, true)
+            } else {
+                AdbShellResult("", "", 0, true)
+            }
+        }
+
+        val outcome = PermissionsAutoGrant.grantMissingWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            packageName = "vad.dashing.tbox",
+            sdkInt = 28,
+        )
+
+        assertTrue(outcome is PermissionsAutoGrant.Outcome.Failed)
+        val failed = outcome as PermissionsAutoGrant.Outcome.Failed
+        assertEquals(PermissionsAutoGrant.Reason.ShellCommandFailed, failed.reason)
+        assertTrue(failed.detail.contains("Permission denial"))
+    }
+
+    @Test
     fun grantMissingWith_partialWhenSomeRemainMissing() = runBlocking {
         val gateway = FakeGateway(
             missing = listOf(
@@ -152,7 +225,7 @@ class PermissionsAutoGrantTest {
                 AppPermissionId.WriteSecureSettings,
             ),
             tcpEnabled = true,
-            openAfterProbes = 1,
+            portOpen = true,
         )
         gateway.afterShell = {
             gateway.missing = listOf(AppPermissionId.WriteSecureSettings)
@@ -193,12 +266,18 @@ class PermissionsAutoGrantTest {
     private class FakeGateway(
         var missing: List<AppPermissionId>,
         var tcpEnabled: Boolean = false,
-        private val openAfterProbes: Int = 1,
+        var portOpen: Boolean = false,
     ) : PermissionsAutoGrant.Gateway {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
         var afterShell: () -> Unit = {}
-        private var probes = 0
+        var onShell: (String) -> AdbShellResult = { command ->
+            if (command.startsWith("settings get")) {
+                AdbShellResult("null", "", 0, true)
+            } else {
+                AdbShellResult("", "", 0, true)
+            }
+        }
 
         override fun missingPermissionIds(): List<AppPermissionId> = missing
 
@@ -211,12 +290,10 @@ class PermissionsAutoGrantTest {
         override suspend fun setTcpEnabled(enabled: Boolean) {
             setTcpCalls += enabled
             tcpEnabled = enabled
+            portOpen = enabled
         }
 
-        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean {
-            probes++
-            return probes >= openAfterProbes
-        }
+        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = portOpen
 
         override fun <T> withShellSession(
             host: String,
@@ -229,11 +306,7 @@ class PermissionsAutoGrantTest {
         ): T {
             val result = block { command ->
                 shellCommands += command
-                if (command.startsWith("settings get")) {
-                    AdbShellResult("null", "", 0, true)
-                } else {
-                    AdbShellResult("", "", 0, true)
-                }
+                onShell(command)
             }
             afterShell()
             return result
