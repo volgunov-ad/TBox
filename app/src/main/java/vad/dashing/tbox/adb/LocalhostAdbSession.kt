@@ -4,24 +4,31 @@ import android.os.Build
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.TboxRepository
 
 /**
  * Short-lived localhost ADB session against the head unit's own adbd.
  *
- * Snapshot ADB TCP → enable :5555 if needed → wait ≤3s → connect once →
- * run shell commands → disconnect → optionally restore previous TCP state.
+ * If TCP :5555 is already accepting connections (or props say TCP is on), connect
+ * without toggling. Otherwise enable TCP via [HuAdbControl], wait for the port
+ * (longer after `adbd` restart), run shell commands, disconnect, then optionally
+ * restore previous TCP state — but only when this session actually turned TCP on.
  *
  * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], and
- * [VirtualDisplayAdb].
+ * [VirtualDisplayAdb]. Always runs blocking socket work on [Dispatchers.IO].
  */
 internal object LocalhostAdbSession {
     private const val TAG = "LOCAL_ADB"
     const val LOCAL_HOST = "127.0.0.1"
+    /** Ready wait when TCP was already available (port open or props on). */
     const val TCP_READY_TIMEOUT_MS = 3_000L
+    /** Ready wait after this session enables TCP (`ctl.restart adbd`). */
+    const val TCP_READY_AFTER_ENABLE_TIMEOUT_MS = 12_000L
     const val TCP_PROBE_TIMEOUT_MS = 250
     const val TCP_PROBE_INTERVAL_MS = 150L
     const val ADB_CONNECT_TIMEOUT_MS = 8_000
@@ -31,7 +38,7 @@ internal object LocalhostAdbSession {
     private val mutex = Mutex()
 
     enum class AfterSession {
-        /** If this session turned TCP on, turn it back off (permission grants). */
+        /** If this session turned TCP on, turn it back off (permission grants / display refresh). */
         RestorePreviousTcp,
         /** Keep ADB TCP enabled after disconnect (virtual-display app launch). */
         LeaveTcpEnabled,
@@ -75,79 +82,90 @@ internal object LocalhostAdbSession {
         delayMs: suspend (Long) -> Unit = { delay(it) },
         afterSession: AfterSession = AfterSession.RestorePreviousTcp,
         block: (execute: (String) -> AdbShellResult) -> T,
-    ): Result<T> = mutex.withLock {
-        gateway.refreshHuAdb()
-        val tcpWasEnabled = gateway.isTcpEnabled()
-        var enabledByUs = false
-
-        try {
-            if (!tcpWasEnabled) {
-                gateway.setTcpEnabled(true)
-                gateway.refreshHuAdb()
-                if (!gateway.isTcpEnabled() &&
-                    !gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
-                ) {
-                    return@withLock Result.Failed(Reason.TcpEnableFailed)
-                }
-                enabledByUs = true
-            }
-
-            val ready = waitUntilTcpReady(
-                host = host,
-                port = port,
-                readyTimeoutMs = readyTimeoutMs,
-                probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
-                probeIntervalMs = TCP_PROBE_INTERVAL_MS,
-                isOpen = gateway::isTcpPortOpen,
-                nowMs = nowMs,
-                delayMs = delayMs,
-            )
-            if (!ready) {
-                return@withLock Result.Failed(Reason.TcpNotReady)
-            }
+    ): Result<T> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            gateway.refreshHuAdb()
+            val propsSayEnabled = gateway.isTcpEnabled()
+            val portAlreadyOpen = gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
+            // Port open wins over lying/stale props — never restart adbd or restore-off.
+            val tcpAlreadyAvailable = propsSayEnabled || portAlreadyOpen
+            var enabledByUs = false
 
             try {
-                val value = gateway.withShellSession(
+                if (!tcpAlreadyAvailable) {
+                    gateway.setTcpEnabled(true)
+                    gateway.refreshHuAdb()
+                    if (!gateway.isTcpEnabled() &&
+                        !gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
+                    ) {
+                        return@withLock Result.Failed(Reason.TcpEnableFailed)
+                    }
+                    // We invoked enable because TCP was not available; restore only in this case.
+                    enabledByUs = true
+                }
+
+                val waitMs = if (enabledByUs) {
+                    maxOf(readyTimeoutMs, TCP_READY_AFTER_ENABLE_TIMEOUT_MS)
+                } else {
+                    readyTimeoutMs
+                }
+                val ready = waitUntilTcpReady(
                     host = host,
                     port = port,
-                    connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
-                    sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
-                    keysDir = keysDir,
-                    clientName = clientName,
-                    block = block,
+                    readyTimeoutMs = waitMs,
+                    probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
+                    probeIntervalMs = TCP_PROBE_INTERVAL_MS,
+                    isOpen = gateway::isTcpPortOpen,
+                    nowMs = nowMs,
+                    delayMs = delayMs,
                 )
-                Result.Ok(value)
-            } catch (e: Exception) {
-                TboxRepository.addLog(
-                    level = "ERROR",
-                    tag = TAG,
-                    message = "ADB session failed: ${e.message ?: e.javaClass.simpleName}",
-                )
-                Result.Failed(
-                    Reason.AdbConnectFailed,
-                    e.message ?: e.javaClass.simpleName,
-                )
-            }
-        } finally {
-            val shouldRestore =
-                enabledByUs && afterSession == AfterSession.RestorePreviousTcp
-            if (shouldRestore) {
-                runCatching {
-                    gateway.setTcpEnabled(false)
-                    gateway.refreshHuAdb()
-                }.onFailure { e ->
+                if (!ready) {
+                    return@withLock Result.Failed(Reason.TcpNotReady)
+                }
+
+                try {
+                    val value = gateway.withShellSession(
+                        host = host,
+                        port = port,
+                        connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
+                        sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
+                        keysDir = keysDir,
+                        clientName = clientName,
+                        block = block,
+                    )
+                    Result.Ok(value)
+                } catch (e: Exception) {
                     TboxRepository.addLog(
-                        level = "WARN",
+                        level = "ERROR",
                         tag = TAG,
-                        message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
+                        message = "ADB session failed: ${e.message ?: e.javaClass.simpleName}",
+                    )
+                    Result.Failed(
+                        Reason.AdbConnectFailed,
+                        e.message ?: e.javaClass.simpleName,
                     )
                 }
-            } else if (enabledByUs && afterSession == AfterSession.LeaveTcpEnabled) {
-                TboxRepository.addLog(
-                    level = "INFO",
-                    tag = TAG,
-                    message = "ADB TCP left enabled after localhost session",
-                )
+            } finally {
+                val shouldRestore =
+                    enabledByUs && afterSession == AfterSession.RestorePreviousTcp
+                if (shouldRestore) {
+                    runCatching {
+                        gateway.setTcpEnabled(false)
+                        gateway.refreshHuAdb()
+                    }.onFailure { e ->
+                        TboxRepository.addLog(
+                            level = "WARN",
+                            tag = TAG,
+                            message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
+                        )
+                    }
+                } else if (enabledByUs && afterSession == AfterSession.LeaveTcpEnabled) {
+                    TboxRepository.addLog(
+                        level = "INFO",
+                        tag = TAG,
+                        message = "ADB TCP left enabled after localhost session",
+                    )
+                }
             }
         }
     }
@@ -176,7 +194,14 @@ internal object LocalhostAdbSession {
             HuAdbControl.refresh()
         }
 
-        override suspend fun isTcpEnabled(): Boolean = HuAdbControl.state.value.tcpEnabled
+        /**
+         * Props from [HuAdbControl] plus a live port probe — props alone can lag or lie
+         * while adbd is already listening on :5555.
+         */
+        override suspend fun isTcpEnabled(): Boolean {
+            if (HuAdbControl.state.value.tcpEnabled) return true
+            return isTcpPortOpen(LOCAL_HOST, HuAdbControl.TCP_ENABLED_PORT, TCP_PROBE_TIMEOUT_MS)
+        }
 
         override suspend fun setTcpEnabled(enabled: Boolean) {
             HuAdbControl.setTcpEnabled(enabled)

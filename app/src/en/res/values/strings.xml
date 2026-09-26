@@ -622,7 +622,7 @@
     <string name="permissions_dialog_intro">Grant the accesses you need for the features you use. Status refreshes after you return from Android settings. Optional items can be skipped; open this list later from Settings.</string>
     <string name="permissions_auto_grant_all">Grant all automatically</string>
     <string name="permissions_auto_grant_all_running">Granting all…</string>
-    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener). Briefly enables ADB TCP :5555 if needed and restores it. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener). If :5555 is not listening yet, briefly enables ADB TCP and restores it only when this session turned it on; an already-open port is left alone. On first use, accept «Allow USB debugging» on the head unit.</string>
     <string name="permissions_auto_grant_all_ok">All permissions granted (%1$d)</string>
     <string name="permissions_auto_grant_all_already">All permissions already granted</string>
     <string name="permissions_auto_grant_all_partial">Granted %1$d, still missing: %2$d</string>
@@ -640,7 +640,7 @@
     <string name="permissions_write_secure_desc">Protected permission: cannot be granted from Android settings. Needed for the same Day/Night and mirror widgets. Grant automatically on the head unit (button below) or run this on a PC:</string>
     <string name="permissions_write_secure_auto_grant">Grant automatically</string>
     <string name="permissions_write_secure_auto_grant_running">Granting…</string>
-    <string name="permissions_write_secure_auto_hint">If needed, briefly enables ADB TCP on port 5555, connects to localhost, runs pm grant, then restores the previous TCP state. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_write_secure_auto_hint">If :5555 is not listening yet, briefly enables ADB TCP, connects to localhost, runs pm grant, then restores TCP only if this session turned it on. Does not disable an already-open port. On first use, accept «Allow USB debugging» on the head unit.</string>
     <string name="permissions_write_secure_auto_ok">WRITE_SECURE_SETTINGS granted</string>
     <string name="permissions_write_secure_auto_already">Permission already granted</string>
     <string name="permissions_write_secure_auto_fail_tcp_enable">Could not enable ADB TCP on the head unit</string>
@@ -2050,7 +2050,7 @@
     <string name="widget_app_launcher_virtual_display_refresh_ok">Displays found: %1$d</string>
     <string name="widget_app_launcher_virtual_display_refresh_fail">Could not refresh list (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Could not launch on display (%1$s)</string>
-    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP if needed, queries displays over localhost, then restores the previous TCP state. Shortcut launch leaves TCP enabled.</string>
+    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP only if the port is not already listening, queries displays over localhost, then restores TCP only if this session turned it on. Shortcut launch leaves TCP enabled.</string>
     <string name="widget_app_launcher_freeform_side">App side</string>
     <string name="widget_app_launcher_freeform_side_left">Left</string>
     <string name="widget_app_launcher_freeform_side_right">Right</string>

@@ -81,17 +81,14 @@ object WriteSecureSettingsAutoGrant {
             )
             is LocalhostAdbSession.Result.Ok -> {
                 val shellResult = session.value
-                if (shellResult.exitCode != null && shellResult.exitCode != 0) {
-                    val detail = listOf(shellResult.stderr, shellResult.stdout)
-                        .firstOrNull { it.isNotBlank() }
-                        .orEmpty()
-                        .ifBlank { "exit ${shellResult.exitCode}" }
+                val shellFailure = AdbShellResults.failureDetail(shellResult)
+                if (shellFailure != null) {
                     TboxRepository.addLog(
                         level = "ERROR",
                         tag = TAG,
-                        message = "pm grant failed: $detail",
+                        message = "pm grant failed: $shellFailure",
                     )
-                    return Outcome.Failed(Reason.GrantCommandFailed, detail)
+                    return Outcome.Failed(Reason.GrantCommandFailed, shellFailure)
                 }
                 if (!gateway.isPermissionGranted()) {
                     val detail = listOf(shellResult.stderr, shellResult.stdout)

@@ -71,22 +71,18 @@ class WriteSecureSettingsAutoGrantTest {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = false,
-            openAfterProbes = 2,
+            portOpen = false,
         )
         gateway.onShell = {
             gateway.permissionGranted = true
             AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
         }
 
-        var now = 0L
         val outcome = WriteSecureSettingsAutoGrant.grantWith(
             gateway = gateway,
             keysDir = tempFolder.newFolder("adb"),
             clientName = "test@hu",
             packageName = "vad.dashing.tbox",
-            readyTimeoutMs = 3_000L,
-            nowMs = { now },
-            delayMs = { delta -> now += delta },
         )
 
         assertEquals(WriteSecureSettingsAutoGrant.Outcome.Success, outcome)
@@ -98,11 +94,35 @@ class WriteSecureSettingsAutoGrantTest {
     }
 
     @Test
+    fun grantWith_portOpenPropsOff_doesNotToggle() = runBlocking {
+        val gateway = FakeGateway(
+            permissionGranted = false,
+            tcpEnabled = false,
+            portOpen = true,
+        )
+        gateway.onShell = {
+            gateway.permissionGranted = true
+            AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
+        }
+
+        val outcome = WriteSecureSettingsAutoGrant.grantWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            packageName = "vad.dashing.tbox",
+        )
+
+        assertEquals(WriteSecureSettingsAutoGrant.Outcome.Success, outcome)
+        assertTrue(gateway.setTcpCalls.isEmpty())
+        assertEquals(1, gateway.shellCommands.size)
+    }
+
+    @Test
     fun grantWith_tcpAlreadyOn_doesNotToggle() = runBlocking {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = true,
-            openAfterProbes = 1,
+            portOpen = true,
         )
         gateway.onShell = {
             gateway.permissionGranted = true
@@ -126,7 +146,7 @@ class WriteSecureSettingsAutoGrantTest {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = false,
-            openAfterProbes = Int.MAX_VALUE,
+            portOpen = false,
             setTcpNoOp = true,
         )
 
@@ -152,7 +172,8 @@ class WriteSecureSettingsAutoGrantTest {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = false,
-            openAfterProbes = Int.MAX_VALUE,
+            portOpen = false,
+            openPortOnEnable = false,
         )
         var now = 0L
         val outcome = WriteSecureSettingsAutoGrant.grantWith(
@@ -180,7 +201,7 @@ class WriteSecureSettingsAutoGrantTest {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = false,
-            openAfterProbes = 1,
+            portOpen = false,
         )
         gateway.onShell = { error("auth rejected") }
 
@@ -202,7 +223,7 @@ class WriteSecureSettingsAutoGrantTest {
         val gateway = FakeGateway(
             permissionGranted = false,
             tcpEnabled = true,
-            openAfterProbes = 1,
+            portOpen = true,
         )
         gateway.onShell = {
             AdbShellResult(
@@ -232,15 +253,15 @@ class WriteSecureSettingsAutoGrantTest {
     private class FakeGateway(
         var permissionGranted: Boolean,
         var tcpEnabled: Boolean = false,
-        private val openAfterProbes: Int = 1,
+        var portOpen: Boolean = false,
         private val setTcpNoOp: Boolean = false,
+        private val openPortOnEnable: Boolean = true,
     ) : WriteSecureSettingsAutoGrant.Gateway {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
         var onShell: () -> AdbShellResult = {
             AdbShellResult("", "", 0, true)
         }
-        private var probes = 0
 
         override fun isPermissionGranted(): Boolean = permissionGranted
 
@@ -252,13 +273,13 @@ class WriteSecureSettingsAutoGrantTest {
             setTcpCalls += enabled
             if (!setTcpNoOp) {
                 tcpEnabled = enabled
+                if (openPortOnEnable) {
+                    portOpen = enabled
+                }
             }
         }
 
-        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean {
-            probes++
-            return probes >= openAfterProbes
-        }
+        override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = portOpen
 
         override fun <T> withShellSession(
             host: String,

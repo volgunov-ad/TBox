@@ -625,7 +625,7 @@
     <string name="permissions_dialog_intro">Выдайте нужные доступы для используемых функций. Статус обновляется после возврата из настроек Android. Необязательные пункты можно пропустить и открыть этот список позже из «Настройки».</string>
     <string name="permissions_auto_grant_all">Выдать все автоматически</string>
     <string name="permissions_auto_grant_all_running">Выдача всех…</string>
-    <string name="permissions_auto_grant_all_hint">Одной сессией localhost ADB выдаёт недостающие доступы из списка (appops / pm grant / notification listener). При необходимости кратко включает ADB TCP :5555 и возвращает его. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
+    <string name="permissions_auto_grant_all_hint">Одной сессией localhost ADB выдаёт недостающие доступы из списка (appops / pm grant / notification listener). Если :5555 ещё не слушает — кратко включает ADB TCP и возвращает его только если включала эта сессия; уже открытый порт не трогает. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
     <string name="permissions_auto_grant_all_ok">Все разрешения выданы (%1$d)</string>
     <string name="permissions_auto_grant_all_already">Все разрешения уже выданы</string>
     <string name="permissions_auto_grant_all_partial">Выдано %1$d, осталось без доступа: %2$d</string>
@@ -643,7 +643,7 @@
     <string name="permissions_write_secure_desc">Защищённое разрешение: через настройки Android не выдаётся. Нужно для тех же виджетов день/ночь и зеркал. Можно выдать автоматически с ГУ (кнопка ниже) или выполнить команду на ПК:</string>
     <string name="permissions_write_secure_auto_grant">Выдать автоматически</string>
     <string name="permissions_write_secure_auto_grant_running">Выдача…</string>
-    <string name="permissions_write_secure_auto_hint">При необходимости кратко включит ADB TCP на порту 5555, подключится к localhost, выполнит pm grant и вернёт TCP в прежнее состояние. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
+    <string name="permissions_write_secure_auto_hint">Если :5555 ещё не слушает — кратко включит ADB TCP, подключится к localhost, выполнит pm grant и вернёт TCP только если включала эта сессия. Уже открытый порт не выключает. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
     <string name="permissions_write_secure_auto_ok">WRITE_SECURE_SETTINGS выдано</string>
     <string name="permissions_write_secure_auto_already">Разрешение уже выдано</string>
     <string name="permissions_write_secure_auto_fail_tcp_enable">Не удалось включить ADB TCP на ГУ</string>
@@ -2063,7 +2063,7 @@
     <string name="widget_app_launcher_virtual_display_refresh_ok">Найдено дисплеев: %1$d</string>
     <string name="widget_app_launcher_virtual_display_refresh_fail">Не удалось обновить список (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Не удалось запустить на дисплее (%1$s)</string>
-    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP при необходимости, опрашивает дисплеи через localhost и возвращает TCP в прежнее состояние. При запуске ярлыка TCP остаётся включённым.</string>
+    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP только если порт ещё не слушает, опрашивает дисплеи через localhost и возвращает TCP лишь если эта сессия его включала. При запуске ярлыка TCP остаётся включённым.</string>
     <string name="widget_app_launcher_freeform_side">Сторона приложения</string>
     <string name="widget_app_launcher_freeform_side_left">Слева</string>
     <string name="widget_app_launcher_freeform_side_right">Справа</string>
