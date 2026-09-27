@@ -620,11 +620,13 @@ class AutomationCodecTest {
             triggers = listOf(
                 AutomationTrigger.EspBleBtn(
                     id = "1",
+                    mac = "aa:bb:cc:dd:ee:01",
                     btn = 1,
                     act = AutomationEspBleBtnAction.PRESS,
                 ),
                 AutomationTrigger.EspBleBtn(
                     id = "2",
+                    mac = "aa:bb:cc:dd:ee:02",
                     btn = 3,
                     act = AutomationEspBleBtnAction.DOUBLE,
                 ),
@@ -633,6 +635,36 @@ class AutomationCodecTest {
                 AutomationAction.Builtin(
                     type = AutomationBuiltinActionType.SHOW_TOAST,
                     stringValue = "ble",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesEspBleBatteryMacOnNumericTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "bat-1",
+            name = "Battery",
+            triggers = listOf(
+                AutomationTrigger.NumericThreshold(
+                    id = "1",
+                    signal = AutomationSignalId.ESP_BLE_BATTERY,
+                    source = AutomationSignalSource.APP,
+                    direction = AutomationThresholdDirection.BELOW,
+                    threshold = 20.0,
+                    resetThreshold = 30.0,
+                    mac = "aa:bb:cc:dd:ee:ff",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "low",
                 ),
             ),
         )

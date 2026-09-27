@@ -180,6 +180,12 @@ object AutomationValidator {
                             "до $AUTOMATION_ESP_BLE_BTN_MAX",
                     )
                 }
+                if (trigger.mac.isBlank()) {
+                    issues += AutomationValidationIssue(
+                        "$path.mac",
+                        "Выберите устройство Shelly Blu (MAC)",
+                    )
+                }
             }
             is AutomationTrigger.Interval -> {
                 if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
@@ -204,6 +210,7 @@ object AutomationValidator {
                     path,
                     issues,
                 )
+                validateEspBleBatteryMac(trigger.signal, trigger.mac, "$path.mac", issues)
                 if (!trigger.threshold.isFinite()) {
                     issues += AutomationValidationIssue("$path.threshold", "Порог должен быть числом")
                 }
@@ -352,6 +359,21 @@ object AutomationValidator {
         }
     }
 
+    private fun validateEspBleBatteryMac(
+        signal: AutomationSignalId,
+        mac: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (signal != AutomationSignalId.ESP_BLE_BATTERY) return
+        if (mac.isBlank()) {
+            issues += AutomationValidationIssue(
+                path,
+                "Выберите устройство Shelly Blu (MAC) для сигнала батареи",
+            )
+        }
+    }
+
     private fun validateCondition(
         condition: AutomationCondition,
         triggerIds: Set<String>,
@@ -373,6 +395,7 @@ object AutomationValidator {
                     path,
                     issues,
                 )
+                validateEspBleBatteryMac(condition.signal, condition.mac, "$path.mac", issues)
                 if (!condition.expectedValue.isFinite()) {
                     issues += AutomationValidationIssue("$path.expectedValue", "Ожидается число")
                 }

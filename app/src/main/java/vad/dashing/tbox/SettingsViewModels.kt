@@ -513,6 +513,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val espBleDeviceNames = settingsManager.espBleDeviceNamesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
     val adbLastHost = settingsManager.adbLastHostFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "127.0.0.1")
 
@@ -2147,6 +2150,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspCompanionEnabledSetting(enabled)
+        }
+    }
+
+    fun saveEspBleDeviceName(mac: String, name: String) {
+        viewModelScope.launch {
+            settingsManager.saveEspBleDeviceName(mac, name)
+        }
+    }
+
+    fun removeEspBleDeviceName(mac: String) {
+        viewModelScope.launch {
+            settingsManager.removeEspBleDeviceName(mac)
+        }
+    }
+
+    fun clearEspBleDeviceNames(macs: Collection<String>? = null) {
+        viewModelScope.launch {
+            settingsManager.clearEspBleDeviceNames(macs)
         }
     }
 

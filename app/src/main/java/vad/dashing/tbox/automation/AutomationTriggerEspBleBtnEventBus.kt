@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 
 /** Normalized Shelly Blu / companion BLE button event for automations. */
 data class AutomationEspBleBtnEvent(
+    val mac: String,
     val btn: Int,
     val act: String,
 )

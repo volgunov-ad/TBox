@@ -3,6 +3,7 @@ package vad.dashing.tbox.esp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.LocValues
 
 data class EspDeviceInfo(
@@ -36,6 +37,23 @@ data class EspBleBtnEvent(
     val ms: Long = 0L,
     val atMs: Long = System.currentTimeMillis(),
 )
+
+/** Per-MAC runtime BLE state from companion `bleBtn` / `bleStatus`. */
+data class EspBleDeviceRuntime(
+    val mac: String,
+    val batteryPercent: Int? = null,
+    val lastBtn: Int? = null,
+    val lastAct: String? = null,
+    val lastRssi: Int? = null,
+    val lastAtMs: Long = 0L,
+) {
+    fun lastEventLabel(): String {
+        val btn = lastBtn ?: return "—"
+        val act = lastAct?.ifBlank { null } ?: "—"
+        val rssiPart = lastRssi?.let { " rssi=$it" }.orEmpty()
+        return "btn$btn $act$rssiPart"
+    }
+}
 
 data class EspMagSample(
     val chip: String = "",
@@ -123,14 +141,11 @@ object EspCompanionRepository {
     private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
     val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
 
+    private val _bleDevices = MutableStateFlow<Map<String, EspBleDeviceRuntime>>(emptyMap())
+    val bleDevices: StateFlow<Map<String, EspBleDeviceRuntime>> = _bleDevices.asStateFlow()
+
     private val _lastBleBtn = MutableStateFlow<EspBleBtnEvent?>(null)
     val lastBleBtn: StateFlow<EspBleBtnEvent?> = _lastBleBtn.asStateFlow()
-
-    private val _bleBattery = MutableStateFlow<Int?>(null)
-    val bleBattery: StateFlow<Int?> = _bleBattery.asStateFlow()
-
-    private val _bleLastRssi = MutableStateFlow(0)
-    val bleLastRssi: StateFlow<Int> = _bleLastRssi.asStateFlow()
 
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
@@ -155,6 +170,13 @@ object EspCompanionRepository {
 
     private val _otaError = MutableStateFlow<String?>(null)
     val otaError: StateFlow<String?> = _otaError.asStateFlow()
+
+    /**
+     * Increments on each successful OTA finish so UI can toast once and then
+     * [clearOtaUiState] after a brief 100% display.
+     */
+    private val _otaSuccessEpoch = MutableStateFlow(0L)
+    val otaSuccessEpoch: StateFlow<Long> = _otaSuccessEpoch.asStateFlow()
 
     /** Profile/SAVECONFIG/refresh batch — UI should disable UM980 controls. */
     private val _um980ConfigBusy = MutableStateFlow(false)
@@ -202,9 +224,11 @@ object EspCompanionRepository {
             _bleOn.value = false
             _bleLearnActive.value = false
             _bleMacs.value = emptyList()
+            _bleDevices.value = emptyMap()
             _lastBleBtn.value = null
-            _bleBattery.value = null
-            _bleLastRssi.value = 0
+            if (!_otaBusy.value) {
+                clearOtaUiState()
+            }
         }
     }
 
@@ -212,7 +236,7 @@ object EspCompanionRepository {
         _deviceInfo.value = info
         if (info.ble) {
             _bleOn.value = info.bleOn
-            _bleMacs.value = info.bleMacs
+            replaceBleMacs(info.bleMacs)
         }
     }
 
@@ -222,24 +246,65 @@ object EspCompanionRepository {
         macs: List<String>,
         lastBat: Int = -1,
         lastRssi: Int = 0,
+        lastMac: String? = null,
     ) {
         _bleOn.value = on
         _bleLearnActive.value = learn
-        _bleMacs.value = macs
-        if (lastBat in 0..100) _bleBattery.value = lastBat
-        if (lastRssi != 0) _bleLastRssi.value = lastRssi
+        replaceBleMacs(macs)
+        val mac = normalizeEspBleMac(lastMac.orEmpty())
+        if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
+            _bleDevices.update { current ->
+                val prev = current[mac] ?: EspBleDeviceRuntime(mac = mac)
+                current + (
+                    mac to prev.copy(
+                        batteryPercent = if (lastBat in 0..100) lastBat else prev.batteryPercent,
+                        lastRssi = if (lastRssi != 0) lastRssi else prev.lastRssi,
+                    )
+                )
+            }
+        }
         val info = _deviceInfo.value
         if (info.ble) {
-            _deviceInfo.value = info.copy(bleOn = on, bleMacs = macs)
+            _deviceInfo.value = info.copy(bleOn = on, bleMacs = _bleMacs.value)
         }
         touchMessage()
     }
 
     fun applyBleBtn(event: EspBleBtnEvent) {
-        _lastBleBtn.value = event
-        if (event.bat in 0..100) _bleBattery.value = event.bat
-        _bleLastRssi.value = event.rssi
+        val mac = normalizeEspBleMac(event.mac)
+        val normalized = if (mac == event.mac) event else event.copy(mac = mac)
+        _lastBleBtn.value = normalized
+        if (mac.isNotEmpty()) {
+            _bleDevices.update { current ->
+                val prev = current[mac] ?: EspBleDeviceRuntime(mac = mac)
+                current + (
+                    mac to prev.copy(
+                        batteryPercent = if (normalized.bat in 0..100) {
+                            normalized.bat
+                        } else {
+                            prev.batteryPercent
+                        },
+                        lastBtn = normalized.btn,
+                        lastAct = normalized.act,
+                        lastRssi = normalized.rssi,
+                        lastAtMs = normalized.atMs,
+                    )
+                )
+            }
+        }
         touchMessage()
+    }
+
+    private fun replaceBleMacs(macs: List<String>) {
+        val normalized = macs.map(::normalizeEspBleMac).filter { it.isNotEmpty() }.distinct()
+        _bleMacs.value = normalized
+        _bleDevices.update { current ->
+            buildMap {
+                for (mac in normalized) {
+                    put(mac, current[mac] ?: EspBleDeviceRuntime(mac = mac))
+                }
+            }
+        }
     }
 
     fun setBleLearnActive(active: Boolean) {
@@ -343,7 +408,15 @@ object EspCompanionRepository {
         } else {
             _otaProgress.value = 100
             _otaError.value = null
+            _otaSuccessEpoch.value = _otaSuccessEpoch.value + 1L
         }
+    }
+
+    /** Hide OTA progress/error after toast or on disconnect after a finished transfer. */
+    fun clearOtaUiState() {
+        _otaBusy.value = false
+        _otaProgress.value = 0
+        _otaError.value = null
     }
 
     fun beginUm980ConfigBusy() {

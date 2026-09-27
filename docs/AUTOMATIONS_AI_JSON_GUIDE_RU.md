@@ -169,6 +169,19 @@
   состояние не воспроизводится); условия/cooldown/`runMode` действуют как обычно;
 - нажатия, случившиеся до полного запуска фоновой службы, теряются.
 
+### Кнопка Shelly Blu (компаньон ESP32)
+
+```json
+{"type":"esp_ble_btn","id":"1","mac":"aa:bb:cc:dd:ee:ff","btn":1,"act":"press"}
+```
+
+- `mac`: обязателен (lowercase `aa:bb:…`); без «любого устройства»; забытый MAC остаётся в JSON
+  и не совпадает, пока пульт снова не обучат на вкладке «Компаньон» → BLE;
+- `btn`: `1..4` (Button 1 всегда 1; RC Button 4 — 1…4);
+- `act`: `press` / `double` / `triple` / `long` / `hold`;
+- события доходят только при подключённом компаньоне, включённом BLE-сканере и MAC в allowlist;
+- срабатывание только по событию `bleBtn` (не по состоянию).
+
 ### Периодически
 
 ```json
@@ -213,6 +226,7 @@
 - `resetThreshold` может быть `null`, тогда используется основной порог;
 - при `rearmEnabled: false` ставь `resetThreshold: null`: триггер срабатывает на каждое новое
   число, пока порог выполнен;
+- для `signal: "esp_ble_battery"` обязателен `"mac":"aa:bb:…"` (батарея конкретного Shelly Blu);
 - `startupBehavior`:
   - `initialize_only` — первое значение после старта только запоминается;
   - `fire_if_matching` — первое подходящее значение может запустить правило.
@@ -697,6 +711,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `hu_phone_volume` | `app` | 1..31 — микшер ГУ телефон |
 | `hu_navi_volume` | `app` | 0..10 — микшер ГУ навигатор |
 | `hu_voice_volume` | `app` | 2..10 — микшер ГУ голос/TTS |
+| `esp_ble_battery` | `app` | %, 0..100 — батарея Shelly Blu; обязателен `mac` в триггере/условии |
 | `overspeed_alarm` | `head_unit` | км/ч, 30..230 с шагом 5 |
 | `audio_key_tone_volume` | `head_unit` | 0..3, только A9/mbCAN |
 | `audio_eq_bass` | `head_unit` | -7..7, только A9/mbCAN |
@@ -765,7 +780,7 @@ TCP :5555 включают только если порт ещё не слуша
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

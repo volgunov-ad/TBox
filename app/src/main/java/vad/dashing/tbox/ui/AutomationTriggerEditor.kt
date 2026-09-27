@@ -40,6 +40,7 @@ import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
 import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -221,6 +222,11 @@ private fun EspBleBtnTriggerFields(
     trigger: AutomationTrigger.EspBleBtn,
     onChange: (AutomationTrigger) -> Unit,
 ) {
+    AutomationEspBleDevicePicker(
+        label = "Устройство",
+        mac = trigger.mac,
+        onValueChange = { onChange(trigger.copy(mac = it)) },
+    )
     AutomationDropdown(
         label = "Кнопка пульта",
         value = trigger.btn,
@@ -245,7 +251,8 @@ private fun EspBleBtnTriggerFields(
     )
     Text(
         text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
-            "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4.",
+            "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4. " +
+            "MAC обязателен; забытый пульт остаётся в правиле, пока не выберете другой.",
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -344,11 +351,25 @@ private fun NumericTriggerFields(
                     signal = signal,
                     source = trigger.source.takeIf { it in sources }
                         ?: AutomationSignalCatalog.preferredSource(sources),
+                    mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
+                        trigger.mac.ifBlank {
+                            EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
+                        }
+                    } else {
+                        ""
+                    },
                 ),
             )
         },
     )
     AutomationSignalValueHint(trigger.signal)
+    if (trigger.signal == AutomationSignalId.ESP_BLE_BATTERY) {
+        AutomationEspBleDevicePicker(
+            label = "Устройство",
+            mac = trigger.mac,
+            onValueChange = { onChange(trigger.copy(mac = it)) },
+        )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -769,6 +790,7 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
 
     TriggerUiKind.ESP_BLE_BTN -> AutomationTrigger.EspBleBtn(
         id = id,
+        mac = EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty(),
         btn = 1,
         act = AutomationEspBleBtnAction.PRESS,
     )

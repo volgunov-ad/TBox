@@ -36,6 +36,7 @@ class AutomationEngine(
             val keyStatus: AutomationHardKeyStatus,
         ) : EngineEvent
         data class EspBleBtn(
+            val mac: String,
             val btn: Int,
             val act: AutomationEspBleBtnAction,
         ) : EngineEvent
@@ -114,7 +115,7 @@ class AutomationEngine(
         scope.launch {
             AutomationTriggerEspBleBtnEventBus.events.collect { event ->
                 val act = AutomationEspBleBtnAction.fromStorageKey(event.act) ?: return@collect
-                events.send(EngineEvent.EspBleBtn(event.btn, act))
+                events.send(EngineEvent.EspBleBtn(event.mac, event.btn, act))
             }
         }
         if (initial.loadError != null) {
@@ -229,7 +230,7 @@ class AutomationEngine(
                     is EngineEvent.System -> handleSystemEvent(event.event)
                     is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId)
                     is EngineEvent.HardKey -> handleHardKey(event.keyCode, event.keyStatus)
-                    is EngineEvent.EspBleBtn -> handleEspBleBtn(event.btn, event.act)
+                    is EngineEvent.EspBleBtn -> handleEspBleBtn(event.mac, event.btn, event.act)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
@@ -286,10 +287,10 @@ class AutomationEngine(
         }
     }
 
-    private suspend fun handleEspBleBtn(btn: Int, act: AutomationEspBleBtnAction) {
+    private suspend fun handleEspBleBtn(mac: String, btn: Int, act: AutomationEspBleBtnAction) {
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
-            val fire = evaluator.onEspBleBtn(btn, act) ?: return@forEach
+            val fire = evaluator.onEspBleBtn(mac, btn, act) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -664,7 +665,13 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
             is AutomationTrigger.EspBleBtn -> Unit
             is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
-                add(AutomationSignalKey(trigger.signal, trigger.source))
+                add(
+                    AutomationSignalKey(
+                        trigger.signal,
+                        trigger.source,
+                        mac = automationSignalMacOrNull(trigger.signal, trigger.mac),
+                    ),
+                )
 
             is AutomationTrigger.StateEquals ->
                 add(AutomationSignalKey(trigger.signal, trigger.source))
@@ -694,7 +701,13 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.Geofence -> add(AUTOMATION_GEO_DISPLAY_KEY)
 
         is AutomationCondition.Numeric ->
-            add(AutomationSignalKey(condition.signal, condition.source))
+            add(
+                AutomationSignalKey(
+                    condition.signal,
+                    condition.source,
+                    mac = automationSignalMacOrNull(condition.signal, condition.mac),
+                ),
+            )
 
         is AutomationCondition.State ->
             add(AutomationSignalKey(condition.signal, condition.source))

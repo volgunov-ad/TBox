@@ -1479,6 +1479,9 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
+    val espBleDeviceNamesFlow: Flow<Map<String, String>> =
+        vad.dashing.tbox.esp.EspBleDeviceNamesCodec.flow(context)
+
     val adbLastHostFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ADB_LAST_HOST_KEY]?.takeIf { it.isNotBlank() } ?: "127.0.0.1" }
         .distinctUntilChanged()
@@ -3012,6 +3015,51 @@ class SettingsManager(private val context: Context) {
                 }
             }
         }
+    }
+
+    suspend fun saveEspBleDeviceNames(names: Map<String, String>) {
+        context.settingsDataStore.edit { preferences ->
+            val encoded = vad.dashing.tbox.esp.EspBleDeviceNamesCodec.encode(names)
+            if (encoded.isEmpty()) {
+                preferences.remove(vad.dashing.tbox.esp.EspBleDeviceNamesCodec.PREF_KEY)
+            } else {
+                preferences[vad.dashing.tbox.esp.EspBleDeviceNamesCodec.PREF_KEY] = encoded
+            }
+        }
+    }
+
+    suspend fun saveEspBleDeviceName(mac: String, name: String) {
+        val normalized = vad.dashing.tbox.esp.normalizeEspBleMac(mac)
+        if (normalized.isEmpty()) return
+        val current = espBleDeviceNamesFlow.first().toMutableMap()
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) {
+            current.remove(normalized)
+        } else {
+            current[normalized] = trimmed
+        }
+        saveEspBleDeviceNames(current)
+    }
+
+    suspend fun removeEspBleDeviceName(mac: String) {
+        saveEspBleDeviceName(mac, "")
+    }
+
+    suspend fun clearEspBleDeviceNames(macs: Collection<String>? = null) {
+        if (macs == null) {
+            saveEspBleDeviceNames(emptyMap())
+            return
+        }
+        val remove = macs.map { vad.dashing.tbox.esp.normalizeEspBleMac(it) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (remove.isEmpty()) return
+        val current = espBleDeviceNamesFlow.first().toMutableMap()
+        var changed = false
+        for (mac in remove) {
+            if (current.remove(mac) != null) changed = true
+        }
+        if (changed) saveEspBleDeviceNames(current)
     }
 
     private fun resolveLocationSource(preferences: Preferences): vad.dashing.tbox.esp.LocationSource {
