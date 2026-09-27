@@ -179,7 +179,8 @@ internal fun launchAppFromWidget(
 
 /**
  * Double-tap on an app-shortcut tile: ADB `am force-stop` only (no relaunch),
- * for every [AppLauncherLaunchMode]. Toasts on failure like App List advanced.
+ * for every [AppLauncherLaunchMode]. Toast only on failure (like App List advanced
+ * error path); success is silent.
  */
 internal fun forceStopAppFromWidget(
     context: Context,
@@ -189,25 +190,15 @@ internal fun forceStopAppFromWidget(
     val pkg = packageName.trim()
     if (pkg.isBlank()) return
     settingsViewModel.forceStopAppViaAdb(context, pkg) { result ->
-        if (result.success) {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(
-                    vad.dashing.tbox.R.string.app_list_adb_toast_ok_force_stop,
-                    pkg,
-                ),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
-        } else {
-            android.widget.Toast.makeText(
-                context,
-                context.getString(
-                    vad.dashing.tbox.R.string.app_list_adb_toast_fail,
-                    result.message.ifBlank { "ADB" },
-                ),
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
-        }
+        if (result.success) return@forceStopAppViaAdb
+        android.widget.Toast.makeText(
+            context,
+            context.getString(
+                vad.dashing.tbox.R.string.app_list_adb_toast_fail,
+                result.message.ifBlank { "ADB" },
+            ),
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
     }
 }
 
