@@ -2319,7 +2319,7 @@
     <string name="widget_actions_music_square">Two button rows; optional artwork and Like; swipe — change player.</string>
     <string name="widget_actions_music_buttons">Buttons — previous, play or pause, and next; swipe — change player.</string>
     <string name="widget_actions_media_volume">Buttons or swipe — change volume; center tap — mute or restore sound.</string>
-    <string name="widget_actions_app_launcher">Single tap — open the application.</string>
+    <string name="widget_actions_app_launcher">Single tap — open the application; double tap — close (ADB force-stop, no relaunch).</string>
     <string name="widget_actions_app_list">Single tap — open the app list.</string>
     <string name="widget_actions_http_request">Single tap — perform the configured action.</string>
     <string name="widget_actions_automation_trigger">Single tap — run automations with a matching trigger id. In edit mode — open widget settings.</string>
