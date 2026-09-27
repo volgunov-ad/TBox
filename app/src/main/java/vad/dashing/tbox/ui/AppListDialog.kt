@@ -599,6 +599,41 @@ private fun AppListDialogRow(
                 )
             }
         }
+        OutlinedButton(
+            onClick = onOpen,
+            enabled = row.canOpen,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.app_list_action_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        OutlinedButton(
+            onClick = onToggleHidden,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = stringResource(
+                    if (showHidden && row.hidden) {
+                        R.string.app_list_action_show
+                    } else {
+                        R.string.app_list_action_hide
+                    },
+                ),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        OutlinedButton(
+            onClick = onDelete,
+            enabled = row.canUninstall,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.app_list_action_delete),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
         if (advancedMode) {
             Box {
                 OutlinedButton(
@@ -655,42 +690,6 @@ private fun AppListDialogRow(
                         },
                     )
                 }
-            }
-        } else {
-            OutlinedButton(
-                onClick = onOpen,
-                enabled = row.canOpen,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.app_list_action_open),
-                    style = MaterialTheme.typography.tboxButton,
-                )
-            }
-            OutlinedButton(
-                onClick = onToggleHidden,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(
-                        if (showHidden && row.hidden) {
-                            R.string.app_list_action_show
-                        } else {
-                            R.string.app_list_action_hide
-                        },
-                    ),
-                    style = MaterialTheme.typography.tboxButton,
-                )
-            }
-            OutlinedButton(
-                onClick = onDelete,
-                enabled = row.canUninstall,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.app_list_action_delete),
-                    style = MaterialTheme.typography.tboxButton,
-                )
             }
         }
     }
