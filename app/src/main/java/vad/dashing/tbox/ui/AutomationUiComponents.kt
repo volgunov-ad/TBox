@@ -68,6 +68,9 @@ import vad.dashing.tbox.automation.automationWeekdayShortLabel
 import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.WifiStaSsid
 import vad.dashing.tbox.automation.sortedByAutomationLabel
+import vad.dashing.tbox.esp.EspBleDeviceNamesCodec
+import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.normalizeEspBleMac
 import vad.dashing.tbox.location.GeoDisplayRepository
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -460,11 +463,25 @@ private fun NumericConditionFields(
                     signal = signal,
                     source = condition.source.takeIf { it in sources }
                         ?: AutomationSignalCatalog.preferredSource(sources),
+                    mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
+                        condition.mac.ifBlank {
+                            EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
+                        }
+                    } else {
+                        ""
+                    },
                 ),
             )
         },
     )
     AutomationSignalValueHint(condition.signal)
+    if (condition.signal == AutomationSignalId.ESP_BLE_BATTERY) {
+        AutomationEspBleDevicePicker(
+            label = "Устройство",
+            mac = condition.mac,
+            onValueChange = { onChange(condition.copy(mac = it)) },
+        )
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
@@ -1214,6 +1231,44 @@ internal fun AutomationPackagePicker(
         label = "Пакет приложения",
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+internal fun AutomationEspBleDevicePicker(
+    label: String,
+    mac: String,
+    onValueChange: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
+    val names by EspBleDeviceNamesCodec.flow(context)
+        .collectAsStateWithLifecycle(initialValue = emptyMap())
+    val selected = normalizeEspBleMac(mac)
+    val options = buildList {
+        add("")
+        if (selected.isNotEmpty() && selected !in bleMacs) add(selected)
+        addAll(bleMacs)
+    }.distinct()
+    AutomationDropdown(
+        label = label,
+        value = selected,
+        options = options,
+        optionLabel = { value ->
+            when {
+                value.isBlank() -> "Выберите…"
+                else -> EspBleDeviceNamesCodec.label(value, names)
+            }
+        },
+        onValueChange = { onValueChange(normalizeEspBleMac(it)) },
+    )
+    if (selected.isNotEmpty() && selected !in bleMacs) {
+        Text(
+            text = "MAC не в allowlist компаньона — обучите пульт снова или выберите другое устройство",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 private fun formatAutomationNumber(value: Double): String =

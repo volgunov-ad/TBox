@@ -1096,6 +1096,7 @@ class EspCompanionManager(
                 EspCompanionRepository.applyBleBtn(event)
                 AutomationTriggerEspBleBtnEventBus.publish(
                     AutomationEspBleBtnEvent(
+                        mac = msg.mac,
                         btn = msg.btn,
                         act = msg.act,
                     ),
@@ -1109,6 +1110,7 @@ class EspCompanionManager(
                     macs = msg.macs,
                     lastBat = msg.lastBat,
                     lastRssi = msg.lastRssi,
+                    lastMac = msg.lastMac,
                 )
             }
             is EspMessage.BleSeen -> {

@@ -975,6 +975,10 @@
     <string name="esp_ble_learn_hint">Нажмите любую кнопку на пульте в течение 30 с</string>
     <string name="esp_ble_learning">Ожидание нажатия…</string>
     <string name="esp_ble_bound_macs">Привязанные MAC</string>
+    <string name="esp_ble_devices">Устройства</string>
+    <string name="esp_ble_no_devices">Нет привязанных пультов — нажмите «Обучить пульт»</string>
+    <string name="esp_ble_device_name">Имя устройства</string>
+    <string name="esp_ble_save_name">Сохранить имя</string>
     <string name="esp_ble_forget">Забыть</string>
     <string name="esp_ble_forget_all">Забыть все</string>
     <string name="esp_ble_last_event">Последнее событие</string>

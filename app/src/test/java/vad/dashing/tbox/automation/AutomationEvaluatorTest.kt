@@ -764,29 +764,32 @@ class AutomationEvaluatorTest {
     }
 
     @Test
-    fun espBleBtnTrigger_firesOnExactBtnAndAct() {
+    fun espBleBtnTrigger_firesOnExactMacBtnAndAct() {
         val evaluator = evaluator(
             AutomationTrigger.EspBleBtn(
                 id = "b1",
+                mac = "aa:bb:cc:dd:ee:01",
                 btn = 1,
                 act = AutomationEspBleBtnAction.PRESS,
             ),
             AutomationTrigger.EspBleBtn(
                 id = "b2d",
+                mac = "aa:bb:cc:dd:ee:02",
                 btn = 2,
                 act = AutomationEspBleBtnAction.DOUBLE,
             ),
         )
         assertEquals(
             "b1",
-            evaluator.onEspBleBtn(1, AutomationEspBleBtnAction.PRESS)?.triggerId,
+            evaluator.onEspBleBtn("AA:BB:CC:DD:EE:01", 1, AutomationEspBleBtnAction.PRESS)?.triggerId,
         )
         assertEquals(
             "b2d",
-            evaluator.onEspBleBtn(2, AutomationEspBleBtnAction.DOUBLE)?.triggerId,
+            evaluator.onEspBleBtn("aa:bb:cc:dd:ee:02", 2, AutomationEspBleBtnAction.DOUBLE)?.triggerId,
         )
-        assertNull(evaluator.onEspBleBtn(1, AutomationEspBleBtnAction.DOUBLE))
-        assertNull(evaluator.onEspBleBtn(3, AutomationEspBleBtnAction.PRESS))
+        assertNull(evaluator.onEspBleBtn("aa:bb:cc:dd:ee:01", 1, AutomationEspBleBtnAction.DOUBLE))
+        assertNull(evaluator.onEspBleBtn("aa:bb:cc:dd:ee:99", 1, AutomationEspBleBtnAction.PRESS))
+        assertNull(evaluator.onEspBleBtn("aa:bb:cc:dd:ee:01", 3, AutomationEspBleBtnAction.PRESS))
         assertTrue(evaluator.triggerStillMatching("b1"))
     }
 

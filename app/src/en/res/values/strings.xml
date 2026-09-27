@@ -967,6 +967,10 @@
     <string name="esp_ble_learn_hint">Press any button on the remote within 30 s</string>
     <string name="esp_ble_learning">Waiting for press…</string>
     <string name="esp_ble_bound_macs">Bound MACs</string>
+    <string name="esp_ble_devices">Devices</string>
+    <string name="esp_ble_no_devices">No bound remotes — tap “Learn remote”</string>
+    <string name="esp_ble_device_name">Device name</string>
+    <string name="esp_ble_save_name">Save name</string>
     <string name="esp_ble_forget">Forget</string>
     <string name="esp_ble_forget_all">Forget all</string>
     <string name="esp_ble_last_event">Last event</string>

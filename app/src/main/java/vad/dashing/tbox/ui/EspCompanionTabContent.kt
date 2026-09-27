@@ -79,8 +79,13 @@ private enum class EspCompanionSection {
 
 /** Subsection header inside a Companion horizontal section (same as ELM327 / Modem). */
 @Composable
-private fun CompanionSectionHeader(text: String) {
-    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+private fun CompanionSectionHeader(
+    text: String,
+    showTopDivider: Boolean = true,
+) {
+    if (showTopDivider) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+    }
     Text(
         text = text,
         style = MaterialTheme.typography.tboxTitle,
@@ -121,12 +126,13 @@ fun EspCompanionTabContent(
     val otaBusy by EspCompanionRepository.otaBusy.collectAsStateWithLifecycle()
     val otaProgress by EspCompanionRepository.otaProgress.collectAsStateWithLifecycle()
     val otaError by EspCompanionRepository.otaError.collectAsStateWithLifecycle()
+    val otaSuccessEpoch by EspCompanionRepository.otaSuccessEpoch.collectAsStateWithLifecycle()
     val um980ConfigBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
     val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
     val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
     val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
-    val lastBle by EspCompanionRepository.lastBleBtn.collectAsStateWithLifecycle()
-    val bleBat by EspCompanionRepository.bleBattery.collectAsStateWithLifecycle()
+    val bleDevices by EspCompanionRepository.bleDevices.collectAsStateWithLifecycle()
+    val bleDeviceNames by settingsViewModel.espBleDeviceNames.collectAsStateWithLifecycle()
     val companionLog by CompanionProtocolLogRecorder.uiState.collectAsStateWithLifecycle()
 
     val sections = EspCompanionSection.entries
@@ -184,10 +190,11 @@ fun EspCompanionTabContent(
         }
     }
 
-    LaunchedEffect(otaBusy, otaError, otaProgress) {
-        if (!otaBusy && otaProgress >= 100 && otaError == null) {
-            Toast.makeText(context, toastOtaOk, Toast.LENGTH_LONG).show()
-        }
+    LaunchedEffect(otaSuccessEpoch) {
+        if (otaSuccessEpoch <= 0L) return@LaunchedEffect
+        Toast.makeText(context, toastOtaOk, Toast.LENGTH_LONG).show()
+        delay(1_500L)
+        EspCompanionRepository.clearOtaUiState()
     }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -351,10 +358,11 @@ fun EspCompanionTabContent(
                     ) {
                         Text(stringResource(R.string.esp_ota_update), style = MaterialTheme.typography.tboxButton)
                     }
-                    if (otaBusy || otaProgress > 0) {
+                    if (otaBusy || (otaProgress > 0 && otaError.isNullOrBlank())) {
                         Text(
                             text = stringResource(R.string.esp_ota_progress, otaProgress),
                             style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = 4.dp),
                         )
                         LinearProgressIndicator(
@@ -407,7 +415,10 @@ fun EspCompanionTabContent(
                 }
 
                 EspCompanionSection.Data -> {
-                    CompanionSectionHeader(stringResource(R.string.esp_gpio_inputs))
+                    CompanionSectionHeader(
+                        stringResource(R.string.esp_gpio_inputs),
+                        showTopDivider = false,
+                    )
                     StatusRow(
                         stringResource(R.string.esp_gpio_inputs),
                         Integer.toBinaryString(gpioMask).padStart(gpioBits, '0'),
@@ -558,7 +569,10 @@ fun EspCompanionTabContent(
                 }
 
                 EspCompanionSection.Ble -> {
-                    CompanionSectionHeader(stringResource(R.string.esp_ble_title))
+                    CompanionSectionHeader(
+                        stringResource(R.string.esp_ble_title),
+                        showTopDivider = false,
+                    )
                     if (!info.ble) {
                         CompanionHelperText(stringResource(R.string.esp_ble_need_fw))
                     } else {
@@ -575,18 +589,6 @@ fun EspCompanionTabContent(
                             text = stringResource(R.string.esp_ble_scan),
                             description = stringResource(R.string.esp_ble_scan_desc),
                             enabled = controlsEnabled,
-                        )
-                        StatusRow(
-                            stringResource(R.string.esp_ble_battery),
-                            bleBat?.let { "$it%" } ?: "—",
-                        )
-                        StatusRow(
-                            stringResource(R.string.esp_ble_last_event),
-                            lastBle?.let { "btn${it.btn} ${it.act} rssi=${it.rssi}" } ?: "—",
-                        )
-                        StatusRow(
-                            stringResource(R.string.esp_ble_bound_macs),
-                            if (bleMacs.isEmpty()) "—" else bleMacs.joinToString("\n"),
                         )
                         if (bleLearn) {
                             Text(
@@ -628,6 +630,7 @@ fun EspCompanionTabContent(
                             if (bleMacs.isNotEmpty()) {
                                 OutlinedButton(
                                     onClick = rememberWrappedOnClick {
+                                        settingsViewModel.clearEspBleDeviceNames(bleMacs)
                                         context.startService(
                                             Intent(context, BackgroundService::class.java).apply {
                                                 action = BackgroundService.ACTION_ESP_BLE_FORGET
@@ -646,35 +649,83 @@ fun EspCompanionTabContent(
                                 }
                             }
                         }
-                        for (mac in bleMacs) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = mac,
-                                    style = MaterialTheme.typography.tboxCaption,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                TextButton(
-                                    onClick = rememberWrappedOnClick {
-                                        context.startService(
-                                            Intent(context, BackgroundService::class.java).apply {
-                                                action = BackgroundService.ACTION_ESP_BLE_FORGET
-                                                putExtra(BackgroundService.EXTRA_ESP_BLE_MAC, mac)
-                                            },
-                                        )
-                                    },
-                                    enabled = controlsEnabled,
+                        if (bleMacs.isEmpty()) {
+                            CompanionHelperText(stringResource(R.string.esp_ble_no_devices))
+                        } else {
+                            CompanionSectionHeader(stringResource(R.string.esp_ble_devices))
+                            for (mac in bleMacs) {
+                                val runtime = bleDevices[mac]
+                                var nameDraft by remember(mac, bleDeviceNames[mac]) {
+                                    mutableStateOf(bleDeviceNames[mac].orEmpty())
+                                }
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
-                                    Text(
-                                        stringResource(R.string.esp_ble_forget),
-                                        style = MaterialTheme.typography.tboxButton,
+                                    OutlinedTextField(
+                                        value = nameDraft,
+                                        onValueChange = { nameDraft = it },
+                                        label = {
+                                            Text(stringResource(R.string.esp_ble_device_name))
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = mac,
+                                            style = MaterialTheme.typography.tboxCaption,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        TextButton(
+                                            onClick = rememberWrappedOnClick {
+                                                settingsViewModel.saveEspBleDeviceName(mac, nameDraft)
+                                            },
+                                        ) {
+                                            Text(
+                                                stringResource(R.string.esp_ble_save_name),
+                                                style = MaterialTheme.typography.tboxButton,
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = rememberWrappedOnClick {
+                                                settingsViewModel.removeEspBleDeviceName(mac)
+                                                context.startService(
+                                                    Intent(context, BackgroundService::class.java).apply {
+                                                        action = BackgroundService.ACTION_ESP_BLE_FORGET
+                                                        putExtra(BackgroundService.EXTRA_ESP_BLE_MAC, mac)
+                                                    },
+                                                )
+                                            },
+                                            enabled = controlsEnabled,
+                                        ) {
+                                            Text(
+                                                stringResource(R.string.esp_ble_forget),
+                                                style = MaterialTheme.typography.tboxButton,
+                                            )
+                                        }
+                                    }
+                                    StatusRow(
+                                        stringResource(R.string.esp_ble_battery),
+                                        runtime?.batteryPercent?.let { "$it%" } ?: "—",
+                                        showDivider = false,
+                                    )
+                                    StatusRow(
+                                        stringResource(R.string.esp_ble_last_event),
+                                        runtime?.lastEventLabel() ?: "—",
+                                        showDivider = false,
+                                    )
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(top = 4.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                                     )
                                 }
                             }
@@ -895,6 +946,7 @@ private fun CanCompanionDialog(
                         Text(
                             stringResource(R.string.esp_can_filter_ext),
                             style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     Button(
@@ -946,6 +998,7 @@ private fun CanCompanionDialog(
                         Text(
                             stringResource(R.string.esp_can_send_ext),
                             style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
                     Button(
@@ -990,6 +1043,7 @@ private fun CanCompanionDialog(
                                     EspCompanionProtocol.formatCanFrame(entry.frame),
                                 style = MaterialTheme.typography.tboxCaption,
                                 fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 2.dp),
                             )
                         }

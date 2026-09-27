@@ -400,9 +400,12 @@ sealed interface AutomationTrigger {
     /**
      * Fired by ESP companion `bleBtn` (Shelly Blu Button 1 / RC Button 4 / BTHome).
      * [btn] is 1…4 (Button 1 uses only 1); [act] is press / double / triple / long / hold.
+     * [mac] is required (normalized lowercase); forgotten/unbound MAC stays stored and simply
+     * does not match until the remote is learned again.
      */
     data class EspBleBtn(
         override val id: String = "1",
+        val mac: String = "",
         val btn: Int = 1,
         val act: AutomationEspBleBtnAction = AutomationEspBleBtnAction.PRESS,
     ) : AutomationTrigger
@@ -428,6 +431,11 @@ sealed interface AutomationTrigger {
         val rearmEnabled: Boolean = true,
         val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
         val startupBehavior: AutomationStartupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+        /**
+         * Bound Shelly Blu MAC when [signal] is [AutomationSignalId.ESP_BLE_BATTERY]
+         * (required for that signal). Ignored for other signals.
+         */
+        val mac: String = "",
     ) : AutomationTrigger
 
     data class StateEquals(
@@ -477,6 +485,11 @@ sealed interface AutomationCondition {
         val source: AutomationSignalSource,
         val comparison: AutomationComparison,
         val expectedValue: Double,
+        /**
+         * Bound Shelly Blu MAC when [signal] is [AutomationSignalId.ESP_BLE_BATTERY]
+         * (required for that signal). Ignored for other signals.
+         */
+        val mac: String = "",
     ) : AutomationCondition
 
     data class State(
@@ -755,7 +768,19 @@ data class AutomationDocument(
 data class AutomationSignalKey(
     val signal: AutomationSignalId,
     val source: AutomationSignalSource,
+    /**
+     * Bound BLE MAC for [AutomationSignalId.ESP_BLE_BATTERY]; null for other signals.
+     * Compared case-insensitively via normalized lowercase form from the codec/UI.
+     */
+    val mac: String? = null,
 )
+
+/** Non-blank MAC only for [AutomationSignalId.ESP_BLE_BATTERY]; otherwise null. */
+fun automationSignalMacOrNull(signal: AutomationSignalId, mac: String): String? {
+    if (signal != AutomationSignalId.ESP_BLE_BATTERY) return null
+    val normalized = mac.trim().lowercase()
+    return normalized.takeIf { it.isNotEmpty() }
+}
 
 sealed interface AutomationSignalValue {
     data class Number(val value: Double) : AutomationSignalValue

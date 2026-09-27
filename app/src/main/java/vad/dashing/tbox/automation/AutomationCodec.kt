@@ -136,6 +136,7 @@ object AutomationCodec {
             is AutomationTrigger.EspBleBtn -> JSONObject()
                 .put(KEY_TYPE, "esp_ble_btn")
                 .put("id", trigger.id)
+                .put("mac", trigger.mac)
                 .put("btn", trigger.btn)
                 .put("act", trigger.act.storageKey)
 
@@ -155,6 +156,13 @@ object AutomationCodec {
                 .put("rearmEnabled", trigger.rearmEnabled)
                 .put("holdMillis", trigger.holdMillis)
                 .put("startupBehavior", trigger.startupBehavior.storageKey)
+                .also { obj ->
+                    if (trigger.signal == AutomationSignalId.ESP_BLE_BATTERY &&
+                        trigger.mac.isNotBlank()
+                    ) {
+                        obj.put("mac", trigger.mac)
+                    }
+                }
 
             is AutomationTrigger.StateEquals -> JSONObject()
                 .put(KEY_TYPE, "state_equals")
@@ -217,6 +225,7 @@ object AutomationCodec {
 
             "esp_ble_btn" -> AutomationTrigger.EspBleBtn(
                 id = json.requireNonBlankString("id"),
+                mac = json.optString("mac", "").trim().lowercase(),
                 btn = json.requireInt("btn"),
                 act = AutomationEspBleBtnAction.fromStorageKey(
                     json.requireNonBlankString("act"),
@@ -260,6 +269,7 @@ object AutomationCodec {
                     rearmEnabled = json.optBooleanOrDefault("rearmEnabled", true),
                     holdMillis = holdMillis,
                     startupBehavior = startupBehavior,
+                    mac = json.optBleMac(signal),
                 )
             }
 
@@ -332,6 +342,13 @@ object AutomationCodec {
                 .put("source", condition.source.storageKey)
                 .put("comparison", condition.comparison.storageKey)
                 .put("expectedValue", condition.expectedValue)
+                .also { obj ->
+                    if (condition.signal == AutomationSignalId.ESP_BLE_BATTERY &&
+                        condition.mac.isNotBlank()
+                    ) {
+                        obj.put("mac", condition.mac)
+                    }
+                }
 
             is AutomationCondition.State -> JSONObject()
                 .put(KEY_TYPE, "state")
@@ -426,6 +443,7 @@ object AutomationCodec {
                     source = source,
                     comparison = comparison,
                     expectedValue = expectedValue,
+                    mac = json.optBleMac(signal),
                 )
             }
 
@@ -697,6 +715,11 @@ object AutomationCodec {
     private fun JSONObject.optNullableInt(key: String): Int? {
         if (!has(key) || isNull(key)) return null
         return requireInt(key)
+    }
+
+    private fun JSONObject.optBleMac(signal: AutomationSignalId): String {
+        if (signal != AutomationSignalId.ESP_BLE_BATTERY) return ""
+        return optString("mac", "").trim().lowercase()
     }
 
     private fun JSONObject.putNullable(key: String, value: Any?): JSONObject =

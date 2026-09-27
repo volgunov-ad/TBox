@@ -122,9 +122,13 @@ class AutomationEvaluator(
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
-    fun onEspBleBtn(btn: Int, act: AutomationEspBleBtnAction): AutomationTriggerFire? {
+    fun onEspBleBtn(mac: String, btn: Int, act: AutomationEspBleBtnAction): AutomationTriggerFire? {
+        val normalizedMac = mac.trim().lowercase()
         val trigger = definition.triggers.firstOrNull {
-            it is AutomationTrigger.EspBleBtn && it.btn == btn && it.act == act
+            it is AutomationTrigger.EspBleBtn &&
+                it.btn == btn &&
+                it.act == act &&
+                it.mac.trim().lowercase() == normalizedMac
         } ?: return null
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
@@ -394,7 +398,13 @@ class AutomationEvaluator(
                 AutomationCondition.Always -> true
                 is AutomationCondition.Numeric -> {
                     val actual = (
-                        snapshot[AutomationSignalKey(condition.signal, condition.source)]
+                        snapshot[
+                            AutomationSignalKey(
+                                condition.signal,
+                                condition.source,
+                                mac = automationSignalMacOrNull(condition.signal, condition.mac),
+                            ),
+                        ]
                             as? AutomationSignalValue.Number
                         )?.value ?: return false
                     when (condition.comparison) {
@@ -635,11 +645,15 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspBleBtn,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     -> null
-    is AutomationTrigger.NumericThreshold -> AutomationSignalKey(signal, source)
+    is AutomationTrigger.NumericThreshold -> AutomationSignalKey(
+        signal,
+        source,
+        mac = automationSignalMacOrNull(signal, mac),
+    )
     is AutomationTrigger.StateEquals -> AutomationSignalKey(signal, source)
     is AutomationTrigger.Geofence,
     is AutomationTrigger.Solar,

@@ -116,7 +116,14 @@ class AutomationSignalProvider(
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
                 AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()
-                AutomationSignalId.ESP_BLE_BATTERY -> espBleBatteryFlow()
+                AutomationSignalId.ESP_BLE_BATTERY -> {
+                    val mac = key.mac?.trim().orEmpty()
+                    if (mac.isEmpty()) {
+                        flowOf(AutomationSignalValue.Unavailable)
+                    } else {
+                        espBleBatteryFlow(mac)
+                    }
+                }
                 AutomationSignalId.WIFI_ENABLED -> wifiSnapshotFlow().map { snap ->
                     AutomationSignalValue.State(snap.radioState())
                 }.distinctUntilChanged()
@@ -264,11 +271,13 @@ private fun espBleBoundFlow(): Flow<AutomationSignalValue> =
         }
     }.distinctUntilChanged()
 
-private fun espBleBatteryFlow(): Flow<AutomationSignalValue> =
+private fun espBleBatteryFlow(mac: String): Flow<AutomationSignalValue> =
     combine(
         EspCompanionRepository.connected,
-        EspCompanionRepository.bleBattery,
-    ) { connected, bat ->
+        EspCompanionRepository.bleDevices,
+    ) { connected, devices ->
+        val normalized = mac.trim().lowercase()
+        val bat = devices[normalized]?.batteryPercent
         when {
             !connected -> AutomationSignalValue.Unavailable
             bat == null -> AutomationSignalValue.Unavailable

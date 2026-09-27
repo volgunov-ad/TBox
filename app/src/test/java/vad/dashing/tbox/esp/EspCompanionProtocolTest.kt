@@ -452,6 +452,7 @@ class EspCompanionProtocolTest {
         assertFalse(status.learn)
         assertEquals(listOf("11:22:33:44:55:66"), status.macs)
         assertEquals(50, status.lastBat)
+        assertEquals("11:22:33:44:55:66", status.lastMac)
 
         val set = EspCompanionProtocol.encodeBleSet(true)
         assertTrue(set.contains("\"t\":\"bleSet\""))
