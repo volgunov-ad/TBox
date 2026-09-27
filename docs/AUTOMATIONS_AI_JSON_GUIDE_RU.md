@@ -518,8 +518,7 @@
   "freeformOverlayCrop": false,
   "virtualDisplayId": null,
   "virtualDisplayWidthPx": null,
-  "virtualDisplayHeightPx": null,
-  "virtualDisplayLaunchPolicy": "relocate"
+  "virtualDisplayHeightPx": null
 }
 ```
 
@@ -530,8 +529,8 @@
   (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI; **display 0
   в пикере скрыт**) и желательно `virtualDisplayWidthPx`/`HeightPx` для remap после рестарта лаунчера;
 - `virtualDisplayId`: `null` или целое `> 0`; обязателен при `launchMode = virtual_display`;
-- `virtualDisplayLaunchPolicy`: `relocate` (по умолчанию: `am force-stop` затем старт) или
-  `new_instance` (`--activity-multiple-task --activity-new-task`);
+- при `virtual_display` всегда relocate: `am force-stop` затем `am start --display`
+  (legacy `virtualDisplayLaunchPolicy` в JSON игнорируется и не пишется);
 - `freeformSide`: `left`, `right`, `top`, `bottom`;
 - `freeformPercent`: используй только `20`, `30`, `40`, `50`, `60`, `70`, `80` (декодер
   нормализует и другие числа, но полагаться на это нельзя);

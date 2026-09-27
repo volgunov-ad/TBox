@@ -165,12 +165,6 @@ data class FloatingDashboardWidgetConfig(
      */
     val launcherVirtualDisplayWidthPx: Int? = null,
     val launcherVirtualDisplayHeightPx: Int? = null,
-    /**
-     * [VirtualDisplayLaunchPolicy] for [AppLauncherLaunchMode.VIRTUAL_DISPLAY].
-     * Default [VirtualDisplayLaunchPolicy.RELOCATE]: force-stop then open on the target display.
-     */
-    val launcherVirtualDisplayLaunchPolicy: VirtualDisplayLaunchPolicy =
-        VirtualDisplayLaunchPolicy.DEFAULT,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */

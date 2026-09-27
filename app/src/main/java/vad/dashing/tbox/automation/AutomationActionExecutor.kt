@@ -263,7 +263,6 @@ class AutomationActionExecutor(
                         displayId = displayId,
                         displayWidthPx = action.virtualDisplayWidthPx,
                         displayHeightPx = action.virtualDisplayHeightPx,
-                        policy = action.virtualDisplayLaunchPolicy,
                         cachedDisplays = cached,
                         onDisplaysRefreshed = { refreshedDisplays = it },
                     )

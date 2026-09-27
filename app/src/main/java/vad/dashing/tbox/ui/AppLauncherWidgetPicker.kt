@@ -47,7 +47,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppLauncherLaunchMode
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
@@ -223,6 +222,14 @@ internal fun AppLauncherWidgetSettingsSection(
             enabled = state.togglesEnabled,
             options = localizedLaunchModes,
             selectorWidth = WidgetDialogDropdownSelectorWidth,
+        )
+        Text(
+            text = stringResource(R.string.widget_app_launcher_double_tap_force_stop_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
         )
         if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
             LaunchedEffect(mainScreenPageCount) {
@@ -468,13 +475,6 @@ private data class VirtualDisplayDropdownOption(
     override fun toString(): String = label
 }
 
-private data class VirtualDisplayPolicyDropdownOption(
-    val policy: VirtualDisplayLaunchPolicy,
-    val label: String,
-) {
-    override fun toString(): String = label
-}
-
 @Composable
 private fun VirtualDisplayLaunchSettings(
     state: WidgetSelectionDialogState,
@@ -565,24 +565,6 @@ private fun VirtualDisplayLaunchSettings(
         description = stringResource(R.string.widget_app_launcher_virtual_display_desc),
         enabled = state.togglesEnabled && !refreshing,
         options = options,
-        selectorWidth = WidgetDialogDropdownSelectorWidth,
-    )
-    val policyOptions = VirtualDisplayLaunchPolicy.entries.map { policy ->
-        VirtualDisplayPolicyDropdownOption(
-            policy = policy,
-            label = stringResource(policy.labelRes),
-        )
-    }
-    val selectedPolicy = policyOptions.firstOrNull {
-        it.policy == state.launcherVirtualDisplayLaunchPolicy
-    } ?: policyOptions.first()
-    SettingDropdownGeneric(
-        selectedValue = selectedPolicy,
-        onValueChange = { state.launcherVirtualDisplayLaunchPolicy = it.policy },
-        text = stringResource(R.string.widget_app_launcher_vd_policy),
-        description = stringResource(R.string.widget_app_launcher_vd_policy_desc),
-        enabled = state.togglesEnabled,
-        options = policyOptions,
         selectorWidth = WidgetDialogDropdownSelectorWidth,
     )
     OutlinedButton(

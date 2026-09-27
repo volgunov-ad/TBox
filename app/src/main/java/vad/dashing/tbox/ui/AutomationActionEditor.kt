@@ -27,7 +27,6 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
@@ -515,20 +514,6 @@ private fun LaunchApplicationFields(
                     ),
                 )
             },
-        )
-        AutomationDropdown(
-            label = "Если приложение уже открыто",
-            value = action.virtualDisplayLaunchPolicy,
-            options = VirtualDisplayLaunchPolicy.entries,
-            optionLabel = {
-                when (it) {
-                    VirtualDisplayLaunchPolicy.RELOCATE ->
-                        "Закрыть и открыть на этом дисплее"
-                    VirtualDisplayLaunchPolicy.NEW_INSTANCE ->
-                        "Второй экземпляр (не закрывать)"
-                }
-            },
-            onValueChange = { onChange(action.copy(virtualDisplayLaunchPolicy = it)) },
         )
         OutlinedButton(
             onClick = rememberWrappedOnClick {

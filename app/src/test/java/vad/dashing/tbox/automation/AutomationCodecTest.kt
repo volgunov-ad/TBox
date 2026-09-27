@@ -7,7 +7,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.AppLauncherLaunchMode
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 
 @RunWith(RobolectricTestRunner::class)
@@ -135,7 +134,6 @@ class AutomationCodecTest {
                     virtualDisplayId = 5,
                     virtualDisplayWidthPx = 1320,
                     virtualDisplayHeightPx = 856,
-                    virtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.NEW_INSTANCE,
                 ),
             ),
             runMode = AutomationRunMode.QUEUED,
@@ -154,11 +152,10 @@ class AutomationCodecTest {
         assertEquals(5, vd.virtualDisplayId)
         assertEquals(1320, vd.virtualDisplayWidthPx)
         assertEquals(856, vd.virtualDisplayHeightPx)
-        assertEquals(VirtualDisplayLaunchPolicy.NEW_INSTANCE, vd.virtualDisplayLaunchPolicy)
     }
 
     @Test
-    fun launchApplication_virtualDisplay_defaultsRelocateAndOmitsLegacyDisplay0() {
+    fun launchApplication_virtualDisplay_dropsLegacyLaunchPolicy() {
         val json = """
             {
               "formatVersion":1,
@@ -179,7 +176,8 @@ class AutomationCodecTest {
                   "freeformOverlayCrop":false,
                   "virtualDisplayId":5,
                   "virtualDisplayWidthPx":1320,
-                  "virtualDisplayHeightPx":856
+                  "virtualDisplayHeightPx":856,
+                  "virtualDisplayLaunchPolicy":"new_instance"
                 }],
                 "runMode":"single",
                 "maxRuns":1
@@ -189,11 +187,17 @@ class AutomationCodecTest {
         val decoded = AutomationCodec.decode(json).getOrThrow()
         val action = decoded.automations.single().actions.single()
             as AutomationAction.LaunchApplication
-        assertEquals(VirtualDisplayLaunchPolicy.RELOCATE, action.virtualDisplayLaunchPolicy)
         assertEquals(5, action.virtualDisplayId)
         assertEquals(1320, action.virtualDisplayWidthPx)
         assertEquals(856, action.virtualDisplayHeightPx)
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
+        val encoded = org.json.JSONObject(AutomationCodec.encode(
+            AutomationDocument(automations = listOf(
+                decoded.automations.single().copy(actions = listOf(action))
+            ))
+        )).getJSONArray("automations").getJSONObject(0)
+            .getJSONArray("actions").getJSONObject(0)
+        assertTrue(!encoded.has("virtualDisplayLaunchPolicy"))
     }
 
     @Test

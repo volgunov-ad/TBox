@@ -2054,6 +2054,7 @@
     <string name="widget_app_launcher_launch_mode">Режим запуска</string>
     <string name="widget_app_launcher_launch_mode_desc">Обычный запуск, окно рядом с TBox (freeform) или запуск в виртуальном дисплее через ADB.</string>
     <string name="widget_app_launcher_launch_mode_desc_a10">Обычный запуск, штатное окно приложений лаунчера A10, окно рядом с TBox (freeform) или запуск в виртуальном дисплее через ADB.</string>
+    <string name="widget_app_launcher_double_tap_force_stop_hint">Двойной тап по ярлыку: am force-stop через ADB (без повторного запуска). При ошибке ADB — toast, как в расширенном списке программ.</string>
     <string name="widget_app_launcher_mode_fullscreen">Обычный</string>
     <string name="widget_app_launcher_mode_freeform">Рядом с TBox (freeform)</string>
     <string name="widget_app_launcher_mode_stock_window">Окно приложений (лаунчер)</string>
@@ -2070,10 +2071,6 @@
     <string name="widget_app_launcher_virtual_display_launch_fail">Не удалось запустить на дисплее (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_remapped">Дисплей %1$d → %2$d (%3$d×%4$d)</string>
     <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP только если порт ещё не слушает, опрашивает дисплеи через localhost и возвращает TCP лишь если эта сессия его включала. Дисплей 0 (панель) в списке скрыт. При запуске ярлыка id сверяется по сохранённому разрешению, TCP остаётся включённым.</string>
-    <string name="widget_app_launcher_vd_policy">Если приложение уже открыто</string>
-    <string name="widget_app_launcher_vd_policy_desc">Перенос закрывает процесс и открывает на выбранном дисплее; второй экземпляр — как freeform (multiple task).</string>
-    <string name="widget_app_launcher_vd_policy_relocate">Закрыть и открыть на этом дисплее</string>
-    <string name="widget_app_launcher_vd_policy_new_instance">Второй экземпляр (не закрывать)</string>
     <string name="widget_app_launcher_freeform_side">Сторона приложения</string>
     <string name="widget_app_launcher_freeform_side_left">Слева</string>
     <string name="widget_app_launcher_freeform_side_right">Справа</string>

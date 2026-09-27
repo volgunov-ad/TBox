@@ -242,10 +242,8 @@ fun serializeWidgetConfigsToJsonArray(
                         }
                     }
                 }
-                val policy = config.launcherVirtualDisplayLaunchPolicy
-                if (policy != VirtualDisplayLaunchPolicy.DEFAULT) {
-                    obj.put("launcherVirtualDisplayLaunchPolicy", policy.storageKey)
-                }
+                // Legacy launcherVirtualDisplayLaunchPolicy (relocate / new_instance) is
+                // ignored: virtual-display launch always relocates (force-stop then start).
             }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
@@ -701,14 +699,6 @@ private fun parseWidgetConfigsFromJsonArray(
                                     .takeIf { it > 0 }
                             } else {
                                 null
-                            },
-                        launcherVirtualDisplayLaunchPolicy =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-                                VirtualDisplayLaunchPolicy.fromStorageKey(
-                                    item.optString("launcherVirtualDisplayLaunchPolicy", ""),
-                                )
-                            } else {
-                                VirtualDisplayLaunchPolicy.DEFAULT
                             },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)

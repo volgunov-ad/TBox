@@ -2259,7 +2259,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         displayId: Int,
         displayWidthPx: Int? = null,
         displayHeightPx: Int? = null,
-        policy: VirtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.DEFAULT,
         onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome) -> Unit = {},
     ) {
         viewModelScope.launch {
@@ -2274,7 +2273,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     displayId = displayId,
                     displayWidthPx = displayWidthPx,
                     displayHeightPx = displayHeightPx,
-                    policy = policy,
                     cachedDisplays = cached,
                     onDisplaysRefreshed = { refreshedDisplays = it },
                 )
@@ -2287,6 +2285,31 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             // Refresh expert TCP toggle state if we left TCP on.
             vad.dashing.tbox.adb.HuAdbControl.refresh()
             onDone(outcome)
+        }
+    }
+
+    /**
+     * Double-tap on an app-shortcut tile: `am force-stop` via localhost ADB (no relaunch).
+     * Restores ADB TCP only if this session enabled it. [onDone] runs on the main thread.
+     */
+    fun forceStopAppViaAdb(
+        context: android.content.Context,
+        packageName: String,
+        onDone: (vad.dashing.tbox.automation.AutomationActionResult) -> Unit = {},
+    ) {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) {
+            onDone(
+                vad.dashing.tbox.automation.AutomationActionResult.failure("empty package"),
+            )
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.adb.AdbAutomationActions.forceStopPackage(context, pkg)
+            }
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+            onDone(result)
         }
     }
 
