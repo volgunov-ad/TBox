@@ -3,12 +3,15 @@ package vad.dashing.tbox.adb
 import java.io.File
 
 /**
- * Single owner for ephemeral localhost ADB shell sessions.
+ * Coordination for ephemeral localhost ADB shell vs the interactive ADB tab.
  *
- * When the ADB tab ([AdbRepository]) already holds a live TCP session to the same
- * host:port, reuses that [AdbConnection] under the repository mutex instead of
- * opening a second client (OEM `adbd` can then emit `ADB CLSE local id mismatch`).
- * Otherwise opens a short-lived TCP connection that does not replace USB/other sessions.
+ * When [AdbRepository] already holds a live TCP session to the same host:port, reuses
+ * that [AdbConnection] under the repository mutex (avoids a second TCP client to the
+ * same `adbd`). Otherwise opens a short-lived TCP connection — **every** grant / VD /
+ * automation / AppList consumer can still start a session when the tab is disconnected.
+ *
+ * Note: `ADB CLSE local id mismatch` also happens on a **single** connection when late
+ * CLSE/OKAY from a previous shell is mis-attributed; that is fixed in [AdbConnection].
  *
  * All production [LocalhostAdbSession.AndroidGateway] shell I/O goes through here.
  */

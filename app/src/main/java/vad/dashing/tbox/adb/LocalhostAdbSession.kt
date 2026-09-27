@@ -21,9 +21,10 @@ import vad.dashing.tbox.TboxRepository
  *
  * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [VirtualDisplayAdb],
  * [AdbAutomationActions], and [PackageAdbActions]. Always runs blocking socket work on
- * [Dispatchers.IO]. Production shell I/O goes through [AdbRepository.withTcpShellSession]
- * so a live ADB-tab TCP client is reused instead of opening a second adbd connection
- * (avoids `ADB CLSE local id mismatch` on OEM stacks).
+ * [Dispatchers.IO]. Production shell I/O goes through [AdbRepository.withTcpShellSession]:
+ * reuses a live ADB-tab TCP client when present, otherwise opens an ephemeral socket so
+ * every consumer can start a session with the tab disconnected. Stream id handling for
+ * sequential shells (grant-all) lives in [AdbConnection].
  */
 internal object LocalhostAdbSession {
     private const val TAG = "LOCAL_ADB"
