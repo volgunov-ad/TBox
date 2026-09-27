@@ -115,7 +115,10 @@ class AdbConnection(
         var exitCode: Int? = null
         while (true) {
             val message = receive()
-            validateStream(message, ids)
+            if (!belongsToStream(message, ids)) {
+                drainStale(message)
+                continue
+            }
             when (message.header.command) {
                 AdbProtocol.CMD_WRTE -> {
                     for (chunk in parser.feed(message.payload)) {
@@ -150,7 +153,10 @@ class AdbConnection(
         val output = ArrayList<ByteArray>()
         while (true) {
             val message = receive()
-            validateStream(message, ids)
+            if (!belongsToStream(message, ids)) {
+                drainStale(message)
+                continue
+            }
             when (message.header.command) {
                 AdbProtocol.CMD_WRTE -> {
                     output.add(message.payload)
@@ -171,6 +177,14 @@ class AdbConnection(
         }
     }
 
+    /**
+     * Opens a stream and waits for OKAY/CLSE addressed to [localId].
+     *
+     * Per ADB protocol, READY/CLOSE for a stream that is already closed (or never opened
+     * on our side) must be ignored — late frames from a previous shell are common on
+     * TCP/`adbd` after sequential `execute()` (grant-all). Throwing on id mismatch caused
+     * `ADB CLSE local id mismatch` even with a single client and no ADB tab session.
+     */
     private fun open(service: String): StreamIds? {
         val localId = nextLocalId++
         send(AdbProtocol.CMD_OPEN, localId, 0, service.toByteArray(Charsets.UTF_8))
@@ -178,26 +192,40 @@ class AdbConnection(
             val message = receive()
             when (message.header.command) {
                 AdbProtocol.CMD_OKAY -> {
-                    if (message.header.arg1 != localId) {
-                        throw IOException("ADB OPEN local id mismatch")
-                    }
+                    if (message.header.arg1 != localId) continue
                     return StreamIds(localId, message.header.arg0)
                 }
                 AdbProtocol.CMD_CLSE -> {
-                    if (message.header.arg1 != localId) {
-                        throw IOException("ADB CLSE local id mismatch")
-                    }
+                    if (message.header.arg1 != localId) continue
                     send(AdbProtocol.CMD_CLSE, localId, message.header.arg0)
                     return null
                 }
-                else -> throw IOException("Expected OKAY or CLSE, got ${AdbProtocol.commandName(message.header.command)}")
+                AdbProtocol.CMD_WRTE -> {
+                    // Stale write from a prior stream — ACK with its ids, then keep waiting.
+                    if (message.header.arg1 != localId) {
+                        send(AdbProtocol.CMD_OKAY, message.header.arg1, message.header.arg0)
+                        continue
+                    }
+                    throw IOException("Unexpected WRTE during OPEN for local id $localId")
+                }
+                else -> throw IOException(
+                    "Expected OKAY or CLSE, got ${AdbProtocol.commandName(message.header.command)}",
+                )
             }
         }
     }
 
-    private fun validateStream(message: AdbMessage, ids: StreamIds) {
-        if (message.header.arg0 != ids.remote || message.header.arg1 != ids.local) {
-            throw IOException("ADB stream id mismatch")
+    private fun belongsToStream(message: AdbMessage, ids: StreamIds): Boolean =
+        message.header.arg0 == ids.remote && message.header.arg1 == ids.local
+
+    private fun drainStale(message: AdbMessage) {
+        when (message.header.command) {
+            AdbProtocol.CMD_WRTE ->
+                send(AdbProtocol.CMD_OKAY, message.header.arg1, message.header.arg0)
+            AdbProtocol.CMD_OKAY, AdbProtocol.CMD_CLSE -> Unit
+            else -> throw IOException(
+                "Unexpected stale ${AdbProtocol.commandName(message.header.command)}",
+            )
         }
     }
 
