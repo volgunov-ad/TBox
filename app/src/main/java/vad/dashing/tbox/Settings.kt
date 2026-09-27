@@ -3050,7 +3050,9 @@ class SettingsManager(private val context: Context) {
             saveEspBleDeviceNames(emptyMap())
             return
         }
-        val remove = macs.map(vad.dashing.tbox.esp::normalizeEspBleMac).filter { it.isNotEmpty() }.toSet()
+        val remove = macs.map { vad.dashing.tbox.esp.normalizeEspBleMac(it) }
+            .filter { it.isNotEmpty() }
+            .toSet()
         if (remove.isEmpty()) return
         val current = espBleDeviceNamesFlow.first().toMutableMap()
         var changed = false
