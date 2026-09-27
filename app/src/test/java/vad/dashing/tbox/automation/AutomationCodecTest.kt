@@ -587,6 +587,21 @@ class AutomationCodecTest {
                     keyCode = 316,
                     keyStatus = AutomationHardKeyStatus.RELEASED,
                 ),
+                AutomationTrigger.HardKey(
+                    id = "3",
+                    keyCode = 210,
+                    keyStatus = AutomationHardKeyStatus.SINGLE,
+                ),
+                AutomationTrigger.HardKey(
+                    id = "4",
+                    keyCode = 211,
+                    keyStatus = AutomationHardKeyStatus.DOUBLE,
+                ),
+                AutomationTrigger.HardKey(
+                    id = "5",
+                    keyCode = 212,
+                    keyStatus = AutomationHardKeyStatus.LONG,
+                ),
             ),
             actions = listOf(
                 AutomationAction.Builtin(

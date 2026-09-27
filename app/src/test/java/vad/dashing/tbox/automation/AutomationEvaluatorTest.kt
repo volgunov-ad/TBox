@@ -747,6 +747,32 @@ class AutomationEvaluatorTest {
         )
         assertEquals("press", evaluator.onHardKey(115, AutomationHardKeyStatus.PRESSED)?.triggerId)
         assertEquals("release", evaluator.onHardKey(316, AutomationHardKeyStatus.RELEASED)?.triggerId)
+        assertNull(evaluator.onHardKey(115, AutomationHardKeyStatus.SINGLE))
+    }
+
+    @Test
+    fun onHardKey_matchesSynthesizedGestures() {
+        val evaluator = evaluator(
+            AutomationTrigger.HardKey(
+                id = "single",
+                keyCode = 115,
+                keyStatus = AutomationHardKeyStatus.SINGLE,
+            ),
+            AutomationTrigger.HardKey(
+                id = "double",
+                keyCode = 115,
+                keyStatus = AutomationHardKeyStatus.DOUBLE,
+            ),
+            AutomationTrigger.HardKey(
+                id = "long",
+                keyCode = 115,
+                keyStatus = AutomationHardKeyStatus.LONG,
+            ),
+        )
+        assertEquals("single", evaluator.onHardKey(115, AutomationHardKeyStatus.SINGLE)?.triggerId)
+        assertEquals("double", evaluator.onHardKey(115, AutomationHardKeyStatus.DOUBLE)?.triggerId)
+        assertEquals("long", evaluator.onHardKey(115, AutomationHardKeyStatus.LONG)?.triggerId)
+        assertNull(evaluator.onHardKey(115, AutomationHardKeyStatus.PRESSED))
     }
 
     @Test

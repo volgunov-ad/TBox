@@ -20,6 +20,8 @@ import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MAX
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MIN
 import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DEBOUNCE_MS
+import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DOUBLE_TAP_MS
+import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_LONG_PRESS_MS
 import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
@@ -191,6 +193,9 @@ private fun HardKeyTriggerFields(
             when (status) {
                 AutomationHardKeyStatus.PRESSED -> "Нажатие"
                 AutomationHardKeyStatus.RELEASED -> "Отпускание"
+                AutomationHardKeyStatus.SINGLE -> "Одиночное"
+                AutomationHardKeyStatus.DOUBLE -> "Двойное"
+                AutomationHardKeyStatus.LONG -> "Долгое"
             }
         },
         onValueChange = { onChange(trigger.copy(keyStatus = it)) },
@@ -199,6 +204,11 @@ private fun HardKeyTriggerFields(
     val available = canMode != HeadUnitCanMode.Android10Vhal
     Text(
         text = "Коды кнопок — в окне «Диагностика клавиш» и в документации MBCAN/VHAL. " +
+            "«Нажатие»/«Отпускание» — сырые события OEM. " +
+            "«Одиночное»/«Двойное»/«Долгое» вычисляются по таймингу " +
+            "(двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, " +
+            "долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс удержания). " +
+            "Одиночное срабатывает с задержкой окна двойного, чтобы отличить от двойного. " +
             "Повторные события одной кнопки подавляются в течение " +
             "${AUTOMATION_HARD_KEY_DEBOUNCE_MS} мс." +
             if (available) {

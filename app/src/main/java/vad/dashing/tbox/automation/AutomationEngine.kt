@@ -66,6 +66,12 @@ class AutomationEngine(
     private val signalProvider = AutomationSignalProvider(scope) { sample ->
         events.send(EngineEvent.Signal(sample))
     }
+    private val hardKeyGestures = AutomationHardKeyGestureRecognizer(
+        scope = scope,
+        publish = { keyCode, status ->
+            AutomationTriggerHardKeyEventBus.publish(AutomationHardKeyEvent(keyCode, status))
+        },
+    )
     private val evaluators = linkedMapOf<String, AutomationEvaluator>()
     private val definitions = linkedMapOf<String, AutomationDefinition>()
     private val executionStates = mutableMapOf<String, ExecutionState>()
@@ -110,6 +116,15 @@ class AutomationEngine(
         scope.launch {
             AutomationTriggerHardKeyEventBus.events.collect { event ->
                 events.send(EngineEvent.HardKey(event.keyCode, event.keyStatus))
+                when (event.keyStatus) {
+                    AutomationHardKeyStatus.PRESSED,
+                    AutomationHardKeyStatus.RELEASED,
+                    -> hardKeyGestures.onRaw(event.keyCode, event.keyStatus)
+                    AutomationHardKeyStatus.SINGLE,
+                    AutomationHardKeyStatus.DOUBLE,
+                    AutomationHardKeyStatus.LONG,
+                    -> Unit
+                }
             }
         }
         scope.launch {
@@ -169,6 +184,7 @@ class AutomationEngine(
             requestStop()
             engineJob.join()
             signalProvider.stop()
+            hardKeyGestures.clear()
             AutomationHardKeyTracking.setInterestRequired(false)
             AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())

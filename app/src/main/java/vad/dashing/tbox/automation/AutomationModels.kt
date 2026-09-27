@@ -27,6 +27,14 @@ const val AUTOMATION_SOLAR_MAX_OFFSET_MINUTES = 180
 const val AUTOMATION_HARD_KEY_MIN_CODE = 0
 const val AUTOMATION_HARD_KEY_MAX_CODE = 1023
 const val AUTOMATION_HARD_KEY_DEBOUNCE_MS = 120L
+/** Hold pressed this long (without release) → synthesized [AutomationHardKeyStatus.LONG]. */
+const val AUTOMATION_HARD_KEY_LONG_PRESS_MS = 500L
+/**
+ * After a short release, wait this long for a second press before emitting
+ * [AutomationHardKeyStatus.SINGLE]; a second press+release within the window emits
+ * [AutomationHardKeyStatus.DOUBLE] instead.
+ */
+const val AUTOMATION_HARD_KEY_DOUBLE_TAP_MS = 400L
 
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
@@ -228,16 +236,26 @@ enum class AutomationSystemEvent(val storageKey: String) {
     }
 }
 
-/** A9 mbCAN hardkey keyStatus: 0 = нажата, 1 = отпущена. */
-enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int) {
+/**
+ * Hardkey trigger edge or synthesized gesture.
+ *
+ * OEM A9 mbCAN delivers only [PRESSED] (raw 0) and [RELEASED] (raw 1).
+ * [SINGLE], [DOUBLE], and [LONG] are derived in-process from press/release timing
+ * ([AUTOMATION_HARD_KEY_DOUBLE_TAP_MS], [AUTOMATION_HARD_KEY_LONG_PRESS_MS]).
+ */
+enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int?) {
     PRESSED("pressed", 0),
-    RELEASED("released", 1);
+    RELEASED("released", 1),
+    SINGLE("single", null),
+    DOUBLE("double", null),
+    LONG("long", null);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationHardKeyStatus? =
             entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
 
-        fun fromRawValue(raw: Int): AutomationHardKeyStatus? = entries.firstOrNull { it.rawValue == raw }
+        fun fromRawValue(raw: Int): AutomationHardKeyStatus? =
+            entries.firstOrNull { it.rawValue == raw }
     }
 }
 
@@ -390,6 +408,9 @@ sealed interface AutomationTrigger {
      * Verified [keyCode] values are listed in docs/MBCAN_VHAL_PARAMETERS_RU.md and
      * [vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat.mbCanKeyName]; the backend is
      * available only when the head unit runs the Android 9 mbCAN CAN stack.
+     *
+     * [keyStatus] may be the raw OEM edge ([PRESSED]/[RELEASED]) or a synthesized
+     * gesture ([SINGLE]/[DOUBLE]/[LONG]) derived from press/release timing.
      */
     data class HardKey(
         override val id: String = "1",
