@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -293,6 +294,69 @@ object AdbRepository {
 
     fun clearLog() {
         _consoleLog.value = emptyList()
+    }
+
+    /**
+     * Runs [block] with a shell executor for [host]:[port], exclusive vs the ADB tab.
+     *
+     * If this repository already holds a live TCP session to the same endpoint, reuses
+     * that connection under [mutex] (no second adbd client). Otherwise opens an ephemeral
+     * TCP session without replacing a USB or unrelated TCP session.
+     *
+     * Used by [LocalhostAdbSession.AndroidGateway] for grants, automations, virtual display,
+     * and AppList advanced ADB actions.
+     */
+    suspend fun <T> withTcpShellSession(
+        host: String,
+        port: Int,
+        connectTimeoutMs: Int,
+        sessionTimeoutMs: Int,
+        keysDir: File,
+        clientName: String,
+        block: (execute: (String) -> AdbShellResult) -> T,
+    ): T {
+        if (!initialized) {
+            return AdbExclusiveTcpShell.openEphemeral(
+                host = host,
+                port = port,
+                connectTimeoutMs = connectTimeoutMs,
+                sessionTimeoutMs = sessionTimeoutMs,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
+        }
+        return mutex.withLock {
+            val state = _state.value
+            val active = connection
+            val mode = AdbExclusiveTcpShell.selectMode(
+                repositoryInitialized = true,
+                phase = state.phase,
+                transport = state.transport,
+                endpoint = state.endpoint,
+                hasConnection = active != null,
+                host = host,
+                port = port,
+            )
+            when (mode) {
+                AdbExclusiveTcpShell.Mode.ReuseLiveTcp -> {
+                    val live = checkNotNull(active) { "ReuseLiveTcp without connection" }
+                    appendLog("Reusing open TCP session for automation (${AdbEndpoints.format(host, port)})")
+                    block { command -> live.execute(command) }
+                }
+                AdbExclusiveTcpShell.Mode.Ephemeral -> {
+                    AdbExclusiveTcpShell.openEphemeral(
+                        host = host,
+                        port = port,
+                        connectTimeoutMs = connectTimeoutMs,
+                        sessionTimeoutMs = sessionTimeoutMs,
+                        keysDir = keysDir,
+                        clientName = clientName,
+                        block = block,
+                    )
+                }
+            }
+        }
     }
 
     private fun connectTransport(

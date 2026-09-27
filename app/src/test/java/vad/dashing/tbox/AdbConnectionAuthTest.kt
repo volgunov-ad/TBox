@@ -167,6 +167,66 @@ class AdbConnectionAuthTest {
         assertEquals("shell:uname\u0000", payloads[3].toString(Charsets.UTF_8))
     }
 
+    @Test
+    fun execute_sequentialShells_ignoresStaleClseFromPreviousStream() {
+        // Grant-all / multi-command: late CLSE for stream 1 arrives after OPEN for stream 2.
+        val transport = FakeTransport(
+            packet(AdbProtocol.CMD_CNXN, AdbProtocol.VERSION, 4096, "device::features=cmd\u0000".toByteArray()) +
+                // first shell localId=1
+                packet(AdbProtocol.CMD_OKAY, 10, 1) +
+                packet(AdbProtocol.CMD_WRTE, 10, 1, "a".toByteArray()) +
+                packet(AdbProtocol.CMD_CLSE, 10, 1) +
+                // stale duplicate CLSE for stream 1, then OKAY for localId=2
+                packet(AdbProtocol.CMD_CLSE, 10, 1) +
+                packet(AdbProtocol.CMD_OKAY, 11, 2) +
+                packet(AdbProtocol.CMD_WRTE, 11, 2, "b".toByteArray()) +
+                packet(AdbProtocol.CMD_CLSE, 11, 2),
+        )
+        val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
+        connection.connect()
+        assertEquals("a", connection.execute("one").stdout)
+        assertEquals("b", connection.execute("two").stdout)
+    }
+
+    @Test
+    fun open_ignoresStaleOkayAndWrteThenAcceptsMatchingOkay() {
+        val transport = FakeTransport(
+            packet(AdbProtocol.CMD_CNXN, AdbProtocol.VERSION, 4096, "device::features=cmd\u0000".toByteArray()) +
+                // OPEN localId=1: stale OKAY/WRTE for a fictional prior stream, then real OKAY
+                packet(AdbProtocol.CMD_OKAY, 99, 7) +
+                packet(AdbProtocol.CMD_WRTE, 99, 7, "stale".toByteArray()) +
+                packet(AdbProtocol.CMD_OKAY, 20, 1) +
+                packet(AdbProtocol.CMD_WRTE, 20, 1, "fresh".toByteArray()) +
+                packet(AdbProtocol.CMD_CLSE, 20, 1),
+        )
+        val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
+        connection.connect()
+        assertEquals("fresh", connection.execute("id").stdout)
+        val headers = writtenHeaders(transport)
+        // ACK for stale WRTE uses its stream ids (local=7, remote=99)
+        assertTrue(
+            headers.any {
+                it.command == AdbProtocol.CMD_OKAY && it.arg0 == 7 && it.arg1 == 99
+            },
+        )
+    }
+
+    @Test
+    fun execute_shellV2Rejected_withDuplicateClse_stillFallsBack() {
+        val transport = FakeTransport(
+            packet(AdbProtocol.CMD_CNXN, AdbProtocol.VERSION, 4096, "device::features=shell_v2\u0000".toByteArray()) +
+                packet(AdbProtocol.CMD_CLSE, 0, 1) +
+                // Extra CLSE some OEM adbd send after reject — must not break legacy OPEN (localId=2)
+                packet(AdbProtocol.CMD_CLSE, 0, 1) +
+                packet(AdbProtocol.CMD_OKAY, 5, 2) +
+                packet(AdbProtocol.CMD_WRTE, 5, 2, "ok".toByteArray()) +
+                packet(AdbProtocol.CMD_CLSE, 5, 2),
+        )
+        val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
+        connection.connect()
+        assertEquals("ok", connection.execute("uname").stdout)
+    }
+
     private fun packet(
         command: Int,
         arg0: Int,

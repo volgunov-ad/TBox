@@ -19,8 +19,12 @@ import vad.dashing.tbox.TboxRepository
  * (longer after `adbd` restart), run shell commands, disconnect, then optionally
  * restore previous TCP state — but only when this session actually turned TCP on.
  *
- * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], and
- * [VirtualDisplayAdb]. Always runs blocking socket work on [Dispatchers.IO].
+ * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [VirtualDisplayAdb],
+ * [AdbAutomationActions], and [PackageAdbActions]. Always runs blocking socket work on
+ * [Dispatchers.IO]. Production shell I/O goes through [AdbRepository.withTcpShellSession]:
+ * reuses a live ADB-tab TCP client when present, otherwise opens an ephemeral socket so
+ * every consumer can start a session with the tab disconnected. Stream id handling for
+ * sequential shells (grant-all) lives in [AdbConnection].
  */
 internal object LocalhostAdbSession {
     private const val TAG = "LOCAL_ADB"
@@ -60,7 +64,7 @@ internal object LocalhostAdbSession {
         suspend fun isTcpEnabled(): Boolean
         suspend fun setTcpEnabled(enabled: Boolean)
         fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean
-        fun <T> withShellSession(
+        suspend fun <T> withShellSession(
             host: String,
             port: Int,
             connectTimeoutMs: Int,
@@ -219,7 +223,7 @@ internal object LocalhostAdbSession {
             }
         }
 
-        override fun <T> withShellSession(
+        override suspend fun <T> withShellSession(
             host: String,
             port: Int,
             connectTimeoutMs: Int,
@@ -227,23 +231,15 @@ internal object LocalhostAdbSession {
             keysDir: File,
             clientName: String,
             block: (execute: (String) -> AdbShellResult) -> T,
-        ): T {
-            val transport = AdbTcpTransport.connect(
-                host,
-                port,
-                timeoutMs = maxOf(connectTimeoutMs, sessionTimeoutMs),
-            )
-            return transport.use { tcp ->
-                AdbConnection(
-                    tcp,
-                    AdbAuthKeys.loadOrCreate(keysDir),
-                    clientName,
-                ).use { connection ->
-                    connection.connect()
-                    block { command -> connection.execute(command) }
-                }
-            }
-        }
+        ): T = AdbRepository.withTcpShellSession(
+            host = host,
+            port = port,
+            connectTimeoutMs = connectTimeoutMs,
+            sessionTimeoutMs = sessionTimeoutMs,
+            keysDir = keysDir,
+            clientName = clientName,
+            block = block,
+        )
     }
 
     fun defaultClientName(): String = "tbox@${Build.MODEL}"

@@ -295,7 +295,7 @@ class PermissionsAutoGrantTest {
 
         override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = portOpen
 
-        override fun <T> withShellSession(
+        override suspend fun <T> withShellSession(
             host: String,
             port: Int,
             connectTimeoutMs: Int,
