@@ -179,7 +179,7 @@ flowchart TB
 | **`relocate`** (по умолчанию) | `am force-stop <pkg>`, затем `am start --display N` — перенос на целевой VD |
 | **`new_instance`** | `am start --display N --activity-multiple-task --activity-new-task` — второй экземпляр без убийства первого (как freeform) |
 
-При тапе по ярлыку TCP включают только если порт был закрыт, выполняют dumpsys + remap + старт, отключают сессию ADB, но **оставляют TCP включённым**. Тот же режим доступен в действии автоматизации **«Запустить приложение»** (`launchMode=virtual_display` + `virtualDisplayId` / size / policy). Код: `adb/VirtualDisplayAdb.kt`, `adb/VirtualDisplayTargetResolver.kt`, `adb/LocalhostAdbSession.kt`, `HuDisplayDumpParser`.
+При тапе по ярлыку TCP включают только если порт был закрыт, выполняют dumpsys + remap + старт, отключают сессию ADB, но **оставляют TCP включённым**. Тот же режим доступен в действии автоматизации **«Запустить приложение»** (`launchMode=virtual_display` + `virtualDisplayId` / size / policy). Код: `adb/VirtualDisplayAdb.kt`, `adb/VirtualDisplayTargetResolver.kt`, `adb/LocalhostAdbSession.kt`, `HuDisplayDumpParser`. Все ephemeral localhost-сессии (grants, VD, automations, AppList advanced) ходят в adbd через `AdbRepository.withTcpShellSession`: если вкладка ADB уже держит TCP к тому же `host:port`, соединение **переиспользуется** (один клиент), иначе открывается короткий сокет — иначе OEM `adbd` может отдавать `ADB CLSE local id mismatch`.
 
 ### Ярлык приложения: режим окна (freeform + overlay)
 
