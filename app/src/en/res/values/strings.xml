@@ -2041,6 +2041,7 @@
     <string name="widget_app_launcher_launch_mode">Launch mode</string>
     <string name="widget_app_launcher_launch_mode_desc">Normal launch, a window beside TBox (freeform), or launch on a virtual display via ADB.</string>
     <string name="widget_app_launcher_launch_mode_desc_a10">Normal launch, stock Adayo A10 app window, a window beside TBox (freeform), or launch on a virtual display via ADB.</string>
+    <string name="widget_app_launcher_double_tap_force_stop_hint">Double-tap the shortcut: am force-stop via ADB (no relaunch). On ADB failure — toast, same as App List advanced mode.</string>
     <string name="widget_app_launcher_mode_fullscreen">Normal</string>
     <string name="widget_app_launcher_mode_freeform">Beside TBox (freeform)</string>
     <string name="widget_app_launcher_mode_stock_window">App window (stock launcher)</string>
@@ -2057,10 +2058,6 @@
     <string name="widget_app_launcher_virtual_display_launch_fail">Could not launch on display (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_remapped">Display %1$d → %2$d (%3$d×%4$d)</string>
     <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP only if the port is not already listening, queries displays over localhost, then restores TCP only if this session turned it on. Display 0 (panel) is hidden from the list. Shortcut launch remaps id by stored resolution and leaves TCP enabled.</string>
-    <string name="widget_app_launcher_vd_policy">If the app is already open</string>
-    <string name="widget_app_launcher_vd_policy_desc">Relocate force-stops then opens on the chosen display; second instance uses freeform-style multiple-task flags.</string>
-    <string name="widget_app_launcher_vd_policy_relocate">Close and open on this display</string>
-    <string name="widget_app_launcher_vd_policy_new_instance">Second instance (keep first)</string>
     <string name="widget_app_launcher_freeform_side">App side</string>
     <string name="widget_app_launcher_freeform_side_left">Left</string>
     <string name="widget_app_launcher_freeform_side_right">Right</string>

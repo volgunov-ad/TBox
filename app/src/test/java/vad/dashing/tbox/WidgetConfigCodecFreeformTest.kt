@@ -11,7 +11,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -71,7 +70,6 @@ class WidgetConfigCodecFreeformTest {
                 launcherVirtualDisplayId = 5,
                 launcherVirtualDisplayWidthPx = 1320,
                 launcherVirtualDisplayHeightPx = 856,
-                launcherVirtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.NEW_INSTANCE,
             ),
         )
         val json = serializeWidgetConfigs(original)
@@ -80,36 +78,36 @@ class WidgetConfigCodecFreeformTest {
         assertEquals(5, obj.getInt("launcherVirtualDisplayId"))
         assertEquals(1320, obj.getInt("launcherVirtualDisplayWidthPx"))
         assertEquals(856, obj.getInt("launcherVirtualDisplayHeightPx"))
-        assertEquals("new_instance", obj.getString("launcherVirtualDisplayLaunchPolicy"))
+        assertFalse(obj.has("launcherVirtualDisplayLaunchPolicy"))
         assertFalse(obj.has("launcherFreeformEnabled"))
         val cfg = parseWidgetConfigsFromString(json).single()
         assertEquals(AppLauncherLaunchMode.VIRTUAL_DISPLAY, cfg.launcherLaunchMode)
         assertEquals(5, cfg.launcherVirtualDisplayId)
         assertEquals(1320, cfg.launcherVirtualDisplayWidthPx)
         assertEquals(856, cfg.launcherVirtualDisplayHeightPx)
-        assertEquals(VirtualDisplayLaunchPolicy.NEW_INSTANCE, cfg.launcherVirtualDisplayLaunchPolicy)
         assertFalse(cfg.launcherFreeformEnabled)
     }
 
     @Test
-    fun encode_omitsDefaultVirtualDisplayPolicy() {
-        val json = serializeWidgetConfigs(
-            listOf(
-                FloatingDashboardWidgetConfig(
-                    dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
-                    launcherAppPackage = "com.example.app",
-                    launcherLaunchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
-                    launcherVirtualDisplayId = 5,
-                    launcherVirtualDisplayWidthPx = 1320,
-                    launcherVirtualDisplayHeightPx = 856,
-                    launcherVirtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.RELOCATE,
-                ),
-            ),
-        )
-        val obj = JSONArray(json).getJSONObject(0)
-        assertFalse(obj.has("launcherVirtualDisplayLaunchPolicy"))
+    fun decode_ignoresLegacyVirtualDisplayLaunchPolicy() {
+        val json = JSONArray()
+            .put(
+                JSONObject()
+                    .put("dataKey", APP_LAUNCHER_WIDGET_DATA_KEY)
+                    .put("launcherAppPackage", "com.example.app")
+                    .put("launcherLaunchMode", "virtual_display")
+                    .put("launcherVirtualDisplayId", 5)
+                    .put("launcherVirtualDisplayWidthPx", 1320)
+                    .put("launcherVirtualDisplayHeightPx", 856)
+                    .put("launcherVirtualDisplayLaunchPolicy", "new_instance"),
+            )
+            .toString()
         val cfg = parseWidgetConfigsFromString(json).single()
-        assertEquals(VirtualDisplayLaunchPolicy.RELOCATE, cfg.launcherVirtualDisplayLaunchPolicy)
+        assertEquals(AppLauncherLaunchMode.VIRTUAL_DISPLAY, cfg.launcherLaunchMode)
+        assertEquals(5, cfg.launcherVirtualDisplayId)
+        // Policy field removed — legacy new_instance migrates by being dropped.
+        val reencoded = JSONArray(serializeWidgetConfigs(listOf(cfg))).getJSONObject(0)
+        assertFalse(reencoded.has("launcherVirtualDisplayLaunchPolicy"))
     }
 
     @Test

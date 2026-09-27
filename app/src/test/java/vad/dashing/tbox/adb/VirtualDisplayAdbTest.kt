@@ -7,7 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 
 class VirtualDisplayAdbTest {
 
@@ -21,19 +20,6 @@ class VirtualDisplayAdbTest {
             VirtualDisplayAdb.buildAmStartOnDisplayCommand(
                 5,
                 "ru.yandex.yandexmaps/ru.yandex.yandexmaps.MapActivity",
-            ),
-        )
-    }
-
-    @Test
-    fun buildAmStartOnDisplayCommand_multipleTask() {
-        assertEquals(
-            "am start --display 5 --activity-multiple-task --activity-new-task " +
-                "-n com.example/.MainActivity",
-            VirtualDisplayAdb.buildAmStartOnDisplayCommand(
-                displayId = 5,
-                component = "com.example/.MainActivity",
-                multipleTask = true,
             ),
         )
     }
@@ -94,7 +80,7 @@ class VirtualDisplayAdbTest {
     }
 
     @Test
-    fun launch_relocate_forceStopsThenStarts_leavesTcpEnabled() = runBlocking {
+    fun launch_alwaysForceStopsThenStarts_leavesTcpEnabled() = runBlocking {
         val dump = """
             mDisplayId=0
             size 1920 x 981
@@ -121,7 +107,6 @@ class VirtualDisplayAdbTest {
             preferredDisplayId = 5,
             preferredWidthPx = 1320,
             preferredHeightPx = 856,
-            policy = VirtualDisplayLaunchPolicy.RELOCATE,
             component = "com.example/.MainActivity",
         )
 
@@ -140,46 +125,7 @@ class VirtualDisplayAdbTest {
     }
 
     @Test
-    fun launch_newInstance_usesMultipleTaskFlags_noForceStop() = runBlocking {
-        val dump = """
-            mDisplayId=5
-            size 1320 x 856
-        """.trimIndent()
-        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
-        gateway.onShell = { command ->
-            if (command == VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND) {
-                AdbShellResult(stdout = dump, stderr = "", exitCode = 0, shellV2 = true)
-            } else {
-                AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
-            }
-        }
-
-        val outcome = VirtualDisplayAdb.launchOnDisplayWith(
-            gateway = gateway,
-            keysDir = tempFolder.newFolder("adb"),
-            clientName = "test@hu",
-            packageName = "com.example",
-            preferredDisplayId = 5,
-            preferredWidthPx = 1320,
-            preferredHeightPx = 856,
-            policy = VirtualDisplayLaunchPolicy.NEW_INSTANCE,
-            component = "com.example/.MainActivity",
-        )
-
-        assertTrue(outcome is VirtualDisplayAdb.LaunchOutcome.Success)
-        assertTrue(gateway.setTcpCalls.isEmpty())
-        assertEquals(
-            listOf(
-                VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND,
-                "am start --display 5 --activity-multiple-task --activity-new-task " +
-                    "-n com.example/.MainActivity",
-            ),
-            gateway.shellCommands,
-        )
-    }
-
-    @Test
-    fun launch_remapsDisplayIdByStoredSize() = runBlocking {
+    fun launch_remapsDisplayIdByStoredSize_thenForceStops() = runBlocking {
         val dump = """
             mDisplayId=0
             size 1920 x 981
@@ -188,10 +134,11 @@ class VirtualDisplayAdbTest {
         """.trimIndent()
         val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
         gateway.onShell = { command ->
-            if (command == VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND) {
-                AdbShellResult(stdout = dump, stderr = "", exitCode = 0, shellV2 = true)
-            } else {
-                AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
+            when {
+                command == VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND ->
+                    AdbShellResult(stdout = dump, stderr = "", exitCode = 0, shellV2 = true)
+                else ->
+                    AdbShellResult(stdout = "", stderr = "", exitCode = 0, shellV2 = true)
             }
         }
 
@@ -203,18 +150,19 @@ class VirtualDisplayAdbTest {
             preferredDisplayId = 5,
             preferredWidthPx = 1320,
             preferredHeightPx = 856,
-            policy = VirtualDisplayLaunchPolicy.NEW_INSTANCE,
             component = "com.example/.MainActivity",
         )
 
         val success = outcome as VirtualDisplayAdb.LaunchOutcome.Success
         assertEquals(9, success.displayId)
         assertTrue(success.remapped)
-        assertTrue(
-            gateway.shellCommands.any {
-                it == "am start --display 9 --activity-multiple-task --activity-new-task " +
-                    "-n com.example/.MainActivity"
-            },
+        assertEquals(
+            listOf(
+                VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND,
+                "am force-stop com.example",
+                "am start --display 9 -n com.example/.MainActivity",
+            ),
+            gateway.shellCommands,
         )
     }
 
@@ -237,7 +185,6 @@ class VirtualDisplayAdbTest {
             preferredDisplayId = 5,
             preferredWidthPx = 1320,
             preferredHeightPx = 856,
-            policy = VirtualDisplayLaunchPolicy.RELOCATE,
             component = "com.example/.MainActivity",
         )
 

@@ -1263,9 +1263,11 @@ fun DashboardWidgetRenderer(
         }
 
         APP_LAUNCHER_WIDGET_DATA_KEY -> {
+            val context = LocalContext.current
+            val pkg = widgetConfig.launcherAppPackage
             DashboardAppLauncherWidgetItem(
                 widget = widget,
-                packageName = widgetConfig.launcherAppPackage,
+                packageName = pkg,
                 customIconRevision = launcherAppIconRevision,
                 iconLookup = iconLookup,
                 suppressCustomIcon = themeActivating,
@@ -1273,6 +1275,13 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = if (enableInnerInteractions && !isEditMode && pkg.isNotBlank()) {
+                    {
+                        forceStopAppFromWidget(context, pkg, settingsViewModel)
+                    }
+                } else {
+                    null
+                },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,

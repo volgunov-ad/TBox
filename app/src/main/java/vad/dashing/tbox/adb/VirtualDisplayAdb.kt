@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import java.io.File
 import vad.dashing.tbox.TboxRepository
-import vad.dashing.tbox.VirtualDisplayLaunchPolicy
 
 /**
  * Lists HU displays and launches apps onto a chosen display via localhost ADB.
@@ -13,8 +12,8 @@ import vad.dashing.tbox.VirtualDisplayLaunchPolicy
  * - [launchOnDisplay]: leave ADB TCP enabled after `am start --display`.
  *
  * Before start, [launchOnDisplay] remaps the stored display id by size when the catalog
- * changed (launcher restart). [VirtualDisplayLaunchPolicy.RELOCATE] force-stops the package
- * first; [VirtualDisplayLaunchPolicy.NEW_INSTANCE] adds multiple-task flags.
+ * changed (launcher restart), then always `am force-stop` the package and
+ * `am start --display` (relocate / close-then-open).
  */
 object VirtualDisplayAdb {
     private const val TAG = "VD_ADB"
@@ -126,7 +125,8 @@ object VirtualDisplayAdb {
      * Launch [packageName] on the display identified by [displayId] (+ optional size for remap).
      *
      * Uses [cachedDisplays] when they already resolve; otherwise refreshes via dumpsys in the
-     * same ADB session as the launch (TCP left enabled).
+     * same ADB session as the launch (TCP left enabled). Always force-stops the package first
+     * (relocate), then starts on the target display.
      */
     suspend fun launchOnDisplay(
         context: Context,
@@ -134,7 +134,6 @@ object VirtualDisplayAdb {
         displayId: Int,
         displayWidthPx: Int? = null,
         displayHeightPx: Int? = null,
-        policy: VirtualDisplayLaunchPolicy = VirtualDisplayLaunchPolicy.DEFAULT,
         cachedDisplays: List<HuDisplayInfo> = emptyList(),
         onDisplaysRefreshed: (List<HuDisplayInfo>) -> Unit = {},
     ): LaunchOutcome {
@@ -152,7 +151,6 @@ object VirtualDisplayAdb {
             preferredDisplayId = displayId,
             preferredWidthPx = displayWidthPx,
             preferredHeightPx = displayHeightPx,
-            policy = policy,
             component = component,
             cachedDisplays = cachedDisplays,
             onDisplaysRefreshed = onDisplaysRefreshed,
@@ -167,7 +165,6 @@ object VirtualDisplayAdb {
         preferredDisplayId: Int,
         preferredWidthPx: Int?,
         preferredHeightPx: Int?,
-        policy: VirtualDisplayLaunchPolicy,
         component: String,
         cachedDisplays: List<HuDisplayInfo> = emptyList(),
         onDisplaysRefreshed: (List<HuDisplayInfo>) -> Unit = {},
@@ -210,21 +207,18 @@ object VirtualDisplayAdb {
                     return@run LaunchStep.ResolveFailed(resolved)
                 is VirtualDisplayTargetResolver.ResolveResult.Matched -> {
                     val targetId = resolved.display.displayId
-                    if (policy == VirtualDisplayLaunchPolicy.RELOCATE) {
-                        val stop = execute(buildForceStopCommand(packageName))
-                        val stopFail = AdbShellResults.failureDetail(stop)
-                        if (stopFail != null) {
-                            TboxRepository.addLog(
-                                level = "WARN",
-                                tag = TAG,
-                                message = "am force-stop $packageName: $stopFail (continuing)",
-                            )
-                        }
+                    val stop = execute(buildForceStopCommand(packageName))
+                    val stopFail = AdbShellResults.failureDetail(stop)
+                    if (stopFail != null) {
+                        TboxRepository.addLog(
+                            level = "WARN",
+                            tag = TAG,
+                            message = "am force-stop $packageName: $stopFail (continuing)",
+                        )
                     }
                     val startCmd = buildAmStartOnDisplayCommand(
                         displayId = targetId,
                         component = component,
-                        multipleTask = policy == VirtualDisplayLaunchPolicy.NEW_INSTANCE,
                     )
                     val start = execute(startCmd)
                     LaunchStep.Started(
@@ -269,7 +263,7 @@ object VirtualDisplayAdb {
                         tag = TAG,
                         message = "Launched $component on display ${d.displayId}" +
                             " (${d.widthPx}×${d.heightPx}$remapNote)" +
-                            " policy=${policy.storageKey} via localhost ADB",
+                            " (relocate) via localhost ADB",
                     )
                     LaunchOutcome.Success(
                         displayId = d.displayId,
@@ -285,15 +279,7 @@ object VirtualDisplayAdb {
     fun buildAmStartOnDisplayCommand(
         displayId: Int,
         component: String,
-        multipleTask: Boolean = false,
-    ): String {
-        val flags = if (multipleTask) {
-            " --activity-multiple-task --activity-new-task"
-        } else {
-            ""
-        }
-        return "am start --display $displayId$flags -n $component"
-    }
+    ): String = "am start --display $displayId -n $component"
 
     fun buildForceStopCommand(packageName: String): String =
         "am force-stop ${packageName.trim()}"
