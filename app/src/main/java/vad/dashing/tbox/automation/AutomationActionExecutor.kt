@@ -674,6 +674,13 @@ class AutomationActionExecutor(
                 AutomationActionResult.ok("Сообщение закрыто")
             }
         }
+
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+        AutomationBuiltinActionType.CRUISE_PAUSE,
+        AutomationBuiltinActionType.CRUISE_FULL_OFF,
+        AutomationBuiltinActionType.CRUISE_RESUME,
+        AutomationBuiltinActionType.CRUISE_NUDGE,
+        -> AutomationCruiseActions.execute(action)
     }
 
     private fun setPlatformVolume(

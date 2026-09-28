@@ -875,6 +875,70 @@ class AutomationValidatorTest {
         )
     }
 
+    @Test
+    fun cruiseBuiltins_acceptAccCcsAndRejectAuto() {
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+                            intValue = 90,
+                            stringValue = "acc",
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_PAUSE,
+                            stringValue = "ccs",
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_NUDGE,
+                            intValue = 1,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).isEmpty(),
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_FULL_OFF,
+                            stringValue = "auto",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+                            intValue = 200,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_NUDGE,
+                            intValue = 2,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+    }
+
     private fun validDefinition(
         triggers: List<AutomationTrigger> = listOf(
             AutomationTrigger.SystemEvent(

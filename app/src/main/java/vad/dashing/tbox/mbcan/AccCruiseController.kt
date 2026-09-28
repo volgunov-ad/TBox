@@ -164,7 +164,7 @@ object AccCruiseController {
         if (state == CruiseLogicalState.Fault) {
             abortAdjustLoop()
             debug("setpointTap action=ignore_fault")
-            return MbCanCommandResult(true, "Cruise fault � tap ignored")
+            return MbCanCommandResult(true, "Cruise fault — tap ignored")
         }
 
         if (atTarget) {
@@ -196,6 +196,117 @@ object AccCruiseController {
             }
         }
         return MbCanCommandResult(true, "ACC/CCS adjust started target=$target type=$cruiseControlType")
+    }
+
+    /**
+     * Same as [engageToTarget], but waits until the converge job finishes (automation actions).
+     * Immediate paths (fault ignore / pause-at-target) return without waiting on a job.
+     */
+    suspend fun engageToTargetAwaiting(
+        targetKmh: Int,
+        increaseIntervalMs: Int,
+        decreaseIntervalMs: Int,
+        cruiseControlType: CruiseControlType,
+        widgetKey: String = "automation",
+    ): MbCanCommandResult {
+        val start = engageToTarget(
+            targetKmh = targetKmh,
+            increaseIntervalMs = increaseIntervalMs,
+            decreaseIntervalMs = decreaseIntervalMs,
+            cruiseControlType = cruiseControlType,
+            widgetKey = widgetKey,
+        )
+        if (!start.success) return start
+        val job = mutex.withLock { adjustJob }
+        if (job != null) {
+            job.join()
+        }
+        val target = normalizeAccCruiseTargetKmh(targetKmh)
+        return MbCanCommandResult(
+            true,
+            "ACC/CCS adjust finished target=$target type=$cruiseControlType",
+        )
+    }
+
+    /**
+     * Pause Active/Override cruise (MFS Cancel **212**), matching status-tile Active tap /
+     * setpoint tap when already at target. No-op when not holding.
+     */
+    suspend fun pauseCruise(
+        cruiseControlType: CruiseControlType,
+    ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
+        abortAdjustLoop()
+        val state = currentLogicalState(cruiseControlType)
+        debug("pauseCruise type=$cruiseControlType state=$state ${signalSnapshot()}")
+        return when (state) {
+            CruiseLogicalState.Active, CruiseLogicalState.Override -> {
+                debug("pauseCruise action=pause_212")
+                pulseCancel()
+            }
+            else -> {
+                debug("pauseCruise action=noop")
+                MbCanCommandResult(true, "Cruise pause ignored")
+            }
+        }
+    }
+
+    /**
+     * Resume prior setpoint from Standby via RES+ (status swipe-up / Standby with setpoint).
+     * No-op when not in Standby.
+     */
+    suspend fun resumeCruise(
+        cruiseControlType: CruiseControlType,
+    ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
+        abortAdjustLoop()
+        val state = currentLogicalState(cruiseControlType)
+        debug("resumeCruise type=$cruiseControlType state=$state ${signalSnapshot()}")
+        return when (state) {
+            CruiseLogicalState.Standby -> {
+                debug("resumeCruise action=resume_res_plus")
+                resumePriorSetpoint(cruiseControlType)
+            }
+            else -> {
+                debug("resumeCruise action=noop")
+                MbCanCommandResult(true, "Cruise resume ignored")
+            }
+        }
+    }
+
+    /**
+     * Active/Override: nudge setpoint by exactly ±1 km/h (RES+ / SET−), matching status swipes.
+     * [deltaKmh] must be +1 or −1.
+     */
+    suspend fun nudgeCruise(
+        deltaKmh: Int,
+        cruiseControlType: CruiseControlType,
+    ): MbCanCommandResult {
+        require(deltaKmh == 1 || deltaKmh == -1) { "deltaKmh must be +1 or -1" }
+        CcsRememberedSetpoint.ensureStarted()
+        abortAdjustLoop()
+        val useAcc = resolveUseAcc(cruiseControlType)
+        val state = currentLogicalState(cruiseControlType)
+        debug("nudgeCruise type=$cruiseControlType delta=$deltaKmh state=$state ${signalSnapshot()}")
+        return when (state) {
+            CruiseLogicalState.Active, CruiseLogicalState.Override -> {
+                if (!useAcc) {
+                    CcsRememberedSetpoint.markOurPulse()
+                    CcsRememberedSetpoint.nudgeBy(deltaKmh, "automation_nudge")
+                }
+                if (deltaKmh > 0) {
+                    debug("nudgeCruise action=nudge_res_plus")
+                    pulseResPlus()
+                } else {
+                    debug("nudgeCruise action=nudge_set_minus")
+                    pulseSetMinus()
+                }
+            }
+            else -> {
+                debug("nudgeCruise action=noop")
+                MbCanCommandResult(true, "Cruise nudge ignored")
+            }
+        }
     }
 
     suspend fun statusSingleTap(

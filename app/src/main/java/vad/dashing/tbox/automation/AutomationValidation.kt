@@ -743,6 +743,80 @@ object AutomationValidator {
                 )
             }
 
+            AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
+                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs)",
+                    )
+                }
+                val target = action.intValue
+                if (
+                    target != 0 &&
+                    target !in vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN..
+                        vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Уставка круиза должна быть " +
+                            "${vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN}–" +
+                            "${vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX} км/ч",
+                    )
+                }
+                val parts = action.stringValue.trim().lowercase().split(':', ',')
+                parts.getOrNull(1)?.toIntOrNull()?.let { increase ->
+                    if (
+                        increase !in vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN..
+                            vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+                    ) {
+                        issues += AutomationValidationIssue(
+                            "$path.stringValue",
+                            "Интервал +1 должен быть " +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN}–" +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX} мс",
+                        )
+                    }
+                }
+                parts.getOrNull(2)?.toIntOrNull()?.let { decrease ->
+                    if (
+                        decrease !in vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN..
+                            vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+                    ) {
+                        issues += AutomationValidationIssue(
+                            "$path.stringValue",
+                            "Интервал −1 должен быть " +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN}–" +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX} мс",
+                        )
+                    }
+                }
+            }
+
+            AutomationBuiltinActionType.CRUISE_PAUSE,
+            AutomationBuiltinActionType.CRUISE_FULL_OFF,
+            AutomationBuiltinActionType.CRUISE_RESUME,
+            -> if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Круиз: режим ACC или CCS (acc / ccs)",
+                )
+            }
+
+            AutomationBuiltinActionType.CRUISE_NUDGE -> {
+                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs)",
+                    )
+                }
+                if (action.intValue != 1 && action.intValue != -1) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Шаг уставки круиза: +1 или −1",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.WIFI_CONNECT -> {
                 if (WifiStaSsid.normalize(action.stringValue) == null) {
                     issues += AutomationValidationIssue(

@@ -648,9 +648,16 @@
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
+| Круиз: включить и довести до уставки | `cruise_engage_to_target` | `stringValue`: `acc` или `ccs` (без `auto`); опционально `acc:increaseMs:decreaseMs` (интервалы шагов 50…1500, по умолчанию как у виджета 150); `intValue`: цель км/ч `30…150` (`0` → 90). Как tap виджета уставки: enable+SET− / converge; уже на цели → пауза 212. **Долгое**: executor ждёт окончания converge |
+| Круиз: пауза (Cancel) | `cruise_pause` | `stringValue`: `acc` / `ccs`. Active/Override → MFS Cancel **212**; иначе no-op |
+| Круиз: полностью выключить | `cruise_full_off` | `stringValue`: `acc` / `ccs`. Standby/Active/Override → MFS **210** |
+| Круиз: возобновить (RES+) | `cruise_resume` | `stringValue`: `acc` / `ccs`. Только Standby → RES+ |
+| Круиз: уставка ±1 | `cruise_nudge` | `stringValue`: `acc` / `ccs`; `intValue`: `1` (RES+) или `-1` (SET−). Только Active/Override |
 
 Не используй `esp_relay_set`: это устаревшее и отклоняемое действие. Для медиакоманд нужен
 доступ TBox Monitor к уведомлениям. Для `show_alert` нужно разрешение «Поверх других окон».
+Круизные Builtin вызывают `AccCruiseController` (те же пути, что виджеты); сырые MFS cruise
+pulses в `AutomationCanCatalog` не публикуются. Режим только **ACC** или **CCS** — без Auto.
 Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Если активна SoftAP/раздача ГУ, переключение
 радио сначала пытается её выключить. При `WRITE_SECURE_SETTINGS` дополнительно пишется
 `Settings.Global.WIFI_ON`. На «чистом» API 29+ с targetSdk ≥ 29 `setWifiEnabled` обычно
@@ -733,7 +740,7 @@ TCP :5555 включают только если порт ещё не слуша
 |---|---|---|
 | `gear_mode` | `head_unit`, `tbox` | `P`, `R`, `N`, `D` |
 | `acc_status` | `head_unit` | `off`, `acc`, `ign` |
-| `acc_cruise_state` | `head_unit` | `off`, `standby`, `active`, `fault` |
+| `acc_cruise_state` | `head_unit` | `off`, `standby`, `active`, `override`, `fault` |
 | `ccs_cruise_state` | `head_unit` | `off`, `standby`, `active` |
 | `brake_pedal` | `head_unit` | `off`, `on` |
 | `wiper_sts` | `head_unit` | `off`, `int`, `low`, `high` |
