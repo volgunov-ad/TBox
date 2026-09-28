@@ -183,6 +183,10 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415946, // T_0B01_IHU_8_LDWLKA_LaneAssit_TypeReq
         // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415939, // T_0B01_IHU_8_TJA_ICA_ON_OFF
+        // MBVehicleProperty.eDVD_LDWSWITCH
+        MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415056, // T_0901_IHU_3_LDWSwitch
+        // MBVehicleProperty.eTIMEGAPSET1REQ
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415938, // T_0B01_IHU_8_TimeGapSet1Req
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415055, // T_0901_IHU_3_BSDSwitch
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415065,
         MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415937,
@@ -286,6 +290,10 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415706, // R_0B00_FCM_2_LDWLKA_LaneAssitfeedback
         // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
+        // MBVehicleProperty.eDVD_LDWSWITCH
+        MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415717, // R_0B00_FCM_2_LDWOnOffSts
+        // MBVehicleProperty.eTIMEGAPSET1REQ
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415688, // R_0B00_FRM_3_TimeGapSet_DVD
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415723, // R_0B00_SRR_1_BSDState
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415729,
         MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415696,

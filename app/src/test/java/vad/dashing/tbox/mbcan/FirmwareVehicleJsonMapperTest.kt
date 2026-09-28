@@ -138,4 +138,24 @@ class FirmwareVehicleJsonMapperTest {
             FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE),
         )
     }
+
+    @Test
+    fun accTimeGapAndLdwSwitch_resolveStockVhalIds() {
+        assertEquals(
+            289_415_688,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET),
+        )
+        assertEquals(
+            289_415_938,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET),
+        )
+        assertEquals(
+            289_415_717,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.LDW_SWITCH),
+        )
+        assertEquals(
+            289_415_056,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.LDW_SWITCH),
+        )
+    }
 }

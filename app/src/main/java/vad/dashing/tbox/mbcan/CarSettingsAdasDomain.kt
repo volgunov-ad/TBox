@@ -9,6 +9,14 @@ enum class LdwSensitivity {
     High, Low
 }
 
+/**
+ * ACC following-distance time-gap (`eTIMEGAPSET1REQ` / mbCAN **95**).
+ * Raw **1…4** (typical closest→farthest). A9 HU log saw **1** with TJA on and **4** with TJA off.
+ */
+enum class AccTimeGap {
+    Level1, Level2, Level3, Level4
+}
+
 object CarSettingsAdasDomain {
     /**
      * Stock A9 (`array_fcw` Close/Standard/Far + `array_both_fcw_value`) and A10
@@ -52,5 +60,39 @@ object CarSettingsAdasDomain {
     fun encodeLdwSensitivityVhal(value: LdwSensitivity): Int = when (value) {
         LdwSensitivity.High -> 1
         LdwSensitivity.Low -> 0
+    }
+
+    /** mbCAN / VHAL share raw **1…4** for [AccTimeGap] (A9 log: 1, 4). */
+    fun decodeAccTimeGapMbCan(raw: Int): AccTimeGap? = decodeAccTimeGap(raw)
+
+    fun encodeAccTimeGapMbCan(value: AccTimeGap): Int = encodeAccTimeGap(value)
+
+    fun decodeAccTimeGapVhal(raw: Int): AccTimeGap? = decodeAccTimeGap(raw)
+
+    fun encodeAccTimeGapVhal(value: AccTimeGap): Int = encodeAccTimeGap(value)
+
+    private fun decodeAccTimeGap(raw: Int): AccTimeGap? = when (raw) {
+        1 -> AccTimeGap.Level1
+        2 -> AccTimeGap.Level2
+        3 -> AccTimeGap.Level3
+        4 -> AccTimeGap.Level4
+        else -> null
+    }
+
+    private fun encodeAccTimeGap(value: AccTimeGap): Int = when (value) {
+        AccTimeGap.Level1 -> 1
+        AccTimeGap.Level2 -> 2
+        AccTimeGap.Level3 -> 3
+        AccTimeGap.Level4 -> 4
+    }
+
+    /**
+     * LDW master switch (`eDVD_LDWSWITCH` / mbCAN **80**): **1** Off / **2** On.
+     * A9 log co-moves with LAS **17** (LKA→80=1, LDW→80=2).
+     */
+    fun decodeLdwSwitchMbCan(raw: Int): MbCanBinaryState? = when (raw) {
+        2 -> MbCanBinaryState.On
+        1 -> MbCanBinaryState.Off
+        else -> null
     }
 }

@@ -206,6 +206,14 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val ldwSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.ldwSwitchState else Android10VhalRepository.ldwSwitchState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val accTimeGap: StateFlow<AccTimeGap?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.accTimeGap else Android10VhalRepository.accTimeGap
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
     val hmaState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

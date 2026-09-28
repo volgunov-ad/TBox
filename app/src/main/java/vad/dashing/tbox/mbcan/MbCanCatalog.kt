@@ -127,7 +127,9 @@ object MbCanCatalog {
         MbCanControlParam("ADAS", "Auto brake switch", "eVEHICLE_PROPERTY_ACC_AUTOBRAKE_SW", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "LKA sensitivity", "eVEHICLE_PROPERTY_LAS_SENSITIVITY_LEVEL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "LAS mode (LDW/LKA/OFF)", "eVEHICLE_PROPERTY_LAS_MODE_SELECTION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "LDW switch", "eDVD_LDWSWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "TJA/ICA switch", "eVEHICLE_PROPERTY_TJA_ICA", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "ACC time gap", "eTIMEGAPSET1REQ", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "HMA / smart high beam", "eVEHICLE_SMART_HIGHBEAM_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC custom mode (ECO/Comfort/Strong)", "eHVAC_CUSTOM", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "AC MAX", "eVEHICLE_SET_RRM_ACMAX_REQ", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -209,6 +211,16 @@ object MbCanKnownVehiclePropertyId {
     const val LAS_MODE_OFF = 3
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA] — 1 off, 2 on. */
     const val TJA_ICA_SWITCH = 23
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eDVD_LDWSWITCH] —
+     * LDW master switch: mbCAN **1** Off / **2** On (A9 log co-moves with [LAS_MODE_SELECTION]).
+     */
+    const val LDW_SWITCH = 80
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eTIMEGAPSET1REQ] —
+     * ACC time-gap set request: raw **1…4** (A9 log: 1 with TJA on, 4 with TJA off).
+     */
+    const val ACC_TIME_GAP_SET = 95
     /** Blind-spot detection: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
     const val BLIND_AREA_DETECTION = 15
     /** Door-open warning: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
@@ -712,6 +724,16 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.TjaIca
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LDW_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.LdwSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
+            refreshSignal = MbCanSignal.AccTimeGap,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,

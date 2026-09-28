@@ -25,6 +25,7 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
             MbCanKnownVehiclePropertyId.REAR_WIPER,
             MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            MbCanKnownVehiclePropertyId.LDW_SWITCH,
             MbCanKnownVehiclePropertyId.HMA_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
             MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
@@ -70,6 +71,7 @@ class VhalBinaryToggleEncodeTest {
             MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
             MbCanKnownVehiclePropertyId.HUD_SWITCH,
             MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+            MbCanKnownVehiclePropertyId.LDW_SWITCH,
         ).forEach { id ->
             assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = true))
             assertEquals(2, VhalBinaryToggleCodec.encodeWriteValue(id, targetOn = false))
