@@ -107,6 +107,29 @@ object DeepDiagnosticsCatalog {
         289_415_179 to "TempknobRollingCounter",
         289_415_204 to "SeatHeatVentAlt1",
         289_415_205 to "SeatHeatVentAlt2",
+        // Door ajar / hood / lock (CEM_1 + CEM_2) — discovery; not yet production-decoded.
+        289_412_336 to "Cem1DriverDoorSts",
+        289_412_337 to "Cem1PsngrDoorSts",
+        289_412_340 to "Cem1LhrDoorSts",
+        289_412_339 to "Cem1RhrDoorSts",
+        289_412_338 to "Cem1HoodSts",
+        289_412_341 to "Cem1TrunkSts",
+        289_412_153 to "Cem1DriverDoorLockSts",
+        289_412_271 to "Cem2DriverDoorSts",
+        289_412_270 to "Cem2PsngrDoorSts",
+        289_412_266 to "Cem2LhrDoorSts",
+        289_412_267 to "Cem2RhrDoorSts",
+        289_412_269 to "Cem2HoodSts",
+        289_412_265 to "Cem2TrunkSt",
+        // Seat-belt warning lamps (ICM / ABM).
+        289_414_928 to "Icm1DriverSeatBeltWarning",
+        289_414_927 to "Icm1PassengerSeatBeltWarning",
+        289_414_926 to "Icm1RfSeatBeltWarning",
+        289_414_925 to "Icm1RrSeatBeltWarning",
+        289_414_924 to "Icm1RmSeatBeltWarning",
+        289_412_187 to "Icm2DriverSeatBeltWarning",
+        289_412_186 to "Icm2PassengerSeatBeltWarning",
+        289_414_956 to "Abm1PsngrSeatBeltWarning",
     )
 
     /** All A10 VHAL property ids to subscribe in deep mode. */

@@ -436,14 +436,17 @@ object MbCanEngineFacade {
                             val getter = bcm.javaClass.getMethod("getRearDoorMoveDir")
                             (getter.invoke(bcm) as? Number)?.toInt()
                         }.getOrNull()
-                        val trunkSts = runCatching {
+                        val doorSnapshot = runCatching {
                             val doorGetter = bcm.javaClass.getMethod("getDoorStatus")
                             val door = doorGetter.invoke(bcm) ?: return@runCatching null
-                            val trunkGetter = door.javaClass.getMethod("getTrunkSts")
-                            (trunkGetter.invoke(door) as? Number)?.toInt()
+                            BcmDoorDomain.fromDoorObject(door)
                         }.getOrNull()
+                        val trunkSts = doorSnapshot?.trunk
                         if (moveDir != null || trunkSts != null) {
                             MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
+                        }
+                        if (doorSnapshot != null) {
+                            MbCanRepository.scheduleDoorsBcmPush(doorSnapshot)
                         }
                         val reverseRaw = runCatching {
                             val getter = bcm.javaClass.getMethod("getReverseGearSwitch")
@@ -676,6 +679,10 @@ object MbCanEngineFacade {
      * `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` are skipped: OEM `unRegistCMDListener(type)`
      * clears **all** listeners of a type, so production CFG listeners must stay sole owners;
      * their raw events are mirrored via [setCfgCmdDeepDiagnosticListener] instead.
+     *
+     * `eMBCAN_VEHICLE_DOOR` / `eMBCAN_SEAT_BELT_STATUS` are **not** CMD-shaped on this OEM:
+     * [startDeepTypedObjectListeners] wires door callback + seat-belt poll instead.
+     * OEM `registCMDListener` only stores listeners for CFG_* types anyway.
      */
     @Synchronized
     fun startDeepCmdListeners(dataTypeNames: Set<String>): List<Pair<String, Boolean>> {
@@ -689,9 +696,15 @@ object MbCanEngineFacade {
             return dataTypeNames.map { it to false }
         }
         val loader = iface.classLoader
+        val skipCmdListener = setOf(
+            "eMBCAN_CFG_VEHICLE",
+            "eMBCAN_CFG_AUDIO",
+            "eMBCAN_VEHICLE_DOOR",
+            "eMBCAN_SEAT_BELT_STATUS",
+        )
         return dataTypeNames.map { name ->
             when {
-                name == "eMBCAN_CFG_VEHICLE" || name == "eMBCAN_CFG_AUDIO" -> name to false
+                name in skipCmdListener -> name to false
                 deepCmdListenerProxies.containsKey(name) -> name to true
                 else -> {
                     val dtEnum = resolveDataTypeEnum(name)
@@ -720,6 +733,94 @@ object MbCanEngineFacade {
         }
     }
 
+    /**
+     * Deep-mode typed listeners for OEM object types that never reach [IMBCmdListener].
+     * Door: [registCarDorListener]. Seat belt: OEM push Runnable is empty — poll via
+     * [readSeatBeltWarningRaw] from [MbCanRepository] while deep is on.
+     */
+    @Synchronized
+    fun startDeepTypedObjectListeners(): List<Pair<String, Boolean>> {
+        val doorOk = registerDeepDoorListener()
+        return listOf(
+            "eMBCAN_VEHICLE_DOOR" to doorOk,
+            "eMBCAN_SEAT_BELT_STATUS" to true, // poll-owned by MbCanRepository while deep
+        )
+    }
+
+    @Synchronized
+    fun stopDeepTypedObjectListeners() {
+        unregisterDeepDoorListener()
+    }
+
+    private var deepDoorListenerProxy: Any? = null
+
+    @Synchronized
+    private fun registerDeepDoorListener(): Boolean {
+        if (deepDoorListenerProxy != null) return true
+        if (ensureInitialized() !is MbCanAvailability.Available) return false
+        val inst = engineInstance ?: return false
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMbCanVehicleDoorCallback")
+        } catch (_: Throwable) {
+            return false
+        }
+        val loader = iface.classLoader ?: return false
+        val handler = InvocationHandler { _, method, args ->
+            oemSafe(method.name) {
+                if (method.name == "onVehicleDoorChange") {
+                    val door = args?.getOrNull(0) ?: return@oemSafe
+                    val snapshot = BcmDoorDomain.fromDoorObject(door) ?: return@oemSafe
+                    DeepCanDiagnostics.recordMbCanObjectSnapshot(
+                        "eMBCAN_VEHICLE_DOOR",
+                        snapshot.journalSample(),
+                    )
+                    MbCanRepository.scheduleDoorsBcmPush(snapshot)
+                    MbCanRepository.scheduleTrunkBcmPush(moveDir = null, trunkSts = snapshot.trunk)
+                }
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        val ok = runCatching {
+            inst.javaClass.getMethod(
+                "registCarDorListener",
+                Class.forName("com.mengbo.mbCan.interfaces.IMbCanVehicleDoorCallback"),
+            ).invoke(inst, proxy)
+            true
+        }.getOrDefault(false)
+        if (ok) deepDoorListenerProxy = proxy
+        return ok
+    }
+
+    @Synchronized
+    private fun unregisterDeepDoorListener() {
+        val inst = engineInstance
+        if (inst != null && deepDoorListenerProxy != null) {
+            runCatching {
+                inst.javaClass.getMethod("unregistCarDorListener").invoke(inst)
+            }
+        }
+        deepDoorListenerProxy = null
+    }
+
+    /**
+     * Seat-belt warning raw via [getMbCanData] type **15** (`eMBCAN_SEAT_BELT_STATUS`).
+     * OEM push callback for this type is empty — poll only.
+     */
+    fun readSeatBeltWarningRaw(): Pair<Int?, Int?>? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val cls = Class.forName("com.mengbo.mbCan.entity.MBCanSeatBeltWarning")
+            val obj = getMbCanData.invoke(inst, 15, cls) ?: return null
+            val driver = (cls.getMethod("getDriverWarning").invoke(obj) as? Number)?.toInt()
+            val passenger = (cls.getMethod("getPassengerWarning").invoke(obj) as? Number)?.toInt()
+            driver to passenger
+        }.getOrNull()
+    }
+
     @Synchronized
     fun stopDeepCmdListeners() {
         val inst = engineInstance
@@ -732,6 +833,7 @@ object MbCanEngineFacade {
             }
         }
         deepCmdListenerProxies.clear()
+        stopDeepTypedObjectListeners()
     }
 
     private fun resolveDataTypeEnum(name: String): Any? = runCatching {
@@ -1679,6 +1781,12 @@ object MbCanEngineFacade {
                         info.javaClass.getMethod("getFRM_3_ObjValid").invoke(info) as? Number
                     }.getOrNull()?.toInt()
                     MbCanRepository.scheduleFrmDxTarObjPush(dxRaw = dxTarObj, objValidRaw = objValid)
+                    val timeGapIcm = runCatching {
+                        info.javaClass.getMethod("getFRM_3_TimeGapSet_ICM").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    if (timeGapIcm != null) {
+                        MbCanRepository.scheduleFrmTimeGapIcmPush(timeGapIcm)
+                    }
                 }
             }
             null

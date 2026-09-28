@@ -75,7 +75,7 @@
 | First blowing | **53** `eVEHICLE_PROPERTY_POWER_FIRST_BREATH` | **289415188** → **289412677** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | BT reduce fan | **51** `eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED` | **289415190** → **289412667** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
-| Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off** |
+| Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off**. A9 cfg push **в allowlist** `scheduleVehicleCfgPush` |
 | Fragrance switch | **33** `eVEHICLE_PROPERTY_FRAGRANCE_SWITCH` | — (A9-only) | 1 Off / 2 On |
 | Fragrance smell | **34** `eVEHICLE_PROPERTY_FRAGRANCE_SMELL` | — (A9-only) | 1 Meteor / 2 Boss / 3 Tea |
 | Fragrance concentration | **35** `eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION` | — (A9-only) | 1 low / 2 mid / 3 high |
@@ -344,7 +344,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | Платформа | Чтение | Запись | Значения | Сигнал |
 |---|---|---|---|---|
 | **Android 9** | Vehicle **4** `MIRROR_AUTOFOLD_SW` | **4** | 1 Off / 2 On | `MirrorAutoFold` |
-| **Android 10** | VHAL **289412131** `R_0400_CEM_2_Mirror_Fold_Sts` | VHAL **289412657** `T_0401_IHU_1_DVD_SET_Mirror_Fold` | write: 1 On / 2 Off; read: **0 On**, иначе Off | `MirrorAutoFold` |
+| **Android 10** | VHAL **289412131** `R_0400_CEM_2_Mirror_Fold_Sts` | VHAL **289412657** `T_0401_IHU_1_DVD_SET_Mirror_Fold` | write: 1 On / 2 Off; read: **0 On**, иначе Off | `MirrorAutoFold` (A10: onChange **и** pull применяют StateFlow) |
 
 - **Одиночное нажатие** — отправляет противоположную команду относительно последней в этой сессии (toggle). По умолчанию последняя считается **unfold (2)**, значит первый одиночный тап шлёт **fold (1)**.
 - **Двойное нажатие** — всегда **fold (1)** и обновляет запомненную команду на fold до конца сессии.
@@ -446,8 +446,14 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — Brake fluid warning | VHAL **289414936** `R_0900_ICM_4_Brake_Fuel_Level` (OEM typo Fuel=Fluid) | CEM 1-bit **1** warning / **0** ok (`decodeCemBinaryActive`). **TBD на машине** | — | onChange + pull; `MbCanSignal.BrakeFluid` |
 | **Android 9** — Gear numbers (текущая) | `MBCanVehicleBcmStatus.getGSM_GearShiftPos()` (type **21**) | Сырое неотрицательное int as-is (`GearNumberDomain.decode`); target на A9 недоступен → null | — | **Push:** BCM + pull. StateFlows `currentGearNumberState` / `targetGearNumberState`. Виджеты `gearBoxCurrentGear` / `gearBoxPreparedGear` с `useMbCanVhal`. Автоматизации: `current_gear` / `target_gear` (bothSources) |
 | **Android 10** — Gear numbers | VHAL **289414947** `GSM_GearShiftPos`, **289414953** `EMS_TargetGearPosition` | Сырые int as-is | — | onChange + pull; `MbCanSignal.GearNumbers` (оба свойства). Target gear доступен только на A10 |
-| **Android 9** — FRM DxTarObj | FRM `getFRM_3_DxTarObj` + `getFRM_3_ObjValid` | ObjValid **1** → dx raw; **0**/иное → null (`FrmDxTarObjDomain`) | — | **Push:** тот же FRM listener, что ACC (`syncFrmDectInfoListener`); interest `FrmTargetDistance` или `AccCruise`. StateFlow `frmDxTarObjState`. Виджет `frmDxTarObj` (только ГУ). Автоматизации: HU-only `frm_dx_tar_obj` |
+| **Android 9** — FRM DxTarObj | FRM `getFRM_3_DxTarObj` + `getFRM_3_ObjValid` | ObjValid **1 или 2** → dx raw; **0**/иное → null (`FrmDxTarObjDomain`). В журнале всегда `dx=` + `valid=` (единицы dx **не** подтверждены как метры). A9: интересные dx чаще при valid=**2** | — | **Push:** тот же FRM listener, что ACC (`syncFrmDectInfoListener`); interest `FrmTargetDistance` или `AccCruise`. StateFlow `frmDxTarObjState`. Виджет `frmDxTarObj` (только ГУ). Автоматизации: HU-only `frm_dx_tar_obj` |
 | **Android 10** — FRM DxTarObj | VHAL **289415681** `R_0B00_FRM_3_DxTarObj`, **289415683** `R_0B00_FRM_3_ObjValid` | то же | — | onChange + pull; `MbCanSignal.FrmTargetDistance` |
+| **Android 9** — FRM TimeGapSet_ICM | FRM `getFRM_3_TimeGapSet_ICM` | Сырое echo уставки time-gap на кластере (уровни; не метры). Журнал `frm_time_gap_icm` | — | **Push:** тот же FRM listener; без отдельного StateFlow/виджета |
+| **Android 9** — Двери open/closed (BCM) | `MBCanVehicleDoor` из BCM `getDoorStatus()` / deep `registCarDorListener` | FL/FR/RL/RR + hood + driverLock (+ trunk/srf). Шкала как багажник: обычно **1** closed / **2** open (TBD). **Не** cfg 1/2/13 (автозамки) | — | **Push:** BCM bridge → `telemetry/doors` + StateFlow `bcmDoorsState`; deep — typed door callback + `CANDIAG` object snapshot. Без UI-виджетов на каждую дверь |
+| **Android 9** — Окна (журнал) | BCM `getVehicleWindow()` | Байты 0…100 (как BodyComfort) | — | Помимо StateFlow: `telemetry/windows` в journal (не только cfg 55–58 echo) |
+| **Android 9** — Ремень | `MBCanSeatBeltWarning` type **15** | `driverWarn` / `passengerWarn` raw. OEM push Runnable **пустой** → только poll | — | Deep: poll `getMbCanData` ~2 с → `telemetry/seat_belt` + `CANDIAG` object. Без виджета |
+| **Android 10** — Двери ajar / капот | VHAL CEM_2 **289412271/270/266/267/269** (+ CEM_1/lock в deep experimental) | Raw as-is → map `vhalDoorAjarRaw` (шкала TBD) | — | Deep catalog + production: interest `TrunkDoor` подписывает CEM_2; `applyPush` → DEBUG `telemetry/doors` |
+| **Android 10** — Ремень | VHAL ICM_1 **289414928/927** (+ ICM_2/ABM в deep) | Raw as-is → `vhalSeatBeltRaw` | — | Deep catalog + production: interest `BrakeFluid` также подписывает ICM_1 belt; `applyPush` → DEBUG `telemetry/seat_belt` |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
 | **Android 10** — Fuel level % | VHAL **289414929** `R_0900_ICM_1_FuelLevel` | int **0…100** | — | onChange + pull |
 | **Android 9** — Total odometer | `readTotalOdometerKm()` / `getOdometer()` | float km → UInt | — | push `onVehicleTotalOdoMeterChange` + pull |

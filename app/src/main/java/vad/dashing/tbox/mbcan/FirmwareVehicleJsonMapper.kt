@@ -132,6 +132,15 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_FR_WIN_POSITION = 289_412_308 // R_0402_CEM_4_FR_WIN_Position
     const val VHAL_RL_WIN_POSITION = 289_412_307 // R_0402_CEM_4_RL_WIN_Position
     const val VHAL_RR_WIN_POSITION = 289_412_306 // R_0402_CEM_4_RR_WIN_Position
+    /** CEM_2 door ajar (preferred production family near PLG trunk). */
+    const val VHAL_CEM2_DRIVER_DOOR_STS = 289_412_271 // R_0402_CEM_2_DriverDoorSts
+    const val VHAL_CEM2_PSNGR_DOOR_STS = 289_412_270 // R_0402_CEM_2_PsngrDoorSts
+    const val VHAL_CEM2_LHR_DOOR_STS = 289_412_266 // R_0402_CEM_2_LHRdoorSts
+    const val VHAL_CEM2_RHR_DOOR_STS = 289_412_267 // R_0402_CEM_2_RHRDoorSts
+    const val VHAL_CEM2_HOOD_STS = 289_412_269 // R_0402_CEM_2_HoodSts
+    /** ICM_1 seat-belt warning (driver / passenger). Scale TBD on car. */
+    const val VHAL_ICM1_DRIVER_SEAT_BELT_WARNING = 289_414_928 // R_0900_ICM_1_DriverSeatBeltWarningSts
+    const val VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING = 289_414_927 // R_0900_ICM_1_PassengerSeatBeltWarningSt
     const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
     const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
     const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus

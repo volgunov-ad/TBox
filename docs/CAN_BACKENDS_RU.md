@@ -289,9 +289,10 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 - единый источник списков — `DeepDiagnosticsCatalog`;
 - **A10 (VHAL)**: подписывает все property id из каталога (константы `FirmwareVehicleJsonMapper` + `explicitReadIdMap` + экспериментальные id) через отдельный deep-listener (не рабочий `syncPushSubscriptions`), порциями по 10 id с паузой 500 мс, rate = on-change (`0.0f`);
-- **A9 (mbCAN)**: подписывает все `MBCanDataType` из каталога через refcount `MbCanJobManager.setDeepTypes`; неизвестные OEM-сборке имена отбрасываются с WARN; raw `onCmdChanged` для не-CFG типов приходит через отдельные `IMBCmdListener`-прокси (`startDeepCmdListeners`), для `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` — fan-out из production-листенеров (`setCfgCmdDeepDiagnosticListener`), потому что OEM `unRegistCMDListener(type)` чистит тип целиком;
-- события пишутся в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` через `DeepCanDiagnostics` (машиночитаемый формат `propertyId=… areaId=… value=… type=… status=… name=…` / `dt=… modular=… rev=… item=… value=… name=…`), с delta-фильтром, окнами коалессинга 1 с (дискретные) / 5 с (быстрая телеметрия), кольцевым буфером 3000 строк и счётчиком `suppressed=`;
+- **A9 (mbCAN)**: подписывает все `MBCanDataType` из каталога через refcount `MbCanJobManager.setDeepTypes`; неизвестные OEM-сборке имена отбрасываются с WARN; raw `onCmdChanged` для не-CFG типов приходит через отдельные `IMBCmdListener`-прокси (`startDeepCmdListeners`) — **но OEM `registCMDListener` реально хранит listeners только для CFG_***; для `eMBCAN_VEHICLE_DOOR` / `eMBCAN_SEAT_BELT_STATUS` deep включает typed path (`registCarDorListener` + poll `getMbCanData`); для `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` — fan-out из production-листенеров (`setCfgCmdDeepDiagnosticListener`), потому что OEM `unRegistCMDListener(type)` чистит тип целиком; object-снимки пишутся как `mbcan dt=… object=…`;
+- события пишутся в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` через `DeepCanDiagnostics` (машиночитаемый формат `propertyId=… areaId=… value=… type=… status=… name=…` / `dt=… modular=… rev=… item=… value=… name=…` / `dt=… object=…`), с delta-фильтром, окнами коалессинга 1 с (дискретные) / 5 с (быстрая телеметрия), кольцевым буфером 3000 строк и счётчиком `suppressed=`;
 - write-only `T_*` id (импульсы MFS, SLA req) в каталоге намеренно отсутствуют.
+- **A10 deep experimental** также включает CEM door ajar / hood / lock и ICM/ABM seat-belt property id (см. `DeepDiagnosticsCatalog.vhalExperimentalIdNames`).
 
 Логи `VHAL_A10` содержат:
 
