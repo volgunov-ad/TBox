@@ -5,10 +5,15 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.CruiseControlType
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class AutomationCruiseActionsTest {
     @Test
     fun parseForcedMode_acceptsAccAndCcsOnly() {
