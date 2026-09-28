@@ -1403,6 +1403,8 @@
     <string name="settings_can_frames_count_title">Number of stored CAN frames (1…3600)</string>
     <string name="settings_mbcan_diagnostics_title">CAN diagnostics (mbCAN/VHAL)</string>
     <string name="settings_mbcan_diagnostics_desc">One switch for MBCAN_TMP and VHAL_A10 logs. Enabled only for the current background service session and not persisted.</string>
+    <string name="settings_mbcan_deep_diagnostics_title">Extended mbCAN/VHAL diagnostics</string>
+    <string name="settings_mbcan_deep_diagnostics_desc">Read-only: subscribe to every known CAN parameter and record changes to the DEBUG journal (CANDIAG_VHAL/CANDIAG_MBCAN). Enables regular diagnostics; lasts only until the background service stops</string>
     <string name="settings_adb_tcp_title">Enable ADB TCP on HU</string>
     <string name="settings_adb_tcp_desc">Port 5555; adbd restarts after changing the setting</string>
     <string name="settings_adb_usb_title">Enable ADB USB on HU</string>

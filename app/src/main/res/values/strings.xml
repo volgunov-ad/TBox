@@ -1414,6 +1414,8 @@
     <string name="settings_can_frames_count_title">Количество сохраняемых CAN фреймов (1…3600)</string>
     <string name="settings_mbcan_diagnostics_title">Диагностика CAN (mbCAN/VHAL)</string>
     <string name="settings_mbcan_diagnostics_desc">Единая опция для логов MBCAN_TMP и VHAL_A10. Включается только на текущую сессию фоновой службы и не сохраняется</string>
+    <string name="settings_mbcan_deep_diagnostics_title">Расширенная диагностика mbCAN/VHAL</string>
+    <string name="settings_mbcan_deep_diagnostics_desc">Только чтение: подписаться на все известные параметры CAN и записывать изменения в DEBUG-журнал (CANDIAG_VHAL/CANDIAG_MBCAN). Включает обычную диагностику, работает только до остановки фоновой службы</string>
     <string name="settings_adb_tcp_title">Включить ADB TCP на ГУ</string>
     <string name="settings_adb_tcp_desc">Порт 5555; после изменения перезапускается adbd</string>
     <string name="settings_adb_usb_title">Включить ADB USB на ГУ</string>

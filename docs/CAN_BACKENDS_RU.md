@@ -281,6 +281,18 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
 - флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
 
+#### 4.6.1 Расширенная диагностика (`ACTION_SET_MBCAN_DEEP_DIAGNOSTICS`)
+
+Отдельный сессионный режим «Расширенная диагностика mbCAN/VHAL» (тумблер в настройках рядом с обычной диагностикой, только в экспертном режиме). Включение автоматически включает и обычную диагностику; выключение обычной диагностики выключает и расширенную.
+
+Что делает (только чтение, ничего не пишет в автомобиль):
+
+- единый источник списков — `DeepDiagnosticsCatalog`;
+- **A10 (VHAL)**: подписывает все property id из каталога (константы `FirmwareVehicleJsonMapper` + `explicitReadIdMap` + экспериментальные id) через отдельный deep-listener (не рабочий `syncPushSubscriptions`), порциями по 10 id с паузой 500 мс, rate = on-change (`0.0f`);
+- **A9 (mbCAN)**: подписывает все `MBCanDataType` из каталога через refcount `MbCanJobManager.setDeepTypes`; неизвестные OEM-сборке имена отбрасываются с WARN; raw `onCmdChanged` для не-CFG типов приходит через отдельные `IMBCmdListener`-прокси (`startDeepCmdListeners`), для `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` — fan-out из production-листенеров (`setCfgCmdDeepDiagnosticListener`), потому что OEM `unRegistCMDListener(type)` чистит тип целиком;
+- события пишутся в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` через `DeepCanDiagnostics` (машиночитаемый формат `propertyId=… areaId=… value=… type=… status=… name=…` / `dt=… modular=… rev=… item=… value=… name=…`), с delta-фильтром, окнами коалессинга 1 с (дискретные) / 5 с (быстрая телеметрия), кольцевым буфером 3000 строк и счётчиком `suppressed=`;
+- write-only `T_*` id (импульсы MFS, SLA req) в каталоге намеренно отсутствуют.
+
 Логи `VHAL_A10` содержат:
 
 - `bind/unbind`, старт/стоп polling;

@@ -120,6 +120,9 @@ import vad.dashing.tbox.utils.ThemeObserver
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanDiagnostics
+import vad.dashing.tbox.mbcan.DeepCanDiagnostics
+import vad.dashing.tbox.mbcan.MbCanRepository
+import vad.dashing.tbox.mbcan.Android10VhalRepository
 import vad.dashing.tbox.mbcan.MbCanEngineFacade
 import vad.dashing.tbox.mbcan.TirePressureDomain
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -540,6 +543,7 @@ class BackgroundService : Service() {
             "vad.dashing.tbox.EXTRA_TOGGLE_FLOATING_ENABLED_ALL"
         const val ACTION_MBCAN_COMMAND = "vad.dashing.tbox.ACTION_MBCAN_COMMAND"
         const val ACTION_SET_MBCAN_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DIAGNOSTICS"
+        const val ACTION_SET_MBCAN_DEEP_DIAGNOSTICS = "vad.dashing.tbox.ACTION_SET_MBCAN_DEEP_DIAGNOSTICS"
         const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
         const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
         const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
@@ -609,6 +613,7 @@ class BackgroundService : Service() {
         const val EXTRA_MBCAN_PROPERTY_ID = "vad.dashing.tbox.EXTRA_MBCAN_PROPERTY_ID"
         const val EXTRA_MBCAN_VALUE = "vad.dashing.tbox.EXTRA_MBCAN_VALUE"
         const val EXTRA_MBCAN_DIAGNOSTICS_ENABLED = "vad.dashing.tbox.EXTRA_MBCAN_DIAGNOSTICS_ENABLED"
+        const val EXTRA_MBCAN_DEEP_DIAGNOSTICS_ENABLED = "vad.dashing.tbox.EXTRA_MBCAN_DEEP_DIAGNOSTICS_ENABLED"
         const val MBCAN_COMMAND_TOGGLE_PROPERTY = "TOGGLE_PROPERTY"
         const val MBCAN_COMMAND_SET_PROPERTY = "SET_PROPERTY"
 
@@ -1031,6 +1036,8 @@ class BackgroundService : Service() {
         }
         startLogLevelSync()
         MbCanDiagnostics.setEnabled(false)
+        MbCanDiagnostics.setDeepEnabled(false)
+        DeepCanDiagnostics.reset()
         scope.launch {
             UniversalCanRepository.bind(scope)
             UniversalCanRepository.autoResolveModeOnStartup(
@@ -1498,8 +1505,37 @@ class BackgroundService : Service() {
             ACTION_SET_MBCAN_DIAGNOSTICS -> {
                 scope.launch {
                     val enabled = intent.getBooleanExtra(EXTRA_MBCAN_DIAGNOSTICS_ENABLED, false)
+                    if (!enabled && MbCanDiagnostics.deepEnabled.value) {
+                        MbCanDiagnostics.setDeepEnabled(false)
+                        when (UniversalCanRepository.mode.value) {
+                            HeadUnitCanMode.Android9MbCan -> MbCanRepository.setDeepDiagnostics(false)
+                            HeadUnitCanMode.Android10Vhal -> Android10VhalRepository.stopDeepDiagnosticsAsync()
+                        }
+                    }
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
+                }
+            }
+            ACTION_SET_MBCAN_DEEP_DIAGNOSTICS -> {
+                scope.launch {
+                    val enabled = intent.getBooleanExtra(EXTRA_MBCAN_DEEP_DIAGNOSTICS_ENABLED, false)
+                    if (enabled) MbCanDiagnostics.setEnabled(true)
+                    MbCanDiagnostics.setDeepEnabled(enabled)
+                    val result = when (UniversalCanRepository.mode.value) {
+                        HeadUnitCanMode.Android9MbCan -> MbCanRepository.setDeepDiagnostics(enabled)
+                        HeadUnitCanMode.Android10Vhal -> {
+                            if (enabled) Android10VhalRepository.startDeepDiagnostics()
+                            else {
+                                Android10VhalRepository.stopDeepDiagnosticsAsync()
+                                "deepDiag vhal stop requested"
+                            }
+                        }
+                    }
+                    DeepCanDiagnostics.report(
+                        if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan)
+                            DeepCanDiagnostics.MBCAN_TAG else DeepCanDiagnostics.VHAL_TAG,
+                        "deepDiag enabled=$enabled result=$result"
+                    )
                 }
             }
             ACTION_SHOW_MAIN_SCREEN_WINDOW -> {
@@ -6861,7 +6897,10 @@ class BackgroundService : Service() {
                 MbCanDiagnostics.log("ERROR", "onDestroy mbCAN unbind failed: ${e.message}")
             }
         }
+        MbCanDiagnostics.setDeepEnabled(false)
         MbCanDiagnostics.setEnabled(false)
+        Android10VhalRepository.stopDeepDiagnosticsAsync()
+        MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
         cancelAllJobs()
         job.cancel()
         disconnectTboxClient()
