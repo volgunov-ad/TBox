@@ -54,6 +54,7 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 ### Tools
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
+- `tools/app_log_mbcan_to_xlsx.py` — converts app / deep-diagnostic journals (`tbox_app_log_*.txt`) to Excel timeline of `MBCAN_TMP` / `CANDIAG_MBCAN` / `CANDIAG_VHAL` / optional `TripFuel` events, with known/unknown cfg ids vs `MbCanKnownVehiclePropertyId`. Same deps as `can_log_to_xlsx.py`.
 - `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, session `integ.*` (CAN path / gyro / steer), rough `k_speed`, left/right turn scale. Stdlib only.
 - `tools/osm_to_tboxroads.py` — GeoJSON / Overpass JSON / exact `--fetch-overpass-area` / synthetic → `.tboxroads` v1. Stdlib only; see `docs/TBOXROADS_FORMAT_RU.md`.
 - `tools/build_road_map_packs.py` — build whole RU/BY regions into the synced `release/maps` Yandex Disk folder and refresh remote/bundled catalogs. See `docs/ROAD_MAPS_HOSTING_RU.md`.
