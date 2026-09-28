@@ -13,9 +13,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.R
 import vad.dashing.tbox.automation.AUTOMATION_DEFAULT_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MAX
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MIN
@@ -185,38 +187,37 @@ private fun HardKeyTriggerFields(
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
         modifier = Modifier.fillMaxWidth(),
     )
+    val pressedLabel = stringResource(R.string.automation_hard_key_status_pressed)
+    val releasedLabel = stringResource(R.string.automation_hard_key_status_released)
+    val singleLabel = stringResource(R.string.automation_hard_key_status_single)
+    val doubleLabel = stringResource(R.string.automation_hard_key_status_double)
+    val longLabel = stringResource(R.string.automation_hard_key_status_long)
     AutomationDropdown(
         label = "Событие кнопки",
         value = trigger.keyStatus,
         options = AutomationHardKeyStatus.entries,
         optionLabel = { status ->
             when (status) {
-                AutomationHardKeyStatus.PRESSED -> "Нажатие"
-                AutomationHardKeyStatus.RELEASED -> "Отпускание"
-                AutomationHardKeyStatus.SINGLE -> "Одиночное"
-                AutomationHardKeyStatus.DOUBLE -> "Двойное"
-                AutomationHardKeyStatus.LONG -> "Долгое"
+                AutomationHardKeyStatus.PRESSED -> pressedLabel
+                AutomationHardKeyStatus.RELEASED -> releasedLabel
+                AutomationHardKeyStatus.SINGLE -> singleLabel
+                AutomationHardKeyStatus.DOUBLE -> doubleLabel
+                AutomationHardKeyStatus.LONG -> longLabel
             }
         },
         onValueChange = { onChange(trigger.copy(keyStatus = it)) },
     )
     val canMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
     val available = canMode != HeadUnitCanMode.Android10Vhal
+    val hint = stringResource(
+        R.string.automation_hard_key_event_hint,
+        AUTOMATION_HARD_KEY_DOUBLE_TAP_MS,
+        AUTOMATION_HARD_KEY_LONG_PRESS_MS,
+        AUTOMATION_HARD_KEY_DEBOUNCE_MS,
+    )
+    val unavailableSuffix = stringResource(R.string.automation_hard_key_unavailable_a10)
     Text(
-        text = "Коды кнопок — в окне «Диагностика клавиш» и в документации MBCAN/VHAL. " +
-            "«Нажатие»/«Отпускание» — сырые события OEM. " +
-            "«Одиночное»/«Двойное»/«Долгое» вычисляются по таймингу " +
-            "(двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, " +
-            "долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс удержания). " +
-            "Одиночное срабатывает с задержкой окна двойного, чтобы отличить от двойного. " +
-            "Повторные события одной кнопки подавляются в течение " +
-            "${AUTOMATION_HARD_KEY_DEBOUNCE_MS} мс." +
-            if (available) {
-                ""
-            } else {
-                " На этом ГУ (Android 10 / VHAL) события кнопок не приходят: " +
-                    "триггер работает только на Android 9 (mbCAN)."
-            },
+        text = if (available) hint else hint + unavailableSuffix,
         style = MaterialTheme.typography.tboxCaption,
         color = if (available) {
             MaterialTheme.colorScheme.onSurfaceVariant
