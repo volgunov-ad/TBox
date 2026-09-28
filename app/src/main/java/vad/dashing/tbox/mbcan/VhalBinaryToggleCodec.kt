@@ -19,6 +19,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.REAR_WIPER,
         MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+        MbCanKnownVehiclePropertyId.LDW_SWITCH,
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
         MbCanKnownVehiclePropertyId.FCW_SWITCH,
@@ -68,6 +69,7 @@ object VhalBinaryToggleCodec {
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+        MbCanKnownVehiclePropertyId.LDW_SWITCH,
         // Stock HVAC: T_0201_IHU_5_FrontOFF_Req — selected (climate off) writes 1, else 2.
         MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF ->
             if (targetOn) 1 else 2

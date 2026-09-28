@@ -729,6 +729,10 @@ object Android10VhalRepository {
     val headlightModeRaw: StateFlow<Int?> = _headlightModeRaw.asStateFlow()
     private val _tjaIcaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val tjaIcaState: StateFlow<MbCanBinaryState> = _tjaIcaState.asStateFlow()
+    private val _ldwSwitchState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val ldwSwitchState: StateFlow<MbCanBinaryState> = _ldwSwitchState.asStateFlow()
+    private val _accTimeGap = MutableStateFlow<AccTimeGap?>(null)
+    val accTimeGap: StateFlow<AccTimeGap?> = _accTimeGap.asStateFlow()
     private val _hmaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hmaState: StateFlow<MbCanBinaryState> = _hmaState.asStateFlow()
     private val _bsdState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -1412,6 +1416,8 @@ object Android10VhalRepository {
             MbCanSignal.EspOffSwitch -> setOf(resolved(MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH))
             MbCanSignal.LasModeSelection -> setOf(resolved(MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION))
             MbCanSignal.TjaIca -> setOf(resolved(MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH))
+            MbCanSignal.LdwSwitch -> setOf(resolved(MbCanKnownVehiclePropertyId.LDW_SWITCH))
+            MbCanSignal.AccTimeGap -> setOf(resolved(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET))
             MbCanSignal.HmaSwitch -> setOf(resolved(MbCanKnownVehiclePropertyId.HMA_SWITCH))
             MbCanSignal.Bsd -> setOf(resolved(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION))
             MbCanSignal.Dow -> setOf(resolved(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING))
@@ -1865,6 +1871,7 @@ object Android10VhalRepository {
             decodeVhalBinaryOneIsOn(raw)
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
         MbCanKnownVehiclePropertyId.HMA_SWITCH,
+        MbCanKnownVehiclePropertyId.LDW_SWITCH,
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
         MbCanKnownVehiclePropertyId.FCW_SWITCH,
@@ -1897,6 +1904,7 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH -> _espOffState.value
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH -> _tjaIcaState.value
         MbCanKnownVehiclePropertyId.HMA_SWITCH -> _hmaState.value
+        MbCanKnownVehiclePropertyId.LDW_SWITCH -> _ldwSwitchState.value
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION -> _bsdState.value
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING -> _dowState.value
         MbCanKnownVehiclePropertyId.FCW_SWITCH -> _fcwState.value
@@ -1961,6 +1969,9 @@ object Android10VhalRepository {
             MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL ->
                 CarSettingsAdasDomain.decodeLdwSensitivityMbCan(mbCanValue)
                     ?.let(CarSettingsAdasDomain::encodeLdwSensitivityVhal)
+            MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET ->
+                CarSettingsAdasDomain.decodeAccTimeGapMbCan(mbCanValue)
+                    ?.let(CarSettingsAdasDomain::encodeAccTimeGapVhal)
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
                 HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
@@ -2110,6 +2121,15 @@ object Android10VhalRepository {
                 raw?.let {
                     stateEngine.applyTjaIcaCandidate(decodeVhalBinaryOneIsOn(it))
                 }
+            resolved(MbCanKnownVehiclePropertyId.LDW_SWITCH) ->
+                raw?.let(::decodeVhalBinaryOneIsOn)?.takeIf {
+                    it is MbCanBinaryState.On || it is MbCanBinaryState.Off
+                }?.let { _ldwSwitchState.value = it }
+            resolved(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET) ->
+                HoldLastKnown.set(
+                    _accTimeGap,
+                    raw?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+                )
             resolved(MbCanKnownVehiclePropertyId.HMA_SWITCH) ->
                 raw?.let {
                     stateEngine.applyHmaCandidate(decodeVhalBinaryOneIsOn(it))
@@ -2482,6 +2502,7 @@ object Android10VhalRepository {
                 MbCanSignal.LightControl,
                 MbCanSignal.FcwSensitivity,
                 MbCanSignal.LdwSensitivity,
+                MbCanSignal.AccTimeGap,
                 MbCanSignal.HudHeight,
                 MbCanSignal.HudBrightness,
                 MbCanSignal.HudDisplayMode,
@@ -2492,6 +2513,7 @@ object Android10VhalRepository {
                 MbCanSignal.CarSettingsVehicleParams -> Unit
                 MbCanSignal.TjaIca -> stateEngine.applyTjaIcaCandidate(MbCanBinaryState.Unavailable(deniedReason))
                 MbCanSignal.HmaSwitch -> stateEngine.applyHmaCandidate(MbCanBinaryState.Unavailable(deniedReason))
+                MbCanSignal.LdwSwitch -> _ldwSwitchState.value = MbCanBinaryState.Unavailable(deniedReason)
                 MbCanSignal.Bsd -> _bsdState.value = MbCanBinaryState.Unavailable(deniedReason)
                 MbCanSignal.Dow -> _dowState.value = MbCanBinaryState.Unavailable(deniedReason)
                 MbCanSignal.Fcw -> _fcwState.value = MbCanBinaryState.Unavailable(deniedReason)
@@ -2625,6 +2647,7 @@ object Android10VhalRepository {
                 MbCanSignal.LightControl,
                 MbCanSignal.FcwSensitivity,
                 MbCanSignal.LdwSensitivity,
+                MbCanSignal.AccTimeGap,
                 MbCanSignal.HudHeight,
                 MbCanSignal.HudBrightness,
                 MbCanSignal.HudDisplayMode,
@@ -2635,6 +2658,7 @@ object Android10VhalRepository {
                 MbCanSignal.CarSettingsVehicleParams -> Unit
                 MbCanSignal.TjaIca -> stateEngine.applyTjaIcaCandidate(MbCanBinaryState.Unavailable(reason))
                 MbCanSignal.HmaSwitch -> stateEngine.applyHmaCandidate(MbCanBinaryState.Unavailable(reason))
+                MbCanSignal.LdwSwitch -> _ldwSwitchState.value = MbCanBinaryState.Unavailable(reason)
                 MbCanSignal.Bsd -> _bsdState.value = MbCanBinaryState.Unavailable(reason)
                 MbCanSignal.Dow -> _dowState.value = MbCanBinaryState.Unavailable(reason)
                 MbCanSignal.Fcw -> _fcwState.value = MbCanBinaryState.Unavailable(reason)
@@ -2840,6 +2864,18 @@ object Android10VhalRepository {
                     raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
                 )
             }
+            MbCanSignal.LdwSwitch -> {
+                val decoded = readMappedIntProperty(MbCanKnownVehiclePropertyId.LDW_SWITCH)
+                    ?.let(::decodeVhalBinaryOneIsOn)
+                if (decoded is MbCanBinaryState.On || decoded is MbCanBinaryState.Off) {
+                    _ldwSwitchState.value = decoded
+                }
+            }
+            MbCanSignal.AccTimeGap -> HoldLastKnown.set(
+                _accTimeGap,
+                readMappedIntProperty(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
+                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+            )
             MbCanSignal.HmaSwitch -> {
                 val raw = readMappedIntProperty(MbCanKnownVehiclePropertyId.HMA_SWITCH)
                 stateEngine.applyHmaCandidate(

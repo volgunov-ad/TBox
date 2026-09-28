@@ -233,6 +233,10 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
 | **Android 9** — NGP (TJA/ICA) | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
 | **Android 10** — NGP (TJA/ICA) | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
+| **Android 9** — ACC time-gap | **95** `eTIMEGAPSET1REQ` | **1…4** (`AccTimeGap` Level1…Level4; A9 log: **1** with TJA on, **4** with TJA off) | **95** | **1…4** | cfg push + pull `AccTimeGap`; UI widget — follow-up |
+| **Android 10** — ACC time-gap | VHAL **289415688** ← 95 (`R_0B00_FRM_3_TimeGapSet_DVD`) | то же 1…4 | VHAL **289415938** ← 95 (`T_0B01_IHU_8_TimeGapSet1Req`) | **1…4** | onChange + pull |
+| **Android 9** — LDW switch | **80** `eDVD_LDWSWITCH` | **1** Off / **2** On (A9 log co-moves with LAS **17**: LKA→80=1, LDW→80=2) | **80** | **2** on / **1** off | cfg push + pull `LdwSwitch`; UI widget — follow-up |
+| **Android 10** — LDW switch | VHAL **289415717** ← 80 (`R_0B00_FCM_2_LDWOnOffSts`) | raw == 1 On | VHAL **289415056** ← 80 (`T_0901_IHU_3_LDWSwitch`) | **1** on / **2** off | onChange + pull |
 | **Android 9** — HMA (smart high beam) | **19** `eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH` (штатный `switchIntelligentHighBeamsHMA`; id **130** `eVEHICLE_SMART_HIGHBEAM_SWITCH` не отражал и не управлял HMA) | 1 Off / 2 On | **19** | **2** on / **1** off | cfg push + pull `HmaSwitch`; виджеты `hmaWidget` / `highBeamWidget` (вариант иконки с «A») |
 | **Android 10** — HMA | VHAL **289415702** ← 19 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 19 | **1** on / **0** off (≠ 1/2) | onChange + pull; виджеты `hmaWidget` / `highBeamWidget` |
 | **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |

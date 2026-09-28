@@ -44,6 +44,8 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
     LightControl(setOf("eMBCAN_CFG_VEHICLE")),
     LasModeSelection(setOf("eMBCAN_CFG_VEHICLE")),
     TjaIca(setOf("eMBCAN_CFG_VEHICLE")),
+    LdwSwitch(setOf("eMBCAN_CFG_VEHICLE")),
+    AccTimeGap(setOf("eMBCAN_CFG_VEHICLE")),
     HmaSwitch(setOf("eMBCAN_CFG_VEHICLE")),
     Bsd(setOf("eMBCAN_CFG_VEHICLE")),
     Dow(setOf("eMBCAN_CFG_VEHICLE")),
@@ -527,6 +529,10 @@ object MbCanRepository {
     val headlightModeRaw: StateFlow<Int?> = _headlightModeRaw.asStateFlow()
     private val _tjaIcaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val tjaIcaState: StateFlow<MbCanBinaryState> = _tjaIcaState.asStateFlow()
+    private val _ldwSwitchState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
+    val ldwSwitchState: StateFlow<MbCanBinaryState> = _ldwSwitchState.asStateFlow()
+    private val _accTimeGap = MutableStateFlow<AccTimeGap?>(null)
+    val accTimeGap: StateFlow<AccTimeGap?> = _accTimeGap.asStateFlow()
     private val _hmaState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
     val hmaState: StateFlow<MbCanBinaryState> = _hmaState.asStateFlow()
     private val _bsdState = MutableStateFlow<MbCanBinaryState>(MbCanBinaryState.Unknown)
@@ -938,6 +944,8 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.LIGHTCONTROL,
             MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
             MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            MbCanKnownVehiclePropertyId.LDW_SWITCH,
+            MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET,
             MbCanKnownVehiclePropertyId.HMA_SWITCH,
             MbCanKnownVehiclePropertyId.HVAC_CUSTOM,
             MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
@@ -1029,6 +1037,10 @@ object MbCanRepository {
                         stateEngine.applyTjaIcaCandidate(
                             MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
                         )
+                    MbCanKnownVehiclePropertyId.LDW_SWITCH ->
+                        CarSettingsAdasDomain.decodeLdwSwitchMbCan(raw)?.let { _ldwSwitchState.value = it }
+                    MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET ->
+                        HoldLastKnown.set(_accTimeGap, CarSettingsAdasDomain.decodeAccTimeGapMbCan(raw))
                     MbCanKnownVehiclePropertyId.HMA_SWITCH ->
                         stateEngine.applyHmaCandidate(
                             MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
@@ -2281,6 +2293,12 @@ object MbCanRepository {
             MbCanSignal.LightControl -> refreshLightControl()
             MbCanSignal.LasModeSelection -> refreshLasMode()
             MbCanSignal.TjaIca -> refreshTjaIca()
+            MbCanSignal.LdwSwitch -> refreshAdasBinary(MbCanKnownVehiclePropertyId.LDW_SWITCH, _ldwSwitchState)
+            MbCanSignal.AccTimeGap -> HoldLastKnown.set(
+                _accTimeGap,
+                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
+                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapMbCan),
+            )
             MbCanSignal.HmaSwitch -> refreshHma()
             MbCanSignal.Bsd -> refreshAdasBinary(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION, _bsdState)
             MbCanSignal.Dow -> refreshAdasBinary(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING, _dowState)
