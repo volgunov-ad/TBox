@@ -901,6 +901,8 @@ object MbCanRepository {
                 pendingPushDebugByKey.clear()
                 pushDebugFlushScheduled = false
             }
+            MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
+            MbCanEngineFacade.stopDeepCmdListeners()
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -3898,6 +3900,34 @@ object MbCanRepository {
         }
     }
 
+    /** Deep mbCAN mode: subscribe extra data types without adding poll signals. */
+    suspend fun setDeepDiagnostics(active: Boolean): String = withContext(stateApplyDispatcher) {
+        if (!active) {
+            MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
+            MbCanEngineFacade.stopDeepCmdListeners()
+            MbCanJobManager.setDeepTypes(false, emptySet())
+            reapplyAllInterests()
+            return@withContext "deepDiag mbcan stopped"
+        }
+        val availability = MbCanEngineFacade.ensureInitialized()
+        if (availability !is MbCanAvailability.Available) {
+            return@withContext "deepDiag mbcan unavailable=$availability"
+        }
+        val requested = DeepDiagnosticsCatalog.mbcanDataTypes
+        val resolved = MbCanEngineFacade.resolveDataTypeNames(requested)
+        val missing = requested - resolved.toSet()
+        MbCanEngineFacade.setCfgCmdDeepDiagnosticListener { source, modular, rev, item, value ->
+            DeepCanDiagnostics.recordMbCanCmdChanged(source, modular, rev, item, value)
+        }
+        MbCanJobManager.setDeepTypes(true, resolved.toSet())
+        reapplyAllInterests()
+        val listenerResults = MbCanEngineFacade.startDeepCmdListeners(resolved.toSet())
+        val listenerCount = listenerResults.count { it.second }
+        val summary = "deepDiag mbcan types=${resolved.size}/${requested.size} cmdListeners=$listenerCount missing=${missing.joinToString()}"
+        DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, summary)
+        summary
+    }
+
     private suspend fun reapplyAllInterests() {
         reapplyMutex.withLock {
             val mergedSignals = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
@@ -3928,8 +3958,12 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
                 mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
                 mergedSignals.contains(MbCanSignal.TrunkDoor)
-            MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener)
-            MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener)
+            MbCanEngineFacade.syncVehicleCfgCmdListener(
+                needsCfgVehicleListener || MbCanDiagnostics.deepEnabled.value
+            )
+            MbCanEngineFacade.syncAudioCfgCmdListener(
+                needsCfgAudioListener || MbCanDiagnostics.deepEnabled.value
+            )
             if (needsSettingsTelemetry) {
                 MbCanEngineFacade.registerSettingsTelemetryBridge()
             } else {

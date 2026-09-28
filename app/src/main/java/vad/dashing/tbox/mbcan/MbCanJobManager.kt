@@ -20,6 +20,8 @@ object MbCanJobManager {
     private val burstUntil = mutableMapOf<MbCanSignal, Long>()
     private val pendingPriority = LinkedHashSet<MbCanSignal>()
     private var pollJob: Job? = null
+    private var deepTypesActive = false
+    private val activeTypesDeep = mutableSetOf<String>()
 
     suspend fun attach(serviceScope: CoroutineScope) {
         mutex.withLock {
@@ -41,7 +43,34 @@ object MbCanJobManager {
             }
             activeTypeRefCounts.clear()
             pendingPriority.clear()
+            deepTypesActive = false
+            activeTypesDeep.clear()
             scope = null
+        }
+    }
+
+    suspend fun setDeepTypes(active: Boolean, types: Set<String>) {
+        mutex.withLock {
+            if (deepTypesActive == active && (activeTypesDeep == types || !active)) return@withLock
+            val toAdd = if (active) types - activeTypesDeep else emptySet()
+            val toRemove = if (active) activeTypesDeep - types else activeTypesDeep.toSet()
+            toAdd.forEach { typeName ->
+                val count = (activeTypeRefCounts[typeName] ?: 0) + 1
+                activeTypeRefCounts[typeName] = count
+                if (count == 1) MbCanEngineFacade.subscribe(setOf(typeName))
+            }
+            toRemove.forEach { typeName ->
+                val count = activeTypeRefCounts[typeName] ?: 0
+                if (count <= 1) {
+                    activeTypeRefCounts.remove(typeName)
+                    MbCanEngineFacade.unSubscribe(setOf(typeName))
+                } else {
+                    activeTypeRefCounts[typeName] = count - 1
+                }
+            }
+            activeTypesDeep.clear()
+            if (active) activeTypesDeep.addAll(types)
+            deepTypesActive = active
         }
     }
 

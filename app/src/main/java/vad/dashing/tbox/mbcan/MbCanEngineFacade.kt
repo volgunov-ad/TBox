@@ -57,6 +57,7 @@ object MbCanEngineFacade {
     private var settingsTelemetryProxy: Any? = null
     private var registCmdListenerMethod: Method? = null
     private var unRegistCmdListenerMethod: Method? = null
+    private var unRegistCmdListenerListenerMethod: Method? = null
     private var registerLkaSlaListenerMethod: Method? = null
     private var unregisterLkaSlaListenerMethod: Method? = null
     private var registerFrmDectInfoListenerMethod: Method? = null
@@ -67,6 +68,11 @@ object MbCanEngineFacade {
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
+    /** Deep diagnostics: raw [IMBCmdListener] proxies per non-CFG data type. */
+    private val deepCmdListenerProxies = mutableMapOf<String, Any>()
+    /** Deep diagnostics fan-out from the production CFG listeners (OEM unRegister clears a whole type). */
+    @Volatile
+    private var onCfgCmdDeepDiagnosticEvent: ((source: String, modular: Int, rev: Int, item: Int, value: Int) -> Unit)? = null
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
@@ -144,6 +150,13 @@ object MbCanEngineFacade {
                 Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
             )
             unRegistCmdListenerMethod = engineClass.getMethod("unRegistCMDListener", Class.forName(DATA_TYPE_CLASS))
+            unRegistCmdListenerListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "unRegistCMDListener",
+                    Class.forName(DATA_TYPE_CLASS),
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+                )
+            }.getOrNull()
             registerLkaSlaListenerMethod = runCatching {
                 engineClass.getMethod(
                     "registIMBCanVehicleLkaSlaStatusListener",
@@ -554,6 +567,7 @@ object MbCanEngineFacade {
                         "DEBUG",
                         "cfgVehiclePush modular=$modular rev=$rev item=$item value=$value"
                     )
+                    onCfgCmdDeepDiagnosticEvent?.invoke("eMBCAN_CFG_VEHICLE", modular, rev, item, value)
                     MbCanRepository.scheduleVehicleCfgPush(modular, item, value)
                 }
             }
@@ -613,6 +627,7 @@ object MbCanEngineFacade {
                         "DEBUG",
                         "cfgAudioPush modular=$modular rev=$rev item=$item value=$value"
                     )
+                    onCfgCmdDeepDiagnosticEvent?.invoke("eMBCAN_CFG_AUDIO", modular, rev, item, value)
                     MbCanRepository.scheduleAudioCfgPush(modular, item, value)
                 }
             }
@@ -626,6 +641,103 @@ object MbCanEngineFacade {
             audioCfgCmdListenerProxy = null
         }
     }
+
+    /**
+     * Deep diagnostics: resolves candidate [MBCanDataType] enum names against the OEM
+     * build. [subscribe] resolves the whole list at once and fails wholesale on an
+     * unknown name, so unknown candidates must be filtered out first.
+     */
+    fun resolveDataTypeNames(candidateNames: Collection<String>): List<String> {
+        if (candidateNames.isEmpty()) return emptyList()
+        return runCatching {
+            val enumClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
+            candidateNames.filter { name ->
+                try {
+                    java.lang.Enum.valueOf(enumClass, name)
+                    true
+                } catch (_: IllegalArgumentException) {
+                    false
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Deep diagnostics: raw CFG push sink (vehicle + audio), independent of UI interests. */
+    fun setCfgCmdDeepDiagnosticListener(
+        listener: ((source: String, modular: Int, rev: Int, item: Int, value: Int) -> Unit)?
+    ) {
+        onCfgCmdDeepDiagnosticEvent = listener
+    }
+
+    /**
+     * Deep diagnostics: registers one [com.mengbo.mbCan.interfaces.IMBCmdListener] per
+     * non-CFG data type and forwards raw `onCmdChanged` into [DeepCanDiagnostics].
+     *
+     * `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` are skipped: OEM `unRegistCMDListener(type)`
+     * clears **all** listeners of a type, so production CFG listeners must stay sole owners;
+     * their raw events are mirrored via [setCfgCmdDeepDiagnosticListener] instead.
+     */
+    @Synchronized
+    fun startDeepCmdListeners(dataTypeNames: Set<String>): List<Pair<String, Boolean>> {
+        if (ensureInitialized() !is MbCanAvailability.Available || engineInstance == null) {
+            return dataTypeNames.map { it to false }
+        }
+        val inst = engineInstance!!
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+        } catch (_: Throwable) {
+            return dataTypeNames.map { it to false }
+        }
+        val loader = iface.classLoader
+        return dataTypeNames.map { name ->
+            when {
+                name == "eMBCAN_CFG_VEHICLE" || name == "eMBCAN_CFG_AUDIO" -> name to false
+                deepCmdListenerProxies.containsKey(name) -> name to true
+                else -> {
+                    val dtEnum = resolveDataTypeEnum(name)
+                        ?: return@map name to false
+                    val handler = InvocationHandler { _, method, args ->
+                        oemSafe(method.name) {
+                            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                                val modular = (args[0] as Number).toInt() and 0xFF
+                                val rev = (args[1] as Number).toInt() and 0xFF
+                                val item = (args[2] as Number).toInt() and 0xFFFF
+                                val value = (args[3] as Number).toInt()
+                                DeepCanDiagnostics.recordMbCanCmdChanged(name, modular, rev, item, value)
+                            }
+                        }
+                        null
+                    }
+                    val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+                    val registered = runCatching {
+                        registCmdListenerMethod?.invoke(inst, dtEnum, proxy)
+                        true
+                    }.getOrDefault(false)
+                    if (registered) deepCmdListenerProxies[name] = proxy
+                    name to registered
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    fun stopDeepCmdListeners() {
+        val inst = engineInstance
+        deepCmdListenerProxies.forEach { (name, proxy) ->
+            val dtEnum = resolveDataTypeEnum(name) ?: return@forEach
+            runCatching {
+                val cleared = unRegistCmdListenerListenerMethod?.invoke(inst, dtEnum, proxy)
+                    ?: unRegistCmdListenerMethod?.invoke(inst, dtEnum)
+                cleared
+            }
+        }
+        deepCmdListenerProxies.clear()
+    }
+
+    private fun resolveDataTypeEnum(name: String): Any? = runCatching {
+        val enumClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
+        java.lang.Enum.valueOf(enumClass, name)
+    }.getOrNull()
 
     /**
      * Reads trunk movement and door status from cached BCM snapshot

@@ -784,6 +784,7 @@ fun SettingsTabContent(
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
+    val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
@@ -1277,6 +1278,13 @@ fun SettingsTabContent(
                 },
                 stringResource(R.string.settings_mbcan_diagnostics_title),
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
+                true
+            )
+            SettingSwitch(
+                isMbCanDeepDiagnosticsEnabled,
+                { enabled -> setMbCanDeepDiagnostics(context, enabled) },
+                stringResource(R.string.settings_mbcan_deep_diagnostics_title),
+                stringResource(R.string.settings_mbcan_deep_diagnostics_desc),
                 true
             )
             SettingSwitch(
@@ -1967,6 +1975,14 @@ private fun setMbCanDiagnostics(context: Context, enabled: Boolean) {
     val intent = Intent(context, BackgroundService::class.java).apply {
         action = BackgroundService.ACTION_SET_MBCAN_DIAGNOSTICS
         putExtra(BackgroundService.EXTRA_MBCAN_DIAGNOSTICS_ENABLED, enabled)
+    }
+    context.startService(intent)
+}
+
+private fun setMbCanDeepDiagnostics(context: Context, enabled: Boolean) {
+    val intent = Intent(context, BackgroundService::class.java).apply {
+        action = BackgroundService.ACTION_SET_MBCAN_DEEP_DIAGNOSTICS
+        putExtra(BackgroundService.EXTRA_MBCAN_DEEP_DIAGNOSTICS_ENABLED, enabled)
     }
     context.startService(intent)
 }

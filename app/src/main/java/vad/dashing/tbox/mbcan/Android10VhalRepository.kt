@@ -48,8 +48,10 @@ private class CarPropertyBridge(private val context: Context) {
     private var propertyManager: Any? = null
     private var pushListener: Any? = null
     private var diagnosticPushListener: Any? = null
+    private var deepDiagnosticPushListener: Any? = null
     private val registeredPushPropertyIds = mutableSetOf<Int>()
     private val registeredDiagnosticPropertyIds = mutableSetOf<Int>()
+    private val registeredDeepDiagnosticPropertyIds = mutableSetOf<Int>()
     @Volatile
     private var onPushPropertyChanged: ((propertyId: Int, areaId: Int, value: Any?) -> Unit)? = null
     @Volatile
@@ -138,6 +140,7 @@ private class CarPropertyBridge(private val context: Context) {
 
     fun disconnect() {
         runCatching { stopDiagnosticSubscriptions() }
+        runCatching { stopDeepDiagnosticSubscriptions() }
         runCatching { syncPushSubscriptions(emptySet()) }
         runCatching {
             val c = car ?: return
@@ -153,8 +156,10 @@ private class CarPropertyBridge(private val context: Context) {
         propertyManager = null
         pushListener = null
         diagnosticPushListener = null
+        deepDiagnosticPushListener = null
         registeredPushPropertyIds.clear()
         registeredDiagnosticPropertyIds.clear()
+        registeredDeepDiagnosticPropertyIds.clear()
         onPushPropertyChanged = null
         onPushPropertyError = null
         onDiagnosticPropertyChanged = null
@@ -356,10 +361,13 @@ private class CarPropertyBridge(private val context: Context) {
         return current
     }
 
-    private fun ensureDiagnosticPushListener(): Any {
-        diagnosticPushListener?.let { return it }
+    private fun newDiagnosticEventProxy(
+        debugName: String,
+        emit: (event: VhalKeyDiagnosticEvent) -> Unit,
+        emitError: (propertyId: Int, areaId: Int) -> Unit,
+    ): Any {
         val listenerInterface = Class.forName("android.car.hardware.property.CarPropertyManager\$CarPropertyEventListener")
-        val proxy = Proxy.newProxyInstance(
+        return Proxy.newProxyInstance(
             listenerInterface.classLoader,
             arrayOf(listenerInterface),
         ) { proxyObj, method, args ->
@@ -369,8 +377,7 @@ private class CarPropertyBridge(private val context: Context) {
                 method.declaringClass == Any::class.java && method.name == "equals" ->
                     proxyObj === args?.getOrNull(0)
                 method.declaringClass == Any::class.java && method.name == "toString" ->
-                    "DiagnosticCarPropertyEventListenerProxy@" +
-                        Integer.toHexString(System.identityHashCode(proxyObj))
+                    "$debugName@" + Integer.toHexString(System.identityHashCode(proxyObj))
                 method.name == "onChangeEvent" -> {
                     runCatching {
                         val event = args?.getOrNull(0) ?: return@runCatching
@@ -383,7 +390,7 @@ private class CarPropertyBridge(private val context: Context) {
                         val status = runCatching {
                             (event.javaClass.getMethod("getStatus").invoke(event) as Number).toInt()
                         }.getOrNull()
-                        onDiagnosticPropertyChanged?.invoke(
+                        emit(
                             VhalKeyDiagnosticEvent(
                                 propertyId = propertyId,
                                 areaId = areaId,
@@ -402,15 +409,92 @@ private class CarPropertyBridge(private val context: Context) {
                     runCatching {
                         val propertyId = (args?.getOrNull(0) as? Number)?.toInt() ?: return@runCatching
                         val areaId = (args.getOrNull(1) as? Number)?.toInt() ?: 0
-                        onDiagnosticPropertyError?.invoke(propertyId, areaId)
+                        emitError(propertyId, areaId)
                     }
                     null
                 }
                 else -> null
             }
         }
+    }
+
+    private fun ensureDiagnosticPushListener(): Any {
+        diagnosticPushListener?.let { return it }
+        val proxy = newDiagnosticEventProxy(
+            debugName = "DiagnosticCarPropertyEventListenerProxy",
+            emit = { event -> onDiagnosticPropertyChanged?.invoke(event) },
+            emitError = { propertyId, areaId -> onDiagnosticPropertyError?.invoke(propertyId, areaId) },
+        )
         diagnosticPushListener = proxy
         return proxy
+    }
+
+    private fun ensureDeepDiagnosticPushListener(): Any {
+        deepDiagnosticPushListener?.let { return it }
+        val proxy = newDiagnosticEventProxy(
+            debugName = "DeepDiagnosticCarPropertyEventListenerProxy",
+            emit = { event ->
+                DeepCanDiagnostics.recordVhalEvent(
+                    propertyId = event.propertyId,
+                    areaId = event.areaId,
+                    value = event.value,
+                    valueType = event.valueType,
+                    status = event.status,
+                    timestampNanos = event.timestampNanos,
+                )
+            },
+            emitError = { propertyId, areaId -> DeepCanDiagnostics.recordVhalError(propertyId, areaId) },
+        )
+        deepDiagnosticPushListener = proxy
+        return proxy
+    }
+
+    /** Deep diagnostics: registers one property on the shared deep listener (rate = on change). */
+    fun startDeepDiagnosticSubscription(propertyId: Int): VhalKeyDiagnosticSubscription {
+        val manager = propertyManager
+            ?: return VhalKeyDiagnosticSubscription(propertyId, false, "CarPropertyManager unavailable")
+        val listener = ensureDeepDiagnosticPushListener()
+        return runCatching {
+            val result = manager.javaClass
+                .getMethod(
+                    "registerListener",
+                    listener.javaClass.interfaces.first(),
+                    Int::class.javaPrimitiveType,
+                    Float::class.javaPrimitiveType,
+                )
+                .invoke(manager, listener, propertyId, 0.0f)
+            val accepted = (result as? Boolean) ?: true
+            if (!accepted) throw IllegalStateException("registerListener returned false")
+            registeredDeepDiagnosticPropertyIds.add(propertyId)
+            VhalKeyDiagnosticSubscription(propertyId, true, "subscribed")
+        }.getOrElse { error ->
+            val root = unwrapReflectionThrowable(error)
+            VhalKeyDiagnosticSubscription(
+                propertyId,
+                false,
+                "${root.javaClass.simpleName}: ${root.message ?: "unknown"}",
+            )
+        }
+    }
+
+    fun stopDeepDiagnosticSubscriptions() {
+        val manager = propertyManager
+        val listener = deepDiagnosticPushListener
+        if (manager != null && listener != null) {
+            registeredDeepDiagnosticPropertyIds.toList().forEach { propertyId ->
+                runCatching {
+                    manager.javaClass
+                        .getMethod(
+                            "unregisterListener",
+                            listener.javaClass.interfaces.first(),
+                            Int::class.javaPrimitiveType,
+                        )
+                        .invoke(manager, listener, propertyId)
+                }
+            }
+        }
+        registeredDeepDiagnosticPropertyIds.clear()
+        deepDiagnosticPushListener = null
     }
 
     private fun ensurePushListener(): Any {
@@ -562,6 +646,8 @@ object Android10VhalRepository {
         557845512,
         561003776,
     )
+    private val DEEP_DIAGNOSTIC_BATCH_SIZE = 10
+    private val DEEP_DIAGNOSTIC_BATCH_DELAY_MS = 500L
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
@@ -590,6 +676,7 @@ object Android10VhalRepository {
     private var pollJob: Job? = null
     private var bridge: CarPropertyBridge? = null
     private val keyDiagnosticSession = AtomicLong(0L)
+    private val deepDiagnosticSession = AtomicLong(0L)
     /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
     private val carConnectMutex = Mutex()
     @Volatile
@@ -1121,6 +1208,58 @@ object Android10VhalRepository {
     fun stopKeyDiagnosticsAsync() {
         keyDiagnosticSession.incrementAndGet()
         scope.launch { bridge?.stopDiagnosticSubscriptions() }
+    }
+
+    /**
+     * Deep diagnostics: subscribes every [DeepDiagnosticsCatalog] property id on the
+     * shared deep listener (on-change rate) in small batches so binder registration
+     * cannot storm the CarPropertyManager. Raw events go to [DeepCanDiagnostics].
+     */
+    suspend fun startDeepDiagnostics(): String {
+        val session = deepDiagnosticSession.incrementAndGet()
+        DeepCanDiagnostics.reset()
+        val ids = DeepDiagnosticsCatalog.vhalPropertyIds
+        DeepCanDiagnostics.report(DeepCanDiagnostics.VHAL_TAG, "deepDiag vhal session start ids=${ids.size}")
+        val availability = ensureConnected()
+        if (availability !is MbCanAvailability.Available) {
+            val reason = (availability as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
+            DeepCanDiagnostics.report(DeepCanDiagnostics.VHAL_TAG, "deepDiag vhal unavailable reason=$reason")
+            return reason
+        }
+        return withContext(stateApplyDispatcher) {
+            var subscribed = 0
+            val failures = mutableListOf<String>()
+            ids.chunked(DEEP_DIAGNOSTIC_BATCH_SIZE).forEach { chunk ->
+                if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
+                chunk.forEach { propertyId ->
+                    val result = bridge?.startDeepDiagnosticSubscription(propertyId)
+                    if (result?.subscribed == true) {
+                        subscribed++
+                    } else {
+                        failures.add("${propertyId}:${result?.detail ?: "bridge unavailable"}")
+                    }
+                }
+                delay(DEEP_DIAGNOSTIC_BATCH_DELAY_MS)
+            }
+            if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
+            val summary = "deepDiag vhal subscribed=$subscribed failed=${failures.size} ids=${ids.size}"
+            DeepCanDiagnostics.report(
+                DeepCanDiagnostics.VHAL_TAG,
+                if (failures.isEmpty()) summary else "$summary failures=${failures.take(15).joinToString(" | ")}"
+            )
+            summary
+        }
+    }
+
+    fun stopDeepDiagnosticsAsync() {
+        deepDiagnosticSession.incrementAndGet()
+        scope.launch {
+            bridge?.stopDeepDiagnosticSubscriptions()
+            DeepCanDiagnostics.report(
+                DeepCanDiagnostics.VHAL_TAG,
+                "deepDiag vhal session stop ${DeepCanDiagnostics.stats()}"
+            )
+        }
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {

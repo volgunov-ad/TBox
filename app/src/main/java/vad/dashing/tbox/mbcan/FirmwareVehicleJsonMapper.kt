@@ -385,6 +385,9 @@ object FirmwareVehicleJsonMapper {
         return null
     }
 
+    /** Deep diagnostics: logical mbCAN id → verified A10 VHAL read id pairs from [explicitReadIdMap]. */
+    fun explicitReadEntries(): List<Pair<Int, Int>> = explicitReadIdMap.map { it.key to it.value }
+
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
         explicitReadIdMap[requestedPropertyId]?.let { return it }
         val tables = loadTables() ?: return null

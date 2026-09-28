@@ -148,8 +148,8 @@ private fun WidgetPressedTriggerFields(
 
 /** Verified A9 mbCAN key codes (docs/MBCAN_VHAL_PARAMETERS_RU.md). */
 private val HARD_KEY_PICKER_CODES = listOf(
-    29, 30, 31, 32, 316,
-    115, 114, 163, 165, 158, 582,
+    29, 30, 31, 32, 33, 316,
+    115, 114, 163, 165, 28, 158, 582,
     210, 211, 212,
 )
 
