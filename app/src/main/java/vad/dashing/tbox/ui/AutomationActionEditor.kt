@@ -38,6 +38,7 @@ import vad.dashing.tbox.automation.AutomationCanCatalogEntry
 import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.automation.AutomationCondition
+import vad.dashing.tbox.automation.AutomationCruiseActions
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
@@ -629,6 +630,9 @@ private fun BuiltinActionFields(
                         AutomationBuiltinActionType.SET_PHONE_VOLUME -> 10
                         AutomationBuiltinActionType.SET_NAVI_VOLUME -> 5
                         AutomationBuiltinActionType.SET_VOICE_VOLUME -> 5
+                        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
+                            vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
+                        AutomationBuiltinActionType.CRUISE_NUDGE -> 1
                         else -> 0
                     },
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
@@ -644,6 +648,12 @@ private fun BuiltinActionFields(
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
                         type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
                         type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
+                        type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
+                            type == AutomationBuiltinActionType.CRUISE_PAUSE ||
+                            type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
+                            type == AutomationBuiltinActionType.CRUISE_RESUME ||
+                            type == AutomationBuiltinActionType.CRUISE_NUDGE ->
+                            AutomationCruiseActions.MODE_ACC
                         else -> ""
                     },
                 ),
@@ -964,8 +974,105 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CruiseModeDropdown(action, onChange)
+            AutomationIntField(
+                label = "Уставка, км/ч (30–150)",
+                value = action.intValue
+                    .takeIf { it != 0 }
+                    ?: vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT,
+                onValueChange = { raw ->
+                    onChange(
+                        action.copy(
+                            intValue = raw.coerceIn(
+                                vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN,
+                                vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX,
+                            ),
+                        ),
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Как виджет «Уставка круиз-контроля»: включение и доведение до цели " +
+                    "(интервалы шагов — как у виджета по умолчанию). Уже на уставке → пауза (212). " +
+                    "Действие ждёт окончания converge.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        AutomationBuiltinActionType.CRUISE_PAUSE,
+        AutomationBuiltinActionType.CRUISE_FULL_OFF,
+        AutomationBuiltinActionType.CRUISE_RESUME,
+        -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CruiseModeDropdown(action, onChange)
+            Text(
+                text = when (action.type) {
+                    AutomationBuiltinActionType.CRUISE_PAUSE ->
+                        "Пауза Active/Override (Cancel 212), как статус-плитка."
+                    AutomationBuiltinActionType.CRUISE_FULL_OFF ->
+                        "Полное выключение (210), как двойное нажатие виджета."
+                    else ->
+                        "Возобновление из Standby (RES+), как свайп вверх на статус-плитке."
+                },
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        AutomationBuiltinActionType.CRUISE_NUDGE -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            CruiseModeDropdown(action, onChange)
+            AutomationDropdown(
+                label = "Шаг уставки",
+                value = if (action.intValue == -1) -1 else 1,
+                options = listOf(1, -1),
+                optionLabel = { if (it > 0) "+1 км/ч (RES+)" else "−1 км/ч (SET−)" },
+                onValueChange = { onChange(action.copy(intValue = it)) },
+            )
+            Text(
+                text = "Только в Active/Override; как свайпы статус-плитки.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         else -> Unit
     }
+}
+
+@Composable
+private fun CruiseModeDropdown(
+    action: AutomationAction.Builtin,
+    onChange: (AutomationAction) -> Unit,
+) {
+    val modeKey = AutomationCruiseActions.parseForcedMode(action.stringValue)
+        ?.let { if (it == vad.dashing.tbox.CruiseControlType.CCS) {
+            AutomationCruiseActions.MODE_CCS
+        } else {
+            AutomationCruiseActions.MODE_ACC
+        } }
+        ?: AutomationCruiseActions.MODE_ACC
+    AutomationDropdown(
+        label = "Режим круиза",
+        value = modeKey,
+        options = AutomationCruiseActions.MODE_OPTIONS,
+        optionLabel = AutomationCruiseActions::modeLabel,
+        onValueChange = { key ->
+            onChange(action.copy(stringValue = AutomationCruiseActions.encodeMode(
+                when (key) {
+                    AutomationCruiseActions.MODE_CCS -> vad.dashing.tbox.CruiseControlType.CCS
+                    else -> vad.dashing.tbox.CruiseControlType.ACC
+                },
+            )))
+        },
+    )
 }
 
 @Composable
@@ -1112,6 +1219,12 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
     AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"
+    AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
+        "Круиз: включить и довести до уставки"
+    AutomationBuiltinActionType.CRUISE_PAUSE -> "Круиз: пауза (Cancel)"
+    AutomationBuiltinActionType.CRUISE_FULL_OFF -> "Круиз: полностью выключить"
+    AutomationBuiltinActionType.CRUISE_RESUME -> "Круиз: возобновить (RES+)"
+    AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

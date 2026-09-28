@@ -503,7 +503,9 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 Фильтр безопасности:
 
 - `SetAnyInt` не публикуется;
-- `SYSTEM_REBOOT`, MFS cruise pulses и raw speed-limiter 253/254 не публикуются;
+- `SYSTEM_REBOOT`, сырые MFS cruise pulses (210/212/213/214) и raw speed-limiter 253/254 не
+  публикуются; управление круизом ACC/CCS — Builtin `cruise_*` → `AccCruiseController`
+  (как виджеты; режим только ACC или CCS);
 - `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)`, без отдельной
   программной проверки скорости или PRND (как у виджета багажника);
 - допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /

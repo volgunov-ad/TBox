@@ -648,7 +648,25 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     SET_HU_SCREEN_AUTO_BRIGHTNESS("set_hu_screen_auto_brightness"),
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert"),
-    SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget");
+    SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget"),
+    /**
+     * Engage ACC/CCS and converge to target (setpoint widget tap).
+     * [AutomationAction.Builtin.stringValue]: `acc` / `ccs`, optional `:increaseMs:decreaseMs`;
+     * [AutomationAction.Builtin.intValue]: target km/h 30…150 (0 → widget default 90).
+     * Long-running: executor awaits converge completion.
+     */
+    CRUISE_ENGAGE_TO_TARGET("cruise_engage_to_target"),
+    /** Pause Active cruise (MFS Cancel 212). stringValue: `acc` / `ccs`. */
+    CRUISE_PAUSE("cruise_pause"),
+    /** Full off (MFS 210). stringValue: `acc` / `ccs`. */
+    CRUISE_FULL_OFF("cruise_full_off"),
+    /** Resume prior setpoint from Standby (RES+). stringValue: `acc` / `ccs`. */
+    CRUISE_RESUME("cruise_resume"),
+    /**
+     * Nudge Active setpoint ±1 km/h (RES+ / SET−).
+     * stringValue: `acc` / `ccs`; intValue: `+1` or `-1`.
+     */
+    CRUISE_NUDGE("cruise_nudge");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

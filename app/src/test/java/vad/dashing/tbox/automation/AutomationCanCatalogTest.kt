@@ -26,6 +26,12 @@ class AutomationCanCatalogTest {
         assertFalse(MbCanKnownVehiclePropertyId.MFS_RES_PLUS in ids)
         assertFalse(MbCanKnownVehiclePropertyId.MFS_SET_MINUS in ids)
         assertTrue(AutomationCanCatalog.entries.none { it.policy is MbCanCommandPolicy.SetAnyInt })
+        // Cruise control is exposed only as high-level Builtins, not raw MFS pulses.
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_engage_to_target"))
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_pause"))
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_full_off"))
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_resume"))
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_nudge"))
     }
 
     @Test
