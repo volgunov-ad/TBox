@@ -75,6 +75,15 @@ class KeyPressDiagnosticsTest {
     }
 
     @Test
+    fun adayoFormat_includesActionAndHardKey() {
+        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", "K_PTT")
+
+        assertTrue(line.contains("action=adayo.keyEvent.onKeyDown"))
+        assertTrue(line.contains("hardKey=K_PTT"))
+        assertTrue(KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyUp", null).contains("hardKey=-"))
+    }
+
+    @Test
     fun androidFormat_includesActionAndCode() {
         val line = KeyPressDiagnosticFormat.android(action = "DOWN", keyCode = 24L, nativeEvent = null)
 

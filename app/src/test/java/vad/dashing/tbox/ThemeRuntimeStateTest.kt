@@ -9,6 +9,8 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import android.app.Application
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -228,7 +230,12 @@ class ThemeRuntimeStateTest {
 
     @Test
     fun applyActivationOverrides_skipsWallpapersWhenTargetExcluded() = runBlocking {
-        val context = ApplicationProvider.getApplicationContext<Application>()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val dataDir = createTempDir(prefix = "runtime_apply_settings_")
+        val context = object : ContextWrapper(app) {
+            override fun getApplicationContext(): Context = this
+            override fun getFilesDir(): File = dataDir
+        }
         val settingsManager = SettingsManager(context)
         val existing = MainScreenWallpaperSelectionsByPage.empty()
             .withFileName(page = 1, forLightTheme = true, fileName = "keep.jpg")

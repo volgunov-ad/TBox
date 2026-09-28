@@ -2,7 +2,10 @@ package vad.dashing.tbox.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -43,6 +46,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
@@ -78,6 +82,42 @@ fun KeyPressDiagnosticsDialog(
             }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) apply() else mainHandler.post(apply)
+    }
+
+    DisposableEffect(context, mode) {
+        if (mode != HeadUnitCanMode.Android10Vhal) {
+            onDispose { }
+        } else {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(receiveContext: Context, intent: Intent) {
+                    val action = intent.action ?: return
+                    append(KeyPressDiagnosticFormat.adayo(action, intent.getStringExtra("hardKey")))
+                }
+            }
+            val filter = IntentFilter().apply {
+                addAction("adayo.keyEvent.onKeyDown")
+                addAction("adayo.keyEvent.onKeyUp")
+                addAction("adayo.keyEvent.onKeyLongPress")
+                addAction("adayo.keyEvent.onSingleValue")
+            }
+            val registration = runCatching {
+                ContextCompat.registerReceiver(
+                    context,
+                    receiver,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED,
+                )
+            }
+            registration.fold(
+                onSuccess = { append("A10 Adayo keyEvent subscribe OK") },
+                onFailure = {
+                    append(KeyPressDiagnosticFormat.error("A10 Adayo keyEvent subscribe", "${it.javaClass.simpleName}: ${it.message}"))
+                },
+            )
+            onDispose {
+                if (registration.isSuccess) runCatching { context.unregisterReceiver(receiver) }
+            }
+        }
     }
 
     LaunchedEffect(mode) {

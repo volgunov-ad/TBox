@@ -64,6 +64,9 @@ internal object KeyPressDiagnosticFormat {
             "value=${rawValue(event.value)} type=${event.valueType} timestamp=$timestamp status=$status"
     }
 
+    fun adayo(action: String, hardKey: String?): String =
+        "A10 Adayo keyEvent action=$action hardKey=${hardKey ?: "-"}"
+
     fun android(action: String, keyCode: Long, nativeEvent: KeyEvent?): String {
         val native = if (nativeEvent != null) {
             " scanCode=${nativeEvent.scanCode} androidKeyCode=${nativeEvent.keyCode} " +
