@@ -33,12 +33,24 @@ class DeepDiagnosticsCatalogTest {
         val ids = DeepDiagnosticsCatalog.vhalPropertyIds
         assertTrue(FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID in ids)
         assertTrue(FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID in ids)
-        // 188 = STEERING_WHEEL_HEAT_SWITCH -> 289412111 R_0400_RBCM_MFS_HeatSts
         val readPair = FirmwareVehicleJsonMapper.explicitReadEntries()
             .first { it.first == MbCanKnownVehiclePropertyId.STEERING_WHEEL_HEAT_SWITCH }
         assertTrue(readPair.second in ids)
         assertTrue(289_411_329 in ids) // RadarCh1
         assertTrue(289_412_346 in ids) // WasherFluidLevel
+    }
+
+    @Test
+    fun `vhal catalog includes door ajar and seatbelt experimental ids`() {
+        val ids = DeepDiagnosticsCatalog.vhalPropertyIds
+        assertTrue(289_412_271 in ids) // Cem2DriverDoorSts
+        assertTrue(289_412_269 in ids) // Cem2HoodSts
+        assertTrue(289_414_928 in ids) // Icm1DriverSeatBeltWarning
+        assertEquals("Cem2DriverDoorSts", DeepDiagnosticsCatalog.annotateVhalPropertyId(289_412_271))
+        assertEquals(
+            "Icm1DriverSeatBeltWarning",
+            DeepDiagnosticsCatalog.annotateVhalPropertyId(289_414_928),
+        )
     }
 
     @Test
@@ -145,6 +157,19 @@ class DeepCanDiagnosticsTest {
         assertTrue(line.startsWith("mbcan dt=eMBCAN_CFG_VEHICLE modular=2 rev=0 item=188 value=2"))
         assertTrue(line.contains("name=STEERING_WHEEL_HEAT_SWITCH"))
         assertFalse(line.contains("ts="))
+    }
+
+    @Test
+    fun `recordMbCanObjectSnapshot formats typed object line`() {
+        DeepCanDiagnostics.recordMbCanObjectSnapshot(
+            "eMBCAN_VEHICLE_DOOR",
+            "FL=2 FR=1 RL=1 RR=1 trunk=1 hood=2 lock=1",
+        )
+        assertEquals(1, lines.size)
+        val (tag, line) = lines.first()
+        assertEquals(DeepCanDiagnostics.MBCAN_TAG, tag)
+        assertTrue(line.contains("dt=eMBCAN_VEHICLE_DOOR"))
+        assertTrue(line.contains("object=FL=2"))
     }
 
     @Test

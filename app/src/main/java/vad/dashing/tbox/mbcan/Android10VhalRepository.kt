@@ -810,6 +810,11 @@ object Android10VhalRepository {
     val frmDxTarObjState: StateFlow<Int?> = _frmDxTarObjState.asStateFlow()
     @Volatile private var frmDxTarObjRaw: Int? = null
     @Volatile private var frmObjValidRaw: Int? = null
+    /** Raw CEM_2 / ICM door & seat-belt values for journal / future UI (scale TBD on car). */
+    private val _vhalDoorAjarRaw = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val vhalDoorAjarRaw: StateFlow<Map<String, Int>> = _vhalDoorAjarRaw.asStateFlow()
+    private val _vhalSeatBeltRaw = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val vhalSeatBeltRaw: StateFlow<Map<String, Int>> = _vhalSeatBeltRaw.asStateFlow()
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -1458,6 +1463,11 @@ object Android10VhalRepository {
             MbCanSignal.TrunkDoor -> setOf(
                 resolved(MbCanKnownVehiclePropertyId.TRUNK_STATUS),
                 resolved(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR),
+                FirmwareVehicleJsonMapper.VHAL_CEM2_DRIVER_DOOR_STS,
+                FirmwareVehicleJsonMapper.VHAL_CEM2_PSNGR_DOOR_STS,
+                FirmwareVehicleJsonMapper.VHAL_CEM2_LHR_DOOR_STS,
+                FirmwareVehicleJsonMapper.VHAL_CEM2_RHR_DOOR_STS,
+                FirmwareVehicleJsonMapper.VHAL_CEM2_HOOD_STS,
             )
             MbCanSignal.AudioVolume -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME))
             MbCanSignal.AudioVolumeSpeed -> setOf(resolved(MbCanKnownAudioPropertyId.VOLUME_SPEED))
@@ -1514,7 +1524,11 @@ object Android10VhalRepository {
             MbCanSignal.HighBeam -> setOf(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID)
             MbCanSignal.EpbParkLamp -> setOf(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID)
             MbCanSignal.EngineOilPressure -> setOf(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID)
-            MbCanSignal.BrakeFluid -> setOf(VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID)
+            MbCanSignal.BrakeFluid -> setOf(
+                VHAL_ICM_BRAKE_FLUID_LEVEL_PROPERTY_ID,
+                FirmwareVehicleJsonMapper.VHAL_ICM1_DRIVER_SEAT_BELT_WARNING,
+                FirmwareVehicleJsonMapper.VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING,
+            )
             MbCanSignal.GearNumbers -> setOf(
                 VHAL_GSM_GEAR_SHIFT_POS_PROPERTY_ID,
                 VHAL_EMS_TARGET_GEAR_POSITION_PROPERTY_ID,
@@ -2095,6 +2109,8 @@ object Android10VhalRepository {
                 applyCertifiedCarSettings(MbCanSignal.LowBeamHeight, raw)
             resolved(MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT) ->
                 applyCertifiedCarSettings(MbCanSignal.TurnFlashCount, raw)
+            resolved(MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW) ->
+                applyCertifiedCarSettings(MbCanSignal.MirrorAutoFold, raw)
             resolved(MbCanKnownVehiclePropertyId.AVH_SWITCH) ->
                 raw?.let {
                     stateEngine.applyAvhCandidate(MbCanSignalStateEngine.decodeAvhHdcStatusRaw(it))
@@ -2286,6 +2302,20 @@ object Android10VhalRepository {
                 frmObjValidRaw = raw
                 publishFrmDxTarObjState()
             }
+            FirmwareVehicleJsonMapper.VHAL_CEM2_DRIVER_DOOR_STS ->
+                publishVhalDoorAjar("FL", raw)
+            FirmwareVehicleJsonMapper.VHAL_CEM2_PSNGR_DOOR_STS ->
+                publishVhalDoorAjar("FR", raw)
+            FirmwareVehicleJsonMapper.VHAL_CEM2_LHR_DOOR_STS ->
+                publishVhalDoorAjar("RL", raw)
+            FirmwareVehicleJsonMapper.VHAL_CEM2_RHR_DOOR_STS ->
+                publishVhalDoorAjar("RR", raw)
+            FirmwareVehicleJsonMapper.VHAL_CEM2_HOOD_STS ->
+                publishVhalDoorAjar("hood", raw)
+            FirmwareVehicleJsonMapper.VHAL_ICM1_DRIVER_SEAT_BELT_WARNING ->
+                publishVhalSeatBelt("driver", raw)
+            FirmwareVehicleJsonMapper.VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING ->
+                publishVhalSeatBelt("passenger", raw)
             resolved(MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH) ->
                 raw?.let {
                     stateEngine.applySeatCandidate(MbCanSeatSlot.FrontLeft, MbCanSignalStateEngine.decodeSeatModeRaw(it))
@@ -3349,6 +3379,18 @@ object Android10VhalRepository {
 
     private fun publishFrmDxTarObjState() {
         _frmDxTarObjState.value = FrmDxTarObjDomain.decode(frmDxTarObjRaw, frmObjValidRaw)
+    }
+
+    private fun publishVhalDoorAjar(key: String, raw: Int?) {
+        if (raw == null) return
+        _vhalDoorAjarRaw.value = _vhalDoorAjarRaw.value + (key to raw)
+        logDebug("telemetry/doors $key=$raw map=${_vhalDoorAjarRaw.value}")
+    }
+
+    private fun publishVhalSeatBelt(key: String, raw: Int?) {
+        if (raw == null) return
+        _vhalSeatBeltRaw.value = _vhalSeatBeltRaw.value + (key to raw)
+        logDebug("telemetry/seat_belt $key=$raw map=${_vhalSeatBeltRaw.value}")
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {

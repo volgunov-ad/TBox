@@ -129,6 +129,18 @@ object DeepCanDiagnostics {
         emit(key = key, tag = MBCAN_TAG, line = line, valueText = valueText, continuous = continuous)
     }
 
+    /**
+     * Typed OEM object snapshot (doors / seat belt / …) that does **not** arrive as
+     * CFG-shaped `onCmdChanged`. Used when deep mode wires a real callback or poll.
+     */
+    fun recordMbCanObjectSnapshot(dataType: String, fields: String) {
+        val valueText = sanitize(fields)
+        val key = "mobj/$dataType"
+        val line = "mbcan dt=$dataType object=$valueText"
+        val continuous = dataType in CONTINUOUS_MBCAN_DATA_TYPES
+        emit(key = key, tag = MBCAN_TAG, line = line, valueText = valueText, continuous = continuous)
+    }
+
     /** Direct journal line bypassing coalescing (subscription reports, session markers). */
     fun report(tag: String, message: String) {
         appendLine(message)

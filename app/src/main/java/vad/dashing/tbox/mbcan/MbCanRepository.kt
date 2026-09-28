@@ -644,6 +644,12 @@ object MbCanRepository {
     val targetGearNumberState: StateFlow<Int?> = _targetGearNumberState.asStateFlow()
     private val _frmDxTarObjState = MutableStateFlow<Int?>(null)
     val frmDxTarObjState: StateFlow<Int?> = _frmDxTarObjState.asStateFlow()
+
+    private val _bcmDoorsState = MutableStateFlow<BcmDoorSnapshot?>(null)
+    val bcmDoorsState: StateFlow<BcmDoorSnapshot?> = _bcmDoorsState.asStateFlow()
+
+    private var seatBeltDeepPollJob: Job? = null
+    private const val SEAT_BELT_DEEP_POLL_MS = 2_000L
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -909,6 +915,8 @@ object MbCanRepository {
             }
             MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
             MbCanEngineFacade.stopDeepCmdListeners()
+            seatBeltDeepPollJob?.cancel()
+            seatBeltDeepPollJob = null
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -955,6 +963,7 @@ object MbCanRepository {
             MbCanKnownVehiclePropertyId.HVAC_POWER,
             MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY,
             MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE,
+            MbCanKnownVehiclePropertyId.HVAC_AQS,
             MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT,
@@ -1264,6 +1273,32 @@ object MbCanRepository {
                 cfgPushHandler.postDelayed(flushBodyComfortPushRunnable, PUSH_STATE_COALESCE_MS)
             }
         }
+        recordPushDebugEvent(
+            "telemetry/windows",
+            "FL=${snapshot.windowFl} FR=${snapshot.windowFr} RL=${snapshot.windowRl} RR=${snapshot.windowRr}",
+        )
+    }
+
+    /**
+     * Full BCM door ajar / lock / hood snapshot (not only trunk).
+     * Called from settings BCM bridge and deep [IMbCanVehicleDoorCallback].
+     */
+    fun scheduleDoorsBcmPush(snapshot: BcmDoorSnapshot) {
+        recordPushDebugEvent("telemetry/doors", snapshot.journalSample())
+        if (MbCanDiagnostics.deepEnabled.value) {
+            DeepCanDiagnostics.recordMbCanObjectSnapshot(
+                "eMBCAN_VEHICLE_DOOR",
+                snapshot.journalSample(),
+            )
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _bcmDoorsState.value = snapshot
+        }
+    }
+
+    fun scheduleFrmTimeGapIcmPush(raw: Int) {
+        recordPushDebugEvent("frm_time_gap_icm", "raw=$raw")
     }
 
     /**
@@ -1352,6 +1387,7 @@ object MbCanRepository {
      */
     fun scheduleFrmDxTarObjPush(dxRaw: Int?, objValidRaw: Int?) {
         if (dxRaw == null && objValidRaw == null) return
+        // Always journal both raw fields so ObjValid scale can be audited offline.
         recordPushDebugEvent("frm_dx_tar_obj", "dx=$dxRaw valid=$objValidRaw")
         HuCanMarkLog.markPush("frm_dx_tar_obj dx=$dxRaw valid=$objValidRaw")
         val scope = boundScope ?: return
@@ -3493,6 +3529,12 @@ object MbCanRepository {
             val lamps = MbCanEngineFacade.readIcmDriverWarningLamps()
             _engineOilPressureWarningState.value = lamps?.engineOilWarning
             _brakeFluidWarningState.value = lamps?.brakeFluidWarning
+            if (MbCanDiagnostics.deepEnabled.value && lamps != null) {
+                recordPushDebugEvent(
+                    "telemetry/icm_warning_lamps",
+                    "oilWarn=${lamps.engineOilWarning} brakeFluidWarn=${lamps.brakeFluidWarning}",
+                )
+            }
         }
     }
 
@@ -3921,6 +3963,8 @@ object MbCanRepository {
     /** Deep mbCAN mode: subscribe extra data types without adding poll signals. */
     suspend fun setDeepDiagnostics(active: Boolean): String = withContext(stateApplyDispatcher) {
         if (!active) {
+            seatBeltDeepPollJob?.cancel()
+            seatBeltDeepPollJob = null
             MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
             MbCanEngineFacade.stopDeepCmdListeners()
             MbCanJobManager.setDeepTypes(false, emptySet())
@@ -3940,10 +3984,38 @@ object MbCanRepository {
         MbCanJobManager.setDeepTypes(true, resolved.toSet())
         reapplyAllInterests()
         val listenerResults = MbCanEngineFacade.startDeepCmdListeners(resolved.toSet())
-        val listenerCount = listenerResults.count { it.second }
-        val summary = "deepDiag mbcan types=${resolved.size}/${requested.size} cmdListeners=$listenerCount missing=${missing.joinToString()}"
+        val typedResults = MbCanEngineFacade.startDeepTypedObjectListeners()
+        val listenerCount = listenerResults.count { it.second } + typedResults.count { it.second }
+        startSeatBeltDeepPoll()
+        val summary =
+            "deepDiag mbcan types=${resolved.size}/${requested.size} " +
+                "cmdListeners=${listenerResults.count { it.second }} " +
+                "typed=${typedResults.joinToString { "${it.first}=${it.second}" }} " +
+                "missing=${missing.joinToString()}"
         DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, summary)
         summary
+    }
+
+    /**
+     * OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on.
+     */
+    private fun startSeatBeltDeepPoll() {
+        seatBeltDeepPollJob?.cancel()
+        val scope = boundScope ?: return
+        seatBeltDeepPollJob = scope.launch(stateApplyDispatcher) {
+            while (MbCanDiagnostics.deepEnabled.value) {
+                pollSeatBeltWarningForJournal()
+                delay(SEAT_BELT_DEEP_POLL_MS)
+            }
+        }
+    }
+
+    private fun pollSeatBeltWarningForJournal() {
+        val pair = MbCanEngineFacade.readSeatBeltWarningRaw() ?: return
+        val (driver, passenger) = pair
+        val sample = BcmDoorDomain.seatBeltJournalSample(driver, passenger)
+        recordPushDebugEvent("telemetry/seat_belt", sample)
+        DeepCanDiagnostics.recordMbCanObjectSnapshot("eMBCAN_SEAT_BELT_STATUS", sample)
     }
 
     private suspend fun reapplyAllInterests() {
