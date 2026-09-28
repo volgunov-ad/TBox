@@ -123,6 +123,13 @@
     <string name="automation_adb_shell_hint">Тот же уровень доступа, что shell во вкладке ADB. Если :5555 ещё не слушает — кратко включает ADB TCP, выполняет команду и возвращает TCP только если эта сессия его включала. Уже открытый порт не выключает.</string>
     <string name="automation_adb_force_stop_package_label">Приложение</string>
     <string name="automation_adb_force_stop_hint">Через localhost ADB выполняет am force-stop для выбранного пакета. Гарантии остановки нет (часть system/persistent процессов может перезапуститься). TCP :5555 включают только если порт ещё не слушает; после команды возвращают только если эта сессия его включала (как у ADB shell).</string>
+    <string name="automation_hard_key_status_pressed">Нажал</string>
+    <string name="automation_hard_key_status_released">Отпустил</string>
+    <string name="automation_hard_key_status_single">Одиночное</string>
+    <string name="automation_hard_key_status_double">Двойное</string>
+    <string name="automation_hard_key_status_long">Долгое</string>
+    <string name="automation_hard_key_event_hint">Коды кнопок — в окне «Диагностика клавиш» и в документации MBCAN/VHAL. «Нажал» (сразу при нажатии) / «Отпустил» (сразу при отпускании) — сырые события OEM. «Одиночное» (короткое нажатие после паузы) / «Двойное» / «Долгое» (удержание) вычисляются по таймингу (двойное окно %1$d мс, долгое ≥ %2$d мс удержания). Одиночное срабатывает с задержкой окна двойного, чтобы отличить от двойного. Повторные события одной кнопки подавляются в течение %3$d мс.</string>
+    <string name="automation_hard_key_unavailable_a10"> На этом ГУ (Android 10 / VHAL) события кнопок не приходят: триггер работает только на Android 9 (mbCAN).</string>
     <string name="tab_settings">Настройки</string>
     <string name="tab_floating_panels_settings">Настройки плавающих панелей</string>
     <string name="tab_themes">Темы</string>
