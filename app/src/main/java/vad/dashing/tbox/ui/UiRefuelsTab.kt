@@ -404,7 +404,7 @@ fun RefuelsTab(
                         ) {
                             Text(
                                 stringResource(R.string.refuels_calibration_reset),
-                                style = MaterialTheme.typography.tboxBody,
+                                style = MaterialTheme.typography.tboxButton,
                             )
                         }
                         Text(

@@ -416,9 +416,8 @@ internal fun AppListDialog(
             onDismissRequest = { pendingUninstall = null },
             title = { AppAlertDialogTitle(stringResource(R.string.app_list_delete_confirm_title)) },
             text = {
-                Text(
-                    text = stringResource(R.string.app_list_delete_confirm_message, row.label),
-                    style = MaterialTheme.typography.tboxBody,
+                AppAlertDialogText(
+                    stringResource(R.string.app_list_delete_confirm_message, row.label),
                 )
             },
             confirmButton = {
@@ -462,14 +461,13 @@ internal fun AppListDialog(
             onDismissRequest = { if (!adbBusy) pendingAdb = null },
             title = { AppAlertDialogTitle(stringResource(R.string.app_list_adb_confirm_title)) },
             text = {
-                Text(
-                    text = stringResource(
+                AppAlertDialogText(
+                    stringResource(
                         R.string.app_list_adb_confirm_message,
                         pending.actionLabel,
                         pending.row.label,
                         pending.row.packageName,
                     ) + warningExtras,
-                    style = MaterialTheme.typography.tboxBody,
                 )
             },
             confirmButton = {
