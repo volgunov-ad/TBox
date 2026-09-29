@@ -891,6 +891,10 @@ class AutomationValidatorTest {
                             stringValue = "ccs",
                         ),
                         AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+                            stringValue = "acc",
+                        ),
+                        AutomationAction.Builtin(
                             type = AutomationBuiltinActionType.CRUISE_NUDGE,
                             intValue = 1,
                             stringValue = "acc",
@@ -905,6 +909,18 @@ class AutomationValidatorTest {
                     actions = listOf(
                         AutomationAction.Builtin(
                             type = AutomationBuiltinActionType.CRUISE_FULL_OFF,
+                            stringValue = "auto",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
                             stringValue = "auto",
                         ),
                     ),

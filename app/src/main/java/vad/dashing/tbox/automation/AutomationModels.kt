@@ -685,6 +685,11 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     /** Resume prior setpoint from Standby (RES+). stringValue: `acc` / `ccs`. */
     CRUISE_RESUME("cruise_resume"),
     /**
+     * Activate at current speed via SET− (status swipe-down / AccCruiseController.activateAtCurrentSpeed).
+     * stringValue: `acc` / `ccs`. Standby/Off → SET− (Off enables first); else no-op.
+     */
+    CRUISE_ACTIVATE_AT_CURRENT_SPEED("cruise_activate_at_current_speed"),
+    /**
      * Nudge Active setpoint ±1 km/h (RES+ / SET−).
      * stringValue: `acc` / `ccs`; intValue: `+1` or `-1`.
      */

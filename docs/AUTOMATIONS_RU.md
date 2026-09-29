@@ -397,7 +397,8 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
   восстановлением TCP только если сессия сама его включала), **ADB force-stop**
   (`am force-stop` выбранного пакета, та же семантика TCP),
   **круиз ACC/CCS** через виджетные Builtin (`cruise_engage_to_target` / `cruise_pause` /
-  `cruise_full_off` / `cruise_resume` / `cruise_nudge` → `AccCruiseController`; режим только
+  `cruise_full_off` / `cruise_resume` / `cruise_activate_at_current_speed` / `cruise_nudge` →
+  `AccCruiseController`; режим только
   ACC или CCS, без «Авто»; сырые MFS-импульсы по-прежнему не в CAN-каталоге),
   mock location, geo log);
 - медиакоманды и громкость (виджет музыки не нужен; Play / Play-Pause при отсутствии

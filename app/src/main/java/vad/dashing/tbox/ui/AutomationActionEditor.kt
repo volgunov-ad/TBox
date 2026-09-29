@@ -667,6 +667,7 @@ private fun BuiltinActionFields(
                             type == AutomationBuiltinActionType.CRUISE_PAUSE ||
                             type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
                             type == AutomationBuiltinActionType.CRUISE_RESUME ||
+                            type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
                             type == AutomationBuiltinActionType.CRUISE_NUDGE ->
                             AutomationCruiseActions.MODE_ACC
                         else -> ""
@@ -1047,6 +1048,7 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.CRUISE_PAUSE,
         AutomationBuiltinActionType.CRUISE_FULL_OFF,
         AutomationBuiltinActionType.CRUISE_RESUME,
+        AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
         -> Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1057,6 +1059,8 @@ private fun BuiltinActionFields(
                         "Пауза Active/Override (Cancel 212), как статус-плитка."
                     AutomationBuiltinActionType.CRUISE_FULL_OFF ->
                         "Полное выключение (210), как двойное нажатие виджета."
+                    AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
+                        "Активация на текущей скорости (SET−), как свайп вниз на статус-плитке в Standby; из Off — enable+SET−."
                     else ->
                         "Возобновление из Standby (RES+), как свайп вверх на статус-плитке."
                 },
@@ -1268,6 +1272,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.CRUISE_PAUSE -> "Круиз: пауза (Cancel)"
     AutomationBuiltinActionType.CRUISE_FULL_OFF -> "Круиз: полностью выключить"
     AutomationBuiltinActionType.CRUISE_RESUME -> "Круиз: возобновить (RES+)"
+    AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
+        "Круиз: активировать на текущей скорости (SET−)"
     AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
 }
 
