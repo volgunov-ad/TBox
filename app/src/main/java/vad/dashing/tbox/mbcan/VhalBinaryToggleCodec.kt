@@ -123,6 +123,8 @@ object VhalBinaryToggleCodec {
 
     /** VHAL read polarity exceptions that differ from mbCAN's usual 2=on convention. */
     fun decodeReadState(propertyId: Int, raw: Int): MbCanBinaryState? = when (propertyId) {
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH ->
+            if (raw == 0) MbCanBinaryState.On else MbCanBinaryState.Off
         // R_0200_CEM_IPM_AnionPurify: 1=on, 2=off; write polarity is independently 2=on, 1=off.
         MbCanKnownVehiclePropertyId.HVAC_AQS ->
             if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off

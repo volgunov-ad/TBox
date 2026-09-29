@@ -122,7 +122,7 @@ class FirmwareVehicleJsonMapperTest {
     @Test
     fun icmBrightness_resolvesCertifiedReadAndWriteIds() {
         assertEquals(
-            289_414_939,
+            289_415_087,
             FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL),
         )
         assertEquals(
@@ -136,6 +136,18 @@ class FirmwareVehicleJsonMapperTest {
         assertEquals(
             289_415_088,
             FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE),
+        )
+    }
+
+    @Test
+    fun parkingRadarAndDistanceWarning_useDistinctStockWriteIds() {
+        assertEquals(
+            289_415_942,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH),
+        )
+        assertEquals(
+            289_415_940,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING),
         )
     }
 

@@ -13,7 +13,7 @@
 |---|---:|---:|---|---|
 | Компенсация громкости по скорости | 557849227 | 557849227 | `AUDIO_VOL_VSC_MOD_REQ` | `1=off`, `2=low`, `3=mid`, `4=high` |
 | Режим движения | 289412123 | 289412695 | `R_0400_TCU_G_DriverMode_7` / `T_0401_IHU_9_DriveMode` | `неявно` |
-| Яркость приборки (ручная) | 289414939 | 289415087 | `R_0900_ICM_4_BrightnessFed` / `T_0901_IHU_ICMBrightnessManualAdj` | `неявно` |
+| Яркость приборки (ручная) | 289415087 | 289415087 | `T_0901_IHU_ICMBrightnessManualAdj` (штатный `MeterLightFragment` читает T-эхо) | `1..10`, <1 → 1 |
 | Режим яркости приборки | 289415088 | 289415088 | `T_0901_IHU_SET_ICMBrightnessMode` | `неявно (авто/ручной)` |
 | Управление светом | — | 289412613 | `T_0405_SET_Lightcontrol` | `1..4` |
 | Передний ПТФ | 289412133 | 289412614 | `R_0400_CEM_2_FrontFogLightSts` / `T_0405_Set_FrontFogLights` | `1/2` |
@@ -84,8 +84,8 @@
 - `[SystemSettings] AUDIO_VOL_VSC_MOD_REQ | 557849227 | 557849227 | 1=off, 2=low, 3=mid, 4=high`
 - `[SystemSettings] R_0400_clearLogs_Result / T_0401_clearLogs_Requset | 289412344 | 289412726 | write: 1`
 - `[SystemSettings] R_0400_TCU_G_DriverMode_7 / T_0401_IHU_9_DriveMode | 289412123 | 289412695 | значения не найдены`
-- `[SystemSettings] R_0900_ICM_4_BrightnessFed / T_0901_IHU_ICMBrightnessManualAdj | 289414939 | 289415087 | значения не найдены`
-- `[SystemSettings] T_0901_IHU_SET_ICMBrightnessMode | 289415088 | 289415088 | значения не найдены`
+- `[SystemSettings] T_0901_IHU_ICMBrightnessManualAdj | 289415087 | 289415087 | 1..10, <1 → 1 (MeterLightFragment)`
+- `[SystemSettings] T_0901_IHU_SET_ICMBrightnessMode | 289415088 | 289415088 | 0=auto, 1=manual (MeterLightFragment)`
 - `[SystemSettings] T_0405_SET_Lightcontrol | — | 289412613 | 1..4`
 - `[SystemSettings] R_0400_CEM_2_FrontFogLightSts / T_0405_Set_FrontFogLights | 289412133 | 289412614 | 1/2`
 - `[SystemSettings] R_0400_CEM_2_RearFogLightSts / T_0405_SET_Rearfoglight | 289412136 | 289412612 | 1/2`

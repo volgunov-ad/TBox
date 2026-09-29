@@ -29,7 +29,7 @@
 
 | Pri | Control | A9 | A10 | Статус |
 |-----|---------|----|-----|--------|
-| P1 | ICM brightness | Vehicle **209** (1…10) | Write **289415087**, read **289414939** | ✅ |
+| P1 | ICM brightness | Vehicle **209** (1…10) | Read/write **289415087** (T-эхо, штатный `MeterLightFragment`; 1…10, <1→1) | ✅ |
 | P1 | ICM auto mode | Vehicle **208** (0=auto, 1=manual) | **289415088** | ✅ |
 | P2 | Volume vs speed A9 map | Audio **13** raw **0–3** | VHAL **557849227** **1–4** | ✅ shared UI 1–4 |
 | P3 | EQ mode + bands | Audio **10**, **5/6/7** | Platform `SettingsSvc` (не VHAL UI) | ✅ A9; A10 controls unavailable |

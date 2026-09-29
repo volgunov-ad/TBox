@@ -200,7 +200,7 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415065,
         MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415937,
         MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH to 289415941,
-        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415942,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415940,
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415936,
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415949,
         // MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH (HMA, 19)
@@ -341,7 +341,8 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412239,
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412243,
         MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
-        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289414939, // R_0900_ICM_4_BrightnessFed
+        // Stock SystemSettings MeterLightFragment reads/writes the T_0901 echo itself.
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289415087, // T_0901_IHU_ICMBrightnessManualAdj
         MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // write echo / stock read
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415168, // R_0200_CEM_IPM_FRTempsts

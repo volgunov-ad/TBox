@@ -144,6 +144,15 @@ class VhalBinaryToggleEncodeTest {
     }
 
     @Test
+    fun autoVentilation_readZeroIsOn_writeOneIsOn() {
+        val id = MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH
+        assertEquals(MbCanBinaryState.On, VhalBinaryToggleCodec.decodeReadState(id, 0))
+        assertEquals(MbCanBinaryState.Off, VhalBinaryToggleCodec.decodeReadState(id, 1))
+        assertEquals(1, VhalBinaryToggleCodec.encodeWriteValue(id, true))
+        assertEquals(2, VhalBinaryToggleCodec.encodeWriteValue(id, false))
+    }
+
+    @Test
     fun encode_unmappedProperty_returnsNull() {
         assertNull(VhalBinaryToggleCodec.encodeWriteValue(MbCanKnownVehiclePropertyId.SYSTEM_REBOOT, true))
         assertNull(

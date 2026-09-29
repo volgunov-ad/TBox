@@ -74,7 +74,7 @@
 |---------|---------------------|-------------------------------|--------------------------|
 | First blowing | **53** `eVEHICLE_PROPERTY_POWER_FIRST_BREATH` | **289415188** → **289412677** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | BT reduce fan | **51** `eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED` | **289415190** → **289412667** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
-| Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10 read: **0 On**, **1 Off** (штатный `AcFragment`); write: **1 On / 2 Off** |
 | Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off**. A9 cfg push **в allowlist** `scheduleVehicleCfgPush` |
 | Fragrance switch | **33** `eVEHICLE_PROPERTY_FRAGRANCE_SWITCH` | — (A9-only) | 1 Off / 2 On |
 | Fragrance smell | **34** `eVEHICLE_PROPERTY_FRAGRANCE_SMELL` | — (A9-only) | 1 Meteor / 2 Boss / 3 Tea |
@@ -241,9 +241,9 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 10** — HMA | VHAL **289415702** ← 19 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 19 | **1** on / **0** off (≠ 1/2) | onChange + pull; виджеты `hmaWidget` / `highBeamWidget` |
 | **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |
 | **Android 9/10** — DOW | A9 **13**; A10 read **289415729** | A9 2 On / 1 Off; A10 raw 1 On | A9 **13**; A10 write **289415065** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Dow` |
-| **Android 9/10** — FCW master | A9 **96**, **20**, **22**; A10 **289415696**, **289415698**, **289415699** | A9 2 On / 1 Off; A10 raw 1 On | A10 **289415937**, **289415941**, **289415942** | 2 on / 1 off; writes all three together | settings only, `Fcw` |
+| **Android 9/10** — FCW master | A9 **96**, **20**, **22**; A10 **289415696**, **289415698**, **289415699** | A9 2 On / 1 Off; A10 raw 1 On | A10 **289415937**, **289415941**, **289415940** (`DistanceWarning_On_Off`, не **289415942** PAS) | 2 on / 1 off; writes all three together | settings only, `Fcw` |
 | **Android 9/10** — FCW sensitivity | A9 **97**; A10 **289415697** | **3** Far / **1** Standard / **2** Near (штатка A9 Close/Standard/Far = 2/1/3; A10 Far/Standard/Near = 3/1/2) | A10 **289415936** | **3** / **1** / **2** на обоих бэкендах | settings only |
-| **Android 9/10** — LDW sensitivity | A9 **16**; A10 **289415707** | A9 1 High / 0 Low; A10 inverted read | A10 **289415949** | A10 1 High / 0 Low | settings only |
+| **Android 9/10** — LDW sensitivity | A9 **16**; A10 **289415707** | **1** High / **0** Low на обоих бэкендах (stock A10 `ConvertValue` для 289415707: raw 1 → UI High, raw 0 → UI Low) | A10 **289415949** | A10 1 High / 0 Low | settings only |
 | **Android 9** — Режим фар (Lightcontrol) | **135** `eVEHICLE_LIGHTCONTROL` | **1** AUTO / **2** PARK / **3** LOW / **4** OFF (`decodeLightControlRaw`) | **135** | **1…4** | cfg push + pull `LightControl`; виджет цикла |
 | **Android 10** — Режим фар | VHAL **289412613** ← 135 (read = write-echo `T_0405_SET_Lightcontrol`; не LowBeamSts **289412250**, тот binary) | то же 1…4 | VHAL **289412613** ← 135 | **1** AUTO / **2** PARK / **3** LOW / **4** OFF | onChange + pull |
 | **Android 9** — Задний ПТФ | **136** `eVEHICLE_REARFOGLIGHT` | **1** Off / **2** On (`decodeRearFogMbCanRaw`) | **136** | 1↔2 | cfg push + pull `RearFogLight` |
@@ -251,12 +251,16 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9/10** — Auto lock / Auto unlock | **1** / **2** | A9: 1 Off / 2 On; A10: raw 1 On / 2 Off | **1** / **2**; VHAL **289412661** / **289412660** | A9: 1↔2; A10: **1** on / **2** off | cfg push/pull; VHAL onChange + pull |
 | **Android 9/10** — Follow-me-home | **7** | A9 30/60/3(off); A10 **289412130** = 1/2/3 | **7**; VHAL **289412656** | A9 30/60/3; A10 1/2/3 | `FollowMeHome`, normalized enum |
 | **Android 9/10** — Unlock mode / lock feedback | **131** / **3** | unlock 1/2; A9 feedback **1** light / **2** horn / **3** light+horn; A10 status **289412144** **0** light+horn / **1** light / **2** horn | **131** / **3**; VHAL **289412608** / **289412668** | unlock 1/2; A9 feedback 1/2/3; A10 write **2** light / **3** horn / **1** light+horn | cfg/onChange + pull |
-| **Android 9/10** — Wiper sensitivity / rear wiper | **191** / **186** | sensitivity 1..4; rear A9 1 Off / 2 On, A10 **289412193** 1 On / 2 Off | **191** / **186**; VHAL **289412688** / **289412681** | sensitivity 1..4; rear A10 1 on / 2 off | settings only |
-| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 / **1=3 миг. / 2=5 / 3=7**; A10 **289412261** inverted 0..3, **289412257** zero-based 0..2 → UI 1..3 | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL UI→4/3/2/1; flashes write **1/2/3** (3/5/7 миганий) | normalized StateFlow |
+| **Android 9/10** — Wiper sensitivity / rear wiper | **191** / **186** | sensitivity 1..4 (A10 статус **289412140** штатным UI не потребляется — CarSet5 читает эхо write **289412688** `mWiperSpeed`: raw 1..4 → idx raw−1; семантика статуса не подтверждена); rear A9 1 Off / 2 On, A10 **289412193** raw 1 On / 2 Off (CarSet5 `num==1`) | **191** / **186**; VHAL **289412688** / **289412681** | sensitivity 1..4; rear A10 1 on / 2 off | settings only |
+| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 (stock EmbarkationLamp seekbar: pos 0..3 → value 1..4, без инверсии); A10 **289412261** raw = позиция 0..3 (0=«0档» … 3=«3档», CarOutLightFragment), **289412257** zero-based 0..2 → UI 1..3 (3/5/7 миганий) | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL = позиция+1 («3档»→4 … «0档»→1), приложение UI→4/3/2/1; flashes write **1/2/3** (3/5/7 миганий) | normalized StateFlow |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
 | **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
 | **Android 10** — Беспроводная зарядка | — (pull/push **не подключены**) | — | VHAL id из firmware для **264** (если есть) | 1↔2 | **Pull/push в A10 не реализованы** (`signalReadPropertyIds` = ∅) |
+
+Сверено по штатным исходникам A10 (CarSet1 / CarSet5 / CarOutLightFragment / CarCommon5 + MainServer): auto lock/unlock и rear wiper read raw **1 = On**; unlock mode **289412214** raw **1 = только водительская / 2 = все двери**; lock feedback **289412144** raw **0 = свет+звук / 1 = свет / 2 = звук**; follow-me-home **289412130** raw **1 = 30 с / 2 = 60 с / 3 = Off**; mirror autofold read **289412131** raw **0 = On** (CarCommon5), write **289412657** **1 = On / 2 = Off** — decode/encode приложения совпадают со штатом по всем этим строкам.
+
+Инверсия low beam (read `4 − raw` / write `5 − level`) взаимно обратима и согласована со штатной парой A10 (read = позиция 0..3, write = позиция+1), т.е. на A10 приложение не может разойтись само с собой. Принятое направление (UI 1 = «3档») совпадает с порядком обоих штатных UI (A10: «3档»…«0档»; A9: value 1 в крайней левой позиции seekbar), но прямого маппинга A9 mbCAN **129** на позиции в исходниках нет (он внутри нативного mbCAN-демона) — направление A9↔A10 подтверждается только тестом на авто.
 
 ---
 
@@ -402,7 +406,7 @@ DataStore `speedLimiterTargetKmh` пока сохраняется виджето
 | **Android 9** — Balance / fader | Audio **3** / **4** | raw **0…14** → UI **raw−7** (−7…+7) | same | UI **+7** → raw **0…14** | cfg_audio push + pull; Car Settings only |
 | **Android 10** — EQ / balance / fader | — | Platform `SettingsSvc` only; no verified VHAL map | — | — | controls disabled; no VHAL subscription or writes |
 | **Android 9** — ICM manual brightness | Vehicle **209** `eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ` | **1…10** | **209** | 1…10 | cfg_vehicle push + pull `IcmManualBrightness` |
-| **Android 10** — ICM manual brightness | VHAL **289414939** `R_0900_ICM_4_BrightnessFed` | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
+| **Android 10** — ICM manual brightness | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` (T-эхо; как штатный `MeterLightFragment`) | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
 | **Android 9** — ICM brightness mode | Vehicle **208** `eVEHICLE_SET_ICM_BRIGHTNESS_MODE` | **0** auto / **1** manual | **208** | 0 auto / 1 manual | cfg_vehicle push + pull `IcmBrightnessMode` |
 | **Android 10** — ICM brightness mode | VHAL **289415088** `T_0901_IHU_SET_ICMBrightnessMode` | **0** auto / **1** manual | VHAL **289415088** | 0 auto / 1 manual | onChange + pull |
 

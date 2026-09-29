@@ -50,10 +50,15 @@ object CarSettingsAdasDomain {
         else -> null
     }
 
-    /** Stock A10 read conversion is inverted; write values retain the UI polarity. */
+    /**
+     * Stock A10 `R_0B00_FCM_2_LDWLKA_Sensitivityfeedback` (289415707) via
+     * `ConvertValue.convertValue`: raw **1** → UI High, raw **0** → UI Low
+     * (titles2 = {High, Low}) — same polarity as the A10 write
+     * `T_0B01_IHU_8_LDW_LKA_SensitivityReq` (High=1, Low=0) and as mbCAN.
+     */
     fun decodeLdwSensitivityVhal(raw: Int): LdwSensitivity? = when (raw) {
-        0 -> LdwSensitivity.High
-        1 -> LdwSensitivity.Low
+        1 -> LdwSensitivity.High
+        0 -> LdwSensitivity.Low
         else -> null
     }
 

@@ -17,10 +17,14 @@ class CarSettingsAdasDomainTest {
         assertEquals(1, CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Standard))
     }
 
-    @Test fun ldwSensitivity_normalizesInvertedVhalRead() {
+    /** Stock A10: raw 1 = High, 0 = Low on both the feedback (289415707) and the request (289415949). */
+    @Test fun ldwSensitivity_sharesHighOneLowZeroPolarityOnBothBackends() {
         assertEquals(LdwSensitivity.High, CarSettingsAdasDomain.decodeLdwSensitivityMbCan(1))
-        assertEquals(LdwSensitivity.High, CarSettingsAdasDomain.decodeLdwSensitivityVhal(0))
+        assertEquals(LdwSensitivity.High, CarSettingsAdasDomain.decodeLdwSensitivityVhal(1))
+        assertEquals(LdwSensitivity.Low, CarSettingsAdasDomain.decodeLdwSensitivityVhal(0))
+        assertNull(CarSettingsAdasDomain.decodeLdwSensitivityVhal(2))
         assertEquals(0, CarSettingsAdasDomain.encodeLdwSensitivityVhal(LdwSensitivity.Low))
+        assertEquals(1, CarSettingsAdasDomain.encodeLdwSensitivityVhal(LdwSensitivity.High))
     }
 
     /** Values from A9 HU log: item=95 value=1 (with TJA on) and value=4 (with TJA off). */

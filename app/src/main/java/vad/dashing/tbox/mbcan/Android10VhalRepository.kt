@@ -1858,6 +1858,10 @@ object Android10VhalRepository {
     private fun decodeVhalBinaryOneIsOn(raw: Int): MbCanBinaryState =
         if (raw == 1) MbCanBinaryState.On else MbCanBinaryState.Off
 
+    private fun decodeVhalAutoVentilation(raw: Int): MbCanBinaryState =
+        VhalBinaryToggleCodec.decodeReadState(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH, raw)
+            ?: MbCanBinaryState.Unknown
+
     private fun decodeVhalBinaryReadState(propertyId: Int, raw: Int): MbCanBinaryState {
         VhalBinaryToggleCodec.decodeReadState(propertyId, raw)?.let { return it }
         return when (propertyId) {
@@ -1874,7 +1878,6 @@ object Android10VhalRepository {
         MbCanKnownVehiclePropertyId.HVAC_AQS,
         MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
         MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
-        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
         MbCanKnownVehiclePropertyId.HUD_SWITCH,
         MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS ->
             decodeVhalBinaryOneIsOn(raw)
@@ -2209,7 +2212,7 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED) ->
                 _btReduceFanState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH) ->
-                _autoVentilationState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                _autoVentilationState.value = raw?.let(::decodeVhalAutoVentilation) ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.HUD_SWITCH) ->
                 _hudSwitchState.value = raw?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
             resolved(MbCanKnownVehiclePropertyId.HUD_HEIGHT) ->
@@ -3023,7 +3026,7 @@ object Android10VhalRepository {
                     ?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
             MbCanSignal.AutoVentilation ->
                 _autoVentilationState.value = readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH)
-                    ?.let(::decodeVhalBinaryOneIsOn) ?: MbCanBinaryState.Unknown
+                    ?.let(::decodeVhalAutoVentilation) ?: MbCanBinaryState.Unknown
             MbCanSignal.HvacDefrosterFront -> {
                 val raw = readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION)
                 stateEngine.applyHvacDefrosterFrontCandidate(
