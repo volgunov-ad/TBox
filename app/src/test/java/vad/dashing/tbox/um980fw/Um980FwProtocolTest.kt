@@ -122,6 +122,40 @@ class Um980FwBootloaderBaudSweepTest {
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
         assertEquals(115_200, transport.currentBaud())
     }
+
+    @Test
+    fun usbSoftSkipsUpgradeBaudAndDoesNotLeaveModuleAt460800() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200, avoidUpgradeBaud = true)
+        var sawConfig460800 = false
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (s.contains("460800")) sawConfig460800 = true
+            if (transport.currentBaud() == 115_200 && s.contains("unlog", ignoreCase = true)) {
+                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertFalse(updater.enterBootloaderSoft(preBaud = 115_200))
+        assertFalse(sawConfig460800)
+        assertEquals(115_200, transport.currentBaud())
+    }
+
+    @Test
+    fun recoverLinkRestoresWorkingBaudFromUpgradeBaud() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true)) {
+                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+            }
+            if (s.contains("config com", ignoreCase = true) && s.contains("115200")) {
+                // module accepts restore
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        updater.recoverLinkBestEffort(preBaud = 115_200)
+        assertEquals(115_200, transport.currentBaud())
+    }
 }
 
 /**
@@ -130,6 +164,7 @@ class Um980FwBootloaderBaudSweepTest {
  */
 private class FakeUm980BinaryTransport(
     initialBaud: Int,
+    private val avoidUpgradeBaud: Boolean = false,
 ) : Um980BinaryTransport {
     private var baud: Int = initialBaud
     private val rx = ConcurrentLinkedQueue<Byte>()
@@ -175,4 +210,6 @@ private class FakeUm980BinaryTransport(
     override fun beginExclusive() = Unit
 
     override fun endExclusive() = Unit
+
+    override fun avoidMidSessionUpgradeBaud(): Boolean = avoidUpgradeBaud
 }

@@ -36,6 +36,7 @@ class Um980FirmwareUpdater(
             ?.let { return fail(it) }
 
         val preBaud = workingBaud.coerceIn(9600, 921600)
+        var upgradeSucceeded = false
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
@@ -98,10 +99,14 @@ class Um980FirmwareUpdater(
                 }
             }
             Um980FirmwareUiStore.finish(null)
+            upgradeSucceeded = true
             Result.success(versionA.orEmpty())
         } catch (e: Exception) {
             fail(e.message ?: "failed", e)
         } finally {
+            if (!upgradeSucceeded) {
+                runCatching { recoverLinkBestEffort(preBaud) }
+            }
             runCatching { transport.endExclusive() }
             runCatching { transport.setBaud(preBaud) }
             runCatching { pkgFile.delete() }
@@ -109,63 +114,59 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Soft entry matching UPrecise, with Android-USB fallbacks when 460800 link is dead.
+     * Soft entry. Direct USB skips CONFIG 460800 (Android adapters often desync and leave the
+     * module at 460800 while the host returns to 115200 — connection lost until power-cycle).
+     * Companion keeps the UPrecise 460800 path.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
-        // Path 0: try reset on the already-working baud before touching CONFIG/460800.
-        // Avoids leaving the module at 460800 when the USB adapter cannot really switch.
+        // Path 0: reset on the already-working baud (single write like UPrecise).
         sendDoubleReset()
         val early = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 8_000L)
         if (early != null && isBootloaderBanner(early)) {
             runCatching { Log.i(TAG, "BootLoader via working-baud reset at ${transport.currentBaud()}") }
             return true
         }
-        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 10_000L)) return true
+        // "rebooting" without banner yet — keep listening briefly at working baud.
+        if (early != null && early.contains("rebooting", ignoreCase = true)) {
+            if (waitForAny(listOf("BootLoader", "boot>"), 6_000L) != null) return true
+        }
+        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 8_000L)) return true
 
-        // Path A (UPrecise): CONFIG all COMs to 460800 (no SAVECONFIG) → host 460800 → double reset.
+        if (transport.avoidMidSessionUpgradeBaud()) {
+            runCatching {
+                Log.w(TAG, "soft: USB transport — skip CONFIG 460800 (use Hard reset if BL not seen)")
+            }
+            // waitForBootloaderBanner may have left host on 460800 during the sweep.
+            runCatching { transport.setBaud(preBaud) }
+            return false
+        }
+
+        // Path A (UPrecise / Companion): CONFIG 460800 → host 460800 → double reset.
         for (com in listOf("com1", "com2", "com3")) {
             sendLine("config $com $UPGRADE_BAUD")
             delay(80)
         }
         if (!transport.setBaud(UPGRADE_BAUD)) {
-            runCatching { Log.w(TAG, "soft: setBaud($UPGRADE_BAUD) failed, trying working baud") }
-        } else {
-            delay(500)
-            drain(200)
-            sendLine("unlog")
-            delay(120)
-            sendLine("unlog")
-            delay(200)
-            if (probeAppAlive(1_800L)) {
-                sendDoubleReset()
-                val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 12_000L)
-                if (hit != null && isBootloaderBanner(hit)) {
-                    runCatching { Log.i(TAG, "BootLoader via UPrecise path at $UPGRADE_BAUD") }
-                    return true
-                }
-                if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)) return true
-            } else {
-                runCatching { Log.w(TAG, "soft: no OK after 460800 — link/baud mismatch, falling back") }
-            }
+            runCatching { Log.w(TAG, "soft: setBaud($UPGRADE_BAUD) failed") }
+            return false
         }
-
-        // Path B: find a baud where the app still answers (or BL already), then reset / catch banner.
-        for (baud in bootloaderBaudCandidates(preBaud, transport.currentBaud())) {
-            if (!transport.setBaud(baud)) continue
-            delay(150)
-            drain(100)
-            transport.write("\r\n".toByteArray(Charsets.US_ASCII))
-            if (waitForAny(listOf("BootLoader", "boot>"), 1_200L) != null) {
-                runCatching { Log.i(TAG, "BootLoader already present at baud=$baud") }
-                return true
-            }
-            if (!probeAppAlive(1_500L)) continue
-            sendDoubleReset()
-            val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 10_000L)
-            if (hit != null && isBootloaderBanner(hit)) return true
-            if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 12_000L)) return true
+        delay(500)
+        drain(200)
+        sendLine("unlog")
+        delay(120)
+        sendLine("unlog")
+        delay(200)
+        if (!probeAppAlive(1_800L)) {
+            runCatching { Log.w(TAG, "soft: no OK after 460800") }
+            return false
         }
-        return false
+        sendDoubleReset()
+        val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 12_000L)
+        if (hit != null && isBootloaderBanner(hit)) {
+            runCatching { Log.i(TAG, "BootLoader via UPrecise path at $UPGRADE_BAUD") }
+            return true
+        }
+        return waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)
     }
 
     /**
@@ -198,9 +199,8 @@ class Um980FirmwareUpdater(
     }
 
     private fun sendDoubleReset() {
-        // UPrecise: "\r\nreset\r\nreset\r\n"
-        sendLine("reset")
-        sendLine("reset")
+        // UPrecise capture: one write "\r\nreset\r\nreset\r\n"
+        transport.write("\r\nreset\r\nreset\r\n".toByteArray(Charsets.US_ASCII))
     }
 
     /** True if UM980 app firmware still answers ASCII (unlog OK / command response). */
@@ -208,6 +208,42 @@ class Um980FirmwareUpdater(
         drain(80)
         sendLine("unlog")
         return waitForAny(listOf("OK", "response", "command"), timeoutMs) != null
+    }
+
+    /**
+     * After a failed Soft path the module is often left at RAM baud 460800 (or in BootLoader)
+     * while the host returns to [preBaud] — connection looks dead until power-cycle.
+     */
+    internal suspend fun recoverLinkBestEffort(preBaud: Int) {
+        val target = preBaud.coerceIn(9600, 921600)
+        for (baud in bootloaderBaudCandidates(target, transport.currentBaud())) {
+            if (!transport.setBaud(baud)) continue
+            delay(150)
+            drain(100)
+            transport.write("\r\n".toByteArray(Charsets.US_ASCII))
+            if (waitForAny(listOf("BootLoader", "boot>"), 900L) != null) {
+                // Menu 0 = Load OS & GSP from flash
+                transport.write("0\r\n".toByteArray(Charsets.US_ASCII))
+                waitForAny(listOf("FreeRTOS", "VERSION", "\$G", "OK", "command"), 8_000L)
+                delay(500)
+            }
+            if (!probeAppAlive(1_200L)) {
+                sendLine("VERSIONA")
+                if (waitForAny(listOf("VERSIONA", "UM980"), 1_500L) == null) continue
+            }
+            for (com in listOf("com1", "com2", "com3")) {
+                sendLine("config $com $target")
+                delay(60)
+            }
+            transport.setBaud(target)
+            delay(200)
+            sendLine("unlog")
+            delay(100)
+            runCatching { Log.i(TAG, "recoverLink: restored app link at baud=$target (from host $baud)") }
+            return
+        }
+        runCatching { transport.setBaud(target) }
+        runCatching { Log.w(TAG, "recoverLink: could not restore module baud") }
     }
 
     private suspend fun xmodemSend(image: ByteArray): String? {

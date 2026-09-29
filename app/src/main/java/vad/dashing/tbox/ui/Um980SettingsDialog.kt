@@ -192,7 +192,10 @@ fun Um980SettingsContent(
     var showFresetConfirm by remember { mutableStateOf(false) }
     var pendingFwFile by remember { mutableStateOf<File?>(null) }
     var pendingFwDisplayName by remember { mutableStateOf("") }
-    var fwResetSoft by remember { mutableStateOf(true) }
+    var fwResetSoft by remember(transport) {
+        // Direct USB: Soft+CONFIG 460800 often bricks the link; prefer Hard by default.
+        mutableStateOf(transport != Um980SettingsTransport.USB)
+    }
     val fwState by Um980FirmwareUiStore.state.collectAsStateWithLifecycle()
     val fwPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
