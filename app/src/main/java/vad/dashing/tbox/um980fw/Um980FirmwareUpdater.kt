@@ -2,7 +2,10 @@ package vad.dashing.tbox.um980fw
 
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.Charset
@@ -36,60 +39,34 @@ class Um980FirmwareUpdater(
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
-            // UPrecise (um980.dmslog8): several unlog pairs, then CONFIG COM* 460800 (no SAVECONFIG).
+            if (!transport.setBaud(preBaud)) {
+                return fail("baud")
+            }
+            delay(150)
+            // Stop NMEA at the known-good working baud first (UPrecise also unlogs before CONFIG).
             repeat(3) {
                 sendLine("unlog")
                 delay(120)
                 sendLine("unlog")
                 delay(150)
             }
-            for (com in listOf("com1", "com2", "com3")) {
-                sendLine("config $com $UPGRADE_BAUD")
-                delay(80)
-            }
-            if (!transport.setBaud(UPGRADE_BAUD)) {
-                return fail("baud")
-            }
-            // Capture: ~2.5s between CONFIG and reset while host settles on 460800.
-            delay(400)
-            drain(300)
-            sendLine("unlog")
-            delay(120)
-            sendLine("unlog")
-            delay(200)
             drain(200)
 
             var bootloaderSeen = false
             when (resetMode) {
                 Um980FwResetMode.SOFT -> {
                     Um980FirmwareUiStore.setPhase("reset", 2)
-                    // UPrecise sends reset twice in one write: "\r\nreset\r\nreset\r\n".
-                    sendLine("reset")
-                    delay(40)
-                    sendLine("reset")
-                    val softHit = waitForAny(
-                        listOf("rebooting", "BootLoader", "boot>"),
-                        15_000L,
-                    )
-                    if (softHit == null) {
-                        runCatching { Log.w(TAG, "soft reset: no reboot banner (continuing)") }
-                    } else if (isBootloaderBanner(softHit)) {
-                        // Bytes already consumed by waitForAny — do not require a second banner.
-                        bootloaderSeen = true
-                        runCatching {
-                            Log.i(TAG, "BootLoader seen during soft reset at baud=${transport.currentBaud()}")
-                        }
-                    }
+                    bootloaderSeen = enterBootloaderSoft(preBaud)
                 }
                 Um980FwResetMode.HARD -> {
                     Um980FirmwareUiStore.setPhase("hard_reset", 2)
-                    onHardResetWait()
+                    // Hard power-cycle drops RAM CONFIG — keep host on saved/working baud and
+                    // listen *while* the user cycles power (banner is easy to miss after Continue).
+                    bootloaderSeen = enterBootloaderHard(preBaud, onHardResetWait)
                 }
             }
 
             Um980FirmwareUiStore.setPhase("bootloader", 5)
-            // After power-cycle (and often soft reset) the module may speak BootLoader at the
-            // *saved* baud (e.g. 115200) while the host is still on UPGRADE_BAUD (460800).
             if (!bootloaderSeen && !waitForBootloaderBanner(preBaud)) {
                 return fail("no_bootloader")
             }
@@ -116,7 +93,9 @@ class Um980FirmwareUpdater(
             val expectedBuild = Um980PkgValidator.buildFromFileName(pkgFile.name)
             val gotBuild = versionA?.let { Um980PkgValidator.buildFromVersionA(it) }
             if (expectedBuild != null && gotBuild != null && expectedBuild != gotBuild) {
-                Log.w(TAG, "VERSIONA build mismatch expect=$expectedBuild got=$gotBuild line=$versionA")
+                runCatching {
+                    Log.w(TAG, "VERSIONA build mismatch expect=$expectedBuild got=$gotBuild line=$versionA")
+                }
             }
             Um980FirmwareUiStore.finish(null)
             Result.success(versionA.orEmpty())
@@ -127,6 +106,108 @@ class Um980FirmwareUpdater(
             runCatching { transport.setBaud(preBaud) }
             runCatching { pkgFile.delete() }
         }
+    }
+
+    /**
+     * Soft entry matching UPrecise, with Android-USB fallbacks when 460800 link is dead.
+     */
+    internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
+        // Path 0: try reset on the already-working baud before touching CONFIG/460800.
+        // Avoids leaving the module at 460800 when the USB adapter cannot really switch.
+        sendDoubleReset()
+        val early = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 8_000L)
+        if (early != null && isBootloaderBanner(early)) {
+            runCatching { Log.i(TAG, "BootLoader via working-baud reset at ${transport.currentBaud()}") }
+            return true
+        }
+        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 10_000L)) return true
+
+        // Path A (UPrecise): CONFIG all COMs to 460800 (no SAVECONFIG) → host 460800 → double reset.
+        for (com in listOf("com1", "com2", "com3")) {
+            sendLine("config $com $UPGRADE_BAUD")
+            delay(80)
+        }
+        if (!transport.setBaud(UPGRADE_BAUD)) {
+            runCatching { Log.w(TAG, "soft: setBaud($UPGRADE_BAUD) failed, trying working baud") }
+        } else {
+            delay(500)
+            drain(200)
+            sendLine("unlog")
+            delay(120)
+            sendLine("unlog")
+            delay(200)
+            if (probeAppAlive(1_800L)) {
+                sendDoubleReset()
+                val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 12_000L)
+                if (hit != null && isBootloaderBanner(hit)) {
+                    runCatching { Log.i(TAG, "BootLoader via UPrecise path at $UPGRADE_BAUD") }
+                    return true
+                }
+                if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)) return true
+            } else {
+                runCatching { Log.w(TAG, "soft: no OK after 460800 — link/baud mismatch, falling back") }
+            }
+        }
+
+        // Path B: find a baud where the app still answers (or BL already), then reset / catch banner.
+        for (baud in bootloaderBaudCandidates(preBaud, transport.currentBaud())) {
+            if (!transport.setBaud(baud)) continue
+            delay(150)
+            drain(100)
+            transport.write("\r\n".toByteArray(Charsets.US_ASCII))
+            if (waitForAny(listOf("BootLoader", "boot>"), 1_200L) != null) {
+                runCatching { Log.i(TAG, "BootLoader already present at baud=$baud") }
+                return true
+            }
+            if (!probeAppAlive(1_500L)) continue
+            sendDoubleReset()
+            val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 10_000L)
+            if (hit != null && isBootloaderBanner(hit)) return true
+            if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 12_000L)) return true
+        }
+        return false
+    }
+
+    /**
+     * Hard entry: listen for BootLoader *while* the user power-cycles (banner often appears
+     * before «Продолжить»), then one more sweep after Continue.
+     */
+    private suspend fun enterBootloaderHard(
+        preBaud: Int,
+        onHardResetWait: suspend () -> Unit,
+    ): Boolean = coroutineScope {
+        if (!transport.setBaud(preBaud)) {
+            runCatching { Log.w(TAG, "hard: setBaud($preBaud) failed") }
+        }
+        delay(100)
+        drain(100)
+
+        val userWait = async {
+            onHardResetWait()
+        }
+        while (isActive && !userWait.isCompleted) {
+            if (waitForBootloaderBanner(preBaud, overallTimeoutMs = HARD_LISTEN_SLICE_MS)) {
+                runCatching { Um980FirmwareUiStore.userContinuedHardReset() }
+                userWait.cancel()
+                runCatching { Log.i(TAG, "BootLoader during hard-reset wait at baud=${transport.currentBaud()}") }
+                return@coroutineScope true
+            }
+        }
+        runCatching { userWait.await() }
+        waitForBootloaderBanner(preBaud, overallTimeoutMs = BOOTLOADER_SWEEP_TIMEOUT_MS)
+    }
+
+    private fun sendDoubleReset() {
+        // UPrecise: "\r\nreset\r\nreset\r\n"
+        sendLine("reset")
+        sendLine("reset")
+    }
+
+    /** True if UM980 app firmware still answers ASCII (unlog OK / command response). */
+    private suspend fun probeAppAlive(timeoutMs: Long): Boolean {
+        drain(80)
+        sendLine("unlog")
+        return waitForAny(listOf("OK", "response", "command"), timeoutMs) != null
     }
 
     private suspend fun xmodemSend(image: ByteArray): String? {
@@ -323,6 +404,7 @@ class Um980FirmwareUpdater(
         const val UPGRADE_BAUD = 460_800
         private const val BOOTLOADER_SWEEP_TIMEOUT_MS = 35_000L
         private const val BOOTLOADER_BAUD_SLICE_MS = 5_000L
+        private const val HARD_LISTEN_SLICE_MS = 6_000L
 
         internal fun isBootloaderBanner(hit: String): Boolean =
             hit.contains("BootLoader", ignoreCase = true) ||
