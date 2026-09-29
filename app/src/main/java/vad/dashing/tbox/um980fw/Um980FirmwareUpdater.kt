@@ -114,59 +114,62 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Soft entry. Direct USB skips CONFIG 460800 (Android adapters often desync and leave the
-     * module at 460800 while the host returns to 115200 — connection lost until power-cycle).
-     * Companion keeps the UPrecise 460800 path.
+     * Soft entry (UPrecise Soft path). Plain `reset` at working baud usually only reboots the
+     * app (like Hot RESET) — BootLoader entry needs CONFIG COM* 460800 then reset.
+     *
+     * Root cause of prior USB Soft failures: [Um980BinaryTransport.setBaud] / setBaudLive often
+     * does not actually switch CP210x/CH340 while exclusive; module was already at 460800 after
+     * CONFIG, host stayed wrong → no BootLoader seen, then host restored to 115200 → link dead
+     * until power-cycle. Fix: [Um980BinaryTransport.reopenAtBaud] after CONFIG, verify `unlog`
+     * OK before reset, [recoverLinkBestEffort] on failure.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
-        // Path 0: reset on the already-working baud (single write like UPrecise).
-        sendDoubleReset()
-        val early = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 8_000L)
-        if (early != null && isBootloaderBanner(early)) {
-            runCatching { Log.i(TAG, "BootLoader via working-baud reset at ${transport.currentBaud()}") }
-            return true
-        }
-        // "rebooting" without banner yet — keep listening briefly at working baud.
-        if (early != null && early.contains("rebooting", ignoreCase = true)) {
-            if (waitForAny(listOf("BootLoader", "boot>"), 6_000L) != null) return true
-        }
-        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 8_000L)) return true
-
-        if (transport.avoidMidSessionUpgradeBaud()) {
-            runCatching {
-                Log.w(TAG, "soft: USB transport — skip CONFIG 460800 (use Hard reset if BL not seen)")
-            }
-            // waitForBootloaderBanner may have left host on 460800 during the sweep.
-            runCatching { transport.setBaud(preBaud) }
-            return false
-        }
-
-        // Path A (UPrecise / Companion): CONFIG 460800 → host 460800 → double reset.
         for (com in listOf("com1", "com2", "com3")) {
             sendLine("config $com $UPGRADE_BAUD")
             delay(80)
         }
-        if (!transport.setBaud(UPGRADE_BAUD)) {
-            runCatching { Log.w(TAG, "soft: setBaud($UPGRADE_BAUD) failed") }
-            return false
+        delay(150)
+        // Prefer full reopen on USB; companion setBaud is enough.
+        if (!transport.reopenAtBaud(UPGRADE_BAUD)) {
+            runCatching { Log.w(TAG, "soft: reopenAtBaud($UPGRADE_BAUD) failed, trying setBaud") }
+            if (!transport.setBaud(UPGRADE_BAUD)) {
+                runCatching { recoverLinkBestEffort(preBaud) }
+                return false
+            }
         }
         delay(500)
-        drain(200)
+        drain(250)
         sendLine("unlog")
-        delay(120)
+        delay(150)
         sendLine("unlog")
         delay(200)
-        if (!probeAppAlive(1_800L)) {
-            runCatching { Log.w(TAG, "soft: no OK after 460800") }
-            return false
+        if (!probeAppAlive(2_500L)) {
+            runCatching { Log.w(TAG, "soft: no OK at 460800 after first open — retry reopen") }
+            if (transport.reopenAtBaud(UPGRADE_BAUD)) {
+                delay(500)
+                drain(250)
+            }
+            if (!probeAppAlive(2_500L)) {
+                runCatching { Log.w(TAG, "soft: still no link at 460800 — restoring working baud") }
+                runCatching { recoverLinkBestEffort(preBaud) }
+                return false
+            }
         }
+
         sendDoubleReset()
         val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 12_000L)
         if (hit != null && isBootloaderBanner(hit)) {
-            runCatching { Log.i(TAG, "BootLoader via UPrecise path at $UPGRADE_BAUD") }
+            runCatching { Log.i(TAG, "BootLoader via Soft at baud=${transport.currentBaud()}") }
             return true
         }
-        return waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)
+        if (hit != null && hit.contains("rebooting", ignoreCase = true)) {
+            if (waitForAny(listOf("BootLoader", "boot>"), 8_000L) != null) return true
+        }
+        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)) return true
+
+        runCatching { Log.w(TAG, "soft: BootLoader not seen — restoring link") }
+        runCatching { recoverLinkBestEffort(preBaud) }
+        return false
     }
 
     /**
