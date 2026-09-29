@@ -36,10 +36,13 @@ class Um980FirmwareUpdater(
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
-            sendLine("unlog")
-            delay(200)
-            sendLine("unlog")
-            delay(150)
+            // UPrecise (um980.dmslog8): several unlog pairs, then CONFIG COM* 460800 (no SAVECONFIG).
+            repeat(3) {
+                sendLine("unlog")
+                delay(120)
+                sendLine("unlog")
+                delay(150)
+            }
             for (com in listOf("com1", "com2", "com3")) {
                 sendLine("config $com $UPGRADE_BAUD")
                 delay(80)
@@ -47,20 +50,29 @@ class Um980FirmwareUpdater(
             if (!transport.setBaud(UPGRADE_BAUD)) {
                 return fail("baud")
             }
-            delay(200)
+            // Capture: ~2.5s between CONFIG and reset while host settles on 460800.
+            delay(400)
             drain(300)
+            sendLine("unlog")
+            delay(120)
+            sendLine("unlog")
+            delay(200)
+            drain(200)
 
             var bootloaderSeen = false
             when (resetMode) {
                 Um980FwResetMode.SOFT -> {
                     Um980FirmwareUiStore.setPhase("reset", 2)
+                    // UPrecise sends reset twice in one write: "\r\nreset\r\nreset\r\n".
+                    sendLine("reset")
+                    delay(40)
                     sendLine("reset")
                     val softHit = waitForAny(
                         listOf("rebooting", "BootLoader", "boot>"),
                         15_000L,
                     )
                     if (softHit == null) {
-                        Log.w(TAG, "soft reset: no reboot banner (continuing)")
+                        runCatching { Log.w(TAG, "soft reset: no reboot banner (continuing)") }
                     } else if (isBootloaderBanner(softHit)) {
                         // Bytes already consumed by waitForAny — do not require a second banner.
                         bootloaderSeen = true
@@ -83,10 +95,11 @@ class Um980FirmwareUpdater(
             }
             delay(200)
             drain(200)
+            // Menu item 2 = "Download from uart to flash" (N4 BootLoader; timeout 2s reprints menu).
             transport.write("2\r\n".toByteArray(Charsets.US_ASCII))
             Um980FirmwareUiStore.setPhase("menu2", 8)
-            waitForAny(listOf("unlock", "xmodem", "download", "binary"), 15_000L)
-                ?: Log.w(TAG, "no unlock banner (continuing to XMODEM)")
+            waitForAny(listOf("unlock", "xmodem", "download", "binary", "Ready"), 15_000L)
+                ?: runCatching { Log.w(TAG, "no unlock banner (continuing to XMODEM)") }.getOrNull()
 
             Um980FirmwareUiStore.setPhase("xmodem", 10)
             xmodemSend(image)?.let { return fail(it) }
