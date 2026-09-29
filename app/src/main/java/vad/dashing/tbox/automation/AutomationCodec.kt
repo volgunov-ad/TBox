@@ -405,6 +405,11 @@ object AutomationCodec {
                 .put(KEY_TYPE, "trigger_widget")
                 .put("triggerId", condition.triggerId)
                 .put("active", condition.active)
+
+            is AutomationCondition.AutomationEnabled -> JSONObject()
+                .put(KEY_TYPE, "automation_enabled")
+                .put("automationId", condition.automationId)
+                .put("enabled", condition.enabled)
         }
 
     private fun decodeCondition(json: JSONObject): AutomationCondition =
@@ -465,6 +470,11 @@ object AutomationCodec {
             "trigger_widget" -> AutomationCondition.TriggerWidget(
                 triggerId = json.requireString("triggerId"),
                 active = json.optBoolean("active", true),
+            )
+
+            "automation_enabled" -> AutomationCondition.AutomationEnabled(
+                automationId = json.requireString("automationId"),
+                enabled = json.optBoolean("enabled", true),
             )
 
             "triggered_by" -> AutomationCondition.TriggeredBy(

@@ -103,6 +103,7 @@ import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
 import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
+import vad.dashing.tbox.automation.AutomationStore
 import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.automation.floatingPanelEnabledResultMessage
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
@@ -1970,6 +1971,45 @@ class BackgroundService : Service() {
                 overlayController.ensureFloatingDashboards(updated)
                 return AutomationActionResult.ok(
                     floatingPanelEnabledResultMessage(scope, op),
+                )
+            }
+
+            override suspend fun setAutomationEnabled(
+                automationId: String,
+                enabled: Boolean,
+            ): AutomationActionResult {
+                val id = automationId.trim()
+                if (id.isEmpty()) {
+                    return AutomationActionResult.failure("ID автоматизации пуст")
+                }
+                val store = AutomationStore(this@BackgroundService)
+                val snapshot = store.snapshots.first()
+                val target = snapshot.document.automations.firstOrNull { it.id == id }
+                    ?: return AutomationActionResult.failure("Автоматизация не найдена")
+                if (target.enabled == enabled) {
+                    return AutomationActionResult.ok(
+                        if (enabled) {
+                            "Автоматизация уже включена"
+                        } else {
+                            "Автоматизация уже выключена"
+                        },
+                    )
+                }
+                return store.setEnabled(id, enabled).fold(
+                    onSuccess = {
+                        AutomationActionResult.ok(
+                            if (enabled) {
+                                "Автоматизация включена"
+                            } else {
+                                "Автоматизация выключена"
+                            },
+                        )
+                    },
+                    onFailure = { error ->
+                        AutomationActionResult.failure(
+                            error.message ?: "Не удалось изменить включение автоматизации",
+                        )
+                    },
                 )
             }
 

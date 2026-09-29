@@ -314,6 +314,10 @@ class AutomationSignalCatalogTest {
             AutomationSignalId.DRIVE_MODE_6DCT,
             AutomationSignalId.TSR_SWITCH,
             AutomationSignalId.TRUNK_DOOR,
+            AutomationSignalId.DOOR_FRONT_LEFT,
+            AutomationSignalId.DOOR_FRONT_RIGHT,
+            AutomationSignalId.DOOR_REAR_LEFT,
+            AutomationSignalId.DOOR_REAR_RIGHT,
             AutomationSignalId.AUDIO_VOLUME_SPEED_MODE,
             AutomationSignalId.AUDIO_KEY_TONE_VOLUME,
             AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME,
@@ -324,7 +328,7 @@ class AutomationSignalCatalogTest {
             AutomationSignalId.AUDIO_BALANCE,
             AutomationSignalId.AUDIO_FADER,
         )
-        assertEquals(54, newIds.size)
+        assertEquals(58, newIds.size)
         newIds.forEach { id ->
             assertTrue(id.name, AutomationSignalCatalog.get(id).valueHint().isNotBlank())
         }

@@ -646,6 +646,15 @@ class AutomationActionExecutor(
             }
         }
 
+        AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> {
+            val automationId = action.stringValue.trim()
+            if (automationId.isEmpty()) {
+                AutomationActionResult.failure("ID автоматизации пуст")
+            } else {
+                serviceActions.setAutomationEnabled(automationId, action.boolValue)
+            }
+        }
+
         AutomationBuiltinActionType.SHOW_TOAST -> {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {

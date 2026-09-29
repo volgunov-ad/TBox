@@ -49,6 +49,7 @@ import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AutomationComparison
 import vad.dashing.tbox.automation.AutomationCondition
+import vad.dashing.tbox.automation.AutomationDefinition
 import vad.dashing.tbox.automation.AutomationGeofencePresence
 import vad.dashing.tbox.automation.AutomationUiState
 import vad.dashing.tbox.automation.AUTOMATION_MAX_CONDITION_DEPTH
@@ -355,6 +356,7 @@ internal fun AutomationConditionEditor(
     onChange: (AutomationCondition) -> Unit,
     modifier: Modifier = Modifier,
     depth: Int = 0,
+    peerAutomations: List<AutomationDefinition> = emptyList(),
 ) {
     val kind = conditionKind(condition)
     Column(
@@ -367,7 +369,7 @@ internal fun AutomationConditionEditor(
             options = ConditionUiKind.entries.sortedByAutomationLabel { it.label() },
             optionLabel = ConditionUiKind::label,
             onValueChange = { selected ->
-                onChange(defaultCondition(selected, triggerIds))
+                onChange(defaultCondition(selected, triggerIds, peerAutomations))
             },
         )
         when (condition) {
@@ -412,6 +414,7 @@ internal fun AutomationConditionEditor(
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
                 apps = apps,
+                peerAutomations = peerAutomations,
                 onChange = { onChange(AutomationCondition.All(it)) },
                 depth = depth,
             )
@@ -421,6 +424,7 @@ internal fun AutomationConditionEditor(
                 conditions = condition.conditions,
                 triggerIds = triggerIds,
                 apps = apps,
+                peerAutomations = peerAutomations,
                 onChange = { onChange(AutomationCondition.Any(it)) },
                 depth = depth,
             )
@@ -431,6 +435,7 @@ internal fun AutomationConditionEditor(
                         condition = condition.condition,
                         triggerIds = triggerIds,
                         apps = apps,
+                        peerAutomations = peerAutomations,
                         onChange = { onChange(AutomationCondition.Not(it)) },
                         modifier = Modifier.padding(start = 12.dp),
                         depth = depth + 1,
@@ -441,6 +446,8 @@ internal fun AutomationConditionEditor(
             is AutomationCondition.Geofence -> GeofenceConditionFields(condition, onChange)
             is AutomationCondition.UiState -> UiStateConditionFields(condition, onChange)
             is AutomationCondition.TriggerWidget -> TriggerWidgetConditionFields(condition, onChange)
+            is AutomationCondition.AutomationEnabled ->
+                AutomationEnabledConditionFields(condition, peerAutomations, onChange)
         }
     }
 }
@@ -789,6 +796,7 @@ private fun ConditionGroupFields(
     conditions: List<AutomationCondition>,
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
+    peerAutomations: List<AutomationDefinition>,
     onChange: (List<AutomationCondition>) -> Unit,
     depth: Int,
 ) {
@@ -807,6 +815,7 @@ private fun ConditionGroupFields(
                 condition = nested,
                 triggerIds = triggerIds,
                 apps = apps,
+                peerAutomations = peerAutomations,
                 onChange = { changed ->
                     onChange(conditions.toMutableList().also { it[index] = changed })
                 },
@@ -846,6 +855,7 @@ private enum class ConditionUiKind {
     GEOFENCE,
     UI_STATE,
     TRIGGER_WIDGET,
+    AUTOMATION_ENABLED,
     TRIGGERED_BY,
     TIME,
     SOLAR,
@@ -860,6 +870,7 @@ private enum class ConditionUiKind {
         GEOFENCE -> "Геозона"
         UI_STATE -> "Состояние приложения"
         TRIGGER_WIDGET -> "Виджет-триггер"
+        AUTOMATION_ENABLED -> "Автоматизация включена"
         TRIGGERED_BY -> "Сработал триггер"
         TIME -> "Время"
         SOLAR -> "Восход / закат"
@@ -876,6 +887,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     is AutomationCondition.Geofence -> ConditionUiKind.GEOFENCE
     is AutomationCondition.UiState -> ConditionUiKind.UI_STATE
     is AutomationCondition.TriggerWidget -> ConditionUiKind.TRIGGER_WIDGET
+    is AutomationCondition.AutomationEnabled -> ConditionUiKind.AUTOMATION_ENABLED
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
     is AutomationCondition.Time -> ConditionUiKind.TIME
     is AutomationCondition.Solar -> ConditionUiKind.SOLAR
@@ -887,6 +899,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
 private fun defaultCondition(
     kind: ConditionUiKind,
     triggerIds: List<String>,
+    peerAutomations: List<AutomationDefinition>,
 ): AutomationCondition = when (kind) {
     ConditionUiKind.ALWAYS -> AutomationCondition.Always
     ConditionUiKind.NUMERIC -> defaultNumericCondition()
@@ -907,6 +920,11 @@ private fun defaultCondition(
     ConditionUiKind.TRIGGER_WIDGET -> AutomationCondition.TriggerWidget(
         triggerId = "",
         active = true,
+    )
+
+    ConditionUiKind.AUTOMATION_ENABLED -> AutomationCondition.AutomationEnabled(
+        automationId = peerAutomations.firstOrNull()?.id.orEmpty(),
+        enabled = true,
     )
 
     ConditionUiKind.TRIGGERED_BY ->
@@ -1049,6 +1067,70 @@ private fun TriggerWidgetConditionFields(
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun AutomationEnabledConditionFields(
+    condition: AutomationCondition.AutomationEnabled,
+    peerAutomations: List<AutomationDefinition>,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    AutomationRulePicker(
+        label = "Автоматизация",
+        selectedId = condition.automationId,
+        peerAutomations = peerAutomations,
+        onIdChange = { onChange(condition.copy(automationId = it)) },
+    )
+    AutomationDropdown(
+        label = "Состояние",
+        value = condition.enabled,
+        options = listOf(true, false),
+        optionLabel = { if (it) "Включена" else "Выключена" },
+        onValueChange = { onChange(condition.copy(enabled = it)) },
+    )
+    Text(
+        text = "Проверяет флаг enabled правила (не «сейчас выполняется»). " +
+            "Неизвестные id считаются выключенными. Взаимные A↔B петли — ответственность автора.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+internal fun AutomationRulePicker(
+    label: String,
+    selectedId: String,
+    peerAutomations: List<AutomationDefinition>,
+    onIdChange: (String) -> Unit,
+) {
+    if (peerAutomations.isEmpty()) {
+        AutomationTextField(
+            value = selectedId,
+            onValueChange = onIdChange,
+            label = "$label (id)",
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            text = "Список правил пуст — введите id вручную.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        return
+    }
+    val selected = peerAutomations.firstOrNull { it.id == selectedId }
+        ?: peerAutomations.first()
+    AutomationDropdown(
+        label = label,
+        value = selected,
+        options = peerAutomations,
+        optionLabel = { def ->
+            val name = def.name.trim().ifEmpty { "Без названия" }
+            "$name (${def.id.take(8)})"
+        },
+        onValueChange = { onIdChange(it.id) },
     )
 }
 

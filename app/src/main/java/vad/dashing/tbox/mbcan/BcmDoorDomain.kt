@@ -36,6 +36,19 @@ data class BcmDoorSnapshot(
 
 object BcmDoorDomain {
     /**
+     * A9 BCM ajar (FL/FR/RL/RR/hood/trunk family): **1** closed / **2** open
+     * (same scale as [TrunkDoorDomain.decodeBinaryOpenMbCan]).
+     */
+    fun decodeAjarOpenMbCan(raw: Int?): Boolean? = TrunkDoorDomain.decodeBinaryOpenMbCan(raw)
+
+    /**
+     * A10 CEM2 door ajar (`R_0402_CEM_2_*DoorSts`): standard CEM 1-bit —
+     * **1** active/open, **0** closed ([TurnSignalsDomain.decodeCemBinaryActive]).
+     */
+    fun decodeAjarOpenVhalCem(raw: Int?): Boolean? =
+        raw?.let(TurnSignalsDomain::decodeCemBinaryActive)
+
+    /**
      * Reflective extract from OEM `MBCanVehicleDoor` (or any object with the same getters).
      */
     fun fromDoorObject(door: Any?): BcmDoorSnapshot? {

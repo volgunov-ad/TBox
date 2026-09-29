@@ -223,6 +223,10 @@ object AutomationParameterLabels {
         AutomationSignalId.DRIVE_MODE_6DCT -> vehicleLabel(MbCanKnownVehiclePropertyId.VEHICLE_DRIVEMODE_6DCT_WET)
         AutomationSignalId.TSR_SWITCH -> vehicleLabel(MbCanKnownVehiclePropertyId.VEHICLE_TSR_SWITCH)
         AutomationSignalId.TRUNK_DOOR -> vehicleLabel(MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL)
+        AutomationSignalId.DOOR_FRONT_LEFT -> "Дверь: передняя левая"
+        AutomationSignalId.DOOR_FRONT_RIGHT -> "Дверь: передняя правая"
+        AutomationSignalId.DOOR_REAR_LEFT -> "Дверь: задняя левая"
+        AutomationSignalId.DOOR_REAR_RIGHT -> "Дверь: задняя правая"
         AutomationSignalId.AUDIO_VOLUME_SPEED_MODE -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_SPEED)
         AutomationSignalId.AUDIO_KEY_TONE_VOLUME -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_KEY)
         AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME -> audioLabel(MbCanKnownAudioPropertyId.VOLUME_RADAR)

@@ -39,6 +39,7 @@ import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.automation.AutomationCondition
 import vad.dashing.tbox.automation.AutomationCruiseActions
+import vad.dashing.tbox.automation.AutomationDefinition
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
@@ -71,6 +72,7 @@ internal fun AutomationActionListEditor(
     onChange: (List<AutomationAction>) -> Unit,
     modifier: Modifier = Modifier,
     depth: Int = 0,
+    peerAutomations: List<AutomationDefinition> = emptyList(),
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -83,6 +85,7 @@ internal fun AutomationActionListEditor(
                 triggerIds = triggerIds,
                 apps = apps,
                 floatingPanels = floatingPanels,
+                peerAutomations = peerAutomations,
                 pageCount = pageCount,
                 settingsViewModel = settingsViewModel,
                 canMoveUp = index > 0,
@@ -106,6 +109,7 @@ internal fun AutomationActionListEditor(
             AddAutomationActionRow(
                 apps = apps,
                 floatingPanels = floatingPanels,
+                peerAutomations = peerAutomations,
                 onAdd = { onChange(actions + it) },
             )
         }
@@ -119,6 +123,7 @@ private fun AutomationActionEditor(
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
+    peerAutomations: List<AutomationDefinition>,
     pageCount: Int,
     settingsViewModel: SettingsViewModel,
     canMoveUp: Boolean,
@@ -170,6 +175,7 @@ private fun AutomationActionEditor(
                     triggerIds = triggerIds,
                     apps = apps,
                     floatingPanels = floatingPanels,
+                    peerAutomations = peerAutomations,
                     pageCount = pageCount,
                     settingsViewModel = settingsViewModel,
                     onChange = onChange,
@@ -196,6 +202,7 @@ private fun AutomationActionEditor(
                     action,
                     apps,
                     floatingPanels,
+                    peerAutomations,
                     onChange,
                 )
             }
@@ -208,6 +215,7 @@ private fun IfThenElseFields(
     triggerIds: List<String>,
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
+    peerAutomations: List<AutomationDefinition>,
     pageCount: Int,
     settingsViewModel: SettingsViewModel,
     onChange: (AutomationAction) -> Unit,
@@ -222,6 +230,7 @@ private fun IfThenElseFields(
         condition = action.condition,
         triggerIds = triggerIds,
         apps = apps,
+        peerAutomations = peerAutomations,
         onChange = { onChange(action.copy(condition = it)) },
         modifier = Modifier.padding(start = 12.dp),
     )
@@ -235,6 +244,7 @@ private fun IfThenElseFields(
         triggerIds = triggerIds,
         apps = apps,
         floatingPanels = floatingPanels,
+        peerAutomations = peerAutomations,
         pageCount = pageCount,
         settingsViewModel = settingsViewModel,
         onChange = { onChange(action.copy(thenActions = it)) },
@@ -251,6 +261,7 @@ private fun IfThenElseFields(
         triggerIds = triggerIds,
         apps = apps,
         floatingPanels = floatingPanels,
+        peerAutomations = peerAutomations,
         pageCount = pageCount,
         settingsViewModel = settingsViewModel,
         onChange = { onChange(action.copy(elseActions = it)) },
@@ -610,6 +621,7 @@ private fun BuiltinActionFields(
     action: AutomationAction.Builtin,
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
+    peerAutomations: List<AutomationDefinition>,
     onChange: (AutomationAction) -> Unit,
 ) {
     val context = LocalContext.current
@@ -639,6 +651,7 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ||
                         type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
+                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
                         type == AutomationBuiltinActionType.ADB_SET_TCP,
                     stringValue = when {
                         type in MEDIA_PACKAGE_ACTION_TYPES ||
@@ -648,6 +661,8 @@ private fun BuiltinActionFields(
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
                         type == AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> "auto"
                         type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
+                        type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
+                            peerAutomations.firstOrNull()?.id.orEmpty()
                         type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
                             type == AutomationBuiltinActionType.CRUISE_PAUSE ||
                             type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
@@ -933,6 +948,31 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationRulePicker(
+                label = "Автоматизация",
+                selectedId = action.stringValue,
+                peerAutomations = peerAutomations,
+                onIdChange = { onChange(action.copy(stringValue = it)) },
+            )
+            AutomationDropdown(
+                label = "Операция",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = "Без переключения: если правило уже в нужном состоянии — no-op. " +
+                    "Правило может выключить само себя (текущий прогон отменяется).",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         AutomationBuiltinActionType.SHOW_TOAST -> AutomationTextField(
             value = action.stringValue,
             onValueChange = { onChange(action.copy(stringValue = it)) },
@@ -1079,6 +1119,7 @@ private fun CruiseModeDropdown(
 private fun AddAutomationActionRow(
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
+    peerAutomations: List<AutomationDefinition>,
     onAdd: (AutomationAction) -> Unit,
 ) {
     var kind by remember { mutableStateOf(ActionUiKind.CAN) }
@@ -1096,7 +1137,9 @@ private fun AddAutomationActionRow(
             modifier = Modifier.weight(1f),
         )
         OutlinedButton(
-            onClick = rememberWrappedOnClick { onAdd(defaultAction(kind, apps)) },
+            onClick = rememberWrappedOnClick {
+                onAdd(defaultAction(kind, apps))
+            },
         ) {
             AutomationButtonLabel("Добавить")
         }
@@ -1219,6 +1262,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.SHOW_TOAST -> "Toast"
     AutomationBuiltinActionType.SHOW_ALERT -> "Сообщение на экране"
     AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> "Триггер автоматизации (виджет)"
+    AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> "Включить / выключить автоматизацию"
     AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
         "Круиз: включить и довести до уставки"
     AutomationBuiltinActionType.CRUISE_PAUSE -> "Круиз: пауза (Cancel)"

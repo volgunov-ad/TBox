@@ -154,6 +154,7 @@ fun AutomationsTab(
             definition = requireNotNull(draft),
             apps = apps,
             floatingPanels = floatingPanels,
+            peerAutomations = peerAutomationsForEditor(snapshot.document.automations, draft),
             pageCount = pageCount,
             settingsViewModel = settingsViewModel,
             isSaved = snapshot.document.automations.any { it.id == draft?.id },
@@ -499,6 +500,7 @@ private fun AutomationDefinitionEditor(
     definition: AutomationDefinition,
     apps: List<LaunchableAppEntry>,
     floatingPanels: List<FloatingDashboardConfig>,
+    peerAutomations: List<AutomationDefinition>,
     pageCount: Int,
     settingsViewModel: SettingsViewModel,
     isSaved: Boolean,
@@ -701,6 +703,7 @@ private fun AutomationDefinitionEditor(
                     condition = condition,
                     triggerIds = definition.triggers.map { it.id },
                     apps = apps,
+                    peerAutomations = peerAutomations,
                     onChange = { changed ->
                         onChange(
                             definition.copy(
@@ -744,6 +747,7 @@ private fun AutomationDefinitionEditor(
                 triggerIds = definition.triggers.map { it.id },
                 apps = apps,
                 floatingPanels = floatingPanels,
+                peerAutomations = peerAutomations,
                 pageCount = pageCount,
                 settingsViewModel = settingsViewModel,
                 onChange = { onChange(definition.copy(actions = it)) },
@@ -765,6 +769,16 @@ private fun AutomationDefinitionEditor(
 
 private fun automationSummary(definition: AutomationDefinition): String =
     "${definition.triggers.size} триггер(а) → ${definition.actions.size} действие(я)"
+
+/** Document rules plus the draft under edit (so self / new rules appear in pickers). */
+private fun peerAutomationsForEditor(
+    saved: List<AutomationDefinition>,
+    draft: AutomationDefinition?,
+): List<AutomationDefinition> {
+    if (draft == null) return saved
+    val withoutDraft = saved.filterNot { it.id == draft.id }
+    return withoutDraft + draft
+}
 
 private fun runtimeStatusText(status: AutomationRuntimeStatus?): String {
     val time = formatAutomationRunTime(status)

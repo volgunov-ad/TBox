@@ -543,6 +543,15 @@ object AutomationValidator {
                     )
                 }
             }
+
+            is AutomationCondition.AutomationEnabled -> {
+                if (condition.automationId.trim().isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.automationId",
+                        "Укажите ID автоматизации",
+                    )
+                }
+            }
         }
     }
 
@@ -880,6 +889,14 @@ object AutomationValidator {
                 issues += AutomationValidationIssue(
                     "$path.stringValue",
                     "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                )
+            }
+        }
+        if (action.type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED) {
+            if (action.stringValue.trim().isEmpty()) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Укажите ID автоматизации",
                 )
             }
         }
