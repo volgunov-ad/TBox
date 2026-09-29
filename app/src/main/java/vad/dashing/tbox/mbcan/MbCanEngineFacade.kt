@@ -842,10 +842,17 @@ object MbCanEngineFacade {
     }.getOrNull()
 
     /**
-     * Reads trunk movement and door status from cached BCM snapshot
+     * Reads trunk movement and full cabin door ajar from cached BCM snapshot
      * ([com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_BCM_STATUS]).
+     *
+     * [BcmTrunkSnapshot.doors] seeds [MbCanRepository.bcmDoorsState] on pull so
+     * automations are not stuck Unavailable until the next BCM push.
      */
-    data class BcmTrunkSnapshot(val moveDir: Int?, val trunkSts: Int?)
+    data class BcmTrunkSnapshot(
+        val moveDir: Int?,
+        val trunkSts: Int?,
+        val doors: BcmDoorSnapshot? = null,
+    )
 
     fun readVehicleBcmTrunkSnapshot(): BcmTrunkSnapshot? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -856,12 +863,11 @@ object MbCanEngineFacade {
             val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
             val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
             val moveDir = bcmCls.getMethod("getRearDoorMoveDir").invoke(bcmObj)?.let { (it as Number).toInt() }
-            val trunkSts = runCatching {
+            val doors = runCatching {
                 val door = bcmCls.getMethod("getDoorStatus").invoke(bcmObj) ?: return@runCatching null
-                val trunkGetter = door.javaClass.getMethod("getTrunkSts")
-                trunkGetter.invoke(door)?.let { (it as Number).toInt() }
+                BcmDoorDomain.fromDoorObject(door)
             }.getOrNull()
-            BcmTrunkSnapshot(moveDir = moveDir, trunkSts = trunkSts)
+            BcmTrunkSnapshot(moveDir = moveDir, trunkSts = doors?.trunk, doors = doors)
         }.getOrNull()
     }
 

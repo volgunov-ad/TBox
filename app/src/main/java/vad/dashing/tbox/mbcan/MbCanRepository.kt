@@ -3175,6 +3175,8 @@ object MbCanRepository {
             val snapshot = MbCanEngineFacade.readVehicleBcmTrunkSnapshot()
             if (snapshot != null) {
                 TrunkDoorRepository.applyBcmPush(snapshot.moveDir, snapshot.trunkSts)
+                // Seed cabin ajar FL/FR/RL/RR (and hood/lock) so automations aren't null until push.
+                snapshot.doors?.let { scheduleDoorsBcmPush(it) }
             }
         }
     }

@@ -3094,6 +3094,10 @@ object Android10VhalRepository {
                     ?.let { TrunkDoorRepository.applyVhalOpenRaw(it) }
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR)
                     ?.let { TrunkDoorRepository.applyMoveDirRaw(it) }
+                // Seed cabin ajar (same keys as onChange publishVhalDoorAjar) on pull/refresh.
+                for ((key, propertyId) in BcmDoorDomain.vhalCem2AjarSeedPropertyIds()) {
+                    publishVhalDoorAjar(key, bridge?.getIntProperty(propertyId))
+                }
             }
             MbCanSignal.AudioVolume -> {
                 val propertyId = FirmwareVehicleJsonMapper
