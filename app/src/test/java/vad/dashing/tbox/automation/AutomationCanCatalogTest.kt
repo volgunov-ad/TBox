@@ -31,6 +31,7 @@ class AutomationCanCatalogTest {
         assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_pause"))
         assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_full_off"))
         assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_resume"))
+        assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_activate_at_current_speed"))
         assertNotNull(AutomationBuiltinActionType.fromStorageKey("cruise_nudge"))
     }
 

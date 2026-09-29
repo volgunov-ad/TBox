@@ -688,6 +688,7 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.CRUISE_PAUSE,
         AutomationBuiltinActionType.CRUISE_FULL_OFF,
         AutomationBuiltinActionType.CRUISE_RESUME,
+        AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
         AutomationBuiltinActionType.CRUISE_NUDGE,
         -> AutomationCruiseActions.execute(action)
     }

@@ -275,6 +275,29 @@ object AccCruiseController {
     }
 
     /**
+     * Activate at current speed via SET− (status swipe-down from Standby / [activateAtCurrentSpeed]).
+     * Off → enable (210) then SET−; Standby → SET−. No-op when Active/Override/Fault.
+     */
+    suspend fun activateCruiseAtCurrentSpeed(
+        cruiseControlType: CruiseControlType,
+    ): MbCanCommandResult {
+        CcsRememberedSetpoint.ensureStarted()
+        abortAdjustLoop()
+        val state = currentLogicalState(cruiseControlType)
+        debug("activateCruiseAtCurrentSpeed type=$cruiseControlType state=$state ${signalSnapshot()}")
+        return when (state) {
+            CruiseLogicalState.Standby, CruiseLogicalState.Off -> {
+                debug("activateCruiseAtCurrentSpeed action=activate_set_minus")
+                activateAtCurrentSpeed(cruiseControlType)
+            }
+            else -> {
+                debug("activateCruiseAtCurrentSpeed action=noop")
+                MbCanCommandResult(true, "Cruise activate ignored")
+            }
+        }
+    }
+
+    /**
      * Active/Override: nudge setpoint by exactly ±1 km/h (RES+ / SET−), matching status swipes.
      * [deltaKmh] must be +1 or −1.
      */

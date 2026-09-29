@@ -91,10 +91,18 @@ class AutomationCruiseActionsTest {
         assertEquals("cruise_pause", AutomationBuiltinActionType.CRUISE_PAUSE.storageKey)
         assertEquals("cruise_full_off", AutomationBuiltinActionType.CRUISE_FULL_OFF.storageKey)
         assertEquals("cruise_resume", AutomationBuiltinActionType.CRUISE_RESUME.storageKey)
+        assertEquals(
+            "cruise_activate_at_current_speed",
+            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED.storageKey,
+        )
         assertEquals("cruise_nudge", AutomationBuiltinActionType.CRUISE_NUDGE.storageKey)
         assertEquals(
             AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
             AutomationBuiltinActionType.fromStorageKey("cruise_engage_to_target"),
+        )
+        assertEquals(
+            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+            AutomationBuiltinActionType.fromStorageKey("cruise_activate_at_current_speed"),
         )
     }
 
@@ -126,6 +134,10 @@ class AutomationCruiseActionsTest {
                 AutomationAction.Builtin(
                     type = AutomationBuiltinActionType.CRUISE_RESUME,
                     stringValue = "ccs",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+                    stringValue = "acc",
                 ),
                 AutomationAction.Builtin(
                     type = AutomationBuiltinActionType.CRUISE_NUDGE,

@@ -666,6 +666,7 @@
 | Круиз: пауза (Cancel) | `cruise_pause` | `stringValue`: `acc` / `ccs`. Active/Override → MFS Cancel **212**; иначе no-op |
 | Круиз: полностью выключить | `cruise_full_off` | `stringValue`: `acc` / `ccs`. Standby/Active/Override → MFS **210** |
 | Круиз: возобновить (RES+) | `cruise_resume` | `stringValue`: `acc` / `ccs`. Только Standby → RES+ |
+| Круиз: активировать на текущей скорости (SET−) | `cruise_activate_at_current_speed` | `stringValue`: `acc` / `ccs`. Standby → SET− (как свайп вниз статус-плитки); Off → enable+SET−. Через `AccCruiseController.activateAtCurrentSpeed`, не сырой MFS 214 |
 | Круиз: уставка ±1 | `cruise_nudge` | `stringValue`: `acc` / `ccs`; `intValue`: `1` (RES+) или `-1` (SET−). Только Active/Override |
 
 Не используй `esp_relay_set`: это устаревшее и отклоняемое действие. Для медиакоманд нужен

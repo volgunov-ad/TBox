@@ -110,6 +110,8 @@ object AutomationCruiseActions {
                 AccCruiseController.fullOff(mode)
             AutomationBuiltinActionType.CRUISE_RESUME ->
                 AccCruiseController.resumeCruise(mode)
+            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
+                AccCruiseController.activateCruiseAtCurrentSpeed(mode)
             AutomationBuiltinActionType.CRUISE_NUDGE -> {
                 if (action.intValue != 1 && action.intValue != -1) {
                     return AutomationActionResult.failure("Круиз: шаг уставки +1 или −1")

@@ -804,6 +804,7 @@ object AutomationValidator {
             AutomationBuiltinActionType.CRUISE_PAUSE,
             AutomationBuiltinActionType.CRUISE_FULL_OFF,
             AutomationBuiltinActionType.CRUISE_RESUME,
+            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
             -> if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
                 issues += AutomationValidationIssue(
                     "$path.stringValue",
