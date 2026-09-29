@@ -450,7 +450,9 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 Багажник по-прежнему только `trunk_door` (с `opening`/`closing`). Капот и live-замок в
 каталог не входят. A9: live BCM (`bcmDoorsState`, шкала 1 закрыто / 2 открыто). A10: CEM2
 ajar (`vhalDoorAjarRaw`, `decodeCemBinaryActive`: 1 открыто / 0 закрыто); подписка через
-интерес `TrunkDoor` (как у багажника).
+интерес `TrunkDoor` (как у багажника); **pull** `refreshTrunkDoor` / VHAL refresh `TrunkDoor`
+также сидирует ajar до первого push (A9 `bcmDoorsState`, A10 `vhalDoorAjarRaw`).
+A10 шкала CEM 0/1 — **предположение кода** (в журналах A10 live ajar не подтверждались).
 
 **Включение правил:** действие `set_automation_enabled` (id + вкл/выкл, без toggle) и
 условие `automation_enabled`. Правило может выключить само себя. Уже в целевом состоянии —

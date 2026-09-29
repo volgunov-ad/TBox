@@ -1307,7 +1307,8 @@ object UniversalCanRepository {
                 "AUTO_CAN primary failed mode=${primaryMode.storageValue} reason=${primaryResult.reason}"
             )
 
-            setMode(alternativeMode)
+            // Must use setModeLocked: we already hold modeSwitchMutex (non-reentrant).
+            setModeLocked(alternativeMode, rebindIfBound = false)
             settingsManager.saveHeadUnitCanMode(alternativeMode)
             val alternativeResult = bindModeWithRetries(
                 mode = alternativeMode,

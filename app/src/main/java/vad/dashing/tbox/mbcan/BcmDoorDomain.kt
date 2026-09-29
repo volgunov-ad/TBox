@@ -6,7 +6,7 @@ package vad.dashing.tbox.mbcan
  * Live door ajar is **not** cfg 1/2/13 (auto-lock settings). Full object arrives via
  * BCM `getDoorStatus()` and optionally `IMbCanVehicleDoorCallback.onVehicleDoorChange`.
  *
- * Raw scale (same family as trunk): typically **1** closed / **2** open — confirm on car.
+ * Raw scale (same family as trunk): **1** closed / **2** open (confirmed on A9 logs for FL/FR).
  */
 data class BcmDoorSnapshot(
     val driver: Int? = null,
@@ -37,16 +37,30 @@ data class BcmDoorSnapshot(
 object BcmDoorDomain {
     /**
      * A9 BCM ajar (FL/FR/RL/RR/hood/trunk family): **1** closed / **2** open
-     * (same scale as [TrunkDoorDomain.decodeBinaryOpenMbCan]).
+     * (same scale as [TrunkDoorDomain.decodeBinaryOpenMbCan]; confirmed on A9 logs).
      */
     fun decodeAjarOpenMbCan(raw: Int?): Boolean? = TrunkDoorDomain.decodeBinaryOpenMbCan(raw)
 
     /**
      * A10 CEM2 door ajar (`R_0402_CEM_2_*DoorSts`): standard CEM 1-bit —
      * **1** active/open, **0** closed ([TurnSignalsDomain.decodeCemBinaryActive]).
+     *
+     * Code-assumed: live A10 ajar values were not present in available journals (subscribe only).
      */
     fun decodeAjarOpenVhalCem(raw: Int?): Boolean? =
         raw?.let(TurnSignalsDomain::decodeCemBinaryActive)
+
+    /**
+     * A10 CEM2 ajar property ids keyed like [Android10VhalRepository] `publishVhalDoorAjar`
+     * (FL/FR/RL/RR + hood). Used on TrunkDoor pull refresh to seed before first onChange.
+     */
+    fun vhalCem2AjarSeedPropertyIds(): Map<String, Int> = mapOf(
+        "FL" to FirmwareVehicleJsonMapper.VHAL_CEM2_DRIVER_DOOR_STS,
+        "FR" to FirmwareVehicleJsonMapper.VHAL_CEM2_PSNGR_DOOR_STS,
+        "RL" to FirmwareVehicleJsonMapper.VHAL_CEM2_LHR_DOOR_STS,
+        "RR" to FirmwareVehicleJsonMapper.VHAL_CEM2_RHR_DOOR_STS,
+        "hood" to FirmwareVehicleJsonMapper.VHAL_CEM2_HOOD_STS,
+    )
 
     /**
      * Reflective extract from OEM `MBCanVehicleDoor` (or any object with the same getters).
