@@ -240,6 +240,7 @@ class UsbNmeaGnssSession(
 
     /**
      * Change baud on the open link without tearing down the session (FW upgrade).
+     * Prefer [reopenExclusiveAtBaud] for CP210x/CH340 — live line-coding alone is often ignored.
      */
     fun setBaudLive(baud: Int): Boolean {
         val b = baud.coerceIn(1_200, 2_000_000)
@@ -259,6 +260,36 @@ class UsbNmeaGnssSession(
                 baud = b,
             )
             true
+        }
+    }
+
+    /**
+     * Close and reopen the USB-UART at [baud] while keeping exclusive FW mode.
+     * Auto-baud already uses full reopen; Soft UM980 upgrade needs the same for 460800.
+     */
+    fun reopenExclusiveAtBaud(baud: Int): Boolean {
+        val b = baud.coerceIn(1_200, 2_000_000)
+        if (!running.get()) return false
+        targetBaud = b
+        val keepExclusive = exclusiveMode
+        Log.i(TAG, "reopenExclusiveAtBaud baud=$b exclusive=$keepExclusive")
+        return try {
+            runOnUsbIo(timeoutMs = OPEN_TIMEOUT_MS) {
+                closeConnectionOnly()
+                // Find current target device and open at new baud (tryConnect ? openDevice).
+                tryConnect()
+            }
+            if (keepExclusive) {
+                exclusiveMode = true
+                synchronized(exclusiveRxLock) { exclusiveRx.reset() }
+                synchronized(lineBuffer) { lineBuffer.setLength(0) }
+            }
+            val ok = isConnected()
+            if (!ok) Log.w(TAG, "reopenExclusiveAtBaud: not connected after reopen")
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "reopenExclusiveAtBaud failed: ${e.message}", e)
+            false
         }
     }
 

@@ -10,6 +10,8 @@ class UsbUm980BinaryTransport(
 
     override fun setBaud(baud: Int): Boolean = session.setBaudLive(baud)
 
+    override fun reopenAtBaud(baud: Int): Boolean = session.reopenExclusiveAtBaud(baud)
+
     override fun write(bytes: ByteArray): Boolean = session.writeRaw(bytes)
 
     override fun read(maxBytes: Int, timeoutMs: Long): ByteArray =
@@ -22,6 +24,4 @@ class UsbUm980BinaryTransport(
     override fun endExclusive() {
         session.endExclusiveIo()
     }
-
-    override fun avoidMidSessionUpgradeBaud(): Boolean = true
 }

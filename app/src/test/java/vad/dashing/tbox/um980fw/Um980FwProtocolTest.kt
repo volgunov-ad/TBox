@@ -104,56 +104,40 @@ class Um980FwBootloaderBaudSweepTest {
 
     @Test
     fun softFallbackFindsBootloaderWhen460800Silent() = runBlocking {
+        // Companion-style: setBaud/reopen both just change baud; module answers at 460800.
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
-            if (transport.currentBaud() == 115_200) {
-                when {
-                    s.contains("unlog", ignoreCase = true) ->
-                        transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
-                    s.contains("reset", ignoreCase = true) ->
-                        transport.enqueueAscii("\r\nN4 BootLoader 2020.04\r\nboot> ")
-                    bytes.contentEquals("\r\n".toByteArray()) ->
-                        transport.enqueueAscii("boot> ")
-                }
+            when {
+                transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
+                    transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+                transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) ->
+                    transport.enqueueAscii("system is rebooting\r\n\r\nN4 BootLoader 2020.04\r\nboot> ")
+                transport.currentBaud() == 460_800 && bytes.contentEquals("\r\n".toByteArray()) ->
+                    transport.enqueueAscii("boot> ")
             }
         }
         val updater = Um980FirmwareUpdater(transport)
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertEquals(115_200, transport.currentBaud())
+        assertEquals(460_800, transport.currentBaud())
+        assertTrue(transport.reopenAtBaudCalls.contains(460_800))
     }
 
     @Test
-    fun usbSoftSkipsUpgradeBaudAndDoesNotLeaveModuleAt460800() = runBlocking {
-        val transport = FakeUm980BinaryTransport(initialBaud = 115_200, avoidUpgradeBaud = true)
-        var sawConfig460800 = false
+    fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        var sawReset = false
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
-            if (s.contains("460800")) sawConfig460800 = true
+            if (s.contains("reset", ignoreCase = true)) sawReset = true
+            // Answer only at 115200 so recoverLink can restore; silence at 460800.
             if (transport.currentBaud() == 115_200 && s.contains("unlog", ignoreCase = true)) {
                 transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
             }
         }
         val updater = Um980FirmwareUpdater(transport)
         assertFalse(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertFalse(sawConfig460800)
-        assertEquals(115_200, transport.currentBaud())
-    }
-
-    @Test
-    fun recoverLinkRestoresWorkingBaudFromUpgradeBaud() = runBlocking {
-        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
-        transport.onWrite = { bytes ->
-            val s = bytes.toString(Charsets.US_ASCII)
-            if (transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true)) {
-                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
-            }
-            if (s.contains("config com", ignoreCase = true) && s.contains("115200")) {
-                // module accepts restore
-            }
-        }
-        val updater = Um980FirmwareUpdater(transport)
-        updater.recoverLinkBestEffort(preBaud = 115_200)
+        assertFalse("must not reset without 460800 link", sawReset)
         assertEquals(115_200, transport.currentBaud())
     }
 }
@@ -164,11 +148,11 @@ class Um980FwBootloaderBaudSweepTest {
  */
 private class FakeUm980BinaryTransport(
     initialBaud: Int,
-    private val avoidUpgradeBaud: Boolean = false,
 ) : Um980BinaryTransport {
     private var baud: Int = initialBaud
     private val rx = ConcurrentLinkedQueue<Byte>()
     var onWrite: ((ByteArray) -> Unit)? = null
+    val reopenAtBaudCalls = mutableListOf<Int>()
 
     fun enqueueAscii(text: String) {
         for (b in text.toByteArray(Charsets.US_ASCII)) {
@@ -179,6 +163,12 @@ private class FakeUm980BinaryTransport(
     override fun currentBaud(): Int = baud
 
     override fun setBaud(baud: Int): Boolean {
+        this.baud = baud
+        return true
+    }
+
+    override fun reopenAtBaud(baud: Int): Boolean {
+        reopenAtBaudCalls.add(baud)
         this.baud = baud
         return true
     }
@@ -210,6 +200,4 @@ private class FakeUm980BinaryTransport(
     override fun beginExclusive() = Unit
 
     override fun endExclusive() = Unit
-
-    override fun avoidMidSessionUpgradeBaud(): Boolean = avoidUpgradeBaud
 }

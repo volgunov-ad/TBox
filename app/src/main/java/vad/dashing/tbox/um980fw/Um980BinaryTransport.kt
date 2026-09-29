@@ -9,6 +9,13 @@ interface Um980BinaryTransport {
 
     fun setBaud(baud: Int): Boolean
 
+    /**
+     * Apply host baud for firmware upgrade. Default = [setBaud].
+     * USB adapters should close/reopen so vendor baud init actually takes effect
+     * (setBaudLive alone is unreliable at 460800 during exclusive IO).
+     */
+    fun reopenAtBaud(baud: Int): Boolean = setBaud(baud)
+
     fun write(bytes: ByteArray): Boolean
 
     /**
@@ -20,12 +27,6 @@ interface Um980BinaryTransport {
     fun beginExclusive()
 
     fun endExclusive()
-
-    /**
-     * Direct USB-UART adapters on Android often cannot reliably switch to 460800 mid-session.
-     * When true, Soft upgrade stays on the working baud (no CONFIG 460800).
-     */
-    fun avoidMidSessionUpgradeBaud(): Boolean = false
 }
 
 enum class Um980FwResetMode {
