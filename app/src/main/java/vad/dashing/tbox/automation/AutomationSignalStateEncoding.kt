@@ -42,6 +42,8 @@ object AutomationSignalStateEncoding {
     val icmBrightnessModeOptions = listOf("auto", "manual")
     val steeringFeelOptions = listOf("nor", "eco", "spt")
     val trunkDoorOptions = listOf("closed", "open", "opening", "closing")
+    /** Cabin door ajar (FL/FR/RL/RR): level states for triggers and conditions. */
+    val doorAjarOptions = listOf("closed", "open")
     val audioVolumeSpeedOptions = listOf("off", "low", "medium", "high")
     val audioKeyToneOptions = listOf("off", "low", "medium", "high")
     val audioRadarVolumeOptions = listOf("low", "medium", "high")
@@ -204,6 +206,12 @@ object AutomationSignalStateEncoding {
         state.isOpen == true -> "open"
         state.isOpen == false -> "closed"
         else -> null
+    }
+
+    fun doorAjarFromOpen(isOpen: Boolean?): String? = when (isOpen) {
+        true -> "open"
+        false -> "closed"
+        null -> null
     }
 
     fun audioVolumeSpeedFromRaw(raw: Int): String? = when (raw) {

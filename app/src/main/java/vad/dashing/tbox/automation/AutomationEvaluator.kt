@@ -485,6 +485,9 @@ class AutomationEvaluator(
 
                 is AutomationCondition.TriggerWidget ->
                     AutomationTriggerWidgetState.isActive(condition.triggerId) == condition.active
+
+                is AutomationCondition.AutomationEnabled ->
+                    AutomationEnabledLookup.isEnabled(condition.automationId) == condition.enabled
             }
         }
     }

@@ -465,6 +465,18 @@
   когда текущая активность плитки совпадает с заданной. После запуска приложения все плитки неактивны
   (runtime-only состояние).
 
+### Включение другой автоматизации
+
+```json
+{"type":"automation_enabled","automationId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","enabled":true}
+```
+
+- `automationId` — id правила из документа (тот же, что у действия `set_automation_enabled`);
+- `enabled` — ожидаемый флаг `definition.enabled` (`true` = включена, `false` = выключена).
+  Неизвестное id считается **выключенным**. Проверяется persist-флаг, а не «сейчас выполняется».
+  Взаимные петли A↔B (A включает B, B включает A) — ответственность автора; действие
+  `set_automation_enabled` — no-op, если цель уже в нужном состоянии.
+
 ---
 
 ## Действия
@@ -649,6 +661,7 @@
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
+| Включить / выключить автоматизацию | `set_automation_enabled` | `stringValue`: id целевого правила; `boolValue`: `true` — включить, `false` — выключить. **Без toggle.** Уже в целевом состоянии → успешный no-op. Правило может выключить само себя (текущий прогон отменяется при reload). Не путать с `set_automation_trigger_widget` (плитка, не `enabled`) |
 | Круиз: включить и довести до уставки | `cruise_engage_to_target` | `stringValue`: `acc` или `ccs` (без `auto`); опционально `acc:increaseMs:decreaseMs` (интервалы шагов 50…1500, по умолчанию как у виджета 150); `intValue`: цель км/ч `30…150` (`0` → 90). Как tap виджета уставки: enable+SET− / converge; уже на цели → пауза 212. **Долгое**: executor ждёт окончания converge |
 | Круиз: пауза (Cancel) | `cruise_pause` | `stringValue`: `acc` / `ccs`. Active/Override → MFS Cancel **212**; иначе no-op |
 | Круиз: полностью выключить | `cruise_full_off` | `stringValue`: `acc` / `ccs`. Standby/Active/Override → MFS **210** |
@@ -773,6 +786,10 @@ TCP :5555 включают только если порт ещё не слуша
 | `eps_mode` | `head_unit` | `nor` (NOR, raw 1), `eco` (ECO, raw 2), `spt` (SPT, raw 3) |
 | `drive_mode_6dct` | `head_unit` | `ECO`, `NOR`, `SPT` |
 | `trunk_door` | `head_unit` | `closed`, `open`, `opening`, `closing` |
+| `door_front_left` | `head_unit` | `closed`, `open` (A9 BCM 1/2; A10 CEM2 0/1 via `decodeCemBinaryActive`) |
+| `door_front_right` | `head_unit` | `closed`, `open` |
+| `door_rear_left` | `head_unit` | `closed`, `open` |
+| `door_rear_right` | `head_unit` | `closed`, `open` |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_radar_alarm_volume` | `head_unit` | `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |

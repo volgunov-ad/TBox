@@ -645,6 +645,30 @@ object AutomationSignalCatalog {
             AutomationSignalStateEncoding.trunkDoorOptions,
         ),
         state(
+            AutomationSignalId.DOOR_FRONT_LEFT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_FRONT_LEFT),
+            headUnitOnly,
+            AutomationSignalStateEncoding.doorAjarOptions,
+        ),
+        state(
+            AutomationSignalId.DOOR_FRONT_RIGHT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_FRONT_RIGHT),
+            headUnitOnly,
+            AutomationSignalStateEncoding.doorAjarOptions,
+        ),
+        state(
+            AutomationSignalId.DOOR_REAR_LEFT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_REAR_LEFT),
+            headUnitOnly,
+            AutomationSignalStateEncoding.doorAjarOptions,
+        ),
+        state(
+            AutomationSignalId.DOOR_REAR_RIGHT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.DOOR_REAR_RIGHT),
+            headUnitOnly,
+            AutomationSignalStateEncoding.doorAjarOptions,
+        ),
+        state(
             AutomationSignalId.AUDIO_VOLUME_SPEED_MODE,
             AutomationParameterLabels.signalLabel(AutomationSignalId.AUDIO_VOLUME_SPEED_MODE),
             headUnitOnly,

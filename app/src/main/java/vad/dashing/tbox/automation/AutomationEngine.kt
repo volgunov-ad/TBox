@@ -387,6 +387,7 @@ class AutomationEngine(
 
         definitions.clear()
         snapshot.document.automations.forEach { definitions[it.id] = it }
+        AutomationEnabledLookup.replaceAll(snapshot.document.automations)
         evaluators.clear()
         evaluators.putAll(nextEvaluators)
         AutomationRuntimeState.retainAutomationIds(definitions.keys)
@@ -711,6 +712,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.Time,
         is AutomationCondition.UiState,
         is AutomationCondition.TriggerWidget,
+        is AutomationCondition.AutomationEnabled,
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)

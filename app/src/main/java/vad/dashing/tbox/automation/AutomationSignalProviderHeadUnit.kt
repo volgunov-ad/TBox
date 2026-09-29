@@ -250,6 +250,22 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         AutomationSignalStateEncoding.trunkDoorFromDisplay(display)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.DOOR_FRONT_LEFT -> UniversalCanRepository.doorFrontLeftOpen.map { open ->
+        AutomationSignalStateEncoding.doorAjarFromOpen(open)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.DOOR_FRONT_RIGHT -> UniversalCanRepository.doorFrontRightOpen.map { open ->
+        AutomationSignalStateEncoding.doorAjarFromOpen(open)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.DOOR_REAR_LEFT -> UniversalCanRepository.doorRearLeftOpen.map { open ->
+        AutomationSignalStateEncoding.doorAjarFromOpen(open)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.DOOR_REAR_RIGHT -> UniversalCanRepository.doorRearRightOpen.map { open ->
+        AutomationSignalStateEncoding.doorAjarFromOpen(open)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.AUDIO_VOLUME_SPEED_MODE -> UniversalCanRepository.audioVolumeSpeedModeState.map { raw ->
         raw?.let(AutomationSignalStateEncoding::audioVolumeSpeedFromRaw)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
@@ -387,7 +403,12 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.ICM_BRIGHTNESS_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.IcmBrightnessMode
     AutomationSignalId.ICM_BRIGHTNESS -> vad.dashing.tbox.mbcan.MbCanSignal.IcmManualBrightness
     AutomationSignalId.OVERSPEED_ALARM -> vad.dashing.tbox.mbcan.MbCanSignal.OverspeedAlarm
-    AutomationSignalId.TRUNK_DOOR -> vad.dashing.tbox.mbcan.MbCanSignal.TrunkDoor
+    AutomationSignalId.TRUNK_DOOR,
+    AutomationSignalId.DOOR_FRONT_LEFT,
+    AutomationSignalId.DOOR_FRONT_RIGHT,
+    AutomationSignalId.DOOR_REAR_LEFT,
+    AutomationSignalId.DOOR_REAR_RIGHT,
+    -> vad.dashing.tbox.mbcan.MbCanSignal.TrunkDoor
     AutomationSignalId.AUDIO_VOLUME_SPEED_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.AudioVolumeSpeed
     AutomationSignalId.AUDIO_KEY_TONE_VOLUME -> vad.dashing.tbox.mbcan.MbCanSignal.AudioKeyToneVolume
     AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME -> vad.dashing.tbox.mbcan.MbCanSignal.AudioRadarAlarmVolume

@@ -444,6 +444,17 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
 на главном экране: отдельной программной проверки скорости или PRND нет. Ограничения
 движения, если они есть, остаются на стороне автомобиля.
 
+**Двери кабины (ajar):** сигналы `door_front_left` / `door_front_right` / `door_rear_left` /
+`door_rear_right` — состояния `closed` / `open` (триггер `state_equals`, условие `state`).
+Багажник по-прежнему только `trunk_door` (с `opening`/`closing`). Капот и live-замок в
+каталог не входят. A9: live BCM (`bcmDoorsState`, шкала 1 закрыто / 2 открыто). A10: CEM2
+ajar (`vhalDoorAjarRaw`, `decodeCemBinaryActive`: 1 открыто / 0 закрыто); подписка через
+интерес `TrunkDoor` (как у багажника).
+
+**Включение правил:** действие `set_automation_enabled` (id + вкл/выкл, без toggle) и
+условие `automation_enabled`. Правило может выключить само себя. Уже в целевом состоянии —
+no-op. Взаимные петли enable между правилами — ответственность автора.
+
 Шторка (**46**) и люк (**45**) пишутся через `canSetVehicleParam` / VHAL с теми же сырыми
 значениями на обеих ГУ. Стёкла на A9 идут через `canSetWindowStatus` (не property 47/55–58);
 на A10 — четыре `WindowCon_Req`. Список значений в редакторе зависит от текущего backend ГУ;

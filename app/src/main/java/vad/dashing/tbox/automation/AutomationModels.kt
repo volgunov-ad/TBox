@@ -169,6 +169,11 @@ enum class AutomationSignalId(
     DRIVE_MODE_6DCT("drive_mode_6dct", AutomationSignalValueType.STATE),
     TSR_SWITCH("tsr_switch", AutomationSignalValueType.STATE),
     TRUNK_DOOR("trunk_door", AutomationSignalValueType.STATE),
+    /** Cabin door ajar FL (A9 BCM 1/2, A10 CEM2 0/1). Not trunk — use [TRUNK_DOOR]. */
+    DOOR_FRONT_LEFT("door_front_left", AutomationSignalValueType.STATE),
+    DOOR_FRONT_RIGHT("door_front_right", AutomationSignalValueType.STATE),
+    DOOR_REAR_LEFT("door_rear_left", AutomationSignalValueType.STATE),
+    DOOR_REAR_RIGHT("door_rear_right", AutomationSignalValueType.STATE),
     AUDIO_VOLUME_SPEED_MODE("audio_volume_speed_mode", AutomationSignalValueType.STATE),
     AUDIO_KEY_TONE_VOLUME("audio_key_tone_volume"),
     AUDIO_RADAR_ALARM_VOLUME("audio_radar_alarm_volume", AutomationSignalValueType.STATE),
@@ -563,6 +568,16 @@ sealed interface AutomationCondition {
         val triggerId: String,
         val active: Boolean = true,
     ) : AutomationCondition
+
+    /**
+     * Whether another (or this) automation rule is enabled.
+     * [automationId] is the persisted definition id. Unknown ids are treated as disabled
+     * (same pattern as [TriggerWidget] for missing trigger ids).
+     */
+    data class AutomationEnabled(
+        val automationId: String,
+        val enabled: Boolean = true,
+    ) : AutomationCondition
 }
 
 enum class AutomationCanBus(val storageKey: String) {
@@ -649,6 +664,13 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
     SHOW_TOAST("show_toast"),
     SHOW_ALERT("show_alert"),
     SET_AUTOMATION_TRIGGER_WIDGET("set_automation_trigger_widget"),
+    /**
+     * Enable or disable a target automation by id ([AutomationAction.Builtin.stringValue]).
+     * [AutomationAction.Builtin.boolValue]: `true` = enable, `false` = disable.
+     * No toggle — already-in-target-state is a no-op success.
+     * A rule may disable itself (current run is cancelled on definition reload).
+     */
+    SET_AUTOMATION_ENABLED("set_automation_enabled"),
     /**
      * Engage ACC/CCS and converge to target (setpoint widget tap).
      * [AutomationAction.Builtin.stringValue]: `acc` / `ccs`, optional `:increaseMs:decreaseMs`;

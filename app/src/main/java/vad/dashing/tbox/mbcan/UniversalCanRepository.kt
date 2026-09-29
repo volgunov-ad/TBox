@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -981,6 +982,44 @@ object UniversalCanRepository {
                 MbCanRepository.steerSpeedState
             } else {
                 Android10VhalRepository.steerSpeedState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    /**
+     * Cabin door ajar open/closed (FL/FR/RL/RR). Not trunk (see [TrunkDoorRepository]).
+     * A9: BCM 1/2 via [MbCanRepository.bcmDoorsState]; A10: CEM2 0/1 via [Android10VhalRepository.vhalDoorAjarRaw].
+     */
+    val doorFrontLeftOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.driver },
+        vhalKey = "FL",
+    )
+    val doorFrontRightOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.passenger },
+        vhalKey = "FR",
+    )
+    val doorRearLeftOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.rearLeft },
+        vhalKey = "RL",
+    )
+    val doorRearRightOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.rearRight },
+        vhalKey = "RR",
+    )
+
+    private fun cabinDoorAjarOpenFlow(
+        bcm: (BcmDoorSnapshot) -> Int?,
+        vhalKey: String,
+    ): StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.bcmDoorsState.map { snap ->
+                    snap?.let { BcmDoorDomain.decodeAjarOpenMbCan(bcm(it)) }
+                }
+            } else {
+                Android10VhalRepository.vhalDoorAjarRaw.map { rawMap ->
+                    BcmDoorDomain.decodeAjarOpenVhalCem(rawMap[vhalKey])
+                }
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
