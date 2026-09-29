@@ -103,10 +103,24 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
-    fun waitForBootloaderFailsWhenSilent() = runBlocking {
-        val transport = FakeUm980BinaryTransport(initialBaud = Um980FirmwareUpdater.UPGRADE_BAUD)
+    fun softFallbackFindsBootloaderWhen460800Silent() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (transport.currentBaud() == 115_200) {
+                when {
+                    s.contains("unlog", ignoreCase = true) ->
+                        transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+                    s.contains("reset", ignoreCase = true) ->
+                        transport.enqueueAscii("\r\nN4 BootLoader 2020.04\r\nboot> ")
+                    bytes.contentEquals("\r\n".toByteArray()) ->
+                        transport.enqueueAscii("boot> ")
+                }
+            }
+        }
         val updater = Um980FirmwareUpdater(transport)
-        assertFalse(updater.waitForBootloaderBanner(preBaud = 115_200, overallTimeoutMs = 1_200L))
+        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
+        assertEquals(115_200, transport.currentBaud())
     }
 }
 

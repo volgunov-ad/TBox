@@ -1152,7 +1152,7 @@
     <string name="um980_fw_reset_soft">Soft reset (команда reset)</string>
     <string name="um980_fw_reset_hard">Hard reset (сбросьте питание модуля вручную)</string>
     <string name="um980_fw_progress">Прошивка UM980: %1$d%% (%2$s)</string>
-    <string name="um980_fw_await_hard_reset">Сбросьте питание/RESET модуля, затем нажмите «Продолжить»</string>
+    <string name="um980_fw_await_hard_reset">Сбросьте питание/RESET модуля (USB-кабель не трогайте). Слушаем BootLoader сразу — затем «Продолжить»</string>
     <string name="um980_fw_hard_continue">Продолжить</string>
     <string name="um980_fw_ok">Прошивка UM980 записана</string>
     <string name="um980_fw_error_no_usb">Нет связи с модулем (USB/компаньон)</string>
