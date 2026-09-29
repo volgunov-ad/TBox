@@ -50,12 +50,24 @@ class Um980FirmwareUpdater(
             delay(200)
             drain(300)
 
+            var bootloaderSeen = false
             when (resetMode) {
                 Um980FwResetMode.SOFT -> {
                     Um980FirmwareUiStore.setPhase("reset", 2)
                     sendLine("reset")
-                    waitForAny(listOf("rebooting", "BootLoader", "boot>"), 15_000L)
-                        ?: Log.w(TAG, "soft reset: no reboot banner (continuing)")
+                    val softHit = waitForAny(
+                        listOf("rebooting", "BootLoader", "boot>"),
+                        15_000L,
+                    )
+                    if (softHit == null) {
+                        Log.w(TAG, "soft reset: no reboot banner (continuing)")
+                    } else if (isBootloaderBanner(softHit)) {
+                        // Bytes already consumed by waitForAny — do not require a second banner.
+                        bootloaderSeen = true
+                        runCatching {
+                            Log.i(TAG, "BootLoader seen during soft reset at baud=${transport.currentBaud()}")
+                        }
+                    }
                 }
                 Um980FwResetMode.HARD -> {
                     Um980FirmwareUiStore.setPhase("hard_reset", 2)
@@ -64,7 +76,9 @@ class Um980FirmwareUpdater(
             }
 
             Um980FirmwareUiStore.setPhase("bootloader", 5)
-            if (waitForAny(listOf("BootLoader", "boot>"), 30_000L) == null) {
+            // After power-cycle (and often soft reset) the module may speak BootLoader at the
+            // *saved* baud (e.g. 115200) while the host is still on UPGRADE_BAUD (460800).
+            if (!bootloaderSeen && !waitForBootloaderBanner(preBaud)) {
                 return fail("no_bootloader")
             }
             delay(200)
@@ -222,6 +236,40 @@ class Um980FirmwareUpdater(
         }
     }
 
+    /**
+     * Wait for N4 BootLoader, sweeping host baud when the banner is silent on [UPGRADE_BAUD].
+     * Leaves the transport on the baud where the banner was seen (XMODEM uses that rate).
+     */
+    internal suspend fun waitForBootloaderBanner(
+        preBaud: Int,
+        overallTimeoutMs: Long = BOOTLOADER_SWEEP_TIMEOUT_MS,
+    ): Boolean {
+        val needles = listOf("BootLoader", "boot>")
+        val ordered = bootloaderBaudCandidates(preBaud, transport.currentBaud())
+        val overallDeadline = System.currentTimeMillis() + overallTimeoutMs.coerceAtLeast(1_000L)
+        for (baud in ordered) {
+            val remaining = overallDeadline - System.currentTimeMillis()
+            if (remaining <= 0L) break
+            if (baud != transport.currentBaud()) {
+                if (!transport.setBaud(baud)) {
+                    runCatching { Log.w(TAG, "bootloader sweep: setBaud($baud) failed") }
+                    continue
+                }
+                delay(120)
+                drain(80)
+            }
+            // Nudge prompt reprint after baud change / power-up.
+            transport.write("\r\n".toByteArray(Charsets.US_ASCII))
+            val slice = minOf(BOOTLOADER_BAUD_SLICE_MS, remaining)
+            val hit = waitForAny(needles, slice)
+            if (hit != null) {
+                runCatching { Log.i(TAG, "BootLoader seen at baud=$baud (matched '$hit')") }
+                return true
+            }
+        }
+        return false
+    }
+
     private suspend fun waitForAny(needles: List<String>, timeoutMs: Long): String? {
         val deadline = System.currentTimeMillis() + timeoutMs
         val ascii = StringBuilder()
@@ -260,5 +308,22 @@ class Um980FirmwareUpdater(
     companion object {
         private const val TAG = "Um980Fw"
         const val UPGRADE_BAUD = 460_800
+        private const val BOOTLOADER_SWEEP_TIMEOUT_MS = 35_000L
+        private const val BOOTLOADER_BAUD_SLICE_MS = 5_000L
+
+        internal fun isBootloaderBanner(hit: String): Boolean =
+            hit.contains("BootLoader", ignoreCase = true) ||
+                hit.contains("boot>", ignoreCase = true)
+
+        /**
+         * Host baud order when hunting for BootLoader after reset.
+         * Prefer current (usually [UPGRADE_BAUD]), then pre-upgrade, then common defaults.
+         */
+        internal fun bootloaderBaudCandidates(preBaud: Int, currentBaud: Int): List<Int> {
+            val pre = preBaud.coerceIn(9600, 921600)
+            val current = currentBaud.coerceIn(9600, 921600)
+            return linkedSetOf(current, UPGRADE_BAUD, pre, 115_200, 57_600, 230_400, 38_400)
+                .filter { it in 9600..921600 }
+        }
     }
 }

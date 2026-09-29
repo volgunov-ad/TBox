@@ -1,9 +1,12 @@
 package vad.dashing.tbox.um980fw
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class Um980PkgValidatorTest {
     @Test
@@ -54,4 +57,108 @@ class Xmodem1kTest {
         assertEquals(3 + 1024 + 2, frame.size)
         assertTrue(frame[0] == Xmodem1k.STX)
     }
+}
+
+class Um980FwBootloaderBaudSweepTest {
+    @Test
+    fun candidatesPreferCurrentThenUpgradeThenPre() {
+        val list = Um980FirmwareUpdater.bootloaderBaudCandidates(
+            preBaud = 115_200,
+            currentBaud = Um980FirmwareUpdater.UPGRADE_BAUD,
+        )
+        assertEquals(Um980FirmwareUpdater.UPGRADE_BAUD, list.first())
+        assertTrue(list.contains(115_200))
+        assertTrue(list.indexOf(115_200) > 0)
+        assertEquals(list.size, list.toSet().size)
+    }
+
+    @Test
+    fun candidatesDedupWhenPreEqualsUpgrade() {
+        val list = Um980FirmwareUpdater.bootloaderBaudCandidates(
+            preBaud = Um980FirmwareUpdater.UPGRADE_BAUD,
+            currentBaud = Um980FirmwareUpdater.UPGRADE_BAUD,
+        )
+        assertEquals(1, list.count { it == Um980FirmwareUpdater.UPGRADE_BAUD })
+    }
+
+    @Test
+    fun isBootloaderBannerRecognizesNeedles() {
+        assertTrue(Um980FirmwareUpdater.isBootloaderBanner("BootLoader"))
+        assertTrue(Um980FirmwareUpdater.isBootloaderBanner("boot>"))
+        assertFalse(Um980FirmwareUpdater.isBootloaderBanner("rebooting"))
+    }
+
+    @Test
+    fun waitForBootloaderSweepsToSavedBaud() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = Um980FirmwareUpdater.UPGRADE_BAUD)
+        // Banner after host matches saved baud and nudges with CR/LF (post-drain).
+        transport.onWrite = { bytes ->
+            if (transport.currentBaud() == 115_200 && bytes.contentEquals("\r\n".toByteArray())) {
+                transport.enqueueAscii("N4 BootLoader\r\nboot>\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertTrue(updater.waitForBootloaderBanner(preBaud = 115_200, overallTimeoutMs = 8_000L))
+        assertEquals(115_200, transport.currentBaud())
+    }
+
+    @Test
+    fun waitForBootloaderFailsWhenSilent() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = Um980FirmwareUpdater.UPGRADE_BAUD)
+        val updater = Um980FirmwareUpdater(transport)
+        assertFalse(updater.waitForBootloaderBanner(preBaud = 115_200, overallTimeoutMs = 1_200L))
+    }
+}
+
+/**
+ * In-memory UART pipe for FW updater unit tests.
+ * [read] sleeps in small slices so coroutine [delay] in the updater can progress under runBlocking.
+ */
+private class FakeUm980BinaryTransport(
+    initialBaud: Int,
+) : Um980BinaryTransport {
+    private var baud: Int = initialBaud
+    private val rx = ConcurrentLinkedQueue<Byte>()
+    var onWrite: ((ByteArray) -> Unit)? = null
+
+    fun enqueueAscii(text: String) {
+        for (b in text.toByteArray(Charsets.US_ASCII)) {
+            rx.offer(b)
+        }
+    }
+
+    override fun currentBaud(): Int = baud
+
+    override fun setBaud(baud: Int): Boolean {
+        this.baud = baud
+        return true
+    }
+
+    override fun write(bytes: ByteArray): Boolean {
+        onWrite?.invoke(bytes)
+        return true
+    }
+
+    override fun read(maxBytes: Int, timeoutMs: Long): ByteArray {
+        val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(0L)
+        val out = ArrayList<Byte>(maxBytes.coerceAtMost(256))
+        while (out.size < maxBytes) {
+            val next = rx.poll()
+            if (next != null) {
+                out.add(next)
+                continue
+            }
+            if (System.currentTimeMillis() >= deadline) break
+            try {
+                Thread.sleep(10)
+            } catch (_: InterruptedException) {
+                break
+            }
+        }
+        return ByteArray(out.size) { out[it] }
+    }
+
+    override fun beginExclusive() = Unit
+
+    override fun endExclusive() = Unit
 }
