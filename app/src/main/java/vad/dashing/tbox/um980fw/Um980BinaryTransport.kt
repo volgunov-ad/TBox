@@ -20,6 +20,12 @@ interface Um980BinaryTransport {
     fun beginExclusive()
 
     fun endExclusive()
+
+    /**
+     * Direct USB-UART adapters on Android often cannot reliably switch to 460800 mid-session.
+     * When true, Soft upgrade stays on the working baud (no CONFIG 460800).
+     */
+    fun avoidMidSessionUpgradeBaud(): Boolean = false
 }
 
 enum class Um980FwResetMode {

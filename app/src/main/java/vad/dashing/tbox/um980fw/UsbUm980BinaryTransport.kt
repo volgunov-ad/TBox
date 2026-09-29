@@ -22,4 +22,6 @@ class UsbUm980BinaryTransport(
     override fun endExclusive() {
         session.endExclusiveIo()
     }
+
+    override fun avoidMidSessionUpgradeBaud(): Boolean = true
 }
