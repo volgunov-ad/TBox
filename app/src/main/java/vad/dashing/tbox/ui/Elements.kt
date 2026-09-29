@@ -449,7 +449,7 @@ fun AppAlertDialogTitle(text: String) {
     )
 }
 
-/** Основной текст диалога: как поля поездок/заправок (24 sp). */
+/** Основной текст диалога: роль Title (~26 sp), как у соседних AlertDialog. */
 @Composable
 fun AppAlertDialogText(text: String) {
     Text(
@@ -591,7 +591,7 @@ fun SettingSwitchWithAction(
         ) {
             Text(
                 text = actionText,
-                style = MaterialTheme.typography.tboxBody,
+                style = MaterialTheme.typography.tboxButton,
             )
         }
     }
@@ -1497,13 +1497,13 @@ fun FloatingDashboardPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
     }
@@ -1576,13 +1576,13 @@ fun MainScreenPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
     }
