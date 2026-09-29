@@ -124,12 +124,35 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
-    fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
+    fun softPrefersBootloaderNeedleWhenSameChunkHasRebooting() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
-        var sawReset = false
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
-            if (s.contains("reset", ignoreCase = true)) sawReset = true
+            when {
+                transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
+                    transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+                // Single chunk: rebooting + BootLoader (old needle order discarded BootLoader).
+                transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) ->
+                    transport.enqueueAscii("system is rebooting\r\nN4 BootLoader 2020.04\r\nboot> ")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
+    }
+
+    @Test
+    fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        var sawDoubleReset = false
+        var sawHotReset = false
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (s.contains("reset\r\nreset", ignoreCase = true)) sawDoubleReset = true
+            if (s.trim().equals("RESET", ignoreCase = true) ||
+                s.equals("RESET\r\n", ignoreCase = true)
+            ) {
+                sawHotReset = true
+            }
             // Answer only at 115200 so recoverLink can restore; silence at 460800.
             if (transport.currentBaud() == 115_200 && s.contains("unlog", ignoreCase = true)) {
                 transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
@@ -137,7 +160,30 @@ class Um980FwBootloaderBaudSweepTest {
         }
         val updater = Um980FirmwareUpdater(transport)
         assertFalse(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertFalse("must not reset without 460800 link", sawReset)
+        assertFalse("must not double-reset without 460800 link", sawDoubleReset)
+        assertTrue("recover must hot-RESET like GNSS reboot UI", sawHotReset)
+        assertTrue(transport.reopenAtBaudCalls.contains(115_200))
+        assertEquals(115_200, transport.currentBaud())
+    }
+
+    @Test
+    fun recoverLinkReopensAndSendsHotReset() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
+        var sawHotReset = false
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (s.equals("RESET\r\n", ignoreCase = true)) sawHotReset = true
+            if (transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true)) {
+                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+            }
+            if (transport.currentBaud() == 115_200 && s.contains("unlog", ignoreCase = true)) {
+                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        updater.recoverLinkBestEffort(preBaud = 115_200)
+        assertTrue(sawHotReset)
+        assertTrue(transport.reopenAtBaudCalls.isNotEmpty())
         assertEquals(115_200, transport.currentBaud())
     }
 }

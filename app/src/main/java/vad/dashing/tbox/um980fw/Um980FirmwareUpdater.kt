@@ -108,7 +108,10 @@ class Um980FirmwareUpdater(
                 runCatching { recoverLinkBestEffort(preBaud) }
             }
             runCatching { transport.endExclusive() }
-            runCatching { transport.setBaud(preBaud) }
+            // Prefer reopen so CP210x/CH340 actually leave UPGRADE_BAUD after Soft.
+            if (!transport.reopenAtBaud(preBaud)) {
+                runCatching { transport.setBaud(preBaud) }
+            }
             runCatching { pkgFile.delete() }
         }
     }
@@ -120,8 +123,9 @@ class Um980FirmwareUpdater(
      * Root cause of prior USB Soft failures: [Um980BinaryTransport.setBaud] / setBaudLive often
      * does not actually switch CP210x/CH340 while exclusive; module was already at 460800 after
      * CONFIG, host stayed wrong → no BootLoader seen, then host restored to 115200 → link dead
-     * until power-cycle. Fix: [Um980BinaryTransport.reopenAtBaud] after CONFIG, verify `unlog`
-     * OK before reset, [recoverLinkBestEffort] on failure.
+     * until power-cycle / UI «Перезагрузка GNSS». Fix: [Um980BinaryTransport.reopenAtBaud]
+     * after CONFIG, verify `unlog` OK before reset, prefer BootLoader needles over `rebooting`
+     * (same RX chunk), [recoverLinkBestEffort] with reopen + hot RESET on failure.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
         for (com in listOf("com1", "com2", "com3")) {
@@ -157,7 +161,10 @@ class Um980FirmwareUpdater(
         }
 
         sendDoubleReset()
-        val hit = waitForAny(listOf("rebooting", "BootLoader", "boot>"), 12_000L)
+        // Prefer BootLoader/boot> over "rebooting": waitForAny returns the first needle in the
+        // list that appears in the buffer — if "rebooting" is listed first, a chunk that also
+        // already contains the BootLoader banner is discarded and the second wait misses it.
+        val hit = waitForAny(listOf("BootLoader", "boot>", "rebooting"), 12_000L)
         if (hit != null && isBootloaderBanner(hit)) {
             runCatching { Log.i(TAG, "BootLoader via Soft at baud=${transport.currentBaud()}") }
             return true
@@ -215,12 +222,18 @@ class Um980FirmwareUpdater(
 
     /**
      * After a failed Soft path the module is often left at RAM baud 460800 (or in BootLoader)
-     * while the host returns to [preBaud] — connection looks dead until power-cycle.
+     * while the host returns to [preBaud] — connection looks dead until power-cycle or UI
+     * «Перезагрузка GNSS» ([GnssModuleCommands.softRebootAscii] = `RESET`).
+     *
+     * USB: [Um980BinaryTransport.reopenAtBaud] per candidate (setBaudLive alone is unreliable),
+     * then hot `RESET` so unsaved CONFIG drops and the module returns to the saved baud —
+     * same effect as the GNSS reboot button after exclusive ends.
      */
     internal suspend fun recoverLinkBestEffort(preBaud: Int) {
         val target = preBaud.coerceIn(9600, 921600)
+        var touchedApp = false
         for (baud in bootloaderBaudCandidates(target, transport.currentBaud())) {
-            if (!transport.setBaud(baud)) continue
+            if (!applyHostBaud(baud)) continue
             delay(150)
             drain(100)
             transport.write("\r\n".toByteArray(Charsets.US_ASCII))
@@ -238,15 +251,40 @@ class Um980FirmwareUpdater(
                 sendLine("config $com $target")
                 delay(60)
             }
-            transport.setBaud(target)
-            delay(200)
-            sendLine("unlog")
-            delay(100)
-            runCatching { Log.i(TAG, "recoverLink: restored app link at baud=$target (from host $baud)") }
-            return
+            touchedApp = true
+            runCatching { Log.i(TAG, "recoverLink: app answered at host baud=$baud → CONFIG $target") }
+            break
         }
-        runCatching { transport.setBaud(target) }
-        runCatching { Log.w(TAG, "recoverLink: could not restore module baud") }
+        // Match UI GNSS reboot: reopen at working baud, hot RESET (drops RAM 460800), reopen again.
+        if (!applyHostBaud(target)) {
+            runCatching { transport.setBaud(target) }
+        }
+        delay(200)
+        sendLine("RESET")
+        delay(RECOVER_RESET_SETTLE_MS)
+        if (!applyHostBaud(target)) {
+            runCatching { transport.setBaud(target) }
+        }
+        delay(300)
+        drain(200)
+        sendLine("unlog")
+        delay(100)
+        if (touchedApp || probeAppAlive(1_500L)) {
+            runCatching { Log.i(TAG, "recoverLink: restored via reopen+RESET at baud=$target") }
+        } else {
+            runCatching { Log.w(TAG, "recoverLink: reopen+RESET sent; app OK not confirmed at $target") }
+        }
+    }
+
+    /** Prefer [Um980BinaryTransport.reopenAtBaud]; fall back to [Um980BinaryTransport.setBaud]. */
+    private fun applyHostBaud(baud: Int): Boolean {
+        if (transport.currentBaud() == baud) {
+            // Still reopen on USB when already at target — live coding may disagree with HW.
+            if (transport.reopenAtBaud(baud)) return true
+            return transport.setBaud(baud)
+        }
+        if (transport.reopenAtBaud(baud)) return true
+        return transport.setBaud(baud)
     }
 
     private suspend fun xmodemSend(image: ByteArray): String? {
@@ -384,8 +422,8 @@ class Um980FirmwareUpdater(
             val remaining = overallDeadline - System.currentTimeMillis()
             if (remaining <= 0L) break
             if (baud != transport.currentBaud()) {
-                if (!transport.setBaud(baud)) {
-                    runCatching { Log.w(TAG, "bootloader sweep: setBaud($baud) failed") }
+                if (!applyHostBaud(baud)) {
+                    runCatching { Log.w(TAG, "bootloader sweep: applyHostBaud($baud) failed") }
                     continue
                 }
                 delay(120)
@@ -444,6 +482,8 @@ class Um980FirmwareUpdater(
         private const val BOOTLOADER_SWEEP_TIMEOUT_MS = 35_000L
         private const val BOOTLOADER_BAUD_SLICE_MS = 5_000L
         private const val HARD_LISTEN_SLICE_MS = 6_000L
+        /** Settle after hot RESET during recover (module drops RAM baud, reboots app). */
+        private const val RECOVER_RESET_SETTLE_MS = 2_500L
 
         internal fun isBootloaderBanner(hit: String): Boolean =
             hit.contains("BootLoader", ignoreCase = true) ||
