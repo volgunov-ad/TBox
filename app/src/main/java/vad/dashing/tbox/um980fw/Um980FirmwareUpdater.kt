@@ -237,7 +237,8 @@ class Um980FirmwareUpdater(
             delay(150)
             drain(100)
             transport.write("\r\n".toByteArray(Charsets.US_ASCII))
-            if (waitForAny(listOf("BootLoader", "boot>"), 900L) != null) {
+            // N4 BootLoader reprints the menu every ~2s — wait longer than one period.
+            if (waitForAny(listOf("BootLoader", "boot>"), 2_500L) != null) {
                 // Menu 0 = Load OS & GSP from flash
                 transport.write("0\r\n".toByteArray(Charsets.US_ASCII))
                 waitForAny(listOf("FreeRTOS", "VERSION", "\$G", "OK", "command"), 8_000L)
