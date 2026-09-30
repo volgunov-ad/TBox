@@ -22,7 +22,17 @@ Package name и label сняты через `aapt dump badging` со всех AP
 
 В этом `system.img` отдельных `vendor/app` / `product/app` нет — все 110 APK лежат в `system/app` + `system/priv-app`.
 
-Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).
+Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_APPS_ANDROID10_VHAL_RU.md](STOCK_APPS_ANDROID10_VHAL_RU.md).
+
+### VirtualCar и mbCAN decode/encode
+
+`com.wt.virtualcar` (`virtual_data.xml`) — **не** каталог сырых mbCAN cfg id. Там ~230 hex property (`0x314…`, `0x354…`, …) в стиле vendor VirtualCar; они **не пересекаются** с известными VHAL int A10 (`2894…` / `5578…`) и не равны mbCAN id вроде `141` / `143`.
+
+Для добавления функций mbCAN в TBox Monitor смотреть:
+
+1. **A9:** `CarSettings` / `ACSettings` / `MB_AIService` → `MBVehicleProperty` + `MBCanRepository` / виджеты (`setModularItem*`, listener’ы) — id, 1/2 on-off, массивы значений в `res/values`.
+2. **A10:** `CarSetting` / `AirConditioning` / `SystemSettings` / `Launcher` → VHAL read/write id и encode (уже частично в [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md)).
+3. **VirtualCar** — только как подсказка по **семантике UI** (диапазоны, 1/2), если рядом нет прямого UI в CarSettings; маппинг на mbCAN всё равно искать в Mengbo-коде или нативном демоне.
 
 ---
 
