@@ -118,70 +118,76 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Soft entry (UPrecise Soft path from `um980.dmslog8` + GNSS-store Soft prep).
+     * Soft entry.
      *
-     * Plain `reset` at working baud only reboots the app. BootLoader needs COM* at 460800.
+     * Build14259 on direct USB never showed BootLoader after CONFIG+reopen+SAVECONFIG:
+     * USB reopen is slower than the N4 menu (~2s) and drops DTR (often RESET_N), so the
+     * banner is gone before RX starts. UPrecise changes baud on an already-open port.
      *
-     * USB-critical: [Um980BinaryTransport.reopenAtBaud] closes the adapter (DTR drops) and
-     * re-opens it — on many boards that pulses RESET_N and **wipes RAM CONFIG**. So Soft must
-     * [SAVECONFIG] 460800 **before** reopen (GNSS store also sets saved speed first). After a
-     * DTR reset the module comes back at 460800 and Soft double-reset can enter BootLoader.
-     *
-     * Also from dmslog8: CONFIG as one write ×2 (~50 ms); two `reset\r\nreset` bursts; prefer
-     * BootLoader needles over `rebooting`. Do not hot-RESET on BootLoader miss here — recover
-     * runs from `update` finally (and must SAVECONFIG the working baud back).
+     * Order:
+     * 1. DTR pulse while the port stays open, listen at the working baud.
+     * 2. ASCII double-reset at the working baud (known-good link) and listen there.
+     * 3. UPrecise CONFIG 460800, [setBaud] (no reopen) so RAM baud survives, then reset.
+     *    Reopen only if 460800 stays silent.
+     * Do not SAVECONFIG 460800 — a failed Soft must not persist the upgrade baud.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
-        // UPrecise: identical CONFIG block twice (~50 ms), all three COMs in one write each.
+        if (transport.pulseHardwareReset()) {
+            runCatching { Log.i(TAG, "soft: DTR pulse, listen baud=${transport.currentBaud()}") }
+            if (awaitBootloaderNudged(SOFT_DTR_LISTEN_MS)) return true
+        }
+
+        if (probeAppAlive(1_500L)) {
+            sendDoubleReset(leadingCrLf = false)
+            delay(SOFT_RESET_REPEAT_GAP_MS)
+            sendDoubleReset(leadingCrLf = true)
+            if (awaitBootloaderNudged(SOFT_PRE_RESET_LISTEN_MS)) {
+                runCatching { Log.i(TAG, "BootLoader via reset at baud=${transport.currentBaud()}") }
+                return true
+            }
+            // App may be rebooting; wait until it answers before CONFIG.
+            if (!probeAppAlive(3_000L)) {
+                transport.setBaud(preBaud)
+                probeAppAlive(2_000L)
+            }
+        }
+
         sendUpgradeBaudConfigBlock()
         delay(SOFT_CONFIG_REPEAT_GAP_MS)
         sendUpgradeBaudConfigBlock()
-        // Persist upgrade baud before USB reopen (DTR pulse ≈ hard reset on many adapters).
-        sendLine("SAVECONFIG")
-        delay(SOFT_SAVECONFIG_SETTLE_MS)
-        drain(200)
-
-        if (!applyHostBaud(UPGRADE_BAUD)) {
-            runCatching { Log.w(TAG, "soft: applyHostBaud($UPGRADE_BAUD) failed") }
-            runCatching { recoverLinkBestEffort(preBaud) }
-            return false
-        }
-        delay(500)
-        drain(250)
-        sendLine("unlog")
-        delay(150)
-        sendLine("unlog")
         delay(200)
-        if (!probeAppAlive(2_500L)) {
-            runCatching { Log.w(TAG, "soft: no OK at 460800 after first open — retry reopen") }
-            if (applyHostBaud(UPGRADE_BAUD)) {
-                delay(500)
-                drain(250)
+        // Keep the port open. reopenAtBaud drops DTR and wipes RAM 460800 / misses the menu.
+        if (!transport.setBaud(UPGRADE_BAUD)) {
+            runCatching { Log.w(TAG, "soft: setBaud($UPGRADE_BAUD) failed, reopening") }
+            if (!transport.reopenAtBaud(UPGRADE_BAUD)) {
+                runCatching { recoverLinkBestEffort(preBaud) }
+                return false
             }
-            if (!probeAppAlive(2_500L)) {
-                runCatching { Log.w(TAG, "soft: still no link at 460800 — restoring working baud") }
+        }
+        delay(300)
+        drain(150)
+        if (!probeAppAlive(2_000L)) {
+            runCatching { Log.w(TAG, "soft: no OK at 460800 after setBaud — one reopen") }
+            if (transport.reopenAtBaud(UPGRADE_BAUD)) {
+                delay(400)
+                drain(150)
+            }
+            if (!probeAppAlive(2_000L)) {
+                if (awaitBootloaderNudged(2_500L)) return true
+                runCatching { Log.w(TAG, "soft: no link at 460800 — restoring working baud") }
                 runCatching { recoverLinkBestEffort(preBaud) }
                 return false
             }
         }
 
-        // UPrecise: two double-reset bursts ~50 ms apart (second has leading CR/LF).
         sendDoubleReset(leadingCrLf = false)
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
-
-        // Prefer BootLoader/boot> over "rebooting": waitForAny returns the first needle in the
-        // list that appears in the buffer — if "rebooting" is listed first, a chunk that also
-        // already contains the BootLoader banner is discarded and the second wait misses it.
-        val hit = waitForAny(listOf("BootLoader", "boot>", "rebooting"), 12_000L)
-        if (hit != null && isBootloaderBanner(hit)) {
+        if (awaitBootloaderNudged(SOFT_POST_RESET_LISTEN_MS)) {
             runCatching { Log.i(TAG, "BootLoader via Soft at baud=${transport.currentBaud()}") }
             return true
         }
-        if (hit != null && hit.contains("rebooting", ignoreCase = true)) {
-            if (waitForAny(listOf("BootLoader", "boot>"), 8_000L) != null) return true
-        }
-        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)) return true
+        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 16_000L)) return true
 
         runCatching { Log.w(TAG, "soft: BootLoader not seen (recover deferred to update finally)") }
         return false
@@ -228,6 +234,29 @@ class Um980FirmwareUpdater(
         }
         runCatching { userWait.await() }
         waitForBootloaderBanner(preBaud, overallTimeoutMs = BOOTLOADER_SWEEP_TIMEOUT_MS)
+    }
+
+    /**
+     * N4 menu reprints about every 2s and only while the host baud matches.
+     * Nudge with CR/LF; ignore a bare "rebooting" hit so a later banner in the same window counts.
+     */
+    private suspend fun awaitBootloaderNudged(timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        var nextNudge = 0L
+        while (System.currentTimeMillis() < deadline) {
+            val now = System.currentTimeMillis()
+            if (now >= nextNudge) {
+                transport.write("\r\n".toByteArray(Charsets.US_ASCII))
+                nextNudge = now + 1_200L
+            }
+            val slice = minOf(500L, (deadline - System.currentTimeMillis()).coerceAtLeast(50L))
+            val hit = waitForAny(listOf("BootLoader", "boot>", "rebooting"), slice)
+            if (hit != null && isBootloaderBanner(hit)) {
+                runCatching { Log.i(TAG, "BootLoader at baud=${transport.currentBaud()}") }
+                return true
+            }
+        }
+        return false
     }
 
     private fun sendDoubleReset(leadingCrLf: Boolean = true) {
@@ -444,12 +473,15 @@ class Um980FirmwareUpdater(
             val remaining = overallDeadline - System.currentTimeMillis()
             if (remaining <= 0L) break
             if (baud != transport.currentBaud()) {
-                if (!applyHostBaud(baud)) {
-                    runCatching { Log.w(TAG, "bootloader sweep: applyHostBaud($baud) failed") }
+                // setBaud keeps the port open. Reopen only if the live change is rejected —
+                // a reopen on every candidate drops DTR and restarts the 2s menu.
+                val switched = transport.setBaud(baud) || transport.reopenAtBaud(baud)
+                if (!switched) {
+                    runCatching { Log.w(TAG, "bootloader sweep: setBaud($baud) failed") }
                     continue
                 }
-                delay(120)
-                drain(80)
+                delay(80)
+                drain(40)
             }
             // Nudge prompt reprint after baud change / power-up.
             transport.write("\r\n".toByteArray(Charsets.US_ASCII))
@@ -469,6 +501,7 @@ class Um980FirmwareUpdater(
         while (System.currentTimeMillis() < deadline) {
             val chunk = transport.read(256, 100)
             if (chunk.isNotEmpty()) {
+                noteRx(chunk)
                 ascii.append(chunk.toString(Charset.forName("US-ASCII")))
                 if (ascii.length > 8_000) ascii.delete(0, ascii.length - 4_000)
                 val hay = ascii.toString()
@@ -492,9 +525,22 @@ class Um980FirmwareUpdater(
         return buf.toString().lines().map { it.trim() }.filter { it.isNotEmpty() }
     }
 
+    private val rxTail = StringBuilder()
+
+    private fun noteRx(chunk: ByteArray) {
+        val s = chunk.toString(Charset.forName("US-ASCII"))
+            .replace('\r', ' ')
+            .replace('\n', '|')
+            .replace(Regex("[^\\x20-\\x7E|]"), ".")
+        rxTail.append(s)
+        if (rxTail.length > 240) rxTail.delete(0, rxTail.length - 160)
+    }
+
     private fun fail(code: String, e: Exception? = null): Result<String> {
         if (e != null) Log.w(TAG, "UM980 FW failed: $code", e) else Log.w(TAG, "UM980 FW failed: $code")
-        Um980FirmwareUiStore.finish(code)
+        val detail = rxTail.toString().trim().take(160).ifBlank { null }
+        if (detail != null) Log.w(TAG, "UM980 FW rx tail: $detail")
+        Um980FirmwareUiStore.finish(code, detail)
         return Result.failure(IllegalStateException(code))
     }
 
@@ -510,7 +556,13 @@ class Um980FirmwareUpdater(
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
         /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
-        /** Allow SAVECONFIG to commit before USB reopen / DTR pulse. */
+        /** Listen after a DTR pulse (port already open, menu ~2s). */
+        private const val SOFT_DTR_LISTEN_MS = 3_000L
+        /** Listen after ASCII reset at the working baud (banner ~3–4s after reset). */
+        private const val SOFT_PRE_RESET_LISTEN_MS = 4_500L
+        /** Listen after reset at 460800. */
+        private const val SOFT_POST_RESET_LISTEN_MS = 8_000L
+        /** Allow SAVECONFIG to commit during recover. */
         private const val SOFT_SAVECONFIG_SETTLE_MS = 800L
 
         internal fun isBootloaderBanner(hit: String): Boolean =

@@ -108,7 +108,6 @@ class Um980FwBootloaderBaudSweepTest {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         var configBatches = 0
         var resetBursts = 0
-        var sawSaveConfig = false
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
             if (s.contains("config com1") && s.contains("config com2") && s.contains("config com3")) {
@@ -120,7 +119,6 @@ class Um980FwBootloaderBaudSweepTest {
                         s.indexOf("config com3") > s.indexOf("config com2"),
                 )
             }
-            if (s.contains("SAVECONFIG", ignoreCase = true)) sawSaveConfig = true
             if (s.contains("reset\r\nreset")) resetBursts++
             when {
                 transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
@@ -134,8 +132,6 @@ class Um980FwBootloaderBaudSweepTest {
         val updater = Um980FirmwareUpdater(transport)
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
         assertEquals(460_800, transport.currentBaud())
-        assertTrue(transport.reopenAtBaudCalls.contains(460_800))
-        assertTrue("Soft must SAVECONFIG 460800 before USB reopen/DTR", sawSaveConfig)
         assertEquals("UPrecise sends CONFIG block twice", 2, configBatches)
         assertEquals("UPrecise sends double-reset twice", 2, resetBursts)
     }
@@ -158,6 +154,26 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
+    fun softDtrPulseCatchesBootloaderWithoutBaudChange() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        transport.pulseHardwareResetResult = true
+        var sawReset = false
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (s.contains("reset", ignoreCase = true) && !s.contains("unlog", ignoreCase = true)) {
+                sawReset = true
+            }
+            if (bytes.contentEquals("\r\n".toByteArray())) {
+                transport.enqueueAscii("N4 BootLoader\r\nboot>\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
+        assertFalse("DTR path must not need ASCII reset", sawReset)
+        assertEquals(115_200, transport.currentBaud())
+    }
+
+    @Test
     fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         var sawDoubleReset = false
@@ -177,7 +193,7 @@ class Um980FwBootloaderBaudSweepTest {
         }
         val updater = Um980FirmwareUpdater(transport)
         assertFalse(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertFalse("must not double-reset without 460800 link", sawDoubleReset)
+        assertTrue("reset at the working baud is required when 460800 is dead", sawDoubleReset)
         assertTrue("recover must hot-RESET like GNSS reboot UI", sawHotReset)
         assertTrue(transport.reopenAtBaudCalls.contains(115_200))
         assertEquals(115_200, transport.currentBaud())
@@ -219,6 +235,7 @@ private class FakeUm980BinaryTransport(
     private val rx = ConcurrentLinkedQueue<Byte>()
     var onWrite: ((ByteArray) -> Unit)? = null
     val reopenAtBaudCalls = mutableListOf<Int>()
+    var pulseHardwareResetResult = false
 
     fun enqueueAscii(text: String) {
         for (b in text.toByteArray(Charsets.US_ASCII)) {
@@ -238,6 +255,8 @@ private class FakeUm980BinaryTransport(
         this.baud = baud
         return true
     }
+
+    override fun pulseHardwareReset(): Boolean = pulseHardwareResetResult
 
     override fun write(bytes: ByteArray): Boolean {
         onWrite?.invoke(bytes)

@@ -293,6 +293,40 @@ class UsbNmeaGnssSession(
         }
     }
 
+    /**
+     * Drop and re-assert DTR while the port stays open so RX is already running.
+     * Full USB reopen misses the ~2s N4 menu: close/open is slower than the banner.
+     */
+    fun pulseDtrReset(): Boolean {
+        val conn: UsbDeviceConnection
+        val device: UsbDevice
+        val dataIfId: Int
+        val comm: UsbInterface?
+        synchronized(ioLock) {
+            conn = connection ?: return false
+            device = usbManager.deviceList.values.firstOrNull { it.deviceId == openDeviceId }
+                ?: return false
+            dataIfId = usbInterface?.id ?: 0
+            comm = commInterface
+        }
+        fun apply(dtr: Boolean) {
+            UsbUartBridgeInit.setDtrRts(device, conn, dataIfId, dtr = dtr, rts = true)
+            if (comm != null) {
+                assertCdcControlLineState(conn, comm.id, dtr = dtr, rts = true)
+            }
+        }
+        return try {
+            Log.i(TAG, "pulseDtrReset")
+            apply(dtr = false)
+            Thread.sleep(150)
+            apply(dtr = true)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "pulseDtrReset failed: ${e.message}", e)
+            false
+        }
+    }
+
     fun beginExclusiveIo() {
         exclusiveMode = true
         synchronized(exclusiveRxLock) { exclusiveRx.reset() }

@@ -11,6 +11,8 @@ object Um980FirmwareUiStore {
         val progressPct: Int = 0,
         val phase: String = "",
         val error: String? = null,
+        /** Last RX snippet when [error] is set (baud / banner mismatch). */
+        val detail: String? = null,
         val doneOk: Boolean = false,
         /** Hard reset: waiting for user to power-cycle before continue. */
         val awaitingHardReset: Boolean = false,
@@ -51,13 +53,14 @@ object Um980FirmwareUiStore {
         cb?.invoke()
     }
 
-    fun finish(error: String?) {
+    fun finish(error: String?, detail: String? = null) {
         hardResetContinue = null
         _state.value = State(
             active = false,
             progressPct = if (error == null) 100 else _state.value.progressPct,
             phase = if (error == null) "done" else "error",
             error = error,
+            detail = detail?.take(160),
             doneOk = error == null,
             awaitingHardReset = false,
         )

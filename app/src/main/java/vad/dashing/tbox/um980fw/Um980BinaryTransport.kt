@@ -16,6 +16,12 @@ interface Um980BinaryTransport {
      */
     fun reopenAtBaud(baud: Int): Boolean = setBaud(baud)
 
+    /**
+     * Pulse adapter DTR while the port stays open (some boards wire DTR to UM980 RESET_N).
+     * @return true if a pulse was attempted. Default: no pulse.
+     */
+    fun pulseHardwareReset(): Boolean = false
+
     fun write(bytes: ByteArray): Boolean
 
     /**

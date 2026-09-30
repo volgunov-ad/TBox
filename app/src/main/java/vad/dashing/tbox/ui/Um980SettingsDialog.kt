@@ -392,7 +392,11 @@ fun Um980SettingsContent(
                     fwState.awaitingHardReset -> stringResource(R.string.um980_fw_await_hard_reset)
                     fwState.active -> stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
                     fwState.doneOk -> stringResource(R.string.um980_fw_ok)
-                    else -> um980FwErrorMessage(context, fwState.error)
+                    else -> {
+                        val base = um980FwErrorMessage(context, fwState.error)
+                        val detail = fwState.detail?.trim().orEmpty()
+                        if (detail.isEmpty()) base else "$base\n$detail"
+                    }
                 },
                 style = MaterialTheme.typography.tboxBody,
                 color = if (!fwState.error.isNullOrBlank() && !fwState.active) {

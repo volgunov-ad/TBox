@@ -14,8 +14,8 @@ Reference Commands Manual N4 **не** описывает кадры upgrade — 
 |----------|---------|
 | 0 | несколько пар `unlog` → `$command,unlog,response: OK` |
 | +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG` в dmslog8) |
-| +~0.9 с | *(на прямом USB)* `SAVECONFIG` — иначе reopen адаптера (падение DTR) ≈ hard reset и RAM baud 460800 теряется |
-| +~2 с | ещё `unlog`; host UART → **460800** |
+| +~0.9 с | *(прямое USB, не в dmslog8)* импульс DTR без закрытия порта, затем ASCII `reset` на **рабочем** baud; CONFIG 460800 и смена baud **без** reopen |
+| +~2 с | ещё `unlog`; host UART → **460800** (`setBaud`, порт не закрывать) |
 | +~2.6 с | два бурста `reset\r\nreset\r\n` (~50 мс; второй с ведущим `\r\n`) → `$command,reset,response: OK` |
 | +~4.3 с | `system is rebooting` |
 | +~6.1 с | `N4 BootLoader 2020.04` … меню … `boot>` (timeout меню **2 с**, default = print menu) |
@@ -29,8 +29,8 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 
 1. (Опционально) `version` / `VERSIONA` — снимок до прошивки.
 2. `unlog` несколько раз — остановить NMEA.
-3. `config com1/com2/com3 460800` **одним write** (и повторить блок ~50 мс). На **прямом USB** затем `SAVECONFIG` (reopen адаптера пульсирует DTR≈RESET и иначе сбрасывает RAM baud).
-4. Host UART → **460800** (USB: полный reopen), короткий settle, ещё пара `unlog`.
+3. На **прямом USB** сначала импульс DTR (порт открыт) и ASCII `reset` на рабочем baud — слушать баннер там. Иначе `config com1/com2/com3 460800` одним write ×2, **без** `SAVECONFIG`.
+4. Host UART → **460800** через смену baud на открытом порту (не reopen). Reopen только если на 460800 нет ответа.
 5. Сброс в bootloader:
    - **Soft:** два бурста `reset\r\nreset\r\n` (~50 мс) → ждать `system is rebooting` / баннер BootLoader / `boot>`.
    - **Hard:** ждать ручной сброс питания/RESET; ASCII `reset` не слать.
@@ -73,5 +73,5 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 - Обрыв → модуль часто остаётся в BootLoader; повтор Soft/Hard + тот же `.pkg`.
 - Неверный `.pkg` для другой модели — не использовать.
 - После `CONFIG 460800` без `SAVECONFIG` Hard power-cycle возвращает сохранённый baud — нужен baud-sweep на шаге 6.
-- **Причина сбоя Soft на прямом USB:** (1) `setBaudLive` часто не меняет CP210x/CH340 — нужен **полный reopen**; (2) reopen закрывает USB → DTR↓↑ ≈ RESET_N → **RAM CONFIG 460800 теряется**, модуль снова на сохранённом 115200 при хосте 460800 — BootLoader не виден (нужен `SAVECONFIG` до reopen); (3) `CONFIG com1/2/3` по одному с паузой теряет строки после flip baud; (4) ранний hot `RESET` в recover срывал поздний баннер. Recover: reopen + CONFIG/SAVECONFIG рабочего baud + `RESET`.
+- **Причина сбоя Soft на прямом USB (Build14259):** полный reopen USB дольше меню N4 (~2 с) и роняет DTR, поэтому баннер теряется ещё до чтения. `SAVECONFIG 460800` это не лечит. Soft теперь: (1) импульс DTR **без** закрытия порта и слушать рабочий baud; (2) ASCII `reset` на рабочем baud; (3) CONFIG 460800 и `setBaud` без reopen (reopen только если на 460800 тишина). В ошибке показывается хвост RX.
 - Soft **нужен** там, где Hard (отдельное питание модуля без отключения USB) физически невозможен.
