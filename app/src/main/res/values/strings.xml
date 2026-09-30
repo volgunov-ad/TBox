@@ -1357,7 +1357,6 @@
     <string name="settings_api_enable_title">Включить сервер API</string>
     <string name="settings_api_enable_desc">Локальный HTTP API для внешних приложений в той же сети (голос, телефон).</string>
     <string name="settings_api_port_title">Порт</string>
-    <string name="settings_api_port_save">Сохранить порт</string>
     <string name="settings_api_status_disabled">Сервер выключен</string>
     <string name="settings_api_status_running">Сервер слушает порт %1$d</string>
     <string name="settings_api_status_starting">Сервер запускается…</string>

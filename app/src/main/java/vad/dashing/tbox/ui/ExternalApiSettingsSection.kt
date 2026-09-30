@@ -10,7 +10,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,12 +25,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.tboxButton
-import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.externalapi.ExternalApiControllerHolder
 import vad.dashing.tbox.externalapi.ExternalApiPairRequest
+import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxButton
+import vad.dashing.tbox.ui.theme.tboxCaption
 
 @Composable
 fun ExternalApiSettingsSection(
@@ -71,6 +70,9 @@ fun ExternalApiSettingsSection(
 
     var approveRequest by remember { mutableStateOf<ExternalApiPairRequest?>(null) }
 
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
     SettingsTitle(stringResource(R.string.settings_api_section_title))
     SettingSwitch(
         externalApiEnabled,
@@ -80,24 +82,16 @@ fun ExternalApiSettingsSection(
         true,
     )
 
-    OutlinedTextField(
-        value = portDraft,
-        onValueChange = { portDraft = it.filter { ch -> ch.isDigit() }.take(5) },
-        label = { Text(stringResource(R.string.settings_api_port_title)) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        singleLine = true,
+    CalibrationIntCommitField(
+        title = stringResource(R.string.settings_api_port_title),
+        description = "",
+        draft = portDraft,
+        onDraftChange = { portDraft = it.filter { ch -> ch.isDigit() }.take(5) },
+        savedValue = externalApiPort,
+        minValue = ExternalApiConstants.MIN_PORT,
+        maxValue = ExternalApiConstants.MAX_PORT,
+        onCommit = { value -> settingsViewModel.saveExternalApiPort(value) },
     )
-    Button(
-        onClick = rememberWrappedOnClick {
-            val port = portDraft.toIntOrNull() ?: ExternalApiConstants.DEFAULT_PORT
-            settingsViewModel.saveExternalApiPort(port)
-        },
-        modifier = Modifier.padding(bottom = 8.dp),
-    ) {
-        Text(stringResource(R.string.settings_api_port_save), style = MaterialTheme.typography.tboxButton)
-    }
 
     val statusText = when {
         !externalApiEnabled -> stringResource(R.string.settings_api_status_disabled)
@@ -105,10 +99,14 @@ fun ExternalApiSettingsSection(
         status.running -> stringResource(R.string.settings_api_status_running, status.boundPort ?: externalApiPort)
         else -> stringResource(R.string.settings_api_status_starting)
     }
+    val statusColor = when {
+        status.lastError != null && externalApiEnabled -> MaterialTheme.colorScheme.error
+        else -> onSurfaceVariant
+    }
     Text(
         text = statusText,
         style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = statusColor,
         modifier = Modifier.padding(bottom = 8.dp),
     )
     Text(
@@ -118,7 +116,7 @@ fun ExternalApiSettingsSection(
             status.catalogVersion,
         ),
         style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
     )
 
@@ -126,12 +124,14 @@ fun ExternalApiSettingsSection(
     Text(
         text = stringResource(R.string.settings_api_url_local, effectivePort),
         style = MaterialTheme.typography.tboxBody,
+        color = onSurfaceVariant,
         modifier = Modifier.padding(bottom = 4.dp),
     )
     controller?.lanAddresses()?.forEach { address ->
         Text(
             text = stringResource(R.string.settings_api_url_lan, address, effectivePort),
             style = MaterialTheme.typography.tboxBody,
+            color = onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
         )
     }
@@ -149,7 +149,10 @@ fun ExternalApiSettingsSection(
             onClick = rememberWrappedOnClick { controller?.stopPairing() },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.settings_api_pairing_stop))
+            Text(
+                stringResource(R.string.settings_api_pairing_stop),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
     } else {
         Button(
@@ -157,7 +160,10 @@ fun ExternalApiSettingsSection(
             enabled = controller != null,
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            Text(stringResource(R.string.settings_api_pairing_start))
+            Text(
+                stringResource(R.string.settings_api_pairing_start),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
     }
 
@@ -171,13 +177,20 @@ fun ExternalApiSettingsSection(
             Text(
                 text = stringResource(R.string.settings_api_pairing_pending, request.clientName),
                 style = MaterialTheme.typography.tboxBody,
+                color = onSurface,
                 modifier = Modifier.weight(1f),
             )
             Button(onClick = rememberWrappedOnClick { approveRequest = request }) {
-                Text(stringResource(R.string.settings_api_pairing_approve))
+                Text(
+                    stringResource(R.string.settings_api_pairing_approve),
+                    style = MaterialTheme.typography.tboxButton,
+                )
             }
             OutlinedButton(onClick = rememberWrappedOnClick { controller?.denyPair(request.requestId) }) {
-                Text(stringResource(R.string.settings_api_pairing_deny))
+                Text(
+                    stringResource(R.string.settings_api_pairing_deny),
+                    style = MaterialTheme.typography.tboxButton,
+                )
             }
         }
     }
@@ -188,7 +201,7 @@ fun ExternalApiSettingsSection(
         Text(
             text = stringResource(R.string.settings_api_clients_empty),
             style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
         )
     } else {
@@ -200,15 +213,22 @@ fun ExternalApiSettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = client.clientName, style = MaterialTheme.typography.tboxBody)
+                    Text(
+                        text = client.clientName,
+                        style = MaterialTheme.typography.tboxBody,
+                        color = onSurface,
+                    )
                     Text(
                         text = client.clientId,
                         style = MaterialTheme.typography.tboxCaption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = onSurfaceVariant,
                     )
                 }
                 OutlinedButton(onClick = rememberWrappedOnClick { controller?.revokeClient(client.clientId) }) {
-                    Text(stringResource(R.string.settings_api_client_revoke))
+                    Text(
+                        stringResource(R.string.settings_api_client_revoke),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
                 }
             }
         }
@@ -226,7 +246,7 @@ fun ExternalApiSettingsSection(
     Text(
         text = stringResource(R.string.settings_api_help),
         style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
     )
 
