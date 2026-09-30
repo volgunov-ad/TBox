@@ -156,6 +156,28 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
+    fun softSweepsSavedBaudWhenRebootBytesAreNotAscii() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            when {
+                s.contains("unlog", ignoreCase = true) &&
+                    (transport.currentBaud() == 115_200 || transport.currentBaud() == 460_800) ->
+                    transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+                transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) -> {
+                    transport.enqueueAscii("\$command,reset,response: OK*2D\r\nsystem is rebooting\r\n")
+                    transport.enqueueRaw(ByteArray(40) { 0x00.toByte() })
+                }
+                transport.currentBaud() == 115_200 && bytes.contentEquals("\r\n".toByteArray()) ->
+                    transport.enqueueAscii("\r\nN4 BootLoader 2020.04\r\nboot> ")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
+        assertEquals(115_200, transport.currentBaud())
+    }
+
+    @Test
     fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         var sawDoubleReset = false
@@ -233,7 +255,11 @@ private class FakeUm980BinaryTransport(
     var pulseHardwareResetResult = false
 
     fun enqueueAscii(text: String) {
-        for (b in text.toByteArray(Charsets.US_ASCII)) {
+        enqueueRaw(text.toByteArray(Charsets.US_ASCII))
+    }
+
+    fun enqueueRaw(bytes: ByteArray) {
+        for (b in bytes) {
             rx.offer(b)
         }
     }

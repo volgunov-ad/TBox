@@ -157,7 +157,11 @@ class Um980FirmwareUpdater(
         sendDoubleReset(leadingCrLf = false)
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
-        if (awaitBootloaderNudged(SOFT_POST_RESET_LISTEN_MS)) return true
+        // UPrecise: banner stays on 460800 ~2s after "system is rebooting".
+        // Build14259 direct USB: that same window is non-ASCII, so the ROM menu
+        // is on the saved baud. Leave 460800 as soon as the garbage starts.
+        if (listenAtUpgradeBaudAfterReset()) return true
+        if (sweepBootloaderAfterGarbage(hostBaud)) return true
         if (waitForBootloaderBanner(hostBaud, overallTimeoutMs = 12_000L)) return true
         notePhase("no-banner")
         runCatching { Log.w(TAG, "soft: 460800 link ok but no BootLoader after reset") }
@@ -313,6 +317,63 @@ class Um980FirmwareUpdater(
             if (hit != null && isBootloaderBanner(hit)) {
                 runCatching { Log.i(TAG, "BootLoader at baud=${transport.currentBaud()}") }
                 return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Stay on 460800 only while the post-reset bytes are still ASCII.
+     * @return true when the N4 banner was read here.
+     */
+    private suspend fun listenAtUpgradeBaudAfterReset(): Boolean {
+        val deadline = System.currentTimeMillis() + SOFT_UPGRADE_BAUD_LISTEN_MS
+        val ascii = StringBuilder()
+        var printable = 0
+        var garbage = 0
+        var sawReboot = false
+        while (System.currentTimeMillis() < deadline) {
+            val chunk = transport.read(256, 80)
+            if (chunk.isNotEmpty()) {
+                noteRx(chunk)
+                for (b in chunk) {
+                    val c = b.toInt() and 0xFF
+                    if (c == 10 || c == 13 || c in 32..126) printable++ else garbage++
+                }
+                ascii.append(chunk.toString(Charsets.US_ASCII))
+                if (ascii.length > 8_000) ascii.delete(0, ascii.length - 4_000)
+                val hay = ascii.toString()
+                if (hay.contains("BootLoader", ignoreCase = true) || hay.contains("boot>", ignoreCase = true)) {
+                    return true
+                }
+                if (hay.contains("rebooting", ignoreCase = true)) sawReboot = true
+                if (sawReboot && garbage > 24 && garbage * 2 > printable) {
+                    notePhase("garbage-after-reboot")
+                    return false
+                }
+            }
+            delay(20)
+        }
+        notePhase(if (sawReboot) "rebooting" else "no-reboot-text")
+        return false
+    }
+
+    /**
+     * ROM menu reprints about every 2s and only at the baud it actually uses.
+     * Try the saved baud first: that is where Build14259 went after a 460800 reset.
+     */
+    private suspend fun sweepBootloaderAfterGarbage(preBaud: Int): Boolean {
+        val saved = preBaud.coerceIn(9600, 921600)
+        val order = linkedSetOf(saved, UPGRADE_BAUD)
+        repeat(3) {
+            for (baud in order) {
+                if (transport.currentBaud() != baud && !transport.setBaud(baud)) continue
+                delay(40)
+                transport.write("\r\n".toByteArray(Charsets.US_ASCII))
+                if (waitForAny(listOf("BootLoader", "boot>"), SOFT_MENU_SLICE_MS) != null) {
+                    notePhase("banner@$baud")
+                    return true
+                }
             }
         }
         return false
@@ -637,8 +698,10 @@ class Um980FirmwareUpdater(
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
         /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
-        /** Listen after reset once the app has answered at 460800. */
-        private const val SOFT_POST_RESET_LISTEN_MS = 10_000L
+        /** How long to stay on 460800 after reset before the saved-baud menu sweep. */
+        private const val SOFT_UPGRADE_BAUD_LISTEN_MS = 3_000L
+        /** One N4 menu reprint period, plus a little slack. */
+        private const val SOFT_MENU_SLICE_MS = 2_200L
         /** Allow SAVECONFIG to commit during recover. */
         private const val SOFT_SAVECONFIG_SETTLE_MS = 800L
 
