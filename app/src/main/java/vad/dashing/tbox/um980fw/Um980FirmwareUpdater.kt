@@ -80,14 +80,14 @@ class Um980FirmwareUpdater(
             }
             delay(200)
             drain(200)
-            // Menu item 2 = "Download from uart to flash" (N4 BootLoader; timeout 2s reprints menu).
+            // Menu item 2 = "Download from uart to flash". The CRC 'C' follows
+            // "## Ready for binary (xmodem)" in the same read; do not drop it.
             transport.write("2\r\n".toByteArray(Charsets.US_ASCII))
             Um980FirmwareUiStore.setPhase("menu2", 8)
-            waitForAny(listOf("unlock", "xmodem", "download", "binary", "Ready"), 15_000L)
-                ?: runCatching { Log.w(TAG, "no unlock banner (continuing to XMODEM)") }.getOrNull()
+            val xmodemMode = awaitXmodemMode(20_000L) ?: return fail("xmodem_start")
 
             Um980FirmwareUiStore.setPhase("xmodem", 10)
-            xmodemSend(image)?.let { return fail(it) }
+            xmodemSend(image, xmodemMode)?.let { return fail(it) }
 
             Um980FirmwareUiStore.setPhase("boot_app", 92)
             waitForAny(listOf("FreeRTOS", "\$G", "\$GN", "#VERSION", "NMEA"), 60_000L)
@@ -473,8 +473,7 @@ class Um980FirmwareUpdater(
         return transport.setBaud(baud)
     }
 
-    private suspend fun xmodemSend(image: ByteArray): String? {
-        val mode = awaitXmodemStart(20_000L) ?: return "xmodem_start"
+    private suspend fun xmodemSend(image: ByteArray, mode: Xmodem1k.CheckMode): String? {
         var offset = 0
         var seq = 1
         while (offset < image.size) {
@@ -496,7 +495,7 @@ class Um980FirmwareUpdater(
             }
             if (!acked) return "xmodem_timeout"
             offset = end
-            seq = if (seq >= 255) 1 else seq + 1
+            seq = (seq + 1) and 0xFF
             val pct = 10 + ((offset.toLong() * 80L) / image.size).toInt()
             Um980FirmwareUiStore.setProgress(pct)
         }
@@ -507,25 +506,22 @@ class Um980FirmwareUpdater(
         return "xmodem_eot"
     }
 
-    private suspend fun awaitXmodemStart(timeoutMs: Long): Xmodem1k.CheckMode? {
+    private suspend fun awaitXmodemMode(timeoutMs: Long): Xmodem1k.CheckMode? {
         val deadline = System.currentTimeMillis() + timeoutMs
         val buf = ByteArrayOutputStream()
         while (System.currentTimeMillis() < deadline) {
-            val chunk = transport.read(64, 200)
-            if (chunk.isNotEmpty()) buf.write(chunk)
-            val bytes = buf.toByteArray()
-            for (b in bytes) {
-                when (b) {
-                    Xmodem1k.CRC_LETTER -> return Xmodem1k.CheckMode.CRC16
-                    Xmodem1k.NAK -> return Xmodem1k.CheckMode.CHECKSUM
-                    Xmodem1k.CAN -> return null
-                }
+            val chunk = transport.read(256, 100)
+            if (chunk.isNotEmpty()) {
+                noteRx(chunk)
+                buf.write(chunk)
+                val bytes = buf.toByteArray()
+                if (bytes.any { it == Xmodem1k.CAN }) return null
+                Xmodem1k.startModeAfterReady(bytes)?.let { return it }
             }
-            delay(50)
+            delay(20)
         }
-        // Bootloader often ready after unlock without explicit NAK in noisy logs — try checksum.
-        Log.w(TAG, "XMODEM start: no NAK/C, defaulting to checksum")
-        return Xmodem1k.CheckMode.CHECKSUM
+        Log.w(TAG, "XMODEM start: no C/NAK after Ready")
+        return null
     }
 
     private suspend fun awaitAckOrNak(timeoutMs: Long): Byte? {
