@@ -1196,6 +1196,24 @@ object UniversalCanRepository {
         return result
     }
 
+    /** Expert raw Get via the active HU backend (mbCAN or VHAL). */
+    suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.getRawProperty(bus, propertyId)
+        } else {
+            Android10VhalRepository.getRawProperty(bus, propertyId)
+        }
+    }
+
+    /** Expert raw Set via the active HU backend (mbCAN or VHAL); value sent as-is. */
+    suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.setRawProperty(bus, propertyId, value)
+        } else {
+            Android10VhalRepository.setRawProperty(bus, propertyId, value)
+        }
+    }
+
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
         val result = if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.setAudioVolume(value)

@@ -858,6 +858,7 @@ fun SettingsTabContent(
     var showUiIconSettingsDialog by remember { mutableStateOf(false) }
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
     var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
+    var showExpertRawGetSetDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -1253,6 +1254,15 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
+        Button(
+            onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.expert_raw_get_set_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -1616,6 +1626,11 @@ fun SettingsTabContent(
             visible = showKeyPressDiagnosticsDialog,
             mode = headUnitCanMode,
             onDismiss = { showKeyPressDiagnosticsDialog = false },
+        )
+        ExpertRawGetSetDialog(
+            visible = showExpertRawGetSetDialog,
+            mode = headUnitCanMode,
+            onDismiss = { showExpertRawGetSetDialog = false },
         )
 }
 

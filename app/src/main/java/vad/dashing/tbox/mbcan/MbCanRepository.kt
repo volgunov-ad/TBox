@@ -2108,6 +2108,60 @@ object MbCanRepository {
         }
     }
 
+    /**
+     * Expert raw Get: direct [MbCanEngineFacade.canGetVehicleParam] /
+     * [MbCanEngineFacade.canGetAudioParam] (bypasses command registry).
+     */
+    suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult =
+        withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            if (availability.value !is MbCanAvailability.Available) {
+                return@withContext ExpertRawGetResult(false, message = "mbCAN unavailable")
+            }
+            val raw = when (bus) {
+                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
+                ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
+            }
+            if (raw == null) {
+                ExpertRawGetResult(
+                    success = false,
+                    effectivePropertyId = propertyId,
+                    message = "Get returned null",
+                )
+            } else {
+                ExpertRawGetResult(
+                    success = true,
+                    rawValue = raw,
+                    effectivePropertyId = propertyId,
+                    message = "ok",
+                )
+            }
+        }
+
+    /**
+     * Expert raw Set: direct facade set with the given integer (bypasses registry / encoding).
+     */
+    suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult =
+        withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            if (availability.value !is MbCanAvailability.Available) {
+                return@withContext ExpertRawSetResult(false, message = "mbCAN unavailable")
+            }
+            val setResult = when (bus) {
+                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canSetVehicleParam(propertyId, value)
+                ExpertRawCanBus.Audio -> MbCanEngineFacade.canSetAudioParam(propertyId, value)
+            } ?: return@withContext ExpertRawSetResult(
+                success = false,
+                effectivePropertyId = propertyId,
+                message = "Set command failed",
+            )
+            ExpertRawSetResult(
+                success = setResult >= 0,
+                effectivePropertyId = propertyId,
+                message = "Set result: $setResult",
+            )
+        }
+
     private suspend fun executeToggleViaRegistry(propertyId: Int): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
         val spec = MbCanCommandRegistry.get(propertyId)
