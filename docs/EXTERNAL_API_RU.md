@@ -159,10 +159,13 @@ scopes), не plaintext токена в логах.
 python3 tools/tbox_external_api_pair.py
 python3 tools/tbox_external_api_pair.py --health-only
 python3 tools/tbox_external_api_pair.py --check-only   # уже есть токен в ~/.tbox_external_api_token.json
+python3 tools/tbox_external_api_pair.py --check-only --run-automation климат
 ```
 
 Скрипт: `POST /v1/pair/request` → poll `GET /v1/pair/status` → сохраняет Bearer →
-проверяет `GET /v1/catalog`, несколько `GET /v1/signals`, `GET /v1/automations`.
+проверяет `GET /v1/catalog` (в т.ч. `voiceAliasesRu`), несколько `GET /v1/signals`,
+`GET /v1/automations`, safe `POST /v1/actions/invoke` (`show_toast`), probe
+`POST /v1/automations/.../run`. Реальный RunNow — только с `--run-automation <id|имя>`.
 
 ---
 
@@ -196,7 +199,7 @@ python3 tools/tbox_external_api_pair.py --check-only   # уже есть ток�
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "serverEnabled": true,
   "pairingActive": false,
   "appVersion": "1.0.0"
@@ -237,14 +240,16 @@ python3 tools/tbox_external_api_pair.py --check-only   # уже есть ток�
 Требует Bearer. Машиночитаемое описание возможностей:
 
 - сигналы: `id`, `valueType` (`number`\|`state`\|`position`), `sources`, `unit`, `label`,
-  `stateOptions` / `namedValues`, `typicalRange`, **`voiceAliasesRu`**,
+  `stateOptions` / `namedValues`, `typicalRange`, **`voiceAliasesRu`** (массив RU-фраз
+  lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
+  вопросов),
 - действия: типы из automations (`can_command`, `builtin`, `launch_application`, …) +
-  `safety` (`safe`\|`confirm`\|`dangerous`),
-- `catalogVersion`.
+  `safety` (`safe`\|`confirm`\|`dangerous`) + **`voiceAliasesRu`**,
+- `catalogVersion` (сейчас **2** — aliases заполнены).
 
 Источник истины для id — те же каталоги, что UI автоматизаций и
 [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md). Поле `voiceAliasesRu` —
-обогащение для NLU, не меняет `storageKey`.
+обогащение для NLU в `ExternalApiVoiceAliasesRu`, не меняет `storageKey`.
 
 ### 7.4. `GET /v1/signals`
 
@@ -374,7 +379,8 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | G7 | `media_title`, `media_artist` | now playing, `app` | **в каталоге** |
 
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
-`/v1/catalog` (и при желании рядом с descriptor’ами в коде).
+`/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
+действий). `catalogVersion = 2`.
 
 ### Не в блокирующем списке v1
 
@@ -424,8 +430,8 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций | **сделано** (код) |
 | 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
-| 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations с LAN | **сделано** |
-| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | открыто (пока `[]`) |
+| 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
+| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 2) |
 | 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 

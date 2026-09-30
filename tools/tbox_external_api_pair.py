@@ -12,6 +12,7 @@ Examples:
   python3 tools/tbox_external_api_pair.py
   python3 tools/tbox_external_api_pair.py --host 192.168.1.128 --port 8765
   python3 tools/tbox_external_api_pair.py --check-only
+  python3 tools/tbox_external_api_pair.py --check-only --run-automation климат
   python3 tools/tbox_external_api_pair.py --token-file ~/.tbox_external_api_token.json
 """
 
@@ -228,7 +229,7 @@ def pair(
     raise ApiError(f"Timed out after {wait_s:.0f}s waiting for HU approve")
 
 
-def verify(root: str, token: str, timeout_s: float) -> None:
+def verify(root: str, token: str, timeout_s: float, *, run_automation: str = "") -> None:
     print("\n=== verify: catalog ===", flush=True)
     status, catalog = request_json(
         "GET",
@@ -246,6 +247,22 @@ def verify(root: str, token: str, timeout_s: float) -> None:
         f"catalogVersion={catalog.get('catalogVersion')} "
         f"signals={n_signals} actionTypes={n_actions}",
     )
+    if isinstance(signals, list):
+        with_aliases = 0
+        sample = None
+        for item in signals:
+            if not isinstance(item, dict):
+                continue
+            aliases = item.get("voiceAliasesRu")
+            if isinstance(aliases, list) and aliases:
+                with_aliases += 1
+                if item.get("id") == "outside_temperature":
+                    sample = aliases
+        print(f"signalsWithVoiceAliasesRu={with_aliases}/{n_signals}")
+        if with_aliases == 0:
+            raise ApiError("catalog signals have empty voiceAliasesRu (need APK with aliases)")
+        if sample is not None:
+            print(f"  outside_temperature aliases: {sample[:5]}")
 
     print("\n=== verify: signals ===", flush=True)
     for signal_id, source in PROBE_SIGNALS:
@@ -292,6 +309,104 @@ def verify(root: str, token: str, timeout_s: float) -> None:
                 )
         if n_rules > 10:
             print(f"  … +{n_rules - 10} more")
+
+    print("\n=== verify: actions/invoke (safe show_toast) ===", flush=True)
+    status, invoke = request_json(
+        "POST",
+        f"{root}/v1/actions/invoke",
+        token=token,
+        body={
+            "actions": [
+                {
+                    "type": "builtin",
+                    "actionType": "show_toast",
+                    "intValue": 0,
+                    "stringValue": "TBox API OK",
+                    "boolValue": False,
+                },
+            ],
+        },
+        timeout_s=timeout_s,
+    )
+    if status != 200 or not isinstance(invoke, dict):
+        raise ApiError(f"invoke failed HTTP {status}: {_pretty(invoke)}", status=status, body=invoke)
+    results = invoke.get("results")
+    if not isinstance(results, list) or not results:
+        raise ApiError(f"invoke without results: {_pretty(invoke)}", body=invoke)
+    first = results[0] if isinstance(results[0], dict) else {}
+    print(f"  success={first.get('success')} message={first.get('message')!r}")
+    if first.get("success") is not True:
+        raise ApiError(f"show_toast failed: {_pretty(invoke)}", body=invoke)
+
+    print("\n=== verify: automations/run ===", flush=True)
+    # Always probe the endpoint with a missing id (no side effects).
+    missing: Any
+    try:
+        status, missing = request_json(
+            "POST",
+            f"{root}/v1/automations/__smoke_missing__/run",
+            token=token,
+            body={},
+            timeout_s=timeout_s,
+        )
+    except ApiError as exc:
+        if exc.status not in (200, 400) or not isinstance(exc.body, dict):
+            raise
+        status, missing = exc.status or 400, exc.body
+    if status not in (200, 400) or not isinstance(missing, dict):
+        raise ApiError(
+            f"automations/run probe failed HTTP {status}: {_pretty(missing)}",
+            status=status,
+            body=missing,
+        )
+    print(
+        f"  missing-id probe: accepted={missing.get('accepted')} "
+        f"message={missing.get('message')!r}",
+    )
+    if missing.get("accepted") is True:
+        raise ApiError("missing automation id unexpectedly accepted", body=missing)
+
+    target = run_automation.strip()
+    if target:
+        rule_id = resolve_automation_id(rules if isinstance(rules, list) else [], target)
+        if rule_id is None:
+            raise ApiError(f"No automation matching {target!r}")
+        print(f"  running automation id={rule_id} (match={target!r})", flush=True)
+        try:
+            status, run = request_json(
+                "POST",
+                f"{root}/v1/automations/{urllib.parse.quote(rule_id, safe='')}/run",
+                token=token,
+                body={},
+                timeout_s=timeout_s,
+            )
+        except ApiError as exc:
+            if exc.status not in (200, 202, 400) or not isinstance(exc.body, dict):
+                raise
+            status, run = exc.status or 400, exc.body
+        if status not in (200, 202, 400) or not isinstance(run, dict):
+            raise ApiError(f"automations/run failed HTTP {status}: {_pretty(run)}", status=status, body=run)
+        print(f"  accepted={run.get('accepted')} message={run.get('message')!r}")
+        if run.get("accepted") is not True:
+            raise ApiError(f"RunNow rejected: {_pretty(run)}", body=run)
+    else:
+        print("  (skip real RunNow; pass --run-automation <id|name> to execute a rule)")
+
+
+def resolve_automation_id(rules: list[Any], target: str) -> Optional[str]:
+    needle = target.strip().lower()
+    if not needle:
+        return None
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        rid = rule.get("id")
+        name = rule.get("name")
+        if isinstance(rid, str) and rid.lower() == needle:
+            return rid
+        if isinstance(name, str) and name.strip().lower() == needle:
+            return rid if isinstance(rid, str) else None
+    return None
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -344,6 +459,11 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Only GET /v1/health (no pairing, no token)",
     )
+    parser.add_argument(
+        "--run-automation",
+        default="",
+        help="Also POST /v1/automations/{id}/run for this id or exact name (optional; may change car state)",
+    )
     return parser.parse_args(argv)
 
 
@@ -389,7 +509,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             token = paired["accessToken"]
 
         assert token is not None
-        verify(root, token, args.timeout)
+        verify(root, token, args.timeout, run_automation=args.run_automation)
         print("\nOK — API reachable and authenticated", flush=True)
         return 0
     except ApiError as exc:

@@ -151,7 +151,12 @@ class ExternalApiRouter(
                     .put("stateOptions", stateOptions)
                     .put("namedValues", namedValues)
                     .put("typicalRange", descriptor.typicalRange)
-                    .put("voiceAliasesRu", JSONArray()),
+                    .put(
+                        "voiceAliasesRu",
+                        jsonStringArray(
+                            ExternalApiVoiceAliasesRu.forSignal(descriptor.id, descriptor.label),
+                        ),
+                    ),
             )
         }
 
@@ -161,7 +166,11 @@ class ExternalApiRouter(
                 JSONObject()
                     .put("type", "builtin")
                     .put("actionType", type.storageKey)
-                    .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey),
+                    .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey)
+                    .put(
+                        "voiceAliasesRu",
+                        jsonStringArray(ExternalApiVoiceAliasesRu.forBuiltin(type)),
+                    ),
             )
         }
 
@@ -173,7 +182,17 @@ class ExternalApiRouter(
                     .put("bus", entry.bus.storageKey)
                     .put("propertyId", entry.propertyId)
                     .put("label", entry.label)
-                    .put("safety", ExternalApiActionSafety.CONFIRM.storageKey),
+                    .put("safety", ExternalApiActionSafety.CONFIRM.storageKey)
+                    .put(
+                        "voiceAliasesRu",
+                        jsonStringArray(
+                            ExternalApiVoiceAliasesRu.forCanCommand(
+                                entry.bus,
+                                entry.propertyId,
+                                entry.label,
+                            ),
+                        ),
+                    ),
             )
         }
 
@@ -184,10 +203,10 @@ class ExternalApiRouter(
         for (index in 0 until canCommands.length()) {
             actionTypes.put(canCommands.get(index))
         }
-        actionTypes.put(JSONObject().put("type", "launch_application").put("safety", "confirm"))
-        actionTypes.put(JSONObject().put("type", "open_main_screen").put("safety", "safe"))
-        actionTypes.put(JSONObject().put("type", "http_request").put("safety", "confirm"))
-        actionTypes.put(JSONObject().put("type", "delay").put("safety", "safe"))
+        actionTypes.put(genericActionType("launch_application", "confirm"))
+        actionTypes.put(genericActionType("open_main_screen", "safe"))
+        actionTypes.put(genericActionType("http_request", "confirm"))
+        actionTypes.put(genericActionType("delay", "safe"))
 
         return jsonResponse(
             200,
@@ -303,6 +322,18 @@ class ExternalApiRouter(
         }
         return block()
     }
+
+    private fun genericActionType(type: String, safety: String): JSONObject =
+        JSONObject()
+            .put("type", type)
+            .put("safety", safety)
+            .put(
+                "voiceAliasesRu",
+                jsonStringArray(ExternalApiVoiceAliasesRu.forGenericAction(type)),
+            )
+
+    private fun jsonStringArray(values: List<String>): JSONArray =
+        JSONArray().also { array -> values.forEach { array.put(it) } }
 
     private fun bearerToken(headers: Map<String, String>): String? {
         val auth = headers["authorization"] ?: return null

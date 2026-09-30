@@ -30,7 +30,7 @@ class ExternalApiRouterTest {
         val json = JSONObject(response.body)
         assertTrue(json.getBoolean("ok"))
         assertEquals(1, json.getInt("apiVersion"))
-        assertEquals(1, json.getInt("catalogVersion"))
+        assertEquals(2, json.getInt("catalogVersion"))
         assertTrue(json.getBoolean("serverEnabled"))
         assertEquals("0.18.1-test", json.getString("appVersion"))
     }
@@ -77,6 +77,66 @@ class ExternalApiRouterTest {
         )
         val response = router.handle("GET", ExternalApiConstants.PATH_CATALOG, emptyMap(), emptyMap(), "")
         assertEquals(401, response.status)
+    }
+
+    @Test
+    fun catalog_withAuth_includesNonEmptyVoiceAliasesRu() {
+        val token = "catalog-token"
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "voice",
+                clientName = "Voice",
+                tokenHash = ExternalApiAuth.sha256Hex(token),
+                createdAtEpochMs = 1L,
+            ),
+        )
+        val router = ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { clients },
+            dangerousEnabled = { false },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { emptyList() },
+            runAutomationNow = { null },
+        )
+        val response = router.handle(
+            "GET",
+            ExternalApiConstants.PATH_CATALOG,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            "",
+        )
+        assertEquals(200, response.status)
+        val json = JSONObject(response.body)
+        assertEquals(2, json.getInt("catalogVersion"))
+        val signals = json.getJSONArray("signals")
+        assertTrue(signals.length() > 0)
+        var foundOutside = false
+        for (i in 0 until signals.length()) {
+            val signal = signals.getJSONObject(i)
+            val aliases = signal.getJSONArray("voiceAliasesRu")
+            assertTrue(
+                "signal ${signal.getString("id")} needs aliases",
+                aliases.length() > 0,
+            )
+            if (signal.getString("id") == "outside_temperature") {
+                foundOutside = true
+                val joined = buildString {
+                    for (j in 0 until aliases.length()) {
+                        append(aliases.getString(j)).append('\n')
+                    }
+                }
+                assertTrue(joined.contains("сколько градусов на улице"))
+            }
+        }
+        assertTrue(foundOutside)
+
+        val actions = json.getJSONArray("actionTypes")
+        assertTrue(actions.length() > 0)
+        val first = actions.getJSONObject(0)
+        assertTrue(first.getJSONArray("voiceAliasesRu").length() > 0)
     }
 
     @Test
