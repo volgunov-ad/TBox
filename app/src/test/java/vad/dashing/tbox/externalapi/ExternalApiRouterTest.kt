@@ -78,4 +78,37 @@ class ExternalApiRouterTest {
         val response = router.handle("GET", ExternalApiConstants.PATH_CATALOG, emptyMap(), emptyMap(), "")
         assertEquals(401, response.status)
     }
+
+    @Test
+    fun pairStatus_afterApproveAndStop_stillReturnsAccessToken() {
+        val session = ExternalApiPairingSession()
+        session.startPairing()
+        val pending = session.submitPairRequest("pc-tools", "TBox API tools (PC)", "tools")
+        session.approveRequest(pending.requestId, "plain-token-value")
+        session.stopPairing()
+
+        val router = ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = session,
+            pairedClients = { emptyList() },
+            dangerousEnabled = { false },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { emptyList() },
+            runAutomationNow = { null },
+        )
+        val response = router.handle(
+            "GET",
+            ExternalApiConstants.PATH_PAIR_STATUS,
+            mapOf("requestId" to pending.requestId),
+            emptyMap(),
+            "",
+        )
+        assertEquals(200, response.status)
+        val json = JSONObject(response.body)
+        assertEquals("approved", json.getString("status"))
+        assertEquals("plain-token-value", json.getString("accessToken"))
+        assertEquals("pc-tools", json.getString("clientId"))
+    }
 }

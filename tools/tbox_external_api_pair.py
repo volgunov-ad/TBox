@@ -192,6 +192,15 @@ def pair(
             f"{root}/v1/pair/status?{query}",
             timeout_s=timeout_s,
         )
+        if status == 404:
+            raise ApiError(
+                "Pair request disappeared before token was delivered "
+                "(HU approved but cleared the pending session). "
+                "Update the APK with the stopPairing fix, revoke the client on ГУ, "
+                "then pair again.",
+                status=status,
+                body=state if isinstance(state, dict) else None,
+            )
         if status != 200 or not isinstance(state, dict):
             raise ApiError(f"Unexpected pair/status HTTP {status}: {_pretty(state)}", status=status, body=state)
         st = state.get("status")

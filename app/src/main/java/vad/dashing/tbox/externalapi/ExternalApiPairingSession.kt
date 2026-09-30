@@ -38,7 +38,12 @@ class ExternalApiPairingSession {
     fun stopPairing() {
         active = false
         expiresAtElapsed = 0L
-        pendingRequests.clear()
+        // Drop unresolved PENDING only. Keep APPROVED/DENIED so the client can still
+        // poll /v1/pair/status and receive accessToken after the HU dialog closes
+        // (approvePair → stopPairing used to wipe the map and caused not_found).
+        pendingRequests.entries.removeIf { (_, req) ->
+            req.status == ExternalApiPairRequestStatus.PENDING
+        }
     }
 
     fun isPairingActive(): Boolean {
