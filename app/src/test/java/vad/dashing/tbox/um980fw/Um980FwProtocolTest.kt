@@ -121,7 +121,8 @@ class Um980FwBootloaderBaudSweepTest {
             }
             if (s.contains("reset\r\nreset")) resetBursts++
             when {
-                transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
+                s.contains("unlog", ignoreCase = true) &&
+                    (transport.currentBaud() == 115_200 || transport.currentBaud() == 460_800) ->
                     transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
                 transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) ->
                     transport.enqueueAscii("system is rebooting\r\n\r\nN4 BootLoader 2020.04\r\nboot> ")
@@ -142,7 +143,8 @@ class Um980FwBootloaderBaudSweepTest {
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
             when {
-                transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
+                s.contains("unlog", ignoreCase = true) &&
+                    (transport.currentBaud() == 115_200 || transport.currentBaud() == 460_800) ->
                     transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
                 // Single chunk: rebooting + BootLoader (old needle order discarded BootLoader).
                 transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) ->
@@ -151,26 +153,6 @@ class Um980FwBootloaderBaudSweepTest {
         }
         val updater = Um980FirmwareUpdater(transport)
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
-    }
-
-    @Test
-    fun softDtrPulseCatchesBootloaderWithoutBaudChange() = runBlocking {
-        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
-        transport.pulseHardwareResetResult = true
-        var sawReset = false
-        transport.onWrite = { bytes ->
-            val s = bytes.toString(Charsets.US_ASCII)
-            if (s.contains("reset", ignoreCase = true) && !s.contains("unlog", ignoreCase = true)) {
-                sawReset = true
-            }
-            if (bytes.contentEquals("\r\n".toByteArray())) {
-                transport.enqueueAscii("N4 BootLoader\r\nboot>\r\n")
-            }
-        }
-        val updater = Um980FirmwareUpdater(transport)
-        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertFalse("DTR path must not need ASCII reset", sawReset)
-        assertEquals(115_200, transport.currentBaud())
     }
 
     @Test
@@ -193,7 +175,7 @@ class Um980FwBootloaderBaudSweepTest {
         }
         val updater = Um980FirmwareUpdater(transport)
         assertFalse(updater.enterBootloaderSoft(preBaud = 115_200))
-        assertTrue("reset at the working baud is required when 460800 is dead", sawDoubleReset)
+        assertFalse("must not reset until the app answers at 460800", sawDoubleReset)
         assertTrue("recover must hot-RESET like GNSS reboot UI", sawHotReset)
         assertTrue(transport.reopenAtBaudCalls.contains(115_200))
         assertEquals(115_200, transport.currentBaud())
