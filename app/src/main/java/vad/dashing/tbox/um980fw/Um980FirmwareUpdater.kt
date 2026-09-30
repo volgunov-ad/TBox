@@ -162,9 +162,8 @@ class Um980FirmwareUpdater(
         sendDoubleReset(leadingCrLf = false)
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
-        // Quiet listen. Build14259 often skips "system is rebooting" and only says
-        // "The Board is reset, do not response any command". A key during that
-        // window is rejected and the 2s menu is already gone. No writes here.
+        // UPrecise COM6 capture: stream T@ through "system is rebooting" until the
+        // N4 menu. Silence here lets the ROM boot the app instead.
         if (listenAtUpgradeBaudAfterReset()) return true
         if (sweepBootloaderAfterGarbage(hostBaud)) return true
         if (waitForBootloaderBanner(hostBaud, overallTimeoutMs = 12_000L)) return true
@@ -328,50 +327,34 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Stay on 460800 and do not send keys.
-     * UPrecise: banner ~3.5s after the reset write, then a reprint ~2s later.
-     * Build14259 field (`no-reboot-text`): there is no "system is rebooting", only
-     * "The Board is reset, do not response any command", and a 3s listen ended
-     * before the menu. A chunk of non-ASCII still means the menu is on another baud.
-     * @return true when the N4 banner was read here.
+     * Stream the UPrecise upgrade flag `T@` at 460800 until `N4 BootLoader` / `boot>`.
+     * The ROM boots the app if this flag is absent. Non-ASCII between pulses is normal.
      */
     private suspend fun listenAtUpgradeBaudAfterReset(): Boolean {
         val deadline = System.currentTimeMillis() + SOFT_QUIET_AFTER_RESET_MS
         val ascii = StringBuilder()
-        var sawResetTalk = false
+        var nextPulse = 0L
         while (System.currentTimeMillis() < deadline) {
-            val chunk = transport.read(256, 80)
+            val now = System.currentTimeMillis()
+            if (now >= nextPulse) {
+                transport.write(UPGRADE_FLAG_PULSE)
+                nextPulse = now + 30L
+            }
+            val chunk = transport.read(256, 40)
             if (chunk.isNotEmpty()) {
                 noteRx(chunk)
                 ascii.append(chunk.toString(Charsets.US_ASCII))
                 if (ascii.length > 8_000) ascii.delete(0, ascii.length - 4_000)
                 val hay = ascii.toString()
                 if (hay.contains("BootLoader", ignoreCase = true) || hay.contains("boot>", ignoreCase = true)) {
+                    notePhase("flag")
                     return true
                 }
-                if (!sawResetTalk && isBoardResetTalk(hay)) {
-                    sawResetTalk = true
-                    notePhase("board-reset")
-                }
-                val nonAscii = chunk.count { b ->
-                    val c = b.toInt() and 0xFF
-                    c != 10 && c != 13 && c !in 32..126
-                }
-                if (nonAscii > 8) {
-                    notePhase("garbage-after-reboot")
-                    return false
-                }
             }
-            delay(20)
+            delay(10)
         }
-        if (!sawResetTalk) notePhase("no-reboot-text")
+        notePhase("no-flag")
         return false
-    }
-
-    private fun isBoardResetTalk(hay: String): Boolean {
-        return hay.contains("rebooting", ignoreCase = true) ||
-            hay.contains("Board is reset", ignoreCase = true) ||
-            hay.contains("do not response", ignoreCase = true)
     }
 
     /**
@@ -727,7 +710,8 @@ class Um980FirmwareUpdater(
          * reprints ~2s later. Stopping at 3s (`no-reboot-text`) missed it; the next
          * CR/LF only got "The Board is reset, do not response any command".
          */
-        private const val SOFT_QUIET_AFTER_RESET_MS = 6_500L
+        private const val SOFT_QUIET_AFTER_RESET_MS = 20_000L
+        private val UPGRADE_FLAG_PULSE = "T@".repeat(32).toByteArray(Charsets.US_ASCII)
         /** Listen for a menu that prints on its own, before sending a key. */
         private const val SOFT_MENU_QUIET_MS = 700L
         /** One N4 menu reprint period, plus a little slack. */
