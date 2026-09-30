@@ -14,18 +14,12 @@ object Um980FirmwareUiStore {
         /** Last RX snippet when [error] is set (baud / banner mismatch). */
         val detail: String? = null,
         val doneOk: Boolean = false,
-        /** Hard reset: waiting for user to power-cycle before continue. */
-        val awaitingHardReset: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
-    @Volatile
-    var hardResetContinue: (() -> Unit)? = null
-
     fun begin() {
-        hardResetContinue = null
         _state.value = State(active = true, phase = "start")
     }
 
@@ -33,7 +27,6 @@ object Um980FirmwareUiStore {
         _state.value = _state.value.copy(
             phase = phase,
             progressPct = progressPct.coerceIn(0, 100),
-            awaitingHardReset = false,
         )
     }
 
@@ -41,29 +34,16 @@ object Um980FirmwareUiStore {
         _state.value = _state.value.copy(progressPct = pct.coerceIn(0, 100))
     }
 
-    fun awaitHardReset(onContinue: () -> Unit) {
-        hardResetContinue = onContinue
-        _state.value = _state.value.copy(awaitingHardReset = true, phase = "hard_reset")
-    }
-
-    fun userContinuedHardReset() {
-        val cb = hardResetContinue
-        hardResetContinue = null
-        _state.value = _state.value.copy(awaitingHardReset = false)
-        cb?.invoke()
-    }
-
     /** Keep the error on screen while [Um980FirmwareUpdater] restores the link. */
     fun beginRecover() {
-        _state.value = _state.value.copy(active = true, phase = "recover", awaitingHardReset = false)
+        _state.value = _state.value.copy(active = true, phase = "recover")
     }
 
     fun endRecover() {
-        _state.value = _state.value.copy(active = false, awaitingHardReset = false)
+        _state.value = _state.value.copy(active = false)
     }
 
     fun finish(error: String?, detail: String? = null) {
-        hardResetContinue = null
         _state.value = State(
             active = false,
             progressPct = if (error == null) 100 else _state.value.progressPct,
@@ -71,12 +51,10 @@ object Um980FirmwareUiStore {
             error = error,
             detail = detail?.take(160),
             doneOk = error == null,
-            awaitingHardReset = false,
         )
     }
 
     fun clearTerminal() {
-        hardResetContinue = null
         _state.value = State()
     }
 }

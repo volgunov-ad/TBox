@@ -21,7 +21,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -191,7 +190,6 @@ fun Um980SettingsContent(
     var showFresetConfirm by remember { mutableStateOf(false) }
     var pendingFwFile by remember { mutableStateOf<File?>(null) }
     var pendingFwDisplayName by remember { mutableStateOf("") }
-    var fwResetSoft by remember { mutableStateOf(true) }
     val fwState by Um980FirmwareUiStore.state.collectAsStateWithLifecycle()
     val enabled = controlsEnabled && !um980ConfigBusy && !fwState.active
     val fwPicker = rememberLauncherForActivityResult(
@@ -389,7 +387,6 @@ fun Um980SettingsContent(
         if (fwState.active || fwState.progressPct > 0 || fwState.doneOk || !fwState.error.isNullOrBlank()) {
             Text(
                 text = when {
-                    fwState.awaitingHardReset -> stringResource(R.string.um980_fw_await_hard_reset)
                     fwState.active && fwState.error.isNullOrBlank() ->
                         stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
                     fwState.doneOk -> stringResource(R.string.um980_fw_ok)
@@ -414,22 +411,6 @@ fun Um980SettingsContent(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
                 )
-            }
-            if (fwState.awaitingHardReset) {
-                Button(
-                    onClick = rememberWrappedOnClick {
-                        context.startService(
-                            Intent(context, BackgroundService::class.java).apply {
-                                action = BackgroundService.ACTION_UM980_FW_HARD_CONTINUE
-                            },
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                ) {
-                    Text(stringResource(R.string.um980_fw_hard_continue), style = MaterialTheme.typography.tboxButton)
-                }
             }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1094,40 +1075,13 @@ fun Um980SettingsContent(
             },
             title = { AppAlertDialogTitle(stringResource(R.string.um980_fw_confirm_title)) },
             text = {
-                Column {
-                    AppAlertDialogText(
-                        stringResource(
-                            R.string.um980_fw_confirm_message,
-                            pendingFwDisplayName.ifBlank { file.name },
-                            sizeLabel,
-                        ),
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickableWithSound { fwResetSoft = true }
-                            .padding(top = 12.dp),
-                    ) {
-                        RadioButton(
-                            selected = fwResetSoft,
-                            onClick = rememberWrappedOnClick { fwResetSoft = true },
-                        )
-                        Text(stringResource(R.string.um980_fw_reset_soft), style = MaterialTheme.typography.tboxBody)
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickableWithSound { fwResetSoft = false },
-                    ) {
-                        RadioButton(
-                            selected = !fwResetSoft,
-                            onClick = rememberWrappedOnClick { fwResetSoft = false },
-                        )
-                        Text(stringResource(R.string.um980_fw_reset_hard), style = MaterialTheme.typography.tboxBody)
-                    }
-                }
+                AppAlertDialogText(
+                    stringResource(
+                        R.string.um980_fw_confirm_message,
+                        pendingFwDisplayName.ifBlank { file.name },
+                        sizeLabel,
+                    ),
+                )
             },
             confirmButton = {
                 TextButton(
@@ -1140,10 +1094,6 @@ fun Um980SettingsContent(
                                 putExtra(
                                     BackgroundService.EXTRA_UM980_FW_TRANSPORT,
                                     if (transport == Um980SettingsTransport.COMPANION) "companion" else "usb",
-                                )
-                                putExtra(
-                                    BackgroundService.EXTRA_UM980_FW_RESET,
-                                    if (fwResetSoft) "soft" else "hard",
                                 )
                             },
                         )

@@ -1153,12 +1153,8 @@
     <string name="um980_fw_desc">Обновление модуля файлом .pkg (как UPrecise). Не отключайте USB и питание.</string>
     <string name="um980_fw_update">Обновить прошивку UM980…</string>
     <string name="um980_fw_confirm_title">Обновить прошивку UM980?</string>
-    <string name="um980_fw_confirm_message">Файл: %1$s (%2$s). Не прерывайте процесс. Выберите способ входа в bootloader:</string>
-    <string name="um980_fw_reset_soft">Soft reset (команда reset, как UPrecise)</string>
-    <string name="um980_fw_reset_hard">Hard reset (питание/RESET модуля; USB не отключать, если возможно)</string>
+    <string name="um980_fw_confirm_message">Файл: %1$s (%2$s). Не прерывайте процесс и не отключайте USB.</string>
     <string name="um980_fw_progress">Прошивка UM980: %1$d%% (%2$s)</string>
-    <string name="um980_fw_await_hard_reset">Сбросьте питание/RESET модуля (USB-кабель не трогайте). Слушаем BootLoader сразу — затем «Продолжить»</string>
-    <string name="um980_fw_hard_continue">Продолжить</string>
     <string name="um980_fw_ok">Прошивка UM980 записана</string>
     <string name="um980_fw_error_no_usb">Нет связи с модулем (USB/компаньон)</string>
     <string name="um980_fw_error_bad_file">Неверный файл .pkg</string>

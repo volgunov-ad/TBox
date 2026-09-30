@@ -34,8 +34,3 @@ interface Um980BinaryTransport {
 
     fun endExclusive()
 }
-
-enum class Um980FwResetMode {
-    SOFT,
-    HARD,
-}

@@ -146,8 +146,8 @@ class Um980FwBootloaderBaudSweepTest {
         val updater = Um980FirmwareUpdater(transport)
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
         assertEquals(460_800, transport.currentBaud())
-        assertEquals("UPrecise sends CONFIG block twice", 2, configBatches)
-        assertEquals("UPrecise sends double-reset twice", 2, resetBursts)
+        assertEquals("um980-fw.txt sends the CONFIG block once", 1, configBatches)
+        assertEquals("um980-fw.txt sends one reset pair", 1, resetBursts)
     }
 
     @Test
@@ -214,6 +214,34 @@ class Um980FwBootloaderBaudSweepTest {
         val updater = Um980FirmwareUpdater(transport)
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
         assertEquals(460_800, transport.currentBaud())
+    }
+
+    @Test
+    fun bootAppSendsMenuSixFourTimesWhenPromptReturns() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
+        val writes = mutableListOf<String>()
+        transport.enqueueAscii("backup succeed\r\nboot> ")
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            writes.add(s)
+            if (s.startsWith("6")) {
+                transport.enqueueAscii("resetting the cpu...\r\n\$GNRMC,,V,,,,,,,,,,N,V*37\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        updater.bootAppAfterXmodem()
+        assertEquals(4, writes.count { it.startsWith("6") })
+    }
+
+    @Test
+    fun bootAppSkipsMenuSixWhenNmeaAlreadyFlowing() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
+        val writes = mutableListOf<String>()
+        transport.enqueueAscii("\$GNRMC,,V,,,,,,,,,,N,V*37\r\n")
+        transport.onWrite = { bytes -> writes.add(bytes.toString(Charsets.US_ASCII)) }
+        val updater = Um980FirmwareUpdater(transport)
+        updater.bootAppAfterXmodem()
+        assertTrue(writes.isEmpty())
     }
 
     @Test

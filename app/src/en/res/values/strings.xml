@@ -1145,12 +1145,8 @@
     <string name="um980_fw_desc">Update the module with a .pkg file (UPrecise-compatible). Do not unplug USB or power.</string>
     <string name="um980_fw_update">Update UM980 firmware…</string>
     <string name="um980_fw_confirm_title">Update UM980 firmware?</string>
-    <string name="um980_fw_confirm_message">File: %1$s (%2$s). Do not interrupt. Choose bootloader entry:</string>
-    <string name="um980_fw_reset_soft">Soft reset (reset command, UPrecise-style)</string>
-    <string name="um980_fw_reset_hard">Hard reset (module power/RESET; keep USB plugged in if possible)</string>
+    <string name="um980_fw_confirm_message">File: %1$s (%2$s). Do not interrupt and do not unplug USB.</string>
     <string name="um980_fw_progress">UM980 firmware: %1$d%% (%2$s)</string>
-    <string name="um980_fw_await_hard_reset">Power-cycle / RESET the module (leave USB plugged in). We listen for BootLoader immediately — then tap Continue</string>
-    <string name="um980_fw_hard_continue">Continue</string>
     <string name="um980_fw_ok">UM980 firmware written</string>
     <string name="um980_fw_error_no_usb">No link to module (USB/companion)</string>
     <string name="um980_fw_error_bad_file">Invalid .pkg file</string>

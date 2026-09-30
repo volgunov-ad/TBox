@@ -1,11 +1,7 @@
 package vad.dashing.tbox.um980fw
 
 import android.util.Log
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.Charset
@@ -19,13 +15,7 @@ class Um980FirmwareUpdater(
 ) {
     suspend fun update(
         pkgFile: File,
-        resetMode: Um980FwResetMode,
         workingBaud: Int,
-        onHardResetWait: suspend () -> Unit = {
-            val gate = CompletableDeferred<Unit>()
-            Um980FirmwareUiStore.awaitHardReset { gate.complete(Unit) }
-            gate.await()
-        },
     ): Result<String> {
         val image = try {
             pkgFile.readBytes()
@@ -62,17 +52,8 @@ class Um980FirmwareUpdater(
             }
             drain(150)
 
-            var bootloaderSeen = false
-            when (resetMode) {
-                Um980FwResetMode.SOFT -> {
-                    Um980FirmwareUiStore.setPhase("reset", 2)
-                    bootloaderSeen = enterBootloaderSoft(liveBaud)
-                }
-                Um980FwResetMode.HARD -> {
-                    Um980FirmwareUiStore.setPhase("hard_reset", 2)
-                    bootloaderSeen = enterBootloaderHard(liveBaud, onHardResetWait)
-                }
-            }
+            Um980FirmwareUiStore.setPhase("reset", 2)
+            val bootloaderSeen = enterBootloaderSoft(liveBaud)
 
             Um980FirmwareUiStore.setPhase("bootloader", 5)
             if (!bootloaderSeen && !waitForBootloaderBanner(liveBaud)) {
@@ -80,9 +61,9 @@ class Um980FirmwareUpdater(
             }
             delay(200)
             drain(200)
-            // Menu item 2 = "Download from uart to flash". The CRC 'C' follows
-            // "## Ready for binary (xmodem)" in the same read; do not drop it.
-            transport.write("2\r\n".toByteArray(Charsets.US_ASCII))
+            // um980-fw.txt: "2" is sent twice, then "unlock Flash" / Ready / C.
+            // The CRC 'C' follows Ready in the same read; do not drop it.
+            transport.write("2\r\n2\r\n".toByteArray(Charsets.US_ASCII))
             Um980FirmwareUiStore.setPhase("menu2", 8)
             val xmodemMode = awaitXmodemMode(20_000L) ?: return fail("xmodem_start")
 
@@ -90,8 +71,9 @@ class Um980FirmwareUpdater(
             xmodemSend(image, xmodemMode)?.let { return fail(it) }
 
             Um980FirmwareUiStore.setPhase("boot_app", 92)
-            waitForAny(listOf("FreeRTOS", "\$G", "\$GN", "#VERSION", "NMEA"), 60_000L)
-            delay(1_500)
+            // After backup succeed the menu returns. Item 6 (four times) soft-resets into the app.
+            bootAppAfterXmodem()
+            delay(800)
 
             Um980FirmwareUiStore.setPhase("baud_restore", 95)
             restoreBaud(linkBaud)?.let { return fail(it) }
@@ -153,15 +135,10 @@ class Um980FirmwareUpdater(
         }
         if (enteredBootloaderDuringSwitch) return true
         notePhase("460800-ok")
-        // ROM menu uses the saved baud, not the RAM 460800. Commit 460800 so the
-        // banner stays on this port; recover writes the working baud back on failure.
-        rxTail.clear()
-        sendLine("SAVECONFIG")
-        waitForAny(listOf("OK", "response"), SOFT_SAVECONFIG_SETTLE_MS)
+        // um980-fw.txt: one "reset" pair, then T@ at once. No SAVECONFIG —
+        // 460800 stays RAM-only, so the saved rate (usually 115200) survives the flash.
         rxTail.clear()
         sendDoubleReset(leadingCrLf = false)
-        delay(SOFT_RESET_REPEAT_GAP_MS)
-        sendDoubleReset(leadingCrLf = true)
         // UPrecise COM6 capture: stream T@ through "system is rebooting" until the
         // N4 menu. Silence here lets the ROM boot the app instead.
         if (listenAtUpgradeBaudAfterReset()) return true
@@ -224,8 +201,7 @@ class Um980FirmwareUpdater(
      * DTR and wipes RAM baud, SAVECONFIG 460800 and reopen once more, then probe again.
      */
     private suspend fun switchToUpgradeBaud(preBaud: Int): Boolean {
-        sendUpgradeBaudConfigBlock()
-        delay(SOFT_CONFIG_REPEAT_GAP_MS)
+        // um980-fw.txt: a single com1+com2+com3 block, then the host moves to 460800.
         sendUpgradeBaudConfigBlock()
         delay(120)
         if (transport.setBaud(UPGRADE_BAUD) && probeAppAlive(2_000L)) return true
@@ -272,35 +248,6 @@ class Um980FirmwareUpdater(
                 "config com2 $b\r\n" +
                 "config com3 $b\r\n"
         transport.write(block.toByteArray(Charsets.US_ASCII))
-    }
-
-    /**
-     * Hard entry: listen for BootLoader *while* the user power-cycles (banner often appears
-     * before «Продолжить»), then one more sweep after Continue.
-     */
-    private suspend fun enterBootloaderHard(
-        preBaud: Int,
-        onHardResetWait: suspend () -> Unit,
-    ): Boolean = coroutineScope {
-        if (!transport.setBaud(preBaud)) {
-            runCatching { Log.w(TAG, "hard: setBaud($preBaud) failed") }
-        }
-        delay(100)
-        drain(100)
-
-        val userWait = async {
-            onHardResetWait()
-        }
-        while (isActive && !userWait.isCompleted) {
-            if (waitForBootloaderBanner(preBaud, overallTimeoutMs = HARD_LISTEN_SLICE_MS)) {
-                runCatching { Um980FirmwareUiStore.userContinuedHardReset() }
-                userWait.cancel()
-                runCatching { Log.i(TAG, "BootLoader during hard-reset wait at baud=${transport.currentBaud()}") }
-                return@coroutineScope true
-            }
-        }
-        runCatching { userWait.await() }
-        waitForBootloaderBanner(preBaud, overallTimeoutMs = BOOTLOADER_SWEEP_TIMEOUT_MS)
     }
 
     /**
@@ -425,9 +372,12 @@ class Um980FirmwareUpdater(
             transport.write("\r\n".toByteArray(Charsets.US_ASCII))
             // N4 BootLoader reprints the menu every ~2s — wait longer than one period.
             if (waitForAny(listOf("BootLoader", "boot>"), 2_500L) != null) {
-                // Menu 0 = Load OS & GSP from flash
-                transport.write("0\r\n".toByteArray(Charsets.US_ASCII))
-                waitForAny(listOf("FreeRTOS", "VERSION", "\$G", "OK", "command"), 8_000L)
+                // Same exit as a finished UPrecise flash: menu 6, four times.
+                repeat(4) {
+                    transport.write("6\r\n".toByteArray(Charsets.US_ASCII))
+                    delay(40)
+                }
+                waitForAny(listOf("resetting the cpu", "\$G", "VERSION", "command"), 8_000L)
                 delay(500)
             }
             if (!probeAppAlive(1_200L)) {
@@ -554,6 +504,9 @@ class Um980FirmwareUpdater(
         val target = workingBaud.coerceIn(9600, 921600)
         val talking = findTalkingBaud(target) ?: return "baud_restore"
         if (transport.currentBaud() != talking && !transport.setBaud(talking)) return "baud_restore"
+        // um980-fw.txt: after menu 6 the app is already on the saved baud and NMEA is flowing.
+        // config/SAVECONFIG only if it actually came back on 460800.
+        if (talking == target) return null
         val ports = ArrayDeque(listOf("com1", "com2", "com3"))
         while (ports.isNotEmpty()) {
             val com = ports.removeFirst()
@@ -581,9 +534,41 @@ class Um980FirmwareUpdater(
             delay(150)
             drain(80)
             sendLine("VERSIONA")
-            if (waitForAny(listOf("VERSIONA", "UM980"), 1_200L) != null) return transport.currentBaud()
+            // "#VERSION" / "$command" only. The boot menu banner contains "UM980"
+            // and must not count as the application.
+            if (waitForAny(listOf("#VERSION", "\$command", "\$GN", "\$GP"), 1_200L) != null) {
+                return transport.currentBaud()
+            }
         }
         return null
+    }
+
+    /**
+     * After XMODEM the loader prints image-load lines, `backup succeed`, then the menu again.
+     * UPrecise sends menu item 6 (`Soft reset cpu`) four times. Item 0 is not used.
+     * NMEA follows `resetting the cpu...`. Do not reopen the port here.
+     */
+    internal suspend fun bootAppAfterXmodem() {
+        val deadline = System.currentTimeMillis() + 20_000L
+        val ascii = StringBuilder()
+        while (System.currentTimeMillis() < deadline) {
+            val chunk = transport.read(256, 80)
+            if (chunk.isNotEmpty()) {
+                noteRx(chunk)
+                ascii.append(chunk.toString(Charsets.US_ASCII))
+                if (ascii.length > 12_000) ascii.delete(0, ascii.length - 6_000)
+                val hay = ascii.toString()
+                if (hay.contains("\$GNRMC") || hay.contains("\$GNGGA") || hay.contains("\$command,")) return
+                if (hay.contains("boot>")) break
+            }
+            delay(20)
+        }
+        notePhase("menu6")
+        repeat(4) {
+            transport.write("6\r\n".toByteArray(Charsets.US_ASCII))
+            delay(40)
+        }
+        waitForAny(listOf("resetting the cpu", "\$GNRMC", "\$GNGGA", "\$command,"), 15_000L)
     }
 
     private suspend fun queryVersionA(): String? {
@@ -708,13 +693,10 @@ class Um980FirmwareUpdater(
         const val UPGRADE_BAUD = 460_800
         private const val BOOTLOADER_SWEEP_TIMEOUT_MS = 35_000L
         private const val BOOTLOADER_BAUD_SLICE_MS = 5_000L
-        private const val HARD_LISTEN_SLICE_MS = 6_000L
         /** Settle after hot RESET during recover (module drops RAM baud, reboots app). */
         private const val RECOVER_RESET_SETTLE_MS = 2_500L
-        /** UPrecise Soft: second CONFIG block ~50 ms after the first. */
+        /** Fallback only: second CONFIG block if the first 460800 probe stays silent. */
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
-        /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
-        private const val SOFT_RESET_REPEAT_GAP_MS = 50L
         /**
          * Quiet time on 460800 after reset, with no further keypresses.
          * Banner in the UPrecise capture is ~3.5s after the reset write and the menu

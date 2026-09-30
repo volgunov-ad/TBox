@@ -69,7 +69,6 @@ import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
 import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
 import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
-import vad.dashing.tbox.um980fw.Um980FwResetMode
 import vad.dashing.tbox.um980fw.UsbUm980BinaryTransport
 import android.hardware.usb.UsbManager
 import kotlinx.coroutines.NonCancellable
@@ -579,8 +578,6 @@ class BackgroundService : Service() {
         const val ACTION_UM980_FW = "vad.dashing.tbox.UM980_FW"
         const val EXTRA_UM980_FW_PATH = "um980_fw_path"
         const val EXTRA_UM980_FW_TRANSPORT = "um980_fw_transport" // "usb" | "companion"
-        const val EXTRA_UM980_FW_RESET = "um980_fw_reset" // "soft" | "hard"
-        const val ACTION_UM980_FW_HARD_CONTINUE = "vad.dashing.tbox.UM980_FW_HARD_CONTINUE"
         /** Soft-reboot GNSS module for current location source (USB or ESP32/UM980). */
         const val ACTION_GNSS_MODULE_REBOOT = "vad.dashing.tbox.GNSS_MODULE_REBOOT"
         const val ACTION_SET_SIMULATED_LOCATION_SOURCE_LOSS =
@@ -1779,15 +1776,11 @@ class BackgroundService : Service() {
             ACTION_UM980_FW -> {
                 val path = intent.getStringExtra(EXTRA_UM980_FW_PATH)?.trim().orEmpty()
                 val transport = intent.getStringExtra(EXTRA_UM980_FW_TRANSPORT)?.trim().orEmpty()
-                val reset = intent.getStringExtra(EXTRA_UM980_FW_RESET)?.trim().orEmpty()
                 if (path.isNotEmpty()) {
                     scope.launch {
-                        runUm980FirmwareUpdate(path, transport, reset)
+                        runUm980FirmwareUpdate(path, transport)
                     }
                 }
-            }
-            ACTION_UM980_FW_HARD_CONTINUE -> {
-                Um980FirmwareUiStore.userContinuedHardReset()
             }
         }
     }
@@ -5209,16 +5202,12 @@ class BackgroundService : Service() {
         }
     }
 
-    private suspend fun runUm980FirmwareUpdate(path: String, transportKey: String, resetKey: String) {
+    private suspend fun runUm980FirmwareUpdate(path: String, transportKey: String) {
         val file = java.io.File(path)
         if (!file.isFile) {
             Um980FirmwareUiStore.begin()
             Um980FirmwareUiStore.finish("bad_file")
             return
-        }
-        val resetMode = when (resetKey.lowercase()) {
-            "hard" -> Um980FwResetMode.HARD
-            else -> Um980FwResetMode.SOFT
         }
         Um980FirmwareUiStore.begin()
         try {
@@ -5231,7 +5220,7 @@ class BackgroundService : Service() {
                     }
                     val workingBaud = EspCompanionRepository.deviceInfo.value.um980Baud.takeIf { it > 0 } ?: 115_200
                     val transport = EspUm980BinaryTransport(mgr)
-                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                    Um980FirmwareUpdater(transport).update(file, workingBaud)
                 }
                 else -> {
                     val session = usbNmeaLocationSource?.currentSessionOrNull()
@@ -5243,7 +5232,7 @@ class BackgroundService : Service() {
                         ?: usbGnssBaud.value.takeIf { it > 0 }
                         ?: 115_200
                     val transport = UsbUm980BinaryTransport(session)
-                    Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
+                    Um980FirmwareUpdater(transport).update(file, workingBaud)
                 }
             }
         } catch (e: Exception) {
