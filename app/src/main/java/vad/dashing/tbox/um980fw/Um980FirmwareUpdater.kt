@@ -162,10 +162,9 @@ class Um980FirmwareUpdater(
         sendDoubleReset(leadingCrLf = false)
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
-        // UPrecise: ASCII banner on 460800 ~2s after "system is rebooting".
-        // Build14259 without a saved 460800: those next bytes are not ASCII, and the
-        // 2s menu is on 115200. Leave as soon as that garbage starts — do not sit
-        // out the whole listen, or the menu has already booted the app.
+        // Quiet listen. Build14259 often skips "system is rebooting" and only says
+        // "The Board is reset, do not response any command". A key during that
+        // window is rejected and the 2s menu is already gone. No writes here.
         if (listenAtUpgradeBaudAfterReset()) return true
         if (sweepBootloaderAfterGarbage(hostBaud)) return true
         if (waitForBootloaderBanner(hostBaud, overallTimeoutMs = 12_000L)) return true
@@ -329,14 +328,17 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Stay on 460800 while the post-reset bytes are still ASCII.
+     * Stay on 460800 and do not send keys.
+     * UPrecise: banner ~3.5s after the reset write, then a reprint ~2s later.
+     * Build14259 field (`no-reboot-text`): there is no "system is rebooting", only
+     * "The Board is reset, do not response any command", and a 3s listen ended
+     * before the menu. A chunk of non-ASCII still means the menu is on another baud.
      * @return true when the N4 banner was read here.
      */
     private suspend fun listenAtUpgradeBaudAfterReset(): Boolean {
-        val deadline = System.currentTimeMillis() + SOFT_UPGRADE_BAUD_LISTEN_MS
+        val deadline = System.currentTimeMillis() + SOFT_QUIET_AFTER_RESET_MS
         val ascii = StringBuilder()
-        var sawReboot = false
-        var rebootAtMs = 0L
+        var sawResetTalk = false
         while (System.currentTimeMillis() < deadline) {
             val chunk = transport.read(256, 80)
             if (chunk.isNotEmpty()) {
@@ -347,27 +349,29 @@ class Um980FirmwareUpdater(
                 if (hay.contains("BootLoader", ignoreCase = true) || hay.contains("boot>", ignoreCase = true)) {
                     return true
                 }
+                if (!sawResetTalk && isBoardResetTalk(hay)) {
+                    sawResetTalk = true
+                    notePhase("board-reset")
+                }
                 val nonAscii = chunk.count { b ->
                     val c = b.toInt() and 0xFF
                     c != 10 && c != 13 && c !in 32..126
                 }
-                if (!sawReboot && hay.contains("rebooting", ignoreCase = true)) {
-                    sawReboot = true
-                    rebootAtMs = System.currentTimeMillis()
-                    notePhase("rebooting")
-                }
-                if (sawReboot && nonAscii > 8) {
+                if (nonAscii > 8) {
                     notePhase("garbage-after-reboot")
                     return false
                 }
             }
-            if (sawReboot && System.currentTimeMillis() - rebootAtMs > SOFT_REBOOT_ASCII_WAIT_MS) {
-                return false
-            }
             delay(20)
         }
-        if (!sawReboot) notePhase("no-reboot-text")
+        if (!sawResetTalk) notePhase("no-reboot-text")
         return false
+    }
+
+    private fun isBoardResetTalk(hay: String): Boolean {
+        return hay.contains("rebooting", ignoreCase = true) ||
+            hay.contains("Board is reset", ignoreCase = true) ||
+            hay.contains("do not response", ignoreCase = true)
     }
 
     /**
@@ -717,15 +721,13 @@ class Um980FirmwareUpdater(
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
         /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
-        /** How long to wait for the reboot text itself after reset. */
-        private const val SOFT_UPGRADE_BAUD_LISTEN_MS = 3_000L
         /**
-         * ASCII wait after "system is rebooting" for a banner still on 460800.
-         * UPrecise prints N4 BootLoader ~1.8s after that line and the menu reprints ~2s later.
-         * 1.6s left 460800 before the banner (field: rebooting no-banner, then
-         * "The Board is reset, do not response any command").
+         * Quiet time on 460800 after reset, with no further keypresses.
+         * Banner in the UPrecise capture is ~3.5s after the reset write and the menu
+         * reprints ~2s later. Stopping at 3s (`no-reboot-text`) missed it; the next
+         * CR/LF only got "The Board is reset, do not response any command".
          */
-        private const val SOFT_REBOOT_ASCII_WAIT_MS = 4_500L
+        private const val SOFT_QUIET_AFTER_RESET_MS = 6_500L
         /** Listen for a menu that prints on its own, before sending a key. */
         private const val SOFT_MENU_QUIET_MS = 700L
         /** One N4 menu reprint period, plus a little slack. */
