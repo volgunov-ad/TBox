@@ -1,7 +1,6 @@
 package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -166,9 +165,7 @@ private fun CalibrationHubDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .fillMaxWidth(0.96f)
-            .fillMaxHeight(0.92f),
+        modifier = Modifier.tboxDialogSurface(),
         title = { AppAlertDialogTitle(title) },
         text = {
             Column(

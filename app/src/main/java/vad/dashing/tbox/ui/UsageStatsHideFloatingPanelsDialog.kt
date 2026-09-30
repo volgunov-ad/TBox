@@ -95,7 +95,7 @@ fun UsageStatsHideFloatingPanelsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.fillMaxWidth(0.92f),
+        modifier = Modifier.tboxDialogSurface(),
         title = {
             AppAlertDialogTitle(stringResource(R.string.settings_floating_usage_stats_hide_dialog_title))
         },

@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -105,9 +104,7 @@ fun RoadMapsDownloadHubDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .fillMaxWidth(0.96f)
-            .fillMaxHeight(0.92f),
+        modifier = Modifier.tboxDialogSurface(),
         title = { AppAlertDialogTitle(stringResource(R.string.road_maps_hub_title)) },
         text = {
             Column(
