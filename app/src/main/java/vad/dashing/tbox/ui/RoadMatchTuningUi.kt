@@ -207,9 +207,7 @@ private fun RoadMatchTuningDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .fillMaxWidth(0.96f)
-            .fillMaxHeight(0.94f),
+        modifier = Modifier.tboxDialogSurface(),
         title = {
             Column {
                 Text(stringResource(R.string.road_match_tuning_title))

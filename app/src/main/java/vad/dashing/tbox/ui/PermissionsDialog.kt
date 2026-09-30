@@ -205,7 +205,7 @@ fun PermissionsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.fillMaxWidth(0.92f),
+        modifier = Modifier.tboxDialogSurface(),
         title = {
             AppAlertDialogTitle(stringResource(R.string.permissions_dialog_title))
         },

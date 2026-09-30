@@ -97,9 +97,7 @@ fun PanelOrderConfigDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(max = 800.dp),
+            modifier = Modifier.tboxDialogSurfaceCompact(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,

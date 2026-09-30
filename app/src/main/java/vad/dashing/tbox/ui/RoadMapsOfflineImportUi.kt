@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -234,9 +233,7 @@ private fun RoadMapsOfflineImportDialog(
             dismissOnBackPress = !importing,
             dismissOnClickOutside = !importing,
         ),
-        modifier = Modifier
-            .fillMaxWidth(0.96f)
-            .fillMaxHeight(0.92f),
+        modifier = Modifier.tboxDialogSurface(),
         title = { AppAlertDialogTitle(stringResource(R.string.road_maps_usb_dialog_title)) },
         text = {
             Column(
