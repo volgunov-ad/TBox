@@ -866,6 +866,102 @@ object AutomationSignalCatalog {
             listOf("only", "assist", "off"),
             typicalRange = "only / assist / off (UI 1/2/3). A9 mbCAN audio 37; A10 SettingsSvc.",
         ),
+        state(
+            AutomationSignalId.TBOX_CONNECTED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TBOX_CONNECTED),
+            appOnly,
+            binaryStates,
+            typicalRange = "on — UDP-связь с TBox через tbox-proxy; off — нет связи. " +
+                "Источник app, чтобы при обрыве было значение off, а не «нет сигнала».",
+        ),
+        number(
+            AutomationSignalId.MODEM_SIGNAL_LEVEL,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_SIGNAL_LEVEL),
+            "",
+            appOnly,
+            typicalRange = "Уровень сигнала модема (CSQ → «палочки»), обычно 0…5; 0 — нет данных. " +
+                "TBox MDC или Wi‑Fi HTTP sink в netState.",
+        ),
+        state(
+            AutomationSignalId.LOCATE_STATUS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.LOCATE_STATUS),
+            appOnly,
+            binaryStates,
+            typicalRange = "on — у активного источника геопозиции (TBox / компаньон / Android / USB) " +
+                "есть фиксация; off — нет. GeoDisplayRepository.state.locateStatus.",
+        ),
+        number(
+            AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED),
+            "%",
+            appOnly,
+            typicalRange = "Отфильтрованный % топлива во время активной поездки " +
+                "(TripTelemetryRepository). Без активной поездки — нет значения.",
+        ),
+        number(
+            AutomationSignalId.FUEL_LEVEL_LITERS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.FUEL_LEVEL_LITERS),
+            "л",
+            appOnly,
+            typicalRange = "Калиброванные литры (+15 °C) во время активной поездки. " +
+                "Без поездки / калибровки — нет значения.",
+        ),
+        number(
+            AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE),
+            "°C",
+            tboxOnly,
+            typicalRange = "Температура масла КПП с TBox CAN, °C.",
+        ),
+        number(
+            AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM),
+            "км",
+            appOnly,
+            typicalRange = "Пробег открытой текущей поездки (не «суточной»). Нет активной — нет значения.",
+        ),
+        number(
+            AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM),
+            "л/100км",
+            appOnly,
+            typicalRange = "Средний расход активной поездки, л/100 км. Нужен ненулевой пробег.",
+        ),
+        number(
+            AutomationSignalId.ACTIVE_TRIP_DURATION_S,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACTIVE_TRIP_DURATION_S),
+            "с",
+            appOnly,
+            typicalRange = "Длительность активной поездки в секундах (движение+простой+стоянка).",
+        ),
+        number(
+            AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS),
+            "ч",
+            appOnly,
+            typicalRange = "Моточасы активной поездки (движение+простой), десятичные часы.",
+        ),
+        number(
+            AutomationSignalId.MOTOR_HOURS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MOTOR_HOURS),
+            "ч",
+            appOnly,
+            typicalRange = "Накопленные моточасы приложения (CarDataRepository).",
+        ),
+        state(
+            AutomationSignalId.MEDIA_TITLE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_TITLE),
+            appOnly,
+            typicalRange = "Название текущего трека из MediaSession (уведомления). " +
+                "Нужен доступ к уведомлениям; без активного плеера — нет значения.",
+        ),
+        state(
+            AutomationSignalId.MEDIA_ARTIST,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_ARTIST),
+            appOnly,
+            typicalRange = "Исполнитель текущего трека из MediaSession. " +
+                "Нужен доступ к уведомлениям; без активного плеера — нет значения.",
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

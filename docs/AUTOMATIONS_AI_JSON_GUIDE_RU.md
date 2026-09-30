@@ -745,6 +745,15 @@ TCP :5555 включают только если порт ещё не слуша
 | `audio_eq_treble` | `head_unit` | -7..7, только A9/mbCAN |
 | `audio_balance` | `head_unit` | -7..7, только A9/mbCAN |
 | `audio_fader` | `head_unit` | -7..7, только A9/mbCAN |
+| `modem_signal_level` | `app` | уровень сигнала модема (обычно 0..5); 0 — нет данных |
+| `fuel_level_percent_filtered` | `app` | %, отфильтрованный уровень в активной поездке |
+| `fuel_level_liters` | `app` | л, калиброванные (+15 °C) в активной поездке |
+| `gear_box_oil_temperature` | `tbox` | °C, масло КПП |
+| `active_trip_distance_km` | `app` | км, открытая текущая поездка |
+| `active_trip_avg_fuel_l100km` | `app` | л/100 км активной поездки |
+| `active_trip_duration_s` | `app` | с, движение+простой+стоянка |
+| `active_trip_motor_hours` | `app` | ч, моточасы активной поездки |
+| `motor_hours` | `app` | ч, накопленные моточасы приложения |
 
 ### Сигналы состояния
 
@@ -804,13 +813,17 @@ TCP :5555 включают только если порт ещё не слуша
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 | `hu_screen_auto_brightness` | `app` | `on`, `off` — автояркость экрана ГУ (Car Settings → Экраны) |
 | `hu_headrest_speaker` | `app` | `only`, `assist`, `off` — динамик подголовника (Car Settings → Аудио) |
+| `tbox_connected` | `app` | `on`, `off` — UDP-связь с TBox |
+| `locate_status` | `app` | `on`, `off` — фиксация у активного источника геопозиции |
+| `media_title` | `app` | название трека (свободная строка) или нет значения |
+| `media_artist` | `app` | исполнитель (свободная строка) или нет значения |
 
 Следующие сигналы имеют только значения `off` / `on`:
 
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

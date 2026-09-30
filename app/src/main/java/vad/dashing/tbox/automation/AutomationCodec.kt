@@ -50,6 +50,19 @@ object AutomationCodec {
         definitions
     }
 
+    fun decodeActionsPayload(json: JSONObject): Result<List<AutomationAction>> = runCatching {
+        val array = json.optJSONArray("actions")
+            ?: throw IllegalArgumentException("Missing actions array")
+        buildList {
+            for (index in 0 until array.length()) {
+                add(decodeAction(array.requireObject(index)))
+            }
+        }
+    }
+
+    fun decodeActionsPayload(raw: String): Result<List<AutomationAction>> =
+        decodeActionsPayload(JSONObject(raw.ifBlank { "{}" }))
+
     fun decode(raw: String): Result<AutomationDocument> = runCatching {
         if (raw.isBlank()) return@runCatching AutomationDocument()
         val root = JSONObject(raw)

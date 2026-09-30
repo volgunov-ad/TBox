@@ -1,13 +1,16 @@
-# Внешний HTTP API TBox Monitor (черновик)
+# Внешний HTTP API TBox Monitor
 
-Статус: **design / plan**. Код сервера ещё не реализован. Документ фиксирует согласованный контракт для
-внешних клиентов (голосовой ассистент на ГУ или в телефоне) и порядок работ так, чтобы **не ломать**
-действующие пользовательские автоматизации.
+Статус: **реализован v1** (сервер, pairing, catalog/signals/invoke/run, ручной токен,
+`voiceAliasesRu`). Голосовой клиент (Voice APK) — отдельный шаг.
+
+**Пользовательская инструкция (вкл. curl / телефон / Tasker):**
+[EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md).
 
 Связанные документы:
 
 | Документ | Роль |
 |----------|------|
+| [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) | Как включить, токен, примеры запросов |
 | [AUTOMATIONS_RU.md](AUTOMATIONS_RU.md) | Каталог сигналов/действий, RunNow, безопасность CAN |
 | [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md) | Каноническая JSON-схема действий и сигналов |
 | [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) | Legacy broadcast (`TboxBroadcastSender`) — **не** основа нового API |
@@ -21,8 +24,8 @@
    автоматизаций (единый каталог).
 2. Позволить **запускать сохранённые автоматизации** так же, как кнопка UI «Выполнить сейчас».
 3. Поддержать клиентов **на ГУ и в телефоне** в той же LAN (не только `localhost`).
-4. Сделать доступ **простым для пользователя**: режим сопряжения с подтверждением на экране ГУ,
-   без ручного копирования длинных секретов.
+4. Сделать доступ **простым для пользователя**: сопряжение с подтверждением на ГУ **или**
+   ручная генерация токена в Настройки → API (телефон / Tasker / curl).
 5. Не изменять поведение существующих правил автоматизаций (только аддитивные расширения каталога).
 
 Вне scope v1:
@@ -105,16 +108,25 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
 | **Состояние** | сервер вкл/выкл; кратко: слушает / ошибка bind; `apiVersion` / `catalogVersion` |
 | **Сеть** | порт (редактируемый); готовые URL для копирования: `http://127.0.0.1:<port>/v1/…` и `http://<lan-ipv4>:<port>/v1/…`; подсказка для телефона в той же Wi‑Fi |
 | **Сопряжение** | кнопка/тумблер **«Подключить приложение»** (режим pairing + таймер/ручное выкл.); индикатор «ожидается подтверждение…»; диалог Да/Нет при входящем `pair/request` |
-| **Доверенные клиенты** | список сопряжённых приложений (имя, дата); **отозвать** доступ |
+| **Токен вручную** | имя клиента + **«Создать токен»**; токен показывается один раз (копирование); для телефона/Tasker/curl без pairing |
+| **Доверенные клиенты** | список сопряжённых / ручных клиентов (имя, id); **отозвать** доступ |
 | **Опасные команды** | тумблер разрешения ADB / `dangerous` (по умолчанию выкл.) |
-| **Справка** | коротко: для чего API, что умеет голос/клиент, ссылка на эту доку для разработчика при желании |
+| **Справка** | коротко: для чего API; подробности — [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) |
 
 Диалог подтверждения сопряжения может быть системным/overlay поверх текущего экрана, но
 **вход в режим pairing и управление клиентами** — только из раздела «API».
 
 ---
 
-## 5. Сопряжение (pairing) — основной механизм доступа
+## 5. Сопряжение и токены — механизмы доступа
+
+Два равноправных способа получить Bearer:
+
+1. **Pairing** — клиент умеет `pair/request` (Voice APK, PC-скрипт).
+2. **Ручной токен** — пользователь создаёт токен в **Настройки → API** (телефон, Tasker,
+   curl, Shortcuts). Токен показывается один раз; на устройстве хранится только hash.
+
+### 5.1. Pairing
 
 Пользовательский поток:
 
@@ -131,7 +143,16 @@ mDNS (`_tboxmonitor._tcp`) — опционально после MVP.
 Хранение на стороне Monitor: **hash** токена + метаданные клиента (`clientId`, имя, createdAt,
 scopes), не plaintext токена в логах.
 
-### Уровни доступа при pairing (v1)
+### 5.2. Ручной токен
+
+1. **Настройки → API → «Создать токен»** (имя клиента, напр. «Телефон»).
+2. Диалог показывает `accessToken` **один раз** (копировать токен / `Bearer …`).
+3. Клиент с `clientId` вида `manual-<uuid>` попадает в доверенные; revoke как обычно.
+4. Дальше те же вызовы с `Authorization: Bearer <accessToken>`.
+
+Практика и curl: [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md).
+
+### Уровни доступа (v1)
 
 | Уровень | Содержание |
 |---------|------------|
@@ -148,6 +169,24 @@ scopes), не plaintext токена в логах.
 | `GET /v1/health` | допускается урезанный ответ (alive / версия API / pairingActive), **без** секретов и телеметрии |
 | `POST /v1/pair/request` | только при активном pairing |
 | Остальные | `401` |
+
+### Клиент для проверки с ПК
+
+В репозитории: `tools/tbox_external_api_pair.py` (только stdlib). По умолчанию хост
+`192.168.1.128`, порт `8765`.
+
+```bash
+# На ГУ: Настройки → API → включить сервер → «Подключить приложение»
+python3 tools/tbox_external_api_pair.py
+python3 tools/tbox_external_api_pair.py --health-only
+python3 tools/tbox_external_api_pair.py --check-only   # уже есть токен в ~/.tbox_external_api_token.json
+python3 tools/tbox_external_api_pair.py --check-only --run-automation климат
+```
+
+Скрипт: `POST /v1/pair/request` → poll `GET /v1/pair/status` → сохраняет Bearer →
+проверяет `GET /v1/catalog` (в т.ч. `voiceAliasesRu`), несколько `GET /v1/signals`,
+`GET /v1/automations`, safe `POST /v1/actions/invoke` (`show_toast`), probe
+`POST /v1/automations/.../run`. Реальный RunNow — только с `--run-automation <id|имя>`.
 
 ---
 
@@ -181,7 +220,7 @@ scopes), не plaintext токена в логах.
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 1,
+  "catalogVersion": 2,
   "serverEnabled": true,
   "pairingActive": false,
   "appVersion": "1.0.0"
@@ -222,14 +261,16 @@ scopes), не plaintext токена в логах.
 Требует Bearer. Машиночитаемое описание возможностей:
 
 - сигналы: `id`, `valueType` (`number`\|`state`\|`position`), `sources`, `unit`, `label`,
-  `stateOptions` / `namedValues`, `typicalRange`, **`voiceAliasesRu`**,
+  `stateOptions` / `namedValues`, `typicalRange`, **`voiceAliasesRu`** (массив RU-фраз
+  lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
+  вопросов),
 - действия: типы из automations (`can_command`, `builtin`, `launch_application`, …) +
-  `safety` (`safe`\|`confirm`\|`dangerous`),
-- `catalogVersion`.
+  `safety` (`safe`\|`confirm`\|`dangerous`) + **`voiceAliasesRu`**,
+- `catalogVersion` (сейчас **2** — aliases заполнены).
 
 Источник истины для id — те же каталоги, что UI автоматизаций и
 [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md). Поле `voiceAliasesRu` —
-обогащение для NLU, не меняет `storageKey`.
+обогащение для NLU в `ExternalApiVoiceAliasesRu`, не меняет `storageKey`.
 
 ### 7.4. `GET /v1/signals`
 
@@ -348,22 +389,19 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 provider + AI guide + тесты), чтобы UI правил и HTTP API получили их одновременно.
 Существующие JSON правил без новых полей не меняются.
 
-| ID | Предлагаемый signal id | Назначение | Ориентир сложности |
-|----|------------------------|------------|--------------------|
-| G1 | `tbox_connected` | TBox на связи (on/off) | S |
-| G2 | `modem_signal_level` | уровень сигнала модема (число) | S |
-| G3 | `locate_status` | есть ли GPS-фикс (state/bool по канону каталога) | S |
-| G4 | `fuel_level_percent_filtered` (+ опц. литры отдельным id) | стабильный % / литры | S–M |
-| G5 | `gear_box_oil_temperature` | температура масла КПП | S |
-| G6 | метрики активной поездки / моточасы (набор id: дистанция, средний расход, длительность, …) | «сколько проехали» | M |
-| G7 | `media_title` / `media_artist` (state/string) | «что играет» | M |
-
-Точные `storageKey`, `valueType` и `source` утверждаются при реализации и сразу попадают в
-`AutomationSignalCatalog` и AI guide. Для G6 допустим небольшой набор id вместо одного
-«мега-сигнала».
+| ID | Signal id | Назначение | Статус |
+|----|-----------|------------|--------|
+| G1 | `tbox_connected` | TBox на связи (on/off), source `app` | **в каталоге** |
+| G2 | `modem_signal_level` | уровень сигнала модема (число), `app` | **в каталоге** |
+| G3 | `locate_status` | GPS-фикс GeoDisplay (on/off), `app` | **в каталоге** |
+| G4 | `fuel_level_percent_filtered`, `fuel_level_liters` | фильтр % / калибр. литры, `app` | **в каталоге** |
+| G5 | `gear_box_oil_temperature` | температура масла КПП, `tbox` | **в каталоге** |
+| G6 | `active_trip_distance_km`, `active_trip_avg_fuel_l100km`, `active_trip_duration_s`, `active_trip_motor_hours`, `motor_hours` | поездка / моточасы, `app` | **в каталоге** |
+| G7 | `media_title`, `media_artist` | now playing, `app` | **в каталоге** |
 
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
-`/v1/catalog` (и при желании рядом с descriptor’ами в коде).
+`/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
+действий). `catalogVersion = 2`.
 
 ### Не в блокирующем списке v1
 
@@ -403,19 +441,22 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 
 ## 11. Порядок реализации
 
-| # | Шаг | Критерий готовности |
-|---|-----|---------------------|
-| 1 | Этот документ + ссылки из README / backlog | Согласован контракт |
-| 2 | Сигналы **G1–G7** в automations (+ тесты, AI guide) | Старые правила грузятся; новые id в UI |
-| 3 | Раздел **«Настройки → API»** (каркас UI): вкл сервера, порт, URL/IP, заглушки pairing/клиентов | Раздел виден в меню настроек |
-| 4 | HTTP server skeleton: bind `0.0.0.0`, порт из раздела API, `GET /health` | Ручная проверка с телефона в LAN |
-| 5 | Pairing + token store + revoke **в разделе API** | Чужой без pairing не читает сигналы |
-| 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций |
-| 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты |
-| 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI |
-| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы |
-| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила |
-| 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве |
+| # | Шаг | Критерий готовности | Статус |
+|---|-----|---------------------|--------|
+| 1 | Этот документ + ссылки из README / backlog | Согласован контракт | **сделано** |
+| 2 | Сигналы **G1–G7** в automations (+ тесты, AI guide) | Старые правила грузятся; новые id в UI | **сделано** |
+| 3 | Раздел **«Настройки → API»** (каркас UI): вкл сервера, порт, URL/IP, pairing/клиенты | Раздел виден в меню настроек | **сделано** |
+| 4 | HTTP server skeleton: bind `0.0.0.0`, порт из раздела API, `GET /health` | Ручная проверка с телефона в LAN | **сделано** (код) |
+| 5 | Pairing + token store + revoke **в разделе API** | Чужой без pairing не читает сигналы | **сделано** (код) |
+| 5a | Ручная генерация токена в UI | Телефон/Tasker без pair/request | **сделано** |
+| 5b | Пользовательская инструкция | `docs/EXTERNAL_API_USER_GUIDE_RU.md` | **сделано** |
+| 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций | **сделано** (код) |
+| 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
+| 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
+| 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
+| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 2) |
+| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
+| 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 
 На каждом шаге с кодом автоматизаций — только аддитивные изменения; прогон
 `./gradlew testRuDebugUnitTest` (как минимум пакеты automation + новые API-тесты).

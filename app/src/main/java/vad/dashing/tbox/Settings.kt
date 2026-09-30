@@ -904,6 +904,12 @@ class SettingsManager(private val context: Context) {
         private val STEER_CALIB_WHEELBASE_M_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_wheelbase_m")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        private val EXTERNAL_API_ENABLED = booleanPreferencesKey("${KEY_PREFIX}external_api_enabled")
+        private val EXTERNAL_API_PORT = intPreferencesKey("${KEY_PREFIX}external_api_port")
+        private val EXTERNAL_API_DANGEROUS_ENABLED =
+            booleanPreferencesKey("${KEY_PREFIX}external_api_dangerous_enabled")
+        private val EXTERNAL_API_CLIENTS_JSON =
+            stringPreferencesKey("${KEY_PREFIX}external_api_clients_json")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}permissions_intro_seen")
@@ -1577,6 +1583,24 @@ class SettingsManager(private val context: Context) {
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[EXTERNAL_API_PORT] ?: vad.dashing.tbox.externalapi.ExternalApiConstants.DEFAULT_PORT
+        }
+        .distinctUntilChanged()
+
+    val externalApiDangerousEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_DANGEROUS_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiClientsJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_CLIENTS_JSON] ?: "[]" }
         .distinctUntilChanged()
 
     val permissionsIntroSeenFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -3159,6 +3183,34 @@ class SettingsManager(private val context: Context) {
     suspend fun saveExpertModeSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXPERT_MODE] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiPort(port: Int) {
+        val normalized = port.coerceIn(
+            vad.dashing.tbox.externalapi.ExternalApiConstants.MIN_PORT,
+            vad.dashing.tbox.externalapi.ExternalApiConstants.MAX_PORT,
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_PORT] = normalized
+        }
+    }
+
+    suspend fun saveExternalApiDangerousEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_DANGEROUS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiClientsJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_CLIENTS_JSON] = json
         }
     }
 

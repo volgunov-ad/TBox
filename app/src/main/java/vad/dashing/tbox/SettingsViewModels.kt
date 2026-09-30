@@ -595,6 +595,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val externalApiEnabled = settingsManager.externalApiEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val externalApiPort = settingsManager.externalApiPortFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.externalapi.ExternalApiConstants.DEFAULT_PORT,
+        )
+
+    val externalApiDangerousEnabled = settingsManager.externalApiDangerousEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
@@ -2216,6 +2237,24 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExpertModeSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
+    fun saveExternalApiEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiEnabled(enabled)
+        }
+    }
+
+    fun saveExternalApiPort(port: Int) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiPort(port)
+        }
+    }
+
+    fun saveExternalApiDangerousEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiDangerousEnabled(enabled)
         }
     }
 

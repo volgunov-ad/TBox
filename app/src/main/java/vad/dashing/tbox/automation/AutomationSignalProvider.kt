@@ -15,13 +15,17 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
+import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
@@ -33,6 +37,7 @@ import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.trip.TripRepository
 
 class AutomationSignalProvider(
     private val scope: CoroutineScope,
@@ -98,150 +103,7 @@ class AutomationSignalProvider(
     }
 
     private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
-        when (key.source) {
-            AutomationSignalSource.TBOX -> tboxFlow(key.signal)?.withAvailability(
-                TboxRepository.tboxConnected,
-            )
-
-            AutomationSignalSource.HEAD_UNIT -> headUnitFlow(key.signal)?.withAvailability(
-                UniversalCanRepository.availability.map { it is MbCanAvailability.Available },
-            )
-
-            AutomationSignalSource.APP -> when (key.signal) {
-                AutomationSignalId.GEO_POSITION -> geoDisplayFlow()
-                AutomationSignalId.ESP_GPIO_IN_0 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 0)
-                AutomationSignalId.ESP_GPIO_IN_1 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 1)
-                AutomationSignalId.ESP_GPIO_IN_2 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 2)
-                AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
-                AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
-                AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
-                AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()
-                AutomationSignalId.ESP_BLE_BATTERY -> {
-                    val mac = key.mac?.trim().orEmpty()
-                    if (mac.isEmpty()) {
-                        flowOf(AutomationSignalValue.Unavailable)
-                    } else {
-                        espBleBatteryFlow(mac)
-                    }
-                }
-                AutomationSignalId.WIFI_ENABLED -> wifiSnapshotFlow().map { snap ->
-                    AutomationSignalValue.State(snap.radioState())
-                }.distinctUntilChanged()
-                AutomationSignalId.WIFI_ASSOCIATED -> wifiSnapshotFlow().map { snap ->
-                    AutomationSignalValue.State(snap.associatedState())
-                }.distinctUntilChanged()
-                AutomationSignalId.WIFI_SSID -> wifiSnapshotFlow().map { snap ->
-                    AutomationSignalValue.State(snap.ssidState())
-                }.distinctUntilChanged()
-                AutomationSignalId.HU_INTERNET_STATUS ->
-                    TboxRepository.huInternetStatus.map { status ->
-                        AutomationSignalValue.State(
-                            vad.dashing.tbox.internet.HuInternetStatusLogic.automationStateKey(status),
-                        )
-                    }.distinctUntilChanged()
-                AutomationSignalId.WIFI_MODEM_LINK_STATUS ->
-                    TboxRepository.wifiModemLinkStatus.map { status ->
-                        AutomationSignalValue.State(
-                            vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
-                        )
-                    }.distinctUntilChanged()
-                AutomationSignalId.MODEM_MOBILE_DATA ->
-                    TboxRepository.apnStatus.map { up ->
-                        AutomationSignalValue.State(
-                            vad.dashing.tbox.wifimodem.ModemAutomationStates.mobileDataKey(up),
-                        )
-                    }.distinctUntilChanged()
-                AutomationSignalId.MODEM_NET_TYPE ->
-                    TboxRepository.netState.map { net ->
-                        AutomationSignalValue.State(
-                            vad.dashing.tbox.wifimodem.ModemAutomationStates.netTypeKey(net.netStatus),
-                        )
-                    }.distinctUntilChanged()
-                AutomationSignalId.MODEM_SIM_STATUS ->
-                    TboxRepository.netState.map { net ->
-                        AutomationSignalValue.State(
-                            vad.dashing.tbox.wifimodem.ModemAutomationStates.simStatusKey(net.simStatus),
-                        )
-                    }.distinctUntilChanged()
-                AutomationSignalId.APP_THEME_MODE -> appThemeModeFlow()
-                AutomationSignalId.APP_THEME -> appThemeEffectiveFlow()
-                AutomationSignalId.HU_SCREEN_BRIGHTNESS -> huScreenBrightnessFlow()
-                AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> huScreenAutoBrightnessFlow()
-                AutomationSignalId.HU_MEDIA_VOLUME -> platformVolumeFlow(
-                    PlatformAudioRepository.mediaVolume,
-                )
-                AutomationSignalId.HU_PHONE_VOLUME -> platformVolumeFlow(
-                    PlatformAudioRepository.phoneVolume,
-                )
-                AutomationSignalId.HU_NAVI_VOLUME -> platformVolumeFlow(
-                    PlatformAudioRepository.naviVolume,
-                )
-                AutomationSignalId.HU_VOICE_VOLUME -> platformVolumeFlow(
-                    PlatformAudioRepository.voiceVolume,
-                )
-                AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
-                AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
-                else -> null
-            }
-        }
-
-    private fun tboxFlow(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
-        AutomationSignalId.ENGINE_RPM -> CanDataRepository.engineRPM.numberFlow()
-        AutomationSignalId.CAR_SPEED -> CanDataRepository.carSpeed.numberFlow()
-        AutomationSignalId.ENGINE_TEMPERATURE -> CanDataRepository.engineTemperature.numberFlow()
-        AutomationSignalId.OUTSIDE_TEMPERATURE -> CanDataRepository.outsideTemperature.numberFlow()
-        AutomationSignalId.INSIDE_TEMPERATURE -> CanDataRepository.insideTemperature.numberFlow()
-        AutomationSignalId.FUEL_LEVEL_PERCENT -> CanDataRepository.fuelLevelPercentage.uintNumberFlow()
-        AutomationSignalId.ODOMETER_KM -> CanDataRepository.odometer.uintNumberFlow()
-        AutomationSignalId.CURRENT_FUEL_CONSUMPTION ->
-            CanDataRepository.currentFuelConsumption.numberFlow()
-
-        AutomationSignalId.DISTANCE_TO_EMPTY_KM -> CanDataRepository.distanceToFuelEmpty.uintNumberFlow()
-        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM ->
-            CanDataRepository.distanceToNextMaintenance.uintNumberFlow()
-
-        AutomationSignalId.VOLTAGE -> CanDataRepository.voltage.numberFlow()
-        AutomationSignalId.STEERING_ANGLE -> CanDataRepository.steerAngle.numberFlow()
-        AutomationSignalId.STEERING_SPEED -> CanDataRepository.steerSpeed.numberFlow()
-        AutomationSignalId.CRUISE_SET_SPEED -> CanDataRepository.cruiseSetSpeed.uintNumberFlow()
-        AutomationSignalId.GEAR_MODE -> CanDataRepository.gearBoxMode.map { value ->
-            value.trim().takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
-                ?: AutomationSignalValue.Unavailable
-        }
-
-        AutomationSignalId.CURRENT_GEAR -> CanDataRepository.gearBoxCurrentGear.numberFlow()
-        AutomationSignalId.TARGET_GEAR -> CanDataRepository.gearBoxPreparedGear.numberFlow()
-        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE ->
-            CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel1)
-
-        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE ->
-            CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel2)
-
-        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE ->
-            CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel3)
-
-        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE ->
-            CanDataRepository.wheelsPressure.wheelNumberFlow(Wheels::wheel4)
-
-        AutomationSignalId.FRONT_LEFT_WHEEL_TEMPERATURE ->
-            CanDataRepository.wheelsTemperature.wheelNumberFlow(Wheels::wheel1)
-
-        AutomationSignalId.FRONT_RIGHT_WHEEL_TEMPERATURE ->
-            CanDataRepository.wheelsTemperature.wheelNumberFlow(Wheels::wheel2)
-
-        AutomationSignalId.REAR_LEFT_WHEEL_TEMPERATURE ->
-            CanDataRepository.wheelsTemperature.wheelNumberFlow(Wheels::wheel3)
-
-        AutomationSignalId.REAR_RIGHT_WHEEL_TEMPERATURE ->
-            CanDataRepository.wheelsTemperature.wheelNumberFlow(Wheels::wheel4)
-
-        AutomationSignalId.INSIDE_AIR_QUALITY -> CanDataRepository.insideAirQuality.uintNumberFlow()
-        AutomationSignalId.OUTSIDE_AIR_QUALITY -> CanDataRepository.outsideAirQuality.uintNumberFlow()
-        else -> null
-    }
-
-    private fun headUnitFlow(signal: AutomationSignalId): Flow<AutomationSignalValue>? =
-        headUnitFlowFor(signal)
+        AutomationSignalReads.flowFor(key)
 
     private fun huInterestFor(signal: AutomationSignalId): MbCanSignal? =
         huInterestForSignal(signal)
@@ -251,12 +113,12 @@ class AutomationSignalProvider(
     }
 }
 
-private fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalValue> =
+internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalValue> =
     mask.map { value ->
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
 
-private fun espBleBoundFlow(): Flow<AutomationSignalValue> =
+internal fun espBleBoundFlow(): Flow<AutomationSignalValue> =
     combine(
         EspCompanionRepository.connected,
         EspCompanionRepository.bleOn,
@@ -271,7 +133,7 @@ private fun espBleBoundFlow(): Flow<AutomationSignalValue> =
         }
     }.distinctUntilChanged()
 
-private fun espBleBatteryFlow(mac: String): Flow<AutomationSignalValue> =
+internal fun espBleBatteryFlow(mac: String): Flow<AutomationSignalValue> =
     combine(
         EspCompanionRepository.connected,
         EspCompanionRepository.bleDevices,
@@ -285,7 +147,7 @@ private fun espBleBatteryFlow(mac: String): Flow<AutomationSignalValue> =
         }
     }.distinctUntilChanged()
 
-private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
+internal fun foregroundAppFlow(): Flow<AutomationSignalValue> =
     ForegroundAppMonitor.packageName
         .map { pkg ->
             val name = pkg?.trim().orEmpty()
@@ -297,7 +159,7 @@ private fun foregroundAppFlow(): Flow<AutomationSignalValue> =
         }
         .distinctUntilChanged()
 
-private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
+internal fun appThemeModeFlow(): Flow<AutomationSignalValue> =
     HeadUnitDayNightRepository.modeState.map { mode ->
         val value = when (mode) {
             HeadUnitDayNightRepository.Mode.LightManual -> "manual_day"
@@ -309,7 +171,7 @@ private fun appThemeModeFlow(): Flow<AutomationSignalValue> =
         value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }.distinctUntilChanged()
 
-private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
+internal fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
     HeadUnitDayNightRepository.modeState.map { mode ->
         val value = when (mode) {
             HeadUnitDayNightRepository.Mode.LightManual,
@@ -325,7 +187,7 @@ private fun appThemeEffectiveFlow(): Flow<AutomationSignalValue> =
         value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }.distinctUntilChanged()
 
-private fun huScreenBrightnessFlow(): Flow<AutomationSignalValue> {
+internal fun huScreenBrightnessFlow(): Flow<AutomationSignalValue> {
     val context = AppContextHolder.appContextOrNull
         ?: return flowOf(AutomationSignalValue.Unavailable)
     return callbackFlow {
@@ -345,7 +207,7 @@ private fun huScreenBrightnessFlow(): Flow<AutomationSignalValue> {
     }.distinctUntilChanged()
 }
 
-private fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
+internal fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
     val context = AppContextHolder.appContextOrNull
         ?: return flowOf(AutomationSignalValue.Unavailable)
     return callbackFlow {
@@ -365,7 +227,7 @@ private fun huScreenAutoBrightnessFlow(): Flow<AutomationSignalValue> {
     }.distinctUntilChanged()
 }
 
-private fun platformVolumeFlow(
+internal fun platformVolumeFlow(
     volume: StateFlow<Int?>,
 ): Flow<AutomationSignalValue> {
     val context = AppContextHolder.appContextOrNull
@@ -387,7 +249,7 @@ private fun platformVolumeFlow(
     }.distinctUntilChanged()
 }
 
-private fun platformHeadrestFlow(): Flow<AutomationSignalValue> {
+internal fun platformHeadrestFlow(): Flow<AutomationSignalValue> {
     val context = AppContextHolder.appContextOrNull
         ?: return flowOf(AutomationSignalValue.Unavailable)
     return callbackFlow {
@@ -412,7 +274,7 @@ private fun platformHeadrestFlow(): Flow<AutomationSignalValue> {
     }.distinctUntilChanged()
 }
 
-private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
+internal fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     val context = AppContextHolder.appContextOrNull
         ?: return flowOf(
             WifiStaSnapshot(radioEnabled = false, associated = false, ssid = null),
@@ -420,7 +282,7 @@ private fun wifiSnapshotFlow(): Flow<WifiStaSnapshot> {
     return WifiStaController.snapshots(context)
 }
 
-private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
+internal fun geoDisplayFlow(): Flow<AutomationSignalValue> =
     GeoDisplayRepository.state
         .map { state ->
             val lat = state.latitude
@@ -437,6 +299,64 @@ private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+internal fun activeTripDistanceFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive }
+        t?.distanceKm?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+internal fun activeTripAvgFuelFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        TripRepository.averageFuelConsumptionLitersPer100Km(t)
+            ?.toDouble()
+            ?.takeIf(Double::isFinite)
+            ?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+internal fun activeTripDurationFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        val seconds =
+            (t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs).coerceAtLeast(0L) / 1000.0
+        AutomationSignalValue.Number(seconds)
+    }.distinctUntilChanged()
+
+internal fun activeTripMotorHoursFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        t.engineRunningTimeHours().toDouble().takeIf(Double::isFinite)
+            ?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+internal fun mediaNowPlayingFlow(
+    pick: (MediaPlayerState) -> String,
+): Flow<AutomationSignalValue> =
+    SharedMediaControlService.playerStates
+        .map { states ->
+            val selected = selectMediaPlayerState(states)
+            val text = selected?.let(pick)?.trim().orEmpty()
+            if (text.isEmpty()) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(text)
+            }
+        }
+        .distinctUntilChanged()
+
+private fun selectMediaPlayerState(
+    states: Map<String, MediaPlayerState>,
+): MediaPlayerState? {
+    if (states.isEmpty()) return null
+    val values = states.values
+    return values.firstOrNull { it.isPlaying && (it.track.isNotBlank() || it.artist.isNotBlank()) }
+        ?: values.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
+        ?: values.firstOrNull { it.isPlaying }
+}
 
 internal fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
     map { value ->
@@ -507,7 +427,7 @@ internal fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue
         value?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
 
-private fun Flow<AutomationSignalValue>.withAvailability(
+internal fun Flow<AutomationSignalValue>.withAvailability(
     availability: Flow<Boolean>,
 ): Flow<AutomationSignalValue> =
     combine(availability) { value, available ->
