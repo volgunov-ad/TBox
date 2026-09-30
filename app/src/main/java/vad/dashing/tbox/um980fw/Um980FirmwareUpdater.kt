@@ -376,7 +376,9 @@ class Um980FirmwareUpdater(
      */
     private suspend fun sweepBootloaderAfterGarbage(preBaud: Int): Boolean {
         val saved = preBaud.coerceIn(9600, 921600)
-        val order = linkedSetOf(saved, UPGRADE_BAUD)
+        // 460800 first: SAVECONFIG just made that the ROM baud, and the menu
+        // reprints there. Leaving for 115200 before the reprint drops it.
+        val order = linkedSetOf(UPGRADE_BAUD, saved)
         repeat(3) {
             for (baud in order) {
                 if (transport.currentBaud() != baud && !transport.setBaud(baud)) continue
@@ -717,8 +719,13 @@ class Um980FirmwareUpdater(
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
         /** How long to wait for the reboot text itself after reset. */
         private const val SOFT_UPGRADE_BAUD_LISTEN_MS = 3_000L
-        /** ASCII wait after "system is rebooting" for a banner still on 460800. */
-        private const val SOFT_REBOOT_ASCII_WAIT_MS = 1_600L
+        /**
+         * ASCII wait after "system is rebooting" for a banner still on 460800.
+         * UPrecise prints N4 BootLoader ~1.8s after that line and the menu reprints ~2s later.
+         * 1.6s left 460800 before the banner (field: rebooting no-banner, then
+         * "The Board is reset, do not response any command").
+         */
+        private const val SOFT_REBOOT_ASCII_WAIT_MS = 4_500L
         /** Listen for a menu that prints on its own, before sending a key. */
         private const val SOFT_MENU_QUIET_MS = 700L
         /** One N4 menu reprint period, plus a little slack. */

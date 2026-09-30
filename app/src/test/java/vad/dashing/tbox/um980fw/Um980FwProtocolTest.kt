@@ -156,6 +156,31 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
+    fun softStaysOn460800UntilBannerAfterRebooting() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            when {
+                s.contains("unlog", ignoreCase = true) &&
+                    (transport.currentBaud() == 115_200 || transport.currentBaud() == 460_800) ->
+                    transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+                transport.currentBaud() == 460_800 && s.contains("reset", ignoreCase = true) -> {
+                    transport.enqueueAscii("system is rebooting\r\n")
+                    Thread {
+                        Thread.sleep(2_000)
+                        if (transport.currentBaud() == 460_800) {
+                            transport.enqueueAscii("N4 BootLoader 2020.04\r\nboot> ")
+                        }
+                    }.start()
+                }
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
+        assertEquals(460_800, transport.currentBaud())
+    }
+
+    @Test
     fun softSweepsSavedBaudWhenRebootBytesAreNotAscii() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         transport.onWrite = { bytes ->
