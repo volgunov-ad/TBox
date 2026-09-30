@@ -2119,6 +2119,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         UsbGnssRepository.requestAutoBaudDetect()
     }
 
+    fun requestUsbGnssReconnect() {
+        UsbGnssRepository.requestReconnect()
+    }
+
     fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveUsbGnssRequestVtgSetting(enabled)

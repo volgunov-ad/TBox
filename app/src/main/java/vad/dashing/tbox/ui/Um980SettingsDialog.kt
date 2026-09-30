@@ -500,8 +500,7 @@ fun Um980SettingsContent(
                             gsvPeriodSec = gsvPeriod,
                             zdaPeriodSec = zdaPeriod,
                             vtgPeriodSec = vtgPeriod,
-                        ),
-                        refreshAfter = true,
+                        ) + listOf("UNILOGLIST"),
                     )
                 },
                 text = stringResource(R.string.esp_um980_nmea_com, port),

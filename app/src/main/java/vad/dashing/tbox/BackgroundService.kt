@@ -5013,6 +5013,9 @@ class BackgroundService : Service() {
             while (isActive && locationSource.value == LocationSource.USB) {
                 // Serial may appear in stable id after permission — same vid:pid is OK.
                 if (!UsbGnssDeviceIds.isCompatibleStableId(usbGnssDeviceId.value, deviceId)) break
+                if (UsbGnssRepository.consumeReconnectRequest()) {
+                    usbNmeaLocationSource?.forceReopen("user reconnect")
+                }
                 if (UsbGnssRepository.consumeAutoBaudRequest()) {
                     runUsbGnssAutoBaudProbe(deviceId)
                     // Baud save restarts this assist loop via settings collect; exit stale closure.

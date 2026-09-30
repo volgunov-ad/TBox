@@ -53,6 +53,7 @@ object UsbGnssRepository {
 
     private val autoBaudRequest = AtomicBoolean(false)
     private val moduleProbeRequest = AtomicBoolean(false)
+    private val reconnectRequest = AtomicBoolean(false)
     private val _probeEpochMs = MutableStateFlow(0L)
     private val _lastValidChecksumAtMs = MutableStateFlow(0L)
 
@@ -82,6 +83,12 @@ object UsbGnssRepository {
     fun requestAutoBaudDetect() {
         autoBaudRequest.set(true)
     }
+
+    fun requestReconnect() {
+        reconnectRequest.set(true)
+    }
+
+    fun consumeReconnectRequest(): Boolean = reconnectRequest.getAndSet(false)
 
     fun consumeAutoBaudRequest(): Boolean = autoBaudRequest.getAndSet(false)
 
@@ -266,10 +273,10 @@ class UsbNmeaLocationSource(
     }
 
     @Synchronized
-    fun forceReopen() {
+    fun forceReopen(reason: String = "NMEA silence") {
         val s = session ?: return
-        Log.i(TAG, "NMEA silence — force reopen")
-        TboxRepository.addLog("WARN", "USB GNSS", "NMEA silence — reopening USB session")
+        Log.i(TAG, "$reason — force reopen")
+        TboxRepository.addLog("WARN", "USB GNSS", "$reason — reopening USB session")
         s.forceReopen()
     }
 

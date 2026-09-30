@@ -904,6 +904,8 @@
     <string name="settings_usb_gnss_auto_baud_running">Auto baud: trying %1$d…</string>
     <string name="settings_usb_gnss_auto_baud_success">Auto baud: found %1$d</string>
     <string name="settings_usb_gnss_auto_baud_failed">Auto baud: no valid NMEA</string>
+    <string name="settings_usb_gnss_reconnect_title">Reconnect USB</string>
+    <string name="settings_usb_gnss_reconnect_desc">Close the port and open it again at the selected baud</string>
     <string name="settings_usb_gnss_request_vtg_title">Request VTG from module</string>
     <string name="settings_usb_gnss_request_vtg_desc">After connect, send Unicore GPVTG (off by default — many modules already emit VTG)</string>
     <string name="settings_usb_gnss_request_zda_title">Request ZDA from module</string>

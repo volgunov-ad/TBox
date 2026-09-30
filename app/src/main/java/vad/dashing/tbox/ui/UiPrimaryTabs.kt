@@ -2469,6 +2469,26 @@ fun LocationTabContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
                     )
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssReconnect()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && !autoBaudRunning,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_usb_gnss_reconnect_title),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_usb_gnss_reconnect_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
                     val autoBaudStatus = when (usbGnssAutoBaudPhase) {
                         UsbGnssRepository.AutoBaudPhase.RUNNING ->
                             stringResource(
