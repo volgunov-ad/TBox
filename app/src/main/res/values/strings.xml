@@ -1002,6 +1002,11 @@
     <string name="esp_um980_saveconfig">Сохранить конфигурацию в модуле</string>
     <string name="esp_um980_saveconfig_desc">После изменения настроек обязательно нажмите эту кнопку, иначе они не сохранятся в модуле и пропадут после перезагрузки</string>
     <string name="esp_um980_geo_period_title">UM980 — периодичность геопозиции</string>
+    <string name="esp_um980_nmea_ports_desc">Поток NMEA на COM1, COM2 и COM3. Переключатель показывает, идёт ли сейчас вывод NMEA (UNILOGLIST). Выключение снимает весь вывод этого порта (UNLOG), не только NMEA. Если выключить порт, к которому подключены ГУ или компаньон, координаты в приложении пропадут, пока порт снова не включат. Чтобы запомнить, нажмите «Сохранить конфигурацию».</string>
+    <string name="esp_um980_nmea_com">NMEA %1$s</string>
+    <string name="esp_um980_nmea_com_on">Сейчас этот порт передаёт NMEA</string>
+    <string name="esp_um980_nmea_com_off">Сейчас этот порт не передаёт NMEA</string>
+    <string name="esp_um980_nmea_com_unknown">Статус ещё не получен — нажмите «Получить конфигурацию»</string>
     <string name="esp_um980_coord_period">Период координат (GGA+RMC)</string>
     <string name="esp_um980_coord_period_desc">Как часто слать координаты и скорость (GPGGA + GPRMC). Основной поток для приложения</string>
     <string name="esp_um980_gsa">GPGSA</string>

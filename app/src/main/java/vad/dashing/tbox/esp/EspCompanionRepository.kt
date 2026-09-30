@@ -374,14 +374,16 @@ object EspCompanionRepository {
             cmd.equals("MASK", ignoreCase = true) ||
             cmd.equals("VERSION", ignoreCase = true) ||
             cmd.equals("VERSIONA", ignoreCase = true) ||
+            cmd.equals("UNILOGLIST", ignoreCase = true) ||
             lines.any {
                 it.contains("CONFIG", ignoreCase = true) ||
                     it.contains("MODE", ignoreCase = true) ||
                     it.contains("MASK", ignoreCase = true) ||
-                    it.contains("VERSION", ignoreCase = true)
+                    it.contains("VERSION", ignoreCase = true) ||
+                    it.contains("UNILOGLIST", ignoreCase = true)
             }
         ) {
-            val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct().takeLast(400)
+            val merged = (_um980ConfigSnapshot.value.rawLines + lines).takeLast(400)
             _um980ConfigSnapshot.value = Um980Commands.parseConfigSnapshot(merged)
         }
     }

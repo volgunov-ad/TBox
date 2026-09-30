@@ -503,6 +503,40 @@ fun Um980SettingsContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_geo_period_title))
+        Text(
+            text = stringResource(R.string.esp_um980_nmea_ports_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        for (port in Um980Commands.NMEA_COM_PORTS) {
+            val output = snapshot.nmeaOutputByCom
+            val portOn = output?.get(port) == true
+            SettingSwitch(
+                isChecked = portOn,
+                onCheckedChange = { turnOn ->
+                    sendCmds(
+                        Um980Commands.nmeaComOutputCommands(
+                            port = port,
+                            enabled = turnOn,
+                            ggaRmcPeriodSec = coordPeriod,
+                            gsaPeriodSec = gsaPeriod,
+                            gsvPeriodSec = gsvPeriod,
+                            zdaPeriodSec = zdaPeriod,
+                            vtgPeriodSec = vtgPeriod,
+                        ),
+                        refreshAfter = true,
+                    )
+                },
+                text = stringResource(R.string.esp_um980_nmea_com, port),
+                description = when {
+                    output == null -> stringResource(R.string.esp_um980_nmea_com_unknown)
+                    portOn -> stringResource(R.string.esp_um980_nmea_com_on)
+                    else -> stringResource(R.string.esp_um980_nmea_com_off)
+                },
+                enabled = enabled,
+            )
+        }
         SettingDropdownGeneric(
             selectedValue = nmeaRateOptions.first { it.periodSec == coordPeriod },
             onValueChange = { opt ->
