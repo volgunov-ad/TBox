@@ -544,36 +544,45 @@ class Um980FirmwareUpdater(
         return null
     }
 
-    private suspend fun restoreBaud(workingBaud: Int): String? {
-        val candidates = linkedSetOf(workingBaud, UPGRADE_BAUD, 115200, 57600, 230400)
-            .filter { it in 9600..921600 }
-        for (baud in candidates) {
-            if (!transport.setBaud(baud)) continue
-            delay(300)
-            drain(200)
-            sendLine("VERSIONA")
-            val lines = collectAscii(2_500L)
-            if (lines.any { it.contains("VERSIONA", ignoreCase = true) }) {
-                for (com in listOf("com1", "com2", "com3")) {
-                    sendLine("config $com $workingBaud")
-                    delay(60)
-                }
-                if (baud != workingBaud) {
-                    transport.setBaud(workingBaud)
-                    delay(200)
-                }
-                sendLine("SAVECONFIG")
-                delay(500)
-                return null
-            }
+    /**
+     * Put every COM back on [workingBaud] and SAVECONFIG.
+     * The live port flips as soon as its own `config com` is applied, so a burst of
+     * com1+com2+com3+SAVECONFIG at 460800 loses SAVECONFIG. That left the module at
+     * 460800 after a successful flash (Build25621 on COM6 and on the head unit).
+     */
+    internal suspend fun restoreBaud(workingBaud: Int): String? {
+        val target = workingBaud.coerceIn(9600, 921600)
+        val talking = findTalkingBaud(target) ?: return "baud_restore"
+        if (transport.currentBaud() != talking && !transport.setBaud(talking)) return "baud_restore"
+        val ports = ArrayDeque(listOf("com1", "com2", "com3"))
+        while (ports.isNotEmpty()) {
+            val com = ports.removeFirst()
+            sendLine("config $com $target")
+            if (waitForAny(listOf("OK"), 900L) != null) continue
+            if (!transport.setBaud(target)) return "baud_restore"
+            delay(200)
+            drain(80)
+            sendLine("config $com $target")
+            if (waitForAny(listOf("OK"), 900L) == null) return "baud_restore"
         }
-        // Last resort: force host baud + CONFIG even without VERSIONA
-        transport.setBaud(workingBaud)
-        for (com in listOf("com1", "com2", "com3")) {
-            sendLine("config $com $workingBaud")
-            delay(60)
-        }
+        if (transport.currentBaud() != target && !transport.setBaud(target)) return "baud_restore"
+        delay(150)
+        drain(60)
         sendLine("SAVECONFIG")
+        if (waitForAny(listOf("OK"), 1_500L) == null) return "baud_restore"
+        return null
+    }
+
+    private suspend fun findTalkingBaud(preferred: Int): Int? {
+        val order = linkedSetOf(transport.currentBaud(), UPGRADE_BAUD, preferred, 115_200)
+            .filter { it in 9600..921600 }
+        for (baud in order) {
+            if (transport.currentBaud() != baud && !transport.setBaud(baud)) continue
+            delay(150)
+            drain(80)
+            sendLine("VERSIONA")
+            if (waitForAny(listOf("VERSIONA", "UM980"), 1_200L) != null) return transport.currentBaud()
+        }
         return null
     }
 

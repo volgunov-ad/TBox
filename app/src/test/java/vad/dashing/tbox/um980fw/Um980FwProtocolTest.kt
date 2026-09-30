@@ -217,6 +217,27 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
+    fun restoreBaudSavesWorkingRateAfterLivePortFlips() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
+        val log = mutableListOf<String>()
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII).trim()
+            log.add("${transport.currentBaud()}:$s")
+            when {
+                transport.currentBaud() == 460_800 && s.contains("VERSIONA", ignoreCase = true) ->
+                    transport.enqueueAscii("#VERSIONA,1;\"UM980\",\"R4.10Build25621\"\r\n")
+                transport.currentBaud() == 115_200 &&
+                    (s.contains("config com", ignoreCase = true) || s.contains("SAVECONFIG")) ->
+                    transport.enqueueAscii("\$command,response: OK*00\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertNull(updater.restoreBaud(115_200))
+        assertEquals(115_200, transport.currentBaud())
+        assertTrue(log.any { it.startsWith("115200:") && it.contains("SAVECONFIG") })
+    }
+
+    @Test
     fun softAbortsWithoutResetIf460800LinkDeadAndRestores() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
         var sawDoubleReset = false
