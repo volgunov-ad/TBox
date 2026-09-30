@@ -153,13 +153,19 @@ class Um980FirmwareUpdater(
         }
         if (enteredBootloaderDuringSwitch) return true
         notePhase("460800-ok")
+        // ROM menu uses the saved baud, not the RAM 460800. Commit 460800 so the
+        // banner stays on this port; recover writes the working baud back on failure.
+        rxTail.clear()
+        sendLine("SAVECONFIG")
+        waitForAny(listOf("OK", "response"), SOFT_SAVECONFIG_SETTLE_MS)
         rxTail.clear()
         sendDoubleReset(leadingCrLf = false)
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
-        // UPrecise: banner stays on 460800 ~2s after "system is rebooting".
-        // Build14259 direct USB: that same window is non-ASCII, so the ROM menu
-        // is on the saved baud. Leave 460800 as soon as the garbage starts.
+        // UPrecise: ASCII banner on 460800 ~2s after "system is rebooting".
+        // Build14259 without a saved 460800: those next bytes are not ASCII, and the
+        // 2s menu is on 115200. Leave as soon as that garbage starts — do not sit
+        // out the whole listen, or the menu has already booted the app.
         if (listenAtUpgradeBaudAfterReset()) return true
         if (sweepBootloaderAfterGarbage(hostBaud)) return true
         if (waitForBootloaderBanner(hostBaud, overallTimeoutMs = 12_000L)) return true
@@ -323,38 +329,44 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Stay on 460800 only while the post-reset bytes are still ASCII.
+     * Stay on 460800 while the post-reset bytes are still ASCII.
      * @return true when the N4 banner was read here.
      */
     private suspend fun listenAtUpgradeBaudAfterReset(): Boolean {
         val deadline = System.currentTimeMillis() + SOFT_UPGRADE_BAUD_LISTEN_MS
         val ascii = StringBuilder()
-        var printable = 0
-        var garbage = 0
         var sawReboot = false
+        var rebootAtMs = 0L
         while (System.currentTimeMillis() < deadline) {
             val chunk = transport.read(256, 80)
             if (chunk.isNotEmpty()) {
                 noteRx(chunk)
-                for (b in chunk) {
-                    val c = b.toInt() and 0xFF
-                    if (c == 10 || c == 13 || c in 32..126) printable++ else garbage++
-                }
                 ascii.append(chunk.toString(Charsets.US_ASCII))
                 if (ascii.length > 8_000) ascii.delete(0, ascii.length - 4_000)
                 val hay = ascii.toString()
                 if (hay.contains("BootLoader", ignoreCase = true) || hay.contains("boot>", ignoreCase = true)) {
                     return true
                 }
-                if (hay.contains("rebooting", ignoreCase = true)) sawReboot = true
-                if (sawReboot && garbage > 24 && garbage * 2 > printable) {
+                val nonAscii = chunk.count { b ->
+                    val c = b.toInt() and 0xFF
+                    c != 10 && c != 13 && c !in 32..126
+                }
+                if (!sawReboot && hay.contains("rebooting", ignoreCase = true)) {
+                    sawReboot = true
+                    rebootAtMs = System.currentTimeMillis()
+                    notePhase("rebooting")
+                }
+                if (sawReboot && nonAscii > 8) {
                     notePhase("garbage-after-reboot")
                     return false
                 }
             }
+            if (sawReboot && System.currentTimeMillis() - rebootAtMs > SOFT_REBOOT_ASCII_WAIT_MS) {
+                return false
+            }
             delay(20)
         }
-        notePhase(if (sawReboot) "rebooting" else "no-reboot-text")
+        if (!sawReboot) notePhase("no-reboot-text")
         return false
     }
 
@@ -369,6 +381,11 @@ class Um980FirmwareUpdater(
             for (baud in order) {
                 if (transport.currentBaud() != baud && !transport.setBaud(baud)) continue
                 delay(40)
+                // Spontaneous menu first. A key before the prompt can take the default item.
+                if (waitForAny(listOf("BootLoader", "boot>"), SOFT_MENU_QUIET_MS) != null) {
+                    notePhase("banner@$baud")
+                    return true
+                }
                 transport.write("\r\n".toByteArray(Charsets.US_ASCII))
                 if (waitForAny(listOf("BootLoader", "boot>"), SOFT_MENU_SLICE_MS) != null) {
                     notePhase("banner@$baud")
@@ -698,8 +715,12 @@ class Um980FirmwareUpdater(
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
         /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
-        /** How long to stay on 460800 after reset before the saved-baud menu sweep. */
+        /** How long to wait for the reboot text itself after reset. */
         private const val SOFT_UPGRADE_BAUD_LISTEN_MS = 3_000L
+        /** ASCII wait after "system is rebooting" for a banner still on 460800. */
+        private const val SOFT_REBOOT_ASCII_WAIT_MS = 1_600L
+        /** Listen for a menu that prints on its own, before sending a key. */
+        private const val SOFT_MENU_QUIET_MS = 700L
         /** One N4 menu reprint period, plus a little slack. */
         private const val SOFT_MENU_SLICE_MS = 2_200L
         /** Allow SAVECONFIG to commit during recover. */
