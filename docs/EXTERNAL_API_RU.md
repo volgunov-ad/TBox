@@ -149,6 +149,21 @@ scopes), не plaintext токена в логах.
 | `POST /v1/pair/request` | только при активном pairing |
 | Остальные | `401` |
 
+### Клиент для проверки с ПК
+
+В репозитории: `tools/tbox_external_api_pair.py` (только stdlib). По умолчанию хост
+`192.168.1.128`, порт `8765`.
+
+```bash
+# На ГУ: Настройки → API → включить сервер → «Подключить приложение»
+python3 tools/tbox_external_api_pair.py
+python3 tools/tbox_external_api_pair.py --health-only
+python3 tools/tbox_external_api_pair.py --check-only   # уже есть токен в ~/.tbox_external_api_token.json
+```
+
+Скрипт: `POST /v1/pair/request` → poll `GET /v1/pair/status` → сохраняет Bearer →
+проверяет `GET /v1/catalog`, несколько `GET /v1/signals`, `GET /v1/automations`.
+
 ---
 
 ## 6. Безопасность (сводка)
@@ -409,6 +424,7 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций | **сделано** (код) |
 | 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
+| 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations с LAN | **сделано** |
 | 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | открыто (пока `[]`) |
 | 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
