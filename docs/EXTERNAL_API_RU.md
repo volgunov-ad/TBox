@@ -348,19 +348,15 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 provider + AI guide + тесты), чтобы UI правил и HTTP API получили их одновременно.
 Существующие JSON правил без новых полей не меняются.
 
-| ID | Предлагаемый signal id | Назначение | Ориентир сложности |
-|----|------------------------|------------|--------------------|
-| G1 | `tbox_connected` | TBox на связи (on/off) | S |
-| G2 | `modem_signal_level` | уровень сигнала модема (число) | S |
-| G3 | `locate_status` | есть ли GPS-фикс (state/bool по канону каталога) | S |
-| G4 | `fuel_level_percent_filtered` (+ опц. литры отдельным id) | стабильный % / литры | S–M |
-| G5 | `gear_box_oil_temperature` | температура масла КПП | S |
-| G6 | метрики активной поездки / моточасы (набор id: дистанция, средний расход, длительность, …) | «сколько проехали» | M |
-| G7 | `media_title` / `media_artist` (state/string) | «что играет» | M |
-
-Точные `storageKey`, `valueType` и `source` утверждаются при реализации и сразу попадают в
-`AutomationSignalCatalog` и AI guide. Для G6 допустим небольшой набор id вместо одного
-«мега-сигнала».
+| ID | Signal id | Назначение | Статус |
+|----|-----------|------------|--------|
+| G1 | `tbox_connected` | TBox на связи (on/off), source `app` | **в каталоге** |
+| G2 | `modem_signal_level` | уровень сигнала модема (число), `app` | **в каталоге** |
+| G3 | `locate_status` | GPS-фикс GeoDisplay (on/off), `app` | **в каталоге** |
+| G4 | `fuel_level_percent_filtered`, `fuel_level_liters` | фильтр % / калибр. литры, `app` | **в каталоге** |
+| G5 | `gear_box_oil_temperature` | температура масла КПП, `tbox` | **в каталоге** |
+| G6 | `active_trip_distance_km`, `active_trip_avg_fuel_l100km`, `active_trip_duration_s`, `active_trip_motor_hours`, `motor_hours` | поездка / моточасы, `app` | **в каталоге** |
+| G7 | `media_title`, `media_artist` | now playing, `app` | **в каталоге** |
 
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
 `/v1/catalog` (и при желании рядом с descriptor’ами в коде).

@@ -262,5 +262,18 @@ object AutomationParameterLabels {
         AutomationSignalId.HU_NAVI_VOLUME -> "Громкость навигатора (микшер ГУ)"
         AutomationSignalId.HU_VOICE_VOLUME -> "Громкость голоса (микшер ГУ)"
         AutomationSignalId.HU_HEADREST_SPEAKER -> "Динамик подголовника"
+        AutomationSignalId.TBOX_CONNECTED -> "TBox на связи"
+        AutomationSignalId.MODEM_SIGNAL_LEVEL -> "Модем: уровень сигнала"
+        AutomationSignalId.LOCATE_STATUS -> "Геопозиция: фиксация"
+        AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> "Топливо % (фильтр)"
+        AutomationSignalId.FUEL_LEVEL_LITERS -> "Топливо, л (калибровка)"
+        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE -> "Температура масла КПП"
+        AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM -> "Поездка: пробег"
+        AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM -> "Поездка: средний расход"
+        AutomationSignalId.ACTIVE_TRIP_DURATION_S -> "Поездка: длительность"
+        AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS -> "Поездка: моточасы"
+        AutomationSignalId.MOTOR_HOURS -> "Моточасы"
+        AutomationSignalId.MEDIA_TITLE -> "Медиа: трек"
+        AutomationSignalId.MEDIA_ARTIST -> "Медиа: исполнитель"
     }
 }

@@ -222,7 +222,35 @@ enum class AutomationSignalId(
     HU_NAVI_VOLUME("hu_navi_volume"),
     HU_VOICE_VOLUME("hu_voice_volume"),
     /** Headrest speaker: `only` / `assist` / `off`. */
-    HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE);
+    HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE),
+
+    // --- External API / voice gaps G1–G7 (also usable in automations) ---
+    /** TBox UDP link up/down; must be `app` (not `tbox`) so offline still yields `off`. */
+    TBOX_CONNECTED("tbox_connected", AutomationSignalValueType.STATE),
+    /** Cellular bars / CSQ-derived level from [TboxRepository.netState.signalLevel]. */
+    MODEM_SIGNAL_LEVEL("modem_signal_level"),
+    /** Active geo source has a fix ([GeoDisplayRepository.state.locateStatus]). */
+    LOCATE_STATUS("locate_status", AutomationSignalValueType.STATE),
+    /** Trip-dwell filtered fuel % ([TripTelemetryRepository.fuelLevelPercentageFiltered]). */
+    FUEL_LEVEL_PERCENT_FILTERED("fuel_level_percent_filtered"),
+    /** Calibrated tank liters at +15 °C ([TripTelemetryRepository.fuelLevelCalibratedLiters]). */
+    FUEL_LEVEL_LITERS("fuel_level_liters"),
+    /** Gearbox oil temperature °C from TBox CAN. */
+    GEAR_BOX_OIL_TEMPERATURE("gear_box_oil_temperature"),
+    /** Open current trip distance km ([TripRepository.activeTrip]). */
+    ACTIVE_TRIP_DISTANCE_KM("active_trip_distance_km"),
+    /** Open current trip average L/100 km. */
+    ACTIVE_TRIP_AVG_FUEL_L100KM("active_trip_avg_fuel_l100km"),
+    /** Open current trip duration seconds (moving+idle+parking). */
+    ACTIVE_TRIP_DURATION_S("active_trip_duration_s"),
+    /** Open current trip engine-on hours (moving+idle). */
+    ACTIVE_TRIP_MOTOR_HOURS("active_trip_motor_hours"),
+    /** Cumulative motor hours ([CarDataRepository.motorHours]). */
+    MOTOR_HOURS("motor_hours"),
+    /** Now-playing title from notification media sessions. */
+    MEDIA_TITLE("media_title", AutomationSignalValueType.STATE),
+    /** Now-playing artist from notification media sessions. */
+    MEDIA_ARTIST("media_artist", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

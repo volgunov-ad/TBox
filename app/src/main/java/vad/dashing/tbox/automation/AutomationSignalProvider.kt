@@ -15,13 +15,17 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
+import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.Wheels
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
@@ -33,6 +37,7 @@ import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.trip.TripRepository
 
 class AutomationSignalProvider(
     private val scope: CoroutineScope,
@@ -181,6 +186,33 @@ class AutomationSignalProvider(
                 )
                 AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
+                AutomationSignalId.TBOX_CONNECTED ->
+                    TboxRepository.tboxConnected.map { connected ->
+                        AutomationSignalValue.State(if (connected) "on" else "off")
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_SIGNAL_LEVEL ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.Number(net.signalLevel.toDouble())
+                    }.distinctUntilChanged()
+                AutomationSignalId.LOCATE_STATUS ->
+                    GeoDisplayRepository.state.map { state ->
+                        AutomationSignalValue.State(if (state.locateStatus) "on" else "off")
+                    }.distinctUntilChanged()
+                AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED ->
+                    TripTelemetryRepository.fuelLevelPercentageFiltered.uintNumberFlow()
+                AutomationSignalId.FUEL_LEVEL_LITERS ->
+                    TripTelemetryRepository.fuelLevelCalibratedLiters.numberFlow()
+                AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM -> activeTripDistanceFlow()
+                AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM -> activeTripAvgFuelFlow()
+                AutomationSignalId.ACTIVE_TRIP_DURATION_S -> activeTripDurationFlow()
+                AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS -> activeTripMotorHoursFlow()
+                AutomationSignalId.MOTOR_HOURS ->
+                    CarDataRepository.motorHours.map { hours ->
+                        hours.toDouble().takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+                            ?: AutomationSignalValue.Unavailable
+                    }.distinctUntilChanged()
+                AutomationSignalId.MEDIA_TITLE -> mediaNowPlayingFlow { it.track }
+                AutomationSignalId.MEDIA_ARTIST -> mediaNowPlayingFlow { it.artist }
                 else -> null
             }
         }
@@ -237,6 +269,7 @@ class AutomationSignalProvider(
 
         AutomationSignalId.INSIDE_AIR_QUALITY -> CanDataRepository.insideAirQuality.uintNumberFlow()
         AutomationSignalId.OUTSIDE_AIR_QUALITY -> CanDataRepository.outsideAirQuality.uintNumberFlow()
+        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE -> CanDataRepository.gearBoxOilTemperature.numberFlow()
         else -> null
     }
 
@@ -437,6 +470,64 @@ private fun geoDisplayFlow(): Flow<AutomationSignalValue> =
             }
         }
         .distinctUntilChanged()
+
+private fun activeTripDistanceFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive }
+        t?.distanceKm?.toDouble()?.takeIf(Double::isFinite)?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun activeTripAvgFuelFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        TripRepository.averageFuelConsumptionLitersPer100Km(t)
+            ?.toDouble()
+            ?.takeIf(Double::isFinite)
+            ?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun activeTripDurationFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        val seconds =
+            (t.movingTimeMs + t.idleTimeMs + t.parkingTimeMs).coerceAtLeast(0L) / 1000.0
+        AutomationSignalValue.Number(seconds)
+    }.distinctUntilChanged()
+
+private fun activeTripMotorHoursFlow(): Flow<AutomationSignalValue> =
+    TripRepository.activeTrip.map { trip ->
+        val t = trip?.takeIf { it.isCurrentActive } ?: return@map AutomationSignalValue.Unavailable
+        t.engineRunningTimeHours().toDouble().takeIf(Double::isFinite)
+            ?.let(AutomationSignalValue::Number)
+            ?: AutomationSignalValue.Unavailable
+    }.distinctUntilChanged()
+
+private fun mediaNowPlayingFlow(
+    pick: (MediaPlayerState) -> String,
+): Flow<AutomationSignalValue> =
+    SharedMediaControlService.playerStates
+        .map { states ->
+            val selected = selectMediaPlayerState(states)
+            val text = selected?.let(pick)?.trim().orEmpty()
+            if (text.isEmpty()) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(text)
+            }
+        }
+        .distinctUntilChanged()
+
+private fun selectMediaPlayerState(
+    states: Map<String, MediaPlayerState>,
+): MediaPlayerState? {
+    if (states.isEmpty()) return null
+    val values = states.values
+    return values.firstOrNull { it.isPlaying && (it.track.isNotBlank() || it.artist.isNotBlank()) }
+        ?: values.firstOrNull { it.track.isNotBlank() || it.artist.isNotBlank() }
+        ?: values.firstOrNull { it.isPlaying }
+}
 
 internal fun <T : Number> Flow<T?>.numberFlow(): Flow<AutomationSignalValue> =
     map { value ->
