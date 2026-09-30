@@ -6,7 +6,8 @@
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
 Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).  
-Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
+Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).  
+Каталог штатных APK / package name прошивки **Android 9 mbCAN** (X50 V000000279): [STOCK_APPS_ANDROID9_MBCAN_RU.md](STOCK_APPS_ANDROID9_MBCAN_RU.md).
 
 ### Пометка про «Android 10» (Adayo)
 
