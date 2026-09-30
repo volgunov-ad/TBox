@@ -497,3 +497,9 @@ mapping, ограничения значений, JNI-сериализация, 
 | Хранение | `AutomationStore.kt` |
 | UI | `ui/AutomationsTab.kt`, `AutomationTriggerEditor.kt`, `AutomationActionEditor.kt` |
 
+## Внешний доступ (план)
+
+Чтение сигналов, `invoke` действий и «Выполнить сейчас» для внешних клиентов (в т.ч. голосовой
+ассистент на ГУ или в телефоне) планируется через HTTP API с сопряжением — без параллельного
+каталога id. Черновик контракта: [EXTERNAL_API_RU.md](EXTERNAL_API_RU.md).
+

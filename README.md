@@ -96,6 +96,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) | Плитки: вкладка «Плитки», главный экран, плавающие панели, новый виджет |
 | [docs/OBD_ELM327_RU.md](docs/OBD_ELM327_RU.md) | Bluetooth ELM327: Mode 01 виджет, Mode 03 DTC во вкладке |
 | [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) | Пользовательские автоматизации: триггеры, условия, действия и CAN-безопасность |
+| [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md) | Внешний HTTP API (черновик): LAN, pairing, сигналы/действия/RunNow для голосового ассистента |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
@@ -111,6 +112,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | CAN головного устройства (климат, сиденья, режимы) | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
 | Панели и виджеты | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 | Автоматизации | [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) |
+| Внешний HTTP API (клиенты / голос) | [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md) |
 
 == Техническая документация по CAN backend
 Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:
