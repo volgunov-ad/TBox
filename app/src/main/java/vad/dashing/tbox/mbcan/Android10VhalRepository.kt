@@ -3400,6 +3400,75 @@ object Android10VhalRepository {
         logDebug("telemetry/seat_belt $key=$raw map=${_vhalSeatBeltRaw.value}")
     }
 
+    /**
+     * Expert raw Get: resolve A10 read id for the logical mbCAN id, then
+     * [CarPropertyBridge.getIntProperty]. Bypasses command registry; no decode.
+     */
+    suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        val connection = ensureConnected()
+        if (connection !is MbCanAvailability.Available) {
+            return ExpertRawGetResult(false, message = currentUnavailableReason())
+        }
+        val effectiveId = FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId) ?: propertyId
+        permissionDeniedReasonForProperty(effectiveId)?.let {
+            return ExpertRawGetResult(
+                success = false,
+                effectivePropertyId = effectiveId,
+                message = it,
+            )
+        }
+        val raw = bridge?.getIntProperty(effectiveId)
+        return if (raw == null) {
+            ExpertRawGetResult(
+                success = false,
+                effectivePropertyId = effectiveId,
+                message = "Get returned null (bus=$bus)",
+            )
+        } else {
+            ExpertRawGetResult(
+                success = true,
+                rawValue = raw,
+                effectivePropertyId = effectiveId,
+                message = "ok",
+            )
+        }
+    }
+
+    /**
+     * Expert raw Set: resolve A10 write id and send [value] as-is (no VHAL encode /
+     * registry policy). Multi-pane window logical ids are rejected — pick a pane id.
+     */
+    suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
+        val connection = ensureConnected()
+        if (connection !is MbCanAvailability.Available) {
+            return ExpertRawSetResult(false, message = currentUnavailableReason())
+        }
+        val windowIds = FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
+        if (windowIds != null && windowIds.size > 1) {
+            return ExpertRawSetResult(
+                success = false,
+                message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
+            )
+        }
+        val effectiveId = windowIds?.singleOrNull()
+            ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
+            ?: propertyId
+        permissionDeniedReasonForProperty(effectiveId)?.let {
+            return ExpertRawSetResult(
+                success = false,
+                effectivePropertyId = effectiveId,
+                message = it,
+            )
+        }
+        val ok = bridge?.setIntProperty(effectiveId, value) == true
+        logDebug("expertSetRaw bus=$bus logical=$propertyId effective=$effectiveId value=$value ok=$ok")
+        return ExpertRawSetResult(
+            success = ok,
+            effectivePropertyId = effectiveId,
+            message = if (ok) "Set ok" else "Set failed",
+        )
+    }
+
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {

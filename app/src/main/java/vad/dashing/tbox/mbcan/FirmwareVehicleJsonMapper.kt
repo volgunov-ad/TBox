@@ -406,6 +406,17 @@ object FirmwareVehicleJsonMapper {
     /** Deep diagnostics: logical mbCAN id → verified A10 VHAL read id pairs from [explicitReadIdMap]. */
     fun explicitReadEntries(): List<Pair<Int, Int>> = explicitReadIdMap.map { it.key to it.value }
 
+    /** Logical mbCAN id → verified A10 VHAL write id pairs from [explicitWriteIdMap]. */
+    fun explicitWriteEntries(): List<Pair<Int, Int>> = explicitWriteIdMap.map { it.key to it.value }
+
+    /** Explicit-map-only peek (no firmware send/receive.json probe). */
+    fun peekExplicitReadPropertyId(requestedPropertyId: Int): Int? =
+        explicitReadIdMap[requestedPropertyId]
+
+    /** Explicit-map-only peek (no firmware send/receive.json probe). */
+    fun peekExplicitWritePropertyId(requestedPropertyId: Int): Int? =
+        explicitWriteIdMap[requestedPropertyId]
+
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
         explicitReadIdMap[requestedPropertyId]?.let { return it }
         val tables = loadTables() ?: return null
