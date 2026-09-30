@@ -164,7 +164,7 @@ fun KeyPressDiagnosticsDialog(
     ) {
         Surface(
             modifier = Modifier
-                .tboxDialogSurface()
+                .tboxDialogSurfaceFill()
                 .onPreviewKeyEvent { event ->
                     append(
                         KeyPressDiagnosticFormat.android(

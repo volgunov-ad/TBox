@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -148,8 +149,8 @@ fun UiIconSettingsDialog(
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .heightIn(max = tboxDialogScrollBodyMaxHeight()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(filteredEntries, key = { it.entry.key }) { localized ->
