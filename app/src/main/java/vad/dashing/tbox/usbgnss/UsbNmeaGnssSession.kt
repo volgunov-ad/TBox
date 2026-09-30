@@ -543,7 +543,11 @@ class UsbNmeaGnssSession(
         if (commIntf != null) {
             assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
         }
-        sendOptionalNmeaEnableCommands()
+        // Soft FW reopen must not re-enable NMEA mid-upgrade (and DTR reopen already
+        // risks a module reset — keep the exclusive pipe quiet).
+        if (!exclusiveMode) {
+            sendOptionalNmeaEnableCommands()
+        }
         // Persist serial once readable after permission / open.
         val resolvedSerial = actualSerial.ifEmpty {
             runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()

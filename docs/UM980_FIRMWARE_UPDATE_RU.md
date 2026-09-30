@@ -13,7 +13,8 @@ Reference Commands Manual N4 **не** описывает кадры upgrade — 
 | t (отн.) | Событие |
 |----------|---------|
 | 0 | несколько пар `unlog` → `$command,unlog,response: OK` |
-| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG`) |
+| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG` в dmslog8) |
+| +~0.9 с | *(на прямом USB)* `SAVECONFIG` — иначе reopen адаптера (падение DTR) ≈ hard reset и RAM baud 460800 теряется |
 | +~2 с | ещё `unlog`; host UART → **460800** |
 | +~2.6 с | два бурста `reset\r\nreset\r\n` (~50 мс; второй с ведущим `\r\n`) → `$command,reset,response: OK` |
 | +~4.3 с | `system is rebooting` |
@@ -28,7 +29,7 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 
 1. (Опционально) `version` / `VERSIONA` — снимок до прошивки.
 2. `unlog` несколько раз — остановить NMEA.
-3. `config com1/com2/com3 460800` **одним write** (и повторить блок ~50 мс) — без `SAVECONFIG`. Не слать COM по одному с паузой: после смены baud USB-COM следующие строки теряются.
+3. `config com1/com2/com3 460800` **одним write** (и повторить блок ~50 мс). На **прямом USB** затем `SAVECONFIG` (reopen адаптера пульсирует DTR≈RESET и иначе сбрасывает RAM baud).
 4. Host UART → **460800** (USB: полный reopen), короткий settle, ещё пара `unlog`.
 5. Сброс в bootloader:
    - **Soft:** два бурста `reset\r\nreset\r\n` (~50 мс) → ждать `system is rebooting` / баннер BootLoader / `boot>`.
@@ -72,5 +73,5 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 - Обрыв → модуль часто остаётся в BootLoader; повтор Soft/Hard + тот же `.pkg`.
 - Неверный `.pkg` для другой модели — не использовать.
 - После `CONFIG 460800` без `SAVECONFIG` Hard power-cycle возвращает сохранённый baud — нужен baud-sweep на шаге 6.
-- **Причина сбоя Soft на прямом USB:** (1) после `CONFIG … 460800` модуль уже на 460800, а `setBaudLive` на CP210x/CH340 часто не переключает адаптер — нужен **полный reopen**; (2) `CONFIG com1/2/3` по одному с паузой — после flip baud USB-COM строки com2/com3 и мусор ломают Soft (в `um980.dmslog8` UPrecise шлёт **один блок ×2**); (3) ранний hot `RESET` в recover до повторного ожидания баннера срывал поздний BootLoader. При неудаче Soft — [recoverLinkBestEffort] с reopen + `RESET` (как UI «Перезагрузка GNSS»).
+- **Причина сбоя Soft на прямом USB:** (1) `setBaudLive` часто не меняет CP210x/CH340 — нужен **полный reopen**; (2) reopen закрывает USB → DTR↓↑ ≈ RESET_N → **RAM CONFIG 460800 теряется**, модуль снова на сохранённом 115200 при хосте 460800 — BootLoader не виден (нужен `SAVECONFIG` до reopen); (3) `CONFIG com1/2/3` по одному с паузой теряет строки после flip baud; (4) ранний hot `RESET` в recover срывал поздний баннер. Recover: reopen + CONFIG/SAVECONFIG рабочего baud + `RESET`.
 - Soft **нужен** там, где Hard (отдельное питание модуля без отключения USB) физически невозможен.

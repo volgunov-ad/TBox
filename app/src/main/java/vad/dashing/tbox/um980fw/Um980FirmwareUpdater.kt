@@ -118,25 +118,29 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Soft entry (UPrecise Soft path from `um980.dmslog8`). Plain `reset` at working baud usually
-     * only reboots the app (Hot RESET) — BootLoader needs CONFIG COM* 460800 then reset.
+     * Soft entry (UPrecise Soft path from `um980.dmslog8` + GNSS-store Soft prep).
      *
-     * Critical details from the capture (not obvious from manuals):
-     * - `config com1/2/3 460800` as **one write** (and the same block **twice** ~50 ms apart).
-     *   Sending COM lines one-by-one with delay loses com2/com3 after the USB COM baud flips.
-     * - Host then [Um980BinaryTransport.reopenAtBaud] to 460800; verify `unlog` OK.
-     * - Two bursts of `reset\r\nreset\r\n` (~50 ms apart), like UPrecise.
-     * - Prefer BootLoader needles over `rebooting` in the same RX chunk.
-     * - On BootLoader miss do **not** hot-RESET here — that aborts a late banner before the
-     *   outer [waitForBootloaderBanner]; [recoverLinkBestEffort] runs from `update` finally.
+     * Plain `reset` at working baud only reboots the app. BootLoader needs COM* at 460800.
+     *
+     * USB-critical: [Um980BinaryTransport.reopenAtBaud] closes the adapter (DTR drops) and
+     * re-opens it — on many boards that pulses RESET_N and **wipes RAM CONFIG**. So Soft must
+     * [SAVECONFIG] 460800 **before** reopen (GNSS store also sets saved speed first). After a
+     * DTR reset the module comes back at 460800 and Soft double-reset can enter BootLoader.
+     *
+     * Also from dmslog8: CONFIG as one write ×2 (~50 ms); two `reset\r\nreset` bursts; prefer
+     * BootLoader needles over `rebooting`. Do not hot-RESET on BootLoader miss here — recover
+     * runs from `update` finally (and must SAVECONFIG the working baud back).
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
         // UPrecise: identical CONFIG block twice (~50 ms), all three COMs in one write each.
         sendUpgradeBaudConfigBlock()
         delay(SOFT_CONFIG_REPEAT_GAP_MS)
         sendUpgradeBaudConfigBlock()
-        // Module UART already at 460800 — reopen host ASAP (mismatch window hurts USB).
-        delay(100)
+        // Persist upgrade baud before USB reopen (DTR pulse ≈ hard reset on many adapters).
+        sendLine("SAVECONFIG")
+        delay(SOFT_SAVECONFIG_SETTLE_MS)
+        drain(200)
+
         if (!applyHostBaud(UPGRADE_BAUD)) {
             runCatching { Log.w(TAG, "soft: applyHostBaud($UPGRADE_BAUD) failed") }
             runCatching { recoverLinkBestEffort(preBaud) }
@@ -185,10 +189,15 @@ class Um980FirmwareUpdater(
 
     /** All three COM baud lines in one write — baud flips after the whole block is received. */
     private fun sendUpgradeBaudConfigBlock() {
+        sendWorkingBaudConfigBlock(UPGRADE_BAUD)
+    }
+
+    private fun sendWorkingBaudConfigBlock(baud: Int) {
+        val b = baud.coerceIn(9600, 921600)
         val block =
-            "config com1 $UPGRADE_BAUD\r\n" +
-                "config com2 $UPGRADE_BAUD\r\n" +
-                "config com3 $UPGRADE_BAUD\r\n"
+            "config com1 $b\r\n" +
+                "config com2 $b\r\n" +
+                "config com3 $b\r\n"
         transport.write(block.toByteArray(Charsets.US_ASCII))
     }
 
@@ -235,13 +244,12 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * After a failed Soft path the module is often left at RAM baud 460800 (or in BootLoader)
-     * while the host returns to [preBaud] — connection looks dead until power-cycle or UI
-     * «Перезагрузка GNSS» ([GnssModuleCommands.softRebootAscii] = `RESET`).
+     * After a failed Soft path the module may be left at saved/RAM 460800 (Soft now SAVECONFIGs
+     * upgrade baud before reopen) or in BootLoader — connection looks dead until power-cycle or UI
+     * «Перезагрузка GNSS».
      *
-     * USB: [Um980BinaryTransport.reopenAtBaud] per candidate (setBaudLive alone is unreliable),
-     * then hot `RESET` so unsaved CONFIG drops and the module returns to the saved baud —
-     * same effect as the GNSS reboot button after exclusive ends.
+     * USB: [Um980BinaryTransport.reopenAtBaud] per candidate, exit BootLoader if needed, CONFIG +
+     * SAVECONFIG working baud, then hot `RESET` (same as GNSS reboot) so the live UART matches.
      */
     internal suspend fun recoverLinkBestEffort(preBaud: Int) {
         val target = preBaud.coerceIn(9600, 921600)
@@ -262,15 +270,14 @@ class Um980FirmwareUpdater(
                 sendLine("VERSIONA")
                 if (waitForAny(listOf("VERSIONA", "UM980"), 1_500L) == null) continue
             }
-            for (com in listOf("com1", "com2", "com3")) {
-                sendLine("config $com $target")
-                delay(60)
-            }
+            sendWorkingBaudConfigBlock(target)
+            sendLine("SAVECONFIG")
+            delay(SOFT_SAVECONFIG_SETTLE_MS)
             touchedApp = true
-            runCatching { Log.i(TAG, "recoverLink: app answered at host baud=$baud → CONFIG $target") }
+            runCatching { Log.i(TAG, "recoverLink: app answered at host baud=$baud → SAVECONFIG $target") }
             break
         }
-        // Match UI GNSS reboot: reopen at working baud, hot RESET (drops RAM 460800), reopen again.
+        // Match UI GNSS reboot: reopen at working baud, hot RESET, reopen again.
         if (!applyHostBaud(target)) {
             runCatching { transport.setBaud(target) }
         }
@@ -503,6 +510,8 @@ class Um980FirmwareUpdater(
         private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
         /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
         private const val SOFT_RESET_REPEAT_GAP_MS = 50L
+        /** Allow SAVECONFIG to commit before USB reopen / DTR pulse. */
+        private const val SOFT_SAVECONFIG_SETTLE_MS = 800L
 
         internal fun isBootloaderBanner(hit: String): Boolean =
             hit.contains("BootLoader", ignoreCase = true) ||
