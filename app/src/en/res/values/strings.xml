@@ -1349,7 +1349,6 @@
     <string name="settings_api_enable_title">Enable API server</string>
     <string name="settings_api_enable_desc">Local HTTP API for external apps on the same network (voice, phone).</string>
     <string name="settings_api_port_title">Port</string>
-    <string name="settings_api_port_save">Save port</string>
     <string name="settings_api_status_disabled">Server disabled</string>
     <string name="settings_api_status_running">Server listening on port %1$d</string>
     <string name="settings_api_status_starting">Server starting…</string>
