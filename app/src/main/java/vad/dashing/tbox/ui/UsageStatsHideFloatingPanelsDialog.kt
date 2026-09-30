@@ -103,7 +103,7 @@ fun UsageStatsHideFloatingPanelsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 560.dp)
+                    .heightIn(max = tboxDialogScrollBodyMaxHeight())
                     .verticalScroll(rememberScrollState()),
             ) {
                 AppAlertDialogText(stringResource(R.string.settings_floating_usage_stats_hide_dialog_intro))

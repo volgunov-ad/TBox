@@ -19,6 +19,14 @@ import androidx.compose.ui.unit.dp
  * (`heightIn(max)`), so short dialogs do not leave empty bottom space.
  * Use [tboxDialogSurfaceFill] / [tboxDialogSurfaceCompactFill] only when the
  * body is a scrollable list that should always claim the available height.
+ *
+ * Sticky footer pattern for wrap [Dialog]+[Surface] columns (close/cancel outside
+ * the scroll): put the scrollable middle on
+ * `Modifier.weight(1f, fill = false)` (not a near-full-screen `heightIn(max)`).
+ * `fill = false` keeps short content wrapping; when content exceeds the surface
+ * max, the middle absorbs the remaining height and scrolls so actions stay visible.
+ * Avoid stacking `heightIn(max ≈ screen×HeightFraction)` on the body — title +
+ * body + buttons then exceed the surface max and clip the action row.
  */
 object TboxDialogSize {
     /** Default/Large custom dialogs (Expert, AppList, maps, pickers, …). */
@@ -29,11 +37,11 @@ object TboxDialogSize {
     const val CompactWidthFraction = 0.6f
 
     /**
-     * Approx. title + paddings + action row reserved when capping a scroll body
-     * inside a wrap-height dialog (so the surface can still stay under
-     * [HeightFraction] of the screen).
+     * Title + paddings + action row reserved when capping an AlertDialog text
+     * body with [tboxDialogScrollBodyMaxHeight] (surface stays under
+     * [HeightFraction] of the screen with confirm/dismiss still visible).
      */
-    const val ScrollBodyChromeReserveDp = 96
+    const val ScrollBodyChromeReserveDp = 200
 }
 
 /** Max dialog height: [TboxDialogSize.HeightFraction] × screen height. */
