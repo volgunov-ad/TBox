@@ -40,7 +40,8 @@ class Um980FirmwareUpdater(
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
-            if (!transport.setBaud(preBaud)) {
+            // USB: reopen so line-coding matches working baud before Soft CONFIG.
+            if (!applyHostBaud(preBaud)) {
                 return fail("baud")
             }
             delay(150)
@@ -117,29 +118,29 @@ class Um980FirmwareUpdater(
     }
 
     /**
-     * Soft entry (UPrecise Soft path). Plain `reset` at working baud usually only reboots the
-     * app (like Hot RESET) — BootLoader entry needs CONFIG COM* 460800 then reset.
+     * Soft entry (UPrecise Soft path from `um980.dmslog8`). Plain `reset` at working baud usually
+     * only reboots the app (Hot RESET) — BootLoader needs CONFIG COM* 460800 then reset.
      *
-     * Root cause of prior USB Soft failures: [Um980BinaryTransport.setBaud] / setBaudLive often
-     * does not actually switch CP210x/CH340 while exclusive; module was already at 460800 after
-     * CONFIG, host stayed wrong → no BootLoader seen, then host restored to 115200 → link dead
-     * until power-cycle / UI «Перезагрузка GNSS». Fix: [Um980BinaryTransport.reopenAtBaud]
-     * after CONFIG, verify `unlog` OK before reset, prefer BootLoader needles over `rebooting`
-     * (same RX chunk), [recoverLinkBestEffort] with reopen + hot RESET on failure.
+     * Critical details from the capture (not obvious from manuals):
+     * - `config com1/2/3 460800` as **one write** (and the same block **twice** ~50 ms apart).
+     *   Sending COM lines one-by-one with delay loses com2/com3 after the USB COM baud flips.
+     * - Host then [Um980BinaryTransport.reopenAtBaud] to 460800; verify `unlog` OK.
+     * - Two bursts of `reset\r\nreset\r\n` (~50 ms apart), like UPrecise.
+     * - Prefer BootLoader needles over `rebooting` in the same RX chunk.
+     * - On BootLoader miss do **not** hot-RESET here — that aborts a late banner before the
+     *   outer [waitForBootloaderBanner]; [recoverLinkBestEffort] runs from `update` finally.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
-        for (com in listOf("com1", "com2", "com3")) {
-            sendLine("config $com $UPGRADE_BAUD")
-            delay(80)
-        }
-        delay(150)
-        // Prefer full reopen on USB; companion setBaud is enough.
-        if (!transport.reopenAtBaud(UPGRADE_BAUD)) {
-            runCatching { Log.w(TAG, "soft: reopenAtBaud($UPGRADE_BAUD) failed, trying setBaud") }
-            if (!transport.setBaud(UPGRADE_BAUD)) {
-                runCatching { recoverLinkBestEffort(preBaud) }
-                return false
-            }
+        // UPrecise: identical CONFIG block twice (~50 ms), all three COMs in one write each.
+        sendUpgradeBaudConfigBlock()
+        delay(SOFT_CONFIG_REPEAT_GAP_MS)
+        sendUpgradeBaudConfigBlock()
+        // Module UART already at 460800 — reopen host ASAP (mismatch window hurts USB).
+        delay(100)
+        if (!applyHostBaud(UPGRADE_BAUD)) {
+            runCatching { Log.w(TAG, "soft: applyHostBaud($UPGRADE_BAUD) failed") }
+            runCatching { recoverLinkBestEffort(preBaud) }
+            return false
         }
         delay(500)
         drain(250)
@@ -149,7 +150,7 @@ class Um980FirmwareUpdater(
         delay(200)
         if (!probeAppAlive(2_500L)) {
             runCatching { Log.w(TAG, "soft: no OK at 460800 after first open — retry reopen") }
-            if (transport.reopenAtBaud(UPGRADE_BAUD)) {
+            if (applyHostBaud(UPGRADE_BAUD)) {
                 delay(500)
                 drain(250)
             }
@@ -160,7 +161,11 @@ class Um980FirmwareUpdater(
             }
         }
 
-        sendDoubleReset()
+        // UPrecise: two double-reset bursts ~50 ms apart (second has leading CR/LF).
+        sendDoubleReset(leadingCrLf = false)
+        delay(SOFT_RESET_REPEAT_GAP_MS)
+        sendDoubleReset(leadingCrLf = true)
+
         // Prefer BootLoader/boot> over "rebooting": waitForAny returns the first needle in the
         // list that appears in the buffer — if "rebooting" is listed first, a chunk that also
         // already contains the BootLoader banner is discarded and the second wait misses it.
@@ -174,9 +179,17 @@ class Um980FirmwareUpdater(
         }
         if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 20_000L)) return true
 
-        runCatching { Log.w(TAG, "soft: BootLoader not seen — restoring link") }
-        runCatching { recoverLinkBestEffort(preBaud) }
+        runCatching { Log.w(TAG, "soft: BootLoader not seen (recover deferred to update finally)") }
         return false
+    }
+
+    /** All three COM baud lines in one write — baud flips after the whole block is received. */
+    private fun sendUpgradeBaudConfigBlock() {
+        val block =
+            "config com1 $UPGRADE_BAUD\r\n" +
+                "config com2 $UPGRADE_BAUD\r\n" +
+                "config com3 $UPGRADE_BAUD\r\n"
+        transport.write(block.toByteArray(Charsets.US_ASCII))
     }
 
     /**
@@ -208,9 +221,10 @@ class Um980FirmwareUpdater(
         waitForBootloaderBanner(preBaud, overallTimeoutMs = BOOTLOADER_SWEEP_TIMEOUT_MS)
     }
 
-    private fun sendDoubleReset() {
-        // UPrecise capture: one write "\r\nreset\r\nreset\r\n"
-        transport.write("\r\nreset\r\nreset\r\n".toByteArray(Charsets.US_ASCII))
+    private fun sendDoubleReset(leadingCrLf: Boolean = true) {
+        // UPrecise Soft: "reset\r\nreset\r\n" then shortly "\r\nreset\r\nreset\r\n"
+        val payload = if (leadingCrLf) "\r\nreset\r\nreset\r\n" else "reset\r\nreset\r\n"
+        transport.write(payload.toByteArray(Charsets.US_ASCII))
     }
 
     /** True if UM980 app firmware still answers ASCII (unlog OK / command response). */
@@ -485,6 +499,10 @@ class Um980FirmwareUpdater(
         private const val HARD_LISTEN_SLICE_MS = 6_000L
         /** Settle after hot RESET during recover (module drops RAM baud, reboots app). */
         private const val RECOVER_RESET_SETTLE_MS = 2_500L
+        /** UPrecise Soft: second CONFIG block ~50 ms after the first. */
+        private const val SOFT_CONFIG_REPEAT_GAP_MS = 50L
+        /** UPrecise Soft: second double-reset burst ~50 ms after the first. */
+        private const val SOFT_RESET_REPEAT_GAP_MS = 50L
 
         internal fun isBootloaderBanner(hit: String): Boolean =
             hit.contains("BootLoader", ignoreCase = true) ||

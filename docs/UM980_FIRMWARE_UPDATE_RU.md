@@ -13,9 +13,9 @@ Reference Commands Manual N4 **не** описывает кадры upgrade — 
 | t (отн.) | Событие |
 |----------|---------|
 | 0 | несколько пар `unlog` → `$command,unlog,response: OK` |
-| +0.7 с | `config com1 460800` + `com2` + `com3` одним блоком (**без** `SAVECONFIG`) |
+| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG`) |
 | +~2 с | ещё `unlog`; host UART → **460800** |
-| +~2.6 с | `\r\nreset\r\nreset\r\n` (reset **дважды**) → `$command,reset,response: OK` |
+| +~2.6 с | два бурста `reset\r\nreset\r\n` (~50 мс; второй с ведущим `\r\n`) → `$command,reset,response: OK` |
 | +~4.3 с | `system is rebooting` |
 | +~6.1 с | `N4 BootLoader 2020.04` … меню … `boot>` (timeout меню **2 с**, default = print menu) |
 | +~8 с | host шлёт `2\r\n` → `unlock Flash` / `## Ready for binary (xmodem)…` |
@@ -28,10 +28,10 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 
 1. (Опционально) `version` / `VERSIONA` — снимок до прошивки.
 2. `unlog` несколько раз — остановить NMEA.
-3. `config com1/com2/com3 460800` (без `SAVECONFIG`).
-4. Host UART → **460800**, короткий settle, ещё пара `unlog`.
+3. `config com1/com2/com3 460800` **одним write** (и повторить блок ~50 мс) — без `SAVECONFIG`. Не слать COM по одному с паузой: после смены baud USB-COM следующие строки теряются.
+4. Host UART → **460800** (USB: полный reopen), короткий settle, ещё пара `unlog`.
 5. Сброс в bootloader:
-   - **Soft:** `reset` **дважды** → ждать `system is rebooting` / баннер BootLoader / `boot>`.
+   - **Soft:** два бурста `reset\r\nreset\r\n` (~50 мс) → ждать `system is rebooting` / баннер BootLoader / `boot>`.
    - **Hard:** ждать ручной сброс питания/RESET; ASCII `reset` не слать.
      На **прямом USB** не отключайте кабель адаптера — только питание/RESET самого модуля (иначе сессия ГУ рвётся).
 6. Дождаться баннера `N4 BootLoader` и приглашения `boot>`.
@@ -72,5 +72,5 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 - Обрыв → модуль часто остаётся в BootLoader; повтор Soft/Hard + тот же `.pkg`.
 - Неверный `.pkg` для другой модели — не использовать.
 - После `CONFIG 460800` без `SAVECONFIG` Hard power-cycle возвращает сохранённый baud — нужен baud-sweep на шаге 6.
-- **Причина сбоя Soft на прямом USB:** после `CONFIG … 460800` модуль уже на 460800, а `setBaudLive` на CP210x/CH340 в exclusive-режиме часто **не** переключает адаптер. Хост продолжает (или возвращается) на 115200 → баннер BootLoader не виден, после ошибки связь «мертва» до цикла питания / кнопки «Перезагрузка GNSS». Исправление: после CONFIG — **полный reopen** USB на 460800 ([UsbNmeaGnssSession.reopenExclusiveAtBaud]); при ожидании баннера не отдавать приоритет игле `rebooting` над `BootLoader`/`boot>` в том же RX-куске; при неудаче — [recoverLinkBestEffort] с **reopen** по кандидатам baud + горячий `RESET` (как UI GNSS reboot), затем снова reopen на рабочий baud.
+- **Причина сбоя Soft на прямом USB:** (1) после `CONFIG … 460800` модуль уже на 460800, а `setBaudLive` на CP210x/CH340 часто не переключает адаптер — нужен **полный reopen**; (2) `CONFIG com1/2/3` по одному с паузой — после flip baud USB-COM строки com2/com3 и мусор ломают Soft (в `um980.dmslog8` UPrecise шлёт **один блок ×2**); (3) ранний hot `RESET` в recover до повторного ожидания баннера срывал поздний BootLoader. При неудаче Soft — [recoverLinkBestEffort] с reopen + `RESET` (как UI «Перезагрузка GNSS»).
 - Soft **нужен** там, где Hard (отдельное питание модуля без отключения USB) физически невозможен.

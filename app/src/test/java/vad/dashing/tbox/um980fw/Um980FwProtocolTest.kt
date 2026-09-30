@@ -106,8 +106,21 @@ class Um980FwBootloaderBaudSweepTest {
     fun softFallbackFindsBootloaderWhen460800Silent() = runBlocking {
         // Companion-style: setBaud/reopen both just change baud; module answers at 460800.
         val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        var configBatches = 0
+        var resetBursts = 0
         transport.onWrite = { bytes ->
             val s = bytes.toString(Charsets.US_ASCII)
+            if (s.contains("config com1") && s.contains("config com2") && s.contains("config com3")) {
+                configBatches++
+                // Must be one write — three separate sendLine would be three callbacks.
+                assertTrue(
+                    "CONFIG must be one batch write",
+                    s.indexOf("config com1") >= 0 &&
+                        s.indexOf("config com2") > s.indexOf("config com1") &&
+                        s.indexOf("config com3") > s.indexOf("config com2"),
+                )
+            }
+            if (s.contains("reset\r\nreset")) resetBursts++
             when {
                 transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true) ->
                     transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
@@ -121,6 +134,8 @@ class Um980FwBootloaderBaudSweepTest {
         assertTrue(updater.enterBootloaderSoft(preBaud = 115_200))
         assertEquals(460_800, transport.currentBaud())
         assertTrue(transport.reopenAtBaudCalls.contains(460_800))
+        assertEquals("UPrecise sends CONFIG block twice", 2, configBatches)
+        assertEquals("UPrecise sends double-reset twice", 2, resetBursts)
     }
 
     @Test
