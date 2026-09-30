@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -102,7 +103,10 @@ fun PanelOrderConfigDialog(
             tonalElevation = 3.dp,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = tboxDialogMaxHeight())
+                    .padding(24.dp),
             ) {
                 AppAlertDialogTitle(title)
                 Spacer(Modifier.height(12.dp))
