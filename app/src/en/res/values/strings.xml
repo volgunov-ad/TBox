@@ -994,6 +994,11 @@
     <string name="esp_um980_saveconfig">Save configuration to module</string>
     <string name="esp_um980_saveconfig_desc">After changing settings, press this button — otherwise they will not be saved in the module and will be lost on reboot</string>
     <string name="esp_um980_geo_period_title">UM980 — position period</string>
+    <string name="esp_um980_nmea_ports_desc">NMEA stream on COM1, COM2 and COM3. The switch shows whether NMEA is being sent now (UNILOGLIST). Turning a port off stops all output on that port (UNLOG), not only NMEA. Turning off the port wired to the head unit or the companion stops coordinates in the app until you turn it back on. Press “Save configuration” to keep the change.</string>
+    <string name="esp_um980_nmea_com">NMEA %1$s</string>
+    <string name="esp_um980_nmea_com_on">This port is sending NMEA</string>
+    <string name="esp_um980_nmea_com_off">This port is not sending NMEA</string>
+    <string name="esp_um980_nmea_com_unknown">Status not loaded yet — tap “Get configuration”</string>
     <string name="esp_um980_coord_period">Coordinate period (GGA+RMC)</string>
     <string name="esp_um980_coord_period_desc">How often to send position and speed (GPGGA + GPRMC). Main stream for the app</string>
     <string name="esp_um980_gsa">GPGSA</string>
@@ -1094,7 +1099,7 @@
     <string name="esp_um980_preset_commands_show">Show commands ▾</string>
     <string name="esp_um980_preset_commands_hide">Hide commands ▴</string>
     <string name="esp_um980_refresh_config">Get configuration from module</string>
-    <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK and VERSIONA from UM980 and refresh switches on screen</string>
+    <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK, VERSIONA and UNILOGLIST from UM980 and refresh the switches</string>
     <string name="esp_um980_config_busy">PLEASE WAIT: MODULE CONFIGURATION REQUEST IN PROGRESS…</string>
     <string name="esp_um980_traffic_log_title">UM980 log</string>
     <string name="esp_um980_traffic_log_desc">Commands to the module (→) and replies (←). Position data at most once per 5 s, up to 100 entries</string>

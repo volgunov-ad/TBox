@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -867,18 +866,21 @@ private fun CanCompanionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .heightIn(max = 720.dp),
+            // Tall CAN console: claim height so Close stays pinned (AppList pattern).
+            modifier = Modifier.tboxDialogSurfaceFill(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+            ) {
                 AppAlertDialogTitle(stringResource(R.string.esp_can_dialog_title))
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = true)
+                        .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 ) {

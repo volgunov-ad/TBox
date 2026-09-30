@@ -5221,7 +5221,6 @@ class BackgroundService : Service() {
             else -> Um980FwResetMode.SOFT
         }
         Um980FirmwareUiStore.begin()
-        Um980ConfigUiStore.setBusy(true)
         try {
             when (transportKey.lowercase()) {
                 "companion", "esp", "esp32" -> {
@@ -5240,7 +5239,9 @@ class BackgroundService : Service() {
                         Um980FirmwareUiStore.finish("no_usb")
                         return
                     }
-                    val workingBaud = usbGnssBaud.value.takeIf { it > 0 } ?: session.currentBaud()
+                    val workingBaud = session.currentBaud().takeIf { it > 0 }
+                        ?: usbGnssBaud.value.takeIf { it > 0 }
+                        ?: 115_200
                     val transport = UsbUm980BinaryTransport(session)
                     Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
                 }
@@ -5250,8 +5251,6 @@ class BackgroundService : Service() {
             if (Um980FirmwareUiStore.state.value.active || Um980FirmwareUiStore.state.value.error == null) {
                 Um980FirmwareUiStore.finish(e.message ?: "failed")
             }
-        } finally {
-            Um980ConfigUiStore.setBusy(false)
         }
     }
 

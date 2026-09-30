@@ -13,8 +13,9 @@ Reference Commands Manual N4 **не** описывает кадры upgrade — 
 | t (отн.) | Событие |
 |----------|---------|
 | 0 | несколько пар `unlog` → `$command,unlog,response: OK` |
-| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG`) |
-| +~2 с | ещё `unlog`; host UART → **460800** |
+| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG` в dmslog8) |
+| +~0.9 с | *(прямое USB, не в dmslog8)* импульс DTR без закрытия порта, затем ASCII `reset` на **рабочем** baud; CONFIG 460800 и смена baud **без** reopen |
+| +~2 с | ещё `unlog`; host UART → **460800** (`setBaud`, порт не закрывать) |
 | +~2.6 с | два бурста `reset\r\nreset\r\n` (~50 мс; второй с ведущим `\r\n`) → `$command,reset,response: OK` |
 | +~4.3 с | `system is rebooting` |
 | +~6.1 с | `N4 BootLoader 2020.04` … меню … `boot>` (timeout меню **2 с**, default = print menu) |
@@ -28,8 +29,8 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 
 1. (Опционально) `version` / `VERSIONA` — снимок до прошивки.
 2. `unlog` несколько раз — остановить NMEA.
-3. `config com1/com2/com3 460800` **одним write** (и повторить блок ~50 мс) — без `SAVECONFIG`. Не слать COM по одному с паузой: после смены baud USB-COM следующие строки теряются.
-4. Host UART → **460800** (USB: полный reopen), короткий settle, ещё пара `unlog`.
+3. На **прямом USB** сначала импульс DTR (порт открыт) и ASCII `reset` на рабочем baud — слушать баннер там. Иначе `config com1/com2/com3 460800` одним write ×2, **без** `SAVECONFIG`.
+4. Host UART → **460800** через смену baud на открытом порту (не reopen). Reopen только если на 460800 нет ответа.
 5. Сброс в bootloader:
    - **Soft:** два бурста `reset\r\nreset\r\n` (~50 мс) → ждать `system is rebooting` / баннер BootLoader / `boot>`.
    - **Hard:** ждать ручной сброс питания/RESET; ASCII `reset` не слать.
@@ -37,7 +38,8 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 6. Дождаться баннера `N4 BootLoader` и приглашения `boot>`.
    - Если Soft уже поймал `BootLoader`/`boot>` — повторно не ждать (байты уже съедены).
    - Если на 460800 тишина (типично после **Hard**: модуль поднялся на **сохранённом** baud, без `SAVECONFIG` на шаге 3): короткий перебор host baud `current → 460800 → pre → 115200 → 57600 → …`, на каждом срезе `\r\n` и ожидание баннера (~5 с, общий бюджет ~35 с). XMODEM дальше идёт на baud, где баннер увидели.
-   - В Soft-захвате UPrecise баннер приходит на **460800** (~3–4 с после reset) — перебор не нужен, но безопасен.
+   - В Soft-захвате UPrecise баннер приходит на **460800** (~2 с после `system is rebooting`).
+   - Перед `reset` — `SAVECONFIG`, чтобы 460800 стал сохранённым baud меню. После `reset` хост **ничего не шлёт** около 6.5 с: баннер в захвате ~3.5 с от команды, меню повторяется ещё через ~2 с. Build14259 часто не пишет `system is rebooting`, только `The Board is reset, do not response any command`. Короткое окно 3 с обрывалось раньше меню, а следующий `\r\n` попадал уже в это сообщение. Бинарные байты по-прежнему сразу переключают на прежний baud.
 7. Отправить `2\r\n` (*Download from uart to flash*).
 8. Дождаться `unlock Flash` / `Ready for binary` / xmodem; приёмник в checksum-режиме (в захвате блок 1: `STX|01|FE|…|csum`).
 9. Передать `.pkg` **XMODEM-1K**:
@@ -72,5 +74,5 @@ Hard reset в этом захвате **нет** (только ASCII `reset`).
 - Обрыв → модуль часто остаётся в BootLoader; повтор Soft/Hard + тот же `.pkg`.
 - Неверный `.pkg` для другой модели — не использовать.
 - После `CONFIG 460800` без `SAVECONFIG` Hard power-cycle возвращает сохранённый baud — нужен baud-sweep на шаге 6.
-- **Причина сбоя Soft на прямом USB:** (1) после `CONFIG … 460800` модуль уже на 460800, а `setBaudLive` на CP210x/CH340 часто не переключает адаптер — нужен **полный reopen**; (2) `CONFIG com1/2/3` по одному с паузой — после flip baud USB-COM строки com2/com3 и мусор ломают Soft (в `um980.dmslog8` UPrecise шлёт **один блок ×2**); (3) ранний hot `RESET` в recover до повторного ожидания баннера срывал поздний BootLoader. При неудаче Soft — [recoverLinkBestEffort] с reopen + `RESET` (как UI «Перезагрузка GNSS»).
+- **`no-link@115200`:** прошивка заново открывала USB на скорости из настроек и роняла DTR, хотя VERSIONA только что прошёл по уже открытому порту. Теперь сначала слушаем текущий baud сессии и перебираем скорость **без** reopen; reopen — только если ни на одной скорости нет ответа.
 - Soft **нужен** там, где Hard (отдельное питание модуля без отключения USB) физически невозможен.

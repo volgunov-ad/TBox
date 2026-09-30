@@ -36,7 +36,8 @@ object Um980ConfigUiStore {
             cmd.equals("MODE", ignoreCase = true) ||
             cmd.equals("MASK", ignoreCase = true) ||
             cmd.equals("VERSIONA", ignoreCase = true) ||
-            lines.any { it.contains("VERSIONA", ignoreCase = true) }
+            cmd.equals("UNILOGLIST", ignoreCase = true) ||
+            lines.any { it.contains("VERSIONA", ignoreCase = true) || it.contains("UNILOGLIST", ignoreCase = true) }
         ) {
             _snapshot.value = Um980Commands.parseConfigSnapshot(merged)
         } else {

@@ -14,7 +14,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -165,8 +164,7 @@ fun KeyPressDiagnosticsDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .fillMaxHeight(0.92f)
+                .tboxDialogSurfaceFill()
                 .onPreviewKeyEvent { event ->
                     append(
                         KeyPressDiagnosticFormat.android(

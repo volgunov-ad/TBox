@@ -9,8 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -75,15 +75,16 @@ fun Um980SettingsDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .heightIn(max = 720.dp),
+            // Always-tall settings list: claim height so Close stays pinned (AppList pattern).
+            modifier = Modifier.tboxDialogSurfaceFill(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
             ) {
                 AppAlertDialogTitle(stringResource(R.string.esp_um980_settings_dialog_title))
                 Um980SettingsContent(
@@ -91,7 +92,7 @@ fun Um980SettingsDialog(
                     controlsEnabled = controlsEnabled,
                     settingsViewModel = settingsViewModel,
                     modifier = Modifier
-                        .weight(1f, fill = true)
+                        .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 )
@@ -137,8 +138,6 @@ fun Um980SettingsContent(
         if (transport == Um980SettingsTransport.COMPANION) espRequestZda else usbRequestZda
     val requestGst =
         if (transport == Um980SettingsTransport.COMPANION) espRequestGst else usbRequestGst
-
-    val enabled = controlsEnabled && !um980ConfigBusy
 
     fun sendCmd(cmd: String) {
         context.sendUm980TransportCmd(transport, cmd)
@@ -194,6 +193,7 @@ fun Um980SettingsContent(
     var pendingFwDisplayName by remember { mutableStateOf("") }
     var fwResetSoft by remember { mutableStateOf(true) }
     val fwState by Um980FirmwareUiStore.state.collectAsStateWithLifecycle()
+    val enabled = controlsEnabled && !um980ConfigBusy && !fwState.active
     val fwPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -390,12 +390,17 @@ fun Um980SettingsContent(
             Text(
                 text = when {
                     fwState.awaitingHardReset -> stringResource(R.string.um980_fw_await_hard_reset)
-                    fwState.active -> stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
+                    fwState.active && fwState.error.isNullOrBlank() ->
+                        stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
                     fwState.doneOk -> stringResource(R.string.um980_fw_ok)
-                    else -> um980FwErrorMessage(context, fwState.error)
+                    else -> {
+                        val base = um980FwErrorMessage(context, fwState.error)
+                        val detail = fwState.detail?.trim().orEmpty()
+                        if (detail.isEmpty()) base else "$base\n$detail"
+                    }
                 },
                 style = MaterialTheme.typography.tboxBody,
-                color = if (!fwState.error.isNullOrBlank() && !fwState.active) {
+                color = if (!fwState.error.isNullOrBlank()) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.onSurface
@@ -499,6 +504,40 @@ fun Um980SettingsContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_geo_period_title))
+        for (port in Um980Commands.NMEA_COM_PORTS) {
+            val output = snapshot.nmeaOutputByCom
+            val portOn = output?.get(port) == true
+            SettingSwitch(
+                isChecked = portOn,
+                onCheckedChange = { turnOn ->
+                    sendCmds(
+                        Um980Commands.nmeaComOutputCommands(
+                            port = port,
+                            enabled = turnOn,
+                            ggaRmcPeriodSec = coordPeriod,
+                            gsaPeriodSec = gsaPeriod,
+                            gsvPeriodSec = gsvPeriod,
+                            zdaPeriodSec = zdaPeriod,
+                            vtgPeriodSec = vtgPeriod,
+                        ),
+                        refreshAfter = true,
+                    )
+                },
+                text = stringResource(R.string.esp_um980_nmea_com, port),
+                description = when {
+                    output == null -> stringResource(R.string.esp_um980_nmea_com_unknown)
+                    portOn -> stringResource(R.string.esp_um980_nmea_com_on)
+                    else -> stringResource(R.string.esp_um980_nmea_com_off)
+                },
+                enabled = enabled,
+            )
+        }
+        Text(
+            text = stringResource(R.string.esp_um980_nmea_ports_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         SettingDropdownGeneric(
             selectedValue = nmeaRateOptions.first { it.periodSec == coordPeriod },
             onValueChange = { opt ->
