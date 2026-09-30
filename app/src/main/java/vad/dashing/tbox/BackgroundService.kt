@@ -5217,7 +5217,9 @@ class BackgroundService : Service() {
                         Um980FirmwareUiStore.finish("no_usb")
                         return
                     }
-                    val workingBaud = usbGnssBaud.value.takeIf { it > 0 } ?: session.currentBaud()
+                    val workingBaud = session.currentBaud().takeIf { it > 0 }
+                        ?: usbGnssBaud.value.takeIf { it > 0 }
+                        ?: 115_200
                     val transport = UsbUm980BinaryTransport(session)
                     Um980FirmwareUpdater(transport).update(file, resetMode, workingBaud)
                 }

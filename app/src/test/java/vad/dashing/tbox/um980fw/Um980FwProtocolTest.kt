@@ -182,6 +182,19 @@ class Um980FwBootloaderBaudSweepTest {
     }
 
     @Test
+    fun discoverUsesBaudThatAnswersWhenPreferredIsSilent() = runBlocking {
+        val transport = FakeUm980BinaryTransport(initialBaud = 115_200)
+        transport.onWrite = { bytes ->
+            val s = bytes.toString(Charsets.US_ASCII)
+            if (transport.currentBaud() == 460_800 && s.contains("unlog", ignoreCase = true)) {
+                transport.enqueueAscii("\$command,unlog,response: OK*21\r\n")
+            }
+        }
+        val updater = Um980FirmwareUpdater(transport)
+        assertEquals(460_800, updater.discoverAppBaud(preferred = 115_200))
+    }
+
+    @Test
     fun recoverLinkReopensAndSendsHotReset() = runBlocking {
         val transport = FakeUm980BinaryTransport(initialBaud = 460_800)
         var sawHotReset = false

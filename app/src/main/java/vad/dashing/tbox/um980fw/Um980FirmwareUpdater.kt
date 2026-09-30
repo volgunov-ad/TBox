@@ -37,39 +37,39 @@ class Um980FirmwareUpdater(
 
         val preBaud = workingBaud.coerceIn(9600, 921600)
         var upgradeSucceeded = false
+        var linkBaud = preBaud
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
-            // USB: reopen so line-coding matches working baud before Soft CONFIG.
-            if (!applyHostBaud(preBaud)) {
-                return fail("baud")
+            // Do not reopen here. Reopen drops DTR and the next probe reports no-link
+            // even though the settings dialog just read VERSIONA on this same port.
+            val liveBaud = discoverAppBaud(preBaud)
+            if (liveBaud == null) {
+                notePhase("no-link@$preBaud")
+                return fail("no_bootloader")
             }
-            delay(150)
-            // Stop NMEA at the known-good working baud first (UPrecise also unlogs before CONFIG).
-            repeat(3) {
+            linkBaud = liveBaud
+            delay(100)
+            repeat(2) {
                 sendLine("unlog")
                 delay(120)
-                sendLine("unlog")
-                delay(150)
             }
-            drain(200)
+            drain(150)
 
             var bootloaderSeen = false
             when (resetMode) {
                 Um980FwResetMode.SOFT -> {
                     Um980FirmwareUiStore.setPhase("reset", 2)
-                    bootloaderSeen = enterBootloaderSoft(preBaud)
+                    bootloaderSeen = enterBootloaderSoft(liveBaud)
                 }
                 Um980FwResetMode.HARD -> {
                     Um980FirmwareUiStore.setPhase("hard_reset", 2)
-                    // Hard power-cycle drops RAM CONFIG — keep host on saved/working baud and
-                    // listen *while* the user cycles power (banner is easy to miss after Continue).
-                    bootloaderSeen = enterBootloaderHard(preBaud, onHardResetWait)
+                    bootloaderSeen = enterBootloaderHard(liveBaud, onHardResetWait)
                 }
             }
 
             Um980FirmwareUiStore.setPhase("bootloader", 5)
-            if (!bootloaderSeen && !waitForBootloaderBanner(preBaud)) {
+            if (!bootloaderSeen && !waitForBootloaderBanner(liveBaud)) {
                 return fail("no_bootloader")
             }
             delay(200)
@@ -88,7 +88,7 @@ class Um980FirmwareUpdater(
             delay(1_500)
 
             Um980FirmwareUiStore.setPhase("baud_restore", 95)
-            restoreBaud(preBaud)?.let { return fail(it) }
+            restoreBaud(linkBaud)?.let { return fail(it) }
 
             Um980FirmwareUiStore.setPhase("verify", 98)
             val versionA = queryVersionA()
@@ -106,12 +106,11 @@ class Um980FirmwareUpdater(
             fail(e.message ?: "failed", e)
         } finally {
             if (!upgradeSucceeded) {
-                runCatching { recoverLinkBestEffort(preBaud) }
+                runCatching { recoverLinkBestEffort(linkBaud) }
             }
             runCatching { transport.endExclusive() }
-            // Prefer reopen so CP210x/CH340 actually leave UPGRADE_BAUD after Soft.
-            if (!transport.reopenAtBaud(preBaud)) {
-                runCatching { transport.setBaud(preBaud) }
+            if (!transport.reopenAtBaud(linkBaud)) {
+                runCatching { transport.setBaud(linkBaud) }
             }
             runCatching { pkgFile.delete() }
         }
@@ -128,15 +127,20 @@ class Um980FirmwareUpdater(
      * be running (no reopen between that probe and `reset`), otherwise the ~2s menu is missed.
      */
     internal suspend fun enterBootloaderSoft(preBaud: Int): Boolean {
-        if (!ensureApp(preBaud)) {
-            notePhase("no-link@$preBaud")
-            runCatching { Log.w(TAG, "soft: app silent at $preBaud") }
-            return false
+        var hostBaud = preBaud
+        if (!ensureApp(hostBaud)) {
+            val found = discoverAppBaud(hostBaud)
+            if (found == null) {
+                notePhase("no-link@$hostBaud")
+                runCatching { Log.w(TAG, "soft: app silent at $hostBaud and sweep") }
+                return false
+            }
+            hostBaud = found
         }
-        if (!switchToUpgradeBaud(preBaud)) {
+        if (!switchToUpgradeBaud(hostBaud)) {
             notePhase("no-460800")
             runCatching { Log.w(TAG, "soft: no app link at 460800") }
-            runCatching { recoverLinkBestEffort(preBaud) }
+            runCatching { recoverLinkBestEffort(hostBaud) }
             return false
         }
         if (enteredBootloaderDuringSwitch) return true
@@ -146,7 +150,7 @@ class Um980FirmwareUpdater(
         delay(SOFT_RESET_REPEAT_GAP_MS)
         sendDoubleReset(leadingCrLf = true)
         if (awaitBootloaderNudged(SOFT_POST_RESET_LISTEN_MS)) return true
-        if (waitForBootloaderBanner(preBaud, overallTimeoutMs = 12_000L)) return true
+        if (waitForBootloaderBanner(hostBaud, overallTimeoutMs = 12_000L)) return true
         notePhase("no-banner")
         runCatching { Log.w(TAG, "soft: 460800 link ok but no BootLoader after reset") }
         return false
@@ -157,7 +161,45 @@ class Um980FirmwareUpdater(
 
     private suspend fun ensureApp(baud: Int): Boolean {
         if (transport.currentBaud() != baud && !transport.setBaud(baud)) return false
-        return probeAppAlive(1_800L)
+        delay(100)
+        val ok = probeAppAlive(2_500L)
+        if (ok) notePhase("link@$baud")
+        return ok
+    }
+
+    /**
+     * Find a baud the app answers on without reopening first.
+     * Reopen is last: it drops DTR and was reporting no-link right after a good VERSIONA.
+     */
+    internal suspend fun discoverAppBaud(preferred: Int): Int? {
+        val order = linkedSetOf(
+            transport.currentBaud(),
+            preferred.coerceIn(9600, 921600),
+            115_200,
+            UPGRADE_BAUD,
+            57_600,
+            38_400,
+            9_600,
+            230_400,
+        ).filter { it in 9600..921600 }
+        for (b in order) {
+            if (transport.currentBaud() != b && !transport.setBaud(b)) continue
+            delay(120)
+            if (probeAppAlive(1_800L)) {
+                notePhase("link@$b")
+                return b
+            }
+        }
+        for (b in linkedSetOf(transport.currentBaud(), preferred, UPGRADE_BAUD, 115_200)) {
+            val baud = b.coerceIn(9600, 921600)
+            if (!transport.reopenAtBaud(baud)) continue
+            delay(400)
+            if (probeAppAlive(5_000L)) {
+                notePhase("link-reopen@$baud")
+                return baud
+            }
+        }
+        return null
     }
 
     /**
