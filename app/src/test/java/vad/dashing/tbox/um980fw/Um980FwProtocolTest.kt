@@ -57,6 +57,19 @@ class Xmodem1kTest {
         assertEquals(3 + 1024 + 2, frame.size)
         assertTrue(frame[0] == Xmodem1k.STX)
     }
+
+    @Test
+    fun crcStartIsTheByteAfterReadyNotCopyright() {
+        val menu = "Copyright (c) Unicore\r\n0) Load OS\r\nboot> "
+        assertEquals(null, Xmodem1k.startModeAfterReady(menu.toByteArray(Charsets.US_ASCII)))
+        val ready = menu + "## Ready for binary (xmodem) download to 0x00454AA8\r\n"
+        assertEquals(null, Xmodem1k.startModeAfterReady(ready.toByteArray(Charsets.US_ASCII)))
+        val withC = ready + "C"
+        assertEquals(
+            Xmodem1k.CheckMode.CRC16,
+            Xmodem1k.startModeAfterReady(withC.toByteArray(Charsets.US_ASCII)),
+        )
+    }
 }
 
 class Um980FwBootloaderBaudSweepTest {
