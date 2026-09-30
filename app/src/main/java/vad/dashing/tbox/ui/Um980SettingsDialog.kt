@@ -135,8 +135,6 @@ fun Um980SettingsContent(
     val requestGst =
         if (transport == Um980SettingsTransport.COMPANION) espRequestGst else usbRequestGst
 
-    val enabled = controlsEnabled && !um980ConfigBusy
-
     fun sendCmd(cmd: String) {
         context.sendUm980TransportCmd(transport, cmd)
     }
@@ -191,6 +189,7 @@ fun Um980SettingsContent(
     var pendingFwDisplayName by remember { mutableStateOf("") }
     var fwResetSoft by remember { mutableStateOf(true) }
     val fwState by Um980FirmwareUiStore.state.collectAsStateWithLifecycle()
+    val enabled = controlsEnabled && !um980ConfigBusy && !fwState.active
     val fwPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -387,7 +386,8 @@ fun Um980SettingsContent(
             Text(
                 text = when {
                     fwState.awaitingHardReset -> stringResource(R.string.um980_fw_await_hard_reset)
-                    fwState.active -> stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
+                    fwState.active && fwState.error.isNullOrBlank() ->
+                        stringResource(R.string.um980_fw_progress, fwState.progressPct, fwState.phase)
                     fwState.doneOk -> stringResource(R.string.um980_fw_ok)
                     else -> {
                         val base = um980FwErrorMessage(context, fwState.error)
@@ -396,7 +396,7 @@ fun Um980SettingsContent(
                     }
                 },
                 style = MaterialTheme.typography.tboxBody,
-                color = if (!fwState.error.isNullOrBlank() && !fwState.active) {
+                color = if (!fwState.error.isNullOrBlank()) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.onSurface
@@ -500,12 +500,6 @@ fun Um980SettingsContent(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.esp_um980_geo_period_title))
-        Text(
-            text = stringResource(R.string.esp_um980_nmea_ports_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 4.dp),
-        )
         for (port in Um980Commands.NMEA_COM_PORTS) {
             val output = snapshot.nmeaOutputByCom
             val portOn = output?.get(port) == true
@@ -534,6 +528,12 @@ fun Um980SettingsContent(
                 enabled = enabled,
             )
         }
+        Text(
+            text = stringResource(R.string.esp_um980_nmea_ports_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
         SettingDropdownGeneric(
             selectedValue = nmeaRateOptions.first { it.periodSec == coordPeriod },
             onValueChange = { opt ->

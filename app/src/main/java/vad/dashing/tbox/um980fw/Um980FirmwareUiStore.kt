@@ -53,6 +53,15 @@ object Um980FirmwareUiStore {
         cb?.invoke()
     }
 
+    /** Keep the error on screen while [Um980FirmwareUpdater] restores the link. */
+    fun beginRecover() {
+        _state.value = _state.value.copy(active = true, phase = "recover", awaitingHardReset = false)
+    }
+
+    fun endRecover() {
+        _state.value = _state.value.copy(active = false, awaitingHardReset = false)
+    }
+
     fun finish(error: String?, detail: String? = null) {
         hardResetContinue = null
         _state.value = State(

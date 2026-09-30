@@ -381,9 +381,19 @@ class UsbNmeaGnssSession(
         try {
             if (!writeAsciiLine(cmd)) return emptyList()
             val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(200L)
+            var quietSince = System.currentTimeMillis()
+            var replyLines = 0
             while (System.currentTimeMillis() < deadline) {
                 Thread.sleep(40)
-                if (GnssModuleCommands.parseProbeReplies(collected.toList()) != null) break
+                val lines = collected.toList()
+                if (GnssModuleCommands.parseProbeReplies(lines) != null) break
+                val replies = lines.count { !UsbAsciiReplyCollect.isStreamingNmea(it) }
+                val now = System.currentTimeMillis()
+                if (replies != replyLines) {
+                    replyLines = replies
+                    quietSince = now
+                }
+                if (UsbAsciiReplyCollect.ready(lines, now - quietSince)) break
             }
             return collected.toList()
         } finally {

@@ -1099,7 +1099,7 @@
     <string name="esp_um980_preset_commands_show">Show commands ▾</string>
     <string name="esp_um980_preset_commands_hide">Hide commands ▴</string>
     <string name="esp_um980_refresh_config">Get configuration from module</string>
-    <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK and VERSIONA from UM980 and refresh switches on screen</string>
+    <string name="esp_um980_refresh_config_desc">Read CONFIG, MODE, MASK, VERSIONA and UNILOGLIST from UM980 and refresh the switches</string>
     <string name="esp_um980_config_busy">PLEASE WAIT: MODULE CONFIGURATION REQUEST IN PROGRESS…</string>
     <string name="esp_um980_traffic_log_title">UM980 log</string>
     <string name="esp_um980_traffic_log_desc">Commands to the module (→) and replies (←). Position data at most once per 5 s, up to 100 entries</string>

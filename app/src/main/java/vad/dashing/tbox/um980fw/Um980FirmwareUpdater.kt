@@ -41,9 +41,15 @@ class Um980FirmwareUpdater(
         transport.beginExclusive()
         return try {
             Um980FirmwareUiStore.setPhase("prep", 0)
-            // Do not reopen here. Reopen drops DTR and the next probe reports no-link
-            // even though the settings dialog just read VERSIONA on this same port.
-            val liveBaud = discoverAppBaud(preBaud)
+            // The settings dialog just read VERSIONA on this open port. Probe that baud
+            // before any setBaud/reopen — a live baud change on CP210x/CH340 often drops
+            // the link and the next probe reports no-link@115200.
+            val liveBaud = if (probeAppAlive(2_500L)) {
+                notePhase("link@${transport.currentBaud()}")
+                transport.currentBaud()
+            } else {
+                discoverAppBaud(preBaud)
+            }
             if (liveBaud == null) {
                 notePhase("no-link@$preBaud")
                 return fail("no_bootloader")
@@ -106,7 +112,9 @@ class Um980FirmwareUpdater(
             fail(e.message ?: "failed", e)
         } finally {
             if (!upgradeSucceeded) {
+                Um980FirmwareUiStore.beginRecover()
                 runCatching { recoverLinkBestEffort(linkBaud) }
+                Um980FirmwareUiStore.endRecover()
             }
             runCatching { transport.endExclusive() }
             if (!transport.reopenAtBaud(linkBaud)) {
@@ -316,11 +324,20 @@ class Um980FirmwareUpdater(
         transport.write(payload.toByteArray(Charsets.US_ASCII))
     }
 
-    /** True if UM980 app firmware still answers ASCII (unlog OK / command response). */
+    /**
+     * True if UM980 app firmware still answers ASCII.
+     * VERSIONA is what the settings dialog already uses; unlog covers a module that
+     * answers commands but has VERSIONA logging disabled.
+     */
     private suspend fun probeAppAlive(timeoutMs: Long): Boolean {
-        drain(80)
+        drain(60)
+        sendLine("VERSIONA")
+        delay(40)
         sendLine("unlog")
-        return waitForAny(listOf("OK", "response", "command"), timeoutMs) != null
+        return waitForAny(
+            listOf("#VERSION", "UM980", "OK", "response", "command"),
+            timeoutMs,
+        ) != null
     }
 
     /**
