@@ -17,14 +17,14 @@ import androidx.compose.ui.unit.dp
  *
  * Height policy: wrap content up to [HeightFraction] of the screen
  * (`heightIn(max)`), so short dialogs do not leave empty bottom space.
- * Use [tboxDialogSurfaceFill] / [tboxDialogSurfaceCompactFill] only when the
- * body is a scrollable list that should always claim the available height.
+ * Use [tboxDialogSurfaceFill] / [tboxDialogSurfaceCompactFill] when the body is
+ * an always-tall scrollable list (Um980, UiIconSettings, AppList, CanCompanion, …)
+ * so Close/actions stay pinned: `Column(fillMaxSize)` + middle `weight(1f)`.
  *
- * Sticky footer pattern for wrap [Dialog]+[Surface] columns (close/cancel outside
- * the scroll): put the scrollable middle on
- * `Modifier.weight(1f, fill = false)` (not a near-full-screen `heightIn(max)`).
- * `fill = false` keeps short content wrapping; when content exceeds the surface
- * max, the middle absorbs the remaining height and scrolls so actions stay visible.
+ * Sticky footer for **wrap** [Dialog]+[Surface] columns (short menus): put the
+ * scrollable middle on `modifier.weight(1f, fill = false)`. `fill = false` keeps
+ * short content wrapping; when content exceeds the surface max, the middle
+ * absorbs remaining height and scrolls so actions stay visible.
  * Avoid stacking `heightIn(max ≈ screen×HeightFraction)` on the body — title +
  * body + buttons then exceed the surface max and clip the action row.
  */
@@ -85,7 +85,8 @@ fun Modifier.tboxDialogSurfaceCompact(): Modifier =
 
 /**
  * Large surface that always claims [TboxDialogSize.HeightFraction] of the screen
- * (scrollable list dialogs: AppList, KeyPress, road tuning, widget pickers, …).
+ * (scrollable list dialogs: AppList, Um980, UiIconSettings, CanCompanion,
+ * KeyPress, road tuning, widget pickers, …).
  */
 @Composable
 fun Modifier.tboxDialogSurfaceFill(): Modifier =

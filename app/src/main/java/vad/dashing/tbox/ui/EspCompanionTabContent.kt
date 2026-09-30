@@ -866,16 +866,21 @@ private fun CanCompanionDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier.tboxDialogSurface(),
+            // Tall CAN console: claim height so Close stays pinned (AppList pattern).
+            modifier = Modifier.tboxDialogSurfaceFill(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+            ) {
                 AppAlertDialogTitle(stringResource(R.string.esp_can_dialog_title))
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 ) {

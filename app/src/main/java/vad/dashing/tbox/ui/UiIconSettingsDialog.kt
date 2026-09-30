@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -124,12 +125,17 @@ fun UiIconSettingsDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier.tboxDialogSurface(),
+            // Always-tall icon list: claim height so Close stays pinned (AppList pattern).
+            modifier = Modifier.tboxDialogSurfaceFill(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+            ) {
                 AppAlertDialogTitle(stringResource(R.string.ui_icons_settings_title))
                 Text(
                     text = stringResource(R.string.ui_icons_settings_description),
@@ -148,7 +154,7 @@ fun UiIconSettingsDialog(
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .weight(1f, fill = false)
+                        .weight(1f)
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
