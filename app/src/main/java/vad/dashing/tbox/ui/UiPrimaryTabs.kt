@@ -904,6 +904,7 @@ fun SettingsTabContent(
                         SettingsSection.TRIPS -> R.string.settings_tab_trips
                         SettingsSection.INTERFACE -> R.string.settings_tab_interface
                         SettingsSection.SYSTEM -> R.string.settings_tab_system
+                        SettingsSection.API -> R.string.settings_tab_api
                     },
                 )
             },
@@ -1497,6 +1498,10 @@ fun SettingsTabContent(
             }
         }
                 }
+
+                SettingsSection.API -> {
+                    ExternalApiSettingsSection(settingsViewModel = settingsViewModel)
+                }
             }
         }
     }
@@ -2076,6 +2081,7 @@ private enum class SettingsSection {
     TRIPS,
     INTERFACE,
     SYSTEM,
+    API,
 }
 
 private enum class FloatingPanelsSection {

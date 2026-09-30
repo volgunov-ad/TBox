@@ -105,6 +105,8 @@ import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
 import vad.dashing.tbox.automation.AutomationSystemEventBus
+import vad.dashing.tbox.externalapi.ExternalApiController
+import vad.dashing.tbox.externalapi.ExternalApiControllerHolder
 import vad.dashing.tbox.automation.floatingPanelEnabledResultMessage
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
 import vad.dashing.tbox.automation.floatingPanelId
@@ -325,6 +327,7 @@ class BackgroundService : Service() {
     private var serviceStartupGeneration: Long = 0L
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
+    private var externalApiController: ExternalApiController? = null
     private var packetSilenceChecks: Int = 0
     private var tboxSwdKeepaliveLastMs: Long = 0L
 
@@ -1025,6 +1028,26 @@ class BackgroundService : Service() {
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)
+        externalApiController = ExternalApiController(
+            context = this,
+            scope = scope,
+            settingsManager = settingsManager,
+            appDataManager = appDataManager,
+            automationStore = AutomationStore(this),
+            serviceActions = automationServiceActions(),
+            runAutomationNowCallback = { automationId ->
+                val engine = automationEngine
+                if (engine == null) {
+                    "Фоновая служба ещё не готова"
+                } else {
+                    engine.requestRunNow(automationId)
+                    null
+                }
+            },
+        ).also { controller ->
+            controller.start()
+            ExternalApiControllerHolder.register(controller)
+        }
         DriveModeThemeWatcher(this, settingsManager, scope).start()
         scope.launch {
             ThemeSettingsValidator.validateOnStartup(this@BackgroundService, settingsManager)
@@ -6912,6 +6935,9 @@ class BackgroundService : Service() {
         automationEngine?.releaseInterests()
         automationEngine?.requestStop()
         automationEngine = null
+        externalApiController?.stop()
+        ExternalApiControllerHolder.unregister()
+        externalApiController = null
         broadcastSender.stopListeners()
         broadcastSender.clearSubscribers()
 

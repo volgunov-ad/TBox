@@ -399,19 +399,19 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 
 ## 11. Порядок реализации
 
-| # | Шаг | Критерий готовности |
-|---|-----|---------------------|
-| 1 | Этот документ + ссылки из README / backlog | Согласован контракт |
-| 2 | Сигналы **G1–G7** в automations (+ тесты, AI guide) | Старые правила грузятся; новые id в UI |
-| 3 | Раздел **«Настройки → API»** (каркас UI): вкл сервера, порт, URL/IP, заглушки pairing/клиентов | Раздел виден в меню настроек |
-| 4 | HTTP server skeleton: bind `0.0.0.0`, порт из раздела API, `GET /health` | Ручная проверка с телефона в LAN |
-| 5 | Pairing + token store + revoke **в разделе API** | Чужой без pairing не читает сигналы |
-| 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций |
-| 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты |
-| 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI |
-| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы |
-| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила |
-| 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве |
+| # | Шаг | Критерий готовности | Статус |
+|---|-----|---------------------|--------|
+| 1 | Этот документ + ссылки из README / backlog | Согласован контракт | **сделано** |
+| 2 | Сигналы **G1–G7** в automations (+ тесты, AI guide) | Старые правила грузятся; новые id в UI | **сделано** |
+| 3 | Раздел **«Настройки → API»** (каркас UI): вкл сервера, порт, URL/IP, pairing/клиенты | Раздел виден в меню настроек | **сделано** |
+| 4 | HTTP server skeleton: bind `0.0.0.0`, порт из раздела API, `GET /health` | Ручная проверка с телефона в LAN | **сделано** (код) |
+| 5 | Pairing + token store + revoke **в разделе API** | Чужой без pairing не читает сигналы | **сделано** (код) |
+| 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций | **сделано** (код) |
+| 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
+| 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
+| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | открыто (пока `[]`) |
+| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
+| 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 
 На каждом шаге с кодом автоматизаций — только аддитивные изменения; прогон
 `./gradlew testRuDebugUnitTest` (как минимум пакеты automation + новые API-тесты).
