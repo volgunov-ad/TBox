@@ -481,19 +481,25 @@ class Um980FirmwareUpdater(
             val chunk = image.copyOfRange(offset, end)
             val frame = Xmodem1k.buildBlock(seq and 0xFF, chunk, mode)
             var acked = false
-            repeat(Xmodem1k.MAX_RETRIES) {
+            // repeat() is inline: return@repeat only ends this attempt and sends the
+            // same block again. The bootloader already moved on, so the duplicate
+            // NAKs pile up and the transfer dies near block 256 (~16% on the bar).
+            for (attempt in 1..Xmodem1k.MAX_RETRIES) {
                 if (!transport.write(frame)) return "no_usb"
                 when (awaitAckOrNak(10_000L)) {
                     Xmodem1k.ACK -> {
                         acked = true
-                        return@repeat
+                        break
                     }
                     Xmodem1k.NAK -> Unit
                     Xmodem1k.CAN -> return "xmodem_cancel"
                     else -> Unit
                 }
             }
-            if (!acked) return "xmodem_timeout"
+            if (!acked) {
+                notePhase("xmodem@$offset/seq=$seq")
+                return "xmodem_timeout"
+            }
             offset = end
             seq = (seq + 1) and 0xFF
             val pct = 10 + ((offset.toLong() * 80L) / image.size).toInt()
