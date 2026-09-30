@@ -86,6 +86,7 @@
 
 | Тема | Doc |
 |------|-----|
+| Внешний HTTP API + голосовой ассистент (LAN, pairing, каталог G1–G7, RunNow) | [EXTERNAL_API_RU.md](./EXTERNAL_API_RU.md) |
 | Компас компаньона (калибровка / DR `COMPASS` / `GYRO_COMPASS`, фазы 2–3) | [COMPASS_HEADING_PLAN_RU.md](./COMPASS_HEADING_PLAN_RU.md) |
 | Map-matching polish (along-track catch-up, полевые проверки) | [MAP_MATCHING_PLAN_RU.md](./MAP_MATCHING_PLAN_RU.md) |
 | Пилот СКДФ maxspeed (tools, пакет НН) | [SKDF_SPEED_LIMITS_NIZHNY_RU.md](./SKDF_SPEED_LIMITS_NIZHNY_RU.md) |
