@@ -58,7 +58,7 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 - `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, session `integ.*` (CAN path / gyro / steer), rough `k_speed`, left/right turn scale. Stdlib only.
 - `tools/osm_to_tboxroads.py` — GeoJSON / Overpass JSON / exact `--fetch-overpass-area` / synthetic → `.tboxroads` v1. Stdlib only; see `docs/TBOXROADS_FORMAT_RU.md`.
 - `tools/build_road_map_packs.py` — build whole RU/BY regions into the synced `release/maps` Yandex Disk folder and refresh remote/bundled catalogs. See `docs/ROAD_MAPS_HOSTING_RU.md`.
-- `tools/tbox_external_api_pair.py` — pair with External HTTP API and smoke-check (`/v1/health`, catalog+`voiceAliasesRu`, signals, automations, safe `actions/invoke`, automations/run probe). Stdlib only. Default host `192.168.1.128:8765`. Optional `--run-automation <id|name>` for real RunNow. On the HU: Settings → API → enable server → «Подключить приложение», then run the script and approve. See [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md).
+- `tools/tbox_external_api_pair.py` — pair with External HTTP API and smoke-check (`/v1/health`, catalog+`voiceAliasesRu`, signals, automations, safe `actions/invoke`, automations/run probe). Stdlib only. Default host `192.168.1.128:8765`. Optional `--run-automation <id|name>` for real RunNow. Manual token: Settings → API → «Создать токен», then put `accessToken` into `~/.tbox_external_api_token.json` and use `--check-only`. See [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md).
 
 ### Git branches
 

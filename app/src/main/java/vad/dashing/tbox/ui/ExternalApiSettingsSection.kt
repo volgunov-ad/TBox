@@ -1,5 +1,8 @@
 package vad.dashing.tbox.ui
 
+import android.content.ClipData
+import android.os.SystemClock
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,16 +21,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.externalapi.ExternalApiControllerHolder
+import vad.dashing.tbox.externalapi.ExternalApiManualToken
 import vad.dashing.tbox.externalapi.ExternalApiPairRequest
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -65,13 +75,20 @@ fun ExternalApiSettingsSection(
 
     val pairingSecondsLeft = remember(status.pairingActive, status.pairingExpiresAtElapsed, pairingTick) {
         val expiresAt = status.pairingExpiresAtElapsed ?: return@remember 0L
-        ((expiresAt - android.os.SystemClock.elapsedRealtime()) / 1000L).coerceAtLeast(0L)
+        ((expiresAt - SystemClock.elapsedRealtime()) / 1000L).coerceAtLeast(0L)
     }
 
     var approveRequest by remember { mutableStateOf<ExternalApiPairRequest?>(null) }
+    val defaultManualName = stringResource(R.string.settings_api_manual_token_name_default)
+    var manualClientName by remember { mutableStateOf(defaultManualName) }
+    var createdManualToken by remember { mutableStateOf<ExternalApiManualToken?>(null) }
 
     val onSurface = MaterialTheme.colorScheme.onSurface
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val copiedMessage = stringResource(R.string.settings_api_manual_token_copied)
 
     SettingsTitle(stringResource(R.string.settings_api_section_title))
     SettingSwitch(
@@ -196,6 +213,37 @@ fun ExternalApiSettingsSection(
     }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    SettingsTitle(stringResource(R.string.settings_api_manual_token_title))
+    Text(
+        text = stringResource(R.string.settings_api_manual_token_desc),
+        style = MaterialTheme.typography.tboxBody,
+        color = onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
+    OutlinedTextField(
+        value = manualClientName,
+        onValueChange = { manualClientName = it.take(64) },
+        label = { Text(stringResource(R.string.settings_api_manual_token_name_hint)) },
+        singleLine = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp),
+    )
+    Button(
+        onClick = rememberWrappedOnClick {
+            val created = controller?.createManualToken(manualClientName) ?: return@rememberWrappedOnClick
+            createdManualToken = created
+        },
+        enabled = controller != null,
+        modifier = Modifier.padding(bottom = 8.dp),
+    ) {
+        Text(
+            stringResource(R.string.settings_api_manual_token_create),
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     SettingsTitle(stringResource(R.string.settings_api_clients_title))
     if (status.clients.isEmpty()) {
         Text(
@@ -274,6 +322,66 @@ fun ExternalApiSettingsSection(
                     AppAlertDialogButtonLabel(stringResource(R.string.settings_api_pairing_deny))
                 }
             },
+        )
+    }
+
+    createdManualToken?.let { token ->
+        AlertDialog(
+            onDismissRequest = { createdManualToken = null },
+            title = { AppAlertDialogTitle(stringResource(R.string.settings_api_manual_token_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppAlertDialogText(
+                        stringResource(
+                            R.string.settings_api_manual_token_dialog_message,
+                            token.clientName,
+                        ),
+                    )
+                    Text(
+                        text = token.accessToken,
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = onSurface,
+                    )
+                    Text(
+                        text = token.clientId,
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            scope.launch {
+                                clipboard.setClipEntry(
+                                    ClipEntry(ClipData.newPlainText("tbox-api-token", token.accessToken)),
+                                )
+                            }
+                            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                        },
+                    ) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.settings_api_manual_token_copy))
+                    }
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            val header = "Bearer ${token.accessToken}"
+                            scope.launch {
+                                clipboard.setClipEntry(
+                                    ClipEntry(ClipData.newPlainText("tbox-api-bearer", header)),
+                                )
+                            }
+                            Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                        },
+                    ) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.settings_api_manual_token_copy_header))
+                    }
+                    OutlinedButton(onClick = rememberWrappedOnClick { createdManualToken = null }) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.settings_api_manual_token_close))
+                    }
+                }
+            },
+            dismissButton = {},
         )
     }
 }

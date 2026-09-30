@@ -39,6 +39,12 @@ data class ExternalApiStatus(
     val clients: List<ExternalApiPairedClient> = emptyList(),
 )
 
+data class ExternalApiManualToken(
+    val clientId: String,
+    val clientName: String,
+    val accessToken: String,
+)
+
 class ExternalApiController(
     context: Context,
     private val scope: CoroutineScope,
@@ -195,6 +201,35 @@ class ExternalApiController(
             )
         }
         publishStatus()
+    }
+
+    /**
+     * Creates a trusted client and returns the plaintext token once.
+     * Used from Settings → API for phone/Tasker/curl without pairing UI.
+     */
+    fun createManualToken(clientName: String): ExternalApiManualToken {
+        val name = clientName.trim().ifEmpty { "Manual token" }
+        val clientId = "manual-${java.util.UUID.randomUUID()}"
+        val token = ExternalApiAuth.generateToken()
+        pairedClients = ExternalApiAuth.registerApprovedClient(
+            clients = pairedClients,
+            clientId = clientId,
+            clientName = name,
+            accessToken = token,
+            createdAtEpochMs = System.currentTimeMillis(),
+        )
+        scope.launch {
+            settingsManager.saveExternalApiClientsJson(
+                ExternalApiPairedClient.encodeList(pairedClients),
+            )
+        }
+        TboxRepository.addLog("INFO", "ExternalApi", "Manual token created: $name")
+        publishStatus()
+        return ExternalApiManualToken(
+            clientId = clientId,
+            clientName = name,
+            accessToken = token,
+        )
     }
 
     fun lanAddresses(): List<String> {

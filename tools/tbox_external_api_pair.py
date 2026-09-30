@@ -5,8 +5,9 @@ Pair with TBox Monitor External HTTP API and smoke-check the connection.
 Stdlib only. Default host is the HU LAN address used in field tests.
 
 On the head unit first:
-  Settings → API → enable server → «Подключить приложение» (pairing on).
-Then run this script and approve the request on the HU screen.
+  Settings → API → enable server, then either:
+  - «Подключить приложение» (pairing) and approve this script, or
+  - «Создать токен» and put accessToken into the token file for --check-only.
 
 Examples:
   python3 tools/tbox_external_api_pair.py
@@ -14,6 +15,8 @@ Examples:
   python3 tools/tbox_external_api_pair.py --check-only
   python3 tools/tbox_external_api_pair.py --check-only --run-automation климат
   python3 tools/tbox_external_api_pair.py --token-file ~/.tbox_external_api_token.json
+
+See docs/EXTERNAL_API_USER_GUIDE_RU.md.
 """
 
 from __future__ import annotations

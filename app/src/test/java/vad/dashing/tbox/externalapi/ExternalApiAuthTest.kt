@@ -29,12 +29,24 @@ class ExternalApiAuthTest {
     }
 
     @Test
-    fun revokeClient_removesMatchingId() {
-        val clients = listOf(
-            ExternalApiPairedClient("a", "A", "hash-a", 0L),
-            ExternalApiPairedClient("b", "B", "hash-b", 0L),
+    fun registerApprovedClient_replacesSameClientId() {
+        val first = ExternalApiAuth.registerApprovedClient(
+            clients = emptyList(),
+            clientId = "manual-1",
+            clientName = "Phone",
+            accessToken = "token-a",
+            createdAtEpochMs = 1L,
         )
-        val updated = ExternalApiAuth.revokeClient(clients, "a")
-        assertEquals(listOf(clients[1]), updated)
+        val second = ExternalApiAuth.registerApprovedClient(
+            clients = first,
+            clientId = "manual-1",
+            clientName = "Phone 2",
+            accessToken = "token-b",
+            createdAtEpochMs = 2L,
+        )
+        assertEquals(1, second.size)
+        assertEquals("Phone 2", second[0].clientName)
+        assertNotNull(ExternalApiAuth.findClientByToken(second, "token-b"))
+        assertNull(ExternalApiAuth.findClientByToken(second, "token-a"))
     }
 }
