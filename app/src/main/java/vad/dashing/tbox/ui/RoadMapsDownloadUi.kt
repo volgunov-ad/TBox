@@ -104,7 +104,7 @@ fun RoadMapsDownloadHubDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier.tboxDialogSurface(),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         title = { AppAlertDialogTitle(stringResource(R.string.road_maps_hub_title)) },
         text = {
             Column(

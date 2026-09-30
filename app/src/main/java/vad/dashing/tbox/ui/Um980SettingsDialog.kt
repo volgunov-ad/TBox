@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,8 +89,8 @@ fun Um980SettingsDialog(
                     controlsEnabled = controlsEnabled,
                     settingsViewModel = settingsViewModel,
                     modifier = Modifier
-                        .weight(1f, fill = true)
                         .fillMaxWidth()
+                        .heightIn(max = tboxDialogScrollBodyMaxHeight())
                         .verticalScroll(rememberScrollState()),
                 )
                 TextButton(

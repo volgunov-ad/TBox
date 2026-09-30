@@ -233,7 +233,7 @@ private fun RoadMapsOfflineImportDialog(
             dismissOnBackPress = !importing,
             dismissOnClickOutside = !importing,
         ),
-        modifier = Modifier.tboxDialogSurface(),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         title = { AppAlertDialogTitle(stringResource(R.string.road_maps_usb_dialog_title)) },
         text = {
             Column(

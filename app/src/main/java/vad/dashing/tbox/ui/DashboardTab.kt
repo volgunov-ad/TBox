@@ -675,7 +675,7 @@ fun WidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {  },
-        modifier = Modifier.tboxDialogSurface(),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(
             usePlatformDefaultWidth = false // Отключает стандартную ширину платформы
         ),
@@ -786,7 +786,7 @@ fun MainScreenPanelWidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { },
-        modifier = Modifier.tboxDialogSurface(),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
@@ -934,7 +934,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { },
-        modifier = Modifier.tboxDialogSurface(),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
