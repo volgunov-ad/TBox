@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -146,8 +145,8 @@ fun LeftMenuConfigDialog(
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp),
+                        .weight(1f, fill = false)
+                        .fillMaxWidth(),
                     userScrollEnabled = activeReorderFieldId == null,
                 ) {
                     items(

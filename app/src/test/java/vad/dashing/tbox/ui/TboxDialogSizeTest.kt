@@ -19,8 +19,16 @@ class TboxDialogSizeTest {
     }
 
     @Test
-    fun scrollBodyChromeReserveIsPositive() {
-        assertTrue(TboxDialogSize.ScrollBodyChromeReserveDp > 0)
+    fun scrollBodyChromeReserveLeavesRoomForTitleAndActions() {
+        assertTrue(TboxDialogSize.ScrollBodyChromeReserveDp >= 160)
         assertTrue(TboxDialogSize.ScrollBodyChromeReserveDp < 300)
+        val sampleScreenDp = 720f
+        val bodyMax = sampleScreenDp * TboxDialogSize.HeightFraction -
+            TboxDialogSize.ScrollBodyChromeReserveDp
+        assertTrue(bodyMax >= 120f)
+        assertTrue(
+            bodyMax + TboxDialogSize.ScrollBodyChromeReserveDp <=
+                sampleScreenDp * TboxDialogSize.HeightFraction + 0.01f,
+        )
     }
 }
