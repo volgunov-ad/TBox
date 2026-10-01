@@ -58,6 +58,7 @@ import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.adb.AdbIoErrors
 import vad.dashing.tbox.adb.PackageAdbActions
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -287,11 +288,17 @@ internal fun AppListDialog(
                     val detail = outcome.detail.ifBlank {
                         outcome.reason.name
                     }
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.app_list_adb_session_fail, detail),
-                        Toast.LENGTH_LONG,
-                    ).show()
+                    if (!AdbIoErrors.shouldSuppressUserFacingFailure(
+                            detail,
+                            context,
+                        )
+                    ) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.app_list_adb_session_fail, detail),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
                     advancedMode = false
                     adbStatuses = emptyMap()
                 }
@@ -517,11 +524,17 @@ internal fun AppListDialog(
                                     val detail = outcome.detail.ifBlank {
                                         outcome.reason.name
                                     }
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.app_list_adb_toast_fail, detail),
-                                        Toast.LENGTH_LONG,
-                                    ).show()
+                                    if (!AdbIoErrors.shouldSuppressUserFacingFailure(
+                                            detail,
+                                            context,
+                                        )
+                                    ) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.app_list_adb_toast_fail, detail),
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
                                 }
                             }
                             adbBusy = false

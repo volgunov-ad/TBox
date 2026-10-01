@@ -4,6 +4,7 @@ import android.os.Build
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -139,6 +140,10 @@ internal object LocalhostAdbSession {
                         block = block,
                     )
                     Result.Ok(value)
+                } catch (e: CancellationException) {
+                    // Composition / ViewModel teardown must not become a user-facing
+                    // "ADB transport closed" Toast via Result.Failed.
+                    throw e
                 } catch (e: Exception) {
                     TboxRepository.addLog(
                         level = "ERROR",
@@ -154,15 +159,19 @@ internal object LocalhostAdbSession {
                 val shouldRestore =
                     enabledByUs && afterSession == AfterSession.RestorePreviousTcp
                 if (shouldRestore) {
-                    runCatching {
-                        gateway.setTcpEnabled(false)
-                        gateway.refreshHuAdb()
-                    }.onFailure { e ->
-                        TboxRepository.addLog(
-                            level = "WARN",
-                            tag = TAG,
-                            message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
-                        )
+                    // ctl.restart adbd drops live tab/ephemeral clients — expected EOF.
+                    AdbShutdownGate.withIntentionalTransportCloseSuspending {
+                        runCatching {
+                            gateway.setTcpEnabled(false)
+                            gateway.refreshHuAdb()
+                        }.onFailure { e ->
+                            if (e is CancellationException) throw e
+                            TboxRepository.addLog(
+                                level = "WARN",
+                                tag = TAG,
+                                message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
+                            )
+                        }
                     }
                 } else if (enabledByUs && afterSession == AfterSession.LeaveTcpEnabled) {
                     TboxRepository.addLog(

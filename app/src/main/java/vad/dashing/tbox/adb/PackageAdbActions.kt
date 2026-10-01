@@ -227,8 +227,10 @@ internal object PackageAdbActions {
             val shouldRestore = tcpEnabledByUs.getAndSet(false)
             if (shouldRestore) {
                 runCatching {
-                    gateway.setTcpEnabled(false)
-                    gateway.refreshHuAdb()
+                    AdbShutdownGate.withIntentionalTransportCloseSuspending {
+                        gateway.setTcpEnabled(false)
+                        gateway.refreshHuAdb()
+                    }
                 }.onFailure { e ->
                     TboxRepository.addLog(
                         level = "WARN",

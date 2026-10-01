@@ -156,14 +156,21 @@ internal fun launchAppFromWidget(
                 ) { outcome ->
                     when (outcome) {
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
-                            android.widget.Toast.makeText(
-                                context,
-                                context.getString(
-                                    vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
-                                    outcome.detail.ifBlank { outcome.reason.name },
-                                ),
-                                android.widget.Toast.LENGTH_LONG,
-                            ).show()
+                            val detail = outcome.detail.ifBlank { outcome.reason.name }
+                            if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+                                    detail,
+                                    context,
+                                )
+                            ) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
+                                        detail,
+                                    ),
+                                    android.widget.Toast.LENGTH_LONG,
+                                ).show()
+                            }
                         }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success -> {
                             if (outcome.remapped) {
@@ -201,6 +208,13 @@ internal fun forceStopAppFromWidget(
     if (pkg.isBlank()) return
     settingsViewModel.forceStopAppViaAdb(context, pkg) { result ->
         if (result.success) return@forceStopAppViaAdb
+        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+                result.message,
+                context,
+            )
+        ) {
+            return@forceStopAppViaAdb
+        }
         android.widget.Toast.makeText(
             context,
             context.getString(

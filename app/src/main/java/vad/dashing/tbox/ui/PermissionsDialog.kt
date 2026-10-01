@@ -39,12 +39,14 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppPermissionGrantKind
 import vad.dashing.tbox.AppPermissionId
 import vad.dashing.tbox.AppPermissionStatus
 import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.R
+import vad.dashing.tbox.adb.AdbIoErrors
 import vad.dashing.tbox.adb.PermissionsAutoGrant
 import vad.dashing.tbox.adb.WriteSecureSettingsAutoGrant
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -170,9 +172,11 @@ fun PermissionsDialog(
         if (autoGrantRunning) return
         autoGrantRunning = true
         scope.launch {
-            val outcome = runCatching {
+            val outcome = try {
                 WriteSecureSettingsAutoGrant.grant(context)
-            }.getOrElse { error ->
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
                 WriteSecureSettingsAutoGrant.Outcome.Failed(
                     WriteSecureSettingsAutoGrant.Reason.AdbConnectFailed,
                     error.message ?: error.javaClass.simpleName,
@@ -180,7 +184,16 @@ fun PermissionsDialog(
             }
             autoGrantRunning = false
             refreshTick++
-            Toast.makeText(context, messageForWriteSecure(outcome), Toast.LENGTH_LONG).show()
+            val message = messageForWriteSecure(outcome)
+            if (outcome is WriteSecureSettingsAutoGrant.Outcome.Failed &&
+                AdbIoErrors.shouldSuppressUserFacingFailure(
+                    outcome.detail,
+                    context,
+                )
+            ) {
+                return@launch
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -188,9 +201,11 @@ fun PermissionsDialog(
         if (autoGrantRunning) return
         autoGrantRunning = true
         scope.launch {
-            val outcome = runCatching {
+            val outcome = try {
                 PermissionsAutoGrant.grantMissing(context)
-            }.getOrElse { error ->
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
                 PermissionsAutoGrant.Outcome.Failed(
                     PermissionsAutoGrant.Reason.AdbConnectFailed,
                     error.message ?: error.javaClass.simpleName,
@@ -198,7 +213,16 @@ fun PermissionsDialog(
             }
             autoGrantRunning = false
             refreshTick++
-            Toast.makeText(context, messageForGrantAll(outcome), Toast.LENGTH_LONG).show()
+            val message = messageForGrantAll(outcome)
+            if (outcome is PermissionsAutoGrant.Outcome.Failed &&
+                AdbIoErrors.shouldSuppressUserFacingFailure(
+                    outcome.detail,
+                    context,
+                )
+            ) {
+                return@launch
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 

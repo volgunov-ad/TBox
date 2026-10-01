@@ -6,6 +6,8 @@ import android.os.Bundle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import vad.dashing.tbox.adb.AdbRepository
+import vad.dashing.tbox.adb.AdbShutdownGate
 import vad.dashing.tbox.automation.AutomationUiEventReporter
 
 /**
@@ -31,7 +33,12 @@ object MainActivityForegroundTracker {
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-            override fun onActivityDestroyed(activity: Activity) {}
+            override fun onActivityDestroyed(activity: Activity) {
+                if (activity is MainActivity && activity.isFinishing) {
+                    AdbShutdownGate.markAppShuttingDown()
+                    AdbRepository.disconnect()
+                }
+            }
 
             override fun onActivityStarted(activity: Activity) {
                 if (activity is MainActivity) {
@@ -60,6 +67,11 @@ object MainActivityForegroundTracker {
                     resumedCount = (resumedCount - 1).coerceAtLeast(0)
                     publishStateLocked()
                     AutomationUiEventReporter.onMainActivityPaused()
+                    // Mark early so in-flight ADB callbacks after Close do not Toast
+                    // "ADB transport closed" while the activity is finishing.
+                    if (activity.isFinishing) {
+                        AdbShutdownGate.markAppShuttingDown()
+                    }
                 }
             }
         })
