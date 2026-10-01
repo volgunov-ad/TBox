@@ -30,7 +30,7 @@ class VoiceSettingsRepository(private val context: Context) {
         VoiceConnectionSettings(
             host = prefs[hostKey] ?: VoiceConnectionSettings.DEFAULT_HOST,
             port = prefs[portKey] ?: VoiceConnectionSettings.DEFAULT_PORT,
-            accessToken = prefs[tokenKey].orEmpty(),
+            accessToken = AccessTokenNormalizer.normalize(prefs[tokenKey].orEmpty()),
         )
     }
 
@@ -38,7 +38,7 @@ class VoiceSettingsRepository(private val context: Context) {
         context.voiceDataStore.edit { prefs ->
             prefs[hostKey] = host.trim().ifEmpty { VoiceConnectionSettings.DEFAULT_HOST }
             prefs[portKey] = port.coerceIn(1024, 65535)
-            prefs[tokenKey] = accessToken.trim()
+            prefs[tokenKey] = AccessTokenNormalizer.normalize(accessToken)
         }
     }
 }

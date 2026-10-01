@@ -6,7 +6,7 @@
     <string name="settings_host">Хост Monitor API</string>
     <string name="settings_port">Порт</string>
     <string name="settings_token">Bearer-токен</string>
-    <string name="settings_token_hint">Из Настройки → API → Создать токен</string>
+    <string name="settings_token_hint">Токен или «Bearer …» из Настройки → API</string>
     <string name="phrase_label">Фраза</string>
     <string name="action_save">Сохранить</string>
     <string name="action_check_health">Проверить связь</string>

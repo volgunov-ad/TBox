@@ -18,6 +18,7 @@ import vad.dashing.voice.api.ExternalApiClient
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
+import vad.dashing.voice.settings.AccessTokenNormalizer
 import vad.dashing.voice.settings.VoiceConnectionSettings
 import vad.dashing.voice.settings.VoiceSettingsRepository
 
@@ -78,9 +79,15 @@ class VoiceHomeViewModel(
     fun saveSettings() {
         val state = _uiState.value
         val port = state.portText.toIntOrNull() ?: VoiceConnectionSettings.DEFAULT_PORT
+        val token = AccessTokenNormalizer.normalize(state.token)
         viewModelScope.launch {
-            settingsRepository.save(state.host, port, state.token)
-            _uiState.update { it.copy(statusMessage = "Сохранено") }
+            settingsRepository.save(state.host, port, token)
+            _uiState.update {
+                it.copy(
+                    token = token,
+                    statusMessage = "Сохранено",
+                )
+            }
         }
     }
 
@@ -126,13 +133,14 @@ class VoiceHomeViewModel(
     fun refreshCatalog() {
         val state = _uiState.value
         val port = portOrDefault(state)
+        val token = AccessTokenNormalizer.normalize(state.token)
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, statusMessage = "Загрузка каталога…") }
             val catalogResult = withContext(Dispatchers.IO) {
-                apiClient.catalog(state.host, port, state.token)
+                apiClient.catalog(state.host, port, token)
             }
             val autosResult = withContext(Dispatchers.IO) {
-                apiClient.automations(state.host, port, state.token)
+                apiClient.automations(state.host, port, token)
             }
             catalogResult.fold(
                 onSuccess = { catalog ->
@@ -165,11 +173,12 @@ class VoiceHomeViewModel(
     fun runPhrase() {
         val state = _uiState.value
         val port = portOrDefault(state)
+        val token = AccessTokenNormalizer.normalize(state.token)
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, answerMessage = "", statusMessage = "Разбор фразы…") }
             val catalog = cachedCatalog ?: run {
                 val loaded = withContext(Dispatchers.IO) {
-                    apiClient.catalog(state.host, port, state.token)
+                    apiClient.catalog(state.host, port, token)
                 }.getOrElse { error ->
                     _uiState.update {
                         it.copy(
@@ -182,7 +191,7 @@ class VoiceHomeViewModel(
                 }
                 cachedCatalog = loaded
                 cachedAutomations = withContext(Dispatchers.IO) {
-                    apiClient.automations(state.host, port, state.token)
+                    apiClient.automations(state.host, port, token)
                 }.getOrDefault(emptyList())
                 loaded
             }
@@ -204,7 +213,7 @@ class VoiceHomeViewModel(
                         apiClient.signals(
                             host = state.host,
                             port = port,
-                            token = state.token,
+                            token = token,
                             ids = listOf(intent.signal.id),
                             source = source,
                         )
