@@ -559,6 +559,11 @@ class AutomationCodecTest {
                     id = "1",
                     triggerId = "button1",
                 ),
+                AutomationTrigger.WidgetPressed(
+                    id = "2",
+                    triggerId = "button1",
+                    pressKind = AutomationWidgetPressKind.DOUBLE,
+                ),
             ),
             actions = listOf(
                 AutomationAction.Builtin(
@@ -573,6 +578,34 @@ class AutomationCodecTest {
         ).getOrThrow()
         assertEquals(definition, decoded.automations.single())
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decode_widgetPressedWithoutPressKind_defaultsToSingle() {
+        val json = """
+            {
+              "formatVersion": 1,
+              "automations": [{
+                "id": "legacy-widget",
+                "name": "Legacy",
+                "description": "",
+                "enabled": true,
+                "triggers": [{
+                  "type": "widget_pressed",
+                  "id": "1",
+                  "triggerId": "button1"
+                }],
+                "conditions": [],
+                "actions": [],
+                "runMode": "single",
+                "maxRuns": 1
+              }]
+            }
+        """.trimIndent()
+        val decoded = AutomationCodec.decode(json).getOrThrow()
+        val trigger = decoded.automations.single().triggers.single() as AutomationTrigger.WidgetPressed
+        assertEquals("button1", trigger.triggerId)
+        assertEquals(AutomationWidgetPressKind.SINGLE, trigger.pressKind)
     }
 
     @Test

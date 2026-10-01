@@ -776,6 +776,31 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun onWidgetPress_matchesPressKindExclusively() {
+        val evaluator = evaluator(
+            AutomationTrigger.WidgetPressed(
+                id = "single",
+                triggerId = "btn1",
+                pressKind = AutomationWidgetPressKind.SINGLE,
+            ),
+            AutomationTrigger.WidgetPressed(
+                id = "double",
+                triggerId = "btn1",
+                pressKind = AutomationWidgetPressKind.DOUBLE,
+            ),
+        )
+        assertEquals(
+            "single",
+            evaluator.onWidgetPress("btn1", AutomationWidgetPressKind.SINGLE)?.triggerId,
+        )
+        assertEquals(
+            "double",
+            evaluator.onWidgetPress("btn1", AutomationWidgetPressKind.DOUBLE)?.triggerId,
+        )
+        assertNull(evaluator.onWidgetPress("other", AutomationWidgetPressKind.SINGLE))
+    }
+
+    @Test
     fun hardKeyTrigger_ignoresOtherCodeOrStatus() {
         val evaluator = evaluator(
             AutomationTrigger.HardKey(

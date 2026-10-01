@@ -38,6 +38,8 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
+import vad.dashing.tbox.automation.AutomationWidgetPressKind
+import vad.dashing.tbox.automation.automationWidgetDoubleTapTimeoutMillis
 import vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAutomationTriggerId
@@ -141,7 +143,30 @@ private fun WidgetPressedTriggerFields(
         onValueChange = { raw ->
             onChange(trigger.copy(triggerId = normalizeAutomationTriggerId(raw)))
         },
-        label = "ID триггера виджета",
+        label = stringResource(R.string.automation_widget_press_trigger_id_label),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    val singleLabel = stringResource(R.string.automation_widget_press_kind_single)
+    val doubleLabel = stringResource(R.string.automation_widget_press_kind_double)
+    AutomationDropdown(
+        label = stringResource(R.string.automation_widget_press_kind_label),
+        value = trigger.pressKind,
+        options = AutomationWidgetPressKind.entries,
+        optionLabel = { kind ->
+            when (kind) {
+                AutomationWidgetPressKind.SINGLE -> singleLabel
+                AutomationWidgetPressKind.DOUBLE -> doubleLabel
+            }
+        },
+        onValueChange = { onChange(trigger.copy(pressKind = it)) },
+    )
+    Text(
+        text = stringResource(
+            R.string.automation_widget_press_kind_hint,
+            automationWidgetDoubleTapTimeoutMillis(),
+        ),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     )
 }
