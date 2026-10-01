@@ -21,8 +21,10 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import vad.dashing.tbox.TboxRepository
 
 object AdbRepository {
+    private const val JOURNAL_TAG = "ADB"
 
     const val ACTION_USB_PERMISSION = "vad.dashing.tbox.ADB_USB_PERMISSION"
 
@@ -290,6 +292,12 @@ object AdbRepository {
                         ) {
                             _state.value = State()
                             appendLog("Disconnected ($message)")
+                            // Expected teardown: ADB-tab console + DEBUG journal (not ERROR spam).
+                            TboxRepository.addLog(
+                                "DEBUG",
+                                JOURNAL_TAG,
+                                "Disconnected ($message)",
+                            )
                         } else {
                             setError(
                                 previous.transport,
@@ -418,6 +426,8 @@ object AdbRepository {
         ) {
             _state.value = State()
             appendLog("Disconnected ($message)")
+            // Expected teardown: keep default INFO journal quiet; DEBUG still records.
+            TboxRepository.addLog("DEBUG", JOURNAL_TAG, "Disconnected ($message)")
             return
         }
         _state.value = State(
@@ -427,6 +437,8 @@ object AdbRepository {
             error = message,
         )
         appendLog("Error: $message")
+        // ADB-tab console is primary for interactive use; mirror real failures to the journal.
+        TboxRepository.addLog("ERROR", JOURNAL_TAG, message)
     }
 
     private fun appendOutput(output: String) {

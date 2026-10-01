@@ -94,6 +94,12 @@ object WriteSecureSettingsAutoGrant {
                     val detail = listOf(shellResult.stderr, shellResult.stdout)
                         .firstOrNull { it.isNotBlank() }
                         .orEmpty()
+                    TboxRepository.addLog(
+                        level = "WARN",
+                        tag = TAG,
+                        message = "WRITE_SECURE_SETTINGS still missing after grant" +
+                            if (detail.isBlank()) "" else ": $detail",
+                    )
                     return Outcome.Failed(Reason.StillMissingAfterGrant, detail)
                 }
                 TboxRepository.addLog(
