@@ -139,6 +139,7 @@ object AutomationCodec {
                 .put(KEY_TYPE, "widget_pressed")
                 .put("id", trigger.id)
                 .put("triggerId", trigger.triggerId)
+                .put("pressKind", trigger.pressKind.storageKey)
 
             is AutomationTrigger.HardKey -> JSONObject()
                 .put(KEY_TYPE, "hard_key")
@@ -223,10 +224,20 @@ object AutomationCodec {
                     ?: throw IllegalArgumentException("Unknown system event"),
             )
 
-            "widget_pressed" -> AutomationTrigger.WidgetPressed(
-                id = json.requireNonBlankString("id"),
-                triggerId = json.requireNonBlankString("triggerId"),
-            )
+            "widget_pressed" -> {
+                val pressKind = if (json.has("pressKind") && !json.isNull("pressKind")) {
+                    AutomationWidgetPressKind.fromStorageKey(json.requireNonBlankString("pressKind"))
+                        ?: throw IllegalArgumentException("Unknown widget press kind")
+                } else {
+                    // Legacy rules without pressKind keep single-tap semantics.
+                    AutomationWidgetPressKind.SINGLE
+                }
+                AutomationTrigger.WidgetPressed(
+                    id = json.requireNonBlankString("id"),
+                    triggerId = json.requireNonBlankString("triggerId"),
+                    pressKind = pressKind,
+                )
+            }
 
             "hard_key" -> AutomationTrigger.HardKey(
                 id = json.requireNonBlankString("id"),

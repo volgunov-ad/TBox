@@ -30,7 +30,10 @@ class AutomationEngine(
     private sealed interface EngineEvent {
         data class Signal(val sample: AutomationSignalSample) : EngineEvent
         data class System(val event: AutomationSystemEvent) : EngineEvent
-        data class WidgetPress(val triggerId: String) : EngineEvent
+        data class WidgetPress(
+            val triggerId: String,
+            val pressKind: AutomationWidgetPressKind,
+        ) : EngineEvent
         data class HardKey(
             val keyCode: Int,
             val keyStatus: AutomationHardKeyStatus,
@@ -72,6 +75,13 @@ class AutomationEngine(
             AutomationTriggerHardKeyEventBus.publish(AutomationHardKeyEvent(keyCode, status))
         },
     )
+    private val widgetPressGestures = AutomationWidgetPressGestureRecognizer(
+        scope = scope,
+        doubleTapMillis = automationWidgetDoubleTapTimeoutMillis(),
+        publish = { triggerId, pressKind ->
+            events.trySend(EngineEvent.WidgetPress(triggerId, pressKind))
+        },
+    )
     private val evaluators = linkedMapOf<String, AutomationEvaluator>()
     private val definitions = linkedMapOf<String, AutomationDefinition>()
     private val executionStates = mutableMapOf<String, ExecutionState>()
@@ -109,8 +119,8 @@ class AutomationEngine(
             }
         }
         scope.launch {
-            AutomationTriggerWidgetPressEventBus.events.collect { triggerId ->
-                events.send(EngineEvent.WidgetPress(triggerId))
+            AutomationTriggerWidgetPressEventBus.events.collect { tap ->
+                widgetPressGestures.onTap(tap.triggerId)
             }
         }
         scope.launch {
@@ -185,6 +195,7 @@ class AutomationEngine(
             engineJob.join()
             signalProvider.stop()
             hardKeyGestures.clear()
+            widgetPressGestures.clear()
             AutomationHardKeyTracking.setInterestRequired(false)
             AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())
@@ -244,7 +255,7 @@ class AutomationEngine(
                 when (event) {
                     is EngineEvent.Signal -> handleSignal(event.sample)
                     is EngineEvent.System -> handleSystemEvent(event.event)
-                    is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId)
+                    is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId, event.pressKind)
                     is EngineEvent.HardKey -> handleHardKey(event.keyCode, event.keyStatus)
                     is EngineEvent.EspBleBtn -> handleEspBleBtn(event.mac, event.btn, event.act)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
@@ -287,10 +298,13 @@ class AutomationEngine(
         }
     }
 
-    private suspend fun handleWidgetPress(triggerId: String) {
+    private suspend fun handleWidgetPress(
+        triggerId: String,
+        pressKind: AutomationWidgetPressKind,
+    ) {
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
-            val fire = evaluator.onWidgetPress(triggerId) ?: return@forEach
+            val fire = evaluator.onWidgetPress(triggerId, pressKind) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }

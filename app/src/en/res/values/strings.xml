@@ -128,6 +128,11 @@
     <string name="automation_hard_key_status_single">Single</string>
     <string name="automation_hard_key_status_double">Double</string>
     <string name="automation_hard_key_status_long">Long</string>
+    <string name="automation_widget_press_trigger_id_label">Widget trigger id</string>
+    <string name="automation_widget_press_kind_label">Press kind</string>
+    <string name="automation_widget_press_kind_single">Single</string>
+    <string name="automation_widget_press_kind_double">Double</string>
+    <string name="automation_widget_press_kind_hint">Single and double are distinct triggers for the same tile. Double-tap window is %1$d ms (same as other dashboard widgets). Single fires after that pause if there was no second tap; a double suppresses the single.</string>
     <string name="automation_hard_key_event_hint">Key codes are listed in the “Key diagnostics” window and in the MBCAN/VHAL docs. “Pressed” (immediately on press) / “Released” (immediately on release) are raw OEM edges. “Single” (short press after the pause) / “Double” / “Long” (hold) are timing-derived (double window %1$d ms, long ≥ %2$d ms hold). Single fires after the double-tap window so it can be distinguished from double. Repeated events for the same key are suppressed for %3$d ms.</string>
     <string name="automation_hard_key_unavailable_a10"> On this head unit (Android 10 / VHAL) key events are not delivered: this trigger works only on Android 9 (mbCAN).</string>
     <string name="tab_settings">Settings</string>
@@ -2313,7 +2318,7 @@
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
     <string name="widget_desc_app_list">List of installed apps with open, hide, and uninstall actions.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
-    <string name="widget_desc_automation_trigger">A button for automations: activated by the “Automation trigger (widget)” action, while a tap runs automations with the “Widget trigger pressed” trigger and a matching id.</string>
+    <string name="widget_desc_automation_trigger">A button for automations: activated by the “Automation trigger (widget)” action, while a single or double tap runs automations with the “Widget trigger pressed” trigger (press kind single/double) and a matching id.</string>
     <string name="widget_desc_empty_tile">Empty tile used to create free space in the grid.</string>
     <string name="widget_desc_restart_tbox">Reboots the TBox module.</string>
     <string name="widget_desc_external_app">System Android widget from a selected third-party application.</string>
@@ -2389,7 +2394,7 @@
     <string name="widget_actions_app_launcher">Single tap — open the application; double tap — close (ADB force-stop, no relaunch).</string>
     <string name="widget_actions_app_list">Single tap — open the app list.</string>
     <string name="widget_actions_http_request">Single tap — perform the configured action.</string>
-    <string name="widget_actions_automation_trigger">Single tap — run automations with a matching trigger id. In edit mode — open widget settings.</string>
+    <string name="widget_actions_automation_trigger">Single or double tap — run automations with a matching trigger id and press kind. In edit mode — open widget settings.</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>
     <string name="widget_automation_trigger_id_label">Trigger id</string>
     <string name="widget_automation_trigger_id_hint">Up to 32 characters. An empty id keeps the widget always inactive. The state resets when the app restarts.</string>

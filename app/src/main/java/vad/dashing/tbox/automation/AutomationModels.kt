@@ -36,6 +36,14 @@ const val AUTOMATION_HARD_KEY_LONG_PRESS_MS = 500L
  */
 const val AUTOMATION_HARD_KEY_DOUBLE_TAP_MS = 400L
 
+/**
+ * Double-tap window for automation trigger tiles.
+ * Same source as Compose [androidx.compose.foundation.combinedClickable] used by
+ * other dashboard widgets: [android.view.ViewConfiguration.getDoubleTapTimeout].
+ */
+fun automationWidgetDoubleTapTimeoutMillis(): Long =
+    android.view.ViewConfiguration.getDoubleTapTimeout().toLong()
+
 enum class AutomationSignalSource(val storageKey: String) {
     TBOX("tbox"),
     HEAD_UNIT("head_unit"),
@@ -292,6 +300,21 @@ enum class AutomationHardKeyStatus(val storageKey: String, val rawValue: Int?) {
     }
 }
 
+/**
+ * Gesture kind for [AutomationTrigger.WidgetPressed].
+ * Exclusive recognition: a second tap within the dashboard double-tap window emits
+ * [DOUBLE] and suppresses [SINGLE]; otherwise [SINGLE] fires after the window.
+ */
+enum class AutomationWidgetPressKind(val storageKey: String) {
+    SINGLE("single"),
+    DOUBLE("double");
+
+    companion object {
+        fun fromStorageKey(raw: String?): AutomationWidgetPressKind? =
+            entries.firstOrNull { it.storageKey == raw?.trim()?.lowercase() }
+    }
+}
+
 /** Shelly Blu / BTHome button action from companion `bleBtn.act`. */
 enum class AutomationEspBleBtnAction(val storageKey: String) {
     PRESS("press"),
@@ -430,10 +453,15 @@ sealed interface AutomationTrigger {
     /**
      * Fired when the user taps an automation trigger widget tile whose trigger id equals
      * [triggerId]. Fires regardless of the tile active/inactive state.
+     *
+     * [pressKind] selects exclusive single vs double tap (same system double-tap window as
+     * other dashboard widgets). Missing [pressKind] in stored JSON defaults to [SINGLE]
+     * so pre-existing rules keep working.
      */
     data class WidgetPressed(
         override val id: String = "1",
         val triggerId: String,
+        val pressKind: AutomationWidgetPressKind = AutomationWidgetPressKind.SINGLE,
     ) : AutomationTrigger
 
     /**

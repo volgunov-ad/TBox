@@ -108,9 +108,14 @@ class AutomationEvaluator(
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
-    fun onWidgetPress(triggerId: String): AutomationTriggerFire? {
+    fun onWidgetPress(
+        triggerId: String,
+        pressKind: AutomationWidgetPressKind = AutomationWidgetPressKind.SINGLE,
+    ): AutomationTriggerFire? {
         val trigger = definition.triggers.firstOrNull {
-            it is AutomationTrigger.WidgetPressed && it.triggerId == triggerId
+            it is AutomationTrigger.WidgetPressed &&
+                it.triggerId == triggerId &&
+                it.pressKind == pressKind
         } ?: return null
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }

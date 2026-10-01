@@ -128,6 +128,11 @@
     <string name="automation_hard_key_status_single">Одиночное</string>
     <string name="automation_hard_key_status_double">Двойное</string>
     <string name="automation_hard_key_status_long">Долгое</string>
+    <string name="automation_widget_press_trigger_id_label">ID триггера виджета</string>
+    <string name="automation_widget_press_kind_label">Тип нажатия</string>
+    <string name="automation_widget_press_kind_single">Одиночное</string>
+    <string name="automation_widget_press_kind_double">Двойное</string>
+    <string name="automation_widget_press_kind_hint">Одиночное и двойное — разные триггеры одной плитки. Окно двойного нажатия %1$d мс (как у других виджетов панели). Одиночное срабатывает после этой паузы, если второго тапа не было; при двойном одиночное не эмитится.</string>
     <string name="automation_hard_key_event_hint">Коды кнопок — в окне «Диагностика клавиш» и в документации MBCAN/VHAL. «Нажал» (сразу при нажатии) / «Отпустил» (сразу при отпускании) — сырые события OEM. «Одиночное» (короткое нажатие после паузы) / «Двойное» / «Долгое» (удержание) вычисляются по таймингу (двойное окно %1$d мс, долгое ≥ %2$d мс удержания). Одиночное срабатывает с задержкой окна двойного, чтобы отличить от двойного. Повторные события одной кнопки подавляются в течение %3$d мс.</string>
     <string name="automation_hard_key_unavailable_a10"> На этом ГУ (Android 10 / VHAL) события кнопок не приходят: триггер работает только на Android 9 (mbCAN).</string>
     <string name="tab_settings">Настройки</string>
@@ -2334,7 +2339,7 @@
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
     <string name="widget_desc_app_list">Список установленных программ с запуском, скрытием и удалением.</string>
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
-    <string name="widget_desc_automation_trigger">Кнопка для запуска автоматизаций: активируется действием «Триггер автоматизации (виджет)», а нажатие запускает автоматизации с триггером «Нажатие виджета-триггера» и совпадающим ID.</string>
+    <string name="widget_desc_automation_trigger">Кнопка для запуска автоматизаций: активируется действием «Триггер автоматизации (виджет)», а одиночное или двойное нажатие запускает автоматизации с триггером «Нажатие виджета-триггера» (тип нажатия single/double) и совпадающим ID.</string>
     <string name="widget_desc_empty_tile">Пустая плитка для создания свободного места в сетке.</string>
     <string name="widget_desc_restart_tbox">Перезагрузка модуля TBox.</string>
     <string name="widget_desc_external_app">Системный Android-виджет выбранного стороннего приложения.</string>
@@ -2410,7 +2415,7 @@
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение; двойное — закрыть (ADB force-stop, без повторного запуска).</string>
     <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>
-    <string name="widget_actions_automation_trigger">Одиночное нажатие — запустить автоматизации с совпадающим ID триггера. В режиме редактирования — открыть настройки виджета.</string>
+    <string name="widget_actions_automation_trigger">Одиночное или двойное нажатие — запустить автоматизации с совпадающим ID и типом нажатия. В режиме редактирования — открыть настройки виджета.</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>
     <string name="widget_automation_trigger_id_hint">До 32 символов. Пустой ID — виджет всегда неактивен. Состояние сбрасывается перезапуском приложения.</string>
