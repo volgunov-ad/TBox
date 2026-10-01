@@ -429,10 +429,12 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 
 | Слой | v1 |
 |------|-----|
-| STT | офлайн RU (напр. Vosk) |
+| STT | офлайн RU (Vosk MVP; Sherpa опционально позже) |
 | NLU | aliases + слоты по `/v1/catalog`; без LLM |
-| Транспорт | единичные HTTP-запросы после pairing |
-| TTS | системный или встроенный |
+| Транспорт | единичные HTTP-запросы после pairing / ручного токена |
+| TTS | **встроенный** офлайн (Piper/Sherpa); системный TTS ГУ **не** используем |
+
+План Voice APK: [VOICE_APK_RU.md](VOICE_APK_RU.md).
 
 Именованные сценарии пользователя → `run` автоматизации по имени.  
 Свободные команды машины → `invoke` по каталогу.
@@ -455,7 +457,7 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
 | 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
 | 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 2) |
-| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
+| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | план: [VOICE_APK_RU.md](VOICE_APK_RU.md) |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 
 На каждом шаге с кодом автоматизаций — только аддитивные изменения; прогон
