@@ -158,16 +158,6 @@ val fetchTtsModel by tasks.registering {
     }
 }
 
-tasks.matching {
-    val n = it.name
-    n.startsWith("assemble") ||
-        n.startsWith("merge") && n.endsWith("Assets") ||
-        n.startsWith("package") && n.endsWith("Assets")
-}.configureEach {
-    dependsOn(fetchTtsModel)
-    dependsOn(fetchSttModel)
-}
-
 // Vosk small-ru STT model (~45 MB zip) — not in git; Gradle unzip (no Python).
 val sttModelDirName = "vosk-model-small-ru-0.22"
 val sttModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
@@ -216,4 +206,17 @@ val fetchSttModel by tasks.registering {
         }
         logger.lifecycle("OK: $modelDir")
     }
+}
+
+// Any task that reads src/main/assets must wait for model fetch (incl. release lintVital).
+tasks.matching {
+    val n = it.name
+    n.startsWith("assemble") ||
+        (n.startsWith("merge") && n.endsWith("Assets")) ||
+        (n.startsWith("package") && n.endsWith("Assets")) ||
+        n.contains("lintvital", ignoreCase = true) ||
+        n.contains("lintreportmodel", ignoreCase = true)
+}.configureEach {
+    dependsOn(fetchTtsModel)
+    dependsOn(fetchSttModel)
 }
