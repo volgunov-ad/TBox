@@ -2456,6 +2456,7 @@
 
     <string name="app_list_dialog_title">App list</string>
     <string name="app_list_action_open">Open</string>
+    <string name="app_list_action_open_in_window">Open in window</string>
     <string name="app_list_action_hide">Hide from list</string>
     <string name="app_list_action_show">Return to list</string>
     <string name="app_list_action_delete">Delete</string>

@@ -54,6 +54,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.adb.PackageAdbActions
@@ -212,6 +214,13 @@ internal fun AppListDialog(
     val pm = remember(context) { context.packageManager }
     val homePackage = remember(pm) { resolveHomeLauncherPackage(pm) }
     val selfPackage = remember(context) { context.packageName }
+    // Same gate as App Shortcut picker for STOCK_WINDOW (A10 / Adayo launcher only).
+    val stockWindowAvailable = remember(context) {
+        AdayoStockAppWindow.isAvailable(context)
+    }
+    val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val showStockWindowOpen = stockWindowAvailable ||
+        headUnitCanMode == HeadUnitCanMode.Android10Vhal
 
     val apps = if (advancedMode) installedApps else launchableApps
 
@@ -345,8 +354,12 @@ internal fun AppListDialog(
                                 showHidden = showHidden,
                                 advancedMode = advancedMode,
                                 adbBusy = adbBusy,
+                                showStockWindowOpen = showStockWindowOpen,
                                 onOpen = {
                                     launchAppFromWidget(context, row.packageName)
+                                },
+                                onOpenInStockWindow = {
+                                    launchAppInStockWindow(context, row.packageName)
                                 },
                                 onToggleHidden = {
                                     settingsViewModel.setAppListPackageHidden(
@@ -536,7 +549,9 @@ private fun AppListDialogRow(
     showHidden: Boolean,
     advancedMode: Boolean,
     adbBusy: Boolean,
+    showStockWindowOpen: Boolean,
     onOpen: () -> Unit,
+    onOpenInStockWindow: () -> Unit,
     onToggleHidden: () -> Unit,
     onDelete: () -> Unit,
     onRequestAdbAction: (PackageAdbActions.Action, String) -> Unit,
@@ -555,6 +570,7 @@ private fun AppListDialogRow(
     val forceStopLabel = stringResource(R.string.app_list_adb_force_stop)
 
     val openLabel = stringResource(R.string.app_list_action_open)
+    val openInWindowLabel = stringResource(R.string.app_list_action_open_in_window)
 
     Row(
         modifier = Modifier
@@ -621,6 +637,18 @@ private fun AppListDialogRow(
                 text = openLabel,
                 style = MaterialTheme.typography.tboxButton,
             )
+        }
+        if (showStockWindowOpen) {
+            OutlinedButton(
+                onClick = onOpenInStockWindow,
+                enabled = row.canOpen,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                Text(
+                    text = openInWindowLabel,
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
         }
         OutlinedButton(
             onClick = onToggleHidden,

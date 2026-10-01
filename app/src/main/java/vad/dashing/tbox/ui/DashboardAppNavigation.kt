@@ -79,6 +79,22 @@ internal fun launchAppFromWidget(context: Context, packageName: String) {
     }
 }
 
+/**
+ * Same path as App Shortcut widget mode [AppLauncherLaunchMode.STOCK_WINDOW]:
+ * Adayo launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`), with fullscreen fallback.
+ */
+internal fun launchAppInStockWindow(context: Context, packageName: String) {
+    val pkg = packageName.trim()
+    if (pkg.isBlank()) return
+    // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
+    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+        val ok = AdayoStockAppWindow.launchInAppWindow(context, pkg)
+        if (!ok) {
+            launchAppFullscreen(context, pkg)
+        }
+    }
+}
+
 internal fun launchAppFromWidget(
     context: Context,
     config: FloatingDashboardWidgetConfig,
@@ -94,13 +110,7 @@ internal fun launchAppFromWidget(
 
     when (launchMode) {
         AppLauncherLaunchMode.STOCK_WINDOW -> {
-            // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
-                if (!ok) {
-                    launchAppFullscreen(context, packageName)
-                }
-            }
+            launchAppInStockWindow(context, packageName)
             return
         }
         AppLauncherLaunchMode.FREEFORM -> {
