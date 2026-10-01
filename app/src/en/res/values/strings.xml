@@ -1756,6 +1756,9 @@
     <string name="info_app_version_loc">LOC version</string>
     <string name="info_app_version_mdc">MDC version</string>
     <string name="info_app_version_swd">SWD version</string>
+    <string name="info_app_version_uda">UDA version</string>
+    <string name="button_uda_read_dtc">UDA: Read DTC (probe)</string>
+    <string name="button_uda_read_dtc_desc">Expert: DiagReq ReadDtc via UDA UDP (ECU params = 0)</string>
     <string name="info_sw_version">SW version</string>
     <string name="info_hw_version">HW version</string>
     <string name="info_vin">VIN code</string>

@@ -66,6 +66,8 @@ import vad.dashing.tbox.usbgnss.UsbNmeaLocationSource
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigUiStore
 import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.uda.CrtVctrlProtocol
+import vad.dashing.tbox.uda.UdaProtocol
 import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
 import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
 import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
@@ -503,6 +505,11 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
+        /** Expert: UDA DiagReq ReadDtc probe (CFG path + zeroed ECU params). */
+        const val ACTION_UDA_READ_DTC = "vad.dashing.tbox.UDA_READ_DTC"
+        /** Expert: raw CRT vctrl frame (CMD 0x26, 45 bytes). Extra: hex payload or empty for lock-close. */
+        const val ACTION_CRT_VCTRL = "vad.dashing.tbox.CRT_VCTRL"
+        const val EXTRA_CRT_VCTRL_HEX = "vad.dashing.tbox.EXTRA_CRT_VCTRL_HEX"
         const val ACTION_SUSPEND_OVERLAYS = "vad.dashing.tbox.SUSPEND_OVERLAYS"
         const val ACTION_RESUME_OVERLAYS = "vad.dashing.tbox.RESUME_OVERLAYS"
         const val ACTION_READ_ALL_SMS = "vad.dashing.tbox.READ_ALL_SMS"
@@ -1376,6 +1383,11 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
+            ACTION_UDA_READ_DTC -> udaReadDtcProbe()
+            ACTION_CRT_VCTRL -> {
+                val hex = intent.getStringExtra(EXTRA_CRT_VCTRL_HEX).orEmpty().trim()
+                crtVctrlSend(hex)
+            }
             ACTION_SUSPEND_OVERLAYS -> overlayController.suspendOverlays()
             ACTION_RESUME_OVERLAYS -> {
                 overlayController.resumeOverlays()
@@ -1390,15 +1402,18 @@ class BackgroundService : Service() {
                     }
                 }
             }
-            ACTION_CLOSE -> crtCmd(0x26,
-                ByteArray(45).apply {
-                    this[0] = 0x02 },
-                "Close", "INFO")
-            ACTION_OPEN -> crtCmd(0x26,
-                ByteArray(45).apply {
-                    this[0] = 0x02
-                    this[9] = 0x01 },
-                "Open", "INFO")
+            ACTION_CLOSE -> crtCmd(
+                CrtVctrlProtocol.CRT_CMD_VCTRL,
+                CrtVctrlProtocol.buildLockClose(),
+                "Close",
+                "INFO",
+            )
+            ACTION_OPEN -> crtCmd(
+                CrtVctrlProtocol.CRT_CMD_VCTRL,
+                CrtVctrlProtocol.buildLockOpen(),
+                "Open",
+                "INFO",
+            )
             ACTION_READ_ALL_SMS -> readAllSMS()
             ACTION_AUTOMATION_RUN_NOW -> {
                 val automationId = intent.getStringExtra(EXTRA_AUTOMATION_ID)?.trim().orEmpty()
@@ -6475,6 +6490,7 @@ class BackgroundService : Service() {
         checkLocVersion: Boolean = true,
         checkSwdVersion: Boolean = true,
         checkGateVersion: Boolean = true,
+        checkUdaVersion: Boolean = true,
         checkSW: Boolean = true,
         checkHW: Boolean = true,
         checkVIN: Boolean = true,
@@ -6541,6 +6557,15 @@ class BackgroundService : Service() {
                     delay(150)
                 }
 
+                if (checkUdaVersion) {
+                    TboxRepository.addLog("DEBUG", "UDA", "Get UDA Version")
+                    sendTboxMessage(
+                        UDA_CODE, SELF_CODE, UdaProtocol.CMD_GET_VERSION,
+                        byteArrayOf(0x00, 0x00), false
+                    )
+                    delay(150)
+                }
+
                 if (checkSW) {
                     TboxRepository.addLog("DEBUG", "TBox", "Get SW Version")
                     sendTboxMessage(
@@ -6583,9 +6608,68 @@ class BackgroundService : Service() {
         settingsManager.saveCustomString("loc_version", "")
         settingsManager.saveCustomString("mdc_version", "")
         settingsManager.saveCustomString("swd_version", "")
+        settingsManager.saveCustomString("uda_version", "")
         settingsManager.saveCustomString("sw_version", "")
         settingsManager.saveCustomString("hw_version", "")
         settingsManager.saveCustomString("vin_code", "")
+    }
+
+    private fun udaReadDtcProbe() {
+        if (!TboxRepository.tboxConnected.value) return
+        scope.launch {
+            try {
+                val payload = UdaProtocol.buildReadDtcProbe()
+                TboxRepository.addLog(
+                    "INFO",
+                    "UDA send",
+                    "DiagReq ReadDtc probe len=${payload.size}",
+                )
+                sendTboxMessage(
+                    UDA_CODE,
+                    SELF_CODE,
+                    UdaProtocol.CMD_DIAG_REQ,
+                    payload,
+                    false,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "UDA", "ReadDtc probe failed: ${e.message}")
+                Log.e("UDA", "ReadDtc probe failed", e)
+            }
+        }
+    }
+
+    private fun crtVctrlSend(hexPayload: String) {
+        if (!TboxRepository.tboxConnected.value) return
+        scope.launch {
+            try {
+                val frame = if (hexPayload.isEmpty()) {
+                    CrtVctrlProtocol.buildLockClose()
+                } else {
+                    val bytes = hexPayload
+                        .split(Regex("\\s+"))
+                        .filter { it.isNotEmpty() }
+                        .map { it.toInt(16).toByte() }
+                        .toByteArray()
+                    require(bytes.size == CrtVctrlProtocol.FRAME_SIZE) {
+                        "vctrl frame must be ${CrtVctrlProtocol.FRAME_SIZE} bytes, got ${bytes.size}"
+                    }
+                    bytes
+                }
+                crtCmd(
+                    CrtVctrlProtocol.CRT_CMD_VCTRL,
+                    frame,
+                    "CRT vctrl ${toHexString(frame.copyOf(8))}…",
+                    "INFO",
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                TboxRepository.addLog("ERROR", "CRT vctrl", e.message ?: "send failed")
+                Log.e("CRT vctrl", "send failed", e)
+            }
+        }
     }
 
     private fun crtGetCanFrame() {
@@ -7287,6 +7371,62 @@ class BackgroundService : Service() {
                         }
                         else -> {
                             TboxRepository.addLog("ERROR", "$tidName response", "Unknown message from $tidName")
+                        }
+                    }
+                } catch (e: Exception) {
+                    TboxRepository.addLog("ERROR", "$tidName response", "$e")
+                }
+            }
+            UDA_CODE -> {
+                tidName = "UDA"
+                try {
+                    when (cmd) {
+                        UdaProtocol.RSP_VERSION -> {
+                            needEndLog = !ansVersion(tidName, receivedData)
+                        }
+                        UdaProtocol.RSP_DIAG_REQ -> {
+                            TboxRepository.addLog(
+                                "INFO",
+                                "UDA response",
+                                "DiagReq ack: ${toHexString(receivedData)}",
+                            )
+                            needEndLog = false
+                        }
+                        UdaProtocol.RSP_DIAG_REPORT -> {
+                            val previewLen = minOf(64, receivedData.size)
+                            TboxRepository.addLog(
+                                "INFO",
+                                "UDA response",
+                                "DiagReport len=${receivedData.size}: ${toHexString(receivedData.copyOfRange(0, previewLen))}",
+                            )
+                            needEndLog = false
+                        }
+                        UdaProtocol.RSP_DIAG_RESULT, UdaProtocol.RSP_PROCESS_INFO -> {
+                            val previewLen = minOf(64, receivedData.size)
+                            TboxRepository.addLog(
+                                "INFO",
+                                "UDA response",
+                                "DiagResult/Process cmd=0x${(cmd.toInt() and 0xFF).toString(16)} len=${receivedData.size}: ${toHexString(receivedData.copyOfRange(0, previewLen))}",
+                            )
+                            needEndLog = false
+                        }
+                        UdaProtocol.RSP_ABORT_REQ -> {
+                            TboxRepository.addLog(
+                                "INFO",
+                                "UDA response",
+                                "Abort ack: ${toHexString(receivedData)}",
+                            )
+                            needEndLog = false
+                        }
+                        0x82.toByte(), 0x83.toByte(), 0x84.toByte() -> {
+                            needEndLog = !ansAppControl(tidName, cmd, receivedData)
+                        }
+                        else -> {
+                            TboxRepository.addLog(
+                                "WARN",
+                                "$tidName response",
+                                "Unhandled CMD 0x${(cmd.toInt() and 0xFF).toString(16)}: ${toHexString(receivedData)}",
+                            )
                         }
                     }
                 } catch (e: Exception) {

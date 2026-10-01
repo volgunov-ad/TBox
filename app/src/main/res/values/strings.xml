@@ -1767,6 +1767,9 @@
     <string name="info_app_version_loc">Версия приложения LOC</string>
     <string name="info_app_version_mdc">Версия приложения MDC</string>
     <string name="info_app_version_swd">Версия приложения SWD</string>
+    <string name="info_app_version_uda">Версия приложения UDA</string>
+    <string name="button_uda_read_dtc">UDA: Read DTC (probe)</string>
+    <string name="button_uda_read_dtc_desc">Эксперт: DiagReq ReadDtc через UDA UDP (параметры ECU = 0)</string>
     <string name="info_sw_version">Версия SW</string>
     <string name="info_hw_version">Версия HW</string>
     <string name="info_vin">VIN код</string>

@@ -108,9 +108,120 @@ TCP-режим (`127.0.0.1:5555` и т.п.) — отдельно, для shell �
 | `0x2D` | **SWD** | Запрет лишних перезагрузок |
 | `0x2F` | **APP** | Suspend / Resume / Stop облачного приложения |
 | `0x37` | **GATE** | Версия proxy/gate |
+| `0x38` | **UDA** | Диагностика UDS/DTC (DiagReq), FOTA |
 | `0x50` | *(SELF)* | Идентификатор клиента на ГУ |
 
-Также определены, но почти не используются: `NTM (0x24)`, `HUM (0x30)`, `UDA (0x38)`.
+Также определены, но почти не используются: `NTM (0x24)`, `HUM (0x30)`.
+
+### UDA (TID `0x38`) — DTC / диагностика
+
+Модуль `ydsapp/run/uda`. Таблица команд (`Uda_Msg_Table`):
+
+| CMD | Ответ | Смысл |
+|-----|-------|--------|
+| `0x01` | `0x81` | VERSION |
+| `0x02`/`0x03`/`0x04` | `0x82`… | SUSPEND / RESUME / STOP |
+| `0x05` | `0x85` (+ async `0x86`/`0x8a`/`0x8b`) | **DiagReq** (ReadDtc / ClearDtc / ReadDid / WriteDid) |
+| `0x07` | `0x87` (+ `0x88`) | FotaReq |
+| `0x09` | `0x89` | AbortReq |
+| `0x28`/`0x29` | — | CanTP PassThrough / Ctrl |
+
+DiagReq payload (см. `UdaProtocol.kt`): путь к `libJX65_n720_CFG.so` + type @`0x84` + ecuParam @`0x85` + dataLen @`0x89` + data @`0x8d`.
+
+В UI: «Запросить информацию» читает VERSION UDA; в эксперт-режиме на вкладке Info — кнопка Read DTC probe.
+
+### CRT CMD `0x26` — vctrl (MCU)
+
+APP шлёт удалённое управление как CRT `0x26` с кадром **45 байт** (`yds_mq_vctrl_sendto_mcu`).
+`frame[0]` = **`TSP.RemoteControlCmdType`** (имена из `RemoteControlCmdType_names` /
+`entries_by_number` в `app`). CRT пробрасывает cmds `0x20…0x3F` на MCU — ГУ может
+слать те же кадры напрямую (в обход APP jump table).
+
+Хелпер: `CrtVctrlProtocol` в `uda/UdaProtocol.kt`.
+
+**Layout кадра (APP `recv_cmd_vctrl`):** `[0]=opcode`, `[1..8]` TSP id/time,
+**`[9]=param0`** у простых команд (on/off/mode). `FIND_VEHICLE` дополнительно
+пишет `[10]`/`[11]`.
+
+**Jump table:** `cmp opcode,#0x67` / `ldrls pc,[pc,r1,lsl#2]`. Non-DEFAULT arm
+пакует поля и ставит кадр в очередь; **DEFAULT = early return, MCU не шлётся**.
+Список PACK: `CrtVctrlProtocol.APP_PACKED_OPCODES`.
+
+**`IsValid`:** валидны `0x00…0x1F`, `0x32…0x3B`, `0x64…0x67`, `200…201`.
+Имена `ENGINE…GREENCABIN_MANUAL` (`0x20…0x2F`) есть в enum-таблице имён, но
+`RemoteControlCmdType_IsValid` их отвергает.
+
+| Opcode | Имя (proto) | APP jump | Примечание |
+|--------|-------------|----------|------------|
+| `0x00` | WINDOWS | PACK | `frame[9]` |
+| `0x01` | GET_TBOX_LOG | PACK | несколько байт с `frame[9]` |
+| `0x02` | FRONT_LIGHT | PACK | Monitor `ACTION_CLOSE`/`OPEN` → off/on `@[9]` |
+| `0x03` | AIR_CONDETION_LEVEL | PACK | typo в proto |
+| `0x04` | SECNE_CTRL | PACK | typo: SCENE |
+| `0x05` | DEFROSTING | PACK | `@[9]` |
+| `0x06` | LIGHT_SHOW_CTRL | PACK | `@[9]` |
+| `0x07` | CLEAN_FAULT_CODE | PACK | `@[9]` (общий handler с `0x08`/`0x32…`) |
+| `0x08` | POWER_ON_OFF | PACK | `@[9]` |
+| `0x09` | FIND_VEHICLE | PACK | `@[9..11]` |
+| `0x0A` | SEAT_VEN | PACK | `@[9]` |
+| `0x0B` | QUERY_CERTIFIVCATE | PACK | typo: CERTIFICATE |
+| `0x0C` | WRITE_CONFIG_CODE | DEFAULT | |
+| `0x0D` | DIGITAL_KEY_CONTROL | DEFAULT | |
+| `0x0E` | ACTION_TEST | PACK | |
+| `0x0F` | AIR_CONDITION_CTRL | PACK | |
+| `0x10` | AUTOAIR_TIMELY | DEFAULT | |
+| `0x11` | TRUNK_DOOR | PACK | |
+| `0x12` | GET_ECU_CONF_CODE | PACK | |
+| `0x13` | VEHICLE_EXAM | DEFAULT | |
+| `0x14` | LOCK | DEFAULT | не путать с Monitor OPEN/CLOSE |
+| `0x15` | LIGHT_SHOW_MODEL | PACK | |
+| `0x16` | WINDOW_ALL | PACK | |
+| `0x17` | ELE_FENCE | PACK | |
+| `0x18` | DOWNLOAD_CERTIFICATE | PACK | |
+| `0x19` | QUERY_ECUINFO | PACK | |
+| `0x1A` | AIR_CONDITION | PACK | |
+| `0x1B` | KEY_UPDATE | PACK | |
+| `0x1C` | SEAT | DEFAULT | |
+| `0x1D` | STERILIZE | PACK | |
+| `0x1E` | WRITE_VIN | PACK | `@[9]` |
+| `0x1F` | GET_CAN_STREAM | DEFAULT | |
+| `0x20` | ENGINE | DEFAULT | + `IsValid=false` |
+| `0x21` | ROOF_WINDOW | DEFAULT | + `IsValid=false` |
+| `0x22` | RESET_ECU | DEFAULT | + `IsValid=false` |
+| `0x23` | GREENCABIN_AUTO | DEFAULT | + `IsValid=false` |
+| `0x24` | AIR_PURIFIER | DEFAULT | + `IsValid=false` |
+| `0x25` | AUTO_AIR_CONDITION_CTRL | DEFAULT | + `IsValid=false` |
+| `0x26` | REPID_COOLING | DEFAULT | typo RAPID; + `IsValid=false` |
+| `0x27` | MANUALAIR_TIMELY | DEFAULT | + `IsValid=false` |
+| `0x28` | REMOTE_DIAG | DEFAULT | + `IsValid=false` |
+| `0x29` | REPID_HEATING | DEFAULT | + `IsValid=false` |
+| `0x2A` | CHARGE_RESERVE | DEFAULT | + `IsValid=false` |
+| `0x2B` | POWER_PHEV | DEFAULT | + `IsValid=false` |
+| `0x2C` | AIR_CONDITION_CTRL_MODE | DEFAULT | + `IsValid=false` |
+| `0x2D` | STEERING_WHEEL_HEATING | DEFAULT | + `IsValid=false` |
+| `0x2E` | HU_AWAKEN | DEFAULT | + `IsValid=false` |
+| `0x2F` | GREENCABIN_MANUAL | DEFAULT | + `IsValid=false` |
+| `0x32…0x3A` | *(без имени)* | PACK | `0x37`/`0x39` — отдельные handlers |
+| `0x64`/`0x65`/`0x67` | *(без имени)* | PACK | `0x66` — DEFAULT |
+
+**MCU firmware (`TBOX_VP.bin`, 1 MiB):** образ VP на **RH850F1K** (`R7F7015813`),
+стек `Core_V3_0_10` / JX65 (`CanFD/rscan`, CanTp, Dcm). Копия:
+`ydsdata/bakup/TBOX_VP.bin` (= `D:\Tools\1\Dashing\CAN\TBOX_VP.bin`).
+
+Кадр 45 байт кладётся в `buf+5`; switch по `frame[0]` (`cmp ≤0x3A`, JT `@0x9E008`).
+
+| Opcode | MCU handler | Наблюдение |
+|--------|-------------|------------|
+| `0x02` FRONT_LIGHT | active | Com **`0x183`**: param`1`→val`1`, param`0`→val`2` |
+| `0x14` LOCK | **nop** (`dispose`) | как APP DEFAULT; BLE — отдельный remap |
+| `0x20` ENGINE | **nop** на этом path | лог `VCTRL_TYPE_ENGINE` есть у handler `0x00` / BLE |
+| `0x00…0x0A`, `0x18`, `0x1A`, `0x1E`, `0x32…36/38…3A` | active | Com ids кластера `0x180…0x1C2` |
+| прочие named | shared dispose | см. `CrtVctrlProtocol.MCU_ACTIVE_OPCODES` |
+
+В MCU также VCTL-логи `lock/windows/dwm/trunk/findcar/engine ctrl success` (в т.ч. BLE
+`recv_BleVctrlCmd`, JT 1…0x16). Предварительный разбор CRT `0x15`/`0x16` — в
+`D:\Tools\1\Dashing\CAN\`; старый `TBOX_VP_bin_analysis.md` ошибочно считал образ
+«дампом» и частоту байт `0x10…0x17` командами CRT.
 
 ---
 

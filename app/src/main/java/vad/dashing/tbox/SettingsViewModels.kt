@@ -851,6 +851,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = ""
         )
 
+    val udaVersion = settingsManager.getStringFlow("uda_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
     val locVersion = settingsManager.getStringFlow("loc_version", "")
         .stateIn(
             scope = viewModelScope,

@@ -3461,11 +3461,13 @@ fun InfoTabContent(
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
     val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
+    val udaVersion by settingsViewModel.udaVersion.collectAsStateWithLifecycle()
     val crtVersion by settingsViewModel.crtVersion.collectAsStateWithLifecycle()
     val locVersion by settingsViewModel.locVersion.collectAsStateWithLifecycle()
     val swVersion by settingsViewModel.swVersion.collectAsStateWithLifecycle()
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
+    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(updateVersionButtonEnabled) {
@@ -3528,6 +3530,7 @@ fun InfoTabContent(
             item { StatusRow(stringResource(R.string.info_app_version_loc), locVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_mdc), mdcVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_swd), swdVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_uda), udaVersion) }
             item { StatusRow(stringResource(R.string.info_sw_version), swVersion) }
             item { StatusRow(stringResource(R.string.info_hw_version), hwVersion) }
             item { StatusRow(stringResource(R.string.info_vin), vinCode) }
@@ -3558,6 +3561,31 @@ fun InfoTabContent(
                             style = MaterialTheme.typography.tboxButton,
                             maxLines = 2,
                             textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            if (isExpertModeEnabled) {
+                item {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            onServiceCommand(
+                                BackgroundService.ACTION_UDA_READ_DTC,
+                                "",
+                                "",
+                            )
+                        },
+                        enabled = tboxConnected,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.button_uda_read_dtc),
+                            style = MaterialTheme.typography.tboxButton,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
