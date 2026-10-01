@@ -1,6 +1,6 @@
 # Voice APK — план реализации
 
-Статус: **design / plan** (решения по MVP зафиксированы ниже).
+Статус: **в разработке** (этапы 1–4: каркас, NLU, signals text, Piper TTS).
 
 Отдельное Android-приложение **VAD Voice** (`vad.dashing.voice`) — голосовой клиент к
 External HTTP API TBox Monitor. Целевая платформа MVP: **только ГУ**.
@@ -76,8 +76,8 @@ External HTTP API TBox Monitor. Целевая платформа MVP: **тол�
 
 | Слой | Выбор |
 |------|--------|
+| TTS | Piper RU **irina-medium-int8** (sherpa-onnx OfflineTts), модель в assets APK |
 | STT | Vosk small-ru, модель в assets APK |
-| TTS | Piper RU (одна модель, напр. irina-medium) в assets |
 | Wake-word | Отдельный лёгкий движок (openWakeWord / Porcupine-совместимый / keyword-spotting); **выкл** по умолчанию; своё слово в настройках |
 | HTTP | `127.0.0.1` + порт из настроек (default 8765) |
 | Auth | Pairing или ручной токен из Monitor |
@@ -199,7 +199,17 @@ TBox/
 - общие CI/ветки `preRelease`;
 - модели живут только в `:voice` → Monitor APK не растёт.
 
-Сборка: `./gradlew :voice:assembleRuDebug` (имена задач уточнить при каркасе).
+Сборка: `./gradlew :voice:assembleDebug` (модель Piper подтягивается
+`tools/fetch_voice_tts_model.py` при `assemble*`, если ещё нет в assets).
+
+Перед первой сборкой Voice APK (или вручную):
+
+```
+python3 tools/fetch_voice_tts_model.py
+./gradlew :voice:assembleDebug
+```
+
+Модели **не** коммитятся в git (~20 MB int8 + espeak-ng-data).
 
 ---
 
@@ -211,7 +221,7 @@ TBox/
 | 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | **сделано** |
 | 2 | Catalog cache + NLU + unit-тесты фраз | voice | **сделано** |
 | 3 | Signals query → текст на экране | voice | **сделано** (кнопка «Выполнить фразу») |
-| 4 | Piper TTS bundle | voice | открыто |
+| 4 | Piper TTS bundle | voice | **сделано** (Irina int8 + sherpa-onnx; озвучка ответа) |
 | 5 | Vosk STT + кнопка «Слушать» | voice | полный PTT-цикл |
 | 6 | Invoke + RunNow | voice | медиа + запуск правила |
 | 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | автоматизация открывает слушание |

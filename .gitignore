@@ -42,3 +42,7 @@ docs/*.pdf
 
 # Built road-map packs (copied into assets by build_road_map_packs.py)
 tools/out/
+
+# Voice TTS / STT models (downloaded by tools/fetch_*.py, not committed)
+voice/src/main/assets/vits-piper-*/
+voice/src/main/assets/vosk-model-*/

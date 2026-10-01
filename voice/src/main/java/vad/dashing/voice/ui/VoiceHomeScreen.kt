@@ -103,6 +103,14 @@ fun VoiceHomeScreen(
         ) {
             Text(stringResource(R.string.action_run_phrase))
         }
+        if (state.speaking) {
+            OutlinedButton(
+                onClick = viewModel::stopSpeaking,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.action_stop_tts))
+            }
+        }
         Button(
             onClick = { /* STT — later */ },
             enabled = false,

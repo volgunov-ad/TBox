@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">VAD Voice</string>
     <string name="home_title">VAD Voice</string>
-    <string name="home_subtitle">Клиент External API. Введите фразу текстом (STT/TTS — следующие этапы).</string>
+    <string name="home_subtitle">Клиент External API. Ответ на фразу — текстом и голосом (Piper). STT — следующий этап.</string>
     <string name="settings_host">Хост Monitor API</string>
     <string name="settings_port">Порт</string>
     <string name="settings_token">Bearer-токен</string>
@@ -12,6 +12,7 @@
     <string name="action_check_health">Проверить связь</string>
     <string name="action_refresh_catalog">Обновить каталог</string>
     <string name="action_run_phrase">Выполнить фразу</string>
+    <string name="action_stop_tts">Стоп озвучки</string>
     <string name="action_listen">Слушать</string>
     <string name="health_ok">Связь OK — API v%1$d, каталог v%2$d, app %3$s</string>
     <string name="health_fail">Нет связи: %1$s</string>

@@ -15,6 +15,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // HU ABIs only — drop emulator x86 from the 47 MB sherpa AAR.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     signingConfigs {
@@ -58,6 +62,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // OfflineTts JNI only needs onnxruntime + sherpa-onnx-jni.
+        jniLibs {
+            excludes += listOf(
+                "**/libsherpa-onnx-c-api.so",
+                "**/libsherpa-onnx-cxx-api.so",
+            )
+        }
     }
 }
 
@@ -74,9 +85,39 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
+    // Piper / VITS offline TTS (JNI + onnxruntime inside AAR).
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5")
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     debugImplementation(libs.androidx.ui.tooling)
+}
+
+// Piper model is large — not in git. Fetch into assets before packaging the APK.
+// Up-to-date via outputs (no onlyIf — that breaks configuration cache).
+val ttsModelMarker =
+    layout.projectDirectory.file("src/main/assets/vits-piper-ru_RU-irina-medium-int8/tokens.txt")
+val fetchTtsScript =
+    rootProject.layout.projectDirectory.file("tools/fetch_voice_tts_model.py")
+val repoRootDir = rootProject.layout.projectDirectory.asFile
+val fetchTtsScriptPath = fetchTtsScript.asFile.absolutePath
+
+val fetchTtsModel by tasks.registering(Exec::class) {
+    description = "Download Piper RU Irina int8 into voice assets"
+    workingDir = repoRootDir
+    commandLine("python3", fetchTtsScriptPath)
+    inputs.file(fetchTtsScript)
+    outputs.file(ttsModelMarker)
+}
+
+tasks.matching {
+    val n = it.name
+    n.startsWith("assemble") ||
+        n.startsWith("merge") && n.endsWith("Assets") ||
+        n.startsWith("package") && n.endsWith("Assets")
+}.configureEach {
+    dependsOn(fetchTtsModel)
 }

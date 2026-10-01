@@ -21,6 +21,8 @@ import vad.dashing.voice.nlu.VoiceIntent
 import vad.dashing.voice.settings.AccessTokenNormalizer
 import vad.dashing.voice.settings.VoiceConnectionSettings
 import vad.dashing.voice.settings.VoiceSettingsRepository
+import vad.dashing.voice.tts.PiperVoiceTts
+import vad.dashing.voice.tts.VoiceTts
 
 data class VoiceHomeUiState(
     val host: String = VoiceConnectionSettings.DEFAULT_HOST,
@@ -31,6 +33,7 @@ data class VoiceHomeUiState(
     val answerMessage: String = "",
     val catalogSummary: String = "",
     val busy: Boolean = false,
+    val speaking: Boolean = false,
     val lastHealthOk: Boolean? = null,
 )
 
@@ -39,6 +42,7 @@ class VoiceHomeViewModel(
     private val settingsRepository: VoiceSettingsRepository = VoiceSettingsRepository(application),
     private val apiClient: ExternalApiClient = ExternalApiClient(),
     private val nlu: AliasNluMatcher = AliasNluMatcher(),
+    private val tts: VoiceTts = PiperVoiceTts.createOrNoOp(application),
 ) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(VoiceHomeUiState())
     val uiState: StateFlow<VoiceHomeUiState> = _uiState.asStateFlow()
@@ -57,6 +61,9 @@ class VoiceHomeViewModel(
                     )
                 }
             }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { tts.ensureReady() }
         }
     }
 
@@ -200,13 +207,15 @@ class VoiceHomeViewModel(
                 is VoiceIntent.QuerySignal -> {
                     val source = SignalAnswerFormatter.preferredSource(intent.signal)
                     if (source == null) {
+                        val msg = "У сигнала ${intent.signal.id} нет источников"
                         _uiState.update {
                             it.copy(
                                 busy = false,
-                                answerMessage = "У сигнала ${intent.signal.id} нет источников",
+                                answerMessage = msg,
                                 statusMessage = "intent=query alias=${intent.matchedAlias}",
                             )
                         }
+                        speakAnswer(msg)
                         return@launch
                     }
                     val snapshot = withContext(Dispatchers.IO) {
@@ -240,40 +249,71 @@ class VoiceHomeViewModel(
                             },
                         )
                     }
+                    speakAnswer(answer)
                 }
 
                 is VoiceIntent.InvokeAction -> {
                     val name = intent.action.label
                         ?: intent.action.actionType
                         ?: intent.action.type
+                    val msg = "Распознано действие «$name». Invoke — на следующем этапе."
                     _uiState.update {
                         it.copy(
                             busy = false,
-                            answerMessage = "Распознано действие «$name». Invoke — на следующем этапе.",
+                            answerMessage = msg,
                             statusMessage = "intent=invoke alias=${intent.matchedAlias}",
                         )
                     }
+                    speakAnswer(msg)
                 }
 
                 is VoiceIntent.RunAutomation -> {
+                    val msg = "Распознано правило «${intent.automation.name}». RunNow — на следующем этапе."
                     _uiState.update {
                         it.copy(
                             busy = false,
-                            answerMessage = "Распознано правило «${intent.automation.name}». RunNow — на следующем этапе.",
+                            answerMessage = msg,
                             statusMessage = "intent=run id=${intent.automation.id}",
                         )
                     }
+                    speakAnswer(msg)
                 }
 
                 VoiceIntent.Unknown -> {
+                    val msg = "Не понял фразу"
                     _uiState.update {
                         it.copy(
                             busy = false,
-                            answerMessage = "Не понял фразу",
+                            answerMessage = msg,
                             statusMessage = "intent=unknown",
                         )
                     }
+                    speakAnswer(msg)
                 }
+            }
+        }
+    }
+
+    fun stopSpeaking() {
+        viewModelScope.launch(Dispatchers.IO) {
+            tts.stop()
+            _uiState.update { it.copy(speaking = false) }
+        }
+    }
+
+    override fun onCleared() {
+        tts.stop()
+        tts.release()
+        super.onCleared()
+    }
+
+    private fun speakAnswer(text: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(speaking = true) }
+            try {
+                tts.speak(text)
+            } finally {
+                _uiState.update { it.copy(speaking = false) }
             }
         }
     }
