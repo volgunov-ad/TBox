@@ -33,6 +33,7 @@ import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.MainScreenWindowOverlayLayout
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import kotlin.math.roundToInt
 import java.util.concurrent.atomic.AtomicLong
 /**
@@ -440,6 +441,7 @@ internal class FloatingOverlayController(
             val owner = MyLifecycleOwner().also { created ->
                 created.setCurrentState(Lifecycle.State.CREATED)
                 created.setCurrentState(Lifecycle.State.STARTED)
+                created.setCurrentState(Lifecycle.State.RESUMED)
             }
             mainScreenLifecycleOwner = owner
 
@@ -1023,14 +1025,26 @@ internal class FloatingOverlayController(
 
             val lifecycleState = lifecycleOwner.lifecycle.currentState
             if (lifecycleState != Lifecycle.State.DESTROYED &&
-                (!lifecycleOwner.isInitialized || !lifecycleState.isAtLeast(Lifecycle.State.STARTED))
+                (!lifecycleOwner.isInitialized || !lifecycleState.isAtLeast(Lifecycle.State.RESUMED))
             ) {
-                // Step through CREATED — jumping INITIALIZED → STARTED can throw and leave
-                // the shared overlay owner stuck below STARTED (breaks collectors / double-taps).
+                // Step CREATED → STARTED → RESUMED. Jumping INITIALIZED → STARTED can throw and
+                // leave the shared overlay owner stuck (breaks collectAsStateWithLifecycle).
                 if (!lifecycleState.isAtLeast(Lifecycle.State.CREATED)) {
                     lifecycleOwner.setCurrentState(Lifecycle.State.CREATED)
                 }
-                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+                if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+                }
+                lifecycleOwner.setCurrentState(Lifecycle.State.RESUMED)
+            }
+
+            // A10: ensure Car/VHAL session + push listeners are armed when only overlays show
+            // (MainActivity / Car Settings warm-up may never run).
+            overlayScope.launch {
+                runCatching { UniversalCanRepository.warmUpAvailabilityForUi() }
+                    .onFailure { e ->
+                        Log.w(TAG, "VHAL warm-up on floating open failed", e)
+                    }
             }
 
             overlayRetryCounts[config.id] = 0

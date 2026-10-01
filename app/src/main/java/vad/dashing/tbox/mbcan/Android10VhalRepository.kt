@@ -62,6 +62,9 @@ private class CarPropertyBridge(private val context: Context) {
     private var onDiagnosticPropertyError: ((propertyId: Int, areaId: Int) -> Unit)? = null
     @Volatile
     private var serviceConnected: Boolean = false
+    /** Invoked on binder death; repository must drop this bridge and reconnect. */
+    @Volatile
+    var onServiceConnectionLost: (() -> Unit)? = null
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
             serviceConnected = true
@@ -70,9 +73,14 @@ private class CarPropertyBridge(private val context: Context) {
 
         override fun onServiceDisconnected(name: android.content.ComponentName?) {
             serviceConnected = false
+            // Fail-fast reads; leave `car` for disconnect() cleanup on the reconnect path.
+            propertyManager = null
             Android10VhalRepository.logWarn("Car service disconnected")
+            onServiceConnectionLost?.invoke()
         }
     }
+
+    fun isServiceConnected(): Boolean = serviceConnected
 
     fun connect(): MbCanAvailability {
         return runCatching {
@@ -632,6 +640,8 @@ object Android10VhalRepository {
     private const val NORMAL_POLL_INTERVAL_MS = 30_000L
     private const val BURST_POLL_INTERVAL_MS = 1_500L
     private const val BURST_DURATION_MS = 15_000L
+    /** Debounce Car binder death → reconnect (vendor may flap). */
+    private const val CAR_RECONNECT_DELAY_MS = 750L
     private const val LOG_TAG = "VHAL_A10"
     private const val CAR_INFO_PERMISSION = "android.car.permission.CAR_INFO"
     private const val CAR_ENGINE_DETAILED_PERMISSION = "android.car.permission.CAR_ENGINE_DETAILED"
@@ -679,6 +689,8 @@ object Android10VhalRepository {
     private val deepDiagnosticSession = AtomicLong(0L)
     /** Serializes connect/unbind so parallel bind/execute cannot orphan Car sessions. */
     private val carConnectMutex = Mutex()
+    /** Bumps on each disconnect so only the latest reconnect attempt runs. */
+    private val carReconnectGeneration = AtomicLong(0L)
     @Volatile
     private var burstUntilMs: Long = 0L
     private val readErrorsLogged = mutableSetOf<String>()
@@ -1102,7 +1114,8 @@ object Android10VhalRepository {
     }
 
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
-        carConnectMutex.withLock {
+        var newlyConnected = false
+        val result = carConnectMutex.withLock {
             val context = AppContextHolder.appContextOrNull
                 ?: return@withLock MbCanAvailability.Unavailable("No app context").also {
                     val reason = "No app context"
@@ -1112,32 +1125,77 @@ object Android10VhalRepository {
                     }
                 }
             val existing = bridge
-            if (existing != null && availability.value is MbCanAvailability.Available) {
+            val canReuse = VhalCarConnectionPolicy.shouldReuseExistingBridge(
+                bridgePresent = existing != null,
+                serviceConnected = existing?.isServiceConnected() == true,
+                availabilityAvailable = availability.value is MbCanAvailability.Available,
+            )
+            if (canReuse) {
                 return@withLock availability.value
             }
-            // Drop stale bridge before opening another Car session (vendor wedge risk).
+            // Drop stale / disconnected bridge before opening another Car session.
             if (existing != null) {
                 runCatching { existing.disconnect() }
                 bridge = null
             }
-            val newBridge = CarPropertyBridge(context)
-            val result = newBridge.connect()
-            _availability.value = result
-            if (result is MbCanAvailability.Available) {
+            val newBridge = CarPropertyBridge(context).also { created ->
+                created.onServiceConnectionLost = { onCarServiceDisconnected() }
+            }
+            val connectResult = newBridge.connect()
+            _availability.value = connectResult
+            if (connectResult is MbCanAvailability.Available) {
                 bridge = newBridge
+                newlyConnected = true
                 if (lastAvailabilityReason != "AVAILABLE") {
                     logInfo("Availability: AVAILABLE")
                     lastAvailabilityReason = "AVAILABLE"
                 }
             } else {
                 runCatching { newBridge.disconnect() }
-                val reason = (result as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
+                val reason = (connectResult as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
                 if (lastAvailabilityReason != reason) {
                     logWarn("Availability: $reason")
                     lastAvailabilityReason = reason
                 }
             }
-            result
+            connectResult
+        }
+        // Push listeners must be (re)armed after a new Car session even when interests
+        // were registered while bridge was null (poll alone is 30s).
+        if (newlyConnected) {
+            val interests = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
+            if (interests.isNotEmpty()) {
+                syncPushListeners(interests)
+            }
+        }
+        result
+    }
+
+    /**
+     * Car binder died while we still held a [CarPropertyBridge]. Drop the dead session and
+     * schedule reconnect + push re-subscribe — critical for overlay-only A10 (no Activity warm-up).
+     */
+    private fun onCarServiceDisconnected() {
+        val generation = carReconnectGeneration.incrementAndGet()
+        scope.launch {
+            carConnectMutex.withLock {
+                val existing = bridge
+                if (existing != null) {
+                    runCatching { existing.disconnect() }
+                    bridge = null
+                }
+                val reason = "Car service disconnected"
+                _availability.value = MbCanAvailability.Unavailable(reason)
+                if (lastAvailabilityReason != reason) {
+                    logWarn("Availability: $reason")
+                    lastAvailabilityReason = reason
+                }
+            }
+            delay(CAR_RECONNECT_DELAY_MS)
+            if (generation != carReconnectGeneration.get()) return@launch
+            logInfo("VHAL reconnect after Car service disconnect")
+            ensureConnected()
+            restartPolling()
         }
     }
 
@@ -1150,6 +1208,7 @@ object Android10VhalRepository {
 
     suspend fun unbind() {
         logDebug("unbind()")
+        carReconnectGeneration.incrementAndGet()
         cancelAllDebouncedClearSources()
         carConnectMutex.withLock {
             pollJob?.cancel()
@@ -1176,7 +1235,13 @@ object Android10VhalRepository {
 
     suspend fun warmUpAvailabilityForUi() {
         logDebug("warmUpAvailabilityForUi()")
-        ensureConnected()
+        val result = ensureConnected()
+        // Overlay-only opens may have registered interests before Car was up, or after a
+        // disconnect left push listeners unregistered — always re-sync when Available.
+        if (result is MbCanAvailability.Available) {
+            val interests = sourceMutex.withLock { sourceSignals.values.flatten().toSet() }
+            syncPushListeners(interests)
+        }
     }
 
     suspend fun startKeyDiagnostics(
