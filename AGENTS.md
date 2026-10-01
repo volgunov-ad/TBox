@@ -62,6 +62,15 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 - `tools/build_road_map_packs.py` — build whole RU/BY regions into the synced `release/maps` Yandex Disk folder and refresh remote/bundled catalogs. See `docs/ROAD_MAPS_HOSTING_RU.md`.
 - `tools/tbox_external_api_pair.py` — pair with External HTTP API and smoke-check (`/v1/health`, catalog+`voiceAliasesRu`, signals, automations, safe `actions/invoke`, automations/run probe). Stdlib only. Default host `192.168.1.128:8765`. Optional `--run-automation <id|name>` for real RunNow. Manual token: Settings → API → «Создать токен», then put `accessToken` into `~/.tbox_external_api_token.json` and use `--check-only`. See [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md).
 
+### Voice APK (`:voice`)
+
+Separate app **VAD Voice** (`vad.dashing.voice`). Plan: [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md).
+
+```
+./gradlew :voice:assembleDebug
+./gradlew :voice:testDebugUnitTest
+```
+
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).

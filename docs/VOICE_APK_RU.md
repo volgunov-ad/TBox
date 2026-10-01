@@ -207,9 +207,9 @@ TBox/
 
 | # | Этап | Где | Критерий |
 |---|------|-----|----------|
-| 0 | План + решения | docs | этот документ |
-| 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | UI видит `ok` от Monitor |
-| 2 | Catalog cache + NLU + unit-тесты фраз | voice | эталонные фразы зелёные |
+| 0 | План + решения | docs | **сделано** |
+| 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | **в работе / каркас** — `./gradlew :voice:assembleDebug` |
+| 2 | Catalog cache + NLU + unit-тесты фраз | voice | открыто |
 | 3 | Signals → текст на экране | voice | температура/скорость |
 | 4 | Piper TTS bundle | voice | ответ озвучивается на ГУ |
 | 5 | Vosk STT + кнопка «Слушать» | voice | полный PTT-цикл |
