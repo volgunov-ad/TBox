@@ -208,10 +208,10 @@ TBox/
 | # | Этап | Где | Критерий |
 |---|------|-----|----------|
 | 0 | План + решения | docs | **сделано** |
-| 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | **в работе / каркас** — `./gradlew :voice:assembleDebug` |
-| 2 | Catalog cache + NLU + unit-тесты фраз | voice | открыто |
-| 3 | Signals → текст на экране | voice | температура/скорость |
-| 4 | Piper TTS bundle | voice | ответ озвучивается на ГУ |
+| 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | **сделано** |
+| 2 | Catalog cache + NLU + unit-тесты фраз | voice | **сделано** |
+| 3 | Signals query → текст на экране | voice | **сделано** (кнопка «Выполнить фразу») |
+| 4 | Piper TTS bundle | voice | открыто |
 | 5 | Vosk STT + кнопка «Слушать» | voice | полный PTT-цикл |
 | 6 | Invoke + RunNow | voice | медиа + запуск правила |
 | 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | автоматизация открывает слушание |

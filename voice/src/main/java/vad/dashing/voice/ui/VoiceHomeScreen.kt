@@ -39,7 +39,7 @@ fun VoiceHomeScreen(
             style = MaterialTheme.typography.headlineMedium,
         )
         Text(
-            text = "Клиент External API TBox Monitor (ГУ). STT/TTS — следующие этапы.",
+            text = stringResource(R.string.home_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -81,8 +81,30 @@ fun VoiceHomeScreen(
         ) {
             Text(stringResource(R.string.action_check_health))
         }
+        OutlinedButton(
+            onClick = viewModel::refreshCatalog,
+            enabled = !state.busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_refresh_catalog))
+        }
+
+        OutlinedTextField(
+            value = state.phrase,
+            onValueChange = viewModel::onPhraseChange,
+            label = { Text(stringResource(R.string.phrase_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+        )
         Button(
-            onClick = { /* STT session — stage 5 */ },
+            onClick = viewModel::runPhrase,
+            enabled = !state.busy && state.phrase.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_run_phrase))
+        }
+        Button(
+            onClick = { /* STT — later */ },
             enabled = false,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -90,6 +112,13 @@ fun VoiceHomeScreen(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+        if (state.catalogSummary.isNotBlank()) {
+            Text(
+                text = state.catalogSummary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         val statusColor = when (state.lastHealthOk) {
             true -> MaterialTheme.colorScheme.primary
             false -> MaterialTheme.colorScheme.error
@@ -100,5 +129,12 @@ fun VoiceHomeScreen(
             style = MaterialTheme.typography.bodyLarge,
             color = statusColor,
         )
+        if (state.answerMessage.isNotBlank()) {
+            Text(
+                text = state.answerMessage,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
