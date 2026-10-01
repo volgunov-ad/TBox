@@ -41,6 +41,7 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.LeftMenuLayout
+import vad.dashing.tbox.voice.VadVoiceLaunchContract
 
 data class AutomationActionResult(
     val success: Boolean,
@@ -691,6 +692,25 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
         AutomationBuiltinActionType.CRUISE_NUDGE,
         -> AutomationCruiseActions.execute(action)
+
+        AutomationBuiltinActionType.START_VAD_VOICE -> startVadVoiceListen()
+    }
+
+    private fun startVadVoiceListen(): AutomationActionResult {
+        val intent = Intent(VadVoiceLaunchContract.ACTION_LISTEN).apply {
+            setPackage(VadVoiceLaunchContract.PACKAGE)
+            putExtra(VadVoiceLaunchContract.EXTRA_SOURCE, VadVoiceLaunchContract.SOURCE_AUTOMATION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return runCatching {
+            appContext.startActivity(intent)
+            AutomationActionResult.ok("VAD Voice: слушаю")
+        }.getOrElse { error ->
+            AutomationActionResult.failure(
+                error.message?.takeIf { it.isNotBlank() }
+                    ?: "VAD Voice не установлен",
+            )
+        }
     }
 
     private fun setPlatformVolume(
@@ -711,10 +731,8 @@ class AutomationActionExecutor(
         block: (Set<String>, String) -> Unit,
     ): AutomationActionResult {
         val preferred = action.stringValue.trim()
-        if (preferred.isEmpty()) {
-            return AutomationActionResult.failure("Не выбран медиаплеер")
-        }
-        val packages = setOf(preferred)
+        // Empty package = active media session (voice / API without a picker).
+        val packages = if (preferred.isEmpty()) emptySet() else setOf(preferred)
         // MediaController.registerCallback / startActivity / transportControls on API 28 need a
         // Looper; automation runs on DefaultDispatcher. Main hop plus main-Handler in
         // SharedMediaControlService cover both the first command and later play retries.

@@ -749,7 +749,12 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * Nudge Active setpoint ±1 km/h (RES+ / SET−).
      * stringValue: `acc` / `ccs`; intValue: `+1` or `-1`.
      */
-    CRUISE_NUDGE("cruise_nudge");
+    CRUISE_NUDGE("cruise_nudge"),
+    /**
+     * Start VAD Voice listening session (exported Intent LISTEN).
+     * No parameters. Safe — opens [vad.dashing.voice] if installed.
+     */
+    START_VAD_VOICE("start_vad_voice");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

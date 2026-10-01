@@ -220,7 +220,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 2,
+  "catalogVersion": 3,
   "serverEnabled": true,
   "pairingActive": false,
   "appVersion": "1.0.0"
@@ -266,7 +266,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   вопросов),
 - действия: типы из automations (`can_command`, `builtin`, `launch_application`, …) +
   `safety` (`safe`\|`confirm`\|`dangerous`) + **`voiceAliasesRu`**,
-- `catalogVersion` (сейчас **2** — aliases заполнены).
+- `catalogVersion` (сейчас **3** — aliases + builtin `start_vad_voice`).
 
 Источник истины для id — те же каталоги, что UI автоматизаций и
 [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md). Поле `voiceAliasesRu` —
@@ -401,7 +401,7 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
 `/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
-действий). `catalogVersion = 2`.
+действий). `catalogVersion = 3`.
 
 ### Не в блокирующем списке v1
 
@@ -429,10 +429,14 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 
 | Слой | v1 |
 |------|-----|
-| STT | офлайн RU (напр. Vosk) |
+| STT | офлайн RU (Vosk MVP; Sherpa опционально позже) |
 | NLU | aliases + слоты по `/v1/catalog`; без LLM |
-| Транспорт | единичные HTTP-запросы после pairing |
-| TTS | системный или встроенный |
+| Транспорт | единичные HTTP-запросы после pairing / ручного токена |
+| TTS | **встроенный** офлайн (Piper/Sherpa); системный TTS ГУ **не** используем |
+
+План Voice APK: [VOICE_APK_RU.md](VOICE_APK_RU.md) (**VAD Voice**, `vad.dashing.voice`;
+модуль `:voice`; Piper TTS; Vosk; активация UI / wake-word opt-in / руль opt-in /
+Intent из Monitor).
 
 Именованные сценарии пользователя → `run` автоматизации по имени.  
 Свободные команды машины → `invoke` по каталогу.
@@ -454,8 +458,8 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
 | 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
-| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 2) |
-| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | открыто |
+| 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 3) |
+| 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | план: [VOICE_APK_RU.md](VOICE_APK_RU.md) |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 
 На каждом шаге с кодом автоматизаций — только аддитивные изменения; прогон

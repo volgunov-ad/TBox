@@ -2,7 +2,7 @@ package vad.dashing.tbox.externalapi
 
 object ExternalApiConstants {
     const val API_VERSION = 1
-    const val CATALOG_VERSION = 2
+    const val CATALOG_VERSION = 3
 
     const val DEFAULT_PORT = 8765
     const val MIN_PORT = 1024
