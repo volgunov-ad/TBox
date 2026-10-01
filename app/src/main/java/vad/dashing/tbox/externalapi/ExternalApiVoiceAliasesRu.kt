@@ -221,13 +221,14 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.CRUISE_RESUME to "Возобновить круиз",
         AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED to "Круиз на текущей скорости",
         AutomationBuiltinActionType.CRUISE_NUDGE to "Подстроить круиз",
+        AutomationBuiltinActionType.START_VAD_VOICE to "Голосовой помощник",
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(
         AutomationBuiltinActionType.MEDIA_PLAY to listOf("играй", "плей", "продолжи"),
         AutomationBuiltinActionType.MEDIA_PLAY_PAUSE to listOf("пауза", "стоп", "плей пауза"),
-        AutomationBuiltinActionType.MEDIA_NEXT to listOf("следующий", "дальше", "некст"),
-        AutomationBuiltinActionType.MEDIA_PREVIOUS to listOf("предыдущий", "назад"),
+        AutomationBuiltinActionType.MEDIA_NEXT to listOf("следующий", "дальше", "некст", "следующий трек"),
+        AutomationBuiltinActionType.MEDIA_PREVIOUS to listOf("предыдущий", "назад", "предыдущий трек"),
         AutomationBuiltinActionType.SET_MEDIA_VOLUME to listOf("громкость", "тише", "громче"),
         AutomationBuiltinActionType.SHOW_TOAST to listOf("тост", "уведомление"),
         AutomationBuiltinActionType.SHOW_ALERT to listOf("алерт", "сообщение на экран"),
@@ -235,6 +236,12 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.FINISH_AND_START_TRIP to listOf("новая поездка", "начать поездку"),
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS to listOf("яркость", "сделай ярче", "сделай темнее"),
         AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf("вайфай", "wifi"),
+        AutomationBuiltinActionType.START_VAD_VOICE to listOf(
+            "слушай",
+            "вад войс",
+            "голосовой помощник",
+            "включи голос",
+        ),
     )
 
     private val VEHICLE_CAN_EXTRAS: Map<Int, List<String>> = mapOf(

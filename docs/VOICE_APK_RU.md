@@ -1,6 +1,6 @@
 # Voice APK — план реализации
 
-Статус: **в разработке** (этапы 1–5: каркас, NLU, signals, Piper TTS, Vosk STT).
+Статус: **в разработке** (этапы 1–7: каркас, NLU, signals, Piper, Vosk, invoke/run, builtin).
 
 Отдельное Android-приложение **VAD Voice** (`vad.dashing.voice`) — голосовой клиент к
 External HTTP API TBox Monitor. Целевая платформа MVP: **только ГУ**.
@@ -225,8 +225,8 @@ Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `
 | 3 | Signals query → текст на экране | voice | **сделано** (кнопка «Выполнить фразу») |
 | 4 | Piper TTS bundle | voice | **сделано** (Irina int8 + sherpa-onnx; озвучка ответа) |
 | 5 | Vosk STT + кнопка «Слушать» | voice | **сделано** (PTT → NLU → TTS) |
-| 6 | Invoke + RunNow | voice | медиа + запуск правила |
-| 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | автоматизация открывает слушание |
+| 6 | Invoke + RunNow | voice | **сделано** (builtin/media + automations/run) |
+| 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | **сделано** |
 | 8 | Настройка кнопки руля (Monitor→Intent) | app(+voice) | вкл/выбор/выкл, default выкл |
 | 9 | Wake-word opt-in | voice | своё слово, default выкл; расход батареи/CPU ок на ГУ |
 | 10 | Полевая полировка | оба | ошибки сети, sentinel −40, audio focus |

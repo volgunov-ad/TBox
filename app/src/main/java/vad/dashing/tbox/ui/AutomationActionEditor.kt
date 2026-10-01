@@ -1275,6 +1275,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
         "Круиз: активировать на текущей скорости (SET−)"
     AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
+    AutomationBuiltinActionType.START_VAD_VOICE -> "VAD Voice: слушать"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

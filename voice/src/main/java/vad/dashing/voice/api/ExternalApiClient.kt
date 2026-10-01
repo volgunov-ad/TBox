@@ -54,6 +54,31 @@ class ExternalApiClient(
         parseSignals(body)
     }
 
+    fun invokeActions(
+        host: String,
+        port: Int,
+        token: String,
+        actionsJsonBody: String,
+    ): Result<InvokeResults> = runCatching {
+        requireToken(token)
+        val body = post(host, port, "/v1/actions/invoke", token, actionsJsonBody)
+        parseInvokeResults(body)
+    }
+
+    fun runAutomation(
+        host: String,
+        port: Int,
+        token: String,
+        automationId: String,
+    ): Result<RunAutomationResult> = runCatching {
+        requireToken(token)
+        require(automationId.isNotBlank()) { "automation id is required" }
+        val encoded = java.net.URLEncoder.encode(automationId, Charsets.UTF_8.name())
+            .replace("+", "%20")
+        val body = post(host, port, "/v1/automations/$encoded/run", token, "{}")
+        parseRunAutomation(body)
+    }
+
     private fun get(host: String, port: Int, path: String, token: String?): String {
         val builder = Request.Builder()
             .url(baseUrl(host, port) + path)
@@ -65,10 +90,26 @@ class ExternalApiClient(
         return execute(builder.build())
     }
 
+    private fun post(
+        host: String,
+        port: Int,
+        path: String,
+        token: String,
+        jsonBody: String,
+    ): String {
+        val builder = Request.Builder()
+            .url(baseUrl(host, port) + path)
+            .header("Authorization", "Bearer $token")
+            .header("Accept", "application/json")
+            .post(jsonBody.toRequestBody(JSON))
+        return execute(builder.build())
+    }
+
     private fun execute(request: Request): String {
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
+            // RunNow returns 202 Accepted.
+            if (!response.isSuccessful && response.code != 202) {
                 val message = errorMessage(body) ?: "HTTP ${response.code}: ${body.take(200)}"
                 error(message)
             }
@@ -224,6 +265,31 @@ class ExternalApiClient(
             return SignalsSnapshot(signals = signals)
         }
 
+        fun parseInvokeResults(raw: String): InvokeResults {
+            val json = JSONObject(raw)
+            val arr = json.optJSONArray("results") ?: JSONArray()
+            val results = buildList {
+                for (i in 0 until arr.length()) {
+                    val item = arr.optJSONObject(i) ?: continue
+                    add(
+                        InvokeResultItem(
+                            success = item.optBoolean("success", false),
+                            message = item.optString("message"),
+                        ),
+                    )
+                }
+            }
+            return InvokeResults(results = results)
+        }
+
+        fun parseRunAutomation(raw: String): RunAutomationResult {
+            val json = JSONObject(raw)
+            return RunAutomationResult(
+                accepted = json.optBoolean("accepted", false),
+                message = json.optString("message"),
+            )
+        }
+
         private fun stringList(array: JSONArray?): List<String> {
             if (array == null) return emptyList()
             return buildList {
@@ -233,9 +299,5 @@ class ExternalApiClient(
                 }
             }
         }
-
-        /** Reserved for later invoke/run stages. */
-        @Suppress("unused")
-        fun emptyJsonBody() = "{}".toRequestBody(JSON)
     }
 }

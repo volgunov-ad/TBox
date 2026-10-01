@@ -51,3 +51,17 @@ data class SignalReading(
 data class SignalsSnapshot(
     val signals: List<SignalReading>,
 )
+
+data class InvokeResultItem(
+    val success: Boolean,
+    val message: String,
+)
+
+data class InvokeResults(
+    val results: List<InvokeResultItem>,
+)
+
+data class RunAutomationResult(
+    val accepted: Boolean,
+    val message: String,
+)

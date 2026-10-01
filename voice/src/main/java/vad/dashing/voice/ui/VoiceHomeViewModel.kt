@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import vad.dashing.voice.api.ApiCatalog
 import vad.dashing.voice.api.AutomationSummary
 import vad.dashing.voice.api.ExternalApiClient
+import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
 import vad.dashing.voice.nlu.VoiceIntent
@@ -198,8 +199,11 @@ class VoiceHomeViewModel(
     /** Toggle PTT listening. Call only after RECORD_AUDIO is granted. */
     fun toggleListen(source: String = "ui") {
         if (_uiState.value.listening) {
-            stt.stopListening()
             _uiState.update { it.copy(statusMessage = "Остановка…") }
+            // SpeechService.stop() joins the recorder thread — never call it on Main.
+            viewModelScope.launch(Dispatchers.IO) {
+                stt.stopListening()
+            }
             return
         }
         startListen(source)
@@ -353,24 +357,81 @@ class VoiceHomeViewModel(
                     val name = intent.action.label
                         ?: intent.action.actionType
                         ?: intent.action.type
-                    val msg = "Распознано действие «$name». Invoke — на следующем этапе."
+                    val payload = InvokeActionPayloadBuilder.build(intent.action).getOrElse { error ->
+                        val msg = error.message ?: "Нельзя вызвать действие"
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                answerMessage = msg,
+                                statusMessage = "intent=invoke alias=${intent.matchedAlias}",
+                            )
+                        }
+                        speakAnswer(msg)
+                        return@launch
+                    }
+                    val body = InvokeActionPayloadBuilder.wrapActions(payload)
+                    val result = withContext(Dispatchers.IO) {
+                        apiClient.invokeActions(state.host, port, token, body)
+                    }.getOrElse { error ->
+                        val msg = "Действие не выполнено: ${error.message ?: error.javaClass.simpleName}"
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                lastHealthOk = false,
+                                answerMessage = msg,
+                                statusMessage = "invoke failed",
+                            )
+                        }
+                        speakAnswer(msg)
+                        return@launch
+                    }
+                    val first = result.results.firstOrNull()
+                    val ok = first?.success == true
+                    val detail = first?.message?.takeIf { it.isNotBlank() }
+                    val msg = when {
+                        ok && detail != null -> "Готово: $detail"
+                        ok -> "Сделано: $name"
+                        detail != null -> "Ошибка: $detail"
+                        else -> "Действие «$name» не выполнено"
+                    }
                     _uiState.update {
                         it.copy(
                             busy = false,
+                            lastHealthOk = ok,
                             answerMessage = msg,
-                            statusMessage = "intent=invoke alias=${intent.matchedAlias}",
+                            statusMessage = "intent=invoke alias=${intent.matchedAlias} ok=$ok",
                         )
                     }
                     speakAnswer(msg)
                 }
 
                 is VoiceIntent.RunAutomation -> {
-                    val msg = "Распознано правило «${intent.automation.name}». RunNow — на следующем этапе."
+                    val result = withContext(Dispatchers.IO) {
+                        apiClient.runAutomation(state.host, port, token, intent.automation.id)
+                    }.getOrElse { error ->
+                        val msg = "Правило не запущено: ${error.message ?: error.javaClass.simpleName}"
+                        _uiState.update {
+                            it.copy(
+                                busy = false,
+                                lastHealthOk = false,
+                                answerMessage = msg,
+                                statusMessage = "run failed",
+                            )
+                        }
+                        speakAnswer(msg)
+                        return@launch
+                    }
+                    val msg = if (result.accepted) {
+                        "Запускаю «${intent.automation.name}»"
+                    } else {
+                        result.message.ifBlank { "Правило «${intent.automation.name}» отклонено" }
+                    }
                     _uiState.update {
                         it.copy(
                             busy = false,
+                            lastHealthOk = result.accepted,
                             answerMessage = msg,
-                            statusMessage = "intent=run id=${intent.automation.id}",
+                            statusMessage = "intent=run id=${intent.automation.id} accepted=${result.accepted}",
                         )
                     }
                     speakAnswer(msg)

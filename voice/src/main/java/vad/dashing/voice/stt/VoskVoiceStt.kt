@@ -134,14 +134,15 @@ class VoskVoiceStt(
 
     override fun stopListening() {
         if (!listening.get()) return
-        val service = synchronized(lock) { speechService }
+        // Must not run on the main thread: SpeechService.stop() joins AudioRecord.read.
+        val service = synchronized(lock) { speechService } ?: return
         try {
-            service?.stop()
+            service.stop()
         } catch (t: Throwable) {
             Log.w(TAG, "stopListening", t)
             finish(ListenEndReason.STOPPED) {}
         }
-        // onFinalResult from SpeechService should follow; if not, end locally.
+        // onFinalResult from SpeechService should follow on the main handler.
     }
 
     override fun release() {

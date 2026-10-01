@@ -641,7 +641,11 @@
 | Предыдущий трек | `media_previous` | `stringValue`: package name медиаплеера |
 | Воспроизведение/пауза | `media_play_pause` | `stringValue`: package name медиаплеера |
 | Воспроизведение | `media_play` | `stringValue`: package name медиаплеера |
-| Следующий трек | `media_next` | `stringValue`: package name медиаплеера |
+| Следующий трек | `media_next` | `stringValue`: package name медиаплеера (пусто = активная сессия) |
+| Предыдущий трек | `media_previous` | то же |
+| Play/Pause | `media_play_pause` | то же |
+| Play | `media_play` | то же |
+| VAD Voice: слушать | `start_vad_voice` | без параметров; открывает `vad.dashing.voice` с Intent LISTEN |
 | Поставить/снять «Нравится» | `media_toggle_like` | `stringValue`: package name медиаплеера |
 | Установить громкость медиа | `set_media_volume` | `intValue`: `0..31` |
 | Установить громкость телефона | `set_phone_volume` | `intValue`: `1..31` |

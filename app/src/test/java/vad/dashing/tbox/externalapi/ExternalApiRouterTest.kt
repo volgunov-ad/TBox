@@ -30,7 +30,7 @@ class ExternalApiRouterTest {
         val json = JSONObject(response.body)
         assertTrue(json.getBoolean("ok"))
         assertEquals(1, json.getInt("apiVersion"))
-        assertEquals(2, json.getInt("catalogVersion"))
+        assertEquals(3, json.getInt("catalogVersion"))
         assertTrue(json.getBoolean("serverEnabled"))
         assertEquals("0.18.1-test", json.getString("appVersion"))
     }
@@ -110,7 +110,7 @@ class ExternalApiRouterTest {
         )
         assertEquals(200, response.status)
         val json = JSONObject(response.body)
-        assertEquals(2, json.getInt("catalogVersion"))
+        assertEquals(3, json.getInt("catalogVersion"))
         val signals = json.getJSONArray("signals")
         assertTrue(signals.length() > 0)
         var foundOutside = false
