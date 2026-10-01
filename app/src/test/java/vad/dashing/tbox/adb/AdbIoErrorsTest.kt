@@ -53,6 +53,8 @@ class LocalhostAdbSessionCancellationTest {
     @Before
     fun resetGate() {
         AdbShutdownGate.resetForTests()
+        vad.dashing.tbox.TboxRepository.clearLogs()
+        vad.dashing.tbox.TboxRepository.updateMinLogLevel("DEBUG")
     }
 
     @Test
@@ -84,5 +86,100 @@ class LocalhostAdbSessionCancellationTest {
         } catch (e: CancellationException) {
             assertEquals("composition disposed", e.message)
         }
+    }
+
+    @Test
+    fun run_benignTransportClosed_duringShutdown_logsDebugNotError() = runBlocking {
+        AdbShutdownGate.markAppShuttingDown()
+        val gateway = object : LocalhostAdbSession.Gateway {
+            override suspend fun refreshHuAdb() = Unit
+            override suspend fun isTcpEnabled(): Boolean = true
+            override suspend fun setTcpEnabled(enabled: Boolean) = Unit
+            override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = true
+            override suspend fun <T> withShellSession(
+                host: String,
+                port: Int,
+                connectTimeoutMs: Int,
+                sessionTimeoutMs: Int,
+                keysDir: File,
+                clientName: String,
+                block: (execute: (String) -> AdbShellResult) -> T,
+            ): T {
+                throw java.io.EOFException("ADB transport closed")
+            }
+        }
+        val result = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+        ) { "ok" }
+        assertTrue(result is LocalhostAdbSession.Result.Failed)
+        val logs = vad.dashing.tbox.TboxRepository.logs.value
+        assertTrue(logs.any { it.contains("DEBUG") && it.contains("ADB transport closed") })
+        assertFalse(logs.any { it.contains("ERROR") && it.contains("ADB transport closed") })
+    }
+
+    @Test
+    fun run_transportClosed_whileAlive_logsError() = runBlocking {
+        val gateway = object : LocalhostAdbSession.Gateway {
+            override suspend fun refreshHuAdb() = Unit
+            override suspend fun isTcpEnabled(): Boolean = true
+            override suspend fun setTcpEnabled(enabled: Boolean) = Unit
+            override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = true
+            override suspend fun <T> withShellSession(
+                host: String,
+                port: Int,
+                connectTimeoutMs: Int,
+                sessionTimeoutMs: Int,
+                keysDir: File,
+                clientName: String,
+                block: (execute: (String) -> AdbShellResult) -> T,
+            ): T {
+                throw java.io.EOFException("ADB transport closed")
+            }
+        }
+        val result = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+        ) { "ok" }
+        assertTrue(result is LocalhostAdbSession.Result.Failed)
+        val logs = vad.dashing.tbox.TboxRepository.logs.value
+        assertTrue(logs.any { it.contains("ERROR") && it.contains("ADB transport closed") })
+    }
+
+    @Test
+    fun run_tcpEnableFailed_logsError() = runBlocking {
+        val gateway = object : LocalhostAdbSession.Gateway {
+            override suspend fun refreshHuAdb() = Unit
+            override suspend fun isTcpEnabled(): Boolean = false
+            override suspend fun setTcpEnabled(enabled: Boolean) {
+                // Enable props but never open the port.
+            }
+            override fun isTcpPortOpen(host: String, port: Int, timeoutMs: Int): Boolean = false
+            override suspend fun <T> withShellSession(
+                host: String,
+                port: Int,
+                connectTimeoutMs: Int,
+                sessionTimeoutMs: Int,
+                keysDir: File,
+                clientName: String,
+                block: (execute: (String) -> AdbShellResult) -> T,
+            ): T = error("should not connect")
+        }
+        val result = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            readyTimeoutMs = 50L,
+            delayMs = { },
+        ) { "ok" }
+        assertTrue(result is LocalhostAdbSession.Result.Failed)
+        assertEquals(
+            LocalhostAdbSession.Reason.TcpEnableFailed,
+            (result as LocalhostAdbSession.Result.Failed).reason,
+        )
+        val logs = vad.dashing.tbox.TboxRepository.logs.value
+        assertTrue(logs.any { it.contains("ERROR") && it.contains("ADB TCP enable failed") })
     }
 }

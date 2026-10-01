@@ -104,6 +104,11 @@ internal object LocalhostAdbSession {
                     if (!gateway.isTcpEnabled() &&
                         !gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
                     ) {
+                        TboxRepository.addLog(
+                            level = "ERROR",
+                            tag = TAG,
+                            message = "ADB TCP enable failed (props off, port closed)",
+                        )
                         return@withLock Result.Failed(Reason.TcpEnableFailed)
                     }
                     // We invoked enable because TCP was not available; restore only in this case.
@@ -126,6 +131,11 @@ internal object LocalhostAdbSession {
                     delayMs = delayFn,
                 )
                 if (!ready) {
+                    TboxRepository.addLog(
+                        level = "ERROR",
+                        tag = TAG,
+                        message = "ADB TCP not ready within ${waitMs}ms ($host:$port)",
+                    )
                     return@withLock Result.Failed(Reason.TcpNotReady)
                 }
 
@@ -145,14 +155,25 @@ internal object LocalhostAdbSession {
                     // "ADB transport closed" Toast via Result.Failed.
                     throw e
                 } catch (e: Exception) {
+                    val detail = e.message ?: e.javaClass.simpleName
+                    // Expected EOF during shutdown / intentional close: keep toast quiet (#401)
+                    // and avoid ERROR spam in the default INFO journal — DEBUG still records it.
+                    val level = if (
+                        AdbIoErrors.isBenignDisconnectMessage(detail) &&
+                        AdbShutdownGate.shouldSuppressBenignDisconnect()
+                    ) {
+                        "DEBUG"
+                    } else {
+                        "ERROR"
+                    }
                     TboxRepository.addLog(
-                        level = "ERROR",
+                        level = level,
                         tag = TAG,
-                        message = "ADB session failed: ${e.message ?: e.javaClass.simpleName}",
+                        message = "ADB session failed: $detail",
                     )
                     Result.Failed(
                         Reason.AdbConnectFailed,
-                        e.message ?: e.javaClass.simpleName,
+                        detail,
                     )
                 }
             } finally {
