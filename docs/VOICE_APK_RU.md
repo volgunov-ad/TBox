@@ -1,7 +1,9 @@
 # Voice APK — план реализации
 
-Статус: **design / plan**. Отдельное Android-приложение — голосовой клиент к
-уже реализованному External HTTP API TBox Monitor.
+Статус: **design / plan** (решения по MVP зафиксированы ниже).
+
+Отдельное Android-приложение **VAD Voice** (`vad.dashing.voice`) — голосовой клиент к
+External HTTP API TBox Monitor. Целевая платформа MVP: **только ГУ**.
 
 Связанные документы:
 
@@ -11,191 +13,229 @@
 | [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) | Как включить API / токен |
 | [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md) | JSON действий и сигналов |
 
-**Зафиксировано заранее**
+---
 
-- **TTS:** не системный `TextToSpeech` ГУ (на Adayo/Jetour часто отсутствует, битый
-  или устаревший). Встроенный офлайн TTS (Piper / Sherpa-ONNX).
-- **NLU v1:** без LLM; матч по `voiceAliasesRu` + имена автоматизаций из `/v1/catalog`
-  и `/v1/automations`.
-- **Транспорт:** только наш External API (не legacy broadcast).
+## 0. Зафиксированные решения
+
+| Тема | Решение |
+|------|---------|
+| Платформа MVP | **Только ГУ** (телефон — позже) |
+| Имя / package | **VAD Voice** / `vad.dashing.voice` |
+| TTS | **Не** system TTS. Встроенный офлайн Piper (Sherpa-ONNX) |
+| STT MVP | **Vosk** `vosk-model-small-ru` (~45 MB); Sherpa — если качество мало |
+| Модели | **Вшить в APK** (ГУ часто без интернета) |
+| NLU | `voiceAliasesRu` + имена автоматизаций; без LLM |
+| Транспорт | External API `http://127.0.0.1:<port>/v1` |
+| Репозиторий | **Модуль `:voice` в этом же git** → отдельный APK (не раздувает Monitor) |
+| Дистрибуция MVP | **Сайдлоад** вместе с Monitor (USB / то же место, куда ставят Monitor). Магазины — не в MVP |
+| Политика действий | Voice **не режет** сильнее Monitor: что разрешает токен + тумблер dangerous в Настройки→API, то и с голоса. (Пояснение: отдельный «запрет багажника только в Voice» не делаем.) |
+
+### Активация (все три канала в scope MVP)
+
+| Канал | По умолчанию | Где настраивается |
+|-------|--------------|-------------------|
+| Кнопка «Слушать» в UI Voice | вкл | Voice |
+| Wake-word | **выкл** | Voice (слово настраиваемое, можно выключить) |
+| Кнопка руля | **выкл** | Выбор кнопки + выкл; фактически через Monitor (см. §3) |
+| Intent из Monitor / автоматизаций | всегда доступен | Контракт Intent + builtin в Monitor |
 
 ---
 
 ## 1. Цели MVP
 
-1. На ГУ (или телефоне в той же LAN) сказать фразу → получить ответ голосом и/или
-   краткий UI.
+1. На ГУ сказать фразу → ответ голосом + краткий UI.
 2. Три класса команд:
    - **вопрос** → `GET /v1/signals` → озвучить значение;
-   - **действие** → `POST /v1/actions/invoke` по каталогу;
-   - **сценарий** → resolve имя правила → `POST /v1/automations/{id}/run`.
-3. Работа **без интернета** (STT/TTS/NLU on-device; HTTP только в LAN к Monitor).
-4. Не ломать Monitor: Voice APK — отдельный клиент с Bearer-токеном.
+   - **действие** → `POST /v1/actions/invoke`;
+   - **сценарий** → имя правила → `POST /v1/automations/{id}/run`.
+3. Полностью офлайн STT/TTS/NLU; HTTP только localhost к Monitor.
+4. Активация: UI / wake-word (opt-in) / руль (opt-in) / Intent из Monitor.
 
-Вне MVP (явно позже):
+Вне MVP:
 
-- диалоговый контекст («потеплее ещё» с памятью сессии) — опционально тонкий;
-- wake-word always-on (можно PTT сначала);
-- облако / LLM;
-- редактирование правил с голоса;
-- полноценный UI ассистента как у Дуси.
+- телефон как клиент;
+- LLM / облако;
+- диалог «потеплее ещё» с длинной памятью (короткий относительный adjust — по возможности);
+- RuStore / свой OTA для Voice;
+- замена Vosk на Sherpa (пока не упрёмся в качество).
 
 ---
 
 ## 2. Архитектура
 
 ```text
-[Микрофон]
-    → STT (Vosk MVP / Sherpa позже)
-    → NLU (normalize → match voiceAliasesRu / automation names → intent)
-    → HTTP Client (Bearer → Monitor /v1)
-    → Response formatter (число/state → RU фраза)
-    → TTS (Piper/Sherpa, вшитая RU-модель)
-    → [Динамик + короткий UI]
+Активация: UI | wake-word | hard-key(via Monitor) | Intent
+    → Listening session
+    → STT (Vosk)
+    → NLU (aliases / automation names)
+    → HTTP Bearer → Monitor /v1
+    → Formatter (RU фраза)
+    → TTS (Piper bundle)
+    → Динамик + UI
 ```
 
-| Слой | MVP | Заметки |
-|------|-----|---------|
-| STT | **Vosk** `vosk-model-small-ru` (~45 MB) | Проще встроить; при слабом качестве — Sherpa GigaAM/zipformer |
-| NLU | Alias matcher + слоты из `namedValues`/`stateOptions` | Каталог кэшировать; refresh по `catalogVersion` |
-| HTTP | OkHttp / HttpURLConnection | `127.0.0.1` на ГУ или LAN IP |
-| TTS | **Piper** (RU irina/ruslan) через Sherpa-ONNX или piper-native | Не system TTS |
-| Auth | Pairing **или** ручной токен из Monitor | Как в user guide |
-| UI | Кнопка «Слушать» + статус + последняя фраза/ответ | Минимум |
-
-Отдельный модуль/репозиторий APK (не внутри `:app` Monitor), чтобы не раздувать
-основной APK моделями STT/TTS (~50–150+ MB).
+| Слой | Выбор |
+|------|--------|
+| STT | Vosk small-ru, модель в assets APK |
+| TTS | Piper RU (одна модель, напр. irina-medium) в assets |
+| Wake-word | Отдельный лёгкий движок (openWakeWord / Porcupine-совместимый / keyword-spotting); **выкл** по умолчанию; своё слово в настройках |
+| HTTP | `127.0.0.1` + порт из настроек (default 8765) |
+| Auth | Pairing или ручной токен из Monitor |
 
 ---
 
-## 3. Потоки UX
+## 3. Доработка TBox Monitor (обязательная)
 
-### 3.1. Первый запуск
+Голосовой APK на ГУ **не получает** штатно CAN-кнопки руля — их уже читает Monitor.
+Поэтому контракт такой:
 
-1. Разрешения: микрофон (обязательно), уведомления при foreground-сервисе.
-2. Настройка сервера: host/port (по умолчанию `127.0.0.1:8765` на ГУ).
-3. Токен:
-   - **A)** «Сопряжение» → Monitor «Подключить приложение» → approve; или
-   - **B)** вставить токен, созданный в Monitor «Создать токен».
-4. `GET /v1/health` + `GET /v1/catalog` → кэш aliases.
+### 3.1. Intent (публичный контракт)
 
-### 3.2. Команда (PTT)
-
-1. Пользователь жмёт «Слушать» (или руль → позже).
-2. STT → текст.
-3. NLU выбирает один intent (или «не понял»).
-4. HTTP; при ошибке — озвучить кратко (`нет связи`, `отказано`).
-5. TTS ответ; показать текст на экране.
-
-Примеры:
-
-| Фраза | Intent | API |
-|-------|--------|-----|
-| «сколько градусов на улице» | query `outside_temperature` | `GET …/signals?ids=outside_temperature&source=head_unit` |
-| «какая скорость» | query `car_speed` | signals |
-| «запусти климат» | run automation by name | automations list → run |
-| «пауза» / «следующий трек» | invoke builtin media | `POST …/actions/invoke` |
-
-### 3.3. Относительные фразы («потеплее»)
-
-В v1 API нет `adjust_+1`. Клиент: GET текущего → вычислить абсолют → invoke.
-**В MVP можно отложить** и поддержать только абсолютные/каталожные фразы.
-
----
-
-## 4. NLU (детали)
-
-1. Нормализация: lowercase, ё→е, схлопнуть пробелы, убрать пунктуацию.
-2. Кандидаты:
-   - все `voiceAliasesRu` сигналов и actionTypes из кэша catalog;
-   - имена автоматизаций (`GET /v1/automations`).
-3. Score: точное вхождение / longest alias match / простой token overlap.
-4. Конфликты: уточняющий TTS («запустить правило климат или включить кондиционер?»)
-   — в MVP достаточно взять лучший score + порог; иначе «не понял».
-5. Слоты: для state/can — если в фразе есть label из `namedValues`, подставить
-   `value`/`valueKey`.
-
-Приоритет intent (черновик):
-
-1. run automation (если имя правила почти целиком в фразе);
-2. invoke action (alias действия);
-3. query signal (alias сигнала).
-
----
-
-## 5. TTS (без system)
-
-| Вариант | Плюсы | Минусы |
-|---------|-------|--------|
-| **Piper RU** (irina/ruslan medium) через Sherpa-ONNX Android | Качество, офлайн, предсказуемо на ГУ | +десятки MB в APK |
-| Sherpa VITS/Kokoro | Гибкость | Тяжелее |
-| Системный TTS | — | **Отклонён** (на ГУ часто нет/сломан) |
-
-MVP: одна голосная модель (например irina-medium), bundlе или first-run download
-на внутреннее хранилище приложения (на ГУ без сети — **лучше bundle**).
-
----
-
-## 6. Структура проекта (предложение)
+Voice экспортирует, например:
 
 ```text
-voice/   или отдельный репозиторий tbox-voice
-  app/                 # Voice APK (product flavors ru)
-  core/
-    stt/               # Vosk wrapper
-    tts/               # Piper/Sherpa wrapper
-    nlu/               # alias matcher + tests
-    api/               # External API client (health/catalog/signals/invoke/run/pair)
-  docs/
+Action:  vad.dashing.voice.action.LISTEN
+Package: vad.dashing.voice
+Extra (opt): source = ui | wake | hard_key | automation
 ```
 
-Unit-тесты NLU на JVM без устройства (фраза → intent).  
-Instrumented — только на железе/эмуляторе (в cloud VM устройства нет).
+Поведение: поднять listening session (STT), как кнопка «Слушать».
+
+### 3.2. Builtin / действие автоматизации в Monitor
+
+Новое действие каталога, например:
+
+- `builtin` / `start_vad_voice` **или**
+- узкий `launch_application` на `vad.dashing.voice` с нужным action
+  (предпочтительнее **явный builtin** — понятнее в UI автоматизаций).
+
+Эффект: `startActivity` / `startForegroundService` с Intent из §3.1.
+
+Тогда пользователь может:
+
+- правило «hard key X → start_vad_voice»;
+- виджет / другая автоматизация → голос.
+
+### 3.3. Упрощённая привязка кнопки руля (UX)
+
+В **Voice** (или в Monitor→API/Voice): «Кнопка руля» = выбор key code / жеста
+(как в тесте кнопок Monitor) + вкл/выкл.
+
+Реализация MVP (рекомендация):
+
+1. Voice хранит pref `hardKeyEnabled` + `hardKeyCode`.
+2. Monitor при событии hard key, если Voice установлен и есть согласованный
+   binding (pref через shared? или Monitor setting «форвард в VAD Voice»):
+   шлёт Intent LISTEN.
+
+Практически проще для v1:
+
+- в Monitor: настройка **«VAD Voice: кнопка руля»** (выкл / код кнопки),  
+  либо документировать «сделайте автоматизацию hard_key → start_vad_voice»;
+- для «из коробки» — настройка в Monitor рядом с API, пишущая тот же binding.
+
+**Открытый микро-выбор при коде:** отдельный экран в Monitor vs только автоматизация.
+Рекомендация: **builtin + короткая настройка в Monitor «Открыть VAD Voice по кнопке»**,
+чтобы не заставлять всех писать правило вручную.
+
+### 3.4. Документы Monitor, которые обновить вместе с кодом
+
+- `AUTOMATIONS_*` / AI guide — новый builtin;
+- `EXTERNAL_API` / user guide — ссылка на Voice;
+- `MBCAN_VHAL` не трогать, если только Intent.
+
+---
+
+## 4. Потоки UX
+
+### 4.1. Первый запуск (на ГУ)
+
+1. Микрофон (+ уведомления, если foreground для wake-word).
+2. Host/port: default `127.0.0.1:8765`.
+3. Токен: pairing **или** вставка ручного токена из Monitor.
+4. Загрузка catalog в кэш.
+5. Wake-word и руль — **выкл**; пользователь включает по желанию.
+
+### 4.2. Listening
+
+1. Старт по любому каналу активации.
+2. STT → текст на экране.
+3. NLU → HTTP → TTS ответ.
+
+### 4.3. Примеры фраз
+
+| Фраза | API |
+|-------|-----|
+| «сколько градусов на улице» | `GET /v1/signals?ids=outside_temperature&source=head_unit` |
+| «запусти климат» | automations → run по имени |
+| «следующий трек» | `POST /v1/actions/invoke` media_next |
+
+---
+
+## 5. NLU
+
+1. Normalize: lowercase, ё→е, пробелы, без пунктуации.
+2. Кандидаты: `voiceAliasesRu` + имена automations.
+3. Score: longest alias / token overlap + порог.
+4. Приоритет: run automation → invoke → query signal.
+5. Relative «потеплее» — после MVP core, если останется время (GET → ± → invoke).
+
+---
+
+## 6. Структура репозитория (решение: monorepo)
+
+```text
+TBox/
+  app/                 # TBox Monitor APK (:app)
+  voice/               # VAD Voice APK (:voice)
+    src/main/...
+    src/test/...       # NLU unit tests
+  docs/VOICE_APK_RU.md
+```
+
+Почему не отдельный git:
+
+- один контракт Intent / builtin с Monitor в одном PR;
+- общие CI/ветки `preRelease`;
+- модели живут только в `:voice` → Monitor APK не растёт.
+
+Сборка: `./gradlew :voice:assembleRuDebug` (имена задач уточнить при каркасе).
 
 ---
 
 ## 7. Этапы реализации
 
-| # | Этап | Критерий готовности |
-|---|------|---------------------|
-| 0 | Этот план + ответы на §8 | Согласован scope MVP |
-| 1 | Каркас APK + настройки host/port/token + health | С ГУ/ПК видно `ok: true` |
-| 2 | Catalog cache + NLU matcher + unit-тесты фраз | Эталонный набор фраз зелёный |
-| 3 | Signals query → текстовый ответ на экране | «температура на улице» → число |
-| 4 | Встроенный TTS | Тот же ответ озвучивается на ГУ |
-| 5 | STT Vosk + PTT кнопка | Полный цикл микрофон → ответ |
-| 6 | Invoke safe actions + RunNow по имени | Медиа/toast + запуск правила |
-| 7 | Pairing UX (опц. если ручного токена мало) | Как Monitor pair flow |
-| 8 | Полировка: ошибки сети, dangerous reject, кэш | Полевые сценарии на ГУ |
+| # | Этап | Где | Критерий |
+|---|------|-----|----------|
+| 0 | План + решения | docs | этот документ |
+| 1 | Каркас `:voice` APK, настройки host/port/token, health | voice | UI видит `ok` от Monitor |
+| 2 | Catalog cache + NLU + unit-тесты фраз | voice | эталонные фразы зелёные |
+| 3 | Signals → текст на экране | voice | температура/скорость |
+| 4 | Piper TTS bundle | voice | ответ озвучивается на ГУ |
+| 5 | Vosk STT + кнопка «Слушать» | voice | полный PTT-цикл |
+| 6 | Invoke + RunNow | voice | медиа + запуск правила |
+| 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | автоматизация открывает слушание |
+| 8 | Настройка кнопки руля (Monitor→Intent) | app(+voice) | вкл/выбор/выкл, default выкл |
+| 9 | Wake-word opt-in | voice | своё слово, default выкл; расход батареи/CPU ок на ГУ |
+| 10 | Полевая полировка | оба | ошибки сети, sentinel −40, audio focus |
 
-Параллельно можно выпустить **скрипты Дуси/Tasker** как необязательный клиент
-(не блокирует Voice APK).
+Этапы 7–9 не откладывать «на потом после MVP»: они в scope; порядок после
+рабочего PTT-цикла (1–6).
 
 ---
 
-## 8. Открытые вопросы
+## 8. Пояснения к бывшим вопросам 6 и 8
 
-Нужны ответы, чтобы зафиксировать MVP:
+**«Резать confirm?»**  
+В Monitor действия делятся на safe / confirm / dangerous. Dangerous и так закрыты
+тумблером в Настройки→API. Вопрос был: должен ли Voice **дополнительно** запрещать
+голосom открыть багажник/окна (confirm), даже если API это разрешает.  
+**Ответ по решению выше:** нет, не дублируем политику — только то, что уже настроили в Monitor.
 
-1. **Где крутится Voice APK в первую очередь?**  
-   Только ГУ / только телефон / оба (один APK, разные default host)?
-
-2. **Активация в MVP:** только кнопка на экране (PTT), или сразу нужен
-   wake-word / кнопка на руле (hard key → intent)?
-
-3. **Репозиторий:** новый модуль в этом же git (`:voice`) или отдельный репозиторий?
-
-4. **STT на MVP:** подтверждаем **Vosk small-ru**, Sherpa — этап 2 по качеству?
-
-5. **Модели в APK:** bundlе STT+TTS в APK (больше размер, работает офлайн из коробки)
-   или download при первом запуске (нужен интернет хоть раз)?
-
-6. **Опасные / confirm действия с голоса:** в MVP разрешить всё, что разрешает
-   токен Monitor, или Voice APK дополнительно режет confirm (окна, багажник)?
-
-7. **Имя приложения / package:** рабочее `TBox Voice` / `vad.dashing.tbox.voice`?
-
-8. **Дистрибуция:** только сайдлоад рядом с Monitor, или ещё RuStore/свой updater?
+**«Дистрибуция?»**  
+Как пользователь получает APK: копирование на ГУ (сайдлоад), как Monitor, или публикация
+в магазине.  
+**Ответ:** для MVP только сайдлоад; магазин не нужен.
 
 ---
 
@@ -203,19 +243,22 @@ Instrumented — только на железе/эмуляторе (в cloud VM 
 
 | Риск | Митигация |
 |------|-----------|
-| Микрофон/аудиофокус на ГУ занят навигатором | Явный PTT; audit audio focus; не держать always-on сначала |
-| Vosk плохо слышит в салоне | Короткие aliases; позже Sherpa; подсказка «повторите» |
-| Размер APK | Отдельный APK; одна TTS-модель; small STT |
-| `outside_temperature=-40` sentinel | В formatter: `available` + разумный range → «нет данных» |
-| Каталог устарел | Сверять `catalogVersion` при старте сессии |
+| Wake-word грузит ГУ / ловит ложные срабатывания | Default **выкл**; порог; пауза после срабатывания |
+| Hard key только в Monitor | Intent-контракт + builtin; не читать CAN из Voice |
+| Размер Voice APK (Vosk+Piper) | Отдельный `:voice`; одна TTS-модель |
+| Audio focus vs навигатор | Короткие сессии listening; корректный focus |
+| Vosk в шуме салона | Короткие aliases; «не понял»; позже Sherpa |
+| Sentinel температуры −40 | Formatter: `available` + диапазон → «нет данных» |
 
 ---
 
 ## 10. Критерий «MVP готов»
 
-На ГУ с включённым Monitor API и токеном:
+На ГУ с Monitor API + токеном:
 
-1. PTT → «сколько градусов на улице» → голос отвечает числом или «нет данных».
-2. PTT → «запусти &lt;имя правила&gt;» → правило уходит в RunNow.
-3. PTT → safe media/toast-команда из aliases → invoke success.
-4. Без сети WAN; при выключенном Monitor — внятная голосовая ошибка.
+1. «Слушать» → вопрос по телеметрии → голос отвечает.
+2. Запуск правила по имени → RunNow.
+3. Safe invoke из aliases → успех.
+4. Автоматизация Monitor / builtin → Voice начинает слушать.
+5. Wake-word и кнопка руля можно включить; по умолчанию выкл и не мешают.
+6. Без WAN; Monitor выключен → понятная голосовая ошибка.

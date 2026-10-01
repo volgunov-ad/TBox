@@ -434,7 +434,9 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | Транспорт | единичные HTTP-запросы после pairing / ручного токена |
 | TTS | **встроенный** офлайн (Piper/Sherpa); системный TTS ГУ **не** используем |
 
-План Voice APK: [VOICE_APK_RU.md](VOICE_APK_RU.md).
+План Voice APK: [VOICE_APK_RU.md](VOICE_APK_RU.md) (**VAD Voice**, `vad.dashing.voice`;
+модуль `:voice`; Piper TTS; Vosk; активация UI / wake-word opt-in / руль opt-in /
+Intent из Monitor).
 
 Именованные сценарии пользователя → `run` автоматизации по имени.  
 Свободные команды машины → `invoke` по каталогу.
