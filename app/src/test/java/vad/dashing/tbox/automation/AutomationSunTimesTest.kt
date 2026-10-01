@@ -43,6 +43,77 @@ class AutomationSunTimesTest {
     }
 
     @Test
+    fun nizhnyNovgorod_2026_10_01_sunsetNear1745MskNot1845() {
+        // Independent sources (timeanddate / weather tables): ~17:39–17:42 MSK.
+        val date = AutomationCalendarDate(2026, 10, 1)
+        val nnLat = 56.33
+        val nnLon = 44.00
+        val sunset = AutomationSunTimes.eventMinutesOfDay(
+            AutomationSolarEvent.SUNSET, date, nnLat, nnLon, msk,
+        )
+        assertNotNull(sunset)
+        assertTrue(
+            "expected ~17:40 MSK, got ${sunset!! / 60}:${sunset % 60}",
+            sunset in minutes(17, 30)..minutes(17, 50),
+        )
+        assertFalse(
+            "UTC+4 must not be treated as MSK — that yields ~18:40",
+            sunset in minutes(18, 30)..minutes(18, 50),
+        )
+        val wrongTz = AutomationSunTimes.eventMinutesOfDay(
+            AutomationSolarEvent.SUNSET, date, nnLat, nnLon, 4 * 60,
+        )!!
+        assertTrue(wrongTz in minutes(18, 30)..minutes(18, 50))
+        assertEquals(60, wrongTz - sunset)
+    }
+
+    @Test
+    fun solarHint_showsBaseEventAndOffsetFireTime() {
+        val date = AutomationCalendarDate(2026, 10, 1)
+        val nnLat = 56.33
+        val nnLon = 44.00
+        val sunset = AutomationSunTimes.eventMinutesOfDay(
+            AutomationSolarEvent.SUNSET, date, nnLat, nnLon, msk,
+        )!!
+        val wall = AutomationWallTime(
+            year = date.year,
+            month = date.month,
+            dayOfMonth = date.day,
+            hour = 12,
+            minute = 0,
+            weekday = AutomationWeekday.THURSDAY,
+            utcOffsetMinutes = msk,
+        )
+        val zero = AutomationSolarHints.todayCaption(
+            AutomationSolarInstant(AutomationSolarEvent.SUNSET, 0),
+            nnLat,
+            nnLon,
+            wall,
+        )
+        assertTrue(zero.contains("закат"))
+        assertTrue(zero.contains(String.format("%02d:%02d", sunset / 60, sunset % 60)))
+        assertTrue(zero.contains("UTC+3"))
+        assertFalse(zero.contains("сработает"))
+
+        val afterHour = AutomationSolarHints.todayCaption(
+            AutomationSolarInstant(
+                event = AutomationSolarEvent.SUNSET,
+                offsetMinutes = 60,
+                offsetDirection = AutomationSolarOffsetDirection.AFTER,
+            ),
+            nnLat,
+            nnLon,
+            wall,
+        )
+        val fire = sunset + 60
+        assertTrue(afterHour.contains("закат"))
+        assertTrue(afterHour.contains(String.format("%02d:%02d", sunset / 60, sunset % 60)))
+        assertTrue(afterHour.contains("сработает"))
+        assertTrue(afterHour.contains(String.format("%02d:%02d", fire / 60, fire % 60)))
+        assertTrue(afterHour.contains("UTC+3"))
+    }
+
+    @Test
     fun tromsoJune_hasNoSunset() {
         val sunset = AutomationSunTimes.eventMinutesOfDay(
             AutomationSolarEvent.SUNSET,

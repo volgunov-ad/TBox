@@ -60,8 +60,8 @@ import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationClock
 import vad.dashing.tbox.automation.AutomationSolarEvent
+import vad.dashing.tbox.automation.AutomationSolarHints
 import vad.dashing.tbox.automation.AutomationSolarInstant
-import vad.dashing.tbox.automation.AutomationSolarLogic
 import vad.dashing.tbox.automation.AutomationSolarOffsetDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationWeekday
@@ -774,21 +774,12 @@ private fun solarInstantHint(
     instant: AutomationSolarInstant,
     latitude: Double,
     longitude: Double,
-): String {
-    if (!latitude.isFinite() || !longitude.isFinite() || latitude == 0.0 && longitude == 0.0) {
-        return "Сегодняшнее время появится, когда будет геопозиция."
-    }
-    val wall = AutomationClock.System.wallTime()
-    val minutes = AutomationSolarLogic.clockMinutesOnWallDate(
-        instant,
-        latitude,
-        longitude,
-        wall,
-    ) ?: return "Сегодня нет этого восхода или заката."
-    val hour = minutes / 60
-    val minute = minutes % 60
-    return String.format("Сегодня %02d:%02d по часам ГУ.", hour, minute)
-}
+): String = AutomationSolarHints.todayCaption(
+    instant = instant,
+    latitude = latitude,
+    longitude = longitude,
+    wall = AutomationClock.System.wallTime(),
+)
 
 @Composable
 private fun ConditionGroupFields(

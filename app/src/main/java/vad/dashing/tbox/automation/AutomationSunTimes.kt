@@ -1,7 +1,9 @@
 package vad.dashing.tbox.automation
 
 import java.util.Calendar
+import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.acos
 import kotlin.math.asin
 import kotlin.math.atan
@@ -268,3 +270,69 @@ object AutomationSolarLogic {
 
 fun AutomationTrigger.Solar.instant(): AutomationSolarInstant =
     AutomationSolarInstant(event, offsetMinutes, offsetDirection)
+
+/**
+ * Editor caption for a solar instant: official event time on the HU clock,
+ * plus the offset-adjusted fire time when [AutomationSolarInstant.offsetMinutes] ≠ 0.
+ * Includes the wall UTC offset so a wrong HU timezone (e.g. UTC+4 in MSK) is visible.
+ */
+object AutomationSolarHints {
+    fun todayCaption(
+        instant: AutomationSolarInstant,
+        latitude: Double,
+        longitude: Double,
+        wall: AutomationWallTime,
+    ): String {
+        if (!latitude.isFinite() || !longitude.isFinite() || latitude == 0.0 && longitude == 0.0) {
+            return "Сегодняшнее время появится, когда будет геопозиция."
+        }
+        val date = wall.calendarDate()
+        val base = AutomationSunTimes.eventMinutesOfDay(
+            instant.event,
+            date,
+            latitude,
+            longitude,
+            wall.utcOffsetMinutes,
+        ) ?: return "Сегодня нет этого восхода или заката."
+        val eventLabel = when (instant.event) {
+            AutomationSolarEvent.SUNRISE -> "восход"
+            AutomationSolarEvent.SUNSET -> "закат"
+        }
+        val offsetLabel = formatUtcOffsetLabel(wall.utcOffsetMinutes)
+        val baseLabel = formatMinutesOfDay(base)
+        if (instant.offsetMinutes == 0) {
+            return "Сегодня $eventLabel $baseLabel по часам ГУ ($offsetLabel)."
+        }
+        val occurrence = AutomationSunTimes.occurrence(
+            instant,
+            date,
+            latitude,
+            longitude,
+            wall.utcOffsetMinutes,
+        ) ?: return "Сегодня нет этого восхода или заката."
+        val fireLabel = formatMinutesOfDay(occurrence.minutesOfDay)
+        val dayNote = if (wall.sameDate(occurrence.date)) {
+            "сработает в $fireLabel"
+        } else {
+            "сработает в $fireLabel (другие сутки)"
+        }
+        return "Сегодня $eventLabel $baseLabel, $dayNote по часам ГУ ($offsetLabel)."
+    }
+
+    fun formatUtcOffsetLabel(utcOffsetMinutes: Int): String {
+        val sign = if (utcOffsetMinutes >= 0) "+" else "-"
+        val absMinutes = abs(utcOffsetMinutes)
+        val hours = absMinutes / 60
+        val minutes = absMinutes % 60
+        return if (minutes == 0) {
+            "UTC$sign$hours"
+        } else {
+            String.format(Locale.US, "UTC%s%d:%02d", sign, hours, minutes)
+        }
+    }
+
+    private fun formatMinutesOfDay(minutes: Int): String {
+        val clamped = minutes.mod(24 * 60)
+        return String.format(Locale.US, "%02d:%02d", clamped / 60, clamped % 60)
+    }
+}
