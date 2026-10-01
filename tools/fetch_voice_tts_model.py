@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Download Piper RU (Irina int8) TTS model into :voice assets.
+"""Optional: download Piper RU (Irina int8) TTS model into :voice assets.
 
-Models are not committed to git (large). Run before assembling the Voice APK:
+Prefer Gradle (no Python needed on Windows):
+
+  gradlew :voice:fetchTtsModel
+  gradlew :voice:assembleDebug
+
+This script remains for manual/CI use when Python is available:
 
   python3 tools/fetch_voice_tts_model.py
-
-Gradle :voice:preBuild also invokes this when the marker file is missing.
 """
 
 from __future__ import annotations

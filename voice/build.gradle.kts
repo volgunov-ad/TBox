@@ -96,21 +96,63 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
 }
 
-// Piper model is large — not in git. Fetch into assets before packaging the APK.
-// Up-to-date via outputs (no onlyIf — that breaks configuration cache).
-val ttsModelMarker =
-    layout.projectDirectory.file("src/main/assets/vits-piper-ru_RU-irina-medium-int8/tokens.txt")
-val fetchTtsScript =
-    rootProject.layout.projectDirectory.file("tools/fetch_voice_tts_model.py")
-val repoRootDir = rootProject.layout.projectDirectory.asFile
-val fetchTtsScriptPath = fetchTtsScript.asFile.absolutePath
+// Piper model is large — not in git. Download+extract in Gradle (no Python; works on Windows).
+val ttsModelDirName = "vits-piper-ru_RU-irina-medium-int8"
+val ttsModelUrl =
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/" +
+        "vits-piper-ru_RU-irina-medium-int8.tar.bz2"
+val ttsAssetsDir = layout.projectDirectory.dir("src/main/assets")
+val ttsModelMarker = ttsAssetsDir.file("$ttsModelDirName/tokens.txt")
+val ttsModelDirFile = ttsAssetsDir.file(ttsModelDirName).asFile
+val ttsDownloadCacheFile =
+    layout.buildDirectory.file("tts-models/vits-piper-ru_RU-irina-medium-int8.tar.bz2").get().asFile
 
-val fetchTtsModel by tasks.registering(Exec::class) {
-    description = "Download Piper RU Irina int8 into voice assets"
-    workingDir = repoRootDir
-    commandLine("python3", fetchTtsScriptPath)
-    inputs.file(fetchTtsScript)
-    outputs.file(ttsModelMarker)
+val fetchTtsModel by tasks.registering {
+    description = "Download Piper RU Irina int8 into voice assets (no Python required)"
+    notCompatibleWithConfigurationCache("Uses Ant get/untar at execution time")
+    val marker = ttsModelMarker.asFile
+    val assetsDir = ttsAssetsDir.asFile
+    val modelDir = ttsModelDirFile
+    val archive = ttsDownloadCacheFile
+    val modelUrl = ttsModelUrl
+    outputs.file(marker)
+    doLast {
+        if (marker.isFile) {
+            logger.lifecycle("TTS model already present: ${marker.parentFile}")
+            return@doLast
+        }
+        archive.parentFile.mkdirs()
+        assetsDir.mkdirs()
+        if (modelDir.exists()) {
+            modelDir.deleteRecursively()
+        }
+        logger.lifecycle("Downloading Piper TTS model…")
+        project.ant.invokeMethod(
+            "get",
+            mapOf(
+                "src" to modelUrl,
+                "dest" to archive.absolutePath,
+            ),
+        )
+        logger.lifecycle("Extracting into $assetsDir")
+        project.ant.invokeMethod(
+            "untar",
+            mapOf(
+                "src" to archive.absolutePath,
+                "dest" to assetsDir.absolutePath,
+                "compression" to "bzip2",
+            ),
+        )
+        check(marker.isFile) {
+            "TTS extract failed: missing ${marker.absolutePath}"
+        }
+        val onnx = modelDir.resolve("ru_RU-irina-medium.onnx")
+        val espeak = modelDir.resolve("espeak-ng-data")
+        check(onnx.isFile && espeak.isDirectory) {
+            "TTS extract incomplete: onnx or espeak-ng-data missing under $modelDir"
+        }
+        logger.lifecycle("OK: $modelDir")
+    }
 }
 
 tasks.matching {

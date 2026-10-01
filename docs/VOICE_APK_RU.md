@@ -199,17 +199,18 @@ TBox/
 - общие CI/ветки `preRelease`;
 - модели живут только в `:voice` → Monitor APK не растёт.
 
-Сборка: `./gradlew :voice:assembleDebug` (модель Piper подтягивается
-`tools/fetch_voice_tts_model.py` при `assemble*`, если ещё нет в assets).
+Сборка: `./gradlew :voice:assembleDebug` (модель Piper скачивается Gradle-задачей
+`:voice:fetchTtsModel` при `assemble*`, если ещё нет в assets; Python не нужен).
 
-Перед первой сборкой Voice APK (или вручную):
+Вручную:
 
 ```
-python3 tools/fetch_voice_tts_model.py
+./gradlew :voice:fetchTtsModel
 ./gradlew :voice:assembleDebug
 ```
 
 Модели **не** коммитятся в git (~20 MB int8 + espeak-ng-data).
+Опционально: `python3 tools/fetch_voice_tts_model.py`.
 
 ---
 
