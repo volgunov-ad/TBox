@@ -8,9 +8,13 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,10 +25,12 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import vad.dashing.tbox.TboxRepository
 
 object AdbRepository {
     private const val JOURNAL_TAG = "ADB"
+    private const val SCRIPT_PAUSE_MS = 1_000L
 
     const val ACTION_USB_PERMISSION = "vad.dashing.tbox.ADB_USB_PERMISSION"
 
@@ -38,6 +44,13 @@ object AdbRepository {
     enum class TransportType {
         TCP,
         USB,
+    }
+
+    enum class ScriptOutcome {
+        COMPLETED,
+        STOPPED,
+        ABORTED,
+        CANCELLED,
     }
 
     data class State(
@@ -58,6 +71,23 @@ object AdbRepository {
         val sharesNetworkWithHost: Boolean = false,
     )
 
+    /**
+     * Interactive shell-script run from a user-picked text file (ADB tab).
+     * Idle when [active] is false and [outcome] is null.
+     */
+    data class ScriptRunState(
+        val active: Boolean = false,
+        /** 1-based index of the command in progress / last attempted; 0 before first. */
+        val currentIndex: Int = 0,
+        val total: Int = 0,
+        val currentCommand: String = "",
+        val awaitingFailureDecision: Boolean = false,
+        val failureDetail: String? = null,
+        val outcome: ScriptOutcome? = null,
+        val completedCount: Int = 0,
+        val failedCount: Int = 0,
+    )
+
     private const val MAX_LOG_LINES = 500
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
@@ -65,10 +95,12 @@ object AdbRepository {
     private val _state = MutableStateFlow(State())
     private val _usbCandidates = MutableStateFlow<List<UsbCandidate>>(emptyList())
     private val _consoleLog = MutableStateFlow<List<String>>(emptyList())
+    private val _scriptRun = MutableStateFlow(ScriptRunState())
 
     val state: StateFlow<State> = _state.asStateFlow()
     val usbCandidates: StateFlow<List<UsbCandidate>> = _usbCandidates.asStateFlow()
     val consoleLog: StateFlow<List<String>> = _consoleLog.asStateFlow()
+    val scriptRun: StateFlow<ScriptRunState> = _scriptRun.asStateFlow()
 
     @Volatile private var initialized = false
     private lateinit var appContext: Context
@@ -78,6 +110,9 @@ object AdbRepository {
     /** Set for the whole USB open/connect attempt, including before CNXN completes. */
     @Volatile private var activeUsbDeviceId: Int? = null
     private var pendingUsbDeviceId: Int? = null
+    private var scriptJob: Job? = null
+    private val scriptStopRequested = AtomicBoolean(false)
+    @Volatile private var scriptFailureDecision: CompletableDeferred<Boolean>? = null
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -252,6 +287,7 @@ object AdbRepository {
     }
 
     fun disconnect() {
+        cancelScriptRun(ScriptOutcome.CANCELLED)
         scope.launch {
             mutex.withLock {
                 val endpoint = _state.value.endpoint
@@ -267,48 +303,67 @@ object AdbRepository {
     fun execute(command: String) {
         val normalized = command.trim()
         if (normalized.isEmpty()) return
+        if (_scriptRun.value.active) {
+            appendLog("Script run in progress — shell field blocked")
+            return
+        }
         scope.launch {
             mutex.withLock {
-                val active = connection
-                if (active == null || _state.value.phase != Phase.CONNECTED) {
-                    appendLog("Not connected")
-                    return@withLock
-                }
-                appendLog("$ $normalized")
-                runCatching { active.execute(normalized) }
-                    .onSuccess { result ->
-                        appendOutput(result.stdout)
-                        appendOutput(result.stderr)
-                        result.exitCode?.let { appendLog("Exit code: $it") }
-                    }
-                    .onFailure {
-                        val previous = _state.value
-                        val gone = previous.transport == TransportType.USB &&
-                            connectedUsbDeviceId?.let { findUsbDevice(it) == null } == true
-                        closeConnection(deviceGone = gone)
-                        val message = it.message ?: it.javaClass.simpleName
-                        if (AdbIoErrors.isBenignDisconnectMessage(message) &&
-                            AdbShutdownGate.shouldSuppressBenignDisconnect()
-                        ) {
-                            _state.value = State()
-                            appendLog("Disconnected ($message)")
-                            // Expected teardown: ADB-tab console + DEBUG journal (not ERROR spam).
-                            TboxRepository.addLog(
-                                "DEBUG",
-                                JOURNAL_TAG,
-                                "Disconnected ($message)",
-                            )
-                        } else {
-                            setError(
-                                previous.transport,
-                                previous.endpoint,
-                                message,
-                            )
-                        }
-                    }
+                executeConnectedLocked(normalized)
             }
         }
     }
+
+    /**
+     * Starts a sequential shell-script run on the live tab connection.
+     * Returns false if already running, not connected, or [commands] is empty.
+     */
+    fun startScript(commands: List<String>): Boolean {
+        if (commands.isEmpty()) return false
+        if (_scriptRun.value.active) return false
+        if (_state.value.phase != Phase.CONNECTED || connection == null) return false
+        scriptStopRequested.set(false)
+        scriptFailureDecision = null
+        _scriptRun.value = ScriptRunState(
+            active = true,
+            currentIndex = 0,
+            total = commands.size,
+        )
+        appendLog("Script: starting ${commands.size} command(s)")
+        TboxRepository.addLog("INFO", JOURNAL_TAG, "Script start: ${commands.size} command(s)")
+        scriptJob = scope.launch {
+            runScript(commands)
+        }
+        return true
+    }
+
+    /** Request stop of remaining commands (current command still finishes). */
+    fun stopScript() {
+        if (!_scriptRun.value.active) return
+        scriptStopRequested.set(true)
+        // If paused on failure, treat Stop as abort.
+        scriptFailureDecision?.complete(false)
+        appendLog("Script: stop requested")
+    }
+
+    /** Continue after a failed command (user chose continue). */
+    fun continueScriptAfterFailure() {
+        scriptFailureDecision?.complete(true)
+    }
+
+    /** Abort remaining commands after a failed command. */
+    fun abortScriptAfterFailure() {
+        scriptFailureDecision?.complete(false)
+    }
+
+    /** Clears a terminal [ScriptRunState.outcome] so the UI can dismiss the summary. */
+    fun acknowledgeScriptFinished() {
+        val current = _scriptRun.value
+        if (current.active || current.outcome == null) return
+        _scriptRun.value = ScriptRunState()
+    }
+
+    fun isScriptRunning(): Boolean = _scriptRun.value.active
 
     fun clearLog() {
         _consoleLog.value = emptyList()
@@ -375,6 +430,259 @@ object AdbRepository {
                 }
             }
         }
+    }
+
+    private suspend fun runScript(commands: List<String>) {
+        var completed = 0
+        var failed = 0
+        var outcome = ScriptOutcome.COMPLETED
+        try {
+            for ((index, rawCommand) in commands.withIndex()) {
+                val n = index + 1
+                if (AdbShutdownGate.isAppShuttingDown()) {
+                    outcome = ScriptOutcome.CANCELLED
+                    break
+                }
+                if (scriptStopRequested.get()) {
+                    outcome = ScriptOutcome.STOPPED
+                    break
+                }
+                _scriptRun.value = _scriptRun.value.copy(
+                    active = true,
+                    currentIndex = n,
+                    total = commands.size,
+                    currentCommand = rawCommand,
+                    awaitingFailureDecision = false,
+                    failureDetail = null,
+                    completedCount = completed,
+                    failedCount = failed,
+                )
+
+                val stepResult = mutex.withLock {
+                    executeConnectedLocked(rawCommand)
+                }
+
+                when (stepResult) {
+                    is ScriptStepResult.Ok -> {
+                        completed++
+                        TboxRepository.addLog(
+                            "INFO",
+                            JOURNAL_TAG,
+                            "Script [$n/${commands.size}] ok: $rawCommand",
+                        )
+                    }
+                    is ScriptStepResult.Failed -> {
+                        failed++
+                        TboxRepository.addLog(
+                            "WARN",
+                            JOURNAL_TAG,
+                            "Script [$n/${commands.size}] fail: $rawCommand — ${stepResult.detail}",
+                        )
+                        if (scriptStopRequested.get() || AdbShutdownGate.isAppShuttingDown()) {
+                            outcome = if (AdbShutdownGate.isAppShuttingDown()) {
+                                ScriptOutcome.CANCELLED
+                            } else {
+                                ScriptOutcome.STOPPED
+                            }
+                            break
+                        }
+                        val decision = CompletableDeferred<Boolean>()
+                        scriptFailureDecision = decision
+                        _scriptRun.value = _scriptRun.value.copy(
+                            awaitingFailureDecision = true,
+                            failureDetail = stepResult.detail,
+                            completedCount = completed,
+                            failedCount = failed,
+                        )
+                        val continueRun = try {
+                            decision.await()
+                        } finally {
+                            if (scriptFailureDecision === decision) {
+                                scriptFailureDecision = null
+                            }
+                        }
+                        _scriptRun.value = _scriptRun.value.copy(
+                            awaitingFailureDecision = false,
+                            failureDetail = null,
+                        )
+                        if (!continueRun) {
+                            outcome = if (scriptStopRequested.get()) {
+                                ScriptOutcome.STOPPED
+                            } else {
+                                ScriptOutcome.ABORTED
+                            }
+                            break
+                        }
+                    }
+                    is ScriptStepResult.TransportLost -> {
+                        failed++
+                        TboxRepository.addLog(
+                            "WARN",
+                            JOURNAL_TAG,
+                            "Script [$n/${commands.size}] fail: $rawCommand — ${stepResult.detail}",
+                        )
+                        outcome = if (AdbShutdownGate.shouldSuppressBenignDisconnect()) {
+                            ScriptOutcome.CANCELLED
+                        } else {
+                            ScriptOutcome.ABORTED
+                        }
+                        break
+                    }
+                    is ScriptStepResult.NotConnected -> {
+                        failed++
+                        TboxRepository.addLog(
+                            "WARN",
+                            JOURNAL_TAG,
+                            "Script [$n/${commands.size}] fail: not connected",
+                        )
+                        outcome = ScriptOutcome.ABORTED
+                        break
+                    }
+                }
+
+                if (n < commands.size) {
+                    if (scriptStopRequested.get()) {
+                        outcome = ScriptOutcome.STOPPED
+                        break
+                    }
+                    if (AdbShutdownGate.isAppShuttingDown()) {
+                        outcome = ScriptOutcome.CANCELLED
+                        break
+                    }
+                    delay(SCRIPT_PAUSE_MS)
+                    if (scriptStopRequested.get()) {
+                        outcome = ScriptOutcome.STOPPED
+                        break
+                    }
+                    if (AdbShutdownGate.isAppShuttingDown()) {
+                        outcome = ScriptOutcome.CANCELLED
+                        break
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            outcome = ScriptOutcome.CANCELLED
+            throw e
+        } finally {
+            finishScript(
+                outcome = outcome,
+                completed = completed,
+                failed = failed,
+                total = commands.size,
+            )
+        }
+    }
+
+    private fun finishScript(
+        outcome: ScriptOutcome,
+        completed: Int,
+        failed: Int,
+        total: Int,
+    ) {
+        scriptFailureDecision = null
+        scriptStopRequested.set(false)
+        val summary = when (outcome) {
+            ScriptOutcome.COMPLETED -> "Script: all $total command(s) completed"
+            ScriptOutcome.STOPPED ->
+                "Script: stopped after $completed ok / $failed fail of $total"
+            ScriptOutcome.ABORTED ->
+                "Script: aborted after $completed ok / $failed fail of $total"
+            ScriptOutcome.CANCELLED ->
+                "Script: cancelled after $completed ok / $failed fail of $total"
+        }
+        appendLog(summary)
+        val level = if (outcome == ScriptOutcome.COMPLETED) "INFO" else "WARN"
+        TboxRepository.addLog(level, JOURNAL_TAG, summary)
+        _scriptRun.value = ScriptRunState(
+            active = false,
+            currentIndex = completed + failed,
+            total = total,
+            outcome = outcome,
+            completedCount = completed,
+            failedCount = failed,
+        )
+        scriptJob = null
+    }
+
+    private fun cancelScriptRun(outcome: ScriptOutcome) {
+        if (!_scriptRun.value.active && scriptJob == null) return
+        scriptStopRequested.set(true)
+        scriptFailureDecision?.complete(false)
+        val job = scriptJob
+        if (job != null) {
+            job.cancel()
+            // finishScript runs in runScript's finally with CANCELLED (or STOPPED if already decided).
+        } else if (_scriptRun.value.active) {
+            val prev = _scriptRun.value
+            _scriptRun.value = ScriptRunState(
+                active = false,
+                currentIndex = prev.currentIndex,
+                total = prev.total,
+                outcome = outcome,
+                completedCount = prev.completedCount,
+                failedCount = prev.failedCount,
+            )
+        }
+    }
+
+    private sealed class ScriptStepResult {
+        data object Ok : ScriptStepResult()
+        data class Failed(val detail: String) : ScriptStepResult()
+        data class TransportLost(val detail: String) : ScriptStepResult()
+        data object NotConnected : ScriptStepResult()
+    }
+
+    /**
+     * Same path as the manual shell field; caller must hold [mutex].
+     */
+    private fun executeConnectedLocked(normalized: String): ScriptStepResult {
+        val active = connection
+        if (active == null || _state.value.phase != Phase.CONNECTED) {
+            appendLog("Not connected")
+            return ScriptStepResult.NotConnected
+        }
+        appendLog("$ $normalized")
+        return runCatching { active.execute(normalized) }
+            .fold(
+                onSuccess = { result ->
+                    appendOutput(result.stdout)
+                    appendOutput(result.stderr)
+                    result.exitCode?.let { appendLog("Exit code: $it") }
+                    val failure = AdbShellResults.failureDetail(result)
+                    if (failure != null) {
+                        appendLog("Command failed: $failure")
+                        ScriptStepResult.Failed(failure)
+                    } else {
+                        ScriptStepResult.Ok
+                    }
+                },
+                onFailure = { error ->
+                    val previous = _state.value
+                    val gone = previous.transport == TransportType.USB &&
+                        connectedUsbDeviceId?.let { findUsbDevice(it) == null } == true
+                    closeConnection(deviceGone = gone)
+                    val message = error.message ?: error.javaClass.simpleName
+                    if (AdbIoErrors.isBenignDisconnectMessage(message) &&
+                        AdbShutdownGate.shouldSuppressBenignDisconnect()
+                    ) {
+                        _state.value = State()
+                        appendLog("Disconnected ($message)")
+                        // Expected teardown: ADB-tab console + DEBUG journal (not ERROR spam).
+                        TboxRepository.addLog(
+                            "DEBUG",
+                            JOURNAL_TAG,
+                            "Disconnected ($message)",
+                        )
+                    } else {
+                        setError(
+                            previous.transport,
+                            previous.endpoint,
+                            message,
+                        )
+                    }
+                    ScriptStepResult.TransportLost(message)
+                },
+            )
     }
 
     private fun connectTransport(
