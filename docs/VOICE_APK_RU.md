@@ -1,6 +1,6 @@
 # Voice APK — план реализации
 
-Статус: **в разработке** (этапы 1–4: каркас, NLU, signals text, Piper TTS).
+Статус: **в разработке** (этапы 1–5: каркас, NLU, signals, Piper TTS, Vosk STT).
 
 Отдельное Android-приложение **VAD Voice** (`vad.dashing.voice`) — голосовой клиент к
 External HTTP API TBox Monitor. Целевая платформа MVP: **только ГУ**.
@@ -199,18 +199,19 @@ TBox/
 - общие CI/ветки `preRelease`;
 - модели живут только в `:voice` → Monitor APK не растёт.
 
-Сборка: `./gradlew :voice:assembleDebug` (модель Piper скачивается Gradle-задачей
-`:voice:fetchTtsModel` при `assemble*`, если ещё нет в assets; Python не нужен).
+Сборка: `./gradlew :voice:assembleDebug` (модели Piper + Vosk скачиваются
+Gradle-задачами `:voice:fetchTtsModel` / `:voice:fetchSttModel` при `assemble*`,
+если ещё нет в assets; Python не нужен).
 
 Вручную:
 
 ```
-./gradlew :voice:fetchTtsModel
+./gradlew :voice:fetchTtsModel :voice:fetchSttModel
 ./gradlew :voice:assembleDebug
 ```
 
-Модели **не** коммитятся в git (~20 MB int8 + espeak-ng-data).
-Опционально: `python3 tools/fetch_voice_tts_model.py`.
+Модели **не** коммитятся в git (Piper ~20 MB + Vosk ~45 MB zip).
+Опционально: `python3 tools/fetch_voice_tts_model.py` (только TTS).
 
 ---
 
@@ -223,7 +224,7 @@ TBox/
 | 2 | Catalog cache + NLU + unit-тесты фраз | voice | **сделано** |
 | 3 | Signals query → текст на экране | voice | **сделано** (кнопка «Выполнить фразу») |
 | 4 | Piper TTS bundle | voice | **сделано** (Irina int8 + sherpa-onnx; озвучка ответа) |
-| 5 | Vosk STT + кнопка «Слушать» | voice | полный PTT-цикл |
+| 5 | Vosk STT + кнопка «Слушать» | voice | **сделано** (PTT → NLU → TTS) |
 | 6 | Invoke + RunNow | voice | медиа + запуск правила |
 | 7 | Intent `LISTEN` + Monitor builtin `start_vad_voice` | voice+app | автоматизация открывает слушание |
 | 8 | Настройка кнопки руля (Monitor→Intent) | app(+voice) | вкл/выбор/выкл, default выкл |

@@ -4,7 +4,7 @@ TTS/STT binaries are **not** stored in git.
 
 | Model | Fetch | Asset path |
 |-------|-------|------------|
-| Piper RU Irina int8 (TTS) | `./gradlew :voice:fetchTtsModel` (или `python3 tools/fetch_voice_tts_model.py`) | `voice/src/main/assets/vits-piper-ru_RU-irina-medium-int8/` |
-| Vosk small-ru (STT) | этап 5 | TBD |
+| Piper RU Irina int8 (TTS) | `./gradlew :voice:fetchTtsModel` | `voice/src/main/assets/vits-piper-ru_RU-irina-medium-int8/` |
+| Vosk small-ru-0.22 (STT) | `./gradlew :voice:fetchSttModel` | `voice/src/main/assets/vosk-model-small-ru-0.22/` |
 
-`./gradlew :voice:assembleDebug` downloads the Piper bundle automatically when missing.
+`./gradlew :voice:assembleDebug` downloads both automatically when missing.

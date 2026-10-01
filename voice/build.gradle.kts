@@ -87,6 +87,9 @@ dependencies {
     implementation(libs.okhttp)
     // Piper / VITS offline TTS (JNI + onnxruntime inside AAR).
     implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.5")
+    // Vosk offline STT (needs JNA AAR from Maven Central).
+    implementation("com.alphacephei:vosk-android:0.3.75")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
@@ -162,4 +165,55 @@ tasks.matching {
         n.startsWith("package") && n.endsWith("Assets")
 }.configureEach {
     dependsOn(fetchTtsModel)
+    dependsOn(fetchSttModel)
+}
+
+// Vosk small-ru STT model (~45 MB zip) — not in git; Gradle unzip (no Python).
+val sttModelDirName = "vosk-model-small-ru-0.22"
+val sttModelUrl = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
+val sttModelMarker = ttsAssetsDir.file("$sttModelDirName/conf/model.conf")
+val sttModelDirFile = ttsAssetsDir.file(sttModelDirName).asFile
+val sttDownloadCacheFile =
+    layout.buildDirectory.file("stt-models/vosk-model-small-ru-0.22.zip").get().asFile
+
+val fetchSttModel by tasks.registering {
+    description = "Download Vosk small-ru into voice assets (no Python required)"
+    notCompatibleWithConfigurationCache("Uses Ant get/unzip at execution time")
+    val marker = sttModelMarker.asFile
+    val assetsDir = ttsAssetsDir.asFile
+    val modelDir = sttModelDirFile
+    val archive = sttDownloadCacheFile
+    val modelUrl = sttModelUrl
+    outputs.file(marker)
+    doLast {
+        if (marker.isFile) {
+            logger.lifecycle("STT model already present: ${marker.parentFile.parentFile}")
+            return@doLast
+        }
+        archive.parentFile.mkdirs()
+        assetsDir.mkdirs()
+        if (modelDir.exists()) {
+            modelDir.deleteRecursively()
+        }
+        logger.lifecycle("Downloading Vosk STT model…")
+        project.ant.invokeMethod(
+            "get",
+            mapOf(
+                "src" to modelUrl,
+                "dest" to archive.absolutePath,
+            ),
+        )
+        logger.lifecycle("Extracting into $assetsDir")
+        project.ant.invokeMethod(
+            "unzip",
+            mapOf(
+                "src" to archive.absolutePath,
+                "dest" to assetsDir.absolutePath,
+            ),
+        )
+        check(marker.isFile) {
+            "STT extract failed: missing ${marker.absolutePath}"
+        }
+        logger.lifecycle("OK: $modelDir")
+    }
 }

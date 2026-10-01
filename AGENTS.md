@@ -66,17 +66,15 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 
 Separate app **VAD Voice** (`vad.dashing.voice`). Plan: [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md).
 
-Piper TTS model is **not** in git. `assemble*` downloads it via Gradle (no Python):
+Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via Gradle (no Python):
 
 ```
-./gradlew :voice:fetchTtsModel    # optional manual
+./gradlew :voice:fetchTtsModel :voice:fetchSttModel   # optional manual
 ./gradlew :voice:assembleDebug
 ./gradlew :voice:testDebugUnitTest
 ```
 
-Optional: `python3 tools/fetch_voice_tts_model.py` if you prefer the script.
-
-APK ships Irina RU int8 (~20 MB archive) via sherpa-onnx; only `armeabi-v7a` / `arm64-v8a`.
+APK ships Irina RU int8 + vosk-model-small-ru (~45 MB); only `armeabi-v7a` / `arm64-v8a`.
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).

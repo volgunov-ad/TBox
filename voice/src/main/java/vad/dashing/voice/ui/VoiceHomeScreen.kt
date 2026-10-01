@@ -1,5 +1,9 @@
 package vad.dashing.voice.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -15,18 +19,56 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.voice.R
 
 @Composable
 fun VoiceHomeScreen(
     viewModel: VoiceHomeViewModel,
+    autoListenSource: String? = null,
+    onAutoListenConsumed: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.startListen("ui")
+        } else {
+            viewModel.onMicPermissionDenied()
+        }
+    }
+
+    fun requestListen(source: String) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            if (state.listening) {
+                viewModel.toggleListen(source)
+            } else {
+                viewModel.startListen(source)
+            }
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(autoListenSource) {
+        val source = autoListenSource ?: return@LaunchedEffect
+        requestListen(source)
+        onAutoListenConsumed()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -69,21 +111,21 @@ fun VoiceHomeScreen(
 
         Button(
             onClick = viewModel::saveSettings,
-            enabled = !state.busy,
+            enabled = !state.busy && !state.listening,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.action_save))
         }
         OutlinedButton(
             onClick = viewModel::checkHealth,
-            enabled = !state.busy,
+            enabled = !state.busy && !state.listening,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.action_check_health))
         }
         OutlinedButton(
             onClick = viewModel::refreshCatalog,
-            enabled = !state.busy,
+            enabled = !state.busy && !state.listening,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.action_refresh_catalog))
@@ -95,10 +137,11 @@ fun VoiceHomeScreen(
             label = { Text(stringResource(R.string.phrase_label)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
+            enabled = !state.listening,
         )
         Button(
             onClick = viewModel::runPhrase,
-            enabled = !state.busy && state.phrase.isNotBlank(),
+            enabled = !state.busy && !state.listening && state.phrase.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.action_run_phrase))
@@ -112,11 +155,23 @@ fun VoiceHomeScreen(
             }
         }
         Button(
-            onClick = { /* STT — later */ },
-            enabled = false,
+            onClick = {
+                if (state.listening) {
+                    viewModel.toggleListen("ui")
+                } else {
+                    requestListen("ui")
+                }
+            },
+            enabled = !state.busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.action_listen))
+            Text(
+                if (state.listening) {
+                    stringResource(R.string.action_stop_listen)
+                } else {
+                    stringResource(R.string.action_listen)
+                },
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -127,10 +182,11 @@ fun VoiceHomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        val statusColor = when (state.lastHealthOk) {
-            true -> MaterialTheme.colorScheme.primary
-            false -> MaterialTheme.colorScheme.error
-            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        val statusColor = when {
+            state.listening -> MaterialTheme.colorScheme.tertiary
+            state.lastHealthOk == true -> MaterialTheme.colorScheme.primary
+            state.lastHealthOk == false -> MaterialTheme.colorScheme.error
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
         Text(
             text = state.statusMessage.ifBlank { stringResource(R.string.status_idle) },

@@ -21,6 +21,9 @@ import vad.dashing.voice.nlu.VoiceIntent
 import vad.dashing.voice.settings.AccessTokenNormalizer
 import vad.dashing.voice.settings.VoiceConnectionSettings
 import vad.dashing.voice.settings.VoiceSettingsRepository
+import vad.dashing.voice.stt.ListenEndReason
+import vad.dashing.voice.stt.VoiceStt
+import vad.dashing.voice.stt.VoskVoiceStt
 import vad.dashing.voice.tts.PiperVoiceTts
 import vad.dashing.voice.tts.VoiceTts
 
@@ -34,6 +37,7 @@ data class VoiceHomeUiState(
     val catalogSummary: String = "",
     val busy: Boolean = false,
     val speaking: Boolean = false,
+    val listening: Boolean = false,
     val lastHealthOk: Boolean? = null,
 )
 
@@ -43,12 +47,16 @@ class VoiceHomeViewModel(
     private val apiClient: ExternalApiClient = ExternalApiClient(),
     private val nlu: AliasNluMatcher = AliasNluMatcher(),
     private val tts: VoiceTts = PiperVoiceTts.createOrNoOp(application),
+    private val stt: VoiceStt = VoskVoiceStt.createOrNoOp(application),
 ) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(VoiceHomeUiState())
     val uiState: StateFlow<VoiceHomeUiState> = _uiState.asStateFlow()
 
     private var cachedCatalog: ApiCatalog? = null
     private var cachedAutomations: List<AutomationSummary> = emptyList()
+
+    @Volatile
+    private var lastHeardText: String = ""
 
     init {
         viewModelScope.launch {
@@ -64,6 +72,7 @@ class VoiceHomeViewModel(
         }
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { tts.ensureReady() }
+            runCatching { stt.ensureReady() }
         }
     }
 
@@ -81,6 +90,15 @@ class VoiceHomeViewModel(
 
     fun onPhraseChange(value: String) {
         _uiState.update { it.copy(phrase = value) }
+    }
+
+    fun onMicPermissionDenied() {
+        _uiState.update {
+            it.copy(
+                statusMessage = "Нужен доступ к микрофону",
+                lastHealthOk = false,
+            )
+        }
     }
 
     fun saveSettings() {
@@ -171,6 +189,85 @@ class VoiceHomeViewModel(
                             lastHealthOk = false,
                             statusMessage = "Каталог: ${error.message ?: error.javaClass.simpleName}",
                         )
+                    }
+                },
+            )
+        }
+    }
+
+    /** Toggle PTT listening. Call only after RECORD_AUDIO is granted. */
+    fun toggleListen(source: String = "ui") {
+        if (_uiState.value.listening) {
+            stt.stopListening()
+            _uiState.update { it.copy(statusMessage = "Остановка…") }
+            return
+        }
+        startListen(source)
+    }
+
+    fun startListen(source: String = "ui") {
+        if (_uiState.value.listening) return
+        viewModelScope.launch(Dispatchers.IO) {
+            tts.stop()
+            stt.ensureReady()
+            if (!stt.isReady) {
+                _uiState.update {
+                    it.copy(
+                        statusMessage = "STT: ${stt.lastError ?: "модель не готова"}",
+                        lastHealthOk = false,
+                    )
+                }
+                return@launch
+            }
+            lastHeardText = ""
+            _uiState.update {
+                it.copy(
+                    listening = true,
+                    speaking = false,
+                    answerMessage = "",
+                    statusMessage = "Слушаю ($source)…",
+                    phrase = "",
+                )
+            }
+            stt.startListening(
+                onPartial = { text ->
+                    lastHeardText = text
+                    _uiState.update {
+                        it.copy(phrase = text, statusMessage = "Слышу: $text")
+                    }
+                },
+                onFinal = { text ->
+                    if (text.isNotBlank()) {
+                        lastHeardText = text
+                        _uiState.update { it.copy(phrase = text) }
+                    }
+                },
+                onEnded = { reason ->
+                    _uiState.update { it.copy(listening = false) }
+                    val heard = lastHeardText.trim()
+                    when {
+                        heard.isNotBlank() -> {
+                            _uiState.update {
+                                it.copy(
+                                    phrase = heard,
+                                    statusMessage = "Распознано ($reason): $heard",
+                                )
+                            }
+                            runPhrase()
+                        }
+                        reason == ListenEndReason.ERROR -> {
+                            _uiState.update {
+                                it.copy(
+                                    statusMessage = "STT ошибка: ${stt.lastError ?: "unknown"}",
+                                    lastHealthOk = false,
+                                )
+                            }
+                        }
+                        else -> {
+                            _uiState.update {
+                                it.copy(statusMessage = "Ничего не услышал ($reason)")
+                            }
+                        }
                     }
                 },
             )
@@ -302,6 +399,8 @@ class VoiceHomeViewModel(
     }
 
     override fun onCleared() {
+        stt.stopListening()
+        stt.release()
         tts.stop()
         tts.release()
         super.onCleared()
