@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -553,6 +554,8 @@ private fun AppListDialogRow(
     val disableLabel = stringResource(adbActionLabelRes(disableAction, row.adbStatus))
     val forceStopLabel = stringResource(R.string.app_list_adb_force_stop)
 
+    val openLabel = stringResource(R.string.app_list_action_open)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -560,38 +563,53 @@ private fun AppListDialogRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (row.icon != null) {
-            Image(
-                bitmap = row.icon,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp),
-                contentScale = ContentScale.Fit,
-            )
-        } else {
-            Spacer(modifier = Modifier.size(40.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = row.label,
-                style = MaterialTheme.typography.tboxTitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = row.packageName,
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (advancedMode && statusLine != null) {
+        // Icon + label: same action as «Открыть» (ordinary fullscreen launch).
+        // Hide / Delete / ADB actions stay on their own buttons and do not launch.
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickableWithSound(
+                    enabled = row.canOpen,
+                    onClickLabel = openLabel,
+                    role = Role.Button,
+                    onClick = onOpen,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (row.icon != null) {
+                Image(
+                    bitmap = row.icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(40.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Spacer(modifier = Modifier.size(40.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = statusLine,
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.primary,
+                    text = row.label,
+                    style = MaterialTheme.typography.tboxTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                Text(
+                    text = row.packageName,
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (advancedMode && statusLine != null) {
+                    Text(
+                        text = statusLine,
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         OutlinedButton(
@@ -600,7 +618,7 @@ private fun AppListDialogRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Text(
-                text = stringResource(R.string.app_list_action_open),
+                text = openLabel,
                 style = MaterialTheme.typography.tboxButton,
             )
         }
