@@ -6922,6 +6922,9 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        vad.dashing.tbox.adb.AdbShutdownGate.markAppShuttingDown()
+        vad.dashing.tbox.adb.AdbRepository.disconnect()
+
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         automationEngine?.releaseInterests()
         automationEngine?.requestStop()

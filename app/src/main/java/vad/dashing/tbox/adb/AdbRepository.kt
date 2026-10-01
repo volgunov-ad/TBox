@@ -253,7 +253,9 @@ object AdbRepository {
         scope.launch {
             mutex.withLock {
                 val endpoint = _state.value.endpoint
-                closeConnection()
+                AdbShutdownGate.withIntentionalTransportClose {
+                    closeConnection()
+                }
                 _state.value = State()
                 if (endpoint.isNotEmpty()) appendLog("Disconnected from $endpoint")
             }
@@ -282,11 +284,19 @@ object AdbRepository {
                         val gone = previous.transport == TransportType.USB &&
                             connectedUsbDeviceId?.let { findUsbDevice(it) == null } == true
                         closeConnection(deviceGone = gone)
-                        setError(
-                            previous.transport,
-                            previous.endpoint,
-                            it.message ?: it.javaClass.simpleName,
-                        )
+                        val message = it.message ?: it.javaClass.simpleName
+                        if (AdbIoErrors.isBenignDisconnectMessage(message) &&
+                            AdbShutdownGate.shouldSuppressBenignDisconnect()
+                        ) {
+                            _state.value = State()
+                            appendLog("Disconnected ($message)")
+                        } else {
+                            setError(
+                                previous.transport,
+                                previous.endpoint,
+                                message,
+                            )
+                        }
                     }
             }
         }
@@ -403,6 +413,13 @@ object AdbRepository {
     }
 
     private fun setError(type: TransportType?, endpoint: String, message: String) {
+        if (AdbIoErrors.isBenignDisconnectMessage(message) &&
+            AdbShutdownGate.shouldSuppressBenignDisconnect()
+        ) {
+            _state.value = State()
+            appendLog("Disconnected ($message)")
+            return
+        }
         _state.value = State(
             phase = Phase.ERROR,
             transport = type,
