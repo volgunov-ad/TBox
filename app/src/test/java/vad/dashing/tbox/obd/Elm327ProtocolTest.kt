@@ -270,19 +270,77 @@ class ObdDtcCatalogTest {
 
     @Test
     fun russianAsset_hasTranslatedCommonCodes() {
-        val candidates = listOf(
-            java.io.File("src/main/assets/obd/dtc_ru.tsv"),
-            java.io.File("app/src/main/assets/obd/dtc_ru.tsv"),
-        )
-        val file = candidates.firstOrNull { it.isFile }
-        assertTrue("dtc_ru.tsv not found in $candidates", file != null)
-        val map = ObdDtcCatalog.parseTsv(file!!.readLines().asSequence())
+        val map = loadAsset("dtc_ru.tsv")
+        val en = loadAsset("dtc_en.tsv")
         assertTrue(map.size > 1000)
+        assertEquals(en.keys, map.keys)
         val p0301 = map["P0301"]
         assertTrue("P0301 missing", !p0301.isNullOrBlank())
         assertTrue("P0301 not RU: $p0301", p0301!!.any { it in '\u0400'..'\u04FF' })
         val p0100 = map["P0100"]!!
         assertTrue(p0100.contains("расход") || p0100.contains("воздух"))
+        assertTrue(map["P0300"]!!.lowercase().contains("случайн"))
+        assertTrue(map["P0301"]!!.lowercase().contains("цилиндр 1"))
+        assertTrue(map["P0302"]!!.lowercase().contains("цилиндр 2"))
+        assertTrue(map["P0130"]!!.lowercase().contains("o2") || map["P0130"]!!.contains("кислород"))
+        assertTrue(!map["P0130"]!!.lowercase().contains("термостат"))
+        assertTrue(map["P0128"]!!.lowercase().contains("термостат"))
+        assertTrue(map["P0126"]!!.contains("устойчив"))
+        assertTrue(map["P0171"]!!.contains("бедн"))
+        assertTrue(map["P0172"]!!.contains("богат"))
+        assertTrue(map["P0420"]!!.contains("катализатор"))
+        assertTrue(map["P0500"]!!.contains("скорост"))
+        assertTrue(map["P0700"]!!.contains("АКПП"))
+        for (code in listOf("P0030", "P0615", "P0627", "P0645", "P0691")) {
+            val text = map[code]
+            assertTrue("$code missing", !text.isNullOrBlank())
+            assertTrue("$code not RU: $text", text!!.any { it in '\u0400'..'\u04FF' })
+        }
+    }
+
+    @Test
+    fun englishAsset_p0DescriptionsSitOnSaeCodes() {
+        val map = loadAsset("dtc_en.tsv")
+        fun has(code: String, vararg needles: String) {
+            val text = map[code]
+            assertTrue("$code missing", !text.isNullOrBlank())
+            val low = text!!.lowercase()
+            for (needle in needles) {
+                assertTrue("$code '$text' lacks '$needle'", low.contains(needle))
+            }
+        }
+        has("P0100", "air flow")
+        has("P0126", "stable")
+        has("P0128", "thermostat")
+        has("P0130", "o2", "bank 1", "sensor 1")
+        has("P0131", "low")
+        has("P0171", "lean")
+        has("P0172", "rich")
+        has("P0300", "random")
+        has("P0301", "cylinder 1")
+        has("P0302", "cylinder 2")
+        has("P0420", "catalyst", "bank 1")
+        has("P0455", "gross leak")
+        has("P0500", "vehicle speed")
+        has("P0700", "transmission control")
+        has("P0030", "heater", "bank 1 sensor 1")
+        has("P0363", "fueling")
+        has("P0615", "starter")
+        has("P0627", "fuel pump")
+        has("P0645", "clutch")
+        has("P0691", "fan 1")
+        assertTrue(!map["P0130"]!!.lowercase().contains("thermostat"))
+        assertTrue(!map["P0300"]!!.lowercase().contains("contribution"))
+    }
+
+    private fun loadAsset(name: String): Map<String, String> {
+        val candidates = listOf(
+            java.io.File("src/main/assets/obd/$name"),
+            java.io.File("app/src/main/assets/obd/$name"),
+        )
+        val file = candidates.firstOrNull { it.isFile }
+        assertTrue("$name not found in $candidates", file != null)
+        return ObdDtcCatalog.parseTsv(file!!.readLines().asSequence())
     }
 }
 

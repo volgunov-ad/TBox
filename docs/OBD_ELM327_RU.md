@@ -10,7 +10,7 @@
 - **DTC**: Mode 03 (stored), Mode 07 (pending), Mode 0A (permanent), Mode 04 clear с подтверждением.
 - **VIN**: Mode 09 `0902`.
 - **Полный снимок**: кнопка читает мониторы + DTC (03/07/0A) + freeze frame + VIN и сохраняет txt в Загрузки.
-- **Расшифровка DTC**: общий SAE-каталог в `assets/obd/dtc_*.tsv` (~3000 кодов). Flavor `ru` → `dtc_ru.tsv`, `en` → `dtc_en.tsv` (MIT mytrile + glossary RU). Коды производителя могут отсутствовать.
+- **Расшифровка DTC**: общий SAE-каталог в `assets/obd/dtc_*.tsv` (~3100 кодов). Flavor `ru` → `dtc_ru.tsv`, `en` → `dtc_en.tsv`. Английский P0 взят из MIT-каталога mytrile и выровнен по номерам SAE (в исходном CSV описание часто стоит на соседнем коде); P1/B/C/U не менялись. Русский текст — glossary `tools/translate_obd_dtc_ru.py`. Коды производителя могут отсутствовать.
 - **Статус мониторов**: Mode 01 PID `01` / `41` — MIL, число DTC, readiness (spark/compression).
 - **Freeze frame (Mode 02)**: по кнопке — DTC-причина (`0202`), support bitfield (`0200`…), затем известные PID с теми же формулами, что Mode 01. Сбрасывается вместе с Mode 04.
 - **Экспорт DTC**: кнопка / полный снимок → `Downloads/tbox_obd_dtc_*.txt`.
