@@ -117,6 +117,15 @@ object EspCompanionRepository {
     private val _gpioMask = MutableStateFlow(0)
     val gpioMask: StateFlow<Int> = _gpioMask.asStateFlow()
 
+    /**
+     * True only after a full `gpio` snapshot on the current link.
+     * USB connect and `gpioEvent` update the mask earlier; automations must not
+     * treat that as a level change.
+     */
+    private val gpioLevelLock = Any()
+    private val _gpioInputsReady = MutableStateFlow(false)
+    val gpioInputsReady: StateFlow<Boolean> = _gpioInputsReady.asStateFlow()
+
     private val _relayMask = MutableStateFlow(0)
     val relayMask: StateFlow<Int> = _relayMask.asStateFlow()
 
@@ -206,8 +215,15 @@ object EspCompanionRepository {
     }
 
     fun updateConnected(value: Boolean) {
-        val was = _connected.value
-        _connected.setIfChanged(value)
+        val was = synchronized(gpioLevelLock) {
+            val previous = _connected.value
+            // A new link has no snapshot yet. Repeated hello on the same link must not clear it.
+            if (!value || !previous) {
+                _gpioInputsReady.value = false
+            }
+            _connected.setIfChanged(value)
+            previous
+        }
         if (value && !was) {
             _connectedAtMs.value = System.currentTimeMillis()
         }
@@ -333,6 +349,17 @@ object EspCompanionRepository {
     fun updateGpioMask(mask: Int) {
         _gpioMask.setIfChanged(mask and 0xFFFF)
         touchMessage()
+    }
+
+    /**
+     * Full input mask (`t:gpio`) for this link. The first one after connect is the
+     * current levels, not an edge. Ignored for automation publish when the link is down.
+     */
+    fun confirmGpioSnapshot(mask: Int) {
+        synchronized(gpioLevelLock) {
+            updateGpioMask(mask)
+            _gpioInputsReady.value = _connected.value
+        }
     }
 
     fun applyGpioEvent(channel: Int, level: Boolean) {

@@ -195,6 +195,36 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun espGpio_snapshotAfterGapDoesNotFire_laterEdgeDoes() {
+        val trigger = AutomationTrigger.StateEquals(
+            id = "in0",
+            signal = AutomationSignalId.ESP_GPIO_IN_0,
+            source = AutomationSignalSource.APP,
+            expectedState = "on",
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ESP_GPIO_IN_0,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.State("on"), 1_000L)))
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_000L)))
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.State("on"), 3_000L)))
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.State("off"), 4_000L)))
+        assertEquals(
+            "in0",
+            evaluator.onSignalSample(sample(AutomationSignalValue.State("on"), 5_000L))?.triggerId,
+        )
+    }
+
+    @Test
     fun stateEquals_unavailableAfterBaselineRearmsAndFiresOnReturn() {
         val trigger = AutomationTrigger.StateEquals(
             id = "fg",

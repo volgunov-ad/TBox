@@ -35,10 +35,10 @@ internal object AutomationSignalReads {
 
             AutomationSignalSource.APP -> when (key.signal) {
                 AutomationSignalId.GEO_POSITION -> geoDisplayFlow()
-                AutomationSignalId.ESP_GPIO_IN_0 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 0)
-                AutomationSignalId.ESP_GPIO_IN_1 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 1)
-                AutomationSignalId.ESP_GPIO_IN_2 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 2)
-                AutomationSignalId.ESP_GPIO_IN_3 -> espMaskBitFlow(EspCompanionRepository.gpioMask, 3)
+                AutomationSignalId.ESP_GPIO_IN_0 -> espGpioInputFlow(0)
+                AutomationSignalId.ESP_GPIO_IN_1 -> espGpioInputFlow(1)
+                AutomationSignalId.ESP_GPIO_IN_2 -> espGpioInputFlow(2)
+                AutomationSignalId.ESP_GPIO_IN_3 -> espGpioInputFlow(3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
                 AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()

@@ -118,6 +118,24 @@ internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalVal
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
 
+/**
+ * Input levels stay [AutomationSignalValue.Unavailable] until the companion sends a `gpio`
+ * snapshot on this link. The default mask (0) and a mask left from the previous session
+ * are not a state change.
+ */
+internal fun espGpioInputFlow(bit: Int): Flow<AutomationSignalValue> =
+    combine(
+        EspCompanionRepository.connected,
+        EspCompanionRepository.gpioInputsReady,
+        EspCompanionRepository.gpioMask,
+    ) { connected, ready, mask ->
+        if (!connected || !ready) {
+            AutomationSignalValue.Unavailable
+        } else {
+            AutomationSignalValue.State(if ((mask and (1 shl bit)) != 0) "on" else "off")
+        }
+    }.distinctUntilChanged()
+
 internal fun espBleBoundFlow(): Flow<AutomationSignalValue> =
     combine(
         EspCompanionRepository.connected,
