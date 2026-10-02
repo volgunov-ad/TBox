@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -33,6 +36,72 @@ class GradleJvmArgsTest(unittest.TestCase):
             command[2:],
             ["assembleRuRelease", "assembleEnRelease"],
         )
+
+
+class FlavorSelectionTest(unittest.TestCase):
+    def test_interactive_choices(self) -> None:
+        with mock.patch("builtins.input", side_effect=["9", "1"]):
+            self.assertEqual(ota.choose_flavors_interactive(), ("ru", "en"))
+        with mock.patch("builtins.input", return_value="2"):
+            self.assertEqual(ota.choose_flavors_interactive(), ("ru",))
+        with mock.patch("builtins.input", return_value="3"):
+            self.assertEqual(ota.choose_flavors_interactive(), ("en",))
+
+    def test_cli_flavors(self) -> None:
+        self.assertEqual(
+            ota.resolve_flavors(argparse.Namespace(flavors="ru")),
+            ("ru",),
+        )
+        self.assertEqual(
+            ota.resolve_flavors(argparse.Namespace(flavors="en")),
+            ("en",),
+        )
+        self.assertEqual(
+            ota.resolve_flavors(argparse.Namespace(flavors="ru+en")),
+            ("ru", "en"),
+        )
+
+    def test_gradle_tasks_follow_selected_flavors(self) -> None:
+        self.assertEqual(
+            ota.gradle_tasks_for("release", ("ru",)),
+            ("assembleRuRelease",),
+        )
+        self.assertEqual(
+            ota.gradle_tasks_for("release", ("en",)),
+            ("assembleEnRelease",),
+        )
+        self.assertEqual(
+            ota.gradle_tasks_for("debug", ("ru", "en")),
+            ("assembleRuDebug", "assembleEnDebug"),
+        )
+
+    def test_partial_build_keeps_other_flavor_in_version_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp)
+            (destination / "version.json").write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "releases": [
+                            {"flavor": "ru", "apkFileName": "old-ru.apk"},
+                            {"flavor": "en", "apkFileName": "old-en.apk"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            merged = ota.merge_version_manifest(
+                destination,
+                {
+                    "schemaVersion": 1,
+                    "releases": [{"flavor": "ru", "apkFileName": "new-ru.apk"}],
+                },
+                ("ru",),
+            )
+            self.assertEqual(
+                [item["apkFileName"] for item in merged["releases"]],
+                ["new-ru.apk", "old-en.apk"],
+            )
 
 
 if __name__ == "__main__":
