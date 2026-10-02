@@ -87,18 +87,21 @@ object CanFramesProcess {
                     CanDataRepository.updateSteerSpeed(speed)
                 } else if (canId == CAN_ID_ENGINE_PARAMS) {
                     val rpm = readUInt16BigEndian(rawValue, payloadStart).toFloat() / 4f
-                    val param1 = unsignedByte(b3).toFloat() / 100f
-                    val param2 = readUInt16BigEndian(rawValue, payloadStart + 4).toFloat()
+                    // Hypotheses (journals/09): b3 = accelerator pedal %; u16@4 = engine torque Nm
+                    val param1 = unsignedByte(b3).toFloat() / 2.55f
+                    val param2 = (readUInt16BigEndian(rawValue, payloadStart + 4).toFloat() - 2000f) / 2f
                     CanDataRepository.updateEngineRPM(rpm)
                     TripTelemetryRepository.applyTboxRpm(rpm)
                     CanDataRepository.updateParam1(param1)
                     CanDataRepository.updateParam2(param2)
                 } else if (canId == CAN_ID_PARAM_3) {
-                    val param3 = readUInt16BigEndian(rawValue, payloadStart + 4).toFloat()
+                    // Hypothesis: wheel-based vehicle speed (km/h), same scale family as 0x310
+                    val param3 = readUInt16BigEndian(rawValue, payloadStart + 4).toFloat() / 100f
                     CanDataRepository.updateParam3(param3)
                 } else if (canId == CAN_ID_PARAM_4) {
                     val engineTemperature = unsignedByte(b0).toFloat() * 0.75f - 48f
-                    val param4 = unsignedByte(b5).toFloat()
+                    // Hypothesis: throttle position % (255 = wide open)
+                    val param4 = unsignedByte(b5).toFloat() / 2.55f
                     CanDataRepository.updateParam4(param4)
                 } else if (canId == CAN_ID_DISTANCE_TO_MAINTENANCE) {
                     val distanceToNextMaintenance =
@@ -223,7 +226,8 @@ object CanFramesProcess {
                     CanDataRepository.updateEngineTemperature(engineTemperature)
                     TripTelemetryRepository.applyTboxEngineTemperature(engineTemperature)
 
-                    val param5 = unsignedByte(b4).toFloat() / 19f
+                    // Hypothesis: coarse RPM copy (gateway/TCU), step 32 rpm
+                    val param5 = unsignedByte(b4).toFloat() * 32f
                     CanDataRepository.updateParam5(param5)
 
                 } else if (canId == CAN_ID_SPEED_ACCURATE) {

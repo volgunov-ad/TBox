@@ -212,11 +212,28 @@ APP шлёт удалённое управление как CRT `0x26` с кад
 
 | Opcode | MCU handler | Наблюдение |
 |--------|-------------|------------|
-| `0x02` FRONT_LIGHT | active | Com **`0x183`**: param`1`→val`1`, param`0`→val`2` |
+| `0x02` FRONT_LIGHT | active | Com **`0x183`** → IPdu **`0x39`** → CAN **`0x315`** bits `[10:11]`; param`1`→val`1`, param`0`→val`2` |
 | `0x14` LOCK | **nop** (`dispose`) | как APP DEFAULT; BLE — отдельный remap |
 | `0x20` ENGINE | **nop** на этом path | лог `VCTRL_TYPE_ENGINE` есть у handler `0x00` / BLE |
 | `0x00…0x0A`, `0x18`, `0x1A`, `0x1E`, `0x32…36/38…3A` | active | Com ids кластера `0x180…0x1C2` |
 | прочие named | shared dispose | см. `CrtVctrlProtocol.MCU_ACTIVE_OPCODES` |
+
+### FRONT_LIGHT → Com / CAN (VP Com-таблицы)
+
+В `TBOX_VP.bin` нет ASCII-имён `Com_Tx_*` (символы сострижены). Привязка по
+дескриптору сигнала и таблице IPdu:
+
+| Поле | Значение | Где в образе |
+|------|----------|--------------|
+| Logical name | **`FRONT_LIGHT`** (= VCTL opcode / `RemoteControlCmdType`) | — |
+| ComSignalId | **`0x183`** | handler `@0x9E264` (`MOVEA`); record `@0x6d640`; ptr table `@0x71a48[0x183]`→`@0x6d648` |
+| ComIPduHandleId | **`0x39`** | поле record+0 |
+| Bit layout | start **10**, end **11**, len **2** | record+8…+12 |
+| CAN ID / DLC | **`0x315`**, DLC **8** | Com IPdu table `@0x6307c` entry `[0x39]` (+28 = CanId) |
+| Values | on=`1`, off=`2` | VCTL param `@[9]` → Com set |
+
+Соседи того же IPdu `0x39` / CAN `0x315` (другие VCTL Com ids): `0x181…0x18b`
+(биты 3…63). IPdu `0x38` → CAN `0x301` (только `0x180`); `0x3A` → CAN `0x320`.
 
 В MCU также VCTL-логи `lock/windows/dwm/trunk/findcar/engine ctrl success` (в т.ч. BLE
 `recv_BleVctrlCmd`, JT 1…0x16). Предварительный разбор CRT `0x15`/`0x16` — в

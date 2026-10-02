@@ -67,5 +67,12 @@ class UdaProtocolTest {
         assertTrue(CrtVctrlProtocol.FRONT_LIGHT in CrtVctrlProtocol.MCU_ACTIVE_OPCODES)
         assertTrue(CrtVctrlProtocol.LOCK !in CrtVctrlProtocol.MCU_ACTIVE_OPCODES)
         assertEquals(0x183, CrtVctrlProtocol.MCU_FRONT_LIGHT_COM_ID)
+        assertEquals(0x39, CrtVctrlProtocol.MCU_FRONT_LIGHT_COM_IPDU)
+        assertEquals(0x315, CrtVctrlProtocol.MCU_FRONT_LIGHT_CAN_ID)
+        assertEquals(10, CrtVctrlProtocol.MCU_FRONT_LIGHT_BIT_START)
+        assertEquals(2, CrtVctrlProtocol.MCU_FRONT_LIGHT_BIT_LEN)
+        assertEquals(1, CrtVctrlProtocol.MCU_FRONT_LIGHT_VAL_ON)
+        assertEquals(2, CrtVctrlProtocol.MCU_FRONT_LIGHT_VAL_OFF)
+        assertEquals("FRONT_LIGHT", CrtVctrlProtocol.MCU_FRONT_LIGHT_SIGNAL_NAME)
     }
 }

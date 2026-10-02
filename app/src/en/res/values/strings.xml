@@ -1799,11 +1799,11 @@
     <string name="seat_mode_vent_2">ventilation 2</string>
     <string name="seat_mode_vent_3">ventilation 3</string>
 
-    <string name="data_title_param_1">Parameter 1</string>
-    <string name="data_title_param_2">Parameter 2</string>
-    <string name="data_title_param_3">Parameter 3</string>
-    <string name="data_title_param_4">Parameter 4</string>
-    <string name="data_title_param_5">Parameter 5</string>
+    <string name="data_title_param_1">Parameter 1 (accelerator pedal), %</string>
+    <string name="data_title_param_2">Parameter 2 (engine torque), Nm</string>
+    <string name="data_title_param_3">Parameter 3 (wheel speed), km/h</string>
+    <string name="data_title_param_4">Parameter 4 (throttle), %</string>
+    <string name="data_title_param_5">Parameter 5 (RPM), rpm</string>
     <string name="data_title_wheel_speed_1">Wheel speed 1</string>
     <string name="data_title_wheel_speed_2">Wheel speed 2</string>
     <string name="data_title_wheel_speed_3">Wheel speed 3</string>

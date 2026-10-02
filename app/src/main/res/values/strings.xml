@@ -1810,11 +1810,11 @@
     <string name="seat_mode_vent_2">вентиляция 2</string>
     <string name="seat_mode_vent_3">вентиляция 3</string>
 
-    <string name="data_title_param_1">Параметр 1</string>
-    <string name="data_title_param_2">Параметр 2</string>
-    <string name="data_title_param_3">Параметр 3</string>
-    <string name="data_title_param_4">Параметр 4</string>
-    <string name="data_title_param_5">Параметр 5</string>
+    <string name="data_title_param_1">Параметр 1 (педаль газа), %</string>
+    <string name="data_title_param_2">Параметр 2 (крутящий момент), Н·м</string>
+    <string name="data_title_param_3">Параметр 3 (скорость по колёсам), км/ч</string>
+    <string name="data_title_param_4">Параметр 4 (дроссель), %</string>
+    <string name="data_title_param_5">Параметр 5 (обороты), об/мин</string>
     <string name="data_title_wheel_speed_1">Скорость колеса 1</string>
     <string name="data_title_wheel_speed_2">Скорость колеса 2</string>
     <string name="data_title_wheel_speed_3">Скорость колеса 3</string>

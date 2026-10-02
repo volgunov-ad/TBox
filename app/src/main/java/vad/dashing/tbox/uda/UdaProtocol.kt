@@ -143,7 +143,9 @@ object UdaProtocol {
  *
  * VP stores the 45-byte frame at `buf+5`, then switches on `frame[0]` (`0..0x3A`,
  * table `@0x9E008`). **FRONT_LIGHT** handler writes Com signal **`0x183`** with
- * value `1` (on, param=1) or `2` (off, param=0). **LOCK (`0x14`)** on this path is
+ * value `1` (on, param=1) or `2` (off, param=0). That signal lives on ComIPdu
+ * handle **`0x39`** → CAN **`0x315`** DLC8, bits **`[10:11]`** (no ARXML symbol
+ * in the binary; logical name = `FRONT_LIGHT`). **LOCK (`0x14`)** on this path is
  * a no-op (`dispose`/return) — same effective dead-end as APP jump-table DEFAULT;
  * BLE has a separate remapped path that can still log `lock ctrl success`.
  */
@@ -233,6 +235,30 @@ object CrtVctrlProtocol {
 
     /** Com signal id used by MCU FRONT_LIGHT handler (`MOVEA 0x183` → Com set). */
     const val MCU_FRONT_LIGHT_COM_ID = 0x183
+
+    /** ComIPdu handle for [MCU_FRONT_LIGHT_COM_ID] (signal record `@0x6d640`). */
+    const val MCU_FRONT_LIGHT_COM_IPDU = 0x39
+
+    /** CAN ID for ComIPdu [MCU_FRONT_LIGHT_COM_IPDU] (IPdu table `@0x6307c`). */
+    const val MCU_FRONT_LIGHT_CAN_ID = 0x315
+
+    /** Bit start (inclusive) of FRONT_LIGHT inside CAN `0x315` payload. */
+    const val MCU_FRONT_LIGHT_BIT_START = 10
+
+    /** Bit length of FRONT_LIGHT (bits `[10:11]`). */
+    const val MCU_FRONT_LIGHT_BIT_LEN = 2
+
+    /** Com value written for FRONT_LIGHT on (vctrl param `1`). */
+    const val MCU_FRONT_LIGHT_VAL_ON = 1
+
+    /** Com value written for FRONT_LIGHT off (vctrl param `0`). */
+    const val MCU_FRONT_LIGHT_VAL_OFF = 2
+
+    /**
+     * Logical Com/signal name for [MCU_FRONT_LIGHT_COM_ID].
+     * Firmware has no `Com_*` ARXML symbol string; name follows VCTL opcode.
+     */
+    const val MCU_FRONT_LIGHT_SIGNAL_NAME = "FRONT_LIGHT"
 
     /** Named enum members that `RemoteControlCmdType_IsValid` rejects (`0x20..0x2F`). */
     val ISVALID_REJECTS_NAMED: Set<Int> = setOf(
