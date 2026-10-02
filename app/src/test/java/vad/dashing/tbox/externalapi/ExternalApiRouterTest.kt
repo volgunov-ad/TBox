@@ -200,6 +200,7 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("var lang = \"ru\" === \"en\" ? STR.en : STR.ru;"))
         assertFalse(response.body.contains("__APP_LANG__"))
         assertFalse(response.body.contains("navigator.language"))
+        assertTrue(response.body.contains("id=\"connect\""))
         assertTrue(response.body.contains("/v1/pair/request"))
         assertTrue(response.body.contains("/v1/pair/status"))
         val alias = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL_ALIAS, emptyMap(), emptyMap(), "")

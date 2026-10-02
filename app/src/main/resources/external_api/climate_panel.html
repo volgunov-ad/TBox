@@ -84,6 +84,12 @@
     #pair-status { min-height: 1.2em; margin: 8px 0 0; }
     button.primary { background: var(--accent); color: #fff; width: 100%; }
     details summary { color: var(--muted); cursor: pointer; margin: 12px 0 8px; }
+    #connect > summary {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      padding: 10px 0;
+    }
     .token { display: flex; gap: 8px; }
     .token input {
       flex: 1;
@@ -114,16 +120,18 @@
     <section class="card" id="climate"></section>
     <section class="card" id="seats"></section>
     <section class="card">
-      <h2 id="lbl-connect">Подключение</h2>
-      <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
-      <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
-      <p id="pair-status"></p>
-      <details>
-        <summary id="lbl-token">Токен вручную</summary>
-        <div class="token">
-          <input id="token" type="password" autocomplete="off" spellcheck="false">
-          <button id="save-token" type="button">OK</button>
-        </div>
+      <details id="connect" open>
+        <summary id="lbl-connect">Подключение</summary>
+        <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
+        <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
+        <p id="pair-status"></p>
+        <details>
+          <summary id="lbl-token">Токен вручную</summary>
+          <div class="token">
+            <input id="token" type="password" autocomplete="off" spellcheck="false">
+            <button id="save-token" type="button">OK</button>
+          </div>
+        </details>
       </details>
     </section>
   </main>
@@ -293,8 +301,10 @@
         history.replaceState(null, "", next);
       }
       document.getElementById("token").value = localStorage.getItem(TOKEN_KEY) || "";
+      document.getElementById("connect").open = !token();
       document.getElementById("save-token").addEventListener("click", function () {
         localStorage.setItem(TOKEN_KEY, document.getElementById("token").value.trim());
+        document.getElementById("connect").open = !token();
         tick();
       });
 
@@ -385,6 +395,7 @@
               localStorage.setItem(TOKEN_KEY, res.body.accessToken);
               document.getElementById("token").value = res.body.accessToken;
               setPairStatus(lang.pairOk);
+              document.getElementById("connect").open = false;
               tick();
               return;
             }
@@ -597,6 +608,7 @@
           return response.json().then(function (body) {
             if (response.status === 401) {
               setStatus(lang.unauthorized);
+              document.getElementById("connect").open = true;
               return;
             }
             if (!response.ok) {
@@ -747,6 +759,7 @@
           var denied = parts[0].status === 401 || parts[1].status === 401;
           if (denied) {
             setStatus(lang.unauthorized);
+            document.getElementById("connect").open = true;
             return;
           }
           if (parts[0].status !== 200) {
