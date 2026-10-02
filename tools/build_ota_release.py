@@ -4,9 +4,11 @@
 
 Скрипт:
   1. Спрашивает канал: Разработка (debug/release) или Релиз
-  2. Собирает ru/en APK через Gradle
-  3. Копирует APK в папку загрузки на Яндекс.Диск
-  4. Создаёт version.json с sha256 и размером файлов
+  2. Спрашивает языки: 1 — ru+en, 2 — ru, 3 — en
+  3. Собирает выбранные APK через Gradle
+  4. Копирует APK в папку загрузки на Яндекс.Диск
+  5. Создаёт version.json с sha256 и размером файлов
+     (запись языка, который не собирали, сохраняется из прежнего version.json)
 
 Имена APK в папке назначения:
   tbox_monitor-v.0.16.0-ru.apk, tbox_monitor-v.0.16.0-en.apk
@@ -18,8 +20,9 @@
 Changelog для version.json берётся из Changelog.dm (секция текущей versionName),
 если не передан --changelog. Markdown (**жирный**, `код`, *курсив*) снимается.
 
-Gradle запускается с -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8"
-(переопределяет 2 GiB из gradle.properties, чтобы R8/lintVital не падали с OOM;
+Gradle запускается с -Dorg.gradle.jvmargs="-Xmx8192m -Dfile.encoding=UTF-8"
+(переопределяет 2 GiB из gradle.properties: R8 и lintVital в AGP 8.11
+работают внутри демона и на 4 GiB падают с Java heap space;
 можно изменить через --gradle-jvm-args или отключить пустой строкой).
 
 Запуск из корня репозитория:
@@ -29,6 +32,8 @@ Gradle запускается с -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding
   python tools/build_ota_release.py --channel dev
   python tools/build_ota_release.py --channel dev-release
   python tools/build_ota_release.py --channel release
+  python tools/build_ota_release.py --channel release --flavors ru
+  python tools/build_ota_release.py --channel release --flavors en
   python tools/build_ota_release.py --channel release --changelog "Исправления"
 """
 
@@ -47,10 +52,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
-DEFAULT_GRADLE_JVM_ARGS = "-Xmx4096m -Dfile.encoding=UTF-8"
+DEFAULT_GRADLE_JVM_ARGS = "-Xmx8192m -Dfile.encoding=UTF-8"
 GRADLE_FILE = Path("app/build.gradle.kts")
 CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
+FLAVOR_SETS: dict[str, tuple[str, ...]] = {
+    "1": ("ru", "en"),
+    "ru+en": ("ru", "en"),
+    "both": ("ru", "en"),
+    "2": ("ru",),
+    "ru": ("ru",),
+    "3": ("en",),
+    "en": ("en",),
+}
 VERSION_HEADER_RE = re.compile(r"^\d+\.\d+(?:\.\d+)*$")
 MARKDOWN_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 MARKDOWN_ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)")
@@ -63,7 +77,6 @@ class ChannelConfig:
     label: str
     build_type: str
     output_dir_name: str
-    gradle_tasks: tuple[str, ...]
 
 
 CHANNELS: dict[str, ChannelConfig] = {
@@ -72,21 +85,18 @@ CHANNELS: dict[str, ChannelConfig] = {
         label="Разработка (debug APK -> dev)",
         build_type="debug",
         output_dir_name="dev",
-        gradle_tasks=("assembleRuDebug", "assembleEnDebug"),
     ),
     "dev_release": ChannelConfig(
         key="dev_release",
         label="Разработка (release APK -> dev)",
         build_type="release",
         output_dir_name="dev",
-        gradle_tasks=("assembleRuRelease", "assembleEnRelease"),
     ),
     "release": ChannelConfig(
         key="release",
         label="Релиз (release APK -> release)",
         build_type="release",
         output_dir_name="release",
-        gradle_tasks=("assembleRuRelease", "assembleEnRelease"),
     ),
 }
 
@@ -158,6 +168,35 @@ def resolve_channel(args: argparse.Namespace) -> ChannelConfig:
             raise ValueError(f"Unknown channel: {args.channel}")
         return CHANNELS[key]
     return choose_channel_interactive()
+
+
+def choose_flavors_interactive() -> tuple[str, ...]:
+    print("Выберите языки:")
+    print("  1 — ru+en")
+    print("  2 — ru")
+    print("  3 — en")
+    while True:
+        choice = input("Введите 1, 2 или 3: ").strip()
+        if choice in FLAVOR_SETS:
+            return FLAVOR_SETS[choice]
+        print("Неверный ввод, попробуйте снова.")
+
+
+def resolve_flavors(args: argparse.Namespace) -> tuple[str, ...]:
+    if args.flavors:
+        key = args.flavors.lower().replace(" ", "")
+        if key not in FLAVOR_SETS:
+            raise ValueError(f"Unknown flavors: {args.flavors}")
+        return FLAVOR_SETS[key]
+    return choose_flavors_interactive()
+
+
+def gradle_tasks_for(build_type: str, flavors: tuple[str, ...]) -> tuple[str, ...]:
+    build_suffix = build_type[:1].upper() + build_type[1:]
+    return tuple(
+        f"assemble{flavor[:1].upper()}{flavor[1:]}{build_suffix}"
+        for flavor in flavors
+    )
 
 
 def run_gradle(project_dir: Path, tasks: tuple[str, ...], jvm_args: str) -> None:
@@ -314,7 +353,49 @@ def build_version_json(
     }
 
 
+def merge_version_manifest(
+    destination_dir: Path,
+    manifest: dict,
+    built_flavors: tuple[str, ...],
+) -> dict:
+    """Keep release entries for flavors that were not built this run."""
+    path = destination_dir / "version.json"
+    if not path.is_file():
+        return manifest
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid version.json: {path}") from error
+    existing_releases = existing.get("releases")
+    if not isinstance(existing_releases, list):
+        return manifest
+
+    built = set(built_flavors)
+    by_flavor: dict[str, dict] = {}
+    extras: list[dict] = []
+    for item in existing_releases:
+        if not isinstance(item, dict):
+            continue
+        flavor = item.get("flavor")
+        if not isinstance(flavor, str) or flavor in built:
+            continue
+        if flavor in FLAVORS:
+            by_flavor[flavor] = item
+        else:
+            extras.append(item)
+    for release in manifest["releases"]:
+        by_flavor[release["flavor"]] = release
+
+    ordered = [by_flavor[flavor] for flavor in FLAVORS if flavor in by_flavor]
+    ordered.extend(extras)
+    return {
+        "schemaVersion": manifest["schemaVersion"],
+        "releases": ordered,
+    }
+
+
 def write_version_json(destination_dir: Path, manifest: dict) -> Path:
+    destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / "version.json"
     destination.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -332,6 +413,11 @@ def parse_args() -> argparse.Namespace:
             "Канал: dev (debug -> dev), dev-release (release -> dev), "
             "release (release -> release). Без аргумента — интерактивный выбор."
         ),
+    )
+    parser.add_argument(
+        "--flavors",
+        choices=["ru+en", "both", "ru", "en"],
+        help="Языки APK: ru+en, ru или en. Без аргумента — интерактивный выбор.",
     )
     parser.add_argument(
         "--output-base",
@@ -383,12 +469,14 @@ def main() -> int:
 
     try:
         channel = resolve_channel(args)
+        flavors = resolve_flavors(args)
         version = read_app_version(gradle_file)
         output_dir = args.output_base / channel.output_dir_name
         changelog = resolve_changelog(args, root, version.version_name)
 
         print()
         print(f"Канал: {channel.label}")
+        print(f"Языки: {'+'.join(flavors)}")
         print(f"Версия: {version.version_name} ({version.version_code})")
         print(f"Папка назначения: {output_dir}")
         changelog_preview = changelog if len(changelog) <= 200 else changelog[:200] + "…"
@@ -396,27 +484,42 @@ def main() -> int:
         print()
 
         if not args.skip_build:
-            run_gradle(root, channel.gradle_tasks, args.gradle_jvm_args)
+            run_gradle(
+                root,
+                gradle_tasks_for(channel.build_type, flavors),
+                args.gradle_jvm_args,
+            )
         else:
             print("Пропуск сборки (--skip-build)")
 
         apks: list[BuiltApk] = []
-        for flavor in FLAVORS:
+        for flavor in flavors:
             metadata = build_apk_metadata(root, flavor, channel.build_type, version.version_name)
             copied = copy_apk(metadata.source_path, output_dir, metadata.file_name)
             print(f"Copied {metadata.source_path.name} -> {copied}")
             apks.append(metadata)
 
-        manifest = build_version_json(
-            version=version,
-            apks=apks,
-            changelog=changelog,
-            min_supported_version_code=args.min_supported_version_code,
+        manifest = merge_version_manifest(
+            output_dir,
+            build_version_json(
+                version=version,
+                apks=apks,
+                changelog=changelog,
+                min_supported_version_code=args.min_supported_version_code,
+            ),
+            flavors,
         )
         version_json_path = write_version_json(output_dir, manifest)
+        kept = [
+            release["flavor"]
+            for release in manifest["releases"]
+            if release["flavor"] not in flavors
+        ]
 
         print()
         print("Готово.")
+        if kept:
+            print(f"В version.json оставлены прежние записи: {', '.join(kept)}")
         print(f"version.json -> {version_json_path}")
         for apk in apks:
             size_mb = apk.size_bytes / (1024 * 1024)

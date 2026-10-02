@@ -175,3 +175,19 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+// AGP 8.11 runs R8 and lintVital inside the Gradle daemon. Release builds of both
+// flavors schedule them together and the daemon OOMs. Keep these tasks in one chain.
+val memoryHeavyReleaseTasks = listOf(
+    "minifyRuReleaseWithR8",
+    "lintVitalAnalyzeRuRelease",
+    "minifyEnReleaseWithR8",
+    "lintVitalAnalyzeEnRelease",
+)
+
+tasks.configureEach {
+    val index = memoryHeavyReleaseTasks.indexOf(name)
+    if (index > 0) {
+        mustRunAfter(memoryHeavyReleaseTasks[index - 1])
+    }
+}
