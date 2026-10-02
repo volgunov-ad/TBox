@@ -651,6 +651,8 @@
 | Установить громкость телефона | `set_phone_volume` | `intValue`: `1..31` |
 | Установить громкость навигатора | `set_navi_volume` | `intValue`: `0..10` |
 | Установить громкость голоса | `set_voice_volume` | `intValue`: `2..10` |
+
+Пустой `stringValue` у `media_previous`, `media_play_pause`, `media_play`, `media_next` и `media_toggle_like` отправляет команду в сессию, которая сейчас играет. Виджет музыки не нужен. Нужен доступ к уведомлениям.
 | Динамик подголовника | `set_headrest_speaker` | `stringValue`: `only` / `assist` / `off` |
 | Следующий режим подмены геопозиции | `cycle_mock_location_mode` | значения по умолчанию |
 | Перезапустить GNSS-модуль | `gnss_module_reboot` | значения по умолчанию |
@@ -823,8 +825,11 @@ TCP :5555 включают только если порт ещё не слуша
 | `hu_headrest_speaker` | `app` | `only`, `assist`, `off` — динамик подголовника (Car Settings → Аудио) |
 | `tbox_connected` | `app` | `on`, `off` — UDP-связь с TBox |
 | `locate_status` | `app` | `on`, `off` — фиксация у активного источника геопозиции |
-| `media_title` | `app` | название трека (свободная строка) или нет значения |
-| `media_artist` | `app` | исполнитель (свободная строка) или нет значения |
+| `media_title` | `app` | название трека или нет значения. Любая играющая MediaSession, виджет музыки не нужен |
+| `media_artist` | `app` | исполнитель или нет значения. Любая играющая MediaSession, виджет музыки не нужен |
+| `media_playing` | `app` | `on` / `off` — сессия играет или на паузе |
+| `media_position_ms` | `app` | позиция, мс, на момент чтения (дорисовка по скорости, как у виджета) |
+| `media_duration_ms` | `app` | длительность, мс; `0` если плеер её не сообщил |
 
 Следующие сигналы имеют только значения `off` / `on`:
 

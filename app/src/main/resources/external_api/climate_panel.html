@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <title>TBox Climate</title>
+  <title>TBox</title>
   <style>
     :root {
       color-scheme: dark;
@@ -61,6 +61,13 @@
     .row-label { min-width: 7.5em; }
     .stepper { display: flex; align-items: center; gap: 8px; }
     .readout { min-width: 4.2em; text-align: center; font-size: 22px; font-variant-numeric: tabular-nums; }
+    .np-title { font-size: 18px; font-weight: 650; }
+    .np-artist { color: var(--muted); font-size: 14px; min-height: 1.2em; }
+    .progress { height: 6px; background: var(--line); border-radius: 99px; margin: 12px 0 6px; overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); }
+    .np-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+    .transport { display: flex; gap: 8px; }
+    .transport button { flex: 1; }
     button {
       border: 0;
       border-radius: 12px;
@@ -105,7 +112,7 @@
 </head>
 <body>
   <main id="tbox-climate-panel">
-    <h1 id="title">Климат</h1>
+    <h1 id="title">Автомобиль</h1>
     <p id="status"></p>
     <section class="temps">
       <div class="card">
@@ -117,6 +124,7 @@
         <div class="temp-value" id="in">—</div>
       </div>
     </section>
+    <section class="card" id="audio"></section>
     <section class="card" id="climate"></section>
     <section class="card" id="seats"></section>
     <section class="card">
@@ -159,14 +167,26 @@
         { state: "defrost", value: 4, label: "blowDefrost" },
         { state: "defrost_foot", value: 5, label: "blowDefrostFoot" }
       ];
+      var VOLUME_MIN = 0;
+      var VOLUME_MAX = 31;
+      var lastMediaVolume = 10;
+      var mediaAnchorAt = 0;
       var TEMP_MIN = 160;
       var TEMP_MAX = 300;
       var TEMP_STEP = 5;
       var STR = {
         ru: {
-          title: "Климат",
+          title: "Автомобиль",
           outside: "Улица",
           inside: "Салон",
+          audio: "Звук",
+          music: "Музыка",
+          media: "Медиа",
+          sound: "Звук",
+          previous: "Назад",
+          play: "Играть",
+          pause: "Пауза",
+          next: "Дальше",
           climate: "Климат-контроль",
           driver: "Водитель",
           passenger: "Пассажир",
@@ -206,9 +226,17 @@
           pairOk: "Подключено. Токен сохранён в этом браузере."
         },
         en: {
-          title: "Climate",
+          title: "Vehicle",
           outside: "Outside",
           inside: "Cabin",
+          audio: "Audio",
+          music: "Music",
+          media: "Media",
+          sound: "Sound",
+          previous: "Previous",
+          play: "Play",
+          pause: "Pause",
+          next: "Next",
           climate: "Climate control",
           driver: "Driver",
           passenger: "Passenger",
@@ -271,6 +299,12 @@
         left: null,
         right: null,
         fan: null,
+        volume: null,
+        mediaTitle: null,
+        mediaArtist: null,
+        mediaPosition: null,
+        mediaDuration: null,
+        mediaPlaying: null,
         auto: null,
         sync: null,
         blow: null,
@@ -308,6 +342,7 @@
         tick();
       });
 
+      renderAudio();
       renderClimate();
       renderSeats();
       renderTemps();
@@ -425,6 +460,11 @@
         if (left) left.textContent = fmtTemp(state.left);
         if (right) right.textContent = fmtTemp(state.right);
         if (fan) fan.textContent = state.fan == null ? "—" : String(state.fan);
+        var volume = document.getElementById("volume-readout");
+        if (volume) volume.textContent = state.volume == null ? "—" : String(state.volume);
+        var mute = document.getElementById("media-mute");
+        if (mute) mute.className = state.volume > 0 ? "on-off" : "";
+        paintNowPlaying();
         paintSeats();
         paintClimate();
       }
@@ -477,6 +517,45 @@
         row.appendChild(name);
         row.appendChild(stepper);
         return row;
+      }
+
+      function renderAudio() {
+        var root = document.getElementById("audio");
+        var title = document.createElement("h2");
+        title.textContent = lang.music;
+        root.appendChild(title);
+        var track = document.createElement("div");
+        track.id = "np-title";
+        track.className = "np-title";
+        track.textContent = "—";
+        var artist = document.createElement("div");
+        artist.id = "np-artist";
+        artist.className = "np-artist";
+        var bar = document.createElement("div");
+        bar.className = "progress";
+        var fill = document.createElement("div");
+        fill.id = "np-bar";
+        bar.appendChild(fill);
+        var time = document.createElement("div");
+        time.id = "np-time";
+        time.className = "np-time";
+        var transport = document.createElement("div");
+        transport.className = "transport";
+        transport.appendChild(button(lang.previous, function () { invokeMedia("media_previous"); }));
+        var play = button(lang.play, togglePlayback);
+        play.id = "np-play";
+        transport.appendChild(play);
+        transport.appendChild(button(lang.next, function () { invokeMedia("media_next"); }));
+        root.appendChild(track);
+        root.appendChild(artist);
+        root.appendChild(bar);
+        root.appendChild(time);
+        root.appendChild(transport);
+        var row = stepperRow(lang.media, "volume-readout", function () { bumpVolume(false); }, function () { bumpVolume(true); });
+        var mute = button(lang.sound, toggleMediaMute);
+        mute.id = "media-mute";
+        row.querySelector(".stepper").appendChild(mute);
+        root.appendChild(row);
       }
 
       function renderClimate() {
@@ -584,6 +663,36 @@
       }
 
       function invoke(propertyId, value) {
+        return postActions([{
+          type: "can_command",
+          bus: "vehicle",
+          propertyId: propertyId,
+          operation: "set",
+          value: value
+        }]);
+      }
+
+      function invokeMedia(actionType) {
+        return postActions([{
+          type: "builtin",
+          actionType: actionType,
+          intValue: 0,
+          stringValue: "",
+          boolValue: false
+        }]);
+      }
+
+      function invokeBuiltin(actionType, intValue) {
+        return postActions([{
+          type: "builtin",
+          actionType: actionType,
+          intValue: intValue,
+          stringValue: "",
+          boolValue: false
+        }]);
+      }
+
+      function postActions(actions) {
         var current = token();
         if (!current) {
           setStatus(lang.needToken);
@@ -595,15 +704,7 @@
             "Authorization": "Bearer " + current,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            actions: [{
-              type: "can_command",
-              bus: "vehicle",
-              propertyId: propertyId,
-              operation: "set",
-              value: value
-            }]
-          })
+          body: JSON.stringify({ actions: actions })
         }).then(function (response) {
           return response.json().then(function (body) {
             if (response.status === 401) {
@@ -634,6 +735,79 @@
         renderTemps();
         var propertyId = side === "left" ? LEFT_TEMP : RIGHT_TEMP;
         enqueue(function () { return invoke(propertyId, raw); });
+      }
+
+      function bumpVolume(increase) {
+        if (state.volume == null) return;
+        var next = state.volume + (increase ? 1 : -1);
+        if (next < VOLUME_MIN) next = VOLUME_MIN;
+        if (next > VOLUME_MAX) next = VOLUME_MAX;
+        state.volume = next;
+        if (next > 0) lastMediaVolume = next;
+        renderTemps();
+        enqueue(function () { return invokeBuiltin("set_media_volume", next); });
+      }
+
+      function shownMediaPosition() {
+        if (state.mediaPosition == null) return null;
+        var pos = state.mediaPosition;
+        if (state.mediaPlaying === "on") pos += Date.now() - mediaAnchorAt;
+        if (pos < 0) pos = 0;
+        if (state.mediaDuration > 0 && pos > state.mediaDuration) pos = state.mediaDuration;
+        return pos;
+      }
+
+      function fmtClock(ms) {
+        if (ms == null || !isFinite(ms) || ms < 0) return "—";
+        var total = Math.floor(ms / 1000);
+        var minutes = Math.floor(total / 60);
+        var seconds = total % 60;
+        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+      }
+
+      function paintNowPlaying() {
+        var title = document.getElementById("np-title");
+        var artist = document.getElementById("np-artist");
+        var bar = document.getElementById("np-bar");
+        var time = document.getElementById("np-time");
+        var play = document.getElementById("np-play");
+        if (!title) return;
+        title.textContent = state.mediaTitle || "—";
+        artist.textContent = state.mediaArtist || "";
+        var pos = shownMediaPosition();
+        var dur = state.mediaDuration;
+        var fraction = dur > 0 && pos != null ? Math.max(0, Math.min(1, pos / dur)) : 0;
+        bar.style.width = (fraction * 100) + "%";
+        time.textContent = dur > 0 ? fmtClock(pos) + " / " + fmtClock(dur) : "";
+        var playing = state.mediaPlaying === "on";
+        play.textContent = playing ? lang.pause : lang.play;
+        play.className = playing ? "on-off" : "";
+      }
+
+      function togglePlayback() {
+        if (state.mediaPlaying === "on") {
+          state.mediaPosition = shownMediaPosition();
+          state.mediaPlaying = "off";
+        } else {
+          state.mediaPlaying = "on";
+          mediaAnchorAt = Date.now();
+        }
+        paintNowPlaying();
+        enqueue(function () { return invokeMedia("media_play_pause"); });
+      }
+
+      function toggleMediaMute() {
+        if (state.volume == null) return;
+        var next;
+        if (state.volume > 0) {
+          lastMediaVolume = state.volume;
+          next = 0;
+        } else {
+          next = lastMediaVolume > 0 ? lastMediaVolume : 1;
+        }
+        state.volume = next;
+        renderTemps();
+        enqueue(function () { return invokeBuiltin("set_media_volume", next); });
       }
 
       function bumpFan(increase) {
@@ -711,7 +885,7 @@
         });
       }
 
-      function applySnapshot(hu, tbox) {
+      function applySnapshot(hu, tbox, app) {
         var outside = pick(hu.outside_temperature, tbox.outside_temperature);
         var inside = pick(tbox.inside_temperature, null);
         state.outside = numberOrNull(outside);
@@ -720,6 +894,19 @@
         state.right = numberOrNull(hu.hvac_temperature_right);
         state.fan = numberOrNull(hu.hvac_fan_speed);
         if (state.fan != null) state.fan = Math.round(state.fan);
+        if (app) {
+          state.volume = numberOrNull(app.hu_media_volume);
+          if (state.volume != null) {
+            state.volume = Math.round(state.volume);
+            if (state.volume > 0) lastMediaVolume = state.volume;
+          }
+          state.mediaTitle = stateOrNull(app.media_title);
+          state.mediaArtist = stateOrNull(app.media_artist);
+          state.mediaPosition = numberOrNull(app.media_position_ms);
+          state.mediaDuration = numberOrNull(app.media_duration_ms);
+          state.mediaPlaying = stateOrNull(app.media_playing);
+          mediaAnchorAt = Date.now();
+        }
         var auto = stateOrNull(hu.hvac_auto);
         if (auto != null) state.auto = auto;
         var sync = stateOrNull(hu.hvac_sync);
@@ -754,9 +941,10 @@
         polling = true;
         Promise.all([
           loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
-          loadSignals("tbox", "inside_temperature,outside_temperature")
+          loadSignals("tbox", "inside_temperature,outside_temperature"),
+          loadSignals("app", "hu_media_volume,media_title,media_artist,media_playing,media_position_ms,media_duration_ms")
         ]).then(function (parts) {
-          var denied = parts[0].status === 401 || parts[1].status === 401;
+          var denied = parts[0].status === 401 || parts[1].status === 401 || parts[2].status === 401;
           if (denied) {
             setStatus(lang.unauthorized);
             document.getElementById("connect").open = true;
@@ -767,7 +955,8 @@
             return;
           }
           if (pendingWrites > 0) return;
-          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body));
+          var app = parts[2].status === 200 ? indexSignals(parts[2].body) : null;
+          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body), app);
           var now = new Date();
           var hh = String(now.getHours()).padStart(2, "0");
           var mm = String(now.getMinutes()).padStart(2, "0");
@@ -791,6 +980,9 @@
       });
 
       tick();
+      setInterval(function () {
+        if (!document.hidden && state.mediaPlaying === "on") paintNowPlaying();
+      }, 500);
     })();
   </script>
 </body>

@@ -952,15 +952,40 @@ object AutomationSignalCatalog {
             AutomationSignalId.MEDIA_TITLE,
             AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_TITLE),
             appOnly,
-            typicalRange = "Название текущего трека из MediaSession (уведомления). " +
-                "Нужен доступ к уведомлениям; без активного плеера — нет значения.",
+            typicalRange = "Название трека из активной MediaSession. " +
+                "Любой плеер, который сейчас играет; виджет музыки не нужен. " +
+                "Нужен доступ к уведомлениям. Без сессии — нет значения.",
         ),
         state(
             AutomationSignalId.MEDIA_ARTIST,
             AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_ARTIST),
             appOnly,
-            typicalRange = "Исполнитель текущего трека из MediaSession. " +
-                "Нужен доступ к уведомлениям; без активного плеера — нет значения.",
+            typicalRange = "Исполнитель из активной MediaSession. " +
+                "Любой плеер, который сейчас играет; виджет музыки не нужен. " +
+                "Нужен доступ к уведомлениям. Без сессии — нет значения.",
+        ),
+        state(
+            AutomationSignalId.MEDIA_PLAYING,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_PLAYING),
+            appOnly,
+            binaryStates,
+            typicalRange = "on — сессия играет, off — на паузе. " +
+                "Берётся играющая сессия, иначе последняя с названием. Виджет не нужен.",
+        ),
+        number(
+            AutomationSignalId.MEDIA_POSITION_MS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_POSITION_MS),
+            "мс",
+            appOnly,
+            typicalRange = "Позиция в миллисекундах на момент чтения. " +
+                "Между событиями плеера дорисовывается по скорости, как у виджета музыки.",
+        ),
+        number(
+            AutomationSignalId.MEDIA_DURATION_MS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MEDIA_DURATION_MS),
+            "мс",
+            appOnly,
+            typicalRange = "Длительность трека в миллисекундах. 0 — сессия длительность не сообщила.",
         ),
     )
 

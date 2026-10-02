@@ -1383,7 +1383,7 @@
     <string name="settings_api_enable_title">Включить сервер API</string>
     <string name="settings_api_enable_desc">Локальный HTTP API для внешних приложений в той же сети (голос, телефон).</string>
     <string name="settings_api_web_panel_title">Простая веб-панель</string>
-    <string name="settings_api_web_panel_desc">Страница климата на том же порту: улица, салон, две зоны, синхронизация, режим климата, обдув, авто и сиденья. Язык страницы совпадает с языком программы. На ГУ включите сопряжение, на странице нажмите «Отправить запрос» и подтвердите.</string>
+    <string name="settings_api_web_panel_desc">Страница управления автомобилем на том же порту: улица, салон, музыка, громкость, климат и сиденья. Язык страницы совпадает с языком программы. На ГУ включите сопряжение, на странице нажмите «Отправить запрос» и подтвердите.</string>
     <string name="web_panel_language" translatable="false">ru</string>
     <string name="settings_api_web_panel_url_local">Панель: http://127.0.0.1:%1$d/</string>
     <string name="settings_api_web_panel_url_lan">Панель: http://%1$s:%2$d/</string>
@@ -1421,7 +1421,7 @@
     <string name="settings_api_manual_token_close">Закрыть</string>
     <string name="settings_api_dangerous_title">Опасные команды</string>
     <string name="settings_api_dangerous_desc">ADB и другие опасные действия через API (по умолчанию выкл.).</string>
-    <string name="settings_api_help">API позволяет внешним приложениям читать телеметрию, выполнять действия из каталога автоматизаций и запускать сохранённые правила. Включите сервер, затем сопрягите приложение или создайте токен вручную для телефона/Tasker. Тумблер «Простая веб-панель» отдаёт страницу климата по адресу http://IP:порт/.</string>
+    <string name="settings_api_help">API позволяет внешним приложениям читать телеметрию, выполнять действия из каталога автоматизаций и запускать сохранённые правила. Включите сервер, затем сопрягите приложение или создайте токен вручную для телефона/Tasker. Тумблер «Простая веб-панель» отдаёт страницу управления автомобилем по адресу http://IP:порт/.</string>
     <string name="settings_tab_panels">Панели</string>
     <string name="settings_tab_common">Общие</string>
     <string name="settings_tab_buttons">Кнопки</string>

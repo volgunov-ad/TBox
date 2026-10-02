@@ -275,5 +275,8 @@ object AutomationParameterLabels {
         AutomationSignalId.MOTOR_HOURS -> "Моточасы"
         AutomationSignalId.MEDIA_TITLE -> "Медиа: трек"
         AutomationSignalId.MEDIA_ARTIST -> "Медиа: исполнитель"
+        AutomationSignalId.MEDIA_PLAYING -> "Медиа: воспроизведение"
+        AutomationSignalId.MEDIA_POSITION_MS -> "Медиа: позиция"
+        AutomationSignalId.MEDIA_DURATION_MS -> "Медиа: длительность"
     }
 }
