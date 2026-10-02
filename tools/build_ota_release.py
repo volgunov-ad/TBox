@@ -18,8 +18,9 @@
 Changelog для version.json берётся из Changelog.dm (секция текущей versionName),
 если не передан --changelog. Markdown (**жирный**, `код`, *курсив*) снимается.
 
-Gradle запускается с -Dorg.gradle.jvmargs="-Xmx4096m -Dfile.encoding=UTF-8"
-(переопределяет 2 GiB из gradle.properties, чтобы R8/lintVital не падали с OOM;
+Gradle запускается с -Dorg.gradle.jvmargs="-Xmx8192m -Dfile.encoding=UTF-8"
+(переопределяет 2 GiB из gradle.properties: R8 и lintVital в AGP 8.11
+работают внутри демона и на 4 GiB падают с Java heap space;
 можно изменить через --gradle-jvm-args или отключить пустой строкой).
 
 Запуск из корня репозитория:
@@ -47,7 +48,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
-DEFAULT_GRADLE_JVM_ARGS = "-Xmx4096m -Dfile.encoding=UTF-8"
+DEFAULT_GRADLE_JVM_ARGS = "-Xmx8192m -Dfile.encoding=UTF-8"
 GRADLE_FILE = Path("app/build.gradle.kts")
 CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
