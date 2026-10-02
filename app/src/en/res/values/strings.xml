@@ -1398,6 +1398,7 @@
     <string name="settings_api_clients_title">Trusted clients</string>
     <string name="settings_api_clients_empty">No paired apps</string>
     <string name="settings_api_client_revoke">Revoke</string>
+    <string name="settings_api_client_last_used">Last used %1$s</string>
     <string name="settings_api_manual_token_title">Manual token</string>
     <string name="settings_api_manual_token_desc">For phone, Tasker, curl: create a token here, copy it, and paste into your command. Shown only once.</string>
     <string name="settings_api_manual_token_name_hint">Client name</string>

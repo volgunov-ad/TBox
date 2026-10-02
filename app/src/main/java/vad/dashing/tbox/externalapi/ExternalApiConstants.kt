@@ -10,6 +10,15 @@ object ExternalApiConstants {
 
     const val PAIRING_TIMEOUT_MS = 120_000L
 
+    /** Idle tokens older than this many calendar months are removed after the API starts. */
+    const val TOKEN_IDLE_MONTHS = 6
+
+    /** Sweep runs once the server has been up long enough for an early request to refresh usage. */
+    const val TOKEN_EXPIRY_CHECK_DELAY_MS = 60_000L
+
+    /** Successful calls update memory immediately; disk is rewritten at this interval. */
+    const val TOKEN_USAGE_PERSIST_INTERVAL_MS = 60L * 60L * 1000L
+
     const val PATH_HEALTH = "/v1/health"
     const val PATH_PAIR_REQUEST = "/v1/pair/request"
     const val PATH_PAIR_STATUS = "/v1/pair/status"

@@ -8,6 +8,7 @@ data class ExternalApiPairedClient(
     val clientName: String,
     val tokenHash: String,
     val createdAtEpochMs: Long,
+    val lastUsedAtEpochMs: Long = createdAtEpochMs,
 ) {
     fun toJson(): JSONObject =
         JSONObject()
@@ -15,15 +16,19 @@ data class ExternalApiPairedClient(
             .put("clientName", clientName)
             .put("tokenHash", tokenHash)
             .put("createdAtEpochMs", createdAtEpochMs)
+            .put("lastUsedAtEpochMs", lastUsedAtEpochMs)
 
     companion object {
-        fun fromJson(json: JSONObject): ExternalApiPairedClient =
-            ExternalApiPairedClient(
+        fun fromJson(json: JSONObject): ExternalApiPairedClient {
+            val createdAtEpochMs = json.getLong("createdAtEpochMs")
+            return ExternalApiPairedClient(
                 clientId = json.getString("clientId"),
                 clientName = json.getString("clientName"),
                 tokenHash = json.getString("tokenHash"),
-                createdAtEpochMs = json.getLong("createdAtEpochMs"),
+                createdAtEpochMs = createdAtEpochMs,
+                lastUsedAtEpochMs = json.optLong("lastUsedAtEpochMs", createdAtEpochMs),
             )
+        }
 
         fun encodeList(clients: List<ExternalApiPairedClient>): String {
             val array = JSONArray()

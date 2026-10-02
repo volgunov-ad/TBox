@@ -26,6 +26,7 @@ class ExternalApiRouter(
     private val executeActions: suspend (List<AutomationAction>) -> List<AutomationActionResult>,
     private val runAutomationNow: (String) -> String?,
     private val webPanelEnabled: () -> Boolean = { false },
+    private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
 ) {
     fun handle(
         method: String,
@@ -341,6 +342,7 @@ class ExternalApiRouter(
         if (client.clientId.isBlank()) {
             return errorResponse(401, "unauthorized", "Invalid token")
         }
+        onAuthenticated(client)
         return block()
     }
 

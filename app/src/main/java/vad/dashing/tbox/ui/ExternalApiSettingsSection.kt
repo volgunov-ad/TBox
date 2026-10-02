@@ -3,6 +3,8 @@ package vad.dashing.tbox.ui
 import android.content.ClipData
 import android.os.SystemClock
 import android.widget.Toast
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -292,6 +294,14 @@ fun ExternalApiSettingsSection(
                     )
                     Text(
                         text = client.clientId,
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = onSurfaceVariant,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_api_client_last_used,
+                            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(client.lastUsedAtEpochMs)),
+                        ),
                         style = MaterialTheme.typography.tboxCaption,
                         color = onSurfaceVariant,
                     )

@@ -193,24 +193,54 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("front_left_seat_mode"))
         assertTrue(response.body.contains("/v1/pair/request"))
         assertTrue(response.body.contains("/v1/pair/status"))
-
         val alias = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL_ALIAS, emptyMap(), emptyMap(), "")
         assertEquals(200, alias.status)
         val post = router.handle("POST", "/", emptyMap(), emptyMap(), "")
         assertEquals(405, post.status)
     }
 
-    private fun router(webPanelEnabled: Boolean): ExternalApiRouter =
+    @Test
+    fun authenticatedRequest_reportsTheClient() {
+        val token = "usage-token"
+        var usedClientId: String? = null
+        val router = router(
+            clients = listOf(
+                ExternalApiPairedClient(
+                    clientId = "phone",
+                    clientName = "Phone",
+                    tokenHash = ExternalApiAuth.sha256Hex(token),
+                    createdAtEpochMs = 1L,
+                ),
+            ),
+            onAuthenticated = { usedClientId = it.clientId },
+        )
+        val response = router.handle(
+            "GET",
+            ExternalApiConstants.PATH_CATALOG,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            "",
+        )
+        assertEquals(200, response.status)
+        assertEquals("phone", usedClientId)
+    }
+
+    private fun router(
+        webPanelEnabled: Boolean = false,
+        clients: List<ExternalApiPairedClient> = emptyList(),
+        onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
+    ): ExternalApiRouter =
         ExternalApiRouter(
             appVersion = "test",
             serverEnabled = { true },
             pairingSession = ExternalApiPairingSession(),
-            pairedClients = { emptyList() },
+            pairedClients = { clients },
             dangerousEnabled = { false },
             signalReader = ExternalApiSignalReader(),
             automationsProvider = { emptyList() },
             executeActions = { emptyList() },
             runAutomationNow = { null },
             webPanelEnabled = { webPanelEnabled },
+            onAuthenticated = onAuthenticated,
         )
 }

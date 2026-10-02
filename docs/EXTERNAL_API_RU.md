@@ -472,7 +472,7 @@ Intent из Monitor).
 
 1. Точный default port и диапазон допустимых портов в UI.
 2. Pairing: long-poll vs `202 pending` + status poll (рекомендация: pending + poll).
-3. Нужен ли TTL у access token или только revoke вручную (сейчас: только revoke).
+3. TTL access token: ручной revoke, плюс удаление, если токен не использовался больше 6 календарных месяцев. Проверка — через 1 минуту после запуска сервера API. Успешный запрос с Bearer обновляет время (на диск не чаще раза в час; повторно — в момент проверки).
 4. Форма `geo_position` и набор id для G6 в JSON ответа signals.
 5. Нужен ли позже mDNS / QR с URL для телефона.
 6. HTTPS / certificate pinning — после стабилизации HTTP v1.

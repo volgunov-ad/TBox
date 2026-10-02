@@ -1406,6 +1406,7 @@
     <string name="settings_api_clients_title">Доверенные клиенты</string>
     <string name="settings_api_clients_empty">Нет сопряжённых приложений</string>
     <string name="settings_api_client_revoke">Отозвать</string>
+    <string name="settings_api_client_last_used">Использовался %1$s</string>
     <string name="settings_api_manual_token_title">Токен вручную</string>
     <string name="settings_api_manual_token_desc">Для телефона, Tasker, curl: создайте токен здесь, скопируйте и вставьте в команду. Показывается один раз.</string>
     <string name="settings_api_manual_token_name_hint">Имя клиента</string>
