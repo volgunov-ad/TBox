@@ -23,12 +23,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -137,6 +142,16 @@ internal fun requestSystemUninstall(context: Context, packageName: String): Bool
     }
 }
 
+/**
+ * Case-insensitive substring match on app [label] or [packageName].
+ * Blank [query] matches everything (full list).
+ */
+internal fun appListMatchesFilter(label: String, packageName: String, query: String): Boolean {
+    val needle = query.trim().lowercase()
+    if (needle.isEmpty()) return true
+    return label.lowercase().contains(needle) || packageName.lowercase().contains(needle)
+}
+
 internal fun formatAppListAdbStatusLine(
     status: PackageAdbActions.PackageStatus?,
     hiddenLabel: String,
@@ -208,6 +223,7 @@ internal fun AppListDialog(
     val installedApps = rememberInstalledAppEntries(settingsViewModel, iconRevision)
     var showHidden by rememberSaveable { mutableStateOf(false) }
     var advancedMode by rememberSaveable { mutableStateOf(false) }
+    var filterText by rememberSaveable { mutableStateOf("") }
     var pendingUninstall by remember { mutableStateOf<AppListRow?>(null) }
     var pendingAdb by remember { mutableStateOf<PendingAdbAction?>(null) }
     var adbStatuses by remember { mutableStateOf<Map<String, PackageAdbActions.PackageStatus>>(emptyMap()) }
@@ -264,6 +280,25 @@ internal fun AppListDialog(
                     .toList()
                 if (extras.isEmpty()) list else (list + extras).sortedBy { it.label.lowercase() }
             }
+    }
+    val filteredRows = remember(rows, filterText) {
+        if (filterText.trim().isEmpty()) {
+            rows
+        } else {
+            rows.filter { appListMatchesFilter(it.label, it.packageName, filterText) }
+        }
+    }
+    // Confirm dialogs target a specific package: drop them if that row is filtered away.
+    LaunchedEffect(filteredRows, pendingUninstall, pendingAdb) {
+        val visible = filteredRows.mapTo(HashSet(filteredRows.size)) { it.packageName }
+        val uninstallPkg = pendingUninstall?.packageName
+        if (uninstallPkg != null && uninstallPkg !in visible) {
+            pendingUninstall = null
+        }
+        val adbPkg = pendingAdb?.row?.packageName
+        if (adbPkg != null && adbPkg !in visible) {
+            pendingAdb = null
+        }
     }
 
     fun tearDownAdvancedAndDismiss() {
@@ -338,7 +373,35 @@ internal fun AppListDialog(
             ) {
                 AppAlertDialogTitle(stringResource(R.string.app_list_dialog_title))
                 Spacer(modifier = Modifier.height(12.dp))
-                if (rows.isEmpty()) {
+                // Same OutlinedTextField filter pattern as the widget tile-type picker.
+                OutlinedTextField(
+                    value = filterText,
+                    onValueChange = { filterText = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    textStyle = MaterialTheme.typography.tboxTitle,
+                    label = {
+                        Text(
+                            text = stringResource(R.string.app_list_search_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                        )
+                    },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (filterText.isNotEmpty()) {
+                            IconButton(
+                                onClick = rememberWrappedOnClick { filterText = "" },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Clear,
+                                    contentDescription = stringResource(R.string.action_clear),
+                                )
+                            }
+                        }
+                    },
+                )
+                if (filteredRows.isEmpty()) {
                     Text(
                         text = stringResource(R.string.app_list_empty),
                         style = MaterialTheme.typography.tboxBody,
@@ -355,7 +418,7 @@ internal fun AppListDialog(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         contentPadding = PaddingValues(bottom = 8.dp),
                     ) {
-                        items(rows, key = { it.packageName }) { row ->
+                        items(filteredRows, key = { it.packageName }) { row ->
                             AppListDialogRow(
                                 row = row,
                                 showHidden = showHidden,
