@@ -136,6 +136,7 @@
       var RIGHT_TEMP = 111;
       var FAN = 38;
       var AUTO = 110;
+      var SYNC = 94;
       var BLOW = 40;
       var HVAC_MODE = 140;
       var HVAC_MODES = [
@@ -163,6 +164,7 @@
           passenger: "Пассажир",
           fan: "Обдув",
           auto: "Авто",
+          sync: "Синхронизация",
           mode: "Режим климата",
           modeEco: "ECO",
           modeComfort: "Комфорт",
@@ -204,6 +206,7 @@
           passenger: "Passenger",
           fan: "Fan",
           auto: "Auto",
+          sync: "Sync",
           mode: "Climate mode",
           modeEco: "ECO",
           modeComfort: "Comfort",
@@ -261,6 +264,7 @@
         right: null,
         fan: null,
         auto: null,
+        sync: null,
         blow: null,
         mode: null,
         seat: {}
@@ -419,6 +423,10 @@
         for (var i = 0; i < autoButtons.length; i++) {
           autoButtons[i].className = state.auto === "on" ? "on-off" : "";
         }
+        var syncButtons = document.querySelectorAll("[data-sync]");
+        for (var s = 0; s < syncButtons.length; s++) {
+          syncButtons[s].className = state.sync === "on" ? "on-off" : "";
+        }
         var blowButtons = document.querySelectorAll("[data-blow]");
         for (var j = 0; j < blowButtons.length; j++) {
           var el = blowButtons[j];
@@ -472,6 +480,11 @@
           button(lang.auto, toggleAuto)
         ], function (el) {
           el.setAttribute("data-auto", "1");
+        }));
+        root.appendChild(choiceRow(lang.sync, [
+          button("SYNC", toggleSync)
+        ], function (el) {
+          el.setAttribute("data-sync", "1");
         }));
         root.appendChild(choiceRow(lang.mode, HVAC_MODES.map(function (mode) {
           var el = button(lang[mode.label], function () { setHvacMode(mode); });
@@ -628,6 +641,13 @@
         enqueue(function () { return invoke(AUTO, next); });
       }
 
+      function toggleSync() {
+        var next = state.sync === "on" ? "off" : "on";
+        state.sync = next;
+        paintClimate();
+        enqueue(function () { return invoke(SYNC, next); });
+      }
+
       function setBlow(mode) {
         state.blow = mode.state;
         paintClimate();
@@ -690,6 +710,8 @@
         if (state.fan != null) state.fan = Math.round(state.fan);
         var auto = stateOrNull(hu.hvac_auto);
         if (auto != null) state.auto = auto;
+        var sync = stateOrNull(hu.hvac_sync);
+        if (sync != null) state.sync = sync;
         var blow = stateOrNull(hu.hvac_fan_direction);
         if (blow != null) state.blow = blow;
         var custom = stateOrNull(hu.hvac_custom_mode);
@@ -719,7 +741,7 @@
         }
         polling = true;
         Promise.all([
-          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
+          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
           loadSignals("tbox", "inside_temperature,outside_temperature")
         ]).then(function (parts) {
           var denied = parts[0].status === 401 || parts[1].status === 401;
