@@ -2502,6 +2502,7 @@
     <string name="ui_icons_replace_variant">Заменить</string>
 
     <string name="app_list_dialog_title">Список программ</string>
+    <string name="app_list_search_hint">Поиск по названию или пакету</string>
     <string name="app_list_action_open">Открыть</string>
     <string name="app_list_action_open_in_window">Открыть в окне</string>
     <string name="app_list_action_hide">Скрыть из списка</string>

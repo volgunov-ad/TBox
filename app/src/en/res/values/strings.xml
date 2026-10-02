@@ -2481,6 +2481,7 @@
     <string name="ui_icons_replace_variant">Replace</string>
 
     <string name="app_list_dialog_title">App list</string>
+    <string name="app_list_search_hint">Search by name or package</string>
     <string name="app_list_action_open">Open</string>
     <string name="app_list_action_open_in_window">Open in window</string>
     <string name="app_list_action_hide">Hide from list</string>
