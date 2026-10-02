@@ -1375,7 +1375,7 @@
     <string name="settings_api_enable_title">Enable API server</string>
     <string name="settings_api_enable_desc">Local HTTP API for external apps on the same network (voice, phone).</string>
     <string name="settings_api_web_panel_title">Simple web panel</string>
-    <string name="settings_api_web_panel_desc">Climate page on the same port: outside, cabin, two zones, and seats. Open it in a phone browser and paste the API token.</string>
+    <string name="settings_api_web_panel_desc">Climate page on the same port: outside, cabin, two zones, and seats. Turn on pairing on the head unit, tap Send request on the page, and approve it.</string>
     <string name="settings_api_web_panel_url_local">Panel: http://127.0.0.1:%1$d/</string>
     <string name="settings_api_web_panel_url_lan">Panel: http://%1$s:%2$d/</string>
     <string name="settings_api_port_title">Port</string>

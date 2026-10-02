@@ -1383,7 +1383,7 @@
     <string name="settings_api_enable_title">Включить сервер API</string>
     <string name="settings_api_enable_desc">Локальный HTTP API для внешних приложений в той же сети (голос, телефон).</string>
     <string name="settings_api_web_panel_title">Простая веб-панель</string>
-    <string name="settings_api_web_panel_desc">Страница климата на том же порту: улица, салон, две зоны и сиденья. Откройте её в браузере телефона и вставьте токен API.</string>
+    <string name="settings_api_web_panel_desc">Страница климата на том же порту: улица, салон, две зоны и сиденья. На ГУ включите сопряжение, на странице нажмите «Отправить запрос» и подтвердите.</string>
     <string name="settings_api_web_panel_url_local">Панель: http://127.0.0.1:%1$d/</string>
     <string name="settings_api_web_panel_url_lan">Панель: http://%1$s:%2$d/</string>
     <string name="settings_api_port_title">Порт</string>

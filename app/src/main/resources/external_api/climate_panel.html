@@ -74,6 +74,10 @@
     button.on-vent { background: var(--vent); color: #082028; }
     button.on-off { background: var(--accent); color: #fff; }
     .levels { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .hint, #pair-status { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+    #pair-status { min-height: 1.2em; margin: 8px 0 0; }
+    button.primary { background: var(--accent); color: #fff; width: 100%; }
+    details summary { color: var(--muted); cursor: pointer; margin: 12px 0 8px; }
     .token { display: flex; gap: 8px; }
     .token input {
       flex: 1;
@@ -104,16 +108,23 @@
     <section class="card" id="climate"></section>
     <section class="card" id="seats"></section>
     <section class="card">
-      <h2 id="lbl-token">Токен API</h2>
-      <div class="token">
-        <input id="token" type="password" autocomplete="off" spellcheck="false">
-        <button id="save-token" type="button">OK</button>
-      </div>
+      <h2 id="lbl-connect">Подключение</h2>
+      <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
+      <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
+      <p id="pair-status"></p>
+      <details>
+        <summary id="lbl-token">Токен вручную</summary>
+        <div class="token">
+          <input id="token" type="password" autocomplete="off" spellcheck="false">
+          <button id="save-token" type="button">OK</button>
+        </div>
+      </details>
     </section>
   </main>
   <script>
     (function () {
       var TOKEN_KEY = "tbox.climate.token";
+      var CLIENT_ID_KEY = "tbox.climate.clientId";
       var POLL_MS = 2000;
       var LEFT_TEMP = 37;
       var RIGHT_TEMP = 111;
@@ -134,12 +145,23 @@
           rearLeft: "Сзади слева",
           rearRight: "Сзади справа",
           off: "Выкл",
-          token: "Токен API",
+          connect: "Подключение",
+          pairHint: "На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.",
+          pair: "Отправить запрос",
+          token: "Токен вручную",
           save: "Сохранить",
-          needToken: "Вставьте токен из Настройки → API. Он сохранится в этом браузере.",
-          unauthorized: "Токен не принят. Создайте новый в Настройки → API.",
+          clientName: "Веб-панель",
+          needToken: "На ГУ включите «Подключить приложение», затем нажмите «Отправить запрос».",
+          unauthorized: "Токен не принят. Отправьте запрос сопряжения ещё раз.",
           offline: "Нет ответа от головного устройства.",
-          updated: "Обновлено"
+          updated: "Обновлено",
+          pairSending: "Отправляю запрос…",
+          pairInactive: "На ГУ сначала нажмите «Подключить приложение».",
+          pairWaiting: "Подтвердите запрос на головном устройстве.",
+          pairDenied: "Запрос отклонён.",
+          pairTimeout: "Время сопряжения вышло. Включите его на ГУ ещё раз.",
+          pairLost: "Запрос пропал. Включите сопряжение на ГУ и отправьте снова.",
+          pairOk: "Подключено. Токен сохранён в этом браузере."
         },
         en: {
           title: "Climate",
@@ -153,12 +175,23 @@
           rearLeft: "Rear left",
           rearRight: "Rear right",
           off: "Off",
-          token: "API token",
+          connect: "Connection",
+          pairHint: "On the head unit: Settings → API → Connect app. Then tap the button and approve the request.",
+          pair: "Send request",
+          token: "Manual token",
           save: "Save",
-          needToken: "Paste the token from Settings → API. It stays in this browser.",
-          unauthorized: "Token rejected. Create a new one in Settings → API.",
+          clientName: "Web panel",
+          needToken: "On the head unit turn on Connect app, then tap Send request.",
+          unauthorized: "Token rejected. Send the pairing request again.",
           offline: "No response from the head unit.",
-          updated: "Updated"
+          updated: "Updated",
+          pairSending: "Sending request…",
+          pairInactive: "On the head unit, tap Connect app first.",
+          pairWaiting: "Approve the request on the head unit.",
+          pairDenied: "Request denied.",
+          pairTimeout: "Pairing timed out. Turn it on again on the head unit.",
+          pairLost: "The request disappeared. Turn pairing on and send it again.",
+          pairOk: "Connected. The token is saved in this browser."
         }
       };
       var lang = ((navigator.language || "ru").toLowerCase().indexOf("en") === 0) ? STR.en : STR.ru;
@@ -195,8 +228,12 @@
       document.title = "TBox " + lang.title;
       document.getElementById("lbl-out").textContent = lang.outside;
       document.getElementById("lbl-in").textContent = lang.inside;
+      document.getElementById("lbl-connect").textContent = lang.connect;
+      document.getElementById("pair-hint").textContent = lang.pairHint;
+      document.getElementById("pair-btn").textContent = lang.pair;
       document.getElementById("lbl-token").textContent = lang.token;
       document.getElementById("save-token").textContent = lang.save;
+      document.getElementById("pair-btn").addEventListener("click", sendPairRequest);
 
       var params = new URLSearchParams(location.search);
       if (params.get("token")) {
@@ -215,8 +252,94 @@
       renderSeats();
       renderTemps();
 
+      var pairing = false;
+
       function token() {
         return (localStorage.getItem(TOKEN_KEY) || "").trim();
+      }
+
+      function clientId() {
+        var id = localStorage.getItem(CLIENT_ID_KEY);
+        if (id) return id;
+        id = "web-" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+        localStorage.setItem(CLIENT_ID_KEY, id);
+        return id;
+      }
+
+      function setPairStatus(text) {
+        document.getElementById("pair-status").textContent = text;
+      }
+
+      function delay(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+      }
+
+      function readJson(response) {
+        return response.json().then(function (body) {
+          return { status: response.status, body: body };
+        });
+      }
+
+      function sendPairRequest() {
+        if (pairing) return;
+        pairing = true;
+        document.getElementById("pair-btn").disabled = true;
+        setPairStatus(lang.pairSending);
+        fetch("/v1/pair/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: clientId(),
+            clientName: lang.clientName,
+            clientKind: "web"
+          })
+        }).then(readJson).then(function (res) {
+          if (res.status === 403) {
+            setPairStatus(lang.pairInactive);
+            return null;
+          }
+          if (res.status !== 202 || !res.body || !res.body.requestId) {
+            var message = res.body && res.body.error && res.body.error.message;
+            setPairStatus(message || lang.offline);
+            return null;
+          }
+          setPairStatus(lang.pairWaiting);
+          return pollPair(res.body.requestId, Date.now() + 120000);
+        }).catch(function () {
+          setPairStatus(lang.offline);
+        }).then(function () {
+          pairing = false;
+          document.getElementById("pair-btn").disabled = false;
+        });
+      }
+
+      function pollPair(requestId, deadline) {
+        if (Date.now() > deadline) {
+          setPairStatus(lang.pairTimeout);
+          return;
+        }
+        return fetch("/v1/pair/status?requestId=" + encodeURIComponent(requestId))
+          .then(readJson)
+          .then(function (res) {
+            if (res.status === 404) {
+              setPairStatus(lang.pairLost);
+              return;
+            }
+            var st = res.body && res.body.status;
+            if (st === "pending") return delay(1000).then(function () { return pollPair(requestId, deadline); });
+            if (st === "denied") {
+              setPairStatus(lang.pairDenied);
+              return;
+            }
+            if (st === "approved" && res.body.accessToken) {
+              localStorage.setItem(TOKEN_KEY, res.body.accessToken);
+              document.getElementById("token").value = res.body.accessToken;
+              setPairStatus(lang.pairOk);
+              tick();
+              return;
+            }
+            setPairStatus(lang.offline);
+          });
       }
 
       function setStatus(text) {
