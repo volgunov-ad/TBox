@@ -25,10 +25,8 @@ class Elm327Manager(
 ) {
     companion object {
         private const val TAG = "Elm327Manager"
-        private val REOPEN_BACKOFF_MS = longArrayOf(3_000L, 10_000L, 30_000L)
         private const val POLL_IDLE_MS = 250L
         private const val BETWEEN_PIDS_MS = 40L
-        private const val PAIRING_RETRY_MS = 60_000L
 
         /** Consecutive transacts without an ELM `>` prompt before forcing a reconnect. */
         private const val SILENT_FAILURE_LIMIT = 3
@@ -48,6 +46,9 @@ class Elm327Manager(
     private var deviceAddress: String = ""
     private var pairingPin: String = ""
     private var reopenFailureStreak = 0
+    /** True after RFCOMM init succeeded at least once for this [start]. */
+    private var hadSuccessfulLink = false
+    private var bondAttemptIndex = 0
     private var silentFailureStreak = 0
     private var lastGoodTransactMs = 0L
     private var lastPairingAttemptMs = 0L
@@ -87,6 +88,10 @@ class Elm327Manager(
         if (running && mac == deviceAddress && loopJob?.isActive == true) return
         stopInternal(clearInterest = false)
         deviceAddress = mac
+        hadSuccessfulLink = false
+        reopenFailureStreak = 0
+        bondAttemptIndex = 0
+        lastPairingAttemptMs = 0L
         running = true
         ObdRepository.setLastError(null)
         ObdRepository.setStatus("starting")
@@ -265,9 +270,11 @@ class Elm327Manager(
                     session?.close()
                     session = null
                 }
-                val wait = REOPEN_BACKOFF_MS[
-                    reopenFailureStreak.coerceIn(0, REOPEN_BACKOFF_MS.lastIndex),
-                ]
+                val wait = Elm327ReconnectPolicy.backoffMs(hadSuccessfulLink, reopenFailureStreak)
+                Log.i(
+                    TAG,
+                    "reconnect in ${wait}ms (hadLink=$hadSuccessfulLink streak=$reopenFailureStreak)",
+                )
                 reopenFailureStreak++
                 delay(wait)
             }
@@ -306,9 +313,17 @@ class Elm327Manager(
         if (!running) return
         val s = Elm327BluetoothSession(deviceAddress)
         connectingSession.set(s)
+        val rfcommAttempts = Elm327ReconnectPolicy.rfcommAttemptCount(
+            hadSuccessfulLink,
+            reopenFailureStreak,
+        )
+        val connectTimeoutMs = Elm327ReconnectPolicy.connectTimeoutMs(
+            hadSuccessfulLink,
+            reopenFailureStreak,
+        )
         try {
             withContext(Dispatchers.IO) {
-                s.open()
+                s.open(maxAttempts = rfcommAttempts, connectTimeoutMs = connectTimeoutMs)
                 if (!running) {
                     s.close()
                     return@withContext
@@ -330,6 +345,7 @@ class Elm327Manager(
                 session = s
             }
             reopenFailureStreak = 0
+            hadSuccessfulLink = true
             silentFailureStreak = 0
             lastGoodTransactMs = System.currentTimeMillis()
             ObdRepository.setConnected(true)
@@ -344,15 +360,26 @@ class Elm327Manager(
     }
 
     private suspend fun maybePairDevice() {
-        val now = System.currentTimeMillis()
-        if (now - lastPairingAttemptMs < PAIRING_RETRY_MS) return
-        lastPairingAttemptMs = now
         if (Elm327BtPairing.isBonded(deviceAddress)) return
+        val now = System.currentTimeMillis()
+        val retryMs = Elm327ReconnectPolicy.bondRetryMs(hadSuccessfulLink, reopenFailureStreak)
+        if (now - lastPairingAttemptMs < retryMs) return
+        lastPairingAttemptMs = now
+        val pin = Elm327ReconnectPolicy.pinForAttempt(pairingPin, bondAttemptIndex)
+        bondAttemptIndex++
         ObdRepository.setStatus("pairing")
-        val result = Elm327BtPairing.ensureBonded(context, deviceAddress, pairingPin)
+        val result = Elm327BtPairing.ensureBonded(
+            context = context,
+            address = deviceAddress,
+            pins = listOf(pin),
+            bondTimeoutMs = Elm327ReconnectPolicy.bondTimeoutMs(
+                hadSuccessfulLink,
+                reopenFailureStreak,
+            ),
+        )
         Log.i(
             TAG,
-            "pairing ensureBonded=${result.success} usedPin=${result.usedPin != null} for $deviceAddress",
+            "pairing ensureBonded=${result.success} pinLen=${pin.length} for $deviceAddress",
         )
         val resolved = result.usedPin?.trim().orEmpty()
         if (result.success && resolved.isNotEmpty() && resolved != pairingPin) {

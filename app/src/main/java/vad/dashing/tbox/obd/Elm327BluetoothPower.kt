@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.channels.awaitClose
@@ -34,10 +35,20 @@ object Elm327BluetoothPower {
      * Request Bluetooth on and wait until [BluetoothAdapter.STATE_ON] or [timeoutMs].
      * Returns true when Bluetooth is on.
      */
+    /**
+     * Turn the radio on only when it stays off. A brief [isEnabled] false during our own
+     * page of a missing ELM must not call [BluetoothAdapter.enable] — that drops every ACL.
+     */
     @SuppressLint("MissingPermission")
-    suspend fun ensureEnabled(context: Context, timeoutMs: Long = 20_000L): Boolean =
-        withContext(Dispatchers.Main) {
-            val adapter = adapterOrNull() ?: return@withContext false
+    suspend fun ensureEnabled(context: Context, timeoutMs: Long = 20_000L): Boolean {
+        val adapter = adapterOrNull() ?: return false
+        if (adapter.isEnabled) return true
+        delay(Elm327ReconnectPolicy.BT_OFF_SETTLE_MS)
+        if (adapter.isEnabled) {
+            Log.i(TAG, "Bluetooth back on after settle; skip enable()")
+            return true
+        }
+        return withContext(Dispatchers.Main) {
             if (adapter.isEnabled) return@withContext true
             if (!canToggleBluetooth(context)) {
                 Log.w(TAG, "missing permission to enable Bluetooth")
@@ -52,6 +63,7 @@ object Elm327BluetoothPower {
             waitUntilState(context, BluetoothAdapter.STATE_ON, timeoutMs)
             adapter.isEnabled
         }
+    }
 
     @SuppressLint("MissingPermission")
     fun setEnabled(context: Context, enabled: Boolean): Boolean {

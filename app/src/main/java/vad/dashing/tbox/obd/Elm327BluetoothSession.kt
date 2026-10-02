@@ -25,7 +25,7 @@ class Elm327BluetoothSession(
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private const val DEFAULT_TIMEOUT_MS = 4_000L
         private const val INIT_TIMEOUT_MS = 8_000L
-        private const val CONNECT_TIMEOUT_MS = 15_000L
+        const val CONNECT_TIMEOUT_MS = 15_000L
     }
 
     private var socket: BluetoothSocket? = null
@@ -36,8 +36,11 @@ class Elm327BluetoothSession(
     val isOpen: Boolean
         get() = !closed.get() && socket?.isConnected == true
 
+    /**
+     * @param maxAttempts 1 = insecure SPP only (missing dongle). 3 = insecure, secure, channel 1.
+     */
     @SuppressLint("MissingPermission")
-    fun open() {
+    fun open(maxAttempts: Int = 3, connectTimeoutMs: Long = CONNECT_TIMEOUT_MS) {
         closeQuietly()
         closed.set(false)
         val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -50,7 +53,11 @@ class Elm327BluetoothSession(
         }
         runCatching { adapter.cancelDiscovery() }
 
-        val sock = connectWithFallback(device)
+        val sock = connectWithFallback(
+            device,
+            maxAttempts.coerceIn(1, 3),
+            connectTimeoutMs.coerceAtLeast(1_000L),
+        )
         socket = sock
         reader = BufferedReader(InputStreamReader(sock.inputStream, Charsets.US_ASCII))
         writer = OutputStreamWriter(sock.outputStream, Charsets.US_ASCII)
@@ -58,7 +65,11 @@ class Elm327BluetoothSession(
     }
 
     @SuppressLint("MissingPermission")
-    private fun connectWithFallback(device: BluetoothDevice): BluetoothSocket {
+    private fun connectWithFallback(
+        device: BluetoothDevice,
+        maxAttempts: Int,
+        connectTimeoutMs: Long,
+    ): BluetoothSocket {
         val attempts = listOf(
             { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) },
             { device.createRfcommSocketToServiceRecord(SPP_UUID) },
@@ -68,7 +79,7 @@ class Elm327BluetoothSession(
                     .getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
                     .invoke(device, 1) as BluetoothSocket
             },
-        )
+        ).take(maxAttempts)
         var lastError: Exception? = null
         for ((index, factory) in attempts.withIndex()) {
             var sock: BluetoothSocket? = null
@@ -77,7 +88,7 @@ class Elm327BluetoothSession(
                 sock = factory()
                 // Publish early so [close] can abort a hung [BluetoothSocket.connect].
                 socket = sock
-                connectWithTimeout(sock!!, CONNECT_TIMEOUT_MS)
+                connectWithTimeout(sock!!, connectTimeoutMs)
                 if (closed.get()) {
                     runCatching { sock.close() }
                     error("session closed")
