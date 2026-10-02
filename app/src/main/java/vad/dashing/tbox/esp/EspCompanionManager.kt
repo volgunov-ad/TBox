@@ -969,7 +969,7 @@ class EspCompanionManager(
                     publishActiveLocation(loc)
                 }
             }
-            is EspMessage.Gpio -> EspCompanionRepository.updateGpioMask(msg.mask)
+            is EspMessage.Gpio -> EspCompanionRepository.confirmGpioSnapshot(msg.mask)
             is EspMessage.GpioEvent -> {
                 Log.d(TAG, "gpioEvent ch=${msg.channel} level=${msg.level}")
                 EspCompanionRepository.applyGpioEvent(msg.channel, msg.level)

@@ -141,11 +141,13 @@ class AutomationEvaluator(
     fun onSignalSample(sample: AutomationSignalSample): AutomationTriggerFire? {
         if (sample.value == AutomationSignalValue.Unavailable) {
             latestSamples.remove(sample.key)
+            val rebaseline = sample.key.baselinesAfterGap()
             definition.triggers.forEach { trigger ->
                 if (trigger.signalKeyOrNull() == sample.key) {
                     invalidate(
                         triggerStates.getValue(trigger.id),
-                        rearm = trigger.rearmsOnUnavailable(),
+                        rearm = trigger.rearmsOnUnavailable() && !rebaseline,
+                        rebaseline = rebaseline,
                     )
                 }
             }
@@ -327,15 +329,19 @@ class AutomationEvaluator(
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
-    private fun invalidate(state: RuntimeState, rearm: Boolean = false) {
+    private fun invalidate(state: RuntimeState, rearm: Boolean = false, rebaseline: Boolean = false) {
         if (state.initialized) {
             state.initialFireAllowed = false
         }
-        // Keep initialized. A brief Unavailable must break the hold timer, not treat the
-        // next matching sample as a cold-start baseline (that would disarm while still matching).
+        // A brief Unavailable breaks the hold timer. initialized stays set so the next
+        // matching sample is not a cold-start baseline (that would disarm while still matching).
         // lastNumericValue is kept so "no hysteresis" can tell a repeated number from a new one.
         // StateEquals: no value means "not this state" — rearm so app-gone → app-back can fire.
-        if (rearm) {
+        // ESP inputs pass rebaseline: the next sample is the link snapshot, not an edge.
+        if (rebaseline) {
+            state.initialized = false
+            state.armed = true
+        } else if (rearm) {
             state.armed = true
         }
         state.matchingSinceElapsedMillis = null
@@ -643,6 +649,16 @@ private fun AutomationTrigger.usesRearmHysteresis(): Boolean = when (this) {
 }
 
 private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = this is AutomationTrigger.StateEquals
+
+/** First live sample after a gap is a snapshot of current levels, not an edge. */
+private fun AutomationSignalKey.baselinesAfterGap(): Boolean = when (signal) {
+    AutomationSignalId.ESP_GPIO_IN_0,
+    AutomationSignalId.ESP_GPIO_IN_1,
+    AutomationSignalId.ESP_GPIO_IN_2,
+    AutomationSignalId.ESP_GPIO_IN_3,
+    -> true
+    else -> false
+}
 
 private fun numericValueChanged(lastNumeric: Double?, value: AutomationSignalValue): Boolean {
     val number = (value as? AutomationSignalValue.Number)?.value ?: return true
