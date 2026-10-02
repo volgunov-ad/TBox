@@ -1,5 +1,7 @@
 package vad.dashing.tbox.externalapi
 
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,6 +31,20 @@ class ExternalApiPairedClientTest {
         val encoded = ExternalApiPairedClient.encodeList(clients)
         val decoded = ExternalApiPairedClient.decodeList(encoded)
         assertEquals(clients, decoded)
+    }
+
+    @Test
+    fun decodeList_missingLastUsed_fallsBackToCreatedAt() {
+        val json = JSONArray()
+            .put(
+                JSONObject()
+                    .put("clientId", "old")
+                    .put("clientName", "Phone")
+                    .put("tokenHash", "abc")
+                    .put("createdAtEpochMs", 1_700_000_000_000L),
+            )
+        val decoded = ExternalApiPairedClient.decodeList(json.toString())
+        assertEquals(1_700_000_000_000L, decoded.single().lastUsedAtEpochMs)
     }
 
     @Test

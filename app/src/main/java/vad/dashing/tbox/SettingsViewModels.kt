@@ -616,6 +616,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val externalApiWebPanelEnabled = settingsManager.externalApiWebPanelEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
@@ -2266,6 +2273,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExternalApiDangerousEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExternalApiDangerousEnabled(enabled)
+        }
+    }
+
+    fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiWebPanelEnabled(enabled)
         }
     }
 

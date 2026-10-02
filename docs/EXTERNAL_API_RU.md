@@ -166,8 +166,9 @@ scopes), не plaintext токена в логах.
 
 | Endpoint | Без Bearer |
 |----------|------------|
-| `GET /v1/health` | допускается урезанный ответ (alive / версия API / pairingActive), **без** секретов и телеметрии |
+| `GET /v1/health` | допускается урезанный ответ (alive / версия API / pairingActive / webPanelEnabled), **без** секретов и телеметрии |
 | `POST /v1/pair/request` | только при активном pairing |
+| `GET /` и `GET /panel` | только если в Настройки → API включена **простая веб-панель**: статический HTML, без телеметрии. Кнопка на странице вызывает тот же `POST /v1/pair/request` и поллит `GET /v1/pair/status`. Дальше команды идут в `/v1` с полученным Bearer |
 | Остальные | `401` |
 
 ### Клиент для проверки с ПК
@@ -471,7 +472,7 @@ Intent из Monitor).
 
 1. Точный default port и диапазон допустимых портов в UI.
 2. Pairing: long-poll vs `202 pending` + status poll (рекомендация: pending + poll).
-3. Нужен ли TTL у access token или только revoke вручную (сейчас: только revoke).
+3. TTL access token: ручной revoke, плюс удаление, если токен не использовался больше 6 календарных месяцев. Проверка — через 1 минуту после запуска сервера API. Успешный запрос с Bearer обновляет время (на диск не чаще раза в час; повторно — в момент проверки).
 4. Форма `geo_position` и набор id для G6 в JSON ответа signals.
 5. Нужен ли позже mDNS / QR с URL для телефона.
 6. HTTPS / certificate pinning — после стабилизации HTTP v1.

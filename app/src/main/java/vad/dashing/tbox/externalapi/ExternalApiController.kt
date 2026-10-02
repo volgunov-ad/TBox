@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.SettingsManager
@@ -70,12 +72,19 @@ class ExternalApiController(
     private val _pendingPairRequests = MutableStateFlow<List<ExternalApiPairRequest>>(emptyList())
     val pendingPairRequests: StateFlow<List<ExternalApiPairRequest>> = _pendingPairRequests.asStateFlow()
 
+    private val clientsLock = Any()
+    private val persistMutex = Mutex()
+    private val lastPersistedUseAt = HashMap<String, Long>()
+
+    @Volatile
     private var pairedClients: List<ExternalApiPairedClient> = emptyList()
     private var enabled: Boolean = false
     private var port: Int = ExternalApiConstants.DEFAULT_PORT
     private var dangerousEnabled: Boolean = false
+    private var climatePanelEnabled: Boolean = false
     private var automations: List<AutomationDefinition> = emptyList()
     private var pairingTimeoutJob: Job? = null
+    private var tokenExpiryJob: Job? = null
     private var observeJob: Job? = null
 
     private val httpServer = ExternalApiHttpServer { method, path, query, headers, body ->
@@ -100,6 +109,8 @@ class ExternalApiController(
                 null
             }
         },
+        webPanelEnabled = { climatePanelEnabled },
+        onAuthenticated = ::noteTokenUsed,
     )
 
     fun start() {
@@ -110,13 +121,20 @@ class ExternalApiController(
                 settingsManager.externalApiPortFlow,
                 settingsManager.externalApiDangerousEnabledFlow,
                 settingsManager.externalApiClientsJsonFlow,
-            ) { apiEnabled, apiPort, apiDangerous, clientsJson ->
-                Quad(apiEnabled, apiPort, apiDangerous, clientsJson)
-            }.collectLatest { (apiEnabled, apiPort, apiDangerous, clientsJson) ->
-                enabled = apiEnabled
-                port = apiPort.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
-                dangerousEnabled = apiDangerous
-                pairedClients = ExternalApiPairedClient.decodeList(clientsJson)
+                settingsManager.externalApiWebPanelEnabledFlow,
+            ) { apiEnabled, apiPort, apiDangerous, clientsJson, webPanel ->
+                ApiRuntimeSettings(apiEnabled, apiPort, apiDangerous, clientsJson, webPanel)
+            }.collectLatest { settings ->
+                enabled = settings.enabled
+                port = settings.port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
+                dangerousEnabled = settings.dangerousEnabled
+                climatePanelEnabled = settings.webPanelEnabled
+                synchronized(clientsLock) {
+                    pairedClients = ExternalApiAuth.mergeNewerUsage(
+                        incoming = ExternalApiPairedClient.decodeList(settings.clientsJson),
+                        current = pairedClients,
+                    )
+                }
                 syncServer()
                 publishStatus()
             }
@@ -139,8 +157,11 @@ class ExternalApiController(
         observeJob = null
         pairingTimeoutJob?.cancel()
         pairingTimeoutJob = null
+        tokenExpiryJob?.cancel()
+        tokenExpiryJob = null
         pairingSession.stopPairing()
         httpServer.stop()
+        persistClients()
         publishStatus()
     }
 
@@ -170,18 +191,18 @@ class ExternalApiController(
         val request = pairingSession.getRequest(requestId) ?: return
         val token = ExternalApiAuth.generateToken()
         pairingSession.approveRequest(requestId, token)
-        pairedClients = ExternalApiAuth.registerApprovedClient(
-            clients = pairedClients,
-            clientId = request.clientId,
-            clientName = request.clientName,
-            accessToken = token,
-            createdAtEpochMs = System.currentTimeMillis(),
-        )
-        scope.launch {
-            settingsManager.saveExternalApiClientsJson(
-                ExternalApiPairedClient.encodeList(pairedClients),
+        val createdAt = System.currentTimeMillis()
+        synchronized(clientsLock) {
+            pairedClients = ExternalApiAuth.registerApprovedClient(
+                clients = pairedClients,
+                clientId = request.clientId,
+                clientName = request.clientName,
+                accessToken = token,
+                createdAtEpochMs = createdAt,
             )
+            lastPersistedUseAt[request.clientId] = createdAt
         }
+        persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Pair approved: ${request.clientName}")
         stopPairing()
         _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
@@ -194,12 +215,11 @@ class ExternalApiController(
     }
 
     fun revokeClient(clientId: String) {
-        pairedClients = ExternalApiAuth.revokeClient(pairedClients, clientId)
-        scope.launch {
-            settingsManager.saveExternalApiClientsJson(
-                ExternalApiPairedClient.encodeList(pairedClients),
-            )
+        synchronized(clientsLock) {
+            pairedClients = ExternalApiAuth.revokeClient(pairedClients, clientId)
+            lastPersistedUseAt.remove(clientId.trim())
         }
+        persistClients()
         publishStatus()
     }
 
@@ -211,18 +231,18 @@ class ExternalApiController(
         val name = clientName.trim().ifEmpty { "Manual token" }
         val clientId = "manual-${java.util.UUID.randomUUID()}"
         val token = ExternalApiAuth.generateToken()
-        pairedClients = ExternalApiAuth.registerApprovedClient(
-            clients = pairedClients,
-            clientId = clientId,
-            clientName = name,
-            accessToken = token,
-            createdAtEpochMs = System.currentTimeMillis(),
-        )
-        scope.launch {
-            settingsManager.saveExternalApiClientsJson(
-                ExternalApiPairedClient.encodeList(pairedClients),
+        val createdAt = System.currentTimeMillis()
+        synchronized(clientsLock) {
+            pairedClients = ExternalApiAuth.registerApprovedClient(
+                clients = pairedClients,
+                clientId = clientId,
+                clientName = name,
+                accessToken = token,
+                createdAtEpochMs = createdAt,
             )
+            lastPersistedUseAt[clientId] = createdAt
         }
+        persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Manual token created: $name")
         publishStatus()
         return ExternalApiManualToken(
@@ -267,8 +287,75 @@ class ExternalApiController(
         }
     }
 
+    private fun noteTokenUsed(client: ExternalApiPairedClient) {
+        val now = System.currentTimeMillis()
+        val persist = synchronized(clientsLock) {
+            var shouldPersist = false
+            pairedClients = pairedClients.map { existing ->
+                if (existing.clientId != client.clientId || existing.tokenHash != client.tokenHash) {
+                    existing
+                } else {
+                    val persistedAt = lastPersistedUseAt[existing.clientId] ?: 0L
+                    if (now - persistedAt >= ExternalApiConstants.TOKEN_USAGE_PERSIST_INTERVAL_MS) {
+                        lastPersistedUseAt[existing.clientId] = now
+                        shouldPersist = true
+                    }
+                    existing.copy(lastUsedAtEpochMs = now)
+                }
+            }
+            shouldPersist
+        }
+        if (persist) {
+            persistClients()
+            publishStatus()
+        }
+    }
+
+    private fun sweepIdleTokens() {
+        val now = System.currentTimeMillis()
+        val removed = synchronized(clientsLock) {
+            val before = pairedClients
+            val kept = ExternalApiAuth.retainRecentlyUsed(before, now)
+            pairedClients = kept
+            val removedIds = before.map { it.clientId }.toSet() - kept.map { it.clientId }.toSet()
+            lastPersistedUseAt.keys.retainAll(kept.map { it.clientId }.toSet())
+            kept.forEach { lastPersistedUseAt[it.clientId] = now }
+            before.filter { it.clientId in removedIds }
+        }
+        removed.forEach { client ->
+            TboxRepository.addLog(
+                "INFO",
+                "ExternalApi",
+                "Token idle > ${ExternalApiConstants.TOKEN_IDLE_MONTHS} months, removed: ${client.clientName}",
+            )
+        }
+        persistClients()
+        publishStatus()
+    }
+
+    private fun persistClients() {
+        scope.launch {
+            persistMutex.withLock {
+                val snapshot = synchronized(clientsLock) { pairedClients }
+                settingsManager.saveExternalApiClientsJson(
+                    ExternalApiPairedClient.encodeList(snapshot),
+                )
+            }
+        }
+    }
+
+    private fun scheduleTokenExpirySweep() {
+        tokenExpiryJob?.cancel()
+        tokenExpiryJob = scope.launch {
+            delay(ExternalApiConstants.TOKEN_EXPIRY_CHECK_DELAY_MS)
+            sweepIdleTokens()
+        }
+    }
+
     private fun syncServer() {
         if (!enabled) {
+            tokenExpiryJob?.cancel()
+            tokenExpiryJob = null
             httpServer.stop()
             publishStatus()
             return
@@ -279,6 +366,9 @@ class ExternalApiController(
         }
         try {
             httpServer.start(port)
+            if (httpServer.isRunning) {
+                scheduleTokenExpirySweep()
+            }
         } catch (error: Exception) {
             val message = error.message ?: error.javaClass.simpleName
             TboxRepository.addLog("ERROR", "ExternalApi", "Bind failed: $message")
@@ -299,11 +389,12 @@ class ExternalApiController(
         )
     }
 
-    private data class Quad<A, B, C, D>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D,
+    private data class ApiRuntimeSettings(
+        val enabled: Boolean,
+        val port: Int,
+        val dangerousEnabled: Boolean,
+        val clientsJson: String,
+        val webPanelEnabled: Boolean,
     )
 }
 

@@ -171,4 +171,76 @@ class ExternalApiRouterTest {
         assertEquals("plain-token-value", json.getString("accessToken"))
         assertEquals("pc-tools", json.getString("clientId"))
     }
+
+    @Test
+    fun webPanel_whenDisabled_isHidden() {
+        val router = router(webPanelEnabled = false)
+        val response = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL, emptyMap(), emptyMap(), "")
+        assertEquals(404, response.status)
+        val health = JSONObject(router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "").body)
+        assertEquals(false, health.getBoolean("webPanelEnabled"))
+    }
+
+    @Test
+    fun webPanel_whenEnabled_servesClimatePageWithoutAuth() {
+        val router = router(webPanelEnabled = true)
+        val response = router.handle("GET", "/", emptyMap(), emptyMap(), "")
+        assertEquals(200, response.status)
+        assertTrue(response.contentType.startsWith("text/html"))
+        assertEquals("no-store", response.headers["Cache-Control"])
+        assertTrue(response.body.contains(ExternalApiClimatePanel.MARKER))
+        assertTrue(response.body.contains("hvac_temperature_left"))
+        assertTrue(response.body.contains("front_left_seat_mode"))
+        assertTrue(response.body.contains("/v1/pair/request"))
+        assertTrue(response.body.contains("/v1/pair/status"))
+        val alias = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL_ALIAS, emptyMap(), emptyMap(), "")
+        assertEquals(200, alias.status)
+        val post = router.handle("POST", "/", emptyMap(), emptyMap(), "")
+        assertEquals(405, post.status)
+    }
+
+    @Test
+    fun authenticatedRequest_reportsTheClient() {
+        val token = "usage-token"
+        var usedClientId: String? = null
+        val router = router(
+            clients = listOf(
+                ExternalApiPairedClient(
+                    clientId = "phone",
+                    clientName = "Phone",
+                    tokenHash = ExternalApiAuth.sha256Hex(token),
+                    createdAtEpochMs = 1L,
+                ),
+            ),
+            onAuthenticated = { usedClientId = it.clientId },
+        )
+        val response = router.handle(
+            "GET",
+            ExternalApiConstants.PATH_CATALOG,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            "",
+        )
+        assertEquals(200, response.status)
+        assertEquals("phone", usedClientId)
+    }
+
+    private fun router(
+        webPanelEnabled: Boolean = false,
+        clients: List<ExternalApiPairedClient> = emptyList(),
+        onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
+    ): ExternalApiRouter =
+        ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { clients },
+            dangerousEnabled = { false },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { emptyList() },
+            runAutomationNow = { null },
+            webPanelEnabled = { webPanelEnabled },
+            onAuthenticated = onAuthenticated,
+        )
 }

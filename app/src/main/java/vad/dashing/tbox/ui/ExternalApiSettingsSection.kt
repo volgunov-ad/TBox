@@ -3,6 +3,8 @@ package vad.dashing.tbox.ui
 import android.content.ClipData
 import android.os.SystemClock
 import android.widget.Toast
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,6 +50,7 @@ fun ExternalApiSettingsSection(
 ) {
     val externalApiEnabled by settingsViewModel.externalApiEnabled.collectAsStateWithLifecycle()
     val externalApiPort by settingsViewModel.externalApiPort.collectAsStateWithLifecycle()
+    val externalApiWebPanelEnabled by settingsViewModel.externalApiWebPanelEnabled.collectAsStateWithLifecycle()
     val externalApiDangerousEnabled by settingsViewModel.externalApiDangerousEnabled.collectAsStateWithLifecycle()
     val controller by ExternalApiControllerHolder.instance.collectAsStateWithLifecycle()
     val idleStatusFlow = remember {
@@ -96,6 +99,13 @@ fun ExternalApiSettingsSection(
         { enabled -> settingsViewModel.saveExternalApiEnabled(enabled) },
         stringResource(R.string.settings_api_enable_title),
         stringResource(R.string.settings_api_enable_desc),
+        true,
+    )
+    SettingSwitch(
+        externalApiWebPanelEnabled,
+        { enabled -> settingsViewModel.saveExternalApiWebPanelEnabled(enabled) },
+        stringResource(R.string.settings_api_web_panel_title),
+        stringResource(R.string.settings_api_web_panel_desc),
         true,
     )
 
@@ -151,6 +161,22 @@ fun ExternalApiSettingsSection(
             color = onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp),
         )
+    }
+    if (externalApiEnabled && externalApiWebPanelEnabled) {
+        Text(
+            text = stringResource(R.string.settings_api_web_panel_url_local, effectivePort),
+            style = MaterialTheme.typography.tboxBody,
+            color = onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        controller?.lanAddresses()?.forEach { address ->
+            Text(
+                text = stringResource(R.string.settings_api_web_panel_url_lan, address, effectivePort),
+                style = MaterialTheme.typography.tboxBody,
+                color = onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
     }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -268,6 +294,14 @@ fun ExternalApiSettingsSection(
                     )
                     Text(
                         text = client.clientId,
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = onSurfaceVariant,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_api_client_last_used,
+                            DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(client.lastUsedAtEpochMs)),
+                        ),
                         style = MaterialTheme.typography.tboxCaption,
                         color = onSurfaceVariant,
                     )

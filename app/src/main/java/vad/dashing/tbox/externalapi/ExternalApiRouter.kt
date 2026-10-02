@@ -25,6 +25,8 @@ class ExternalApiRouter(
     private val automationsProvider: () -> List<AutomationDefinition>,
     private val executeActions: suspend (List<AutomationAction>) -> List<AutomationActionResult>,
     private val runAutomationNow: (String) -> String?,
+    private val webPanelEnabled: () -> Boolean = { false },
+    private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
 ) {
     fun handle(
         method: String,
@@ -66,6 +68,10 @@ class ExternalApiRouter(
                     handleAutomationRun(id)
                 }
 
+            path == ExternalApiConstants.PATH_WEB_PANEL ||
+                path == ExternalApiConstants.PATH_WEB_PANEL_ALIAS ->
+                handleWebPanel(method)
+
             else -> errorResponse(404, "not_found", "Unknown route")
         }
     }
@@ -78,9 +84,25 @@ class ExternalApiRouter(
                 .put("apiVersion", ExternalApiConstants.API_VERSION)
                 .put("catalogVersion", ExternalApiConstants.CATALOG_VERSION)
                 .put("serverEnabled", serverEnabled())
+                .put("webPanelEnabled", webPanelEnabled())
                 .put("pairingActive", pairingSession.isPairingActive())
                 .put("appVersion", appVersion),
         )
+
+    private fun handleWebPanel(method: String): ExternalApiHttpResponse {
+        if (!webPanelEnabled()) {
+            return errorResponse(404, "not_found", "Unknown route")
+        }
+        if (method != "GET" && method != "HEAD") {
+            return errorResponse(405, "method_not_allowed", "GET required")
+        }
+        return ExternalApiHttpResponse(
+            status = 200,
+            contentType = "text/html; charset=utf-8",
+            body = if (method == "HEAD") "" else ExternalApiClimatePanel.html(),
+            headers = mapOf("Cache-Control" to "no-store"),
+        )
+    }
 
     private fun handlePairRequest(body: String): ExternalApiHttpResponse {
         if (!pairingSession.isPairingActive()) {
@@ -320,6 +342,7 @@ class ExternalApiRouter(
         if (client.clientId.isBlank()) {
             return errorResponse(401, "unauthorized", "Invalid token")
         }
+        onAuthenticated(client)
         return block()
     }
 
