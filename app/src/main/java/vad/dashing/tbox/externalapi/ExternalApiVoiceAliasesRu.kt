@@ -156,6 +156,14 @@ object ExternalApiVoiceAliasesRu {
             "артист",
             "кто играет",
         ),
+        AutomationSignalId.MEDIA_PLAYING to listOf(
+            "играет ли музыка",
+            "воспроизведение",
+        ),
+        AutomationSignalId.MEDIA_POSITION_MS to listOf(
+            "позиция трека",
+            "где в песне",
+        ),
         AutomationSignalId.HVAC_TEMPERATURE_LEFT to listOf(
             "температура климата",
             "климат слева",

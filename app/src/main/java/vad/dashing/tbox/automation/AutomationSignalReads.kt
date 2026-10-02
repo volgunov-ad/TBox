@@ -1,5 +1,6 @@
 package vad.dashing.tbox.automation
 
+import android.os.SystemClock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -21,6 +22,7 @@ import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
+import vad.dashing.tbox.ui.estimatePlaybackPositionMs
 
 internal object AutomationSignalReads {
     fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
@@ -134,6 +136,22 @@ internal object AutomationSignalReads {
                     }.distinctUntilChanged()
                 AutomationSignalId.MEDIA_TITLE -> mediaNowPlayingFlow { it.track }
                 AutomationSignalId.MEDIA_ARTIST -> mediaNowPlayingFlow { it.artist }
+                AutomationSignalId.MEDIA_PLAYING -> mediaNowPlayingFlow { state ->
+                    if (state.isPlaying) "on" else "off"
+                }
+                AutomationSignalId.MEDIA_POSITION_MS -> mediaPlaybackNumberFlow { state, now ->
+                    estimatePlaybackPositionMs(
+                        isPlaying = state.isPlaying,
+                        durationMs = state.durationMs,
+                        positionMs = state.positionMs,
+                        playbackSpeed = state.playbackSpeed,
+                        positionUpdateTimeMs = state.positionUpdateTimeMs,
+                        nowElapsedRealtimeMs = now,
+                    ).toDouble()
+                }
+                AutomationSignalId.MEDIA_DURATION_MS -> mediaPlaybackNumberFlow { state, _ ->
+                    state.durationMs.toDouble()
+                }
                 else -> null
             }
         }

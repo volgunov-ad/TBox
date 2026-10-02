@@ -258,7 +258,13 @@ enum class AutomationSignalId(
     /** Now-playing title from notification media sessions. */
     MEDIA_TITLE("media_title", AutomationSignalValueType.STATE),
     /** Now-playing artist from notification media sessions. */
-    MEDIA_ARTIST("media_artist", AutomationSignalValueType.STATE);
+    MEDIA_ARTIST("media_artist", AutomationSignalValueType.STATE),
+    /** Whether the selected media session is playing. */
+    MEDIA_PLAYING("media_playing", AutomationSignalValueType.STATE),
+    /** Predicted playback position in milliseconds at the moment the signal is read. */
+    MEDIA_POSITION_MS("media_position_ms"),
+    /** Media session duration in milliseconds. Zero when the session does not report one. */
+    MEDIA_DURATION_MS("media_duration_ms");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

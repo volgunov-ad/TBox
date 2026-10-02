@@ -358,7 +358,7 @@ internal fun mediaNowPlayingFlow(
         .map { states ->
             val selected = selectMediaPlayerState(states)
             val text = selected?.let(pick)?.trim().orEmpty()
-            if (text.isEmpty()) {
+            if (selected == null || text.isEmpty()) {
                 AutomationSignalValue.Unavailable
             } else {
                 AutomationSignalValue.State(text)
@@ -366,7 +366,23 @@ internal fun mediaNowPlayingFlow(
         }
         .distinctUntilChanged()
 
-private fun selectMediaPlayerState(
+internal fun mediaPlaybackNumberFlow(
+    pick: (MediaPlayerState, Long) -> Double,
+): Flow<AutomationSignalValue> =
+    SharedMediaControlService.playerStates
+        .map { states ->
+            val selected = selectMediaPlayerState(states)
+                ?: return@map AutomationSignalValue.Unavailable
+            val value = pick(selected, SystemClock.elapsedRealtime())
+            if (!value.isFinite()) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.Number(value)
+            }
+        }
+        .distinctUntilChanged()
+
+internal fun selectMediaPlayerState(
     states: Map<String, MediaPlayerState>,
 ): MediaPlayerState? {
     if (states.isEmpty()) return null

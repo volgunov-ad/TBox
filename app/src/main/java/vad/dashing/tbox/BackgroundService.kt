@@ -1052,6 +1052,7 @@ class BackgroundService : Service() {
             controller.start()
             ExternalApiControllerHolder.register(controller)
         }
+        SharedMediaControlService.startActiveSessionMonitor(this)
         DriveModeThemeWatcher(this, settingsManager, scope).start()
         scope.launch {
             ThemeSettingsValidator.validateOnStartup(this@BackgroundService, settingsManager)
