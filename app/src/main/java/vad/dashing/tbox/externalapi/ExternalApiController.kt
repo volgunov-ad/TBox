@@ -74,6 +74,7 @@ class ExternalApiController(
     private var enabled: Boolean = false
     private var port: Int = ExternalApiConstants.DEFAULT_PORT
     private var dangerousEnabled: Boolean = false
+    private var climatePanelEnabled: Boolean = false
     private var automations: List<AutomationDefinition> = emptyList()
     private var pairingTimeoutJob: Job? = null
     private var observeJob: Job? = null
@@ -100,6 +101,7 @@ class ExternalApiController(
                 null
             }
         },
+        webPanelEnabled = { climatePanelEnabled },
     )
 
     fun start() {
@@ -110,13 +112,15 @@ class ExternalApiController(
                 settingsManager.externalApiPortFlow,
                 settingsManager.externalApiDangerousEnabledFlow,
                 settingsManager.externalApiClientsJsonFlow,
-            ) { apiEnabled, apiPort, apiDangerous, clientsJson ->
-                Quad(apiEnabled, apiPort, apiDangerous, clientsJson)
-            }.collectLatest { (apiEnabled, apiPort, apiDangerous, clientsJson) ->
-                enabled = apiEnabled
-                port = apiPort.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
-                dangerousEnabled = apiDangerous
-                pairedClients = ExternalApiPairedClient.decodeList(clientsJson)
+                settingsManager.externalApiWebPanelEnabledFlow,
+            ) { apiEnabled, apiPort, apiDangerous, clientsJson, webPanel ->
+                ApiRuntimeSettings(apiEnabled, apiPort, apiDangerous, clientsJson, webPanel)
+            }.collectLatest { settings ->
+                enabled = settings.enabled
+                port = settings.port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
+                dangerousEnabled = settings.dangerousEnabled
+                climatePanelEnabled = settings.webPanelEnabled
+                pairedClients = ExternalApiPairedClient.decodeList(settings.clientsJson)
                 syncServer()
                 publishStatus()
             }
@@ -299,11 +303,12 @@ class ExternalApiController(
         )
     }
 
-    private data class Quad<A, B, C, D>(
-        val first: A,
-        val second: B,
-        val third: C,
-        val fourth: D,
+    private data class ApiRuntimeSettings(
+        val enabled: Boolean,
+        val port: Int,
+        val dangerousEnabled: Boolean,
+        val clientsJson: String,
+        val webPanelEnabled: Boolean,
     )
 }
 

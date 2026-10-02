@@ -1374,6 +1374,10 @@
     <string name="settings_api_section_title">External HTTP API</string>
     <string name="settings_api_enable_title">Enable API server</string>
     <string name="settings_api_enable_desc">Local HTTP API for external apps on the same network (voice, phone).</string>
+    <string name="settings_api_web_panel_title">Simple web panel</string>
+    <string name="settings_api_web_panel_desc">Climate page on the same port: outside, cabin, two zones, and seats. Open it in a phone browser and paste the API token.</string>
+    <string name="settings_api_web_panel_url_local">Panel: http://127.0.0.1:%1$d/</string>
+    <string name="settings_api_web_panel_url_lan">Panel: http://%1$s:%2$d/</string>
     <string name="settings_api_port_title">Port</string>
     <string name="settings_api_status_disabled">Server disabled</string>
     <string name="settings_api_status_running">Server listening on port %1$d</string>
@@ -1407,7 +1411,7 @@
     <string name="settings_api_manual_token_close">Close</string>
     <string name="settings_api_dangerous_title">Dangerous commands</string>
     <string name="settings_api_dangerous_desc">ADB and other dangerous API actions (off by default).</string>
-    <string name="settings_api_help">The API lets external apps read telemetry, run catalog actions, and trigger saved automations. Enable the server, then pair an app or create a manual token for phone/Tasker.</string>
+    <string name="settings_api_help">The API lets external apps read telemetry, run catalog actions, and trigger saved automations. Enable the server, then pair an app or create a manual token for phone/Tasker. The simple web panel toggle serves a climate page at http://IP:port/.</string>
     <string name="settings_tab_panels">Panels</string>
     <string name="settings_tab_common">General</string>
     <string name="settings_tab_buttons">Buttons</string>

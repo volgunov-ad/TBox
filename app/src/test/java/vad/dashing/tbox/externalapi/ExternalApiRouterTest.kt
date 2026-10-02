@@ -171,4 +171,44 @@ class ExternalApiRouterTest {
         assertEquals("plain-token-value", json.getString("accessToken"))
         assertEquals("pc-tools", json.getString("clientId"))
     }
+
+    @Test
+    fun webPanel_whenDisabled_isHidden() {
+        val router = router(webPanelEnabled = false)
+        val response = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL, emptyMap(), emptyMap(), "")
+        assertEquals(404, response.status)
+        val health = JSONObject(router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "").body)
+        assertEquals(false, health.getBoolean("webPanelEnabled"))
+    }
+
+    @Test
+    fun webPanel_whenEnabled_servesClimatePageWithoutAuth() {
+        val router = router(webPanelEnabled = true)
+        val response = router.handle("GET", "/", emptyMap(), emptyMap(), "")
+        assertEquals(200, response.status)
+        assertTrue(response.contentType.startsWith("text/html"))
+        assertEquals("no-store", response.headers["Cache-Control"])
+        assertTrue(response.body.contains(ExternalApiClimatePanel.MARKER))
+        assertTrue(response.body.contains("hvac_temperature_left"))
+        assertTrue(response.body.contains("front_left_seat_mode"))
+
+        val alias = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL_ALIAS, emptyMap(), emptyMap(), "")
+        assertEquals(200, alias.status)
+        val post = router.handle("POST", "/", emptyMap(), emptyMap(), "")
+        assertEquals(405, post.status)
+    }
+
+    private fun router(webPanelEnabled: Boolean): ExternalApiRouter =
+        ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { emptyList() },
+            dangerousEnabled = { false },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { emptyList() },
+            runAutomationNow = { null },
+            webPanelEnabled = { webPanelEnabled },
+        )
 }

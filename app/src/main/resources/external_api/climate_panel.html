@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache">
+  <title>TBox Climate</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e1116;
+      --card: #1a1f27;
+      --text: #e8edf5;
+      --muted: #9aa6b8;
+      --line: #2c3442;
+      --btn: #2a3140;
+      --accent: #4c8dff;
+      --heat: #e85d4c;
+      --vent: #3dbeff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.35 system-ui, sans-serif;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 16px 16px 32px;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+    #status { min-height: 1.2em; margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .temps {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .temp-label { display: block; color: var(--muted); font-size: 13px; }
+    .temp-value { font-size: 36px; font-weight: 650; letter-spacing: -0.03em; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .row + .row { border-top: 1px solid var(--line); }
+    .row-label { min-width: 7.5em; }
+    .stepper { display: flex; align-items: center; gap: 8px; }
+    .readout { min-width: 4.2em; text-align: center; font-size: 22px; font-variant-numeric: tabular-nums; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      background: var(--btn);
+      color: var(--text);
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 12px;
+      font: inherit;
+    }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.4; }
+    button.on-heat { background: var(--heat); color: #fff; }
+    button.on-vent { background: var(--vent); color: #082028; }
+    button.on-off { background: var(--accent); color: #fff; }
+    .levels { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .token { display: flex; gap: 8px; }
+    .token input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      border-radius: 12px;
+      background: var(--btn);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+    }
+  </style>
+</head>
+<body>
+  <main id="tbox-climate-panel">
+    <h1 id="title">Климат</h1>
+    <p id="status"></p>
+    <section class="temps">
+      <div class="card">
+        <span class="temp-label" id="lbl-out">Улица</span>
+        <div class="temp-value" id="out">—</div>
+      </div>
+      <div class="card">
+        <span class="temp-label" id="lbl-in">Салон</span>
+        <div class="temp-value" id="in">—</div>
+      </div>
+    </section>
+    <section class="card" id="climate"></section>
+    <section class="card" id="seats"></section>
+    <section class="card">
+      <h2 id="lbl-token">Токен API</h2>
+      <div class="token">
+        <input id="token" type="password" autocomplete="off" spellcheck="false">
+        <button id="save-token" type="button">OK</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var TOKEN_KEY = "tbox.climate.token";
+      var POLL_MS = 2000;
+      var LEFT_TEMP = 37;
+      var RIGHT_TEMP = 111;
+      var FAN = 38;
+      var TEMP_MIN = 160;
+      var TEMP_MAX = 300;
+      var TEMP_STEP = 5;
+      var STR = {
+        ru: {
+          title: "Климат",
+          outside: "Улица",
+          inside: "Салон",
+          climate: "Климат-контроль",
+          driver: "Водитель",
+          passenger: "Пассажир",
+          fan: "Обдув",
+          seats: "Сиденья",
+          rearLeft: "Сзади слева",
+          rearRight: "Сзади справа",
+          off: "Выкл",
+          token: "Токен API",
+          save: "Сохранить",
+          needToken: "Вставьте токен из Настройки → API. Он сохранится в этом браузере.",
+          unauthorized: "Токен не принят. Создайте новый в Настройки → API.",
+          offline: "Нет ответа от головного устройства.",
+          updated: "Обновлено"
+        },
+        en: {
+          title: "Climate",
+          outside: "Outside",
+          inside: "Cabin",
+          climate: "Climate control",
+          driver: "Driver",
+          passenger: "Passenger",
+          fan: "Fan",
+          seats: "Seats",
+          rearLeft: "Rear left",
+          rearRight: "Rear right",
+          off: "Off",
+          token: "API token",
+          save: "Save",
+          needToken: "Paste the token from Settings → API. It stays in this browser.",
+          unauthorized: "Token rejected. Create a new one in Settings → API.",
+          offline: "No response from the head unit.",
+          updated: "Updated"
+        }
+      };
+      var lang = ((navigator.language || "ru").toLowerCase().indexOf("en") === 0) ? STR.en : STR.ru;
+      var FRONT = [
+        { state: "off", value: 1, label: lang.off, kind: "off" },
+        { state: "heat_1", value: 2, label: "H1", kind: "heat" },
+        { state: "heat_2", value: 3, label: "H2", kind: "heat" },
+        { state: "heat_3", value: 4, label: "H3", kind: "heat" },
+        { state: "vent_1", value: 5, label: "V1", kind: "vent" },
+        { state: "vent_2", value: 6, label: "V2", kind: "vent" },
+        { state: "vent_3", value: 7, label: "V3", kind: "vent" }
+      ];
+      var REAR = FRONT.slice(0, 4);
+      var seats = [
+        { propertyId: 138, label: lang.driver, levels: FRONT },
+        { propertyId: 139, label: lang.passenger, levels: FRONT },
+        { propertyId: 318, label: lang.rearLeft, levels: REAR },
+        { propertyId: 319, label: lang.rearRight, levels: REAR }
+      ];
+      var state = {
+        outside: null,
+        inside: null,
+        left: null,
+        right: null,
+        fan: null,
+        seat: {}
+      };
+      var chain = Promise.resolve();
+      var pendingWrites = 0;
+      var timer = null;
+      var polling = false;
+
+      document.getElementById("title").textContent = lang.title;
+      document.title = "TBox " + lang.title;
+      document.getElementById("lbl-out").textContent = lang.outside;
+      document.getElementById("lbl-in").textContent = lang.inside;
+      document.getElementById("lbl-token").textContent = lang.token;
+      document.getElementById("save-token").textContent = lang.save;
+
+      var params = new URLSearchParams(location.search);
+      if (params.get("token")) {
+        localStorage.setItem(TOKEN_KEY, params.get("token"));
+        params.delete("token");
+        var next = location.pathname + (params.toString() ? "?" + params.toString() : "");
+        history.replaceState(null, "", next);
+      }
+      document.getElementById("token").value = localStorage.getItem(TOKEN_KEY) || "";
+      document.getElementById("save-token").addEventListener("click", function () {
+        localStorage.setItem(TOKEN_KEY, document.getElementById("token").value.trim());
+        tick();
+      });
+
+      renderClimate();
+      renderSeats();
+      renderTemps();
+
+      function token() {
+        return (localStorage.getItem(TOKEN_KEY) || "").trim();
+      }
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      function fmtTemp(value) {
+        if (value == null || !isFinite(value)) return "—";
+        var rounded = Math.round(value * 10) / 10;
+        var text = (Math.abs(rounded - Math.round(rounded)) < 0.05)
+          ? String(Math.round(rounded))
+          : rounded.toFixed(1);
+        return text + "°";
+      }
+
+      function renderTemps() {
+        document.getElementById("out").textContent = fmtTemp(state.outside);
+        document.getElementById("in").textContent = fmtTemp(state.inside);
+        var left = document.getElementById("left-readout");
+        var right = document.getElementById("right-readout");
+        var fan = document.getElementById("fan-readout");
+        if (left) left.textContent = fmtTemp(state.left);
+        if (right) right.textContent = fmtTemp(state.right);
+        if (fan) fan.textContent = state.fan == null ? "—" : String(state.fan);
+        paintSeats();
+      }
+
+      function button(label, onClick) {
+        var el = document.createElement("button");
+        el.type = "button";
+        el.textContent = label;
+        el.addEventListener("click", onClick);
+        return el;
+      }
+
+      function stepperRow(label, readoutId, onMinus, onPlus) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var name = document.createElement("div");
+        name.className = "row-label";
+        name.textContent = label;
+        var stepper = document.createElement("div");
+        stepper.className = "stepper";
+        var readout = document.createElement("div");
+        readout.className = "readout";
+        readout.id = readoutId;
+        readout.textContent = "—";
+        stepper.appendChild(button("−", onMinus));
+        stepper.appendChild(readout);
+        stepper.appendChild(button("+", onPlus));
+        row.appendChild(name);
+        row.appendChild(stepper);
+        return row;
+      }
+
+      function renderClimate() {
+        var root = document.getElementById("climate");
+        var title = document.createElement("h2");
+        title.textContent = lang.climate;
+        root.appendChild(title);
+        root.appendChild(stepperRow(lang.driver, "left-readout", function () { bumpTemp("left", false); }, function () { bumpTemp("left", true); }));
+        root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
+        root.appendChild(stepperRow(lang.fan, "fan-readout", function () { bumpFan(false); }, function () { bumpFan(true); }));
+      }
+
+      function renderSeats() {
+        var root = document.getElementById("seats");
+        var title = document.createElement("h2");
+        title.textContent = lang.seats;
+        root.appendChild(title);
+        seats.forEach(function (seat) {
+          var row = document.createElement("div");
+          row.className = "row";
+          var name = document.createElement("div");
+          name.className = "row-label";
+          name.textContent = seat.label;
+          var levels = document.createElement("div");
+          levels.className = "levels";
+          seat.levels.forEach(function (level) {
+            var el = button(level.label, function () { setSeat(seat, level); });
+            el.setAttribute("data-seat", String(seat.propertyId));
+            el.setAttribute("data-state", level.state);
+            el.setAttribute("data-kind", level.kind);
+            levels.appendChild(el);
+          });
+          row.appendChild(name);
+          row.appendChild(levels);
+          root.appendChild(row);
+        });
+      }
+
+      function paintSeats() {
+        var buttons = document.querySelectorAll("[data-seat]");
+        for (var i = 0; i < buttons.length; i++) {
+          var el = buttons[i];
+          var active = state.seat[el.getAttribute("data-seat")] === el.getAttribute("data-state");
+          el.className = active ? "on-" + el.getAttribute("data-kind") : "";
+        }
+      }
+
+      function adjustRaw(celsius, increase) {
+        var base = Math.round(celsius * 10);
+        var rem = ((base - TEMP_MIN) % TEMP_STEP + TEMP_STEP) % TEMP_STEP;
+        var next = increase
+          ? (rem === 0 ? base + TEMP_STEP : base + (TEMP_STEP - rem))
+          : (rem === 0 ? base - TEMP_STEP : base - rem);
+        if (next < TEMP_MIN) next = TEMP_MIN;
+        if (next > TEMP_MAX) next = TEMP_MAX;
+        return next;
+      }
+
+      function enqueue(task) {
+        pendingWrites += 1;
+        chain = chain.then(function () {
+          return task();
+        }).then(function () {
+          pendingWrites -= 1;
+        }, function () {
+          pendingWrites -= 1;
+        });
+      }
+
+      function invoke(propertyId, value) {
+        var current = token();
+        if (!current) {
+          setStatus(lang.needToken);
+          return Promise.resolve();
+        }
+        return fetch("/v1/actions/invoke", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + current,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            actions: [{
+              type: "can_command",
+              bus: "vehicle",
+              propertyId: propertyId,
+              operation: "set",
+              value: value
+            }]
+          })
+        }).then(function (response) {
+          return response.json().then(function (body) {
+            if (response.status === 401) {
+              setStatus(lang.unauthorized);
+              return;
+            }
+            if (!response.ok) {
+              var message = body && body.error && body.error.message;
+              setStatus(message || lang.offline);
+              return;
+            }
+            var results = body.results || [];
+            if (results.length && results[0].success === false) {
+              setStatus(results[0].message || lang.offline);
+            }
+          });
+        }).catch(function () {
+          setStatus(lang.offline);
+        });
+      }
+
+      function bumpTemp(side, increase) {
+        var current = state[side];
+        if (current == null) return;
+        var raw = adjustRaw(current, increase);
+        state[side] = raw / 10;
+        renderTemps();
+        var propertyId = side === "left" ? LEFT_TEMP : RIGHT_TEMP;
+        enqueue(function () { return invoke(propertyId, raw); });
+      }
+
+      function bumpFan(increase) {
+        if (state.fan == null) return;
+        var next = state.fan + (increase ? 1 : -1);
+        if (next < 0) next = 0;
+        if (next > 7) next = 7;
+        state.fan = next;
+        renderTemps();
+        enqueue(function () { return invoke(FAN, next); });
+      }
+
+      function setSeat(seat, level) {
+        state.seat[String(seat.propertyId)] = level.state;
+        paintSeats();
+        enqueue(function () { return invoke(seat.propertyId, level.value); });
+      }
+
+      function indexSignals(payload) {
+        var map = {};
+        var list = (payload && payload.signals) || [];
+        for (var i = 0; i < list.length; i++) map[list[i].id] = list[i];
+        return map;
+      }
+
+      function pick(primary, fallback) {
+        if (primary && primary.available) return primary;
+        if (fallback && fallback.available) return fallback;
+        return null;
+      }
+
+      function numberOrNull(signal) {
+        if (!signal || !signal.available || typeof signal.value !== "number") return null;
+        return signal.value;
+      }
+
+      function stateOrNull(signal) {
+        if (!signal || !signal.available || typeof signal.value !== "string") return null;
+        return signal.value;
+      }
+
+      function loadSignals(source, ids) {
+        return fetch("/v1/signals?ids=" + encodeURIComponent(ids) + "&source=" + source, {
+          headers: { "Authorization": "Bearer " + token() }
+        }).then(function (response) {
+          return response.json().then(function (body) {
+            return { status: response.status, body: body };
+          });
+        });
+      }
+
+      function applySnapshot(hu, tbox) {
+        var outside = pick(hu.outside_temperature, tbox.outside_temperature);
+        var inside = pick(tbox.inside_temperature, null);
+        state.outside = numberOrNull(outside);
+        state.inside = numberOrNull(inside);
+        state.left = numberOrNull(hu.hvac_temperature_left);
+        state.right = numberOrNull(hu.hvac_temperature_right);
+        state.fan = numberOrNull(hu.hvac_fan_speed);
+        if (state.fan != null) state.fan = Math.round(state.fan);
+        seats.forEach(function (seat) {
+          var id = seat.propertyId === 138 ? "front_left_seat_mode"
+            : seat.propertyId === 139 ? "front_right_seat_mode"
+            : seat.propertyId === 318 ? "rear_left_seat_mode"
+            : "rear_right_seat_mode";
+          var mode = stateOrNull(hu[id]);
+          if (mode != null) state.seat[String(seat.propertyId)] = mode;
+        });
+        renderTemps();
+      }
+
+      function tick() {
+        clearTimeout(timer);
+        timer = null;
+        if (document.hidden) return;
+        if (!token()) {
+          setStatus(lang.needToken);
+          return;
+        }
+        if (polling) {
+          timer = setTimeout(tick, POLL_MS);
+          return;
+        }
+        polling = true;
+        Promise.all([
+          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
+          loadSignals("tbox", "inside_temperature,outside_temperature")
+        ]).then(function (parts) {
+          var denied = parts[0].status === 401 || parts[1].status === 401;
+          if (denied) {
+            setStatus(lang.unauthorized);
+            return;
+          }
+          if (parts[0].status !== 200) {
+            setStatus(lang.offline);
+            return;
+          }
+          if (pendingWrites > 0) return;
+          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body));
+          var now = new Date();
+          var hh = String(now.getHours()).padStart(2, "0");
+          var mm = String(now.getMinutes()).padStart(2, "0");
+          var ss = String(now.getSeconds()).padStart(2, "0");
+          setStatus(lang.updated + " " + hh + ":" + mm + ":" + ss);
+        }).catch(function () {
+          setStatus(lang.offline);
+        }).then(function () {
+          polling = false;
+          if (!document.hidden && token()) timer = setTimeout(tick, POLL_MS);
+        });
+      }
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+          clearTimeout(timer);
+          timer = null;
+        } else {
+          tick();
+        }
+      });
+
+      tick();
+    })();
+  </script>
+</body>
+</html>

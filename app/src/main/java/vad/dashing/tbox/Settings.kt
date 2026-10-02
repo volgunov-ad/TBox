@@ -908,6 +908,8 @@ class SettingsManager(private val context: Context) {
         private val EXTERNAL_API_PORT = intPreferencesKey("${KEY_PREFIX}external_api_port")
         private val EXTERNAL_API_DANGEROUS_ENABLED =
             booleanPreferencesKey("${KEY_PREFIX}external_api_dangerous_enabled")
+        private val EXTERNAL_API_WEB_PANEL_ENABLED =
+            booleanPreferencesKey("${KEY_PREFIX}external_api_web_panel_enabled")
         private val EXTERNAL_API_CLIENTS_JSON =
             stringPreferencesKey("${KEY_PREFIX}external_api_clients_json")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
@@ -1597,6 +1599,10 @@ class SettingsManager(private val context: Context) {
 
     val externalApiDangerousEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXTERNAL_API_DANGEROUS_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiWebPanelEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_WEB_PANEL_ENABLED] ?: false }
         .distinctUntilChanged()
 
     val externalApiClientsJsonFlow: Flow<String> = context.settingsDataStore.data
@@ -3205,6 +3211,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveExternalApiDangerousEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXTERNAL_API_DANGEROUS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_WEB_PANEL_ENABLED] = enabled
         }
     }
 

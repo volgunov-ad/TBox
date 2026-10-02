@@ -18,6 +18,7 @@ data class ExternalApiHttpResponse(
     val status: Int,
     val contentType: String = "application/json; charset=utf-8",
     val body: String = "",
+    val headers: Map<String, String> = emptyMap(),
 )
 
 typealias ExternalApiHttpHandler = (
@@ -217,6 +218,12 @@ class ExternalApiHttpServer(
             append(statusLine)
             append("Content-Type: ${response.contentType}\r\n")
             append("Content-Length: ${bodyBytes.size}\r\n")
+            response.headers.forEach { (name, value) ->
+                append(name)
+                append(": ")
+                append(value)
+                append("\r\n")
+            }
             append("Connection: close\r\n")
             append("\r\n")
         }

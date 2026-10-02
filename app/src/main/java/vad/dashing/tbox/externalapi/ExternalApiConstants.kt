@@ -18,6 +18,8 @@ object ExternalApiConstants {
     const val PATH_ACTIONS_INVOKE = "/v1/actions/invoke"
     const val PATH_AUTOMATIONS = "/v1/automations"
     const val PATH_AUTOMATIONS_RUN_PREFIX = "/v1/automations/"
+    const val PATH_WEB_PANEL = "/"
+    const val PATH_WEB_PANEL_ALIAS = "/panel"
 
     const val MAX_ACTIONS_PER_REQUEST = 20
     const val MAX_SIGNAL_IDS_PER_REQUEST = 50
