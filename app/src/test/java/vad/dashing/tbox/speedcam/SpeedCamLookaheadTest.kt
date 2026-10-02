@@ -104,9 +104,10 @@ class SpeedCamLookaheadTest {
 
     @Test
     fun formatDistance() {
-        assertEquals("250 м", SpeedCamLookahead.formatDistanceM(250.4))
-        assertEquals("1.2 км", SpeedCamLookahead.formatDistanceM(1200.0))
-        assertEquals("250 m", SpeedCamLookahead.formatDistanceMEn(250.4))
-        assertEquals("1.2 km", SpeedCamLookahead.formatDistanceMEn(1200.0))
+        assertEquals("250 м", SpeedCamLookahead.formatDistance(250.4, "м", "км"))
+        assertEquals("1.2 км", SpeedCamLookahead.formatDistance(1200.0, "м", "км"))
+        assertEquals("250 m", SpeedCamLookahead.formatDistance(250.4, "m", "km"))
+        assertEquals("1.2 km", SpeedCamLookahead.formatDistance(1200.0, "m", "km"))
+        assertEquals("—", SpeedCamLookahead.formatDistance(Double.NaN, "m", "km"))
     }
 }

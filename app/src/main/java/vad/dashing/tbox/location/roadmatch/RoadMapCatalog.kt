@@ -20,11 +20,24 @@ data class RoadMapRegion(
     val url: String,
     val bytes: Long,
     val graphVersion: Int,
+    /**
+     * Extra display names keyed by product-flavor language (`fr`, …).
+     * `ru` and `en` stay in [titleRu] / [titleEn]. A language with no entry uses [titleEn].
+     */
+    val titles: Map<String, String> = emptyMap(),
 ) {
     val hasDownloadUrl: Boolean
         get() = url.isNotBlank()
 
-    fun title(isRussian: Boolean): String = if (isRussian) titleRu else titleEn
+    /**
+     * Display name for an APK language tag (`BuildConfig.FLAVOR`), not the head-unit locale.
+     * Unknown languages fall back to English, then to the Russian name if English is blank.
+     */
+    fun title(language: String): String {
+        val lang = language.trim().lowercase()
+        titles[lang]?.takeIf { it.isNotBlank() }?.let { return it }
+        return if (lang == "ru") titleRu else titleEn.ifBlank { titleRu }
+    }
 
     fun contains(lat: Double, lon: Double): Boolean {
         if (bbox.size < 4) return false
@@ -48,8 +61,8 @@ data class RoadMapCatalog(
     val version: Int,
     val regions: List<RoadMapRegion>,
 ) {
-    fun regionsByCountry(isRussian: Boolean): Map<String, List<RoadMapRegion>> {
-        val comparator = alphabeticalComparator(isRussian)
+    fun regionsByCountry(language: String): Map<String, List<RoadMapRegion>> {
+        val comparator = alphabeticalComparator(language)
         return regions.groupBy { it.country }
             .mapValues { (_, list) -> list.sortedWith(comparator) }
     }
@@ -63,15 +76,36 @@ data class RoadMapCatalog(
         /** Display order for Geoposition download UI. */
         val COUNTRY_ORDER: List<String> = listOf("RU", "BY")
 
-        fun alphabeticalComparator(isRussian: Boolean): Comparator<RoadMapRegion> {
-            val locale = if (isRussian) Locale.forLanguageTag("ru-RU") else Locale.ENGLISH
+        fun alphabeticalComparator(language: String): Comparator<RoadMapRegion> {
+            val locale = displayLocale(language)
             val collator = Collator.getInstance(locale).apply {
                 strength = Collator.PRIMARY
             }
             return Comparator { left, right ->
-                val titleOrder = collator.compare(left.title(isRussian), right.title(isRussian))
+                val titleOrder = collator.compare(left.title(language), right.title(language))
                 if (titleOrder != 0) titleOrder else left.id.compareTo(right.id)
             }
+        }
+
+        /** Collator locale for a flavor language. `ru` uses ru-RU; anything else uses that tag. */
+        fun displayLocale(language: String): Locale {
+            val lang = language.trim().lowercase()
+            return if (lang == "ru") Locale.forLanguageTag("ru-RU") else Locale.forLanguageTag(lang)
+        }
+
+        /** Optional `titles` object: `{ "fr": "Moscou" }`. Blank values are dropped. */
+        fun parseExtraTitles(o: JSONObject): Map<String, String> {
+            val obj = o.optJSONObject("titles") ?: return emptyMap()
+            val out = LinkedHashMap<String, String>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val lang = key.trim().lowercase()
+                if (lang.isEmpty() || lang == "ru" || lang == "en") continue
+                val value = obj.optString(key, "").trim()
+                if (value.isNotEmpty()) out[lang] = value
+            }
+            return out
         }
 
         fun parse(json: String): RoadMapCatalog {
@@ -95,6 +129,7 @@ data class RoadMapCatalog(
                         titleRu = o.optString("title_ru", id),
                         titleEn = o.optString("title_en", id),
                         bbox = bbox,
+                        titles = parseExtraTitles(o),
                         url = o.optString("url", "").trim(),
                         bytes = o.optLong("bytes", 0L).coerceAtLeast(0L),
                         graphVersion = o.optInt("graphVersion", 1).coerceAtLeast(1),

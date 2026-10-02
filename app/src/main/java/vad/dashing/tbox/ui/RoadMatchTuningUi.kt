@@ -91,7 +91,6 @@ private fun RoadMatchTuningDialog(
     var group by remember { mutableStateOf(RoadMatchTuningGroup.COMMON) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
-    val isRu = remember { Locale.getDefault().language.equals("ru", ignoreCase = true) }
     fun save(next: RoadMatchTuning) {
         tuning = next
         settingsViewModel.saveMockRoadMatchTuning(next)
@@ -242,7 +241,7 @@ private fun RoadMatchTuningDialog(
                         ) {
                             rowGroups.forEach { candidate ->
                                 val selected = candidate == group
-                                val label = groupLabel(candidate, isRu)
+                                val label = groupLabel(candidate)
                                 if (selected) {
                                     Button(
                                         onClick = { group = candidate },
@@ -327,7 +326,6 @@ private fun RoadMatchTuningDialog(
                             TuningSlider(
                                 key = key,
                                 value = tuning[key],
-                                isRu = isRu,
                                 onChange = { save(tuning.with(key, it)) },
                             )
                         }
@@ -346,7 +344,6 @@ private fun RoadMatchTuningDialog(
 private fun TuningSlider(
     key: RoadMatchTuningKey,
     value: Double,
-    isRu: Boolean,
     onChange: (Double) -> Unit,
 ) {
     Column(
@@ -361,7 +358,7 @@ private fun TuningSlider(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    roadMatchTuningTitle(key, isRu),
+                    roadMatchTuningTitle(key),
                     style = MaterialTheme.typography.tboxTitle,
                     modifier = Modifier.weight(1f),
                 )
@@ -371,19 +368,17 @@ private fun TuningSlider(
                 )
             }
             Text(
-                roadMatchTuningDescription(key, isRu),
+                roadMatchTuningDescription(key),
                 style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(top = 2.dp),
             )
+            val onLabel = stringResource(R.string.road_match_tune_on)
+            val offLabel = stringResource(R.string.road_match_tune_off)
+            val defaultSwitch = if (key.defaultValue >= 0.5) onLabel else offLabel
             Text(
-                "${key.storageName}: ${if (isRu) "выкл/вкл" else "off/on"} " +
-                    "(${if (isRu) "по умолчанию" else "default"} " +
-                    "${if (key.defaultValue >= 0.5) {
-                        if (isRu) "вкл" else "on"
-                    } else {
-                        if (isRu) "выкл" else "off"
-                    }})",
+                "${key.storageName}: ${stringResource(R.string.road_match_tune_switch_values)} " +
+                    "(${stringResource(R.string.road_match_tune_default_value, defaultSwitch)})",
                 style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -401,7 +396,7 @@ private fun TuningSlider(
             "%.${decimals}f".format(Locale.US, value)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(roadMatchTuningTitle(key, isRu), style = MaterialTheme.typography.tboxTitle)
+            Text(roadMatchTuningTitle(key), style = MaterialTheme.typography.tboxTitle)
             Text(
                 "$display${key.unit.takeIf { it.isNotEmpty() }?.let { " $it" }.orEmpty()}",
                 style = MaterialTheme.typography.tboxTitle,
@@ -409,14 +404,14 @@ private fun TuningSlider(
             )
         }
         Text(
-            roadMatchTuningDescription(key, isRu),
+            roadMatchTuningDescription(key),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(top = 2.dp),
         )
         Text(
             "${key.storageName}: ${formatBound(key.minValue)}…${formatBound(key.maxValue)} " +
-                "(${if (isRu) "по умолчанию" else "default"} ${formatBound(key.defaultValue)})",
+                "(${stringResource(R.string.road_match_tune_default_value, formatBound(key.defaultValue))})",
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -432,390 +427,210 @@ private fun TuningSlider(
 private fun formatBound(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else "%.2f".format(Locale.US, value)
 
-private fun groupLabel(group: RoadMatchTuningGroup, ru: Boolean): String = when (group) {
-    RoadMatchTuningGroup.COMMON -> if (ru) "Общие" else "Common"
-    RoadMatchTuningGroup.ORDINARY -> if (ru) "Обычный" else "Ordinary"
-    RoadMatchTuningGroup.RAILS -> if (ru) "Рельсы" else "Rails"
-    RoadMatchTuningGroup.TURN_SIGNAL -> if (ru) "Поворотник" else "Turn signal"
-    RoadMatchTuningGroup.FREE_TURNS -> if (ru) "Своб. повороты" else "FreeTurns"
+@Composable
+private fun groupLabel(group: RoadMatchTuningGroup): String = stringResource(
+    when (group) {
+        RoadMatchTuningGroup.COMMON -> R.string.road_match_tune_group_common
+        RoadMatchTuningGroup.ORDINARY -> R.string.road_match_tune_group_ordinary
+        RoadMatchTuningGroup.RAILS -> R.string.road_match_tune_group_rails
+        RoadMatchTuningGroup.TURN_SIGNAL -> R.string.road_match_tune_group_turn_signal
+        RoadMatchTuningGroup.FREE_TURNS -> R.string.road_match_tune_group_free_turns
+    },
+)
+
+@Composable
+internal fun roadMatchTuningTitle(key: RoadMatchTuningKey): String =
+    stringResource(roadMatchTuningTitleRes(key))
+
+@Composable
+internal fun roadMatchTuningDescription(key: RoadMatchTuningKey): String =
+    stringResource(roadMatchTuningDescriptionRes(key))
+
+/** Flavor overlay owns the wording. A new language adds the same names under its source set. */
+internal fun roadMatchTuningTitleRes(key: RoadMatchTuningKey): Int = when (key) {
+        RoadMatchTuningKey.MATCH_CADENCE_MS -> R.string.road_match_tune_title_match_cadence_ms
+        RoadMatchTuningKey.PATH_TRIGGER_M -> R.string.road_match_tune_title_path_trigger_m
+        RoadMatchTuningKey.TIME_TRIGGER_MS -> R.string.road_match_tune_title_time_trigger_ms
+        RoadMatchTuningKey.TURN_TRIGGER_DEG -> R.string.road_match_tune_title_turn_trigger_deg
+        RoadMatchTuningKey.MIN_SPEED_KMH -> R.string.road_match_tune_title_min_speed_kmh
+        RoadMatchTuningKey.CANDIDATE_RADIUS_M -> R.string.road_match_tune_title_candidate_radius_m
+        RoadMatchTuningKey.HEADING_TOLERANCE_DEG -> R.string.road_match_tune_title_heading_tolerance_deg
+        RoadMatchTuningKey.CROSS_BLEND -> R.string.road_match_tune_title_cross_blend
+        RoadMatchTuningKey.MAX_CROSS_STEP_M -> R.string.road_match_tune_title_max_cross_step_m
+        RoadMatchTuningKey.MAX_BEARING_STEP_DEG -> R.string.road_match_tune_title_max_bearing_step_deg
+        RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG -> R.string.road_match_tune_title_max_bearing_catchup_deg
+        RoadMatchTuningKey.BEARING_INHIBIT_DEG -> R.string.road_match_tune_title_bearing_inhibit_deg
+        RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M -> R.string.road_match_tune_title_hold_previous_radius_m
+        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT -> R.string.road_match_tune_title_switch_confirm_count
+        RoadMatchTuningKey.BEAM_WIDTH -> R.string.road_match_tune_title_beam_width
+        RoadMatchTuningKey.MATCH_LAG_MIN_M -> R.string.road_match_tune_title_match_lag_min_m
+        RoadMatchTuningKey.MATCH_LAG_MAX_M -> R.string.road_match_tune_title_match_lag_max_m
+        RoadMatchTuningKey.MATCH_LAG_SECONDS -> R.string.road_match_tune_title_match_lag_seconds
+        RoadMatchTuningKey.LOOK_AHEAD_MIN_M -> R.string.road_match_tune_title_look_ahead_min_m
+        RoadMatchTuningKey.LOOK_AHEAD_MAX_M -> R.string.road_match_tune_title_look_ahead_max_m
+        RoadMatchTuningKey.LOOK_AHEAD_SECONDS -> R.string.road_match_tune_title_look_ahead_seconds
+        RoadMatchTuningKey.GNSS_MAX_ACCURACY_M -> R.string.road_match_tune_title_gnss_max_accuracy_m
+        RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M -> R.string.road_match_tune_title_gnss_max_shadow_gap_m
+        RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX -> R.string.road_match_tune_title_gnss_class_penalty_relax
+        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS -> R.string.road_match_tune_title_rank_same_edge_bonus
+        RoadMatchTuningKey.RANK_CONNECTED_BONUS -> R.string.road_match_tune_title_rank_connected_bonus
+        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY -> R.string.road_match_tune_title_rank_disconnected_penalty
+        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY -> R.string.road_match_tune_title_rank_disconnected_link_penalty
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY -> R.string.road_match_tune_title_rank_unhinted_link_penalty
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH -> R.string.road_match_tune_title_rank_unhinted_link_min_speed_kmh
+        RoadMatchTuningKey.LEASH_BREAK_XT_M -> R.string.road_match_tune_title_leash_break_xt_m
+        RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M -> R.string.road_match_tune_title_leash_break_yard_xt_m
+        RoadMatchTuningKey.LEASH_BREAK_PATH_M -> R.string.road_match_tune_title_leash_break_path_m
+        RoadMatchTuningKey.JUNCTION_RADIUS_M -> R.string.road_match_tune_title_junction_radius_m
+        RoadMatchTuningKey.JUNCTION_MIN_ROADS -> R.string.road_match_tune_title_junction_min_roads
+        RoadMatchTuningKey.PROMOTE_POS_M -> R.string.road_match_tune_title_promote_pos_m
+        RoadMatchTuningKey.PROMOTE_POS_HEADING_M -> R.string.road_match_tune_title_promote_pos_heading_m
+        RoadMatchTuningKey.PROMOTE_HEADING_DEG -> R.string.road_match_tune_title_promote_heading_deg
+        RoadMatchTuningKey.MAX_ALONG_STEP_M -> R.string.road_match_tune_title_max_along_step_m
+        RoadMatchTuningKey.PAST_END_RELEASE_M -> R.string.road_match_tune_title_past_end_release_m
+        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> R.string.road_match_tune_title_path_odo_sync_enabled
+        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> R.string.road_match_tune_title_path_odo_sync_dead_m
+        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> R.string.road_match_tune_title_path_odo_sync_max_step_m
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY -> R.string.road_match_tune_title_ordinary_stalk_unbind_city
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY -> R.string.road_match_tune_title_ordinary_stalk_unbind_highway
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY -> R.string.road_match_tune_title_ordinary_stalk_unbind_intentional_only
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M -> R.string.road_match_tune_title_ordinary_stalk_rebind_after_m
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH -> R.string.road_match_tune_title_ordinary_stalk_unbind_min_speed_kmh
+        RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> R.string.road_match_tune_title_rails_hard_snap_xt_m
+        RoadMatchTuningKey.RAILS_SOFT_XT_M -> R.string.road_match_tune_title_rails_soft_xt_m
+        RoadMatchTuningKey.RAILS_SOFT_BLEND -> R.string.road_match_tune_title_rails_soft_blend
+        RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M -> R.string.road_match_tune_title_rails_soft_max_step_m
+        RoadMatchTuningKey.RAILS_BREAK_XT_M -> R.string.road_match_tune_title_rails_break_xt_m
+        RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M -> R.string.road_match_tune_title_rails_break_yard_xt_m
+        RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M -> R.string.road_match_tune_title_rails_relock_radius_m
+        RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG -> R.string.road_match_tune_title_rails_relock_heading_deg
+        RoadMatchTuningKey.RAILS_MIN_ADVANCE_M -> R.string.road_match_tune_title_rails_min_advance_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M -> R.string.road_match_tune_title_rails_along_leash_xt_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M -> R.string.road_match_tune_title_rails_along_leash_dead_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN -> R.string.road_match_tune_title_rails_along_leash_gain
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M -> R.string.road_match_tune_title_rails_along_leash_max_pull_m
+        RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR -> R.string.road_match_tune_title_rails_nav_path_factor
+        RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M -> R.string.road_match_tune_title_rails_nav_path_slack_m
+        RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG -> R.string.road_match_tune_title_rails_turn_hint_bias_deg
+        RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG -> R.string.road_match_tune_title_rails_highway_intent_bias_deg
+        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED -> R.string.road_match_tune_title_ts_fork_bias_enabled
+        RoadMatchTuningKey.TS_INTENTIONAL_ONLY -> R.string.road_match_tune_title_ts_intentional_only
+        RoadMatchTuningKey.TS_TOWARD_MIN_DEG -> R.string.road_match_tune_title_ts_toward_min_deg
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG -> R.string.road_match_tune_title_ts_highway_toward_min_deg
+        RoadMatchTuningKey.TS_STRAIGHT_DEG -> R.string.road_match_tune_title_ts_straight_deg
+        RoadMatchTuningKey.TS_TOWARD_BONUS -> R.string.road_match_tune_title_ts_toward_bonus
+        RoadMatchTuningKey.TS_STRAIGHT_PENALTY -> R.string.road_match_tune_title_ts_straight_penalty
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS -> R.string.road_match_tune_title_ts_highway_toward_bonus
+        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY -> R.string.road_match_tune_title_ts_highway_straight_penalty
+        RoadMatchTuningKey.TS_ARC_WEIGHT -> R.string.road_match_tune_title_ts_arc_weight
+        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT -> R.string.road_match_tune_title_ts_min_flashes_for_intent
+        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS -> R.string.road_match_tune_title_ts_continuous_stalk_ms
+        RoadMatchTuningKey.TS_LATCH_HOLD_MS -> R.string.road_match_tune_title_ts_latch_hold_ms
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY -> R.string.road_match_tune_title_ts_bias_without_sticky
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M -> R.string.road_match_tune_title_ts_bias_without_sticky_max_xt_m
+        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M -> R.string.road_match_tune_title_free_unbind_before_m
+        RoadMatchTuningKey.FREE_REBIND_AFTER_M -> R.string.road_match_tune_title_free_rebind_after_m
+        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES -> R.string.road_match_tune_title_free_min_incident_lines
+        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG -> R.string.road_match_tune_title_free_bearing_catchup_deg
+        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> R.string.road_match_tune_title_free_throttle_bearing_deg
+        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> R.string.road_match_tune_title_free_throttle_max_residual_deg
+        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED -> R.string.road_match_tune_title_free_stalk_unbind_enabled
+        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY -> R.string.road_match_tune_title_free_stalk_unbind_intentional_only
+        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M -> R.string.road_match_tune_title_free_stalk_rebind_after_m
+        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY -> R.string.road_match_tune_title_free_stalk_unbind_block_highway
+        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH -> R.string.road_match_tune_title_free_stalk_unbind_min_speed_kmh
 }
 
-internal fun roadMatchTuningTitle(key: RoadMatchTuningKey, ru: Boolean): String {
-    if (!ru) {
-        return key.storageName
-            .replace(Regex("([a-z])([A-Z])"), "$1 $2")
-            .replaceFirstChar { it.uppercase() }
-    }
-    return when (key) {
-        RoadMatchTuningKey.MATCH_CADENCE_MS -> "Период внутреннего цикла"
-        RoadMatchTuningKey.PATH_TRIGGER_M -> "Порог запуска по пути"
-        RoadMatchTuningKey.TIME_TRIGGER_MS -> "Порог запуска по времени"
-        RoadMatchTuningKey.TURN_TRIGGER_DEG -> "Порог запуска по повороту"
-        RoadMatchTuningKey.MIN_SPEED_KMH -> "Минимальная скорость"
-        RoadMatchTuningKey.CANDIDATE_RADIUS_M -> "Радиус поиска кандидатов"
-        RoadMatchTuningKey.HEADING_TOLERANCE_DEG -> "Допуск курса к ребру"
-        RoadMatchTuningKey.CROSS_BLEND -> "Доля поперечной подтяжки"
-        RoadMatchTuningKey.MAX_CROSS_STEP_M -> "Максимальный поперечный шаг"
-        RoadMatchTuningKey.MAX_BEARING_STEP_DEG -> "Обычная подтяжка курса"
-        RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG -> "Быстрая подтяжка курса"
-        RoadMatchTuningKey.BEARING_INHIBIT_DEG -> "Запрет подтяжки при отклонении"
-        RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M -> "Радиус удержания старого ребра"
-        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT -> "Подтверждений смены ребра"
-        RoadMatchTuningKey.BEAM_WIDTH -> "Число гипотез"
-        RoadMatchTuningKey.MATCH_LAG_MIN_M -> "Минимальное отставание ранжирования"
-        RoadMatchTuningKey.MATCH_LAG_MAX_M -> "Максимальное отставание ранжирования"
-        RoadMatchTuningKey.MATCH_LAG_SECONDS -> "Отставание ранжирования по времени"
-        RoadMatchTuningKey.LOOK_AHEAD_MIN_M -> "Минимальный прогноз вперёд"
-        RoadMatchTuningKey.LOOK_AHEAD_MAX_M -> "Максимальный прогноз вперёд"
-        RoadMatchTuningKey.LOOK_AHEAD_SECONDS -> "Прогноз вперёд по времени"
-        RoadMatchTuningKey.GNSS_MAX_ACCURACY_M -> "GNSS: предел точности"
-        RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M -> "GNSS: предел разрыва с тенью"
-        RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX -> "GNSS: ослабление штрафа класса"
-        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS -> "Бонус за ту же дорогу"
-        RoadMatchTuningKey.RANK_CONNECTED_BONUS -> "Бонус за связанную дорогу"
-        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY -> "Штраф за прыжок на чужую"
-        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY -> "Доп. штраф прыжка на съезд"
-        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY -> "Штраф раннего съезда без поворота"
-        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH -> "Скорость: ниже — съезд без штрафа"
-        RoadMatchTuningKey.LEASH_BREAK_XT_M -> "Leash: отрыв поперёк"
-        RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M -> "Leash: отрыв во дворе"
-        RoadMatchTuningKey.LEASH_BREAK_PATH_M -> "Leash: путь до отрыва"
-        RoadMatchTuningKey.JUNCTION_RADIUS_M -> "Радиус анализа перекрёстка"
-        RoadMatchTuningKey.JUNCTION_MIN_ROADS -> "Минимум дорог перекрёстка"
-        RoadMatchTuningKey.PROMOTE_POS_M -> "Free particle: разрыв позиции"
-        RoadMatchTuningKey.PROMOTE_POS_HEADING_M -> "Free particle: разрыв с курсом"
-        RoadMatchTuningKey.PROMOTE_HEADING_DEG -> "Free particle: разрыв курса"
-        RoadMatchTuningKey.MAX_ALONG_STEP_M -> "Максимальная подтяжка вдоль"
-        RoadMatchTuningKey.PAST_END_RELEASE_M -> "Отпускание после конца ребра"
-        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> "Догон вдоль дороги"
-        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> "Догон: мёртвая зона"
-        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> "Догон: максимум за шаг"
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY -> "Отвязка при поворотнике (обычные)"
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY -> "Отвязка при поворотнике (шоссе)"
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY -> "Отвязка только intentional"
-        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M -> "Прилипание после выкл. поворотника"
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH -> "Мин. скорость для отвязки"
-        RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> "Rails: граница жёсткого snap"
-        RoadMatchTuningKey.RAILS_SOFT_XT_M -> "Rails: граница мягкого snap"
-        RoadMatchTuningKey.RAILS_SOFT_BLEND -> "Rails: доля мягкого snap"
-        RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M -> "Rails: максимальный мягкий шаг"
-        RoadMatchTuningKey.RAILS_BREAK_XT_M -> "Rails: отрыв от коридора"
-        RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M -> "Rails: отрыв во дворе"
-        RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M -> "Rails: радиус перезахвата"
-        RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG -> "Rails: допуск курса перезахвата"
-        RoadMatchTuningKey.RAILS_MIN_ADVANCE_M -> "Rails: минимум продвижения"
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M -> "Rails: ширина along-leash"
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M -> "Rails: мёртвая зона along-leash"
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN -> "Rails: сила along-leash"
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M -> "Rails: предел along-leash"
-        RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR -> "Rails: множитель пути навигатора"
-        RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M -> "Rails: запас пути навигатора"
-        RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG -> "Rails: смещение по поворотнику"
-        RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG -> "Rails: смещение на трассе"
-        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED -> "Bias на развилке"
-        RoadMatchTuningKey.TS_INTENTIONAL_ONLY -> "Только intentional stalk"
-        RoadMatchTuningKey.TS_TOWARD_MIN_DEG -> "Мин. угол «в сторону» (город)"
-        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG -> "Мин. угол «в сторону» (шоссе)"
-        RoadMatchTuningKey.TS_STRAIGHT_DEG -> "Угол «прямо» для штрафа"
-        RoadMatchTuningKey.TS_TOWARD_BONUS -> "Бонус за ветку «туда» (город)"
-        RoadMatchTuningKey.TS_STRAIGHT_PENALTY -> "Штраф «прямо» (город)"
-        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS -> "Бонус за ветку «туда» (шоссе)"
-        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY -> "Штраф «прямо» (шоссе)"
-        RoadMatchTuningKey.TS_ARC_WEIGHT -> "Вес bias на кольце"
-        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT -> "Вспышек для intentional"
-        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS -> "Удержание стебля (A10)"
-        RoadMatchTuningKey.TS_LATCH_HOLD_MS -> "Память стороны после вспышки"
-        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY -> "Bias без sticky-ребра"
-        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M -> "Макс. xt для bias без sticky"
-        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M -> "Отпустить до узла"
-        RoadMatchTuningKey.FREE_REBIND_AFTER_M -> "Привязать после узла"
-        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES -> "Минимум линий узла"
-        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG -> "Подтяжка курса"
-        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> "Подтяжка между match"
-        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> "Предел отклонения"
-        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED -> "Отвязка при поворотнике"
-        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY -> "Отвязка только intentional"
-        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M -> "Прилипание после выкл. поворотника"
-        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY -> "Не отвязывать на шоссе"
-        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH -> "Мин. скорость для отвязки"
-    }
-}
-
-internal fun roadMatchTuningDescription(key: RoadMatchTuningKey, ru: Boolean): String {
-    val text = when (key) {
-        RoadMatchTuningKey.MATCH_CADENCE_MS ->
-            "Частота расчёта тени и matcher. Меньше — быстрее реакция, но выше нагрузка." to
-                "Shadow and matcher calculation interval. Lower reacts faster but uses more CPU."
-        RoadMatchTuningKey.PATH_TRIGGER_M ->
-            "Новый полный поиск после такого пробега. Меньше — чаще обновление ребра." to
-                "Run a full match after this distance. Lower values update the edge more often."
-        RoadMatchTuningKey.TIME_TRIGGER_MS ->
-            "Максимальная пауза между полными поисками, даже если машина проехала мало." to
-                "Maximum delay between full matches even when little distance was travelled."
-        RoadMatchTuningKey.TURN_TRIGGER_DEG ->
-            "Изменение курса, которое запускает matcher досрочно. Меньше — раньше реакция на поворот." to
-                "Heading change that triggers an early match. Lower reacts to turns sooner."
-        RoadMatchTuningKey.MIN_SPEED_KMH ->
-            "Ниже этой скорости коррекция дороги не выполняется, чтобы точка не дёргалась на месте." to
-                "Road correction is paused below this speed to avoid movement while stopped."
-        RoadMatchTuningKey.CANDIDATE_RADIUS_M ->
-            "На каком расстоянии искать дороги. Большой радиус помогает при уходе, но добавляет ложные варианты." to
-                "Distance used to search for roads. Larger helps recovery but adds false candidates."
-        RoadMatchTuningKey.HEADING_TOLERANCE_DEG ->
-            "Допустимое расхождение курса машины и направления новой дороги." to
-                "Allowed heading difference between the vehicle and a new road candidate."
-        RoadMatchTuningKey.CROSS_BLEND ->
-            "Какая доля боковой ошибки убирается за коррекцию. Больше — сильнее притяжка к линии." to
-                "Fraction of lateral error removed per correction. Higher snaps harder to the road."
-        RoadMatchTuningKey.MAX_CROSS_STEP_M ->
-            "Ограничение одного бокового сдвига. Защищает от резкого прыжка на дорогу." to
-                "Maximum lateral move per correction. Limits sudden jumps onto a road."
-        RoadMatchTuningKey.MAX_BEARING_STEP_DEG ->
-            "Обычный максимальный поворот курса к направлению ребра за один шаг." to
-                "Normal maximum heading rotation toward the edge in one correction."
-        RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG ->
-            "Ускоренная подтяжка курса после уверенного захвата или смены ребра." to
-                "Faster heading pull after a confident lock or confirmed edge switch."
-        RoadMatchTuningKey.BEARING_INHIBIT_DEG ->
-            "При большем расхождении обычная подтяжка курса блокируется: вероятно, машина уже поворачивает." to
-                "Normal heading pull stops above this mismatch because the vehicle may be turning away."
-        RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M ->
-            "До какого бокового удаления разрешено удерживать ранее выбранную дорогу." to
-                "Maximum lateral distance at which the previously selected edge may be retained."
-        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT ->
-            "Сколько последовательных побед кандидата нужно для смены дороги. Больше — стабильнее, но медленнее." to
-                "Consecutive wins required to switch roads. Higher is steadier but slower."
-        RoadMatchTuningKey.BEAM_WIDTH ->
-            "Сколько лучших вариантов дорог matcher хранит одновременно." to
-                "Number of best road hypotheses retained by the matcher."
-        RoadMatchTuningKey.MATCH_LAG_MIN_M ->
-            "Минимальная точка просмотра назад при выборе дороги после развилки." to
-                "Minimum look-behind distance used when ranking roads near a fork."
-        RoadMatchTuningKey.MATCH_LAG_MAX_M ->
-            "Максимальное отставание точки ранжирования от текущей тени." to
-                "Maximum distance the ranking point may trail the live shadow."
-        RoadMatchTuningKey.MATCH_LAG_SECONDS ->
-            "Скоростная часть отставания: сколько секунд пути смотреть назад." to
-                "Speed-based look-behind: how many seconds of travel to rank behind."
-        RoadMatchTuningKey.LOOK_AHEAD_MIN_M ->
-            "Минимальная дистанция прогноза по графу для следующего связного ребра." to
-                "Minimum graph look-ahead distance for the next connected edge."
-        RoadMatchTuningKey.LOOK_AHEAD_MAX_M ->
-            "Максимальная дистанция прогноза по графу; ограничивает слишком далёкий выбор." to
-                "Maximum graph look-ahead distance, limiting overly distant choices."
-        RoadMatchTuningKey.LOOK_AHEAD_SECONDS ->
-            "Сколько секунд движения использовать для прогноза вперёд по текущей скорости." to
-                "Seconds of travel used for graph look-ahead at the current speed."
-        RoadMatchTuningKey.GNSS_MAX_ACCURACY_M ->
-            "Максимальная заявленная точность GNSS, при которой координате можно усиленно доверять." to
-                "Maximum GNSS accuracy value that still permits stronger position trust."
-        RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M ->
-            "Если живая GNSS-точка дальше от тени, доверие GNSS для выбора дороги отключается." to
-                "GNSS road-choice trust is disabled when the live fix is farther from the shadow."
-        RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX ->
-            "Насколько хороший GNSS ослабляет преимущество дорог высокого класса. 0 — не ослабляет, 1 — почти убирает." to
-                "How much good GNSS relaxes major-road preference. 0 keeps it; 1 nearly removes it."
-        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS ->
-            "Насколько сильнее держать уже выбранную линию. Больше — труднее съехать на другую дорогу (в т.ч. на съезд). Меньше — легче переключиться." to
-                "How strongly to keep the already selected road. Higher makes exits harder; lower switches more readily."
-        RoadMatchTuningKey.RANK_CONNECTED_BONUS ->
-            "Преимущество дороги, которая стыкуется с текущей в узле. Больше — охотнее берём связанный съезд/поворот; меньше — почти как чужая дорога." to
-                "Advantage for a road that joins the current one at a node. Higher favours connected ramps/turns."
-        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY ->
-            "Штраф, если кандидат не связан с текущей дорогой (прыжок через поле). Больше — сильнее запрет «перескочить» на параллель без стыка." to
-                "Penalty when a candidate does not join the current road. Higher blocks jumping onto a parallel without a junction."
-        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY ->
-            "Дополнительный штраф, если прыжок ещё и на съезд (*_link) без связи. Больше — почти не берём «левый» ramp; меньше — легче захватить съезд рядом." to
-                "Extra penalty for jumping onto an unconnected *_link ramp. Higher almost forbids stray ramps; lower accepts nearby exits sooner."
-        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY ->
-            "Штраф почти прямому съезду (*_link), когда нет явного поворота / look-ahead / intentional поворотника. Больше — не цепляемся за ранний ramp на магистрали; меньше — раньше берём съезд." to
-                "Penalty for a nearly straight *_link with no clear turn / look-ahead / intentional stalk. Higher avoids early highway ramps; lower takes exits sooner."
-        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH ->
-            "Ниже этой скорости ранний съезд без поворота не штрафуем и не режем (городские съезды со светофора). На шоссе обычно едем быстрее — порог срабатывает." to
-                "Below this speed an early unhinted exit is not penalized or blocked (city exits from a stop). Highway speeds usually exceed it."
-        RoadMatchTuningKey.LEASH_BREAK_XT_M ->
-            "Боковое удаление, после которого Ordinary может отпустить обычную дорогу." to
-                "Lateral distance at which Ordinary may release a normal road."
-        RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M ->
-            "Более осторожный порог отпускания для дворовых и жилых проездов." to
-                "More conservative release distance for yard and residential roads."
-        RoadMatchTuningKey.LEASH_BREAK_PATH_M ->
-            "Сколько нужно проехать в сторону от ребра, прежде чем разорвать поводок." to
-                "Distance travelled away from the edge before the leash may break."
-        RoadMatchTuningKey.JUNCTION_RADIUS_M ->
-            "Радиус поиска направлений вокруг машины при распознавании сложного перекрёстка." to
-                "Radius used to inspect nearby headings when detecting a complex junction."
-        RoadMatchTuningKey.JUNCTION_MIN_ROADS ->
-            "Минимум разных направлений, чтобы Ordinary включил свободную контрольную точку." to
-                "Minimum distinct road directions required to start Ordinary's free particle."
-        RoadMatchTuningKey.PROMOTE_POS_M ->
-            "Разрыв между свободной и привязанной точками, при котором свободная сразу побеждает." to
-                "Position gap at which the free particle immediately replaces the snapped pose."
-        RoadMatchTuningKey.PROMOTE_POS_HEADING_M ->
-            "Меньший разрыв позиции, достаточный при одновременном сильном расхождении курса." to
-                "Smaller position gap accepted together with a large heading disagreement."
-        RoadMatchTuningKey.PROMOTE_HEADING_DEG ->
-            "Расхождение курсов, необходимое для принятия свободной точки по комбинированному условию." to
-                "Heading disagreement required by the combined free-particle promotion rule."
-        RoadMatchTuningKey.MAX_ALONG_STEP_M ->
-            "Максимальная подтяжка вперёд или назад вдоль однозначного ребра за шаг." to
-                "Maximum forward or backward correction along an unambiguous edge."
-        RoadMatchTuningKey.PAST_END_RELEASE_M ->
-            "Боковая ошибка за концом ребра, после которой matcher перестаёт тянуть к его endpoint." to
-                "Lateral error beyond an edge end that stops snapping back to its endpoint."
-        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED ->
-            "После поворота возвращает путь CAN/импульсов вдоль графа. Не использует километровый одометр. Действует и в «Своб. повороты», кроме периода отвязки у узла/поворотника." to
-                "After a turn, restores CAN/pulse path along the graph. Does not use the kilometre odometer. Also applies in Free Turns, except while unbound at a junction/stalk."
-        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M ->
-            "Продольное отставание меньше этого не догоняется — защита от дрожания на прямой. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
-                "Along-track lag below this is left alone, avoiding jitter on a straight road. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
-        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M ->
-            "Максимум метров догона вдоль дороги за один match. Больше — быстрее навёрстывает повороты. Как и догон, действует в Ordinary и Free Turns (вне отвязки)." to
-                "Maximum along-road catch-up per match. Higher recovers turn lag faster. Like catch-up, applies in Ordinary and Free Turns (outside unbind)."
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY ->
-            "Тест: на обычных (городских) дорогах при intentional поворотнике Ordinary полностью отпускает линию. По умолчанию выкл." to
-                "Test: on ordinary (city) roads, intentional turn signal fully releases Ordinary softCorrect. Off by default."
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY ->
-            "Тест для съездов/клевера: на профиле шоссе при intentional поворотнике отпускает магистраль, чтобы DR мог уйти на link/дублёр. По умолчанию выкл." to
-                "Exit/cloverleaf test: on highway profile, intentional stalk releases the motorway so DR can take a link/frontage road. Off by default."
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY ->
-            "Отвязка только при intentional stalk; comfort 3 вспышки дорогу не отпускают." to
-                "Unbind only for intentional stalk; comfort 3-blink does not release the road."
-        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M ->
-            "Сколько метров проехать после выключения поворотника перед повторным прилипанием (0…100)." to
-                "Metres to travel after the turn signal goes off before rebinding (0…100)."
-        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH ->
-            "Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр)." to
-                "Stalk unbind will not start below this speed (parked or crawling manoeuvre)."
-        RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M ->
-            "Внутри этого расстояния Rails полностью ставит точку на линию дороги." to
-                "Within this distance Rails places the published pose directly on the road."
-        RoadMatchTuningKey.RAILS_SOFT_XT_M ->
-            "До этого удаления Rails мягко подтягивает к линии; дальше публикует свободную точку." to
-                "Rails pulls softly up to this distance, then publishes the free pose."
-        RoadMatchTuningKey.RAILS_SOFT_BLEND ->
-            "Сила мягкой боковой подтяжки Rails между жёсткой и внешней границами." to
-                "Strength of Rails soft lateral pull between the hard and outer limits."
-        RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M ->
-            "Максимальный боковой шаг мягкой коррекции Rails." to
-                "Maximum lateral step of a Rails soft correction."
-        RoadMatchTuningKey.RAILS_BREAK_XT_M ->
-            "Боковое удаление, при котором Rails может разорвать дорожный коридор." to
-                "Lateral distance at which Rails may leave the road corridor."
-        RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M ->
-            "Отдельный, обычно меньший, порог схода Rails для дворовых дорог." to
-                "Separate, normally smaller, Rails corridor break limit for yard roads."
-        RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M ->
-            "Радиус поиска дороги после схода Rails с коридора." to
-                "Road search radius after Rails has left its corridor."
-        RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG ->
-            "Максимальное расхождение курса для повторного захвата Rails." to
-                "Maximum heading mismatch allowed for Rails re-lock."
-        RoadMatchTuningKey.RAILS_MIN_ADVANCE_M ->
-            "Минимальный новый путь перед следующим продвижением Rails по графу." to
-                "Minimum new travel distance before Rails advances on the graph again."
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M ->
-            "Максимальная боковая ошибка, при которой разрешена продольная подтяжка Rails." to
-                "Maximum lateral error that still permits Rails along-edge pull."
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M ->
-            "Продольное отставание меньше этого значения не исправляется." to
-                "Along-edge lag below this dead zone is not corrected."
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN ->
-            "Доля продольного отставания, исправляемая за один шаг." to
-                "Fraction of along-edge lag corrected in one step."
-        RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M ->
-            "Максимальная продольная подтяжка Rails за один шаг." to
-                "Maximum Rails along-edge pull in a single step."
-        RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR ->
-            "Во сколько раз увеличить реально пройденный путь при поиске достижимого ребра." to
-                "Multiplier applied to travelled distance when searching reachable graph edges."
-        RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M ->
-            "Дополнительный запас метров к бюджету поиска следующего ребра Rails." to
-                "Extra metres added to the Rails reachable-edge search budget."
-        RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG ->
-            "Насколько поворотник смещает прогноз курса к нужной ветке в городе." to
-                "Heading bias from an intentional turn signal when selecting a city branch."
-        RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG ->
-            "Усиленное смещение по поворотнику для съезда на скоростной дороге." to
-                "Stronger intentional turn-signal bias for highway exits."
-        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED ->
-            "Включает бонус/штраф поворотника на развилке во всех режимах. Выкл — stalk не меняет ранжирование." to
-                "Enables turn-signal fork bonus/penalty in all modes. Off means the stalk does not change ranking."
-        RoadMatchTuningKey.TS_INTENTIONAL_ONLY ->
-            "Bias только при intentional stalk (не comfort 3 вспышки). Выкл — любая сторона L/R даёт bias." to
-                "Apply bias only for intentional stalk, not comfort 3-blink. Off uses any latched L/R side."
-        RoadMatchTuningKey.TS_TOWARD_MIN_DEG ->
-            "Минимальный угол кандидата «в сторону поворотника» в городе. Меньше — бонус раньше, до поворота машины." to
-                "City minimum angle for a toward-candidate. Lower grants the bonus earlier, before the car turns."
-        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG ->
-            "Тот же порог на шоссе при intentional stalk — для пологих съездов обычно ниже городского." to
-                "Same threshold on highway with intentional stalk; usually lower for shallow ramps."
-        RoadMatchTuningKey.TS_STRAIGHT_DEG ->
-            "Кандидаты с |углом| меньше этого считаются «прямо» и получают штраф, если есть ветка «туда»." to
-                "Candidates within this |angle| count as straight-through and get a penalty when a toward branch exists."
-        RoadMatchTuningKey.TS_TOWARD_BONUS ->
-            "Насколько сильнее предпочесть ветку в сторону поворотника в городе (ещё до поворота руля)." to
-                "How strongly to prefer the toward-branch in the city before the vehicle has turned."
-        RoadMatchTuningKey.TS_STRAIGHT_PENALTY ->
-            "Насколько сильнее наказать прямую ветку, когда поворотник уже intentional." to
-                "How strongly to penalize the straight-through branch once the stalk is intentional."
-        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS ->
-            "Усиленный бонус за съезд/рампу на шоссе при intentional stalk." to
-                "Stronger toward-branch bonus for highway ramps with an intentional stalk."
-        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY ->
-            "Усиленный штраф за продолжение прямо на шоссе при intentional stalk." to
-                "Stronger straight-through penalty on highway with an intentional stalk."
-        RoadMatchTuningKey.TS_ARC_WEIGHT ->
-            "Ослабление полного bias на кольце/изогнутом oneway: 0 — без nudge, 1 — как на обычной развилке." to
-                "Scales full fork bias on circulating arcs: 0 disables the nudge, 1 equals a normal fork."
-        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT ->
-            "Сколько вспышек A9 нужно, чтобы stalk стал intentional (comfort обычно 3)." to
-                "A9 flash count required before the stalk counts as intentional (comfort is usually 3)."
-        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS ->
-            "Сколько держать стебель A10, чтобы считать поворот intentional без набора вспышек." to
-                "How long an A10 stalk must stay held to count as intentional without flash counting."
-        RoadMatchTuningKey.TS_LATCH_HOLD_MS ->
-            "Сколько помнить сторону L/R после последней вспышки/отпускания стебля." to
-                "How long to remember the L/R side after the last flash or stalk release."
-        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY ->
-            "Разрешить fork-bias даже без sticky-ребра, если рядом есть близкий кандидат." to
-                "Allow fork bias without a sticky edge when a nearby candidate is within the xt limit."
-        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M ->
-            "Максимальная боковая ошибка кандидата для bias без sticky; дальше bias не включается." to
-                "Maximum candidate cross-track for bias without sticky; farther candidates are ignored."
-        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M ->
-            "За сколько метров до подходящего узла FreeTurns полностью отпускает дорогу." to
-                "Distance before an eligible junction where FreeTurns fully releases the road."
-        RoadMatchTuningKey.FREE_REBIND_AFTER_M ->
-            "Сколько проехать за узлом свободно перед повторным поиском дороги." to
-                "Free travel distance beyond the junction before matching resumes."
-        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES ->
-            "Сколько рёбер должно сходиться в узле для свободного окна. Меньше — больше перекрёстков." to
-                "Incident edges required for a free window. Lower values affect more junctions."
-        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG ->
-            "Максимальная подтяжка курса FreeTurns на полном match-шаге." to
-                "Maximum FreeTurns heading pull on a full matching step."
-        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG ->
-            "Подтяжка курса FreeTurns между полными поисками дороги." to
-                "FreeTurns heading pull between full road searches."
-        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG ->
-            "При большем расхождении межшаговая подтяжка отключается, чтобы не тянуть через разворот." to
-                "Inter-step pull stops above this mismatch to avoid pulling through a U-turn."
-        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED ->
-            "Полностью отвязать курс и позицию на время включённого поворотника (до выключения + путь ниже)." to
-                "Fully release heading and position while the turn signal is on, until off plus the path below."
-        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY ->
-            "Отвязка только при intentional stalk; comfort 3 вспышки дорогу не отпускают." to
-                "Unbind only for intentional stalk; comfort 3-blink does not release the road."
-        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M ->
-            "Сколько метров проехать после выключения поворотника перед повторным прилипанием (0…100)." to
-                "Metres to travel after the turn signal goes off before rebinding (0…100)."
-        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY ->
-            "Не отвязывать на профиле шоссе — защита от смены полосы с включённым поворотником." to
-                "Do not stalk-unbind on highway profile — protects lane changes with the signal on."
-        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH ->
-            "Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр)." to
-                "Stalk unbind will not start below this speed (parked or crawling manoeuvre)."
-    }
-    return if (ru) text.first else text.second
+internal fun roadMatchTuningDescriptionRes(key: RoadMatchTuningKey): Int = when (key) {
+        RoadMatchTuningKey.MATCH_CADENCE_MS -> R.string.road_match_tune_desc_match_cadence_ms
+        RoadMatchTuningKey.PATH_TRIGGER_M -> R.string.road_match_tune_desc_path_trigger_m
+        RoadMatchTuningKey.TIME_TRIGGER_MS -> R.string.road_match_tune_desc_time_trigger_ms
+        RoadMatchTuningKey.TURN_TRIGGER_DEG -> R.string.road_match_tune_desc_turn_trigger_deg
+        RoadMatchTuningKey.MIN_SPEED_KMH -> R.string.road_match_tune_desc_min_speed_kmh
+        RoadMatchTuningKey.CANDIDATE_RADIUS_M -> R.string.road_match_tune_desc_candidate_radius_m
+        RoadMatchTuningKey.HEADING_TOLERANCE_DEG -> R.string.road_match_tune_desc_heading_tolerance_deg
+        RoadMatchTuningKey.CROSS_BLEND -> R.string.road_match_tune_desc_cross_blend
+        RoadMatchTuningKey.MAX_CROSS_STEP_M -> R.string.road_match_tune_desc_max_cross_step_m
+        RoadMatchTuningKey.MAX_BEARING_STEP_DEG -> R.string.road_match_tune_desc_max_bearing_step_deg
+        RoadMatchTuningKey.MAX_BEARING_CATCHUP_DEG -> R.string.road_match_tune_desc_max_bearing_catchup_deg
+        RoadMatchTuningKey.BEARING_INHIBIT_DEG -> R.string.road_match_tune_desc_bearing_inhibit_deg
+        RoadMatchTuningKey.HOLD_PREVIOUS_RADIUS_M -> R.string.road_match_tune_desc_hold_previous_radius_m
+        RoadMatchTuningKey.SWITCH_CONFIRM_COUNT -> R.string.road_match_tune_desc_switch_confirm_count
+        RoadMatchTuningKey.BEAM_WIDTH -> R.string.road_match_tune_desc_beam_width
+        RoadMatchTuningKey.MATCH_LAG_MIN_M -> R.string.road_match_tune_desc_match_lag_min_m
+        RoadMatchTuningKey.MATCH_LAG_MAX_M -> R.string.road_match_tune_desc_match_lag_max_m
+        RoadMatchTuningKey.MATCH_LAG_SECONDS -> R.string.road_match_tune_desc_match_lag_seconds
+        RoadMatchTuningKey.LOOK_AHEAD_MIN_M -> R.string.road_match_tune_desc_look_ahead_min_m
+        RoadMatchTuningKey.LOOK_AHEAD_MAX_M -> R.string.road_match_tune_desc_look_ahead_max_m
+        RoadMatchTuningKey.LOOK_AHEAD_SECONDS -> R.string.road_match_tune_desc_look_ahead_seconds
+        RoadMatchTuningKey.GNSS_MAX_ACCURACY_M -> R.string.road_match_tune_desc_gnss_max_accuracy_m
+        RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M -> R.string.road_match_tune_desc_gnss_max_shadow_gap_m
+        RoadMatchTuningKey.GNSS_CLASS_PENALTY_RELAX -> R.string.road_match_tune_desc_gnss_class_penalty_relax
+        RoadMatchTuningKey.RANK_SAME_EDGE_BONUS -> R.string.road_match_tune_desc_rank_same_edge_bonus
+        RoadMatchTuningKey.RANK_CONNECTED_BONUS -> R.string.road_match_tune_desc_rank_connected_bonus
+        RoadMatchTuningKey.RANK_DISCONNECTED_PENALTY -> R.string.road_match_tune_desc_rank_disconnected_penalty
+        RoadMatchTuningKey.RANK_DISCONNECTED_LINK_PENALTY -> R.string.road_match_tune_desc_rank_disconnected_link_penalty
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_PENALTY -> R.string.road_match_tune_desc_rank_unhinted_link_penalty
+        RoadMatchTuningKey.RANK_UNHINTED_LINK_MIN_SPEED_KMH -> R.string.road_match_tune_desc_rank_unhinted_link_min_speed_kmh
+        RoadMatchTuningKey.LEASH_BREAK_XT_M -> R.string.road_match_tune_desc_leash_break_xt_m
+        RoadMatchTuningKey.LEASH_BREAK_YARD_XT_M -> R.string.road_match_tune_desc_leash_break_yard_xt_m
+        RoadMatchTuningKey.LEASH_BREAK_PATH_M -> R.string.road_match_tune_desc_leash_break_path_m
+        RoadMatchTuningKey.JUNCTION_RADIUS_M -> R.string.road_match_tune_desc_junction_radius_m
+        RoadMatchTuningKey.JUNCTION_MIN_ROADS -> R.string.road_match_tune_desc_junction_min_roads
+        RoadMatchTuningKey.PROMOTE_POS_M -> R.string.road_match_tune_desc_promote_pos_m
+        RoadMatchTuningKey.PROMOTE_POS_HEADING_M -> R.string.road_match_tune_desc_promote_pos_heading_m
+        RoadMatchTuningKey.PROMOTE_HEADING_DEG -> R.string.road_match_tune_desc_promote_heading_deg
+        RoadMatchTuningKey.MAX_ALONG_STEP_M -> R.string.road_match_tune_desc_max_along_step_m
+        RoadMatchTuningKey.PAST_END_RELEASE_M -> R.string.road_match_tune_desc_past_end_release_m
+        RoadMatchTuningKey.PATH_ODO_SYNC_ENABLED -> R.string.road_match_tune_desc_path_odo_sync_enabled
+        RoadMatchTuningKey.PATH_ODO_SYNC_DEAD_M -> R.string.road_match_tune_desc_path_odo_sync_dead_m
+        RoadMatchTuningKey.PATH_ODO_SYNC_MAX_STEP_M -> R.string.road_match_tune_desc_path_odo_sync_max_step_m
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_CITY -> R.string.road_match_tune_desc_ordinary_stalk_unbind_city
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_HIGHWAY -> R.string.road_match_tune_desc_ordinary_stalk_unbind_highway
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_INTENTIONAL_ONLY -> R.string.road_match_tune_desc_ordinary_stalk_unbind_intentional_only
+        RoadMatchTuningKey.ORDINARY_STALK_REBIND_AFTER_M -> R.string.road_match_tune_desc_ordinary_stalk_rebind_after_m
+        RoadMatchTuningKey.ORDINARY_STALK_UNBIND_MIN_SPEED_KMH -> R.string.road_match_tune_desc_ordinary_stalk_unbind_min_speed_kmh
+        RoadMatchTuningKey.RAILS_HARD_SNAP_XT_M -> R.string.road_match_tune_desc_rails_hard_snap_xt_m
+        RoadMatchTuningKey.RAILS_SOFT_XT_M -> R.string.road_match_tune_desc_rails_soft_xt_m
+        RoadMatchTuningKey.RAILS_SOFT_BLEND -> R.string.road_match_tune_desc_rails_soft_blend
+        RoadMatchTuningKey.RAILS_SOFT_MAX_STEP_M -> R.string.road_match_tune_desc_rails_soft_max_step_m
+        RoadMatchTuningKey.RAILS_BREAK_XT_M -> R.string.road_match_tune_desc_rails_break_xt_m
+        RoadMatchTuningKey.RAILS_BREAK_YARD_XT_M -> R.string.road_match_tune_desc_rails_break_yard_xt_m
+        RoadMatchTuningKey.RAILS_RELOCK_RADIUS_M -> R.string.road_match_tune_desc_rails_relock_radius_m
+        RoadMatchTuningKey.RAILS_RELOCK_HEADING_DEG -> R.string.road_match_tune_desc_rails_relock_heading_deg
+        RoadMatchTuningKey.RAILS_MIN_ADVANCE_M -> R.string.road_match_tune_desc_rails_min_advance_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_XT_M -> R.string.road_match_tune_desc_rails_along_leash_xt_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_DEAD_M -> R.string.road_match_tune_desc_rails_along_leash_dead_m
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_GAIN -> R.string.road_match_tune_desc_rails_along_leash_gain
+        RoadMatchTuningKey.RAILS_ALONG_LEASH_MAX_PULL_M -> R.string.road_match_tune_desc_rails_along_leash_max_pull_m
+        RoadMatchTuningKey.RAILS_NAV_PATH_FACTOR -> R.string.road_match_tune_desc_rails_nav_path_factor
+        RoadMatchTuningKey.RAILS_NAV_PATH_SLACK_M -> R.string.road_match_tune_desc_rails_nav_path_slack_m
+        RoadMatchTuningKey.RAILS_TURN_HINT_BIAS_DEG -> R.string.road_match_tune_desc_rails_turn_hint_bias_deg
+        RoadMatchTuningKey.RAILS_HIGHWAY_INTENT_BIAS_DEG -> R.string.road_match_tune_desc_rails_highway_intent_bias_deg
+        RoadMatchTuningKey.TS_FORK_BIAS_ENABLED -> R.string.road_match_tune_desc_ts_fork_bias_enabled
+        RoadMatchTuningKey.TS_INTENTIONAL_ONLY -> R.string.road_match_tune_desc_ts_intentional_only
+        RoadMatchTuningKey.TS_TOWARD_MIN_DEG -> R.string.road_match_tune_desc_ts_toward_min_deg
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_MIN_DEG -> R.string.road_match_tune_desc_ts_highway_toward_min_deg
+        RoadMatchTuningKey.TS_STRAIGHT_DEG -> R.string.road_match_tune_desc_ts_straight_deg
+        RoadMatchTuningKey.TS_TOWARD_BONUS -> R.string.road_match_tune_desc_ts_toward_bonus
+        RoadMatchTuningKey.TS_STRAIGHT_PENALTY -> R.string.road_match_tune_desc_ts_straight_penalty
+        RoadMatchTuningKey.TS_HIGHWAY_TOWARD_BONUS -> R.string.road_match_tune_desc_ts_highway_toward_bonus
+        RoadMatchTuningKey.TS_HIGHWAY_STRAIGHT_PENALTY -> R.string.road_match_tune_desc_ts_highway_straight_penalty
+        RoadMatchTuningKey.TS_ARC_WEIGHT -> R.string.road_match_tune_desc_ts_arc_weight
+        RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT -> R.string.road_match_tune_desc_ts_min_flashes_for_intent
+        RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS -> R.string.road_match_tune_desc_ts_continuous_stalk_ms
+        RoadMatchTuningKey.TS_LATCH_HOLD_MS -> R.string.road_match_tune_desc_ts_latch_hold_ms
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY -> R.string.road_match_tune_desc_ts_bias_without_sticky
+        RoadMatchTuningKey.TS_BIAS_WITHOUT_STICKY_MAX_XT_M -> R.string.road_match_tune_desc_ts_bias_without_sticky_max_xt_m
+        RoadMatchTuningKey.FREE_UNBIND_BEFORE_M -> R.string.road_match_tune_desc_free_unbind_before_m
+        RoadMatchTuningKey.FREE_REBIND_AFTER_M -> R.string.road_match_tune_desc_free_rebind_after_m
+        RoadMatchTuningKey.FREE_MIN_INCIDENT_LINES -> R.string.road_match_tune_desc_free_min_incident_lines
+        RoadMatchTuningKey.FREE_BEARING_CATCHUP_DEG -> R.string.road_match_tune_desc_free_bearing_catchup_deg
+        RoadMatchTuningKey.FREE_THROTTLE_BEARING_DEG -> R.string.road_match_tune_desc_free_throttle_bearing_deg
+        RoadMatchTuningKey.FREE_THROTTLE_MAX_RESIDUAL_DEG -> R.string.road_match_tune_desc_free_throttle_max_residual_deg
+        RoadMatchTuningKey.FREE_STALK_UNBIND_ENABLED -> R.string.road_match_tune_desc_free_stalk_unbind_enabled
+        RoadMatchTuningKey.FREE_STALK_UNBIND_INTENTIONAL_ONLY -> R.string.road_match_tune_desc_free_stalk_unbind_intentional_only
+        RoadMatchTuningKey.FREE_STALK_REBIND_AFTER_M -> R.string.road_match_tune_desc_free_stalk_rebind_after_m
+        RoadMatchTuningKey.FREE_STALK_UNBIND_BLOCK_HIGHWAY -> R.string.road_match_tune_desc_free_stalk_unbind_block_highway
+        RoadMatchTuningKey.FREE_STALK_UNBIND_MIN_SPEED_KMH -> R.string.road_match_tune_desc_free_stalk_unbind_min_speed_kmh
 }

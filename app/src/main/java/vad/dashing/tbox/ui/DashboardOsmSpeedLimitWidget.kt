@@ -17,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -82,9 +81,9 @@ fun DashboardOsmSpeedLimitWidgetItem(
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val dashLabel = stringResource(R.string.osm_speed_limit_unknown)
     val packMissing = stringResource(R.string.speed_cam_pack_missing)
+    val metersUnit = stringResource(R.string.unit_meter)
+    val kilometersUnit = stringResource(R.string.unit_km)
     val context = LocalContext.current
-    val isRu = LocalConfiguration.current.locales[0]?.language.equals("ru", ignoreCase = true) ||
-        Locale.getDefault().language.equals("ru", ignoreCase = true)
     val tileOverage = normalizeSpeedCamOverageKmh(overageKmh)
     val display = MapsCamerasRadarsDisplay.from(
         anchor = anchor,
@@ -152,7 +151,8 @@ fun DashboardOsmSpeedLimitWidgetItem(
                                     display = display,
                                     dashLabel = dashLabel,
                                     packMissing = packMissing,
-                                    isRu = isRu,
+                                    metersUnit = metersUnit,
+                                    kilometersUnit = kilometersUnit,
                                     emptyTextColor = resolvedTextColor,
                                     distanceColor = cameraAccent,
                                     iconTextStyle = sideTextStyle,
@@ -206,7 +206,8 @@ private fun MapsCamCameraColumn(
     display: MapsCamerasRadarsDisplay,
     dashLabel: String,
     packMissing: String,
-    isRu: Boolean,
+    metersUnit: String,
+    kilometersUnit: String,
     emptyTextColor: Color,
     distanceColor: Color,
     iconTextStyle: TextStyle,
@@ -252,10 +253,10 @@ private fun MapsCamCameraColumn(
             contentAlignment = Alignment.Center,
         ) {
             val dist = display.cameraDistanceM
-            val text = when {
-                dist == null -> dashLabel
-                isRu -> SpeedCamLookahead.formatDistanceM(dist)
-                else -> SpeedCamLookahead.formatDistanceMEn(dist)
+            val text = if (dist == null) {
+                dashLabel
+            } else {
+                SpeedCamLookahead.formatDistance(dist, metersUnit, kilometersUnit)
             }
             Text(
                 text = text,

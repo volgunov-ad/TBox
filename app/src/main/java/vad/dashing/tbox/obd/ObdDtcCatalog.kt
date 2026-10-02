@@ -7,15 +7,22 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Generic SAE-style DTC text catalog, loaded from assets.
  *
- * - `ru` flavor → [ASSET_RU]
- * - `en` flavor → [ASSET_EN]
+ * Each product flavor maps to `assets/obd/dtc_<flavor>.tsv`. A flavor with no
+ * entry (or a missing file) uses the English catalog. Adding a language is a
+ * TSV plus one map entry — there is no "everything else is English" branch
+ * hiding inside the lookup.
  *
  * English source: mytrile/obd-trouble-codes (MIT).
  * Russian: glossary translation of that catalog (`tools/translate_obd_dtc_ru.py`).
  */
 object ObdDtcCatalog {
-    private const val ASSET_EN = "obd/dtc_en.tsv"
-    private const val ASSET_RU = "obd/dtc_ru.tsv"
+    internal const val ASSET_EN = "obd/dtc_en.tsv"
+    internal const val ASSET_RU = "obd/dtc_ru.tsv"
+
+    private val assetsByFlavor = mapOf(
+        "ru" to ASSET_RU,
+        "en" to ASSET_EN,
+    )
 
     private val descriptions = AtomicReference<Map<String, String>?>(null)
 
@@ -24,7 +31,7 @@ object ObdDtcCatalog {
     fun size(): Int = descriptions.get()?.size ?: 0
 
     fun assetPathForFlavor(flavor: String = BuildConfig.FLAVOR): String =
-        if (flavor.equals("ru", ignoreCase = true)) ASSET_RU else ASSET_EN
+        assetsByFlavor[flavor.trim().lowercase()] ?: ASSET_EN
 
     fun ensureLoaded(context: Context) {
         if (descriptions.get() != null) return

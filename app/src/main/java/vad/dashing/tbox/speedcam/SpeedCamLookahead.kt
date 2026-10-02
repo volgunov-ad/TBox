@@ -320,21 +320,16 @@ object SpeedCamLookahead {
         return if (delta <= 90f) SpeedCamRelativeDirection.SAME else SpeedCamRelativeDirection.ONCOMING
     }
 
-    fun formatDistanceM(distanceM: Double): String {
+    /**
+     * Distance label. Unit words come from flavor strings (`unit_meter`, `unit_km`),
+     * so a new language does not add another formatter.
+     */
+    fun formatDistance(distanceM: Double, metersUnit: String, kilometersUnit: String): String {
         if (!distanceM.isFinite() || distanceM < 0.0) return "—"
         return if (distanceM >= 1000.0) {
-            String.format(Locale.US, "%.1f км", distanceM / 1000.0)
+            String.format(Locale.US, "%.1f %s", distanceM / 1000.0, kilometersUnit)
         } else {
-            "${distanceM.toInt()} м"
-        }
-    }
-
-    fun formatDistanceMEn(distanceM: Double): String {
-        if (!distanceM.isFinite() || distanceM < 0.0) return "—"
-        return if (distanceM >= 1000.0) {
-            String.format(Locale.US, "%.1f km", distanceM / 1000.0)
-        } else {
-            "${distanceM.toInt()} m"
+            "${distanceM.toInt()} $metersUnit"
         }
     }
 }

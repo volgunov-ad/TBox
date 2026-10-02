@@ -13,7 +13,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -34,7 +33,6 @@ import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
 import vad.dashing.tbox.speedcam.normalizeSpeedCamRadiusM
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 import vad.dashing.tbox.ui.theme.scaledWidgetText
-import java.util.Locale
 
 @Composable
 fun DashboardSpeedCamWidgetItem(
@@ -56,8 +54,8 @@ fun DashboardSpeedCamWidgetItem(
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
     val dash = stringResource(R.string.speed_cam_no_target)
     val packMissing = stringResource(R.string.speed_cam_pack_missing)
-    val isRu = LocalConfiguration.current.locales[0]?.language.equals("ru", ignoreCase = true)
-        || Locale.getDefault().language.equals("ru", ignoreCase = true)
+    val metersUnit = stringResource(R.string.unit_meter)
+    val kilometersUnit = stringResource(R.string.unit_km)
     val tileRadius = normalizeSpeedCamRadiusM(radiusM)
     val tileOverage = normalizeSpeedCamOverageKmh(overageKmh)
 
@@ -123,11 +121,11 @@ fun DashboardSpeedCamWidgetItem(
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
-                        val dist = if (isRu) {
-                            SpeedCamLookahead.formatDistanceM(alert.distanceM)
-                        } else {
-                            SpeedCamLookahead.formatDistanceMEn(alert.distanceM)
-                        }
+                        val dist = SpeedCamLookahead.formatDistance(
+                            alert.distanceM,
+                            metersUnit,
+                            kilometersUnit,
+                        )
                         Text(
                             text = dist,
                             color = accent,

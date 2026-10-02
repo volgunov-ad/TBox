@@ -35,6 +35,7 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.location.roadmatch.OfflineImportProgress
 import vad.dashing.tbox.location.roadmatch.OfflineRegionReadiness
@@ -220,9 +221,7 @@ private fun RoadMapsOfflineImportDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val isRu = remember {
-        Locale.getDefault().language.equals("ru", ignoreCase = true)
-    }
+    val language = BuildConfig.FLAVOR
     val title = catalog?.title?.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.road_maps_usb_catalog_untitled)
 
@@ -309,7 +308,7 @@ private fun RoadMapsOfflineImportDialog(
                 for (state in regionStates) {
                     UsbRegionRow(
                         state = state,
-                        isRussian = isRu,
+                        language = language,
                         checked = state.offline.region.id in selected,
                         enabled = state.selectable && !importing,
                         onCheckedChange = { onToggle(state.offline.region.id, it) },
@@ -379,7 +378,7 @@ private fun RoadMapsOfflineImportDialog(
 @Composable
 private fun UsbRegionRow(
     state: OfflineRegionUiState,
-    isRussian: Boolean,
+    language: String,
     checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
@@ -430,7 +429,7 @@ private fun UsbRegionRow(
         Spacer(modifier = Modifier.width(4.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = region.title(isRussian),
+                text = region.title(language),
                 style = MaterialTheme.typography.tboxBody,
                 color = MaterialTheme.colorScheme.onSurface,
             )

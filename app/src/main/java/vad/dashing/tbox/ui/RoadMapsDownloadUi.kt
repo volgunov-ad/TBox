@@ -85,19 +85,17 @@ fun RoadMapsDownloadHubDialog(
     }
     val snap by manager.snapshot.collectAsStateWithLifecycle()
     val loc by TboxRepository.locValues.collectAsStateWithLifecycle()
-    val isRu = remember {
-        Locale.getDefault().language.equals("ru", ignoreCase = true)
-    }
-    val regionComparator = remember(isRu) {
-        RoadMapCatalog.alphabeticalComparator(isRu)
+    val language = BuildConfig.FLAVOR
+    val regionComparator = remember(language) {
+        RoadMapCatalog.alphabeticalComparator(language)
     }
     val covering = remember(snap, loc.latitude, loc.longitude) {
         manager.coveringInstalled(loc.latitude, loc.longitude)
     }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
-    val pendingDeleteTitle = remember(pendingDeleteId, snap, isRu) {
+    val pendingDeleteTitle = remember(pendingDeleteId, snap, language) {
         pendingDeleteId?.let { id ->
-            snap.regions.firstOrNull { it.region.id == id }?.region?.title(isRu)
+            snap.regions.firstOrNull { it.region.id == id }?.region?.title(language)
         }
     }
 
@@ -133,7 +131,7 @@ fun RoadMapsDownloadHubDialog(
                     } else {
                         stringResource(
                             R.string.road_maps_coverage_ok,
-                            covering.joinToString { it.title(isRu) },
+                            covering.joinToString { it.title(language) },
                         )
                     },
                     style = MaterialTheme.typography.tboxBody,
@@ -172,7 +170,7 @@ fun RoadMapsDownloadHubDialog(
                     for (row in list) {
                         RoadMapRegionRow(
                             state = row,
-                            isRussian = isRu,
+                            language = language,
                             onDownload = { manager.enqueueDownload(row.region.id) },
                             onDelete = { pendingDeleteId = row.region.id },
                             onCancel = { manager.cancelQueued(row.region.id) },
@@ -246,7 +244,7 @@ private fun countryTitle(code: String): String {
 @Composable
 private fun RoadMapRegionRow(
     state: RoadMapRegionUiState,
-    isRussian: Boolean,
+    language: String,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
@@ -289,7 +287,7 @@ private fun RoadMapRegionRow(
             .padding(vertical = 6.dp),
     ) {
         Text(
-            text = region.title(isRussian),
+            text = region.title(language),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
         )

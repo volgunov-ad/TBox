@@ -260,9 +260,12 @@ class ObdDtcCatalogTest {
     }
 
     @Test
-    fun assetPath_ruAndEn() {
-        assertEquals("obd/dtc_ru.tsv", ObdDtcCatalog.assetPathForFlavor("ru"))
-        assertEquals("obd/dtc_en.tsv", ObdDtcCatalog.assetPathForFlavor("en"))
+    fun assetPath_isExplicitPerFlavor_andUnknownFallsBackToEnglish() {
+        assertEquals(ObdDtcCatalog.ASSET_RU, ObdDtcCatalog.assetPathForFlavor("ru"))
+        assertEquals(ObdDtcCatalog.ASSET_EN, ObdDtcCatalog.assetPathForFlavor("en"))
+        assertEquals(ObdDtcCatalog.ASSET_RU, ObdDtcCatalog.assetPathForFlavor("RU"))
+        assertEquals(ObdDtcCatalog.ASSET_EN, ObdDtcCatalog.assetPathForFlavor("fr"))
+        assertEquals(ObdDtcCatalog.ASSET_EN, ObdDtcCatalog.assetPathForFlavor(""))
     }
 
     @Test

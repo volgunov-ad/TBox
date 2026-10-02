@@ -57,6 +57,7 @@ object RoadMapOfflineCatalogParser {
                         titleRu = o.optString("title_ru", id),
                         titleEn = o.optString("title_en", id),
                         bbox = bbox,
+                        titles = RoadMapCatalog.parseExtraTitles(o),
                         url = "",
                         bytes = o.optLong("bytes", 0L).coerceAtLeast(0L),
                         graphVersion = o.optInt("graphVersion", 1).coerceAtLeast(1),

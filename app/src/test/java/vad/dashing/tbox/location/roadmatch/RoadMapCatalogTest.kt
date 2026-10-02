@@ -53,7 +53,7 @@ class RoadMapCatalogTest {
         assertFalse(cat.findById("ru-moscow")!!.contains(59.9, 30.3))
         assertEquals(
             listOf("ru-dnr", "ru-moscow"),
-            cat.regionsByCountry(isRussian = true)["RU"]!!.map { it.id },
+            cat.regionsByCountry("ru")["RU"]!!.map { it.id },
         )
     }
 
@@ -80,12 +80,51 @@ class RoadMapCatalogTest {
 
         assertEquals(
             listOf("a-id", "m-id", "z-id"),
-            cat.regionsByCountry(isRussian = true)["RU"]!!.map { it.id },
+            cat.regionsByCountry("ru")["RU"]!!.map { it.id },
         )
         assertEquals(
             listOf("z-id", "m-id", "a-id"),
-            cat.regionsByCountry(isRussian = false)["RU"]!!.map { it.id },
+            cat.regionsByCountry("en")["RU"]!!.map { it.id },
         )
+    }
+
+    @Test
+    fun titleFollowsFlavorLanguage_andFallsBackToEnglish() {
+        val region = RoadMapRegion(
+            id = "ru-moscow",
+            country = "RU",
+            titleRu = "Москва",
+            titleEn = "Moscow",
+            bbox = doubleArrayOf(0.0, 0.0, 0.0, 0.0),
+            url = "",
+            bytes = 0L,
+            graphVersion = 1,
+            titles = mapOf("fr" to "Moscou"),
+        )
+        assertEquals("Москва", region.title("ru"))
+        assertEquals("Moscow", region.title("en"))
+        assertEquals("Moscou", region.title("fr"))
+        assertEquals("Moscow", region.title("de"))
+        val parsed = RoadMapCatalog.parse(
+            """
+            {
+              "version": 1,
+              "regions": [
+                {
+                  "id": "ru-moscow",
+                  "country": "RU",
+                  "title_ru": "Москва",
+                  "title_en": "Moscow",
+                  "titles": { "fr": "Moscou", "ru": "ignored", "en": "" },
+                  "bbox": [0, 0, 0, 0]
+                }
+              ]
+            }
+            """.trimIndent(),
+        )
+        assertEquals("Moscou", parsed.findById("ru-moscow")!!.title("FR"))
+        assertEquals("Москва", parsed.findById("ru-moscow")!!.title("ru"))
+        assertEquals("Moscow", parsed.findById("ru-moscow")!!.title("en"))
     }
 
     @Test
