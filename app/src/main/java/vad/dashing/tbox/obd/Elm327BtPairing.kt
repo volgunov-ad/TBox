@@ -21,8 +21,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object Elm327BtPairing {
     private const val TAG = "Elm327BtPairing"
-    private const val BOND_TIMEOUT_MS = 35_000L
-    private val DEFAULT_PINS = listOf("1234", "0000", "6789", "8888")
+    const val BOND_TIMEOUT_MS = Elm327ReconnectPolicy.FULL_BOND_TIMEOUT_MS
 
     @SuppressLint("MissingPermission")
     fun isBonded(address: String): Boolean {
@@ -35,8 +34,8 @@ object Elm327BtPairing {
     }
 
     /**
-     * Ensure [address] is bonded. Uses [preferredPin] when non-blank, otherwise tries
-     * common ELM pins.
+     * Ensure [address] is bonded, trying [pins] in order.
+     * Background reconnect passes a single PIN and a short [bondTimeoutMs].
      *
      * @return [BondResult] with success flag and the PIN that worked when bonding was
      * performed in this call (null if already bonded / PIN unknown).
@@ -45,7 +44,8 @@ object Elm327BtPairing {
     suspend fun ensureBonded(
         context: Context,
         address: String,
-        preferredPin: String,
+        pins: List<String>,
+        bondTimeoutMs: Long = BOND_TIMEOUT_MS,
     ): BondResult = withContext(Dispatchers.IO) {
         val mac = address.trim().uppercase()
         if (mac.isEmpty()) return@withContext BondResult(success = false, usedPin = null)
@@ -62,20 +62,17 @@ object Elm327BtPairing {
         when (device.bondState) {
             BluetoothDevice.BOND_BONDED -> return@withContext BondResult(true, null)
             BluetoothDevice.BOND_BONDING -> {
-                val ok = awaitBondResult(context, mac) == true
+                val ok = awaitBondResult(context, mac, bondTimeoutMs) == true
                 return@withContext BondResult(success = ok, usedPin = null)
             }
         }
 
-        val pinsToTry = buildList {
-            val preferred = preferredPin.trim()
-            if (preferred.isNotEmpty()) add(preferred)
-            DEFAULT_PINS.filterTo(this) { it != preferred }
-        }
+        val pinsToTry = pins.map { it.trim() }.filter { it.isNotEmpty() }
+        if (pinsToTry.isEmpty()) return@withContext BondResult(false, null)
 
         for (pin in pinsToTry) {
             Log.i(TAG, "createBond $mac pinLen=${pin.length}")
-            val bonded = bondOnce(context, device, mac, pin)
+            val bonded = bondOnce(context, device, mac, pin, bondTimeoutMs)
             if (bonded || isBonded(mac)) {
                 return@withContext BondResult(success = true, usedPin = pin)
             }
@@ -95,6 +92,7 @@ object Elm327BtPairing {
         device: BluetoothDevice,
         mac: String,
         pin: String,
+        bondTimeoutMs: Long,
     ): Boolean {
         applyPinHints(device, pin)
         val deferred = CompletableDeferred<Boolean>()
@@ -139,10 +137,13 @@ object Elm327BtPairing {
         )
         return try {
             val started = runCatching { device.createBond() }.getOrDefault(false)
-            if (!started && device.bondState == BluetoothDevice.BOND_NONE) {
+            if (!started && device.bondState != BluetoothDevice.BOND_BONDING) {
+                // createBond did not start. Do not wait for a bond broadcast that will not arrive.
                 Log.w(TAG, "createBond returned false for $mac")
+                false
+            } else {
+                withTimeoutOrNull(bondTimeoutMs) { deferred.await() } == true
             }
-            withTimeoutOrNull(BOND_TIMEOUT_MS) { deferred.await() } == true
         } finally {
             runCatching {
                 context.applicationContext.unregisterReceiver(receiver)
@@ -150,7 +151,11 @@ object Elm327BtPairing {
         }
     }
 
-    private suspend fun awaitBondResult(context: Context, mac: String): Boolean? {
+    private suspend fun awaitBondResult(
+        context: Context,
+        mac: String,
+        bondTimeoutMs: Long,
+    ): Boolean? {
         val deferred = CompletableDeferred<Boolean>()
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
@@ -170,7 +175,7 @@ object Elm327BtPairing {
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         return try {
-            withTimeoutOrNull(BOND_TIMEOUT_MS) { deferred.await() }
+            withTimeoutOrNull(bondTimeoutMs) { deferred.await() }
         } finally {
             runCatching {
                 context.applicationContext.unregisterReceiver(receiver)
