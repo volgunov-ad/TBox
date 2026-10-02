@@ -6,10 +6,15 @@ package vad.dashing.tbox.externalapi
  */
 object ExternalApiClimatePanel {
     const val MARKER = "tbox-climate-panel"
+    private const val LANG_TOKEN = "__APP_LANG__"
 
-    private val html: String by lazy { loadHtml() }
+    private val template: String by lazy { loadHtml() }
 
-    fun html(): String = html
+    /** [language] is the app UI language (`ru` or `en`). Anything else stays Russian. */
+    fun html(language: String = "ru"): String {
+        val code = if (language.equals("en", ignoreCase = true)) "en" else "ru"
+        return template.replace(LANG_TOKEN, code)
+    }
 
     private fun loadHtml(): String {
         val stream = ExternalApiClimatePanel::class.java.classLoader
