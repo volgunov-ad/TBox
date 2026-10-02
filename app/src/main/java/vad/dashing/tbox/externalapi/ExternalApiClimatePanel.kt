@@ -1,7 +1,7 @@
 package vad.dashing.tbox.externalapi
 
 /**
- * Static climate page served by the external API HTTP server when the web-panel
+ * Static vehicle page served by the external API HTTP server when the web-panel
  * setting is on. The page calls the existing `/v1` routes with the caller's token.
  */
 object ExternalApiClimatePanel {
