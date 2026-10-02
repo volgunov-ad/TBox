@@ -129,6 +129,15 @@
       var LEFT_TEMP = 37;
       var RIGHT_TEMP = 111;
       var FAN = 38;
+      var AUTO = 110;
+      var BLOW = 40;
+      var BLOWS = [
+        { state: "face", value: 1, label: "blowFace" },
+        { state: "foot", value: 2, label: "blowFoot" },
+        { state: "face_foot", value: 3, label: "blowFaceFoot" },
+        { state: "defrost", value: 4, label: "blowDefrost" },
+        { state: "defrost_foot", value: 5, label: "blowDefrostFoot" }
+      ];
       var TEMP_MIN = 160;
       var TEMP_MAX = 300;
       var TEMP_STEP = 5;
@@ -141,6 +150,13 @@
           driver: "Водитель",
           passenger: "Пассажир",
           fan: "Обдув",
+          auto: "Авто",
+          direction: "Направление",
+          blowFace: "Лицо",
+          blowFoot: "Ноги",
+          blowFaceFoot: "Лицо и ноги",
+          blowDefrost: "Стекло",
+          blowDefrostFoot: "Стекло и ноги",
           seats: "Сиденья",
           rearLeft: "Сзади слева",
           rearRight: "Сзади справа",
@@ -171,6 +187,13 @@
           driver: "Driver",
           passenger: "Passenger",
           fan: "Fan",
+          auto: "Auto",
+          direction: "Direction",
+          blowFace: "Face",
+          blowFoot: "Feet",
+          blowFaceFoot: "Face and feet",
+          blowDefrost: "Windshield",
+          blowDefrostFoot: "Windshield and feet",
           seats: "Seats",
           rearLeft: "Rear left",
           rearRight: "Rear right",
@@ -217,6 +240,8 @@
         left: null,
         right: null,
         fan: null,
+        auto: null,
+        blow: null,
         seat: {}
       };
       var chain = Promise.resolve();
@@ -365,6 +390,19 @@
         if (right) right.textContent = fmtTemp(state.right);
         if (fan) fan.textContent = state.fan == null ? "—" : String(state.fan);
         paintSeats();
+        paintClimate();
+      }
+
+      function paintClimate() {
+        var autoButtons = document.querySelectorAll("[data-auto]");
+        for (var i = 0; i < autoButtons.length; i++) {
+          autoButtons[i].className = state.auto === "on" ? "on-off" : "";
+        }
+        var blowButtons = document.querySelectorAll("[data-blow]");
+        for (var j = 0; j < blowButtons.length; j++) {
+          var el = blowButtons[j];
+          el.className = state.blow === el.getAttribute("data-blow") ? "on-off" : "";
+        }
       }
 
       function button(label, onClick) {
@@ -403,6 +441,33 @@
         root.appendChild(stepperRow(lang.driver, "left-readout", function () { bumpTemp("left", false); }, function () { bumpTemp("left", true); }));
         root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
         root.appendChild(stepperRow(lang.fan, "fan-readout", function () { bumpFan(false); }, function () { bumpFan(true); }));
+        root.appendChild(choiceRow(lang.auto, [
+          button(lang.auto, toggleAuto)
+        ], function (el) {
+          el.setAttribute("data-auto", "1");
+        }));
+        root.appendChild(choiceRow(lang.direction, BLOWS.map(function (mode) {
+          var el = button(lang[mode.label], function () { setBlow(mode); });
+          el.setAttribute("data-blow", mode.state);
+          return el;
+        })));
+      }
+
+      function choiceRow(label, buttons, decorate) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var name = document.createElement("div");
+        name.className = "row-label";
+        name.textContent = label;
+        var levels = document.createElement("div");
+        levels.className = "levels";
+        buttons.forEach(function (el) {
+          if (decorate) decorate(el);
+          levels.appendChild(el);
+        });
+        row.appendChild(name);
+        row.appendChild(levels);
+        return row;
       }
 
       function renderSeats() {
@@ -524,6 +589,19 @@
         enqueue(function () { return invoke(FAN, next); });
       }
 
+      function toggleAuto() {
+        var next = state.auto === "on" ? "off" : "on";
+        state.auto = next;
+        paintClimate();
+        enqueue(function () { return invoke(AUTO, next); });
+      }
+
+      function setBlow(mode) {
+        state.blow = mode.state;
+        paintClimate();
+        enqueue(function () { return invoke(BLOW, mode.value); });
+      }
+
       function setSeat(seat, level) {
         state.seat[String(seat.propertyId)] = level.state;
         paintSeats();
@@ -572,6 +650,10 @@
         state.right = numberOrNull(hu.hvac_temperature_right);
         state.fan = numberOrNull(hu.hvac_fan_speed);
         if (state.fan != null) state.fan = Math.round(state.fan);
+        var auto = stateOrNull(hu.hvac_auto);
+        if (auto != null) state.auto = auto;
+        var blow = stateOrNull(hu.hvac_fan_direction);
+        if (blow != null) state.blow = blow;
         seats.forEach(function (seat) {
           var id = seat.propertyId === 138 ? "front_left_seat_mode"
             : seat.propertyId === 139 ? "front_right_seat_mode"
@@ -597,7 +679,7 @@
         }
         polling = true;
         Promise.all([
-          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
+          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_fan_direction,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
           loadSignals("tbox", "inside_temperature,outside_temperature")
         ]).then(function (parts) {
           var denied = parts[0].status === 401 || parts[1].status === 401;
