@@ -197,6 +197,7 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("hvac_custom_mode"))
         assertTrue(response.body.contains("hu_media_volume"))
         assertTrue(response.body.contains("set_media_volume"))
+        assertTrue(response.body.contains("toggleMediaMute"))
         assertTrue(response.body.contains("Автомобиль"))
         assertTrue(response.body.contains("front_left_seat_mode"))
         assertTrue(response.body.contains("lang=\"ru\""))
