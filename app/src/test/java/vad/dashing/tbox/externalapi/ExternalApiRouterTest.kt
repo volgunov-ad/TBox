@@ -190,6 +190,8 @@ class ExternalApiRouterTest {
         assertEquals("no-store", response.headers["Cache-Control"])
         assertTrue(response.body.contains(ExternalApiClimatePanel.MARKER))
         assertTrue(response.body.contains("hvac_temperature_left"))
+        assertTrue(response.body.contains("hvac_auto"))
+        assertTrue(response.body.contains("hvac_fan_direction"))
         assertTrue(response.body.contains("front_left_seat_mode"))
         assertTrue(response.body.contains("/v1/pair/request"))
         assertTrue(response.body.contains("/v1/pair/status"))
