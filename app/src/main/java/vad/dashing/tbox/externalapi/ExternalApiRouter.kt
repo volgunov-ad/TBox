@@ -26,6 +26,7 @@ class ExternalApiRouter(
     private val executeActions: suspend (List<AutomationAction>) -> List<AutomationActionResult>,
     private val runAutomationNow: (String) -> String?,
     private val webPanelEnabled: () -> Boolean = { false },
+    private val pageLanguage: () -> String = { "ru" },
     private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
 ) {
     fun handle(
@@ -99,7 +100,7 @@ class ExternalApiRouter(
         return ExternalApiHttpResponse(
             status = 200,
             contentType = "text/html; charset=utf-8",
-            body = if (method == "HEAD") "" else ExternalApiClimatePanel.html(),
+            body = if (method == "HEAD") "" else ExternalApiClimatePanel.html(pageLanguage()),
             headers = mapOf("Cache-Control" to "no-store"),
         )
     }

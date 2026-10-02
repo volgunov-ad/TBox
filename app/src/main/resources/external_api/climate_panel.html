@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="__APP_LANG__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,6 +17,9 @@
       --accent: #4c8dff;
       --heat: #e85d4c;
       --vent: #3dbeff;
+      --eco: #00a400;
+      --comfort: #00c8ff;
+      --strong: #f3a721;
     }
     * { box-sizing: border-box; }
     body {
@@ -73,11 +76,20 @@
     button.on-heat { background: var(--heat); color: #fff; }
     button.on-vent { background: var(--vent); color: #082028; }
     button.on-off { background: var(--accent); color: #fff; }
+    button.on-eco { background: var(--eco); color: #fff; }
+    button.on-comfort { background: var(--comfort); color: #082028; }
+    button.on-strong { background: var(--strong); color: #1a1200; }
     .levels { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
     .hint, #pair-status { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
     #pair-status { min-height: 1.2em; margin: 8px 0 0; }
     button.primary { background: var(--accent); color: #fff; width: 100%; }
     details summary { color: var(--muted); cursor: pointer; margin: 12px 0 8px; }
+    #connect > summary {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      padding: 10px 0;
+    }
     .token { display: flex; gap: 8px; }
     .token input {
       flex: 1;
@@ -108,16 +120,18 @@
     <section class="card" id="climate"></section>
     <section class="card" id="seats"></section>
     <section class="card">
-      <h2 id="lbl-connect">Подключение</h2>
-      <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
-      <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
-      <p id="pair-status"></p>
-      <details>
-        <summary id="lbl-token">Токен вручную</summary>
-        <div class="token">
-          <input id="token" type="password" autocomplete="off" spellcheck="false">
-          <button id="save-token" type="button">OK</button>
-        </div>
+      <details id="connect" open>
+        <summary id="lbl-connect">Подключение</summary>
+        <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
+        <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
+        <p id="pair-status"></p>
+        <details>
+          <summary id="lbl-token">Токен вручную</summary>
+          <div class="token">
+            <input id="token" type="password" autocomplete="off" spellcheck="false">
+            <button id="save-token" type="button">OK</button>
+          </div>
+        </details>
       </details>
     </section>
   </main>
@@ -130,7 +144,14 @@
       var RIGHT_TEMP = 111;
       var FAN = 38;
       var AUTO = 110;
+      var SYNC = 94;
       var BLOW = 40;
+      var HVAC_MODE = 140;
+      var HVAC_MODES = [
+        { state: "eco", value: 1, label: "modeEco" },
+        { state: "comfort", value: 2, label: "modeComfort" },
+        { state: "strong", value: 3, label: "modeStrong" }
+      ];
       var BLOWS = [
         { state: "face", value: 1, label: "blowFace" },
         { state: "foot", value: 2, label: "blowFoot" },
@@ -151,6 +172,11 @@
           passenger: "Пассажир",
           fan: "Обдув",
           auto: "Авто",
+          sync: "Синхронизация",
+          mode: "Режим климата",
+          modeEco: "ECO",
+          modeComfort: "Комфорт",
+          modeStrong: "Сильный",
           direction: "Направление",
           blowFace: "Лицо",
           blowFoot: "Ноги",
@@ -188,6 +214,11 @@
           passenger: "Passenger",
           fan: "Fan",
           auto: "Auto",
+          sync: "Sync",
+          mode: "Climate mode",
+          modeEco: "ECO",
+          modeComfort: "Comfort",
+          modeStrong: "Strong",
           direction: "Direction",
           blowFace: "Face",
           blowFoot: "Feet",
@@ -217,7 +248,7 @@
           pairOk: "Connected. The token is saved in this browser."
         }
       };
-      var lang = ((navigator.language || "ru").toLowerCase().indexOf("en") === 0) ? STR.en : STR.ru;
+      var lang = "__APP_LANG__" === "en" ? STR.en : STR.ru;
       var FRONT = [
         { state: "off", value: 1, label: lang.off, kind: "off" },
         { state: "heat_1", value: 2, label: "H1", kind: "heat" },
@@ -241,7 +272,9 @@
         right: null,
         fan: null,
         auto: null,
+        sync: null,
         blow: null,
+        mode: null,
         seat: {}
       };
       var chain = Promise.resolve();
@@ -268,8 +301,10 @@
         history.replaceState(null, "", next);
       }
       document.getElementById("token").value = localStorage.getItem(TOKEN_KEY) || "";
+      document.getElementById("connect").open = !token();
       document.getElementById("save-token").addEventListener("click", function () {
         localStorage.setItem(TOKEN_KEY, document.getElementById("token").value.trim());
+        document.getElementById("connect").open = !token();
         tick();
       });
 
@@ -360,6 +395,7 @@
               localStorage.setItem(TOKEN_KEY, res.body.accessToken);
               document.getElementById("token").value = res.body.accessToken;
               setPairStatus(lang.pairOk);
+              document.getElementById("connect").open = false;
               tick();
               return;
             }
@@ -398,10 +434,20 @@
         for (var i = 0; i < autoButtons.length; i++) {
           autoButtons[i].className = state.auto === "on" ? "on-off" : "";
         }
+        var syncButtons = document.querySelectorAll("[data-sync]");
+        for (var s = 0; s < syncButtons.length; s++) {
+          syncButtons[s].className = state.sync === "on" ? "on-off" : "";
+        }
         var blowButtons = document.querySelectorAll("[data-blow]");
         for (var j = 0; j < blowButtons.length; j++) {
           var el = blowButtons[j];
           el.className = state.blow === el.getAttribute("data-blow") ? "on-off" : "";
+        }
+        var modeButtons = document.querySelectorAll("[data-hvac-mode]");
+        for (var k = 0; k < modeButtons.length; k++) {
+          var modeEl = modeButtons[k];
+          var selected = state.mode === modeEl.getAttribute("data-hvac-mode");
+          modeEl.className = selected ? "on-" + modeEl.getAttribute("data-hvac-mode") : "";
         }
       }
 
@@ -446,6 +492,16 @@
         ], function (el) {
           el.setAttribute("data-auto", "1");
         }));
+        root.appendChild(choiceRow(lang.sync, [
+          button("SYNC", toggleSync)
+        ], function (el) {
+          el.setAttribute("data-sync", "1");
+        }));
+        root.appendChild(choiceRow(lang.mode, HVAC_MODES.map(function (mode) {
+          var el = button(lang[mode.label], function () { setHvacMode(mode); });
+          el.setAttribute("data-hvac-mode", mode.state);
+          return el;
+        })));
         root.appendChild(choiceRow(lang.direction, BLOWS.map(function (mode) {
           var el = button(lang[mode.label], function () { setBlow(mode); });
           el.setAttribute("data-blow", mode.state);
@@ -552,6 +608,7 @@
           return response.json().then(function (body) {
             if (response.status === 401) {
               setStatus(lang.unauthorized);
+              document.getElementById("connect").open = true;
               return;
             }
             if (!response.ok) {
@@ -596,10 +653,23 @@
         enqueue(function () { return invoke(AUTO, next); });
       }
 
+      function toggleSync() {
+        var next = state.sync === "on" ? "off" : "on";
+        state.sync = next;
+        paintClimate();
+        enqueue(function () { return invoke(SYNC, next); });
+      }
+
       function setBlow(mode) {
         state.blow = mode.state;
         paintClimate();
         enqueue(function () { return invoke(BLOW, mode.value); });
+      }
+
+      function setHvacMode(mode) {
+        state.mode = mode.state;
+        paintClimate();
+        enqueue(function () { return invoke(HVAC_MODE, mode.value); });
       }
 
       function setSeat(seat, level) {
@@ -652,8 +722,12 @@
         if (state.fan != null) state.fan = Math.round(state.fan);
         var auto = stateOrNull(hu.hvac_auto);
         if (auto != null) state.auto = auto;
+        var sync = stateOrNull(hu.hvac_sync);
+        if (sync != null) state.sync = sync;
         var blow = stateOrNull(hu.hvac_fan_direction);
         if (blow != null) state.blow = blow;
+        var custom = stateOrNull(hu.hvac_custom_mode);
+        if (custom != null) state.mode = custom;
         seats.forEach(function (seat) {
           var id = seat.propertyId === 138 ? "front_left_seat_mode"
             : seat.propertyId === 139 ? "front_right_seat_mode"
@@ -679,12 +753,13 @@
         }
         polling = true;
         Promise.all([
-          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_fan_direction,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
+          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
           loadSignals("tbox", "inside_temperature,outside_temperature")
         ]).then(function (parts) {
           var denied = parts[0].status === 401 || parts[1].status === 401;
           if (denied) {
             setStatus(lang.unauthorized);
+            document.getElementById("connect").open = true;
             return;
           }
           if (parts[0].status !== 200) {

@@ -2,6 +2,7 @@ package vad.dashing.tbox.externalapi
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -191,14 +192,35 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains(ExternalApiClimatePanel.MARKER))
         assertTrue(response.body.contains("hvac_temperature_left"))
         assertTrue(response.body.contains("hvac_auto"))
+        assertTrue(response.body.contains("hvac_sync"))
         assertTrue(response.body.contains("hvac_fan_direction"))
+        assertTrue(response.body.contains("hvac_custom_mode"))
         assertTrue(response.body.contains("front_left_seat_mode"))
+        assertTrue(response.body.contains("lang=\"ru\""))
+        assertTrue(response.body.contains("var lang = \"ru\" === \"en\" ? STR.en : STR.ru;"))
+        assertFalse(response.body.contains("__APP_LANG__"))
+        assertFalse(response.body.contains("navigator.language"))
+        assertTrue(response.body.contains("id=\"connect\""))
         assertTrue(response.body.contains("/v1/pair/request"))
         assertTrue(response.body.contains("/v1/pair/status"))
         val alias = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL_ALIAS, emptyMap(), emptyMap(), "")
         assertEquals(200, alias.status)
         val post = router.handle("POST", "/", emptyMap(), emptyMap(), "")
         assertEquals(405, post.status)
+    }
+
+    @Test
+    fun webPanel_usesTheAppLanguage() {
+        val english = router(webPanelEnabled = true, pageLanguage = { "en" })
+        val enBody = english.handle("GET", "/", emptyMap(), emptyMap(), "").body
+        assertTrue(enBody.contains("lang=\"en\""))
+        assertTrue(enBody.contains("var lang = \"en\" === \"en\" ? STR.en : STR.ru;"))
+        assertFalse(enBody.contains("__APP_LANG__"))
+
+        val other = router(webPanelEnabled = true, pageLanguage = { "de" })
+        val otherBody = other.handle("GET", "/", emptyMap(), emptyMap(), "").body
+        assertTrue(otherBody.contains("lang=\"ru\""))
+        assertTrue(otherBody.contains("var lang = \"ru\" === \"en\" ? STR.en : STR.ru;"))
     }
 
     @Test
@@ -230,6 +252,7 @@ class ExternalApiRouterTest {
     private fun router(
         webPanelEnabled: Boolean = false,
         clients: List<ExternalApiPairedClient> = emptyList(),
+        pageLanguage: () -> String = { "ru" },
         onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
     ): ExternalApiRouter =
         ExternalApiRouter(
@@ -243,6 +266,7 @@ class ExternalApiRouterTest {
             executeActions = { emptyList() },
             runAutomationNow = { null },
             webPanelEnabled = { webPanelEnabled },
+            pageLanguage = pageLanguage,
             onAuthenticated = onAuthenticated,
         )
 }

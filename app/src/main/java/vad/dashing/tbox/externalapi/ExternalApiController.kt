@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.BuildConfig
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.automation.AutomationAction
@@ -110,6 +111,7 @@ class ExternalApiController(
             }
         },
         webPanelEnabled = { climatePanelEnabled },
+        pageLanguage = { appContext.getString(R.string.web_panel_language) },
         onAuthenticated = ::noteTokenUsed,
     )
 
