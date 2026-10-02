@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-cache">
-  <title>TBox Climate</title>
+  <title>TBox</title>
   <style>
     :root {
       color-scheme: dark;
@@ -105,7 +105,7 @@
 </head>
 <body>
   <main id="tbox-climate-panel">
-    <h1 id="title">Климат</h1>
+    <h1 id="title">Автомобиль</h1>
     <p id="status"></p>
     <section class="temps">
       <div class="card">
@@ -117,6 +117,7 @@
         <div class="temp-value" id="in">—</div>
       </div>
     </section>
+    <section class="card" id="audio"></section>
     <section class="card" id="climate"></section>
     <section class="card" id="seats"></section>
     <section class="card">
@@ -159,14 +160,18 @@
         { state: "defrost", value: 4, label: "blowDefrost" },
         { state: "defrost_foot", value: 5, label: "blowDefrostFoot" }
       ];
+      var VOLUME_MIN = 0;
+      var VOLUME_MAX = 31;
       var TEMP_MIN = 160;
       var TEMP_MAX = 300;
       var TEMP_STEP = 5;
       var STR = {
         ru: {
-          title: "Климат",
+          title: "Автомобиль",
           outside: "Улица",
           inside: "Салон",
+          audio: "Звук",
+          media: "Медиа",
           climate: "Климат-контроль",
           driver: "Водитель",
           passenger: "Пассажир",
@@ -206,9 +211,11 @@
           pairOk: "Подключено. Токен сохранён в этом браузере."
         },
         en: {
-          title: "Climate",
+          title: "Vehicle",
           outside: "Outside",
           inside: "Cabin",
+          audio: "Audio",
+          media: "Media",
           climate: "Climate control",
           driver: "Driver",
           passenger: "Passenger",
@@ -271,6 +278,7 @@
         left: null,
         right: null,
         fan: null,
+        volume: null,
         auto: null,
         sync: null,
         blow: null,
@@ -308,6 +316,7 @@
         tick();
       });
 
+      renderAudio();
       renderClimate();
       renderSeats();
       renderTemps();
@@ -425,6 +434,8 @@
         if (left) left.textContent = fmtTemp(state.left);
         if (right) right.textContent = fmtTemp(state.right);
         if (fan) fan.textContent = state.fan == null ? "—" : String(state.fan);
+        var volume = document.getElementById("volume-readout");
+        if (volume) volume.textContent = state.volume == null ? "—" : String(state.volume);
         paintSeats();
         paintClimate();
       }
@@ -477,6 +488,14 @@
         row.appendChild(name);
         row.appendChild(stepper);
         return row;
+      }
+
+      function renderAudio() {
+        var root = document.getElementById("audio");
+        var title = document.createElement("h2");
+        title.textContent = lang.audio;
+        root.appendChild(title);
+        root.appendChild(stepperRow(lang.media, "volume-readout", function () { bumpVolume(false); }, function () { bumpVolume(true); }));
       }
 
       function renderClimate() {
@@ -584,6 +603,26 @@
       }
 
       function invoke(propertyId, value) {
+        return postActions([{
+          type: "can_command",
+          bus: "vehicle",
+          propertyId: propertyId,
+          operation: "set",
+          value: value
+        }]);
+      }
+
+      function invokeBuiltin(actionType, intValue) {
+        return postActions([{
+          type: "builtin",
+          actionType: actionType,
+          intValue: intValue,
+          stringValue: "",
+          boolValue: false
+        }]);
+      }
+
+      function postActions(actions) {
         var current = token();
         if (!current) {
           setStatus(lang.needToken);
@@ -595,15 +634,7 @@
             "Authorization": "Bearer " + current,
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({
-            actions: [{
-              type: "can_command",
-              bus: "vehicle",
-              propertyId: propertyId,
-              operation: "set",
-              value: value
-            }]
-          })
+          body: JSON.stringify({ actions: actions })
         }).then(function (response) {
           return response.json().then(function (body) {
             if (response.status === 401) {
@@ -634,6 +665,16 @@
         renderTemps();
         var propertyId = side === "left" ? LEFT_TEMP : RIGHT_TEMP;
         enqueue(function () { return invoke(propertyId, raw); });
+      }
+
+      function bumpVolume(increase) {
+        if (state.volume == null) return;
+        var next = state.volume + (increase ? 1 : -1);
+        if (next < VOLUME_MIN) next = VOLUME_MIN;
+        if (next > VOLUME_MAX) next = VOLUME_MAX;
+        state.volume = next;
+        renderTemps();
+        enqueue(function () { return invokeBuiltin("set_media_volume", next); });
       }
 
       function bumpFan(increase) {
@@ -711,7 +752,7 @@
         });
       }
 
-      function applySnapshot(hu, tbox) {
+      function applySnapshot(hu, tbox, app) {
         var outside = pick(hu.outside_temperature, tbox.outside_temperature);
         var inside = pick(tbox.inside_temperature, null);
         state.outside = numberOrNull(outside);
@@ -720,6 +761,10 @@
         state.right = numberOrNull(hu.hvac_temperature_right);
         state.fan = numberOrNull(hu.hvac_fan_speed);
         if (state.fan != null) state.fan = Math.round(state.fan);
+        if (app) {
+          state.volume = numberOrNull(app.hu_media_volume);
+          if (state.volume != null) state.volume = Math.round(state.volume);
+        }
         var auto = stateOrNull(hu.hvac_auto);
         if (auto != null) state.auto = auto;
         var sync = stateOrNull(hu.hvac_sync);
@@ -754,9 +799,10 @@
         polling = true;
         Promise.all([
           loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
-          loadSignals("tbox", "inside_temperature,outside_temperature")
+          loadSignals("tbox", "inside_temperature,outside_temperature"),
+          loadSignals("app", "hu_media_volume")
         ]).then(function (parts) {
-          var denied = parts[0].status === 401 || parts[1].status === 401;
+          var denied = parts[0].status === 401 || parts[1].status === 401 || parts[2].status === 401;
           if (denied) {
             setStatus(lang.unauthorized);
             document.getElementById("connect").open = true;
@@ -767,7 +813,8 @@
             return;
           }
           if (pendingWrites > 0) return;
-          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body));
+          var app = parts[2].status === 200 ? indexSignals(parts[2].body) : null;
+          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body), app);
           var now = new Date();
           var hh = String(now.getHours()).padStart(2, "0");
           var mm = String(now.getMinutes()).padStart(2, "0");
