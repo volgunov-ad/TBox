@@ -7,6 +7,33 @@ import org.junit.Test
 
 class UdaProtocolTest {
     @Test
+    fun parseVersionPayload_rawBannerFromN720() {
+        val hex = "5F 5F 55 44 41 5F 56 45 52 53 49 4F 4E 5F 5F 3A 20 75 64 61 40 6E 37 32 30 20 " +
+            "56 30 2E 30 2E 30 20 42 75 69 6C 74 3A 20 46 65 62 20 20 38 20 32 30 32 33 20 " +
+            "30 35 3A 35 35 3A 31 30 20 42 55 49 4C 44 5F 4E 55 4D 42 45 52 3A 20 31 34 20 " +
+            "53 48 41 31 3A 20 27 61 65 32 39 37 64 65 27"
+        val data = hex.split(" ").map { it.toInt(16).toByte() }.toByteArray()
+        assertEquals(
+            "__UDA_VERSION__: uda@n720 V0.0.0 Built: Feb  8 2023 05:55:10 BUILD_NUMBER: 14 SHA1: 'ae297de'",
+            UdaProtocol.parseVersionPayload(data),
+        )
+    }
+
+    @Test
+    fun parseVersionPayload_acceptsZeroStatusPrefix() {
+        val body = "__UDA_VERSION__: test".toByteArray(Charsets.UTF_8)
+        val data = byteArrayOf(0, 0, 0, 0) + body
+        assertEquals("__UDA_VERSION__: test", UdaProtocol.parseVersionPayload(data))
+    }
+
+    @Test
+    fun parseVersionPayload_rejectsShortOrBinary() {
+        assertEquals(null, UdaProtocol.parseVersionPayload(byteArrayOf(0, 0, 0)))
+        assertEquals(null, UdaProtocol.parseVersionPayload(byteArrayOf(0, 0, 0, 0)))
+        assertEquals(null, UdaProtocol.parseVersionPayload(byteArrayOf(0x01, 0x02, 0x00, 0x03)))
+    }
+
+    @Test
     fun buildDiagReq_readDtc_layout() {
         val payload = byteArrayOf(0x12, 0x34)
         val buf = UdaProtocol.buildDiagReq(

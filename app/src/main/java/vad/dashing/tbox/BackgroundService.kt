@@ -7383,7 +7383,7 @@ class BackgroundService : Service() {
                 try {
                     when (cmd) {
                         UdaProtocol.RSP_VERSION -> {
-                            needEndLog = !ansVersion(tidName, receivedData)
+                            needEndLog = !ansVersion(tidName, receivedData, requireStatusPrefix = false)
                         }
                         UdaProtocol.RSP_DIAG_REQ -> {
                             TboxRepository.addLog(
@@ -8016,12 +8016,24 @@ class BackgroundService : Service() {
         return true
     }
 
-    private fun ansVersion(app: String, data: ByteArray, needSaveSettings: Boolean = true): Boolean {
-        if (!data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
-            TboxRepository.addLog("ERROR", "$app response", "Error version info")
-            return false
+    private fun ansVersion(
+        app: String,
+        data: ByteArray,
+        needSaveSettings: Boolean = true,
+        requireStatusPrefix: Boolean = true,
+    ): Boolean {
+        val version = if (requireStatusPrefix) {
+            if (data.size < 4 || !data.copyOfRange(0, 4).contentEquals(byteArrayOf(0x00, 0x00, 0x00, 0x00))) {
+                TboxRepository.addLog("ERROR", "$app response", "Error version info")
+                return false
+            }
+            String(data.copyOfRange(4, data.size), charset = Charsets.UTF_8).trimEnd()
+        } else {
+            UdaProtocol.parseVersionPayload(data) ?: run {
+                TboxRepository.addLog("ERROR", "$app response", "Error version info")
+                return false
+            }
         }
-        val version =  String(data.copyOfRange(4, data.size), charset = Charsets.UTF_8).trimEnd()
         if (app == "GATE") {
             TboxRepository.updateGateVersion(version)
         }

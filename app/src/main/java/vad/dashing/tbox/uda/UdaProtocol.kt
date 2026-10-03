@@ -28,6 +28,30 @@ object UdaProtocol {
     const val CMD_CANTP_CTRL: Byte = 0x29
 
     const val RSP_VERSION: Byte = 0x81.toByte()
+
+    /**
+     * `0x81` body is the version banner itself
+     * (`__UDA_VERSION__: uda@n720 V0.0.0 Built: …`).
+     * Some other TBox modules prefix four zero status bytes; accept that form too.
+     */
+    fun parseVersionPayload(data: ByteArray): String? {
+        if (data.size < 4) return null
+        val body = if (
+            data[0] == 0.toByte() &&
+            data[1] == 0.toByte() &&
+            data[2] == 0.toByte() &&
+            data[3] == 0.toByte()
+        ) {
+            if (data.size == 4) return null
+            data.copyOfRange(4, data.size)
+        } else {
+            data
+        }
+        val text = String(body, Charsets.UTF_8).trimEnd('\u0000').trim()
+        if (text.isEmpty()) return null
+        if (text.any { it.code < 0x20 && it != '\t' }) return null
+        return text
+    }
     const val RSP_DIAG_REQ: Byte = 0x85.toByte()
     const val RSP_DIAG_REPORT: Byte = 0x86.toByte()
     const val RSP_FOTA_REQ: Byte = 0x87.toByte()

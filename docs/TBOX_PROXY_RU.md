@@ -119,7 +119,7 @@ TCP-режим (`127.0.0.1:5555` и т.п.) — отдельно, для shell �
 
 | CMD | Ответ | Смысл |
 |-----|-------|--------|
-| `0x01` | `0x81` | VERSION |
+| `0x01` | `0x81` | VERSION — тело ответа это сама строка `__UDA_VERSION__: …` (без префикса `00 00 00 00`, как у CRT/MDC) |
 | `0x02`/`0x03`/`0x04` | `0x82`… | SUSPEND / RESUME / STOP |
 | `0x05` | `0x85` (+ async `0x86`/`0x8a`/`0x8b`) | **DiagReq** (ReadDtc / ClearDtc / ReadDid / WriteDid) |
 | `0x07` | `0x87` (+ `0x88`) | FotaReq |
