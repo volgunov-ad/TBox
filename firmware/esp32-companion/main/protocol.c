@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "ble_btn.h"
+#include "wifi_router.h"
 #include "esp_crc.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -277,14 +278,14 @@ void protocol_send_hello(void)
     macs_json[mp] = '\0';
 
     const bool um980_flag = gnss_is_um980();
-    char buf[768];
+    char buf[1024];
     if (s_hello_can) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
                  "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s}\n",
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -305,7 +306,7 @@ void protocol_send_hello(void)
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s}\n",
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -407,6 +408,26 @@ void protocol_send_ble_ack(const char *phase, bool ok, const char *err)
                  phase ? phase : "",
                  ok ? "true" : "false");
     }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *psk,
+                             const char *ip, int freq_mhz, int channel,
+                             const char *hu_ip, int panel_port)
+{
+    char buf[384];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"apStatus\",\"on\":%s,\"sta\":%s,\"ssid\":\"%s\",\"psk\":\"%s\","
+             "\"ip\":\"%s\",\"freq\":%d,\"ch\":%d,\"huIp\":\"%s\",\"panel\":%d}\n",
+             on ? "true" : "false",
+             sta ? "true" : "false",
+             ssid ? ssid : "",
+             psk ? psk : "",
+             ip ? ip : "",
+             freq_mhz,
+             channel,
+             hu_ip ? hu_ip : "",
+             panel_port);
     cdc_write_str(buf);
 }
 
@@ -791,9 +812,12 @@ static void handle_ota_begin(const char *line)
         protocol_send_ota_ack("begin", 0, false, "missing fields");
         return;
     }
+    /* Stop heartbeats before the blocking erase. On 0.8 they filled the
+     * CDC TX FIFO and the begin ack was dropped. */
+    s_ota_bin_mode = true;
     if (!ota_begin(size, crc, err, sizeof(err))) {
-        protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         s_ota_bin_mode = false;
+        protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         return;
     }
     s_ota_bin_mode = true;
@@ -1086,6 +1110,17 @@ static void handle_line(const char *line)
         bool ok = ble_btn_forget(mac);
         protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
         protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"apCfg\"") || strstr(line, "\"t\": \"apCfg\"")) {
+        bool on = extract_json_bool(line, "on", false);
+        char ssid[33];
+        char psk[64];
+        ssid[0] = '\0';
+        psk[0] = '\0';
+        extract_json_string(line, "huSsid", ssid, sizeof(ssid));
+        extract_json_string(line, "huPsk", psk, sizeof(psk));
+        wifi_router_request(on, ssid, psk);
         return;
     }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {

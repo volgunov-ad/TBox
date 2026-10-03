@@ -20,7 +20,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.0.0). Th
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 | **Boot / autostart** | `BootCompleteReceiver`, `MainScreenBootOpen.kt`, `BackgroundService` | [docs/BOOT_AUTOSTART_DEVICE_RU.md](docs/BOOT_AUTOSTART_DEVICE_RU.md) |
-| **Wi-Fi SoftAP → ESP32 router** | (firmware research, `app_process` helper) | [docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md](docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md) |
+| **Wi-Fi SoftAP → ESP32 router** | (firmware research, `app_process` helper) | [docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md](docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md) (A9), [docs/WIFI_SOFTAP_A10_RU.md](docs/WIFI_SOFTAP_A10_RU.md) (A10) |
 
 Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are computed **only during an active trip** (`CanFramesProcess` gate); refuel records are created inside `BackgroundService.applyActiveTripFuelStep`.
 

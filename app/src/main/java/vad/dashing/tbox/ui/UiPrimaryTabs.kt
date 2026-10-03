@@ -905,6 +905,7 @@ fun SettingsTabContent(
                         SettingsSection.INTERFACE -> R.string.settings_tab_interface
                         SettingsSection.SYSTEM -> R.string.settings_tab_system
                         SettingsSection.API -> R.string.settings_tab_api
+                        SettingsSection.HOTSPOT -> R.string.settings_tab_hotspot
                     },
                 )
             },
@@ -1502,6 +1503,10 @@ fun SettingsTabContent(
                 SettingsSection.API -> {
                     ExternalApiSettingsSection(settingsViewModel = settingsViewModel)
                 }
+
+                SettingsSection.HOTSPOT -> {
+                    HuSoftApSettingsCard()
+                }
             }
         }
     }
@@ -2082,6 +2087,7 @@ private enum class SettingsSection {
     INTERFACE,
     SYSTEM,
     API,
+    HOTSPOT,
 }
 
 private enum class FloatingPanelsSection {

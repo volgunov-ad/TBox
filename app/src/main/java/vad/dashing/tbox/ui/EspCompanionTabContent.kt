@@ -74,6 +74,7 @@ private enum class EspCompanionSection {
     Settings,
     Data,
     Ble,
+    Hotspot,
 }
 
 /** Subsection header inside a Companion horizontal section (same as ELM327 / Modem). */
@@ -190,10 +191,13 @@ fun EspCompanionTabContent(
     }
 
     LaunchedEffect(otaSuccessEpoch) {
-        if (otaSuccessEpoch <= 0L) return@LaunchedEffect
+        if (!EspCompanionRepository.consumeOtaSuccess(otaSuccessEpoch)) return@LaunchedEffect
         Toast.makeText(context, toastOtaOk, Toast.LENGTH_LONG).show()
-        delay(1_500L)
-        EspCompanionRepository.clearOtaUiState()
+        try {
+            delay(1_500L)
+        } finally {
+            EspCompanionRepository.clearOtaUiState()
+        }
     }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
@@ -226,6 +230,7 @@ fun EspCompanionTabContent(
                         EspCompanionSection.Settings -> R.string.esp_tab_settings
                         EspCompanionSection.Data -> R.string.esp_tab_data
                         EspCompanionSection.Ble -> R.string.esp_tab_ble
+                        EspCompanionSection.Hotspot -> R.string.esp_tab_hotspot
                     },
                 )
             },
@@ -359,7 +364,11 @@ fun EspCompanionTabContent(
                     }
                     if (otaBusy || (otaProgress > 0 && otaError.isNullOrBlank())) {
                         Text(
-                            text = stringResource(R.string.esp_ota_progress, otaProgress),
+                            text = if (otaProgress <= 0) {
+                                stringResource(R.string.esp_ota_erasing)
+                            } else {
+                                stringResource(R.string.esp_ota_progress, otaProgress)
+                            },
                             style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = 4.dp),
@@ -731,6 +740,15 @@ fun EspCompanionTabContent(
                         }
                     }
                 }
+
+                EspCompanionSection.Hotspot -> {
+                    EspCompanionHotspotSection(
+                        settingsViewModel = settingsViewModel,
+                        companionEnabled = companionEnabled,
+                        companionConnected = connected,
+                        firmwareSupportsAp = info.ap,
+                    )
+                }
             }
         }
     }
@@ -1083,13 +1101,18 @@ private fun prepareOtaCacheFile(context: Context, uri: Uri): Result<Pair<File, S
 }
 
 private fun otaErrorMessage(context: Context, code: String?): String {
+    val timeout = context.getString(R.string.esp_ota_error_timeout)
+    if (code == "timeout") return timeout
+    if (code != null && code.startsWith("timeout:")) {
+        val detail = code.removePrefix("timeout:")
+        return if (detail.isEmpty()) timeout else "$timeout ($detail)"
+    }
     return when (code) {
         "no_usb" -> context.getString(R.string.esp_ota_error_no_usb)
         "bad_file" -> context.getString(R.string.esp_ota_error_bad_file)
         "empty" -> context.getString(R.string.esp_ota_error_empty)
         "too_large" -> context.getString(R.string.esp_ota_error_too_large)
         "bad_magic" -> context.getString(R.string.esp_ota_error_bad_magic)
-        "timeout" -> context.getString(R.string.esp_ota_error_timeout)
         null, "" -> context.getString(R.string.esp_ota_error_bad_file)
         else -> context.getString(R.string.esp_ota_error_generic, code)
     }

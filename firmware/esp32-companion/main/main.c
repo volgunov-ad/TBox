@@ -17,6 +17,7 @@
 #include "mcp2515.h"
 #include "protocol.h"
 #include "um980_uart.h"
+#include "wifi_router.h"
 
 static const char *TAG = "esp32_companion";
 
@@ -246,6 +247,7 @@ void app_main(void)
     gpio_io_init();
     mag_init();
     ble_btn_init();
+    wifi_router_init();
 
     s_can_present = mcp2515_init(MCP2515_DEFAULT_BAUD, MCP2515_DEFAULT_XTAL_HZ);
     if (s_can_present) {
@@ -298,9 +300,9 @@ void app_main(void)
                 protocol_send_relay(gpio_io_get_relays());
                 sent_hello = true;
             }
-            // During OTA keep a rare heartbeat so HU soft-watchdog stays calm.
-            const uint32_t hb_period = ota_busy ? 5000u : 1000u;
-            if (now_ms - last_hb_ms >= hb_period) {
+            // No heartbeat during OTA. A blocked USB callback cannot drain TX,
+            // so heartbeats fill the FIFO and the begin ack is dropped.
+            if (!ota_busy && now_ms - last_hb_ms >= 1000u) {
                 protocol_send_hb(now_ms);
                 last_hb_ms = now_ms;
             }

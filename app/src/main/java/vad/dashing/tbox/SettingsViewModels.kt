@@ -513,6 +513,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val espSoftApRouterEnabled = settingsManager.espSoftApRouterEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val espBleDeviceNames = settingsManager.espBleDeviceNamesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
@@ -2189,6 +2192,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspCompanionEnabledSetting(enabled)
+        }
+    }
+
+    fun saveEspSoftApRouterEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspSoftApRouterEnabled(enabled)
         }
     }
 

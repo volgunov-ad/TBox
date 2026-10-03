@@ -463,4 +463,22 @@ class EspCompanionProtocolTest {
         val forget = EspCompanionProtocol.encodeBleForgetAll()
         assertTrue(forget.contains("\"all\":true"))
     }
+
+    @Test
+    fun parseApStatusAndEncodeApCfg() {
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"apStatus","on":true,"sta":true,"ssid":"TBox","psk":"tbox8765",""" +
+                """"ip":"192.168.4.1","freq":2462,"ch":11,"huIp":"192.168.42.1","panel":8765}""",
+        ) as EspMessage.ApStatus
+        assertTrue(status.on)
+        assertTrue(status.sta)
+        assertEquals("TBox", status.ssid)
+        assertEquals("tbox8765", status.password)
+        assertEquals(2462, status.freqMhz)
+        assertEquals("192.168.42.1", status.huIp)
+        val cfg = EspCompanionProtocol.encodeApCfg(true, "hu", "abcd1234")
+        assertTrue(cfg.contains("\"t\":\"apCfg\""))
+        assertTrue(cfg.contains("\"huSsid\":\"hu\""))
+        assertTrue(cfg.contains("\"huPsk\":\"abcd1234\""))
+    }
 }

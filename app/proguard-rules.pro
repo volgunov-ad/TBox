@@ -33,3 +33,8 @@
 
 -keep class com.yandex.** { *; }
 -dontwarn com.yandex.**
+
+# app_process loads this class by name from the app APK (shell uid).
+-keep class vad.dashing.tbox.hotspot.HuSoftApMain {
+    public static void main(java.lang.String[]);
+}

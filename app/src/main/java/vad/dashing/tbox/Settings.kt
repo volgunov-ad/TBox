@@ -753,6 +753,8 @@ class SettingsManager(private val context: Context) {
         private val HU_INTERNET_PROBE_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ESP_SOFTAP_ROUTER_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_softap_router_enabled")
         private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
         private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
         private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
@@ -1485,6 +1487,10 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val espSoftApRouterEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val espBleDeviceNamesFlow: Flow<Map<String, String>> =
@@ -3030,6 +3036,12 @@ class SettingsManager(private val context: Context) {
                 preferences[USB_GNSS_MODULE_BY_DEVICE_KEY] =
                     vad.dashing.tbox.usbgnss.GnssModuleIdentityCodec.encodeMap(migrated)
             }
+        }
+    }
+
+    suspend fun saveEspSoftApRouterEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] = enabled
         }
     }
 

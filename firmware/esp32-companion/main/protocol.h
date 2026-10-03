@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.8.0"
+#define ESP_COMPANION_FW_VERSION "0.9.1"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
@@ -75,6 +75,11 @@ void protocol_send_ble_btn(const char *mac, int btn, const char *act,
 void protocol_send_ble_status(void);
 void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms);
 void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
+
+/** SoftAP router status (fw 0.9+). */
+void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *psk,
+                             const char *ip, int freq_mhz, int channel,
+                             const char *hu_ip, int panel_port);
 
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);

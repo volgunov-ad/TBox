@@ -42,6 +42,7 @@ import vad.dashing.tbox.speedcam.SpeedCamRepository
 import vad.dashing.tbox.speedcam.SpeedCamUiState
 import vad.dashing.tbox.speedcam.SpeedCamWidgetPresence
 import vad.dashing.tbox.esp.EspCompanionManager
+import vad.dashing.tbox.hotspot.HuSoftApRouter
 import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdRepository
@@ -85,6 +86,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
 import vad.dashing.tbox.fuellevelcalibration.FuelCalibrationJson
@@ -206,6 +208,7 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    private val espSoftApRouterGeneration = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
     private var elm327Manager: Elm327Manager? = null
@@ -570,6 +573,8 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_UM980_BAUD = "esp_um980_baud"
         const val ACTION_ESP_MAG_CHIP = "vad.dashing.tbox.ESP_MAG_CHIP"
         const val EXTRA_ESP_MAG_CHIP = "esp_mag_chip"
+        const val ACTION_ESP_SOFTAP_ROUTER = "vad.dashing.tbox.ESP_SOFTAP_ROUTER"
+        const val EXTRA_ESP_SOFTAP_ROUTER = "esp_softap_router"
         const val ACTION_ESP_BLE_SET = "vad.dashing.tbox.ESP_BLE_SET"
         const val EXTRA_ESP_BLE_ON = "esp_ble_on"
         const val ACTION_ESP_BLE_LEARN_BEGIN = "vad.dashing.tbox.ESP_BLE_LEARN_BEGIN"
@@ -1163,6 +1168,12 @@ class BackgroundService : Service() {
             }
         }
         createNotificationChannel()
+        scope.launch {
+            delay(45_000)
+            if (settingsManager.espSoftApRouterEnabledFlow.first()) {
+                applyEspSoftApRouter(true)
+            }
+        }
         timingMark("onCreate_done")
         timingLog("Timings.onCreate")
     }
@@ -1651,6 +1662,10 @@ class BackgroundService : Service() {
                 if (chip.isNotBlank()) {
                     espCompanionManager?.setMagChip(chip)
                 }
+            }
+            ACTION_ESP_SOFTAP_ROUTER -> {
+                val on = intent.getBooleanExtra(EXTRA_ESP_SOFTAP_ROUTER, false)
+                scope.launch { applyEspSoftApRouter(on) }
             }
             ACTION_ESP_BLE_SET -> {
                 val on = intent.getBooleanExtra(EXTRA_ESP_BLE_ON, false)
@@ -6898,6 +6913,35 @@ class BackgroundService : Service() {
      * Runs (or resumes) the boot open-main episode when [MainScreenBootOpenStore] is pending.
      * Starts early after service kickoff / late BOOT_COMPLETED — not gated on TBox startup.
      */
+    private suspend fun applyEspSoftApRouter(on: Boolean) {
+        val ticket = espSoftApRouterGeneration.incrementAndGet()
+        if (!on) {
+            HuSoftApRouter.clear()
+            espCompanionManager?.sendApCfg(false, "", "")
+            EspCompanionRepository.setRouterError(null)
+            EspCompanionRepository.setRouterBusy(false)
+            return
+        }
+        if (settingsManager.headUnitCanModeFlow.first() != HeadUnitCanMode.Android9MbCan) {
+            EspCompanionRepository.setRouterError("a9")
+            return
+        }
+        EspCompanionRepository.setRouterBusy(true)
+        EspCompanionRepository.setRouterError(null)
+        val error = HuSoftApRouter.prepare(this)
+        if (ticket != espSoftApRouterGeneration.get()) return
+        val push = HuSoftApRouter.current()
+        if (push != null && (error == null || error == "band")) {
+            espCompanionManager?.sendApCfg(true, push.ssid, push.password)
+        }
+        if (error != null) {
+            EspCompanionRepository.setRouterError(error)
+            EspCompanionRepository.setRouterBusy(false)
+            return
+        }
+        EspCompanionRepository.setRouterBusy(false)
+    }
+
     private fun ensureBootOpenMainEpisode(forceRestart: Boolean) {
         if (!MainScreenBootOpenStore.isPending(this)) return
         if (!forceRestart && bootOpenMainActivityJob?.isActive == true) return

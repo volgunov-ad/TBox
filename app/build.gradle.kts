@@ -63,6 +63,7 @@ android {
             "MAPKIT_API_KEY",
             "\"$mapkitApiKeyFromLocal\"",
         )
+        multiDexKeepProguard = file("multidex-keep.pro")
         buildConfigField(
             "boolean",
             "MAPKIT_ENABLED",
@@ -158,6 +159,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
+    implementation(libs.zxing)
     implementation(libs.snakeyaml.engine)
     if (mapkitEnabled) {
         implementation(libs.yandex.mapkit.lite)

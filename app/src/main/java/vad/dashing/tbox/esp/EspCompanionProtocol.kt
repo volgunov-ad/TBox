@@ -80,6 +80,8 @@ object EspCompanionProtocol {
     const val TYPE_BLE_LEARN_END = "bleLearnEnd"
     const val TYPE_BLE_ALLOW = "bleAllow"
     const val TYPE_BLE_FORGET = "bleForget"
+    const val TYPE_AP_CFG = "apCfg"
+    const val TYPE_AP_STATUS = "apStatus"
 
     const val BLE_BTN_ACT_PRESS = "press"
     const val BLE_BTN_ACT_DOUBLE = "double"
@@ -216,6 +218,9 @@ object EspCompanionProtocol {
 
     fun encodeBleForgetAll(): String =
         line(TYPE_BLE_FORGET, mapOf("all" to true))
+
+    fun encodeApCfg(on: Boolean, huSsid: String, huPsk: String): String =
+        line(TYPE_AP_CFG, mapOf("on" to on, "huSsid" to huSsid, "huPsk" to huPsk))
 
     fun isKnownMagChip(chip: String): Boolean =
         MAG_CHIP_IDS.any { it.equals(chip, ignoreCase = true) }
@@ -426,6 +431,7 @@ object EspCompanionProtocol {
                         ble = o.optBoolean("ble", false),
                         bleOn = o.optBoolean("bleOn", false),
                         bleMacs = parseStringList(o, "bleMacs"),
+                        ap = o.optBoolean("ap", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -558,6 +564,17 @@ object EspCompanionProtocol {
                     ok = o.optBoolean("ok", false),
                     err = o.optString("err", "").ifBlank { null },
                 )
+                TYPE_AP_STATUS -> EspMessage.ApStatus(
+                    on = o.optBoolean("on", false),
+                    sta = o.optBoolean("sta", false),
+                    ssid = o.optString("ssid", ""),
+                    password = o.optString("psk", ""),
+                    ip = o.optString("ip", ""),
+                    freqMhz = o.optInt("freq", 0),
+                    channel = o.optInt("ch", 0),
+                    huIp = o.optString("huIp", ""),
+                    panelPort = o.optInt("panel", 8765),
+                )
                 else -> null
             }
         } catch (_: Exception) {
@@ -667,6 +684,8 @@ sealed class EspMessage {
         val ble: Boolean = false,
         val bleOn: Boolean = false,
         val bleMacs: List<String> = emptyList(),
+        /** Firmware 0.9+ SoftAP router. */
+        val ap: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -788,6 +807,18 @@ sealed class EspMessage {
         val phase: String,
         val ok: Boolean,
         val err: String? = null,
+    ) : EspMessage()
+
+    data class ApStatus(
+        val on: Boolean,
+        val sta: Boolean,
+        val ssid: String,
+        val password: String,
+        val ip: String,
+        val freqMhz: Int,
+        val channel: Int,
+        val huIp: String,
+        val panelPort: Int,
     ) : EspMessage()
 }
 

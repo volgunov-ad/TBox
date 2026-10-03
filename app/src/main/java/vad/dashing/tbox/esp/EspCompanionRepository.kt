@@ -26,6 +26,19 @@ data class EspDeviceInfo(
     val ble: Boolean = false,
     val bleOn: Boolean = false,
     val bleMacs: List<String> = emptyList(),
+    val ap: Boolean = false,
+)
+
+data class EspApStatus(
+    val on: Boolean = false,
+    val sta: Boolean = false,
+    val ssid: String = "",
+    val password: String = "",
+    val ip: String = "",
+    val freqMhz: Int = 0,
+    val channel: Int = 0,
+    val huIp: String = "",
+    val panelPort: Int = 8765,
 )
 
 data class EspBleBtnEvent(
@@ -144,6 +157,15 @@ object EspCompanionRepository {
     private val _bleOn = MutableStateFlow(false)
     val bleOn: StateFlow<Boolean> = _bleOn.asStateFlow()
 
+    private val _apStatus = MutableStateFlow(EspApStatus())
+    val apStatus: StateFlow<EspApStatus> = _apStatus.asStateFlow()
+
+    private val _routerBusy = MutableStateFlow(false)
+    val routerBusy: StateFlow<Boolean> = _routerBusy.asStateFlow()
+
+    private val _routerError = MutableStateFlow<String?>(null)
+    val routerError: StateFlow<String?> = _routerError.asStateFlow()
+
     private val _bleLearnActive = MutableStateFlow(false)
     val bleLearnActive: StateFlow<Boolean> = _bleLearnActive.asStateFlow()
 
@@ -186,6 +208,7 @@ object EspCompanionRepository {
      */
     private val _otaSuccessEpoch = MutableStateFlow(0L)
     val otaSuccessEpoch: StateFlow<Long> = _otaSuccessEpoch.asStateFlow()
+    private var toastedOtaSuccessEpoch = 0L
 
     /** Profile/SAVECONFIG/refresh batch — UI should disable UM980 controls. */
     private val _um980ConfigBusy = MutableStateFlow(false)
@@ -238,6 +261,8 @@ object EspCompanionRepository {
             _connectedAtMs.value = 0L
             _canLightActive.value = false
             _bleOn.value = false
+            _apStatus.value = EspApStatus()
+            _routerBusy.value = false
             _bleLearnActive.value = false
             _bleMacs.value = emptyList()
             _bleDevices.value = emptyMap()
@@ -254,6 +279,19 @@ object EspCompanionRepository {
             _bleOn.value = info.bleOn
             replaceBleMacs(info.bleMacs)
         }
+    }
+
+    fun applyApStatus(status: EspApStatus) {
+        _apStatus.value = status
+        _routerError.value = null
+    }
+
+    fun setRouterBusy(busy: Boolean) {
+        _routerBusy.value = busy
+    }
+
+    fun setRouterError(code: String?) {
+        _routerError.value = code
     }
 
     fun applyBleStatus(
@@ -442,6 +480,13 @@ object EspCompanionRepository {
     }
 
     /** Hide OTA progress/error after toast or on disconnect after a finished transfer. */
+    /** True only the first time this success epoch is observed. Survives leaving the screen. */
+    fun consumeOtaSuccess(epoch: Long): Boolean {
+        if (epoch <= 0L || epoch == toastedOtaSuccessEpoch) return false
+        toastedOtaSuccessEpoch = epoch
+        return true
+    }
+
     fun clearOtaUiState() {
         _otaBusy.value = false
         _otaProgress.value = 0
