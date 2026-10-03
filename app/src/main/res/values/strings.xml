@@ -297,6 +297,7 @@
     <string name="car_settings_option_low">Низкий</string>
     <string name="car_settings_option_medium">Средний</string>
     <string name="car_settings_option_high">Высокий</string>
+    <string name="car_settings_option_eco">Эко</string>
     <string name="car_settings_option_comfort">Комфорт</string>
     <string name="car_settings_option_sport">Спорт</string>
     <string name="car_settings_option_strong">Сильный</string>

@@ -297,6 +297,7 @@
     <string name="car_settings_option_low">Low</string>
     <string name="car_settings_option_medium">Medium</string>
     <string name="car_settings_option_high">High</string>
+    <string name="car_settings_option_eco">ECO</string>
     <string name="car_settings_option_comfort">Comfort</string>
     <string name="car_settings_option_sport">Sport</string>
     <string name="car_settings_option_strong">Strong</string>
