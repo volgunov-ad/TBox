@@ -44,6 +44,8 @@
 
 Подключён как `WifiModemModel.HUAWEI_E3372`: опрос HiLink XML и управление dataswitch/reboot через `HuaweiHilinkClient` / `WifiModemPoller`.
 
-Вне окна reboot: после **2** подряд неудачных опросов `WifiModemPoller` обнуляет зеркало net/APN (`clearNetMirror`). После **reboot** poller пересоздаёт HTTP-клиент/сессию и в течение ~2 минут не затирает зеркало на временных ошибках недоступности, чтобы данные снова появились без переключения источника модема.
+`/api/device/signal` и `/api/monitoring/traffic-statistics` необязательны: ошибка этих методов (часто `100003`, пока радио занято) не роняет весь опрос. Пустые радио/скорость оставляют предыдущий образец. `ConnectionStatus` **900** (connecting) при уже поднятых данных тоже не публикует «нет сети» — держится последний online-снимок. Явный **902** по-прежнему означает данные выключены.
+
+Вне окна reboot: после **2** подряд неудачных опросов обязательных методов (`information`, `monitoring/status`) `WifiModemPoller` обнуляет зеркало net/APN (`clearNetMirror`). После **reboot** poller пересоздаёт HTTP-клиент/сессию и в течение ~2 минут не затирает зеркало на временных ошибках недоступности, чтобы данные снова появились без переключения источника модема.
 
 См. также: [WIFI_MODEM_ZTE_MF79U_RU.md](./WIFI_MODEM_ZTE_MF79U_RU.md), [WIFI_MODEM_OLAX_F95_RU.md](./WIFI_MODEM_OLAX_F95_RU.md), [WIFI_MODEM_CANDIDATES_RU.md](./WIFI_MODEM_CANDIDATES_RU.md).

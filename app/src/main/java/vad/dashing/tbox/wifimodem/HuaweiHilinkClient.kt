@@ -29,27 +29,16 @@ class HuaweiHilinkClient(
     @Volatile
     private var requestToken: String = ""
 
-    fun fetchStatus(): WifiModemSnapshot {
-        ensureSession()
-        val information = getXmlMap("/api/device/information")
-        val monitoring = getXmlMap("/api/monitoring/status")
-        val signal = getXmlMap("/api/device/signal")
-        val traffic = getXmlMap("/api/monitoring/traffic-statistics")
-        return HuaweiHilinkStatusMapper.map(
-            information = information,
-            monitoring = monitoring,
-            signal = signal,
-            traffic = traffic,
-            previous = null,
-        )
-    }
+    fun fetchStatus(): WifiModemSnapshot = fetchStatus(null)
 
     fun fetchStatus(previous: WifiModemSnapshot?): WifiModemSnapshot {
         ensureSession()
         val information = getXmlMap("/api/device/information")
         val monitoring = getXmlMap("/api/monitoring/status")
-        val signal = getXmlMap("/api/device/signal")
-        val traffic = getXmlMap("/api/monitoring/traffic-statistics")
+        // Radio and throughput are optional: a busy or unsupported endpoint must not
+        // fail the poll and wipe the connection snapshot already read above.
+        val signal = getXmlMapOrEmpty("/api/device/signal")
+        val traffic = getXmlMapOrEmpty("/api/monitoring/traffic-statistics")
         return HuaweiHilinkStatusMapper.map(
             information = information,
             monitoring = monitoring,
@@ -100,12 +89,23 @@ class HuaweiHilinkClient(
         }
     }
 
-    private fun getXmlMap(path: String): Map<String, String> {
-        val responseText = getRaw(path)
-        return HuaweiHilinkXml.tagValues(responseText)
+    private fun getXmlMap(path: String): Map<String, String> =
+        HuaweiHilinkXml.tagValues(getRaw(path, optional = false))
+
+    /**
+     * Best-effort GET. Endpoint errors (unsupported / busy) leave the session intact
+     * and yield an empty map so the mapper can keep the previous sample.
+     * A dead session (HTTP 401 or HiLink 125xxx) still drops the token.
+     */
+    private fun getXmlMapOrEmpty(path: String): Map<String, String> {
+        return try {
+            HuaweiHilinkXml.tagValues(getRaw(path, optional = true))
+        } catch (_: HuaweiHilinkException) {
+            emptyMap()
+        }
     }
 
-    private fun getRaw(path: String): String {
+    private fun getRaw(path: String, optional: Boolean): String {
         ensureSession()
         val request = Request.Builder()
             .url("http://$baseHost$path")
@@ -117,21 +117,30 @@ class HuaweiHilinkClient(
             val text = response.body?.string().orEmpty()
             captureRotatedToken(response)
             if (!response.isSuccessful) {
-                if (response.code == 401 || "error" in text.lowercase()) {
+                if (response.code == 401 || isSessionErrorEnvelope(text)) {
                     invalidateSession()
                 }
                 throw HuaweiHilinkException("GET $path HTTP ${response.code}")
             }
-            // HiLink error envelope
-            if (HuaweiHilinkXml.tagValue(text, "code") != null &&
-                HuaweiHilinkXml.tagValue(text, "message") != null &&
-                HuaweiHilinkXml.tagValue(text, "response") == null
-            ) {
-                invalidateSession()
+            if (isErrorEnvelope(text)) {
+                if (!optional || isSessionErrorEnvelope(text)) {
+                    invalidateSession()
+                }
                 throw HuaweiHilinkException("GET $path error XML: $text")
             }
             return text
         }
+    }
+
+    private fun isErrorEnvelope(text: String): Boolean =
+        HuaweiHilinkXml.tagValue(text, "code") != null &&
+            HuaweiHilinkXml.tagValue(text, "message") != null &&
+            HuaweiHilinkXml.tagValue(text, "response") == null
+
+    /** HiLink session/token failures. 100002/100003/100004 are endpoint errors, not these. */
+    private fun isSessionErrorEnvelope(text: String): Boolean {
+        val code = HuaweiHilinkXml.tagValue(text, "code") ?: return false
+        return code.startsWith("125")
     }
 
     private fun postXml(path: String, xmlBody: String) {

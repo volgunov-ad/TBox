@@ -8,7 +8,9 @@ import java.util.Date
 /**
  * Maps Huawei HiLink XML status payloads into [WifiModemSnapshot].
  *
- * `ConnectionStatus`: 901 = data online, 902 = data offline (E3372 HAR).
+ * `ConnectionStatus`: 901 = data online, 902 = data offline, 900 = connecting (E3372 HAR).
+ * A brief 900 keeps the previous online snapshot. Missing radio/throughput fields
+ * (optional endpoints failed) also keep the previous sample instead of zeros.
  */
 object HuaweiHilinkStatusMapper {
 
@@ -23,7 +25,11 @@ object HuaweiHilinkStatusMapper {
             monitoring["ConnectionStatus"],
             monitoring["connectionstatus"],
         )
-        val apnUp = connectionStatus == "901"
+        val prevNet = previous?.netState
+        // 900 is "connecting" between PDP sessions. Hold the last online sample
+        // so a one-poll blip does not publish "нет сети" / data off.
+        val heldConnection = connectionStatus == "900" && previous?.apnStatus == true
+        val apnUp = connectionStatus == "901" || heldConnection
         val signalIcon = firstNonBlank(
             monitoring["SignalIcon"],
             monitoring["SignalStrength"],
@@ -41,9 +47,12 @@ object HuaweiHilinkStatusMapper {
             firstNonBlank(signal["sinr"], signal["SINR"]),
         )
         // Prefer RSSI for the shared dBm sink; fall back to RSRP (LTE) then previous.
-        val signalDbm = rssi ?: rsrp ?: previous?.netState?.signalDbm
+        val signalDbm = rssi ?: rsrp ?: prevNet?.signalDbm
         val csq = signalDbm?.let { ((it + 113) / 2).coerceIn(0, 31) }
+        val previousLevel = prevNet?.signalLevel?.takeIf { it > 0 }
         val signalLevel = when {
+            heldConnection && (signalIcon == null || signalIcon == 0) && previousLevel != null ->
+                previousLevel
             signalIcon != null && signalIcon > 0 -> signalIcon.coerceIn(0, 5).let { if (it > 4) 4 else it }
             signalIcon == 0 -> 0
             csq != null -> when {
@@ -53,23 +62,27 @@ object HuaweiHilinkStatusMapper {
                 csq >= 5 -> 1
                 else -> 0
             }
-            previous?.netState?.signalLevel?.takeIf { it > 0 } != null -> previous.netState.signalLevel
+            previousLevel != null -> previousLevel
             else -> 0
         }
-        val mode = signal["mode"].orEmpty()
-        val netStatus = when (mode) {
-            "7" -> "4G"
-            "6", "5", "4", "3" -> "3G"
-            "2", "1", "0" -> "2G"
-            else -> if (apnUp) "4G" else "нет сети"
-        }
-        val simStatus = when (firstNonBlank(monitoring["SimStatus"], monitoring["simstatus"])) {
+        val mode = signal["mode"].orEmpty().ifBlank { previous?.networkTypeRaw.orEmpty() }
+        val reportedGeneration = radioGeneration(signal["mode"].orEmpty())
+        val netStatus = reportedGeneration
+            ?: prevNet?.netStatus?.takeIf { (heldConnection || apnUp) && it.isRadioGeneration() }
+            ?: if (apnUp) "4G" else "нет сети"
+        val simRaw = firstNonBlank(monitoring["SimStatus"], monitoring["simstatus"])
+        val simStatus = when (simRaw) {
             "1" -> "SIM готова"
             "0" -> "нет SIM"
-            else -> firstNonBlank(monitoring["SimStatus"]).ifBlank { "-" }
+            else -> simRaw.ifBlank {
+                prevNet?.simStatus?.takeIf { heldConnection && it.isNotBlank() && it != "-" } ?: "-"
+            }
         }
         val regStatus = when {
             firstNonBlank(monitoring["RoamingStatus"], monitoring["roamingstatus"]) == "1" -> "роуминг"
+            heldConnection -> prevNet?.regStatus?.takeIf {
+                it == "домашняя сеть" || it == "роуминг"
+            } ?: "домашняя сеть"
             apnUp -> "домашняя сеть"
             else -> "нет сети"
         }
@@ -91,7 +104,6 @@ object HuaweiHilinkStatusMapper {
             information["HardwareVersion"],
         )
 
-        val prevNet = previous?.netState
         val connectionChangeTime = when {
             prevNet == null -> Date()
             prevNet.regStatus != regStatus -> Date()
@@ -103,13 +115,13 @@ object HuaweiHilinkStatusMapper {
                 traffic["CurrentDownloadRate"],
                 traffic["currentdownloadrate"],
             ),
-        )
+        ) ?: prevNet?.downloadSpeedBps
         val uploadBps = ModemThroughputFormat.parseBps(
             firstNonBlank(
                 traffic["CurrentUploadRate"],
                 traffic["currentuploadrate"],
             ),
-        )
+        ) ?: prevNet?.uploadSpeedBps
         val netState = NetState(
             csq = csq ?: 99,
             signalLevel = signalLevel,
@@ -145,15 +157,27 @@ object HuaweiHilinkStatusMapper {
             apnState = apnState,
             apnStatus = apnUp,
             firmware = firmware,
-            rssiDbm = rssi,
-            rsrpDbm = rsrp,
-            rsrqDb = rsrq,
-            sinrDb = sinr,
-            cellId = firstNonBlank(signal["cell_id"], signal["cellid"]),
+            rssiDbm = rssi ?: previous?.rssiDbm,
+            rsrpDbm = rsrp ?: previous?.rsrpDbm,
+            rsrqDb = rsrq ?: previous?.rsrqDb,
+            sinrDb = sinr ?: previous?.sinrDb,
+            cellId = firstNonBlank(signal["cell_id"], signal["cellid"])
+                .ifBlank { previous?.cellId.orEmpty() },
             networkTypeRaw = mode,
             pppStatusRaw = connectionStatus,
         )
     }
+
+    /** HiLink `signal.mode`: 7 = LTE, 3–6 = 3G, 0–2 = 2G. */
+    private fun radioGeneration(mode: String): String? = when (mode) {
+        "7" -> "4G"
+        "6", "5", "4", "3" -> "3G"
+        "2", "1", "0" -> "2G"
+        else -> null
+    }
+
+    private fun String.isRadioGeneration(): Boolean =
+        this == "4G" || this == "3G" || this == "2G"
 
     private fun firstNonBlank(vararg values: String?): String =
         values.firstOrNull { !it.isNullOrBlank() }.orEmpty()
