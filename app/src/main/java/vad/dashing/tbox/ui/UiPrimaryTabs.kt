@@ -3483,6 +3483,7 @@ fun InfoTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item { HuSystemNetworksSection() }
             item {
                 StatusRow(
                     stringResource(R.string.info_confirm_suspend_app),

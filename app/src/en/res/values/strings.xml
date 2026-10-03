@@ -1750,6 +1750,17 @@
     <string name="location_geo_debug_log_recording">Recording… ticks: %1$d</string>
     <string name="location_geo_debug_log_idle">Not recording</string>
 
+    <string name="info_hu_networks">Head unit networks</string>
+    <string name="info_hu_networks_none">none</string>
+    <string name="info_hu_network_internet_yes">internet OK</string>
+    <string name="info_hu_network_internet_no">no internet</string>
+    <string name="info_hu_network_default">app route</string>
+    <string name="info_hu_network_no_ip">no IP</string>
+    <string name="info_hu_transport_wifi">Wi‑Fi</string>
+    <string name="info_hu_transport_ethernet">Ethernet</string>
+    <string name="info_hu_transport_cellular">cellular</string>
+    <string name="info_hu_transport_vpn">VPN</string>
+    <string name="info_hu_transport_other">other</string>
     <string name="info_confirm_suspend_app">Confirm SUSPEND command for APP</string>
     <string name="info_confirm_suspend_mdc">Confirm SUSPEND command for MDC</string>
     <string name="info_confirm_suspend_swd">Confirm SUSPEND command for SWD</string>
