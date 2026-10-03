@@ -63,6 +63,46 @@ class HuSystemNetworksTest {
     }
 
     @Test
+    fun merge_addsSoftApThatConnectivityDoesNotTrack() {
+        val sta = HuSystemNetworks.fromLink(
+            interfaceName = "wlan0",
+            addresses = listOf(InetAddress.getByName("192.168.1.128")),
+            wifi = true,
+            ethernet = false,
+            cellular = false,
+            vpn = false,
+            validated = true,
+            isDefault = true,
+        )
+        val merged = HuSystemNetworks.merge(
+            connectivity = listOf(sta),
+            local = listOf(
+                HuLocalInterface("wlan0", listOf(InetAddress.getByName("192.168.1.128"))),
+                HuLocalInterface("wlan1", listOf(InetAddress.getByName("192.168.42.38"))),
+                HuLocalInterface("lo", listOf(InetAddress.getByName("127.0.0.1"))),
+            ),
+        )
+        assertEquals(listOf("wlan0", "lo", "wlan1"), merged.map { it.interfaceName })
+        val ap = merged.first { it.interfaceName == "wlan1" }
+        assertEquals(listOf(HuNetTransport.HOTSPOT), ap.transports)
+        assertEquals(listOf("192.168.42.38"), ap.ipv4)
+        assertEquals(false, ap.validated)
+        assertEquals(listOf(HuNetTransport.OTHER), merged.first { it.interfaceName == "lo" }.transports)
+    }
+
+    @Test
+    fun looksLikeSoftAp_matchesTetherPoolOutsideKnownNames() {
+        assertEquals(
+            true,
+            HuSystemNetworks.looksLikeSoftAp("swlan3", listOf(InetAddress.getByName("192.168.43.1"))),
+        )
+        assertEquals(
+            false,
+            HuSystemNetworks.looksLikeSoftAp("eth0", listOf(InetAddress.getByName("10.0.0.2"))),
+        )
+    }
+
+    @Test
     fun sort_defaultThenValidatedThenName() {
         val wifi = net("wlan0", validated = true, isDefault = true)
         val usb = net("usb0", validated = false, isDefault = false)

@@ -1761,6 +1761,7 @@
     <string name="location_geo_debug_log_recording">Идёт запись… тиков: %1$d</string>
     <string name="location_geo_debug_log_idle">Запись не идёт</string>
 
+    <string name="info_tbox_section">Информация TBox</string>
     <string name="info_hu_networks">Сети ГУ</string>
     <string name="info_hu_networks_none">нет</string>
     <string name="info_hu_network_internet_yes">интернет есть</string>
@@ -1770,6 +1771,7 @@
     <string name="info_hu_transport_wifi">Wi‑Fi</string>
     <string name="info_hu_transport_ethernet">Ethernet</string>
     <string name="info_hu_transport_cellular">мобильная</string>
+    <string name="info_hu_transport_hotspot">точка доступа</string>
     <string name="info_hu_transport_vpn">VPN</string>
     <string name="info_hu_transport_other">другая</string>
     <string name="info_confirm_suspend_app">Подтверждение команды SUSPEND приложению APP</string>

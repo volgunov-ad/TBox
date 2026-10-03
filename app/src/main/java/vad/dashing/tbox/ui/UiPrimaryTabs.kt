@@ -3485,6 +3485,10 @@ fun InfoTabContent(
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { HuSystemNetworksSection() }
             item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.info_tbox_section))
+            }
+            item {
                 StatusRow(
                     stringResource(R.string.info_confirm_suspend_app),
                     if (tboxAppSuspended) yesLabel else noLabel

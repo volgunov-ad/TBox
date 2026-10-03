@@ -10,25 +10,22 @@ import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.R
 import vad.dashing.tbox.internet.HuNetTransport
 import vad.dashing.tbox.internet.HuSystemNetwork
 import vad.dashing.tbox.internet.HuSystemNetworks
-import vad.dashing.tbox.ui.theme.tboxBody
-import vad.dashing.tbox.ui.theme.tboxHeadline
 
 @Composable
 fun HuSystemNetworksSection() {
@@ -68,17 +65,22 @@ fun HuSystemNetworksSection() {
         }
     }
 
+    LaunchedEffect(context) {
+        val cm = context.applicationContext
+            .getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return@LaunchedEffect
+        while (isActive) {
+            delay(2_000)
+            rows = runCatching { HuSystemNetworks.read(cm) }.getOrDefault(emptyList())
+        }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.info_hu_networks),
-            style = MaterialTheme.typography.tboxHeadline,
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-        )
+        SettingsTitle(stringResource(R.string.info_hu_networks))
         if (rows.isEmpty()) {
-            Text(
-                text = stringResource(R.string.info_hu_networks_none),
-                style = MaterialTheme.typography.tboxBody,
-                modifier = Modifier.padding(bottom = 8.dp),
+            StatusRow(
+                label = stringResource(R.string.info_hu_networks),
+                value = stringResource(R.string.info_hu_networks_none),
             )
         } else {
             val internetYes = stringResource(R.string.info_hu_network_internet_yes)
@@ -90,6 +92,7 @@ fun HuSystemNetworksSection() {
                 HuNetTransport.ETHERNET to stringResource(R.string.info_hu_transport_ethernet),
                 HuNetTransport.CELLULAR to stringResource(R.string.info_hu_transport_cellular),
                 HuNetTransport.VPN to stringResource(R.string.info_hu_transport_vpn),
+                HuNetTransport.HOTSPOT to stringResource(R.string.info_hu_transport_hotspot),
                 HuNetTransport.OTHER to stringResource(R.string.info_hu_transport_other),
             )
             rows.forEach { row ->
@@ -97,7 +100,6 @@ fun HuSystemNetworksSection() {
                     label = networkLabel(row, transportNames),
                     value = networkValue(row, internetYes, internetNo, defaultRoute, noIp),
                     valueMaxLines = 3,
-                    labelColumnWidthPercent = 42,
                 )
             }
         }
@@ -120,6 +122,7 @@ private fun networkValue(
     noIp: String,
 ): String {
     val ip = row.ipv4.joinToString(separator = ", ").ifEmpty { noIp }
+    if (HuNetTransport.HOTSPOT in row.transports) return ip
     val internet = if (row.validated) internetYes else internetNo
     return if (row.isDefault) "$ip · $internet · $defaultRoute" else "$ip · $internet"
 }
