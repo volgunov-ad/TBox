@@ -713,12 +713,17 @@ class AutomationActionExecutor(
         }
     }
 
-    private fun setPlatformVolume(
+    private suspend fun setPlatformVolume(
         channel: PlatformAudioDomain.VolumeChannel,
         value: Int,
         label: String,
     ): AutomationActionResult {
-        val ok = PlatformAudioRepository.setVolume(channel, value)
+        // OpenOS and Adayo SettingsSvc accept mixer writes on the main looper,
+        // the same thread the volume widget uses. The external API runs actions
+        // on a worker thread, and that write comes back as a volume error.
+        val ok = withContext(Dispatchers.Main) {
+            PlatformAudioRepository.setVolume(channel, value)
+        }
         return AutomationActionResult(
             ok,
             if (ok) "Громкость $label установлена" else "Ошибка громкости $label",
