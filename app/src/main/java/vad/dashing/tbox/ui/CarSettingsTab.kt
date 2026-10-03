@@ -148,7 +148,10 @@ private fun epsModeOptions(): List<CarSettingsModeOption> = listOf(
 
 @Composable
 private fun hvacCustomModeOptions(): List<CarSettingsModeOption> = listOf(
-    CarSettingsModeOption(MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO, "ECO"),
+    CarSettingsModeOption(
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO,
+        stringResource(R.string.car_settings_option_eco),
+    ),
     CarSettingsModeOption(
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT,
         stringResource(R.string.car_settings_option_comfort),

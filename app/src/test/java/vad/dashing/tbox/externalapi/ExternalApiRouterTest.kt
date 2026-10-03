@@ -203,6 +203,8 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("media_play_pause"))
         assertTrue(response.body.contains("toggleMediaMute"))
         assertTrue(response.body.contains("Автомобиль"))
+        assertTrue(response.body.contains("modeEco: \"Эко\""))
+        assertTrue(response.body.contains("modeEco: \"ECO\""))
         assertTrue(response.body.contains("front_left_seat_mode"))
         assertTrue(response.body.contains("lang=\"ru\""))
         assertTrue(response.body.contains("var lang = \"ru\" === \"en\" ? STR.en : STR.ru;"))
