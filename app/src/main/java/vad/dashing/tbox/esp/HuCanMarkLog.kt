@@ -85,6 +85,10 @@ object HuCanMarkLog {
     /**
      * Map int consts → names; skip ambiguous ids and value-alias fields
      * (`*_ON` / `*_OFF` / `*_VALUE` / mode enums).
+     *
+     * Relies on static `const val` fields surviving R8 — see proguard-rules.pro
+     * keep for [vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId] /
+     * [vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId].
      */
     internal fun uniqueConstNameMap(clazz: Class<*>): Map<Int, String> {
         val first = LinkedHashMap<Int, String>()

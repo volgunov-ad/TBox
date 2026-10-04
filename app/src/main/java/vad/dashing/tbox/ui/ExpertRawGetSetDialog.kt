@@ -1,23 +1,19 @@
 package vad.dashing.tbox.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,7 +45,6 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpertRawGetSetDialog(
     visible: Boolean,
@@ -69,7 +64,6 @@ fun ExpertRawGetSetDialog(
     val modeStorage = mode.storageValue
 
     var filterText by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<ExpertRawCanParam?>(catalog.firstOrNull()) }
     var writeEnabled by remember { mutableStateOf(false) }
     var setValueText by remember { mutableStateOf("") }
@@ -78,17 +72,7 @@ fun ExpertRawGetSetDialog(
     var showSetConfirm by remember { mutableStateOf(false) }
 
     val filtered = remember(filterText, catalog) {
-        val q = filterText.trim()
-        if (q.isEmpty()) {
-            catalog
-        } else {
-            catalog.filter { param ->
-                param.name.contains(q, ignoreCase = true) ||
-                    param.mbCanId.toString().contains(q) ||
-                    param.vhalReadId?.toString()?.contains(q) == true ||
-                    param.vhalWriteId?.toString()?.contains(q) == true
-            }
-        }
+        ExpertRawCanCatalog.filterParams(catalog, filterText)
     }
 
     fun runGet() {
@@ -148,8 +132,8 @@ fun ExpertRawGetSetDialog(
         ) {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .fillMaxSize()
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 AppAlertDialogTitle(stringResource(R.string.expert_raw_get_set_title))
@@ -166,56 +150,42 @@ fun ExpertRawGetSetDialog(
 
                 OutlinedTextField(
                     value = filterText,
-                    onValueChange = {
-                        filterText = it
-                        expanded = true
-                    },
+                    onValueChange = { filterText = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text(stringResource(R.string.expert_raw_get_set_filter)) },
                     textStyle = MaterialTheme.typography.tboxBody,
                 )
 
-                ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = it },
-                    modifier = Modifier.fillMaxWidth(),
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    OutlinedTextField(
-                        value = selected?.displayLabel() ?: "",
-                        onValueChange = {},
-                        readOnly = true,
-                        modifier = Modifier
-                            .menuAnchor(
-                                type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                enabled = true,
-                            )
-                            .fillMaxWidth(),
-                        label = { Text(stringResource(R.string.expert_raw_get_set_param)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        textStyle = MaterialTheme.typography.tboxBody,
-                    )
-                    ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                        modifier = Modifier.heightIn(max = 320.dp),
-                    ) {
-                        filtered.take(200).forEach { param ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = param.displayLabel(),
-                                        style = MaterialTheme.typography.tboxCaption,
-                                    )
-                                },
-                                onClick = {
-                                    selected = param
-                                    expanded = false
-                                    statusText = ""
-                                },
-                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                            )
-                        }
+                    items(
+                        filtered,
+                        key = { "${it.bus.name}-${it.mbCanId}-${it.name}" },
+                    ) { param ->
+                        val isSelected = param == selected
+                        Text(
+                            text = param.displayLabel(),
+                            style = MaterialTheme.typography.tboxCaption,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    onClick = rememberWrappedOnClick {
+                                        selected = param
+                                        statusText = ""
+                                    },
+                                )
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                        )
                     }
                 }
 

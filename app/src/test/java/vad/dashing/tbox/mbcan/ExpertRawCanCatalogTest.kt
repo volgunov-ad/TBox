@@ -35,6 +35,25 @@ class ExpertRawCanCatalogTest {
     }
 
     @Test
+    fun filterParams_emptyQueryReturnsAll() {
+        val params = ExpertRawCanCatalog.allParams()
+        assertEquals(params, ExpertRawCanCatalog.filterParams(params, ""))
+        assertEquals(params, ExpertRawCanCatalog.filterParams(params, "   "))
+        assertTrue(params.size > 20)
+    }
+
+    @Test
+    fun filterParams_matchesNameAndIds() {
+        val params = ExpertRawCanCatalog.allParams()
+        val byName = ExpertRawCanCatalog.filterParams(params, "VOLUME")
+        assertTrue(byName.any { it.name == "VOLUME" })
+        val volume = params.first { it.name == "VOLUME" && it.bus == ExpertRawCanBus.Audio }
+        val byId = ExpertRawCanCatalog.filterParams(params, volume.mbCanId.toString())
+        assertTrue(byId.any { it.name == "VOLUME" && it.bus == ExpertRawCanBus.Audio })
+        assertTrue(ExpertRawCanCatalog.filterParams(params, "zzz-no-such-param").isEmpty())
+    }
+
+    @Test
     fun formatIdsSummary_a10_showsSeparateReadWriteWhenTheyDiffer() {
         val param = ExpertRawCanCatalog.allParams().firstOrNull {
             it.mbCanId == MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF

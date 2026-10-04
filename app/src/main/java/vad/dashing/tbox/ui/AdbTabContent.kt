@@ -56,6 +56,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.adb.AdbRepository
 import vad.dashing.tbox.adb.AdbShellScriptParser
+import vad.dashing.tbox.adb.HuAdbControl
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -76,6 +77,8 @@ fun AdbTabContent(
     val usbCandidates by AdbRepository.usbCandidates.collectAsStateWithLifecycle()
     val logLines by AdbRepository.consoleLog.collectAsStateWithLifecycle()
     val scriptRun by AdbRepository.scriptRun.collectAsStateWithLifecycle()
+    val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
+    val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     var host by rememberSaveable(savedHost) { mutableStateOf(savedHost) }
     var port by rememberSaveable(savedPort) { mutableStateOf(savedPort.toString()) }
     var mode by rememberSaveable(savedMode) { mutableStateOf(savedMode) }
@@ -146,6 +149,13 @@ fun AdbTabContent(
     LaunchedEffect(Unit) {
         AdbRepository.initialize(context)
         AdbRepository.refreshUsbDevices()
+        settingsViewModel.refreshHuAdbState()
+    }
+
+    LaunchedEffect(huAdbError) {
+        val message = huAdbError ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        settingsViewModel.consumeHuAdbError()
     }
 
     LaunchedEffect(usbCandidates) {
@@ -280,6 +290,13 @@ fun AdbTabContent(
         }
 
         if (mode == "tcp") {
+            SettingSwitch(
+                huAdbState.tcpEnabled,
+                { enabled -> settingsViewModel.setHuAdbTcpEnabled(enabled) },
+                stringResource(R.string.settings_adb_tcp_title),
+                stringResource(R.string.settings_adb_tcp_desc),
+                !huAdbState.readFailed,
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),

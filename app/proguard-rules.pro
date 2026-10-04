@@ -38,3 +38,13 @@
 -keep class vad.dashing.tbox.hotspot.HuSoftApMain {
     public static void main(java.lang.String[]);
 }
+
+# Expert raw Get/Set and HuCanMarkLog resolve names via Class.getDeclaredFields.
+# Kotlin `const val` is inlined at call sites; R8 then drops the unused static
+# fields and the catalog / prop-name maps become empty in release APKs.
+-keep class vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId {
+    *;
+}
+-keep class vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId {
+    *;
+}

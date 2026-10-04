@@ -51,6 +51,7 @@ object ExpertRawCanCatalog {
     fun allParams(): List<ExpertRawCanParam> {
         // Catalog display uses explicit maps only (no firmware JSON / Log probe).
         // Live Get/Set still goes through resolveRead/WritePropertyId on device.
+        // Names come from uniqueConstNameMap (needs kept const fields in release).
         val vehicle = HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
             .entries
             .map { (id, name) ->
@@ -77,6 +78,18 @@ object ExpertRawCanCatalog {
             compareBy<ExpertRawCanParam> { it.bus.ordinal }
                 .thenBy { it.name },
         )
+    }
+
+    /** Empty [query] returns [params] unchanged (no HU-mode filtering). */
+    fun filterParams(params: List<ExpertRawCanParam>, query: String): List<ExpertRawCanParam> {
+        val q = query.trim()
+        if (q.isEmpty()) return params
+        return params.filter { param ->
+            param.name.contains(q, ignoreCase = true) ||
+                param.mbCanId.toString().contains(q) ||
+                param.vhalReadId?.toString()?.contains(q) == true ||
+                param.vhalWriteId?.toString()?.contains(q) == true
+        }
     }
 
     fun formatIdsSummary(param: ExpertRawCanParam, mode: HeadUnitCanModeLabel): String {

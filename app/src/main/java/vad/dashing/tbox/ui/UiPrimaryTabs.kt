@@ -829,10 +829,8 @@ fun SettingsTabContent(
         UniversalCanRepository.warmUpAvailabilityForUi()
     }
 
-    LaunchedEffect(isExpertModeEnabled) {
-        if (isExpertModeEnabled) {
-            settingsViewModel.refreshHuAdbState()
-        }
+    LaunchedEffect(Unit) {
+        settingsViewModel.refreshHuAdbState()
     }
 
     val huAdbErrorTitle = stringResource(R.string.settings_adb_apply_error_title)
@@ -1281,6 +1279,15 @@ fun SettingsTabContent(
             "",
             true
         )
+        SettingSwitch(
+            huAdbState.tcpEnabled,
+            { enabled ->
+                settingsViewModel.setHuAdbTcpEnabled(enabled)
+            },
+            stringResource(R.string.settings_adb_tcp_title),
+            stringResource(R.string.settings_adb_tcp_desc),
+            !huAdbState.readFailed
+        )
 
         if (isExpertModeEnabled) {
             SettingSwitch(
@@ -1298,15 +1305,6 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_deep_diagnostics_title),
                 stringResource(R.string.settings_mbcan_deep_diagnostics_desc),
                 true
-            )
-            SettingSwitch(
-                huAdbState.tcpEnabled,
-                { enabled ->
-                    settingsViewModel.setHuAdbTcpEnabled(enabled)
-                },
-                stringResource(R.string.settings_adb_tcp_title),
-                stringResource(R.string.settings_adb_tcp_desc),
-                !huAdbState.readFailed
             )
             SettingSwitch(
                 huAdbState.usbEnabled,
