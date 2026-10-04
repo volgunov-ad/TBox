@@ -48,21 +48,21 @@ object HvacClimateCanRepository {
         _hvacFrontOffState.value = HvacClimateDomain.decodeHvacFrontOffVhalRaw(raw)
     }
 
-    fun applyTempLeftMbCan(raw: Int) {
-        _hvacTempLeftCelsius.value = HvacClimateDomain.mbCanTempRawToCelsius(raw)
+    fun applyTempLeftReported(raw: Number) {
+        _hvacTempLeftCelsius.value = HvacClimateDomain.decodeHvacSetpointRaw(raw)
     }
 
-    fun applyTempLeftVhal(raw: Int) {
-        _hvacTempLeftCelsius.value = HvacClimateDomain.vhalTempRawToCelsius(raw)
+    fun applyTempRightReported(raw: Number) {
+        _hvacTempRightCelsius.value = HvacClimateDomain.decodeHvacSetpointRaw(raw)
     }
 
-    fun applyTempRightMbCan(raw: Int) {
-        _hvacTempRightCelsius.value = HvacClimateDomain.mbCanTempRawToCelsius(raw)
-    }
+    fun applyTempLeftMbCan(raw: Int) = applyTempLeftReported(raw)
 
-    fun applyTempRightVhal(raw: Int) {
-        _hvacTempRightCelsius.value = HvacClimateDomain.vhalTempRawToCelsius(raw)
-    }
+    fun applyTempLeftVhal(raw: Int) = applyTempLeftReported(raw)
+
+    fun applyTempRightMbCan(raw: Int) = applyTempRightReported(raw)
+
+    fun applyTempRightVhal(raw: Int) = applyTempRightReported(raw)
 
     fun applyFanSpeed(raw: Int) {
         _hvacFanSpeed.value = raw.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }

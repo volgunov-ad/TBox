@@ -11,8 +11,14 @@ import vad.dashing.tbox.automation.AutomationSignalReads
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValue
 import vad.dashing.tbox.automation.AutomationSignalValueType
+import vad.dashing.tbox.automation.huInterestForSignal
+import vad.dashing.tbox.mbcan.MbCanSignal
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 class ExternalApiSignalReader {
+    private val headUnitInterestLock = Any()
+    private var headUnitInterest: Set<MbCanSignal> = emptySet()
+
     suspend fun read(key: AutomationSignalKey): AutomationSignalValue {
         val flow = AutomationSignalReads.flowFor(key) ?: return AutomationSignalValue.Unavailable
         return withTimeoutOrNull(500) { flow.first() } ?: AutomationSignalValue.Unavailable
@@ -22,6 +28,9 @@ class ExternalApiSignalReader {
         ids: List<String>,
         source: AutomationSignalSource,
     ): JSONObject {
+        if (source == AutomationSignalSource.HEAD_UNIT) {
+            ensureHeadUnitSignals(ids)
+        }
         val observedAt = SystemClock.elapsedRealtime()
         val signals = org.json.JSONArray()
         ids.forEach { rawId ->
@@ -48,7 +57,32 @@ class ExternalApiSignalReader {
             .put("signals", signals)
     }
 
+    /**
+     * Widget interests do not cover every signal the page asks for. Without this,
+     * a zone that has no tile on the head unit stays empty in the snapshot.
+     */
+    private suspend fun ensureHeadUnitSignals(ids: List<String>) {
+        val signals = ids.mapNotNull { rawId ->
+            AutomationSignalId.fromStorageKey(rawId)?.let { huInterestForSignal(it) }
+        }.toSet()
+        if (signals.isEmpty()) return
+        val changed = synchronized(headUnitInterestLock) {
+            if (signals == headUnitInterest) {
+                false
+            } else {
+                headUnitInterest = signals
+                true
+            }
+        }
+        if (changed) {
+            UniversalCanRepository.setSourceSignals(HEAD_UNIT_SOURCE_ID, signals)
+        }
+        UniversalCanRepository.refreshSignalsNow(signals)
+    }
+
     companion object {
+        private const val HEAD_UNIT_SOURCE_ID = "external-api"
+
         fun signalToJson(
             id: String,
             source: AutomationSignalSource,
