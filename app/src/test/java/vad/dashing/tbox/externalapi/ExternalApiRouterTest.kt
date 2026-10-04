@@ -202,6 +202,7 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("media_position_ms"))
         assertTrue(response.body.contains("media_play_pause"))
         assertTrue(response.body.contains("toggleMediaMute"))
+        assertTrue(response.body.contains("volume-controls"))
         assertTrue(response.body.contains("Автомобиль"))
         assertTrue(response.body.contains("modeEco: \"Эко\""))
         assertTrue(response.body.contains("modeEco: \"ECO\""))

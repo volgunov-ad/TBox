@@ -32,6 +32,9 @@ internal object AdayoSettingsService {
     fun setInt(methodName: String, arg1: Int, arg2: Int): Boolean =
         invokeNumber(methodName, intParams(2), arrayOf(arg1, arg2)) != null
 
+    fun setInt(methodName: String, arg1: Int, arg2: Int, arg3: Int): Boolean =
+        invokeNumber(methodName, intParams(3), arrayOf(arg1, arg2, arg3)) != null
+
     private fun intParams(count: Int): Array<Class<*>?> =
         Array(count) { Int::class.javaPrimitiveType }
 

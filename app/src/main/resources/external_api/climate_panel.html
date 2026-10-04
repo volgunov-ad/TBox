@@ -61,6 +61,17 @@
     .row-label { min-width: 7.5em; }
     .stepper { display: flex; align-items: center; gap: 8px; }
     .readout { min-width: 4.2em; text-align: center; font-size: 22px; font-variant-numeric: tabular-nums; }
+    .volume-row .row-label { min-width: 0; }
+    .volume-controls {
+      display: flex;
+      flex: 1 1 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .volume-controls .readout { min-width: 2.4em; }
     .np-title { font-size: 18px; font-weight: 650; }
     .np-artist { color: var(--muted); font-size: 14px; min-height: 1.2em; }
     .progress { height: 6px; background: var(--line); border-radius: 99px; margin: 12px 0 6px; overflow: hidden; }
@@ -552,9 +563,15 @@
         root.appendChild(time);
         root.appendChild(transport);
         var row = stepperRow(lang.media, "volume-readout", function () { bumpVolume(false); }, function () { bumpVolume(true); });
+        row.className += " volume-row";
+        var stepper = row.querySelector(".stepper");
+        var controls = document.createElement("div");
+        controls.className = "volume-controls";
+        stepper.parentNode.insertBefore(controls, stepper);
+        controls.appendChild(stepper);
         var mute = button(lang.sound, toggleMediaMute);
         mute.id = "media-mute";
-        row.querySelector(".stepper").appendChild(mute);
+        controls.appendChild(mute);
         root.appendChild(row);
       }
 
