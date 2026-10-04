@@ -47,9 +47,14 @@ class WidgetsRepositoryDescriptionTest {
     }
 
     @Test
-    fun speedLimiterWidgetIsOfferedInPicker() {
-        assertTrue(
+    fun speedLimiterWidgetIsHiddenFromPickerButStillCataloged() {
+        assertEquals(true, SPEED_LIMITER_UI_HIDDEN)
+        assertFalse(
             WidgetsRepository.getAvailableDataKeysWidgets().contains(SPEED_LIMITER_WIDGET_DATA_KEY),
+        )
+        assertFalse(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(SPEED_LIMITER_WIDGET_DATA_KEY),
         )
         assertNotNull(WidgetsRepository.getDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))
         assertNotNull(WidgetsRepository.getActionsDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))

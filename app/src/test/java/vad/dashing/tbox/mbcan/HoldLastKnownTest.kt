@@ -33,6 +33,7 @@ class HoldLastKnownTest {
         assertTrue(signals.contains(MbCanSignal.TjaIca))
         assertTrue(signals.contains(MbCanSignal.LasModeSelection))
         assertTrue(signals.contains(MbCanSignal.BodyComfort))
+        assertFalse(signals.contains(MbCanSignal.SpeedLimiter))
         assertTrue(signals.any { it.subscribeDataTypes.contains("eMBCAN_CFG_AUDIO") })
         assertTrue(signals.any { it.subscribeDataTypes.contains("eMBCAN_CFG_VEHICLE") })
         // Union is larger than any single section (Audio has 9 CAN signals after platform mixer).
