@@ -4,6 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
@@ -12,6 +15,8 @@ import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.ui.carSettingsTabMbCanSignals
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class SpeedLimiterUiHiddenTest {
     @Test
     fun flagHidesConfigurableLimiterNotSlaSign() {
