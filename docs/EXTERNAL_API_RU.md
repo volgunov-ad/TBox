@@ -275,7 +275,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 
 ### 7.4. `GET /v1/signals`
 
-Требует Bearer. Единичный snapshot (без подписки):
+Требует Bearer. Единичный snapshot, без потока событий. Для `source=head_unit` чтение регистрирует интерес CAN этих сигналов и сразу делает pull, поэтому значение есть и без виджета на экране ГУ:
 
 ```
 GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit

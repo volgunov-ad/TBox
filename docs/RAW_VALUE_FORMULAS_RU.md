@@ -28,7 +28,7 @@
 | Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | mbCAN: `fPressure` bar as-is (−1 invalid) | VHAL: **raw × 0.0275** (≤0 или >3.5 → null) | бар |
 | t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | mbCAN: `nTemperature` °C as-is (−100 invalid) | VHAL: **raw − 60** (raw ≤0 или ≥150 → null) | °C |
 | t° снаружи | CAN `0x535`: **raw×0.5 − 40** | signed byte °C; **87** = invalid | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | °C |
-| HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: **raw/10** (160…300) | VHAL: **raw/2** (32…60) | °C |
+| HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: `decodeHvacSetpointRaw` | VHAL: тот же decode (×2 / ×10 / уже °C) | °C |
 | SLA знак | — | LKA Spdlimit: **(raw−1)×5** | то же | км/ч |
 
 ---
@@ -149,7 +149,7 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Gas pedal % | `getfGasPedalPosition` (уже %) | **289414943** | A9: as-is 0…100; A10: **% = raw × 100 / 255** (raw 0…255); invalid ≠ 0 → null | — | % |
 | Instant fuel | `getFuelRollingCounter` | **289414918** | A9: **raw / 10**; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
 | Average fuel | `getICM_4_AverageFuelConsume` | **289414933** | A9: float as-is; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
-| HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** | A9: **°C = raw/10** (160…300, шаг 5); A10: **°C = raw/2** (32…60) | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
+| HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** (если статус пустой — эхо записи **289415313** / **289415314**) | `decodeHvacSetpointRaw`: **32…60 → raw/2**, **160…300 → raw/10**, **16…30 шаг 0,5 → уже °C** | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
 | Fan speed | **38** | **289415171** | 0…7 identity | identity | уровень |
 | SLA recognized limit | LKA `FCM_2_SLASpdlimit` | **289415711** | **(raw − 1) × 5**; raw≤1 → null; raw>27 → **130** | — | км/ч |
 | Limiter target | DataStore | write resolve(**253**) | clamp 0…150, шаг 5 | identity km/h | км/ч |
@@ -178,8 +178,7 @@ TBox Cycle:   V=raw/1000; P=raw/36; v=raw/16; a=raw/1000−2; rpm=raw/4; yaw=raw
 TBox CAN:     steer=(raw−32767)/16; rpm=raw/4; oilT=raw−40; speed=raw/16; V=raw/10
               L/100km=raw/160; engT=raw×0.75−48; tyreT=raw−60; P=raw/36
               setT=raw/4; cabin/out=raw×0.5−40
-mbCAN HVAC:   °C = raw/10
-VHAL HVAC:    °C = raw/2
+mbCAN/VHAL HVAC setpoint: 32…60 → raw/2; 160…300 → raw/10; 16…30 шаг 0,5 → уже °C
 VHAL RPM:     rpm = raw×4
 VHAL coolant: °C = raw×0.75−48
 VHAL gas pedal: % = raw×100/255

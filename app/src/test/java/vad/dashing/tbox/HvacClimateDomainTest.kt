@@ -23,6 +23,17 @@ class HvacClimateDomainTest {
     }
 
     @Test
+    fun decodeHvacSetpointRaw_acceptsEachReportedScale() {
+        assertEquals(23.0f, HvacClimateDomain.decodeHvacSetpointRaw(46)!!, 0.001f)
+        assertEquals(23.0f, HvacClimateDomain.decodeHvacSetpointRaw(230)!!, 0.001f)
+        assertEquals(23.0f, HvacClimateDomain.decodeHvacSetpointRaw(23)!!, 0.001f)
+        assertEquals(22.5f, HvacClimateDomain.decodeHvacSetpointRaw(22.5f)!!, 0.001f)
+        assertEquals(22.5f, HvacClimateDomain.decodeHvacSetpointRaw(45)!!, 0.001f)
+        assertNull(HvacClimateDomain.decodeHvacSetpointRaw(0))
+        assertNull(HvacClimateDomain.decodeHvacSetpointRaw(20.2f))
+    }
+
+    @Test
     fun celsiusRoundTrip_mbCanAndVhal() {
         val celsius = 23.5f
         val mbCan = HvacClimateDomain.celsiusToMbCanTempRaw(celsius)

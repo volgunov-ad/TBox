@@ -2139,6 +2139,24 @@ object Android10VhalRepository {
         return bridge?.getIntProperty(propertyId)
     }
 
+    /**
+     * Status id first, then the write echo. Int and float are both accepted:
+     * a zone can arrive as °C×2, °C×10, or already in °C.
+     */
+    private fun readHvacSetpointRaw(mbCanPropertyId: Int): Number? {
+        val propertyIds = listOfNotNull(
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(mbCanPropertyId) ?: mbCanPropertyId,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(mbCanPropertyId),
+        ).distinct()
+        for (propertyId in propertyIds) {
+            val asInt = bridge?.getIntProperty(propertyId)
+            if (asInt != null && HvacClimateDomain.decodeHvacSetpointRaw(asInt) != null) return asInt
+            val asFloat = bridge?.getFloatProperty(propertyId)
+            if (asFloat != null && HvacClimateDomain.decodeHvacSetpointRaw(asFloat) != null) return asFloat
+        }
+        return null
+    }
+
     private suspend fun applyPushPropertyUpdate(propertyId: Int, rawValue: Any?) {
         fun resolved(id: Int): Int = FirmwareVehicleJsonMapper.resolveReadPropertyId(id) ?: id
         val raw = asIntValue(rawValue)
@@ -2302,9 +2320,9 @@ object Android10VhalRepository {
                     HvacClimateCanRepository.applyBlowModeVhal(it)
                 }
             resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT) ->
-                raw?.let { HvacClimateCanRepository.applyTempLeftVhal(it) }
+                (rawValue as? Number)?.let { HvacClimateCanRepository.applyTempLeftReported(it) }
             resolved(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT) ->
-                raw?.let { HvacClimateCanRepository.applyTempRightVhal(it) }
+                (rawValue as? Number)?.let { HvacClimateCanRepository.applyTempRightReported(it) }
             resolved(MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED) ->
                 raw?.let { HvacClimateCanRepository.applyFanSpeed(it) }
             resolved(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) ->
@@ -3104,12 +3122,12 @@ object Android10VhalRepository {
                     ?.let { HvacClimateCanRepository.applyFrontOffVhal(it) }
             }
             MbCanSignal.HvacTempLeft -> {
-                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT)
-                    ?.let { HvacClimateCanRepository.applyTempLeftVhal(it) }
+                readHvacSetpointRaw(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT)
+                    ?.let { HvacClimateCanRepository.applyTempLeftReported(it) }
             }
             MbCanSignal.HvacTempRight -> {
-                readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT)
-                    ?.let { HvacClimateCanRepository.applyTempRightVhal(it) }
+                readHvacSetpointRaw(MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT)
+                    ?.let { HvacClimateCanRepository.applyTempRightReported(it) }
             }
             MbCanSignal.HvacFanSpeed -> {
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED)

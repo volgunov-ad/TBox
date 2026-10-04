@@ -1,5 +1,6 @@
 package vad.dashing.tbox.mbcan
 
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Canonical HVAC custom / energy modes use mbCAN write values 1/2/3. */
@@ -79,6 +80,29 @@ object HvacClimateDomain {
 
     fun vhalTempRawToCelsius(raw: Int): Float? =
         raw.takeIf { it in TEMP_VHAL_MIN..TEMP_VHAL_MAX }?.div(2f)
+
+    /**
+     * Setpoint as reported by mbCAN or VHAL.
+     *
+     * The two zones are not always on the same scale: one side can be °C×2 (32…60),
+     * the other °C×10 (160…300) or already °C (16…30, including halves).
+     */
+    fun decodeHvacSetpointRaw(raw: Number): Float? {
+        val value = raw.toFloat()
+        if (!value.isFinite()) return null
+        val nearestInt = value.roundToInt()
+        if (abs(value - nearestInt) < 0.05f) {
+            when (nearestInt) {
+                in TEMP_VHAL_MIN..TEMP_VHAL_MAX -> return nearestInt / 2f
+                in TEMP_MB_CAN_MIN..TEMP_MB_CAN_MAX -> return nearestInt / 10f
+            }
+        }
+        if (value in 16f..30f) {
+            val tenths = (value * 10f).roundToInt()
+            if (tenths % 5 == 0) return tenths / 10f
+        }
+        return null
+    }
 
     fun celsiusToMbCanTempRaw(celsius: Float): Int {
         val tenths = (celsius * 10f).toInt()
