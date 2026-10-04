@@ -157,269 +157,269 @@ object MbCanCatalog {
 
 object MbCanKnownVehiclePropertyId {
     // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.
-    const val STEERING_WHEEL_HEAT_SWITCH = 188
+    @JvmField val STEERING_WHEEL_HEAT_SWITCH = 188
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH]. */
-    const val WIPER_MAINTENANCE_SWITCH = 185
+    @JvmField val WIPER_MAINTENANCE_SWITCH = 185
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH]. */
-    const val PARKING_RADAR_SWITCH = 218
+    @JvmField val PARKING_RADAR_SWITCH = 218
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_AVH_SWITCH] — Auto Hold. */
-    const val AVH_SWITCH = 142
+    @JvmField val AVH_SWITCH = 142
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_HDC_SWITCH] — Hill Descent Control. */
-    const val HDC_SWITCH = 143
+    @JvmField val HDC_SWITCH = 143
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH] — ESP off. */
-    const val ESP_OFF_SWITCH = 144
+    @JvmField val ESP_OFF_SWITCH = 144
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_LIGHTCONTROL] —
      * headlight mode: **1** AUTO, **2** PARK, **3** LOW, **4** OFF
      * (stock A9 [Em_HeadlampControl_ListItem_value] / A10 [CarOutLightFragment]).
      */
-    const val LIGHTCONTROL = 135
-    const val LIGHTCONTROL_AUTO = 1
-    const val LIGHTCONTROL_PARK = 2
-    const val LIGHTCONTROL_LOW = 3
-    const val LIGHTCONTROL_OFF = 4
+    @JvmField val LIGHTCONTROL = 135
+    @JvmField val LIGHTCONTROL_AUTO = 1
+    @JvmField val LIGHTCONTROL_PARK = 2
+    @JvmField val LIGHTCONTROL_LOW = 3
+    @JvmField val LIGHTCONTROL_OFF = 4
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_REARFOGLIGHT] —
      * rear fog; mbCAN **1** off / **2** on; A10 VHAL **1** on / **2** off.
      */
-    const val REAR_FOG_LIGHT = 136
+    @JvmField val REAR_FOG_LIGHT = 136
     /** Door auto lock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
-    const val DOOR_AUTO_LOCK = 1
+    @JvmField val DOOR_AUTO_LOCK = 1
     /** Ignition-off door unlock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
-    const val DOOR_IGNOFF_UNLOCK = 2
+    @JvmField val DOOR_IGNOFF_UNLOCK = 2
     /** Follow-me-home delay: mbCAN 30/60/3(off), VHAL 1/2/3(off). */
-    const val HEADLIGHTS_HOMELIGHT_DELAY = 7
+    @JvmField val HEADLIGHTS_HOMELIGHT_DELAY = 7
     /** Driver-only (1) or all-door (2) unlock. */
-    const val DRIVER_UNLOCK_MODE = 131
+    @JvmField val DRIVER_UNLOCK_MODE = 131
     /** Remote lock feedback: light+horn (1), light (2), horn (3). */
-    const val DEFENCES_PROMPT = 3
+    @JvmField val DEFENCES_PROMPT = 3
     /** Wiper sensitivity level 1..4. */
-    const val WIPER_SENSITIVITY = 191
+    @JvmField val WIPER_SENSITIVITY = 191
     /** Rear wiper: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
-    const val REAR_WIPER = 186
+    @JvmField val REAR_WIPER = 186
     /** Low-beam height UI level 1..4 (VHAL feedback/write are inverted). */
-    const val HIGHBEAM_ADJUST = 129
+    @JvmField val HIGHBEAM_ADJUST = 129
     /** Turn-signal flash count 1..3 (VHAL feedback is zero-based). */
-    const val TURN_FLASH_COUNT = 8
+    @JvmField val TURN_FLASH_COUNT = 8
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION] —
      * lane assist mode: **1** LDW, **2** LKA, **3** OFF.
      */
-    const val LAS_MODE_SELECTION = 17
-    const val LAS_MODE_LDW = 1
-    const val LAS_MODE_LKA = 2
-    const val LAS_MODE_OFF = 3
+    @JvmField val LAS_MODE_SELECTION = 17
+    @JvmField val LAS_MODE_LDW = 1
+    @JvmField val LAS_MODE_LKA = 2
+    @JvmField val LAS_MODE_OFF = 3
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA] — 1 off, 2 on. */
-    const val TJA_ICA_SWITCH = 23
+    @JvmField val TJA_ICA_SWITCH = 23
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eDVD_LDWSWITCH] —
      * LDW master switch: mbCAN **1** Off / **2** On (A9 log co-moves with [LAS_MODE_SELECTION]).
      */
-    const val LDW_SWITCH = 80
+    @JvmField val LDW_SWITCH = 80
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eTIMEGAPSET1REQ] —
      * ACC time-gap set request: raw **1…4** (A9 log: 1 with TJA on, 4 with TJA off).
      */
-    const val ACC_TIME_GAP_SET = 95
+    @JvmField val ACC_TIME_GAP_SET = 95
     /** Blind-spot detection: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
-    const val BLIND_AREA_DETECTION = 15
+    @JvmField val BLIND_AREA_DETECTION = 15
     /** Door-open warning: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
-    const val DOOR_OPEN_WARNING = 13
+    @JvmField val DOOR_OPEN_WARNING = 13
     /** Forward-collision warning master; enabled value is 2 on both backends. */
-    const val FCW_SWITCH = 96
+    @JvmField val FCW_SWITCH = 96
     /** Coupled with [FCW_SWITCH] by stock CarSettings. */
-    const val ACC_AUTOBRAKE_SWITCH = 20
+    @JvmField val ACC_AUTOBRAKE_SWITCH = 20
     /** Coupled with [FCW_SWITCH] by stock CarSettings. */
-    const val SAFE_DISTANCE_WARNING = 22
+    @JvmField val SAFE_DISTANCE_WARNING = 22
     /** FCW warning-distance setting. */
-    const val FCW_SENSITIVITY = 97
+    @JvmField val FCW_SENSITIVITY = 97
     /** LDW sensitivity: mbCAN 0 low / 1 high. */
-    const val LAS_SENSITIVITY_LEVEL = 16
+    @JvmField val LAS_SENSITIVITY_LEVEL = 16
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH] —
      * HMA / intelligent high beam on A9: stock CarSettings `switchIntelligentHighBeamsHMA`
      * binds this id (**19**; enum name is misleading). 1 off / 2 on. The old A9 id
      * **130** (`eVEHICLE_SMART_HIGHBEAM_SWITCH`) never reflects or drives HMA on this car.
      */
-    const val HMA_SWITCH = 19
+    @JvmField val HMA_SWITCH = 19
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_CUSTOM] — ECO/Comfort/Strong; write 1/2/3. */
-    const val HVAC_CUSTOM = 140
-    const val HVAC_CUSTOM_ECO = 1
-    const val HVAC_CUSTOM_COMFORT = 2
-    const val HVAC_CUSTOM_STRONG = 3
+    @JvmField val HVAC_CUSTOM = 140
+    @JvmField val HVAC_CUSTOM_ECO = 1
+    @JvmField val HVAC_CUSTOM_COMFORT = 2
+    @JvmField val HVAC_CUSTOM_STRONG = 3
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ] — AC MAX; 1 off, 2 on. */
-    const val HVAC_AC_MAX = 228
+    @JvmField val HVAC_AC_MAX = 228
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] */
-    const val FRONT_WINDSCREEN_HEAT_SWITCH = 316
+    @JvmField val FRONT_WINDSCREEN_HEAT_SWITCH = 316
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors. */
-    const val HVAC_DEFROSTER_SWITCH = 41
+    @JvmField val HVAC_DEFROSTER_SWITCH = 41
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION] — property id. */
-    const val HVAC_AIR_RECIRCULATION = 39
+    @JvmField val HVAC_AIR_RECIRCULATION = 39
     /** [canSetVehicleParam]/[canGetVehicleParam] value: recirculation on. */
-    const val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
+    @JvmField val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
     /** Same property: recirculation off. */
-    const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
+    @JvmField val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
-    const val HVAC_POWER = 36
+    @JvmField val HVAC_POWER = 36
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY] —
      * AC clean when locked (stock ACSettings Set switch); mbCAN 1 off, 2 on.
      */
-    const val HVAC_BLOWER_DELAY = 52
+    @JvmField val HVAC_BLOWER_DELAY = 52
     /** mbCAN / [MBWTSwitch] on value for [HVAC_BLOWER_DELAY]. */
-    const val HVAC_BLOWER_DELAY_VALUE_ON = 2
+    @JvmField val HVAC_BLOWER_DELAY_VALUE_ON = 2
     /** mbCAN / [MBWTSwitch] off value for [HVAC_BLOWER_DELAY]. */
-    const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
+    @JvmField val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
-    const val HVAC_AUTO_STATE = 110
+    @JvmField val HVAC_AUTO_STATE = 110
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS] — anion purification; 1 off, 2 on. */
-    const val HVAC_AQS = 42
+    @JvmField val HVAC_AQS = 42
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SWITCH] — 1 off, 2 on (A9 only). */
-    const val FRAGRANCE_SWITCH = 33
+    @JvmField val FRAGRANCE_SWITCH = 33
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SMELL] — 1 Meteor, 2 Boss, 3 Tea (A9 only). */
-    const val FRAGRANCE_SMELL = 34
+    @JvmField val FRAGRANCE_SMELL = 34
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION] — 1 low, 2 mid, 3 high (A9 only). */
-    const val FRAGRANCE_CONCENTRATION = 35
+    @JvmField val FRAGRANCE_CONCENTRATION = 35
     /** First blowing after vehicle start: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
-    const val POWER_FIRST_BREATH = 53
+    @JvmField val POWER_FIRST_BREATH = 53
     /** Reduce fan speed while Bluetooth is active: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
-    const val BT_REDUCED_WIND_SPEED = 51
+    @JvmField val BT_REDUCED_WIND_SPEED = 51
     /** Automatic ventilation: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
-    const val HVAC_VENTILATION_AUTO_SWITCH = 141
+    @JvmField val HVAC_VENTILATION_AUTO_SWITCH = 141
     /** HUD master switch: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
-    const val HUD_SWITCH = 220
+    @JvmField val HUD_SWITCH = 220
     /** HUD height level, 1..10. */
-    const val HUD_HEIGHT = 221
+    @JvmField val HUD_HEIGHT = 221
     /** HUD brightness level, 1..10. */
-    const val HUD_BRIGHTNESS = 222
+    @JvmField val HUD_BRIGHTNESS = 222
     /** HUD display mode: 1 standard, 2 snow. */
-    const val HUD_DISPLAY_MODE = 223
+    @JvmField val HUD_DISPLAY_MODE = 223
     /** HUD automatic brightness: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
-    const val HUD_AUTO_BRIGHTNESS = 227
+    @JvmField val HUD_AUTO_BRIGHTNESS = 227
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_ICM_BRIGHTNESS_MODE] — 0 auto / 1 manual. */
-    const val ICM_BRIGHTNESS_MODE = 208
+    @JvmField val ICM_BRIGHTNESS_MODE = 208
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ] — manual level 1..10. */
-    const val ICM_BRIGHTNESS_MANUAL = 209
+    @JvmField val ICM_BRIGHTNESS_MANUAL = 209
     /** Overspeed alarm threshold, raw value maps to km/h through [CarSettingsHudDomain]. */
-    const val OVERSPEED_ALARM_SET = 296
+    @JvmField val OVERSPEED_ALARM_SET = 296
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
-    const val HVAC_TEMPERATURE_LEFT = 37
+    @JvmField val HVAC_TEMPERATURE_LEFT = 37
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_FR_TEMPERATURE] — right zone, °C×10. */
-    const val HVAC_TEMPERATURE_RIGHT = 111
+    @JvmField val HVAC_TEMPERATURE_RIGHT = 111
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_SPEED] — 0..7. */
-    const val HVAC_FAN_SPEED = 38
+    @JvmField val HVAC_FAN_SPEED = 38
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eFRONT_OFF] — front climate off; 1 running, 2 off. */
-    const val HVAC_FRONT_OFF = 90
+    @JvmField val HVAC_FRONT_OFF = 90
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYNCSWTICH_REQ] — dual-zone sync; 1 off, 2 on. */
-    const val HVAC_SYNC_SWITCH = 94
+    @JvmField val HVAC_SYNC_SWITCH = 94
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PLG_CONTROL] — power liftgate pulse. */
-    const val TRUNK_PLG_CONTROL = 134
+    @JvmField val TRUNK_PLG_CONTROL = 134
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_DOOR_TRUNK_POS] — max opening angle setting (stock dialog). */
-    const val DOOR_TRUNK_POS = 6
+    @JvmField val DOOR_TRUNK_POS = 6
     /** VHAL [R_0402_PLG_1_RearDoorStatus] — 0 closed, 1 open (stock [CarCommon3]). */
-    const val TRUNK_STATUS = 71343
+    @JvmField val TRUNK_STATUS = 71343
     /** PLG movement direction (A10 read); also BCM `nRearDoorMoveDir` push on A9. */
-    const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
+    @JvmField val TRUNK_REAR_DOOR_MOVE_DIR = 71341
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
-    const val MIRROR_FOLD_SWITCH = 230
+    @JvmField val MIRROR_FOLD_SWITCH = 230
     /** [MBVehicleProperty.eVEHICLE_PROPERTY_MIRROR_AUTOFOLD_SW] — 1 off, 2 on. */
-    const val MIRROR_AUTOFOLD_SW = 4
+    @JvmField val MIRROR_AUTOFOLD_SW = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
-    const val HVAC_FAN_DIRECTION = 40
+    @JvmField val HVAC_FAN_DIRECTION = 40
     /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
-    const val HVAC_FAN_DIRECTION_FACE = 1
-    const val HVAC_FAN_DIRECTION_FOOT = 2
-    const val HVAC_FAN_DIRECTION_FACE_FOOT = 3
-    const val HVAC_FAN_DIRECTION_DEFROST = 4
-    const val HVAC_FAN_DIRECTION_DEFROST_FOOT = 5
+    @JvmField val HVAC_FAN_DIRECTION_FACE = 1
+    @JvmField val HVAC_FAN_DIRECTION_FOOT = 2
+    @JvmField val HVAC_FAN_DIRECTION_FACE_FOOT = 3
+    @JvmField val HVAC_FAN_DIRECTION_DEFROST = 4
+    @JvmField val HVAC_FAN_DIRECTION_DEFROST_FOOT = 5
     /** VHAL blow modes (Android 10 [AcFragment.mWindModeIds]). */
-    const val HVAC_FAN_DIRECTION_VHAL_FACE = 0
-    const val HVAC_FAN_DIRECTION_VHAL_DEFROST_FOOT = 3
-    const val HVAC_FAN_DIRECTION_VHAL_DEFROST = 4
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_FACE = 0
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_DEFROST_FOOT = 3
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_DEFROST = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
-    const val CHG_WIRELESS_SWITCH = 264
+    @JvmField val CHG_WIRELESS_SWITCH = 264
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_STEERING_MODE] — 0–6. */
-    const val VEHICLE_PROPERTY_STEERING_MODE = 24
+    @JvmField val VEHICLE_PROPERTY_STEERING_MODE = 24
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_EPS_MODE] — 0–6. */
-    const val VEHICLE_PROPERTY_EPS_MODE = 25
+    @JvmField val VEHICLE_PROPERTY_EPS_MODE = 25
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_MODE] — 0–6. */
-    const val SYSTEM_MODE = 73
+    @JvmField val SYSTEM_MODE = 73
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_REBOOT] — head unit reboot via [canSetVehicleParam]. */
-    const val SYSTEM_REBOOT = 74
+    @JvmField val SYSTEM_REBOOT = 74
     /** Value written to [SYSTEM_REBOOT] to request HU reboot. */
-    const val SYSTEM_REBOOT_VALUE = 1
+    @JvmField val SYSTEM_REBOOT_VALUE = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE] — 0–6. */
-    const val VEHICLE_DRIVEMODE = 145
+    @JvmField val VEHICLE_DRIVEMODE = 145
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_POWERMODE] — 0–6. */
-    const val VEHICLE_POWERMODE = 147
+    @JvmField val VEHICLE_POWERMODE = 147
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE_6DCT_WET] — 0–6. */
-    const val VEHICLE_DRIVEMODE_6DCT_WET = 149
+    @JvmField val VEHICLE_DRIVEMODE_6DCT_WET = 149
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN] — SLA/TSR; 1 off, 2 on. */
-    const val VEHICLE_TSR_SWITCH = 18
+    @JvmField val VEHICLE_TSR_SWITCH = 18
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h raw.
      * Live read feeds the speed-limiter widget / car-settings raw field. VHAL map may be missing on some HUs.
      */
-    const val VEHICLE_SPEEDLIMIT_VALUESET = 253
+    @JvmField val VEHICLE_SPEEDLIMIT_VALUESET = 253
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — typically 1 off, 2 on (mbCAN).
      * Live read feeds widget active state / car-settings raw field. VHAL map may be missing on some HUs.
      */
-    const val VEHICLE_SPEEDLIMIT_SWITCH = 254
+    @JvmField val VEHICLE_SPEEDLIMIT_SWITCH = 254
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PM25_DISPLAY_TOGGLE] — 1 inside, 2 outside. */
-    const val VEHICLE_PM25_DISPLAY_TOGGLE = 163
+    @JvmField val VEHICLE_PM25_DISPLAY_TOGGLE = 163
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_UV_LAMP_REQ] — 1 off, 2 on, 3 auto. */
-    const val VEHICLE_UV_LAMP_REQ = 164
+    @JvmField val VEHICLE_UV_LAMP_REQ = 164
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_STERILIZE_STRENGTH_REQ] — 1 low, 2 medium, 3 high. */
-    const val VEHICLE_STERILIZE_STRENGTH_REQ = 165
+    @JvmField val VEHICLE_STERILIZE_STRENGTH_REQ = 165
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSOURCE_STATION_MODE] — 1 off, 2 on. */
-    const val SOURCE_STATION_MODE = 127
+    @JvmField val SOURCE_STATION_MODE = 127
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_VEHWASH_MODESET] — 1 off, 2 on. */
-    const val VEHICLE_VEHWASH_MODESET = 252
+    @JvmField val VEHICLE_VEHWASH_MODESET = 252
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICEL_BRAKE_PEDA_FEEL_MODE] — 0–6. */
-    const val VEHICEL_BRAKE_PEDA_FEEL_MODE = 300
-    const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
-    const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
+    @JvmField val VEHICEL_BRAKE_PEDA_FEEL_MODE = 300
+    @JvmField val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
+    @JvmField val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_LR_HEATVENTSW] — rear heat only (values 1–4). */
-    const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
+    @JvmField val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
-    const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+    @JvmField val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — main cruise switch (enable / full off). */
-    const val MFS_CRUISE_CONTROL = 210
+    @JvmField val MFS_CRUISE_CONTROL = 210
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CANCEL] — pause Active→Standby on Dashing. */
-    const val MFS_CANCEL = 212
+    @JvmField val MFS_CANCEL = 212
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_RESPLUS] — RES / +1 km/h pulse. */
-    const val MFS_RES_PLUS = 213
+    @JvmField val MFS_RES_PLUS = 213
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_SETMINUS] — SET / −1 km/h pulse. */
-    const val MFS_SET_MINUS = 214
+    @JvmField val MFS_SET_MINUS = 214
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNROOF_CONTROL] —
      * 1 closed … 11 open, 12 tilt. Same raw on A9 (`canSetVehicleParam`) and A10 VHAL.
      */
-    const val SUNROOF_CONTROL = 45
+    @JvmField val SUNROOF_CONTROL = 45
     /** Sunroof tilt (value of [SUNROOF_CONTROL], not a separate property). */
-    const val SUNROOF_TILT = 12
+    @JvmField val SUNROOF_TILT = 12
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNSHADE_POS] —
      * 1 closed … 11 open. Own property id, not sunroof.
      */
-    const val SUNSHADE_POS = 46
+    @JvmField val SUNSHADE_POS = 46
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_WINDOW_POS] —
      * all panes. A9 writes via [MbCanEngineFacade.canSetWindowStatus], not `canSetVehicleParam`.
      */
-    const val WINDOW_POS = 47
+    @JvmField val WINDOW_POS = 47
     /** [MBVehicleProperty.eVEHICLE_PROPERTY_FRWINDOW_POS] */
-    const val WINDOW_FR_POS = 55
+    @JvmField val WINDOW_FR_POS = 55
     /** [MBVehicleProperty.eVEHICLE_PROPERTY_FLWINDOW_POS] */
-    const val WINDOW_FL_POS = 56
+    @JvmField val WINDOW_FL_POS = 56
     /** [MBVehicleProperty.eVEHICLE_PROPERTY_RRWINDOW_POS] */
-    const val WINDOW_RR_POS = 57
+    @JvmField val WINDOW_RR_POS = 57
     /** [MBVehicleProperty.eVEHICLE_PROPERTY_RLWINDOW_POS] */
-    const val WINDOW_RL_POS = 58
-    const val WINDOW_A10_CLOSE = 1
-    const val WINDOW_A10_OPEN = 2
-    const val WINDOW_A10_VENT = 3
+    @JvmField val WINDOW_RL_POS = 58
+    @JvmField val WINDOW_A10_CLOSE = 1
+    @JvmField val WINDOW_A10_OPEN = 2
+    @JvmField val WINDOW_A10_VENT = 3
 }
 
 /**
@@ -518,27 +518,27 @@ object BodyComfortWrite {
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
 object MbCanKnownAudioPropertyId {
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME] */
-    const val VOLUME = 2
+    @JvmField val VOLUME = 2
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] */
-    const val VOLUME_SPEED = 13
+    @JvmField val VOLUME_SPEED = 13
     /** `eAUDIO_PROPERTY_BALANCE_BALANCE`: raw 0…14 maps to UI −7…+7. */
-    const val BALANCE = 3
+    @JvmField val BALANCE = 3
     /** `eAUDIO_PROPERTY_BALANCE_FADER`: raw 0…14 maps to UI −7…+7. */
-    const val FADER = 4
+    @JvmField val FADER = 4
     /** `eAUDIO_PROPERTY_EQBAND_BASS`: −7…+7. */
-    const val EQ_BAND_BASS = 5
+    @JvmField val EQ_BAND_BASS = 5
     /** `eAUDIO_PROPERTY_EQBAND_MIDDLE`: −7…+7. */
-    const val EQ_BAND_MIDDLE = 6
+    @JvmField val EQ_BAND_MIDDLE = 6
     /** `eAUDIO_PROPERTY_EQBAND_TREBLE`: −7…+7. */
-    const val EQ_BAND_TREBLE = 7
+    @JvmField val EQ_BAND_TREBLE = 7
     /** `eAUDIO_PROPERTY_EQMODE`: 1 Pop, 2 Rock, 3 Jazz, 4 Classic, 5 Voice, 255 Custom. */
-    const val EQ_MODE = 10
+    @JvmField val EQ_MODE = 10
     /** `eAUDIO_PROPERTY_VOLUME_RADAS`: 1 Low, 2 Medium, 3 High. */
-    const val VOLUME_RADAR = 11
+    @JvmField val VOLUME_RADAR = 11
     /** `eAUDIO_PROPERTY_VOLUME_KEY`: 0 Mute, 1 Low, 2 Medium, 3 High. */
-    const val VOLUME_KEY = 17
+    @JvmField val VOLUME_KEY = 17
     /** `eAUDIO_AUDIO_HEADREST_SPEAKER`: A9 0 close / 1 headrest / 2 auxiliary. */
-    const val HEADREST_SPEAKER = 37
+    @JvmField val HEADREST_SPEAKER = 37
 }
 
 data class MbCanAudioCommandSpec(
