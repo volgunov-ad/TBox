@@ -40,11 +40,11 @@
 }
 
 # Expert raw Get/Set and HuCanMarkLog resolve names via Class.getDeclaredFields.
-# Kotlin `const val` is inlined at call sites; R8 then drops the unused static
-# fields and the catalog / prop-name maps become empty in release APKs.
+# Kotlin `const val` is inlined then dropped by R8 even under `-keep class { *; }`.
+# The id objects use `@JvmField val` plus this keep so the static ints survive.
 -keep class vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId {
-    *;
+    public static <fields>;
 }
 -keep class vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId {
-    *;
+    public static <fields>;
 }

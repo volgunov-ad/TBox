@@ -51,7 +51,8 @@ object ExpertRawCanCatalog {
     fun allParams(): List<ExpertRawCanParam> {
         // Catalog display uses explicit maps only (no firmware JSON / Log probe).
         // Live Get/Set still goes through resolveRead/WritePropertyId on device.
-        // Names come from uniqueConstNameMap (needs kept const fields in release).
+        // Names come from uniqueConstNameMap. Id objects use @JvmField (not const)
+        // plus ProGuard keep so R8 does not drop the static ints.
         val vehicle = HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
             .entries
             .map { (id, name) ->
