@@ -978,7 +978,7 @@
     <string name="esp_hotspot_sta_on">есть</string>
     <string name="esp_hotspot_sta_off">нет</string>
     <string name="esp_hotspot_panel">Панель: http://%1$s:%2$d/</string>
-    <string name="esp_hotspot_mdns">Или http://tbox.local:8765/</string>
+    <string name="esp_hotspot_mdns">Или http://tbox.local:%1$d/</string>
     <string name="esp_connect_enabled_title">Подключаться к компаньону</string>
     <string name="esp_connect_enabled_desc">USB-сессия с компаньоном. Выключено по умолчанию — включайте только если компаньон установлен</string>
     <string name="esp_connected">Подключено</string>

@@ -1,5 +1,7 @@
 #include "wifi_router.h"
 
+#include <errno.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "esp_event.h"
@@ -8,9 +10,11 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "lwip/ip4_addr.h"
 #include "lwip/lwip_napt.h"
+#include "lwip/sockets.h"
 #include "mdns.h"
 
 #include "protocol.h"
@@ -20,7 +24,7 @@ static const char *TAG = "wifi_router";
 #define AP_SSID "TBox"
 #define AP_PSK "tbox8765"
 #define PANEL_PORT 8765
-#define IP_PROTO_TCP 6
+#define PROXY_MAX 4
 
 typedef struct {
     bool on;
@@ -41,7 +45,13 @@ static bool s_hold_reconnect;
 static bool s_want_sta;
 static bool s_sta_up;
 static bool s_napt;
-static bool s_portmap;
+static bool s_proxy_started;
+static bool s_dns_started;
+static uint32_t s_up_dns;
+static SemaphoreHandle_t s_proxy_slots;
+static int s_panel_port = PANEL_PORT;
+static bool s_mdns_ready;
+static int s_mdns_port;
 static int s_freq;
 static int s_channel;
 static esp_ip4_addr_t s_hu_gw;
@@ -67,24 +77,314 @@ static void publish(void)
         esp_ip4addr_ntoa(&s_hu_gw, hu, sizeof(hu));
     }
     protocol_send_ap_status(s_wifi_up && s_want_sta, s_sta_up, AP_SSID, AP_PSK,
-                            ip, s_freq, s_channel, hu, PANEL_PORT);
+                            ip, s_freq, s_channel, hu, s_panel_port);
 }
 
-static void apply_portmap(void)
+static void sync_mdns_port(void)
 {
-    if (!s_ap || s_hu_gw.addr == 0) return;
+    if (!s_mdns_ready || s_mdns_port == s_panel_port) return;
+    if (s_mdns_port != 0) {
+        mdns_service_remove("_http", "_tcp");
+    }
+    if (mdns_service_add(NULL, "_http", "_tcp", s_panel_port, NULL, 0) == ESP_OK) {
+        s_mdns_port = s_panel_port;
+    }
+}
+
+static void enable_napt(void)
+{
+    if (s_napt || !s_ap || !esp_netif_is_netif_up(s_ap)) return;
     esp_netif_ip_info_t info;
-    if (esp_netif_get_ip_info(s_ap, &info) != ESP_OK) return;
-    if (!s_napt) {
-        ip_napt_enable(info.ip.addr, 1);
-        s_napt = true;
+    if (esp_netif_get_ip_info(s_ap, &info) != ESP_OK || info.ip.addr == 0) return;
+    /* NAPT flag belongs on the AP. Packets to the AP's own address are then
+     * delivered locally, so a port map cannot steal :8765. A TCP proxy does. */
+    ip_napt_enable(info.ip.addr, 1);
+    s_napt = true;
+    ESP_LOGI(TAG, "NAPT on");
+}
+
+static void shuttle(int left, int right)
+{
+    char buf[1024];
+    for (;;) {
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(left, &readfds);
+        FD_SET(right, &readfds);
+        int maxfd = left > right ? left : right;
+        struct timeval wait = { .tv_sec = 60, .tv_usec = 0 };
+        int ready = select(maxfd + 1, &readfds, NULL, NULL, &wait);
+        if (ready <= 0) return;
+        int from = -1;
+        if (FD_ISSET(left, &readfds)) from = left;
+        else if (FD_ISSET(right, &readfds)) from = right;
+        if (from < 0) continue;
+        int to = from == left ? right : left;
+        int got = recv(from, buf, sizeof(buf), 0);
+        if (got == 0) return;
+        if (got < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+            return;
+        }
+        int off = 0;
+        while (off < got) {
+            int sent = send(to, buf + off, got - off, 0);
+            if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+            if (sent <= 0) return;
+            off += sent;
+        }
     }
-    if (s_portmap) {
-        ip_portmap_remove(IP_PROTO_TCP, PANEL_PORT);
+}
+
+static void proxy_session(void *arg)
+{
+    int client = (int)(intptr_t)arg;
+    int upstream = -1;
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons((uint16_t)s_panel_port);
+    dest.sin_addr.s_addr = s_hu_gw.addr;
+    if (dest.sin_addr.s_addr != 0) {
+        upstream = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     }
-    ip_portmap_add(IP_PROTO_TCP, info.ip.addr, PANEL_PORT, s_hu_gw.addr, PANEL_PORT);
-    s_portmap = true;
-    ESP_LOGI(TAG, "DNAT %d -> head unit", PANEL_PORT);
+    if (upstream >= 0) {
+        esp_netif_ip_info_t sta;
+        if (s_sta && esp_netif_get_ip_info(s_sta, &sta) == ESP_OK && sta.ip.addr != 0) {
+            struct sockaddr_in local = {0};
+            local.sin_family = AF_INET;
+            local.sin_addr.s_addr = sta.ip.addr;
+            bind(upstream, (struct sockaddr *)&local, sizeof(local));
+        }
+        if (connect(upstream, (struct sockaddr *)&dest, sizeof(dest)) == 0) {
+            shuttle(client, upstream);
+        } else {
+            ESP_LOGW(TAG, "panel upstream failed errno=%d", errno);
+        }
+    }
+    if (upstream >= 0) close(upstream);
+    close(client);
+    xSemaphoreGive(s_proxy_slots);
+    vTaskDelete(NULL);
+}
+
+static int open_panel_listener(int port)
+{
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd < 0) return -1;
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 || listen(fd, 2) != 0) {
+        ESP_LOGE(TAG, "panel listen %d failed", port);
+        close(fd);
+        return -1;
+    }
+    ESP_LOGI(TAG, "panel proxy :%d", port);
+    return fd;
+}
+
+static void proxy_listen(void *arg)
+{
+    (void)arg;
+    int fd = -1;
+    int bound = 0;
+    for (;;) {
+        int want = s_panel_port;
+        if (want < 1 || want > 65535) want = PANEL_PORT;
+        if (fd < 0 || want != bound) {
+            if (fd >= 0) close(fd);
+            fd = open_panel_listener(want);
+            bound = fd >= 0 ? want : 0;
+            if (fd < 0) {
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                continue;
+            }
+        }
+        fd_set readfds;
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+        struct timeval wait = { .tv_sec = 1, .tv_usec = 0 };
+        if (select(fd + 1, &readfds, NULL, NULL, &wait) <= 0) continue;
+        int client = accept(fd, NULL, NULL);
+        if (client < 0) continue;
+        if (xSemaphoreTake(s_proxy_slots, 0) != pdTRUE) {
+            close(client);
+            continue;
+        }
+        if (xTaskCreate(proxy_session, "panel", 8192, (void *)(intptr_t)client, 4, NULL) != pdPASS) {
+            close(client);
+            xSemaphoreGive(s_proxy_slots);
+        }
+    }
+}
+
+static uint32_t ap_ipv4(void)
+{
+    esp_netif_ip_info_t ip;
+    if (s_ap && esp_netif_get_ip_info(s_ap, &ip) == ESP_OK && ip.ip.addr != 0) return ip.ip.addr;
+    return htonl(0xC0A80401);
+}
+
+static bool dns_query(const uint8_t *pkt, int len)
+{
+    if (len < 12) return false;
+    uint16_t flags = ((uint16_t)pkt[2] << 8) | pkt[3];
+    if ((flags & 0x8000) != 0 || ((flags >> 11) & 0xF) != 0) return false;
+    return pkt[4] == 0 && pkt[5] == 1;
+}
+
+static int dns_question_end(const uint8_t *pkt, int len)
+{
+    int i = 12;
+    while (i < len) {
+        int lab = pkt[i];
+        if (lab == 0) {
+            i++;
+            break;
+        }
+        if ((lab & 0xC0) != 0) return -1;
+        i += 1 + lab;
+    }
+    if (i + 4 > len) return -1;
+    return i + 4;
+}
+
+static bool dns_name_is_panel(const uint8_t *pkt, int len)
+{
+    char name[64];
+    int n = 0;
+    int i = 12;
+    while (i < len) {
+        int lab = pkt[i];
+        if (lab == 0) break;
+        if ((lab & 0xC0) != 0 || n + 1 + lab >= (int)sizeof(name)) return false;
+        if (n > 0) name[n++] = '.';
+        memcpy(name + n, pkt + i + 1, (size_t)lab);
+        n += lab;
+        i += 1 + lab;
+    }
+    name[n] = 0;
+    for (int k = 0; k < n; k++) {
+        if (name[k] >= 'A' && name[k] <= 'Z') name[k] = (char)(name[k] - 'A' + 'a');
+    }
+    return strcmp(name, "tbox.local") == 0 || strcmp(name, "tbox") == 0;
+}
+
+static int panel_dns_reply(const uint8_t *query, int qlen, uint8_t *out, int outcap)
+{
+    if (!dns_query(query, qlen) || !dns_name_is_panel(query, qlen)) return 0;
+    int qend = dns_question_end(query, qlen);
+    if (qend < 16 || qend > outcap) return 0;
+    uint16_t qtype = ((uint16_t)query[qend - 4] << 8) | query[qend - 3];
+    memcpy(out, query, (size_t)qend);
+    out[2] = 0x81;
+    out[3] = 0x80;
+    out[6] = 0;
+    out[7] = 0;
+    out[8] = 0;
+    out[9] = 0;
+    out[10] = 0;
+    out[11] = 0;
+    if (qtype == 28) return qend;
+    if (qtype != 1 || qend + 16 > outcap) return 0;
+    out[7] = 1;
+    int o = qend;
+    out[o++] = 0xC0;
+    out[o++] = 0x0C;
+    out[o++] = 0;
+    out[o++] = 1;
+    out[o++] = 0;
+    out[o++] = 1;
+    out[o++] = 0;
+    out[o++] = 0;
+    out[o++] = 0;
+    out[o++] = 60;
+    out[o++] = 0;
+    out[o++] = 4;
+    uint32_t ip = ap_ipv4();
+    memcpy(out + o, &ip, 4);
+    return o + 4;
+}
+
+static void forward_dns(int fd, uint8_t *buf, int n, const struct sockaddr_in *from, socklen_t flen)
+{
+    if (s_up_dns == 0 || n <= 0) return;
+    int upstream = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (upstream < 0) return;
+    struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
+    setsockopt(upstream, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    struct sockaddr_in up = {0};
+    up.sin_family = AF_INET;
+    up.sin_port = htons(53);
+    up.sin_addr.s_addr = s_up_dns;
+    if (sendto(upstream, buf, (size_t)n, 0, (struct sockaddr *)&up, sizeof(up)) == n) {
+        int got = recvfrom(upstream, buf, 512, 0, NULL, NULL);
+        if (got > 0) sendto(fd, buf, (size_t)got, 0, (struct sockaddr *)from, flen);
+    }
+    close(upstream);
+}
+
+static void dns_task(void *arg)
+{
+    (void)arg;
+    int fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd < 0) {
+        vTaskDelete(NULL);
+        return;
+    }
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(53);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        ESP_LOGW(TAG, "dns bind errno=%d", errno);
+        close(fd);
+        vTaskDelete(NULL);
+        return;
+    }
+    ESP_LOGI(TAG, "dns tbox.local");
+    uint8_t query[512];
+    uint8_t reply[512];
+    for (;;) {
+        struct sockaddr_in from;
+        socklen_t flen = sizeof(from);
+        int n = recvfrom(fd, query, sizeof(query), 0, (struct sockaddr *)&from, &flen);
+        if (n < 12) continue;
+        int answered = panel_dns_reply(query, n, reply, sizeof(reply));
+        if (answered > 0) {
+            sendto(fd, reply, (size_t)answered, 0, (struct sockaddr *)&from, flen);
+            continue;
+        }
+        forward_dns(fd, query, n, &from, flen);
+    }
+}
+
+static void start_dns(void)
+{
+    if (s_dns_started) return;
+    if (xTaskCreate(dns_task, "dns", 4096, NULL, 3, NULL) == pdPASS) s_dns_started = true;
+}
+
+static void refresh_upstream_dns(void)
+{
+    esp_netif_dns_info_t dns;
+    if (!s_sta) return;
+    if (esp_netif_get_dns_info(s_sta, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK) {
+        s_up_dns = dns.ip.u_addr.ip4.addr;
+    }
+}
+
+static void start_proxy(void)
+{
+    if (s_proxy_started) return;
+    s_proxy_slots = xSemaphoreCreateCounting(PROXY_MAX, PROXY_MAX);
+    if (!s_proxy_slots) return;
+    if (xTaskCreate(proxy_listen, "panel_l", 4096, NULL, 4, NULL) == pdPASS) {
+        s_proxy_started = true;
+    }
 }
 
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -145,6 +445,9 @@ static void start_softap(uint8_t channel)
             ESP_ERROR_CHECK(esp_wifi_start());
             s_ap_started = true;
             s_hold_reconnect = false;
+            enable_napt();
+            start_proxy();
+            start_dns();
             esp_wifi_connect();
             return;
         }
@@ -157,7 +460,9 @@ static void start_softap(uint8_t channel)
     }
     s_channel = channel;
     s_freq = freq_mhz(channel);
-    if (s_sta_up) apply_portmap();
+    enable_napt();
+    start_proxy();
+    start_dns();
     ESP_LOGI(TAG, "SoftAP %s ch %u", AP_SSID, channel);
 }
 
@@ -169,7 +474,8 @@ static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
     const ip_event_got_ip_t *event = data;
     s_hu_gw = event->ip_info.gw;
     s_sta_up = true;
-    if (s_ap_started) apply_portmap();
+    refresh_upstream_dns();
+    if (s_ap_started) enable_napt();
     publish();
 }
 
@@ -205,7 +511,8 @@ static void ensure_wifi(void)
     if (mdns_init() == ESP_OK) {
         mdns_hostname_set("tbox");
         mdns_instance_name_set("TBox");
-        mdns_service_add(NULL, "_http", "_tcp", PANEL_PORT, NULL, 0);
+        s_mdns_ready = true;
+        sync_mdns_port();
     }
     s_wifi_up = true;
     ESP_LOGI(TAG, "STA ready");
@@ -279,9 +586,14 @@ void wifi_router_init(void)
     xTaskCreate(worker, "wifi_router", 12288, NULL, 5, NULL);
 }
 
-void wifi_router_request(bool on, const char *hu_ssid, const char *hu_psk)
+void wifi_router_request(bool on, const char *hu_ssid, const char *hu_psk, int port)
 {
     if (!s_q) return;
+    if (port >= 1 && port <= 65535 && port != s_panel_port) {
+        s_panel_port = port;
+        sync_mdns_port();
+        publish();
+    }
     wifi_job_t job = {0};
     job.on = on;
     if (hu_ssid) {

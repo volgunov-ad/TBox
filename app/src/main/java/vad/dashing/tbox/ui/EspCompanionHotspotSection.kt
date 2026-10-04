@@ -174,7 +174,7 @@ private fun CompanionApDetails(
             color = onSurfaceVariant,
         )
         Text(
-            text = stringResource(R.string.esp_hotspot_mdns),
+            text = stringResource(R.string.esp_hotspot_mdns, status.panelPort),
             style = MaterialTheme.typography.tboxBody,
             color = onSurfaceVariant,
         )

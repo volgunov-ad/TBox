@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
 import vad.dashing.tbox.location.GeoDisplayState
@@ -208,6 +209,7 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    private var espPanelPort = ExternalApiConstants.DEFAULT_PORT
     private val espSoftApRouterGeneration = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
@@ -1168,6 +1170,16 @@ class BackgroundService : Service() {
             }
         }
         createNotificationChannel()
+        scope.launch {
+            settingsManager.externalApiPortFlow.collect { port ->
+                val coerced = port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
+                val changed = coerced != espPanelPort
+                espPanelPort = coerced
+                if (!changed) return@collect
+                val push = HuSoftApRouter.current() ?: return@collect
+                espCompanionManager?.sendApCfg(true, push.ssid, push.password, coerced)
+            }
+        }
         scope.launch {
             delay(45_000)
             if (settingsManager.espSoftApRouterEnabledFlow.first()) {
@@ -6917,7 +6929,7 @@ class BackgroundService : Service() {
         val ticket = espSoftApRouterGeneration.incrementAndGet()
         if (!on) {
             HuSoftApRouter.clear()
-            espCompanionManager?.sendApCfg(false, "", "")
+            espCompanionManager?.sendApCfg(false, "", "", espPanelPort)
             EspCompanionRepository.setRouterError(null)
             EspCompanionRepository.setRouterBusy(false)
             return
@@ -6928,11 +6940,13 @@ class BackgroundService : Service() {
         }
         EspCompanionRepository.setRouterBusy(true)
         EspCompanionRepository.setRouterError(null)
+        espPanelPort = settingsManager.externalApiPortFlow.first()
+            .coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
         val error = HuSoftApRouter.prepare(this)
         if (ticket != espSoftApRouterGeneration.get()) return
         val push = HuSoftApRouter.current()
         if (push != null && (error == null || error == "band")) {
-            espCompanionManager?.sendApCfg(true, push.ssid, push.password)
+            espCompanionManager?.sendApCfg(true, push.ssid, push.password, espPanelPort)
         }
         if (error != null) {
             EspCompanionRepository.setRouterError(error)

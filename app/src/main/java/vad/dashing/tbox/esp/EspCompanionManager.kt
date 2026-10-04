@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.hotspot.HuSoftApRouter
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.TboxRepository
@@ -607,15 +608,18 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeMagChipSet(id))
     }
 
-    fun sendApCfg(on: Boolean, huSsid: String, huPsk: String) {
+    private var panelPort = ExternalApiConstants.DEFAULT_PORT
+
+    fun sendApCfg(on: Boolean, huSsid: String, huPsk: String, port: Int) {
         if (EspCompanionRepository.otaBusy.value) return
-        Log.i(TAG, "apCfg on=$on huSsid=$huSsid")
-        writeLine(EspCompanionProtocol.encodeApCfg(on, huSsid, huPsk))
+        panelPort = port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
+        Log.i(TAG, "apCfg on=$on huSsid=$huSsid port=$panelPort")
+        writeLine(EspCompanionProtocol.encodeApCfg(on, huSsid, huPsk, panelPort))
     }
 
     fun sendRememberedApCfg() {
         val push = HuSoftApRouter.current() ?: return
-        sendApCfg(true, push.ssid, push.password)
+        sendApCfg(true, push.ssid, push.password, panelPort)
     }
 
     fun setBleOn(on: Boolean) {
