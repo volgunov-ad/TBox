@@ -217,3 +217,4 @@ USB: Espressif VID `0x303A`.
 - UPrecise passthrough (частично: `um980Bridge` для прошивки UM980)
 - OTA rollback UI (IDF rollback можно включить позже)
 - Калибровка компаса и источники курса DR (`COMPASS` / `GYRO_COMPASS`) — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md) фазы 2–3. Телеметрия и выбор чипа уже в fw 0.6.
+- Приложение на телефоне с тем же управлением, что веб-страница автомобиля: отдельное сопряжение по постоянному идентификатору, ключ от телефона в момент сопряжения, дальше команды и снимок климата/сидений/громкости в эфире зашифрованы. Кнопки Shelly не меняются — [PHONE_COMPANION_BLE_PLAN_RU.md](PHONE_COMPANION_BLE_PLAN_RU.md).
