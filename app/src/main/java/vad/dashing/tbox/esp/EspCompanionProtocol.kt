@@ -219,8 +219,25 @@ object EspCompanionProtocol {
     fun encodeBleForgetAll(): String =
         line(TYPE_BLE_FORGET, mapOf("all" to true))
 
-    fun encodeApCfg(on: Boolean, huSsid: String, huPsk: String, port: Int): String =
-        line(TYPE_AP_CFG, mapOf("on" to on, "huSsid" to huSsid, "huPsk" to huPsk, "port" to port))
+    fun encodeApCfg(
+        on: Boolean,
+        huSsid: String,
+        huPsk: String,
+        port: Int,
+        apSsid: String,
+        apPsk: String,
+    ): String =
+        line(
+            TYPE_AP_CFG,
+            mapOf(
+                "on" to on,
+                "huSsid" to huSsid,
+                "huPsk" to huPsk,
+                "port" to port,
+                "apSsid" to apSsid,
+                "apPsk" to apPsk,
+            ),
+        )
 
     fun isKnownMagChip(chip: String): Boolean =
         MAG_CHIP_IDS.any { it.equals(chip, ignoreCase = true) }

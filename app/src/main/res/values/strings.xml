@@ -979,6 +979,10 @@
     <string name="esp_hotspot_sta_off">нет</string>
     <string name="esp_hotspot_panel">Панель: http://%1$s:%2$d/</string>
     <string name="esp_hotspot_mdns">Или http://tbox.local:%1$d/</string>
+    <string name="esp_hotspot_ssid">Имя сети</string>
+    <string name="esp_hotspot_password">Пароль</string>
+    <string name="esp_hotspot_save">Сохранить имя и пароль</string>
+    <string name="esp_hotspot_invalid">Имя — от 1 до 32 символов, пароль — от 8 до 63. Без кавычек и обратной косой черты.</string>
     <string name="esp_connect_enabled_title">Подключаться к компаньону</string>
     <string name="esp_connect_enabled_desc">USB-сессия с компаньоном. Выключено по умолчанию — включайте только если компаньон установлен</string>
     <string name="esp_connected">Подключено</string>

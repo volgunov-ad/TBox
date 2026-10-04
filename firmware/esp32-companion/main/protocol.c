@@ -1120,13 +1120,19 @@ static void handle_line(const char *line)
         psk[0] = '\0';
         extract_json_string(line, "huSsid", ssid, sizeof(ssid));
         extract_json_string(line, "huPsk", psk, sizeof(psk));
+        char ap_ssid[33];
+        char ap_psk[64];
+        ap_ssid[0] = '\0';
+        ap_psk[0] = '\0';
+        extract_json_string(line, "apSsid", ap_ssid, sizeof(ap_ssid));
+        extract_json_string(line, "apPsk", ap_psk, sizeof(ap_psk));
         int port = 8765;
         const char *port_field = strstr(line, "\"port\"");
         if (port_field) {
             port_field = strchr(port_field, ':');
             if (port_field) port = atoi(port_field + 1);
         }
-        wifi_router_request(on, ssid, psk, port);
+        wifi_router_request(on, ssid, psk, port, ap_ssid, ap_psk);
         return;
     }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {

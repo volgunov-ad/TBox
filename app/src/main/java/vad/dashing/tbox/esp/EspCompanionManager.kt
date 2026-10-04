@@ -609,12 +609,28 @@ class EspCompanionManager(
     }
 
     private var panelPort = ExternalApiConstants.DEFAULT_PORT
+    private var companionApSsid = ""
+    private var companionApPsk = ""
+
+    fun setCompanionAp(ssid: String, psk: String) {
+        companionApSsid = ssid
+        companionApPsk = psk
+    }
 
     fun sendApCfg(on: Boolean, huSsid: String, huPsk: String, port: Int) {
         if (EspCompanionRepository.otaBusy.value) return
         panelPort = port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
-        Log.i(TAG, "apCfg on=$on huSsid=$huSsid port=$panelPort")
-        writeLine(EspCompanionProtocol.encodeApCfg(on, huSsid, huPsk, panelPort))
+        Log.i(TAG, "apCfg on=$on huSsid=$huSsid apSsid=$companionApSsid port=$panelPort")
+        writeLine(
+            EspCompanionProtocol.encodeApCfg(
+                on,
+                huSsid,
+                huPsk,
+                panelPort,
+                companionApSsid,
+                companionApPsk,
+            ),
+        )
     }
 
     fun sendRememberedApCfg() {

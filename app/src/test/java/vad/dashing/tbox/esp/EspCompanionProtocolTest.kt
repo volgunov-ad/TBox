@@ -476,10 +476,12 @@ class EspCompanionProtocolTest {
         assertEquals("tbox8765", status.password)
         assertEquals(2462, status.freqMhz)
         assertEquals("192.168.42.1", status.huIp)
-        val cfg = EspCompanionProtocol.encodeApCfg(true, "hu", "abcd1234", 9000)
+        val cfg = EspCompanionProtocol.encodeApCfg(true, "hu", "abcd1234", 9000, "TBox-ab12", "cabin8765")
         assertTrue(cfg.contains("\"t\":\"apCfg\""))
         assertTrue(cfg.contains("\"huSsid\":\"hu\""))
         assertTrue(cfg.contains("\"huPsk\":\"abcd1234\""))
         assertTrue(cfg.contains("\"port\":9000"))
+        assertTrue(cfg.contains("\"apSsid\":\"TBox-ab12\""))
+        assertTrue(cfg.contains("\"apPsk\":\"cabin8765\""))
     }
 }

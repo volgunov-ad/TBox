@@ -29,6 +29,7 @@ import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.hotspot.EspSoftApIdentity
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
@@ -755,6 +756,8 @@ class SettingsManager(private val context: Context) {
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
         private val ESP_SOFTAP_ROUTER_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}esp_softap_router_enabled")
+        private val ESP_SOFTAP_SSID_KEY = stringPreferencesKey("${KEY_PREFIX}esp_softap_ssid")
+        private val ESP_SOFTAP_PSK_KEY = stringPreferencesKey("${KEY_PREFIX}esp_softap_psk")
         private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
         private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
         private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
@@ -1491,6 +1494,14 @@ class SettingsManager(private val context: Context) {
 
     val espSoftApRouterEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val espSoftApSsidFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_SSID_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val espSoftApPskFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_PSK_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val espBleDeviceNamesFlow: Flow<Map<String, String>> =
@@ -3043,6 +3054,39 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] = enabled
         }
+    }
+
+    /**
+     * Creates the companion SoftAP name and password once. Later boots keep the stored pair.
+     */
+    suspend fun ensureEspSoftApIdentity(): Pair<String, String> {
+        var ssid = ""
+        var psk = ""
+        context.settingsDataStore.edit { preferences ->
+            var storedSsid = preferences[ESP_SOFTAP_SSID_KEY].orEmpty()
+            var storedPsk = preferences[ESP_SOFTAP_PSK_KEY].orEmpty()
+            if (!EspSoftApIdentity.isValidSsid(storedSsid)) {
+                storedSsid = EspSoftApIdentity.randomSsid()
+                preferences[ESP_SOFTAP_SSID_KEY] = storedSsid
+            }
+            if (!EspSoftApIdentity.isValidPsk(storedPsk)) {
+                storedPsk = EspSoftApIdentity.randomPsk()
+                preferences[ESP_SOFTAP_PSK_KEY] = storedPsk
+            }
+            ssid = storedSsid
+            psk = storedPsk
+        }
+        return ssid to psk
+    }
+
+    suspend fun saveEspSoftApIdentity(ssid: String, psk: String): Boolean {
+        val cleanSsid = ssid.trim()
+        if (!EspSoftApIdentity.isValidSsid(cleanSsid) || !EspSoftApIdentity.isValidPsk(psk)) return false
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_SOFTAP_SSID_KEY] = cleanSsid
+            preferences[ESP_SOFTAP_PSK_KEY] = psk
+        }
+        return true
     }
 
     suspend fun saveEspCompanionEnabledSetting(enabled: Boolean) {

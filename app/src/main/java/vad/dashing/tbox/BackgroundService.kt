@@ -210,6 +210,8 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
     private var espPanelPort = ExternalApiConstants.DEFAULT_PORT
+    private var espApSsid = ""
+    private var espApPsk = ""
     private val espSoftApRouterGeneration = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
@@ -577,6 +579,7 @@ class BackgroundService : Service() {
         const val EXTRA_ESP_MAG_CHIP = "esp_mag_chip"
         const val ACTION_ESP_SOFTAP_ROUTER = "vad.dashing.tbox.ESP_SOFTAP_ROUTER"
         const val EXTRA_ESP_SOFTAP_ROUTER = "esp_softap_router"
+        const val ACTION_ESP_SOFTAP_IDENTITY = "vad.dashing.tbox.ESP_SOFTAP_IDENTITY"
         const val ACTION_ESP_BLE_SET = "vad.dashing.tbox.ESP_BLE_SET"
         const val EXTRA_ESP_BLE_ON = "esp_ble_on"
         const val ACTION_ESP_BLE_LEARN_BEGIN = "vad.dashing.tbox.ESP_BLE_LEARN_BEGIN"
@@ -1171,6 +1174,9 @@ class BackgroundService : Service() {
         }
         createNotificationChannel()
         scope.launch {
+            refreshCompanionApIdentity()
+        }
+        scope.launch {
             settingsManager.externalApiPortFlow.collect { port ->
                 val coerced = port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
                 val changed = coerced != espPanelPort
@@ -1678,6 +1684,9 @@ class BackgroundService : Service() {
             ACTION_ESP_SOFTAP_ROUTER -> {
                 val on = intent.getBooleanExtra(EXTRA_ESP_SOFTAP_ROUTER, false)
                 scope.launch { applyEspSoftApRouter(on) }
+            }
+            ACTION_ESP_SOFTAP_IDENTITY -> {
+                scope.launch { pushCompanionApIdentity() }
             }
             ACTION_ESP_BLE_SET -> {
                 val on = intent.getBooleanExtra(EXTRA_ESP_BLE_ON, false)
@@ -4308,7 +4317,10 @@ class BackgroundService : Service() {
                 return@launch
             }
             espCompanionStartJob = null
-            espCompanionManager = EspCompanionManager(
+            val (ssid, psk) = settingsManager.ensureEspSoftApIdentity()
+            espApSsid = ssid
+            espApPsk = psk
+            val manager = EspCompanionManager(
                 context = this@BackgroundService,
                 scope = scope,
                 locationSource = locationSource,
@@ -4317,7 +4329,10 @@ class BackgroundService : Service() {
                 requestVtg = espUm980RequestVtg,
                 requestZda = espUm980RequestZda,
                 requestGst = espUm980RequestGst,
-            ).also { it.start() }
+            )
+            manager.setCompanionAp(ssid, psk)
+            manager.start()
+            espCompanionManager = manager
         }
     }
 
@@ -6927,6 +6942,7 @@ class BackgroundService : Service() {
      */
     private suspend fun applyEspSoftApRouter(on: Boolean) {
         val ticket = espSoftApRouterGeneration.incrementAndGet()
+        refreshCompanionApIdentity()
         if (!on) {
             HuSoftApRouter.clear()
             espCompanionManager?.sendApCfg(false, "", "", espPanelPort)
@@ -6954,6 +6970,20 @@ class BackgroundService : Service() {
             return
         }
         EspCompanionRepository.setRouterBusy(false)
+    }
+
+    private suspend fun refreshCompanionApIdentity() {
+        val (ssid, psk) = settingsManager.ensureEspSoftApIdentity()
+        espApSsid = ssid
+        espApPsk = psk
+        espCompanionManager?.setCompanionAp(ssid, psk)
+    }
+
+    private suspend fun pushCompanionApIdentity() {
+        refreshCompanionApIdentity()
+        if (!settingsManager.espSoftApRouterEnabledFlow.first()) return
+        val push = HuSoftApRouter.current() ?: return
+        espCompanionManager?.sendApCfg(true, push.ssid, push.password, espPanelPort)
     }
 
     private fun ensureBootOpenMainEpisode(forceRestart: Boolean) {

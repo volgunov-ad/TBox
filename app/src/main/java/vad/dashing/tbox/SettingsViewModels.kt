@@ -516,6 +516,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val espSoftApRouterEnabled = settingsManager.espSoftApRouterEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val espSoftApSsid = settingsManager.espSoftApSsidFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val espSoftApPsk = settingsManager.espSoftApPskFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
     val espBleDeviceNames = settingsManager.espBleDeviceNamesFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
@@ -2198,6 +2204,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveEspSoftApRouterEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveEspSoftApRouterEnabled(enabled)
+        }
+    }
+
+    fun ensureEspSoftApIdentity() {
+        viewModelScope.launch {
+            settingsManager.ensureEspSoftApIdentity()
+        }
+    }
+
+    fun saveEspSoftApIdentity(ssid: String, psk: String, onSaved: () -> Unit = {}) {
+        viewModelScope.launch {
+            if (settingsManager.saveEspSoftApIdentity(ssid, psk)) onSaved()
         }
     }
 

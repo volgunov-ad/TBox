@@ -21,8 +21,6 @@
 
 static const char *TAG = "wifi_router";
 
-#define AP_SSID "TBox"
-#define AP_PSK "tbox8765"
 #define PANEL_PORT 8765
 #define PROXY_MAX 4
 
@@ -30,11 +28,16 @@ typedef struct {
     bool on;
     char hu_ssid[33];
     char hu_psk[64];
+    char ap_ssid[33];
+    char ap_psk[64];
     uint8_t follow_channel;
 } wifi_job_t;
 
 static char s_hu_ssid[33];
 static char s_hu_psk[64];
+static char s_ap_ssid[33] = "TBox";
+static char s_ap_psk[64] = "tbox8765";
+static bool s_radio_on;
 
 static QueueHandle_t s_q;
 static esp_netif_t *s_ap;
@@ -76,7 +79,7 @@ static void publish(void)
     if (s_sta_up && s_hu_gw.addr != 0) {
         esp_ip4addr_ntoa(&s_hu_gw, hu, sizeof(hu));
     }
-    protocol_send_ap_status(s_wifi_up && s_want_sta, s_sta_up, AP_SSID, AP_PSK,
+    protocol_send_ap_status(s_ap_started, s_sta_up, s_ap_ssid, s_ap_psk,
                             ip, s_freq, s_channel, hu, s_panel_port);
 }
 
@@ -415,9 +418,9 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data)
 static void fill_ap_config(wifi_config_t *ap, uint8_t channel)
 {
     memset(ap, 0, sizeof(*ap));
-    strncpy((char *)ap->ap.ssid, AP_SSID, sizeof(ap->ap.ssid) - 1);
-    ap->ap.ssid_len = strlen(AP_SSID);
-    strncpy((char *)ap->ap.password, AP_PSK, sizeof(ap->ap.password) - 1);
+    strncpy((char *)ap->ap.ssid, s_ap_ssid, sizeof(ap->ap.ssid));
+    ap->ap.ssid_len = (uint8_t)strnlen(s_ap_ssid, sizeof(ap->ap.ssid));
+    strncpy((char *)ap->ap.password, s_ap_psk, sizeof(ap->ap.password) - 1);
     ap->ap.channel = channel;
     ap->ap.max_connection = 4;
     ap->ap.authmode = WIFI_AUTH_WPA2_PSK;
@@ -443,6 +446,7 @@ static void start_softap(uint8_t channel)
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta));
             ESP_ERROR_CHECK(esp_wifi_start());
+            s_radio_on = true;
             s_ap_started = true;
             s_hold_reconnect = false;
             enable_napt();
@@ -463,7 +467,7 @@ static void start_softap(uint8_t channel)
     enable_napt();
     start_proxy();
     start_dns();
-    ESP_LOGI(TAG, "SoftAP %s ch %u", AP_SSID, channel);
+    ESP_LOGI(TAG, "SoftAP %s ch %u", s_ap_ssid, channel);
 }
 
 static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -507,6 +511,7 @@ static void ensure_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_start());
+    s_radio_on = true;
 
     if (mdns_init() == ESP_OK) {
         mdns_hostname_set("tbox");
@@ -528,11 +533,71 @@ static void connect_sta(const char *ssid, const char *psk)
     strncpy((char *)sta.sta.ssid, s_hu_ssid, sizeof(sta.sta.ssid) - 1);
     strncpy((char *)sta.sta.password, s_hu_psk, sizeof(sta.sta.password) - 1);
     sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    if (!s_radio_on) {
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_start());
+        s_radio_on = true;
+    }
     esp_wifi_set_config(WIFI_IF_STA, &sta);
     s_want_sta = true;
     s_sta_up = false;
     esp_wifi_disconnect();
     esp_wifi_connect();
+}
+
+static bool identity_char_ok(unsigned char c)
+{
+    return c >= 0x20 && c <= 0x7E && c != '"' && c != '\\';
+}
+
+static bool apply_ap_identity(const char *ssid, const char *psk)
+{
+    if (!ssid || !psk) return false;
+    size_t ssid_len = strlen(ssid);
+    size_t psk_len = strlen(psk);
+    if (ssid_len == 0 || ssid_len > 32 || psk_len < 8 || psk_len > 63) return false;
+    for (size_t i = 0; i < ssid_len; i++) {
+        if (!identity_char_ok((unsigned char)ssid[i])) return false;
+    }
+    for (size_t i = 0; i < psk_len; i++) {
+        if (!identity_char_ok((unsigned char)psk[i])) return false;
+    }
+    if (strcmp(s_ap_ssid, ssid) == 0 && strcmp(s_ap_psk, psk) == 0) return false;
+    memcpy(s_ap_ssid, ssid, ssid_len);
+    s_ap_ssid[ssid_len] = '\0';
+    memcpy(s_ap_psk, psk, psk_len);
+    s_ap_psk[psk_len] = '\0';
+    return true;
+}
+
+static void refresh_ap_config(void)
+{
+    if (!s_ap_started || s_channel <= 0 || s_channel > 14) return;
+    wifi_config_t ap;
+    fill_ap_config(&ap, (uint8_t)s_channel);
+    esp_err_t err = esp_wifi_set_config(WIFI_IF_AP, &ap);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ap rename %s", esp_err_to_name(err));
+        return;
+    }
+    ESP_LOGI(TAG, "SoftAP %s", s_ap_ssid);
+}
+
+static void stop_radio(void)
+{
+    s_want_sta = false;
+    s_hold_reconnect = true;
+    if (s_wifi_up && s_radio_on) {
+        esp_wifi_stop();
+        s_radio_on = false;
+    }
+    s_hold_reconnect = false;
+    s_ap_started = false;
+    s_napt = false;
+    s_sta_up = false;
+    s_freq = 0;
+    s_channel = 0;
+    s_hu_gw.addr = 0;
 }
 
 static void handle_job(const wifi_job_t *job)
@@ -543,19 +608,20 @@ static void handle_job(const wifi_job_t *job)
         return;
     }
     if (!job->on) {
-        s_want_sta = false;
-        if (s_wifi_up) {
-            esp_wifi_disconnect();
-        }
-        s_sta_up = false;
-        s_freq = 0;
-        s_channel = 0;
-        s_hu_gw.addr = 0;
+        apply_ap_identity(job->ap_ssid, job->ap_psk);
+        stop_radio();
         publish();
         return;
     }
+    bool identity_changed = apply_ap_identity(job->ap_ssid, job->ap_psk);
+    if (identity_changed) refresh_ap_config();
     if (job->hu_ssid[0] == '\0' || strlen(job->hu_psk) < 8) {
         ESP_LOGW(TAG, "reject apCfg");
+        publish();
+        return;
+    }
+    if (s_ap_started && s_sta_up &&
+        strcmp(s_hu_ssid, job->hu_ssid) == 0 && strcmp(s_hu_psk, job->hu_psk) == 0) {
         publish();
         return;
     }
@@ -586,7 +652,8 @@ void wifi_router_init(void)
     xTaskCreate(worker, "wifi_router", 12288, NULL, 5, NULL);
 }
 
-void wifi_router_request(bool on, const char *hu_ssid, const char *hu_psk, int port)
+void wifi_router_request(bool on, const char *hu_ssid, const char *hu_psk, int port,
+                         const char *ap_ssid, const char *ap_psk)
 {
     if (!s_q) return;
     if (port >= 1 && port <= 65535 && port != s_panel_port) {
@@ -601,6 +668,12 @@ void wifi_router_request(bool on, const char *hu_ssid, const char *hu_psk, int p
     }
     if (hu_psk) {
         strncpy(job.hu_psk, hu_psk, sizeof(job.hu_psk) - 1);
+    }
+    if (ap_ssid) {
+        strncpy(job.ap_ssid, ap_ssid, sizeof(job.ap_ssid) - 1);
+    }
+    if (ap_psk) {
+        strncpy(job.ap_psk, ap_psk, sizeof(job.ap_psk) - 1);
     }
     if (xQueueSend(s_q, &job, 0) != pdTRUE) {
         ESP_LOGW(TAG, "queue full");
