@@ -1,5 +1,6 @@
 package vad.dashing.tbox.externalapi
 
+import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
@@ -111,13 +112,28 @@ class ExternalApiHttpServer(
                 val input = BufferedInputStream(socket.getInputStream())
                 val output = BufferedOutputStream(socket.getOutputStream())
                 val request = readRequest(input) ?: return
-                val response = handler(
-                    request.method,
-                    request.path,
-                    request.query,
-                    request.headers,
-                    request.body,
-                )
+                val response = try {
+                    handler(
+                        request.method,
+                        request.path,
+                        request.query,
+                        request.headers,
+                        request.body,
+                    )
+                } catch (error: Exception) {
+                    lastError = error.message ?: error.javaClass.simpleName
+                    ExternalApiHttpResponse(
+                        status = 500,
+                        body = JSONObject()
+                            .put(
+                                "error",
+                                JSONObject()
+                                    .put("code", "internal")
+                                    .put("message", error.javaClass.simpleName),
+                            )
+                            .toString(),
+                    )
+                }
                 writeResponse(output, response)
             }
         } catch (_: IOException) {

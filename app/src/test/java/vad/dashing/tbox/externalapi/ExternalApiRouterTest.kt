@@ -174,6 +174,32 @@ class ExternalApiRouterTest {
     }
 
     @Test
+    fun actionsInvoke_malformedJson_returns400() {
+        val token = "actions-token"
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "voice",
+                clientName = "Voice",
+                tokenHash = ExternalApiAuth.sha256Hex(token),
+                createdAtEpochMs = 1L,
+            ),
+        )
+        val router = router(clients = clients)
+        val response = router.handle(
+            "POST",
+            ExternalApiConstants.PATH_ACTIONS_INVOKE,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            "not-json{",
+        )
+        assertEquals(400, response.status)
+        assertEquals(
+            "invalid_request",
+            JSONObject(response.body).getJSONObject("error").getString("code"),
+        )
+    }
+
+    @Test
     fun webPanel_whenDisabled_isHidden() {
         val router = router(webPanelEnabled = false)
         val response = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL, emptyMap(), emptyMap(), "")

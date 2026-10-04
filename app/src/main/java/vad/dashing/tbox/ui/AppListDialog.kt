@@ -57,9 +57,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
@@ -150,6 +155,32 @@ internal fun appListMatchesFilter(label: String, packageName: String, query: Str
     val needle = query.trim().lowercase()
     if (needle.isEmpty()) return true
     return label.lowercase().contains(needle) || packageName.lowercase().contains(needle)
+}
+
+/**
+ * Exit App List advanced ADB without blocking the caller.
+ * [DisposableEffect] runs on the composition thread; [PackageAdbActions.exitAdvancedSession]
+ * can wait on [PackageAdbActions] sessionMutex while enter/refresh still holds a live ADB
+ * session (connect/session timeouts of several seconds) — [kotlinx.coroutines.runBlocking]
+ * there ANRs the HU and can starve [android.app.Service.startForeground].
+ */
+internal fun scheduleAppListAdvancedSessionExit(
+    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    isActive: () -> Boolean = { PackageAdbActions.isAdvancedSessionActive() },
+    exit: suspend () -> Unit = {
+        AppContextHolder.appContextOrNull?.let { PackageAdbActions.exitAdvancedSession(it) }
+    },
+): Job? {
+    if (!isActive()) return null
+    return scope.launch {
+        try {
+            exit()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(APP_LIST_UNINSTALL_TAG, "Failed to exit App List advanced ADB session", e)
+        }
+    }
 }
 
 internal fun formatAppListAdbStatusLine(
@@ -346,13 +377,11 @@ internal fun AppListDialog(
     }
 
     DisposableEffect(Unit) {
+        val appContext = context.applicationContext
         onDispose {
-            if (PackageAdbActions.isAdvancedSessionActive()) {
-                // Best-effort restore if composition is torn down without Close.
-                runBlocking {
-                    PackageAdbActions.exitAdvancedSession(context)
-                }
-            }
+            scheduleAppListAdvancedSessionExit(
+                exit = { PackageAdbActions.exitAdvancedSession(appContext) },
+            )
         }
     }
 

@@ -60,8 +60,12 @@ object AutomationCodec {
         }
     }
 
-    fun decodeActionsPayload(raw: String): Result<List<AutomationAction>> =
-        decodeActionsPayload(JSONObject(raw.ifBlank { "{}" }))
+    fun decodeActionsPayload(raw: String): Result<List<AutomationAction>> = runCatching {
+        JSONObject(raw.ifBlank { "{}" })
+    }.fold(
+        onSuccess = { decodeActionsPayload(it) },
+        onFailure = { Result.failure(it) },
+    )
 
     fun decode(raw: String): Result<AutomationDocument> = runCatching {
         if (raw.isBlank()) return@runCatching AutomationDocument()

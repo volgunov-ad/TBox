@@ -1,7 +1,16 @@
 package vad.dashing.tbox.ui
 
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.adb.PackageAdbActions
 
@@ -63,5 +72,32 @@ class AppListAdvancedHelpersTest {
             PackageAdbActions.Action.Disable,
             adbToggleAction(hideOrUnhide = false, status = null),
         )
+    }
+
+    @Test
+    fun scheduleAppListAdvancedSessionExit_skipsWhenInactive() {
+        val ran = AtomicBoolean(false)
+        val job = scheduleAppListAdvancedSessionExit(
+            isActive = { false },
+            exit = { ran.set(true) },
+        )
+        assertNull(job)
+        assertFalse(ran.get())
+    }
+
+    @Test
+    fun scheduleAppListAdvancedSessionExit_doesNotBlockCaller() = runBlocking {
+        val gate = CompletableDeferred<Unit>()
+        val job = scheduleAppListAdvancedSessionExit(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            isActive = { true },
+            exit = { gate.await() },
+        )
+        assertNotNull(job)
+        assertTrue(job!!.isActive)
+        assertFalse(job.isCompleted)
+        gate.complete(Unit)
+        job.join()
+        assertTrue(job.isCompleted)
     }
 }

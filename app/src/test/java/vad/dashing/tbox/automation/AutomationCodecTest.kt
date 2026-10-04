@@ -722,4 +722,20 @@ class AutomationCodecTest {
         assertEquals(definition, decoded.automations.single())
         assertTrue(AutomationValidator.validate(decoded).isEmpty())
     }
+
+    @Test
+    fun decodeActionsPayload_malformedJson_isFailureNotThrow() {
+        val result = AutomationCodec.decodeActionsPayload("not-json{")
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decodeActionsPayload_validDelay_roundTrips() {
+        val result = AutomationCodec.decodeActionsPayload(
+            """{"actions":[{"type":"delay","durationMillis":250}]}""",
+        )
+        assertTrue(result.isSuccess)
+        val delay = result.getOrThrow().single() as AutomationAction.Delay
+        assertEquals(250L, delay.durationMillis)
+    }
 }
