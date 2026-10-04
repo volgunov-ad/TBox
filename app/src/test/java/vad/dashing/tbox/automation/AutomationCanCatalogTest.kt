@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.SPEED_LIMITER_AUTOMATION_PROPERTY_IDS
 import vad.dashing.tbox.mbcan.BodyComfortWrite
 import vad.dashing.tbox.mbcan.MbCanCommandPolicy
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -21,6 +22,11 @@ class AutomationCanCatalogTest {
         assertFalse(MbCanKnownVehiclePropertyId.SYSTEM_REBOOT in ids)
         assertFalse(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH in ids)
         assertFalse(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET in ids)
+        assertTrue(
+            AutomationCanCatalog.pickerEntries().none {
+                it.propertyId in SPEED_LIMITER_AUTOMATION_PROPERTY_IDS
+            },
+        )
         assertFalse(MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL in ids)
         assertFalse(MbCanKnownVehiclePropertyId.MFS_CANCEL in ids)
         assertFalse(MbCanKnownVehiclePropertyId.MFS_RES_PLUS in ids)

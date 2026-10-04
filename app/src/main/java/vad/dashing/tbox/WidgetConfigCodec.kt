@@ -15,8 +15,6 @@ private const val LEGACY_WIDGETS_SEPARATOR = "|"
 private const val LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY = "launchAppWidget"
 private val REMOVED_WIDGET_DATA_KEYS = setOf(
     "wirelessChargingWidget",
-    // Speed limiter widget: not offered until fully debugged (also commented out in WidgetsRepository).
-    SPEED_LIMITER_WIDGET_DATA_KEY,
     // Merged into osmSpeedLimitWidget (maps / cameras / radars).
     vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
 )

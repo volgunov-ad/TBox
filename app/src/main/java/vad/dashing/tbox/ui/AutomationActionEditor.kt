@@ -277,7 +277,7 @@ private fun CanCommandFields(
 ) {
     val canMode by UniversalCanRepository.mode.collectAsState()
     val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
-    val catalogEntries = AutomationCanCatalog.entries
+    val catalogEntries = AutomationCanCatalog.pickerEntries()
         .filter { it.supports(canMode) }
         .sortedByAutomationLabel { it.label }
     if (entry == null) {
@@ -1180,8 +1180,8 @@ private fun defaultAction(
 ): AutomationAction = when (kind) {
     ActionUiKind.CAN -> {
         val canMode = UniversalCanRepository.mode.value
-        val entry = AutomationCanCatalog.entries.firstOrNull { it.supports(canMode) }
-            ?: AutomationCanCatalog.entries.first()
+        val entry = AutomationCanCatalog.pickerEntries().firstOrNull { it.supports(canMode) }
+            ?: AutomationCanCatalog.pickerEntries().first()
         AutomationAction.CanCommand(
             bus = entry.bus,
             propertyId = entry.propertyId,

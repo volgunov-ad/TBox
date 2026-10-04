@@ -457,7 +457,7 @@ private fun NumericConditionFields(
     condition: AutomationCondition.Numeric,
     onChange: (AutomationCondition) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.NUMBER)
+    val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
     AutomationDropdown(
         label = "Сигнал",
         value = condition.signal,
@@ -521,7 +521,7 @@ private fun StateConditionFields(
     apps: List<LaunchableAppEntry>,
     onChange: (AutomationCondition) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
+    val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
     AutomationDropdown(
         label = "Сигнал",
         value = condition.signal,

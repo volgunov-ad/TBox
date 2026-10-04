@@ -44,6 +44,7 @@ import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.R
+import vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
@@ -303,8 +304,13 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
  * oscillate `eMBCAN_CFG_AUDIO` / `eMBCAN_CFG_VEHICLE` subscribe+listener register and OEM cfg dumps,
  * which crashed the HU and blanked ModeButtons on transient `-1`/invalid reads.
  */
+private fun carSettingsVisibleSections(): List<CarSettingsSection> =
+    CarSettingsSection.entries.filter { section ->
+        section != CarSettingsSection.SpeedLimiter || !SPEED_LIMITER_UI_HIDDEN
+    }
+
 internal fun carSettingsTabMbCanSignals(): Set<MbCanSignal> =
-    CarSettingsSection.entries.flatMap { signalsForSection(it) }.toSet()
+    carSettingsVisibleSections().flatMap { signalsForSection(it) }.toSet()
 
 @Composable
 fun CarSettingsTab(
@@ -315,7 +321,7 @@ fun CarSettingsTab(
     val mbCanOk = availability is MbCanAvailability.Available
     val headUnitCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
 
-    val sections = CarSettingsSection.entries
+    val sections = carSettingsVisibleSections()
     var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 

@@ -374,7 +374,7 @@ private fun NumericTriggerFields(
     trigger: AutomationTrigger.NumericThreshold,
     onChange: (AutomationTrigger) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.NUMBER)
+    val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
     AutomationDropdown(
         label = "Сигнал",
         value = trigger.signal,
@@ -495,7 +495,7 @@ private fun StateTriggerFields(
     apps: List<LaunchableAppEntry>,
     onChange: (AutomationTrigger) -> Unit,
 ) {
-    val signals = AutomationSignalCatalog.signalsOfType(AutomationSignalValueType.STATE)
+    val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
     AutomationDropdown(
         label = "Сигнал",
         value = trigger.signal,

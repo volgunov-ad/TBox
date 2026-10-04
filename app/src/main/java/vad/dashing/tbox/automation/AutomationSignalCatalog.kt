@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
@@ -1017,6 +1018,10 @@ object AutomationSignalCatalog {
         entries.filter { it.id.valueType == valueType }
             .sortedByAutomationLabel { it.label }
             .map { it.id }
+
+    /** Trigger/condition pickers: hides speed-limiter signals while [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN]. */
+    fun pickerSignalsOfType(valueType: AutomationSignalValueType): List<AutomationSignalId> =
+        signalsOfType(valueType).filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
 
     fun stateOptionLabel(raw: String): String = AutomationSignalStateEncoding.stateOptionLabel(raw)
 

@@ -3,6 +3,7 @@ package vad.dashing.tbox.automation
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
@@ -104,7 +105,8 @@ data class AutomationCanCatalogEntry(
  *
  * Raw `SetAnyInt`, HU reboot, and cruise-control key pulses are intentionally absent. The liftgate
  * is available only as the staff pulse (`TrunkPulse` 1/2), matching the dashboard widget: no extra
- * software speed or PRND gate.
+ * software speed or PRND gate. Speed-limiter probes (253/254) stay unpublished in pickers
+ * ([vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN]); they are also excluded here as `SetAnyInt`.
  */
 object AutomationCanCatalog {
     private val allowedVehiclePropertyIds: Set<Int> = setOf(
@@ -225,6 +227,10 @@ object AutomationCanCatalog {
 
     fun get(bus: AutomationCanBus, propertyId: Int): AutomationCanCatalogEntry? =
         entriesByKey[bus to propertyId]
+
+    /** Picker list: omits speed-limiter CAN ids while [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN]. */
+    fun pickerEntries(): List<AutomationCanCatalogEntry> =
+        entries.filterNot { isSpeedLimiterHiddenFromAutomationPicker(it.propertyId) }
 
     fun isAllowed(action: AutomationAction.CanCommand): Boolean =
         get(action.bus, action.propertyId)?.isActionAllowed(action) == true

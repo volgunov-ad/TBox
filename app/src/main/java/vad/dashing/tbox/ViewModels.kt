@@ -970,6 +970,7 @@ object WidgetsRepository {
 
     fun getAvailableDataKeysWidgets(noTboxConnect: Boolean = false): List<String> {
         val keys = dataKeyTitlesWidgets.keys.toList()
+            .filterNot { isSpeedLimiterHiddenFromWidgetPicker(it) }
         if (!noTboxConnect) return keys
         return keys.filter { isWidgetOfferedWhenNoTbox(it) }
     }

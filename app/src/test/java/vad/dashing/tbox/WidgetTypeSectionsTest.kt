@@ -12,7 +12,9 @@ class WidgetTypeSectionsTest {
             .toSet()
         val mapped = WidgetTypeSections.mappedDataKeys()
         val missing = available - mapped
-        val extra = mapped - available
+        val extra = mapped - available - setOfNotNull(
+            SPEED_LIMITER_WIDGET_DATA_KEY.takeIf { SPEED_LIMITER_UI_HIDDEN },
+        )
         assertTrue(
             "Unmapped widget dataKeys (add to WidgetTypeSections): $missing",
             missing.isEmpty(),
@@ -21,7 +23,8 @@ class WidgetTypeSectionsTest {
             "Stale WidgetTypeSections keys not in catalog: $extra",
             extra.isEmpty(),
         )
-        assertEquals(available.size, mapped.size)
+        val hiddenMapped = if (SPEED_LIMITER_UI_HIDDEN) 1 else 0
+        assertEquals(available.size + hiddenMapped, mapped.size)
     }
 
     @Test
