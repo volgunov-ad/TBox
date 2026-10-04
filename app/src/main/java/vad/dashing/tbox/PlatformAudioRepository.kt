@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,7 +108,10 @@ object PlatformAudioRepository {
         return setVolume(channel, next)
     }
 
-    fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
+    fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean =
+        callOnMain(false) { setVolumeOnMain(channel, value) }
+
+    private fun setVolumeOnMain(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         val target = PlatformAudioDomain.sanitizeVolume(channel, value) ?: return false
         val ok = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             writeA10Volume(channel, target)
@@ -151,8 +156,12 @@ object PlatformAudioRepository {
     }
 
     private fun publishVolumes() {
-        PlatformAudioDomain.VolumeChannel.entries.forEach { channel ->
-            val value = readVolume(channel)
+        val values = callOnMain(emptyMap()) {
+            PlatformAudioDomain.VolumeChannel.entries.associateWith { channel ->
+                readVolumeOnMain(channel)
+            }
+        }
+        values.forEach { (channel, value) ->
             flowFor(channel).value = value
             if (channel == PlatformAudioDomain.VolumeChannel.Media && value != null && value > 0) {
                 lastNonZeroMedia = value
@@ -184,13 +193,30 @@ object PlatformAudioRepository {
         mainHandler.postDelayed(runnable, HEADREST_BURST_POLL_MS)
     }
 
-    private fun readVolume(channel: PlatformAudioDomain.VolumeChannel): Int? {
+    private fun readVolumeOnMain(channel: PlatformAudioDomain.VolumeChannel): Int? {
         val raw = if (HeadUnitDayNightMapping.usesAdayoKeys()) {
             AdayoSettingsService.getInt("getAudioStreamVolume", PlatformAudioDomain.a10StreamType(channel))
         } else {
             readA9Volume(channel)
         } ?: return null
         return PlatformAudioDomain.sanitizeVolume(channel, raw)
+    }
+
+    /**
+     * Signal polls start and stop observing around a single read, which clears
+     * [appContext]. Writes still need a context for the AudioManager fallback.
+     */
+    private fun audioContext(): Context? = appContext ?: AppContextHolder.appContextOrNull
+
+    /** OpenOS and Adayo mixer calls run on the main looper, like the volume widget. */
+    private fun <T> callOnMain(default: T, block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        val pending = CompletableFuture<T>()
+        val posted = mainHandler.post {
+            pending.complete(runCatching(block).getOrDefault(default))
+        }
+        if (!posted) return default
+        return runCatching { pending.get(2, TimeUnit.SECONDS) }.getOrDefault(default)
     }
 
     private fun readHeadrestAdayo(): Int? =
@@ -202,16 +228,16 @@ object PlatformAudioRepository {
         MbCanEngineFacade.canGetAudioParam(MbCanKnownAudioPropertyId.HEADREST_SPEAKER)
             ?.let(PlatformAudioDomain::decodeHeadrestMbCan)
 
-    private fun writeA10Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean =
-        AdayoSettingsService.setInt(
-            "setAudioStreamVolume",
-            PlatformAudioDomain.a10StreamType(channel),
-            value,
-        )
+    private fun writeA10Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
+        val stream = PlatformAudioDomain.a10StreamType(channel)
+        if (AdayoSettingsService.setInt("setAudioStreamVolume", stream, value)) return true
+        // Some SettingsSvc builds take a flags argument after the level.
+        return AdayoSettingsService.setInt("setAudioStreamVolume", stream, value, 0)
+    }
 
     private fun writeA9Volume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean {
         if (OpenOsAudio.setVolume(channel, value)) return true
-        val context = appContext ?: return false
+        val context = audioContext() ?: return false
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
         val stream = PlatformAudioDomain.a9FallbackStream(channel)
         return runCatching {
@@ -222,7 +248,7 @@ object PlatformAudioRepository {
 
     private fun readA9Volume(channel: PlatformAudioDomain.VolumeChannel): Int? {
         OpenOsAudio.getVolume(channel)?.let { return it }
-        val context = appContext ?: return null
+        val context = audioContext() ?: return null
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return null
         val stream = PlatformAudioDomain.a9FallbackStream(channel)
         return runCatching { audioManager.getStreamVolume(stream) }.getOrNull()
@@ -252,10 +278,19 @@ object PlatformAudioRepository {
         fun setVolume(channel: PlatformAudioDomain.VolumeChannel, value: Int): Boolean = runCatching {
             val audio = manager() ?: return false
             val groupId = groupId(audio, channel) ?: return false
-            val method = audio.javaClass.methods.firstOrNull {
-                it.name == "setGroupVolume" && it.parameterTypes.size == 3
+            val method = audio.javaClass.methods.firstOrNull { candidate ->
+                candidate.name == "setGroupVolume" &&
+                    candidate.parameterTypes.size == 3 &&
+                    candidate.parameterTypes.all { it == Int::class.javaPrimitiveType }
+            } ?: audio.javaClass.methods.firstOrNull {
+                it.name == "setGroupVolume" && it.parameterTypes.size == 2 &&
+                    it.parameterTypes.all { type -> type == Int::class.javaPrimitiveType }
             } ?: return false
-            method.invoke(audio, groupId, value, 0)
+            if (method.parameterTypes.size == 3) {
+                method.invoke(audio, groupId, value, 0)
+            } else {
+                method.invoke(audio, groupId, value)
+            }
             true
         }.onFailure { Log.w(TAG, "OpenOS setVolume failed: ${it.javaClass.simpleName}: ${it.message}") }
             .getOrDefault(false)
@@ -272,7 +307,10 @@ object PlatformAudioRepository {
 
         private fun manager(): Any? {
             if (probeCompleted) return manager
-            val context = appContext ?: return null
+            if (Looper.myLooper() != Looper.getMainLooper()) {
+                return callOnMain(null) { manager() }
+            }
+            val context = audioContext() ?: return null
             synchronized(this) {
                 if (probeCompleted) return manager
                 val created = runCatching {
