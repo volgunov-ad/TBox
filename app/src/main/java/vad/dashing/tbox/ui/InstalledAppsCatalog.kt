@@ -5,16 +5,15 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.graphics.drawable.toBitmap
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.SettingsViewModel
 
@@ -75,25 +74,23 @@ internal fun rememberInstalledAppEntries(
 ): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
-    val lifecycleOwner = LocalLifecycleOwner.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
     val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
-    DisposableEffect(appContext, lifecycleOwner) {
-        LaunchableAppsCatalog.ensurePackageChangeWatcher(appContext)
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                LaunchableAppsCatalog.refreshIfLaunchablePackagesChanged(appContext)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+    WatchLaunchablePackageChanges(appContext)
+    val entries by produceState(
+        initialValue = emptyList<LaunchableAppEntry>(),
+        appContext,
+        iconSizePx,
+        launcherIconRevision,
+        iconLookup,
+        packagesRevision,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            loadInstalledAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
-    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup, packagesRevision) {
-        loadInstalledAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
-    }
+    return entries
 }

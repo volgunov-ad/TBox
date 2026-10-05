@@ -26,6 +26,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -1491,24 +1494,32 @@ private fun MusicWidgetPlayerAvatar(
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = remember(selectedPackage, context, launcherIconRevision, iconSizePx, iconLookup, suppressCustomIcon) {
+    val appIcon = produceState<ImageBitmap?>(
+        initialValue = null,
+        selectedPackage,
+        context,
+        launcherIconRevision,
+        iconSizePx,
+        iconLookup,
+        suppressCustomIcon,
+    ) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
-            null
-        } else if (!suppressCustomIcon) {
-            decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
-                ?: runCatching {
-                    val pm = context.packageManager
-                    val info = pm.getApplicationInfo(selectedPackage, 0)
-                    info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-                }.getOrNull()
-        } else {
-            runCatching {
+            value = null
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            val custom = if (!suppressCustomIcon) {
+                decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
+            } else {
+                null
+            }
+            custom ?: runCatching {
                 val pm = context.packageManager
                 val info = pm.getApplicationInfo(selectedPackage, 0)
                 info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
             }.getOrNull()
         }
-    }
+    }.value
     val clip = Modifier.clip(RoundedCornerShape(4.dp))
     val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     when {

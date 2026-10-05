@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,12 +36,42 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
+
+private const val APP_LAUNCHER_WIDGET_ICON_MAX_PX = 256
+
+private fun loadAppLauncherWidgetIcon(
+    context: Context,
+    packageName: String,
+    iconLookup: LauncherAppIconPaths.Lookup,
+    suppressCustomIcon: Boolean,
+): ImageBitmap? {
+    if (packageName.isBlank()) return null
+    if (!suppressCustomIcon) {
+        val custom: ImageBitmap? = runCatching {
+            val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
+                ?: return@runCatching null
+            decodeFileToOwnedImageBitmap(f)
+        }.getOrNull()
+        if (custom != null) return custom
+    }
+    return runCatching {
+        val pm = context.packageManager
+        val drawable = pm.getApplicationInfo(packageName, 0).loadIcon(pm)
+        val width = drawable.intrinsicWidth.takeIf { it > 0 }
+            ?.coerceAtMost(APP_LAUNCHER_WIDGET_ICON_MAX_PX) ?: APP_LAUNCHER_WIDGET_ICON_MAX_PX
+        val height = drawable.intrinsicHeight.takeIf { it > 0 }
+            ?.coerceAtMost(APP_LAUNCHER_WIDGET_ICON_MAX_PX) ?: APP_LAUNCHER_WIDGET_ICON_MAX_PX
+        drawable.toBitmap(width, height).asImageBitmap()
+    }.getOrNull()
+}
 
 @Composable
 internal fun DashboardAppLauncherWidgetItem(
@@ -58,22 +91,17 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = remember(packageName, customIconRevision, iconLookup, suppressCustomIcon) {
-        if (packageName.isBlank()) return@remember null
-        if (!suppressCustomIcon) {
-            val custom: ImageBitmap? = runCatching {
-                val f = LauncherAppIconPaths.resolveIconFile(context.filesDir, packageName, iconLookup)
-                    ?: return@runCatching null
-                decodeFileToOwnedImageBitmap(f)
-            }.getOrNull()
-            if (custom != null) return@remember custom
+    val imageBitmap = produceState<ImageBitmap?>(
+        initialValue = null,
+        packageName,
+        customIconRevision,
+        iconLookup,
+        suppressCustomIcon,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            loadAppLauncherWidgetIcon(context, packageName, iconLookup, suppressCustomIcon)
         }
-        runCatching {
-            val pm = context.packageManager
-            val info = pm.getApplicationInfo(packageName, 0)
-            info.loadIcon(pm).toBitmap().asImageBitmap()
-        }.getOrNull()
-    }
+    }.value
     val appLabel = remember(packageName) {
         if (packageName.isBlank()) {
             ""

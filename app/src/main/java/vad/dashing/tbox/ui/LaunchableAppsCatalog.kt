@@ -41,6 +41,21 @@ internal object LaunchableAppsCatalog {
     private var packageChangeReceiver: BroadcastReceiver? = null
     private var watchingAppContext: Context? = null
 
+    /** Cached list for these keys without loading (first frame while [getOrLoad] runs off main). */
+    fun peek(
+        iconSizePx: Int,
+        iconRevision: Int,
+        packagesRevision: Int,
+        lookup: LauncherAppIconPaths.Lookup,
+    ): List<LaunchableAppEntry>? = synchronized(this) {
+        entries?.takeIf {
+            cachedIconSizePx == iconSizePx &&
+                cachedIconRevision == iconRevision &&
+                cachedPackagesRevision == packagesRevision &&
+                cachedLookup == lookup
+        }
+    }
+
     fun getOrLoad(
         iconSizePx: Int,
         iconRevision: Int,

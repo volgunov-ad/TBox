@@ -7,6 +7,7 @@ import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -30,7 +31,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +48,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.HeadUnitCanMode
@@ -73,32 +79,56 @@ internal fun rememberLaunchableAppEntries(
 ): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
-    val lifecycleOwner = LocalLifecycleOwner.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
     val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
+    WatchLaunchablePackageChanges(appContext)
+    val entries by produceState(
+        initialValue = LaunchableAppsCatalog.peek(
+            iconSizePx,
+            launcherIconRevision,
+            packagesRevision,
+            iconLookup,
+        ) ?: emptyList(),
+        appContext,
+        iconSizePx,
+        launcherIconRevision,
+        iconLookup,
+        packagesRevision,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            LaunchableAppsCatalog.getOrLoad(
+                iconSizePx,
+                launcherIconRevision,
+                packagesRevision,
+                iconLookup,
+            ) {
+                loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
+            }
+        }
+    }
+    return entries
+}
+
+/** Package-change receiver plus an off-main launcher re-query on every resume. */
+@Composable
+internal fun WatchLaunchablePackageChanges(appContext: Context) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
     DisposableEffect(appContext, lifecycleOwner) {
         LaunchableAppsCatalog.ensurePackageChangeWatcher(appContext)
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                LaunchableAppsCatalog.refreshIfLaunchablePackagesChanged(appContext)
+                scope.launch(Dispatchers.IO) {
+                    runCatching { LaunchableAppsCatalog.refreshIfLaunchablePackagesChanged(appContext) }
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup, packagesRevision) {
-        LaunchableAppsCatalog.getOrLoad(
-            iconSizePx,
-            launcherIconRevision,
-            packagesRevision,
-            iconLookup,
-        ) {
-            loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
 }
