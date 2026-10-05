@@ -37,6 +37,7 @@ static const char *TAG = "ble_phone";
 #define TX_MAX 16
 /* A connected stranger that never sends a valid packet is dropped. */
 #define LINK_IDLE_MS 20000u
+#define IDLE_BLOCK_MS 60000u
 #define BLE_ERR_REM_USER_CONN_TERM 0x13
 /*
  * NVS is 24 KB. A counter write per packet (one refresh every ~2 s per open
@@ -111,6 +112,11 @@ static bool s_notify;
 static uint16_t s_mtu = 23;
 static uint32_t s_link_ms;
 static bool s_link_seen;
+static ble_addr_t s_link_addr;
+/* A dropped stranger reconnects at once and would hold the only link slot. */
+static bool s_idle_valid;
+static ble_addr_t s_idle_addr;
+static uint32_t s_idle_until_ms;
 
 /* USB messages are sent from ble_phone_poll (main loop), never from the NimBLE host task. */
 static bool s_out_pair;
@@ -750,6 +756,9 @@ void ble_phone_poll(uint32_t t)
         (uint32_t)(t - s_link_ms) > LINK_IDLE_MS) {
         drop_conn = s_conn;
         s_link_seen = true;
+        s_idle_valid = true;
+        s_idle_addr = s_link_addr;
+        s_idle_until_ms = t + IDLE_BLOCK_MS;
     }
     if (s_tx_n > 0 && s_notify && s_conn != BLE_HS_CONN_HANDLE_NONE &&
         s_mtu >= (uint16_t)(SEALED_LEN + 3)) {
@@ -921,12 +930,8 @@ static int start_adv_locked(void)
 
 void ble_phone_start_adv(void)
 {
-    int rc = ble_gatts_start();
-    if (rc != 0 && rc != BLE_HS_EALREADY) {
-        ESP_LOGW(TAG, "gatts start rc=%d", rc);
-    }
     ble_radio_lock();
-    rc = start_adv_locked();
+    int rc = start_adv_locked();
     ble_radio_unlock();
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         /* Advertising and a running scan do not always start together. */
@@ -967,14 +972,30 @@ void ble_phone_on_gap(struct ble_gap_event *event)
             ble_phone_start_adv();
             break;
         }
-        ble_radio_lock();
-        s_conn = event->connect.conn_handle;
-        s_notify = false;
-        s_mtu = 23;
-        s_link_ms = now_ms();
-        s_link_seen = false;
-        s_tx_n = 0;
-        ble_radio_unlock();
+        {
+            struct ble_gap_conn_desc desc;
+            bool blocked = false;
+            uint32_t t = now_ms();
+            memset(&desc, 0, sizeof(desc));
+            ble_gap_conn_find(event->connect.conn_handle, &desc);
+            ble_radio_lock();
+            s_conn = event->connect.conn_handle;
+            s_notify = false;
+            s_mtu = 23;
+            s_link_ms = t;
+            s_link_seen = false;
+            s_tx_n = 0;
+            s_link_addr = desc.peer_id_addr;
+            if (s_idle_valid && (int32_t)(t - s_idle_until_ms) >= 0) s_idle_valid = false;
+            blocked = s_idle_valid && !s_learn &&
+                      ble_addr_cmp(&s_idle_addr, &desc.peer_id_addr) == 0;
+            if (blocked) s_link_seen = true;
+            ble_radio_unlock();
+            if (blocked) {
+                ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+                break;
+            }
+        }
         {
             struct ble_gap_upd_params upd;
             memset(&upd, 0, sizeof(upd));

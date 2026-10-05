@@ -120,6 +120,7 @@ private fun PhoneScreen() {
             launcher.launch(permissions)
             return
         }
+        if (!radio.linkUp) return
         val counter = store.nextCounter()
         val payload = PhoneBleCodec.seal(
             store.key,

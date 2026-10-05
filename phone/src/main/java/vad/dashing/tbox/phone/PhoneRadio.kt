@@ -41,6 +41,8 @@ class PhoneRadio(
     private var running = false
     private var scanning = false
     private var writing = false
+    private var snapOnLink = false
+    private var strangerDrop = false
     private var snapshot = PhoneBleCodec.Snapshot()
 
     @Volatile var linkUp: Boolean = false
@@ -72,7 +74,7 @@ class PhoneRadio(
                     if (!gatt.requestMtu(PhoneBleCodec.ATT_MTU)) gatt.discoverServices()
                 } else {
                     dropLink()
-                    if (running) main.postDelayed({ startScan() }, 800)
+                    rescanLater()
                 }
             }
         }
@@ -96,7 +98,7 @@ class PhoneRadio(
                 if (status != BluetoothGatt.GATT_SUCCESS || inboxChr == null || snapChr == null) {
                     Log.w(TAG, "phone service missing")
                     dropLink()
-                    if (running) main.postDelayed({ startScan() }, 800)
+                    rescanLater()
                     return@post
                 }
                 inbox = inboxChr
@@ -104,7 +106,7 @@ class PhoneRadio(
                 val cccd = snapChr.getDescriptor(CCCD)
                 if (cccd == null || !writeCccd(gatt, cccd)) {
                     dropLink()
-                    if (running) main.postDelayed({ startScan() }, 800)
+                    rescanLater()
                 }
             }
         }
@@ -118,7 +120,7 @@ class PhoneRadio(
                     pump()
                 } else {
                     dropLink()
-                    if (running) main.postDelayed({ startScan() }, 800)
+                    rescanLater()
                 }
             }
         }
@@ -203,18 +205,27 @@ class PhoneRadio(
     private fun connect(device: BluetoothDevice) {
         if (!running || gatt != null) return
         stopScan()
+        snapOnLink = false
+        strangerDrop = false
         gatt = guardedOrNull("connect") {
             device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         }
-        if (gatt == null && running) main.postDelayed({ startScan() }, 800)
+        if (gatt == null) rescanLater()
+    }
+
+    private fun rescanLater() {
+        if (!running) return
+        main.postDelayed({ startScan() }, if (strangerDrop) STRANGER_RESCAN_MS else RESCAN_MS)
     }
 
     private fun dropLink() {
+        strangerDrop = linkUp && !snapOnLink
         gatt?.close()
         gatt = null
         inbox = null
         linkUp = false
         writing = false
+        pending.clear()
     }
 
     private fun pump() {
@@ -227,6 +238,7 @@ class PhoneRadio(
         if (!ok) {
             writing = false
             pending.addFirst(payload)
+            main.postDelayed({ pump() }, 200)
         }
     }
 
@@ -234,6 +246,7 @@ class PhoneRadio(
         val open = PhoneBleCodec.open(storeKey, value) ?: return
         if (open.type != PhoneBleCodec.TYPE_SNAP) return
         if (open.counter != waitingCounter) return
+        snapOnLink = true
         snapshot = PhoneBleCodec.overlaySnapshot(snapshot, open.body)
         onSnap(snapshot)
     }
@@ -317,6 +330,9 @@ class PhoneRadio(
     private companion object {
         const val TAG = "PhoneRadio"
         const val PENDING_MAX = 16
+        const val RESCAN_MS = 800L
+        /** The companion drops a phone it does not know and refuses it for a minute. */
+        const val STRANGER_RESCAN_MS = 10_000L
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }
