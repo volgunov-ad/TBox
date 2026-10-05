@@ -145,7 +145,6 @@ import vad.dashing.tbox.fuel.RefuelRecord
 import vad.dashing.tbox.fuel.RefuelRepository
 import vad.dashing.tbox.fuel.ambientTempForCalibrationC
 import vad.dashing.tbox.fuel.refuelsListFromJson
-import vad.dashing.tbox.fuel.refuelsListToJson
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
@@ -154,9 +153,7 @@ import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.trip.TripRules
 import vad.dashing.tbox.trip.favoritesSetFromJson
-import vad.dashing.tbox.trip.favoritesSetToJson
 import vad.dashing.tbox.trip.tripsListFromJson
-import vad.dashing.tbox.trip.tripsListToJson
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -281,8 +278,6 @@ class BackgroundService : Service() {
     private val commandRouterMutex = Mutex()
     /** Main-thread only: set once the service has entered the foreground state. */
     private var foregroundPromoted = false
-    private val tripsPersistMutex = Mutex()
-    private val refuelsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
@@ -1928,7 +1923,14 @@ class BackgroundService : Service() {
         stopDataListener()
         TripTelemetryRepository.stop()
         stopFuelCalibratedLitersWatcher()
-        scope.launch { finalizeTripsOnServiceStop() }
+        // Awaited so a following restart cannot reseed trip state while the stop is still finalizing.
+        try {
+            withContext(Dispatchers.Default) { finalizeTripsOnServiceStop() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Background Service", "finalizeTripsOnServiceStop failed", e)
+        }
         stopStateBroadcastListener()
         stopReadAllSMS()
         disconnectTboxClient()
@@ -3879,26 +3881,20 @@ class BackgroundService : Service() {
 
     private fun maybePersistTrips(force: Boolean) {
         if (!force && !TripRepository.needsPersistence()) return
-        val tripsJson = tripsListToJson(TripRepository.trips.value)
-        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
         scope.launch {
-            tripsPersistMutex.withLock {
-                appDataManager.saveTripsJson(tripsJson)
-                appDataManager.saveTripFavoritesJson(favJson)
-                TripRepository.markPersisted(tripsJson, favJson)
-            }
+            persistTripsNow(onlyIfNeeded = !force)
             persistLastKnownFuelLevel()
         }
     }
 
+    private suspend fun persistTripsNow(onlyIfNeeded: Boolean) {
+        TripRefuelPersistence.persistTrips(appDataManager, onlyIfNeeded)
+    }
+
     private fun maybePersistRefuels(force: Boolean) {
         if (!force && !RefuelRepository.needsPersistence()) return
-        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
         scope.launch {
-            refuelsPersistMutex.withLock {
-                appDataManager.saveRefuelsJson(refuelsJson)
-                RefuelRepository.markPersisted(refuelsJson)
-            }
+            TripRefuelPersistence.persistRefuels(appDataManager, onlyIfNeeded = !force)
         }
     }
 
@@ -4038,13 +4034,7 @@ class BackgroundService : Service() {
                     " ${tripTelemetryDebugSnippet()}",
             )
         }
-        val tripsJson = tripsListToJson(TripRepository.trips.value)
-        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-        tripsPersistMutex.withLock {
-            appDataManager.saveTripsJson(tripsJson)
-            appDataManager.saveTripFavoritesJson(favJson)
-            TripRepository.markPersisted(tripsJson, favJson)
-        }
+        persistTripsNow(onlyIfNeeded = false)
     }
 
     private suspend fun finalizeTripsOnServiceStop() {
@@ -4071,15 +4061,7 @@ class BackgroundService : Service() {
             tripFirstSampleAfterSessionStart = true
             FuelLevelStableApply.resetDwell()
         }
-        if (TripRepository.needsPersistence()) {
-            val tripsJson = tripsListToJson(TripRepository.trips.value)
-            val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-            tripsPersistMutex.withLock {
-                appDataManager.saveTripsJson(tripsJson)
-                appDataManager.saveTripFavoritesJson(favJson)
-                TripRepository.markPersisted(tripsJson, favJson)
-            }
-        }
+        persistTripsNow(onlyIfNeeded = true)
     }
 
     private suspend fun persistMotorHoursToStore() {

@@ -9,11 +9,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.fuel.FuelTypeOption
 import vad.dashing.tbox.fuel.RefuelRepository
-import vad.dashing.tbox.fuel.refuelsListToJson
 import vad.dashing.tbox.trip.TripRepository
-import vad.dashing.tbox.trip.favoritesSetToJson
-import vad.dashing.tbox.trip.tripsListToJson
-
 class AppDataViewModel(
     private val appDataManager: AppDataManager,
     private val settingsManager: SettingsManager,
@@ -159,19 +155,11 @@ class AppDataViewModel(
     }
 
     private suspend fun persistTripsIfNeeded() {
-        if (!TripRepository.needsPersistence()) return
-        val tripsJson = tripsListToJson(TripRepository.trips.value)
-        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-        appDataManager.saveTripsJson(tripsJson)
-        appDataManager.saveTripFavoritesJson(favJson)
-        TripRepository.markPersisted(tripsJson, favJson)
+        TripRefuelPersistence.persistTrips(appDataManager, onlyIfNeeded = true)
     }
 
     private suspend fun persistRefuelsIfNeeded() {
-        if (!RefuelRepository.needsPersistence()) return
-        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
-        appDataManager.saveRefuelsJson(refuelsJson)
-        RefuelRepository.markPersisted(refuelsJson)
+        TripRefuelPersistence.persistRefuels(appDataManager, onlyIfNeeded = true)
     }
 
     /**
