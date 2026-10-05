@@ -36,6 +36,8 @@ fun ThemeOpenConfirmDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val toastApplyOk = stringResource(R.string.toast_theme_apply_ok)
+    val toastApplyError = stringResource(R.string.toast_theme_apply_error)
     var applying by remember(request) { mutableStateOf(false) }
     var availableTargets by remember(request) { mutableStateOf<Set<ThemeApplyTarget>?>(null) }
     var selectedTargets by remember(request) { mutableStateOf<Set<ThemeApplyTarget>>(emptySet()) }
@@ -114,14 +116,14 @@ fun ThemeOpenConfirmDialog(
                             if (result.isSuccess) {
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.toast_theme_apply_ok),
+                                    toastApplyOk,
                                     Toast.LENGTH_LONG,
                                 ).show()
                             } else {
                                 val msg = result.exceptionOrNull()?.message.orEmpty()
                                 Toast.makeText(
                                     context,
-                                    context.getString(R.string.toast_theme_apply_error, msg),
+                                    toastApplyError.format(msg),
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }

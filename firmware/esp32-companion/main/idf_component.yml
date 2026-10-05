@@ -15,3 +15,5 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp_tinyusb: ^1.7.6
+  # Moved out of ESP-IDF in 5.5.
+  espressif/mdns: "^1.8.0"

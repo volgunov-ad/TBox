@@ -5,6 +5,8 @@ object SlaSpeedLimitDomain {
     const val SPEED_LIMITER_KMH_MIN = 0
     const val SPEED_LIMITER_KMH_MAX = 150
     const val SPEED_LIMITER_KMH_DEFAULT = 60
+    /** First write when CAN VALUESET has no data yet; further ± can go down to [SPEED_LIMITER_KMH_MIN]. */
+    const val SPEED_LIMITER_KMH_BOOTSTRAP = 30
     const val SPEED_LIMITER_KMH_STEP = 5
 
     const val SLA_SWITCH_OFF = 1
@@ -109,6 +111,19 @@ object SlaSpeedLimitDomain {
         val delta = if (increase) SPEED_LIMITER_KMH_STEP else -SPEED_LIMITER_KMH_STEP
         return clampLimiterTargetKmh(current + delta)
     }
+
+    /**
+     * Next widget ± target from live CAN VALUESET.
+     * When [currentFromCan] is null (no data), returns [SPEED_LIMITER_KMH_BOOTSTRAP].
+     */
+    fun nextLimiterTargetFromCan(currentFromCan: Int?, increase: Boolean): Int {
+        if (currentFromCan == null) return SPEED_LIMITER_KMH_BOOTSTRAP
+        return stepLimiterTargetKmh(currentFromCan, increase)
+    }
+
+    /** Target to write when enabling limiter with no live VALUESET. */
+    fun resolveLimiterTargetOrBootstrap(currentFromCan: Int?): Int =
+        currentFromCan?.let(::clampLimiterTargetKmh) ?: SPEED_LIMITER_KMH_BOOTSTRAP
 }
 
 /** Dashboard SLA sign presentation (stock AdasCard-aligned). */

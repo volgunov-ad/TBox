@@ -10,6 +10,7 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -37,6 +38,11 @@ firmware/esp32-companion/_cdc_*.txt
 
 # Large vendor PDFs kept locally (not in git)
 docs/*.pdf
+!docs/USER_GUIDE_RU.pdf
 
 # Built road-map packs (copied into assets by build_road_map_packs.py)
 tools/out/
+
+# Voice TTS / STT models (downloaded by Gradle fetch*Model tasks, not committed)
+voice/src/main/assets/vits-piper-*/
+voice/src/main/assets/vosk-model-*/

@@ -1,0 +1,121 @@
+package vad.dashing.tbox.mbcan
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
+import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
+
+class MbCanWidgetSignalMapTest {
+    @Test
+    fun previouslyMissingA10GateKeys_mapToSignals() {
+        assertEquals(MbCanSignal.LasModeSelection, MbCanWidgetSignalMap.signalFor(LDW_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.LasModeSelection, MbCanWidgetSignalMap.signalFor(LKA_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.TjaIca, MbCanWidgetSignalMap.signalFor(TJA_ICA_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.HmaSwitch, MbCanWidgetSignalMap.signalFor(HMA_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.HvacAcMax, MbCanWidgetSignalMap.signalFor(HVAC_AC_MAX_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.TrunkDoor, MbCanWidgetSignalMap.signalFor(TRUNK_DOOR_WIDGET_DATA_KEY))
+        assertEquals(MbCanSignal.GasPedal, MbCanWidgetSignalMap.signalFor(GAS_BRAKE_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun panelNeedsCan_trueWhenLonePreviouslyGatedWidget() {
+        listOf(
+            LDW_WIDGET_DATA_KEY,
+            LKA_WIDGET_DATA_KEY,
+            TJA_ICA_WIDGET_DATA_KEY,
+            HMA_WIDGET_DATA_KEY,
+            HVAC_AC_MAX_WIDGET_DATA_KEY,
+            TRUNK_DOOR_WIDGET_DATA_KEY,
+        ).forEach { key ->
+            assertTrue(key, MbCanWidgetSignalMap.panelNeedsCan(listOf(key)))
+        }
+    }
+
+    @Test
+    fun panelNeedsCan_falseForUnknownOrBlank() {
+        assertFalse(MbCanWidgetSignalMap.panelNeedsCan(listOf("speedWidget")))
+        assertFalse(MbCanWidgetSignalMap.panelNeedsCan(listOf("")))
+        assertFalse(MbCanWidgetSignalMap.panelNeedsCan(listOf("null")))
+    }
+
+    @Test
+    fun climatePanel_addsHvacFrontOffPiggyback() {
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(
+            listOf(HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY),
+        )
+        assertTrue(signals.contains(MbCanSignal.HvacCustomMode))
+        assertTrue(signals.contains(MbCanSignal.HvacFrontOff))
+    }
+
+    @Test
+    fun gasBrakeWidget_subscribesGasAndBrake() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(GAS_BRAKE_WIDGET_DATA_KEY)))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.GasPedal))
+        assertTrue(signals.contains(MbCanSignal.BrakePedal))
+    }
+
+    @Test
+    fun wiperMaintenanceWidget_subscribesMaintenanceAndWiperSts() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY)))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(WIPER_MAINTENANCE_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.WiperMaintenance))
+        assertTrue(signals.contains(MbCanSignal.WiperSts))
+    }
+
+    @Test
+    fun highBeamWidget_subscribesHighBeamAndHmaSwitch() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(HIGH_BEAM_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.HighBeam, MbCanWidgetSignalMap.signalFor(HIGH_BEAM_WIDGET_DATA_KEY))
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(listOf(HIGH_BEAM_WIDGET_DATA_KEY))
+        assertTrue(signals.contains(MbCanSignal.HighBeam))
+        assertTrue(signals.contains(MbCanSignal.HmaSwitch))
+    }
+
+    @Test
+    fun epbParkLampWidget_subscribesEpbParkLamp() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(EPB_PARK_LAMP_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.EpbParkLamp, MbCanWidgetSignalMap.signalFor(EPB_PARK_LAMP_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun engineOilPressureWidget_subscribesEngineOilPressure() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY)))
+        assertEquals(
+            MbCanSignal.EngineOilPressure,
+            MbCanWidgetSignalMap.signalFor(ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY),
+        )
+        assertTrue(
+            MbCanSignal.EngineOilPressure.subscribeDataTypes.contains("eMBCAN_VEHICLE_ICM_DRIVE_INFO"),
+        )
+    }
+
+    @Test
+    fun brakeFluidWidget_subscribesBrakeFluid() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(BRAKE_FLUID_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.BrakeFluid, MbCanWidgetSignalMap.signalFor(BRAKE_FLUID_WIDGET_DATA_KEY))
+        assertTrue(
+            MbCanSignal.BrakeFluid.subscribeDataTypes.contains("eMBCAN_VEHICLE_ICM_DRIVE_INFO"),
+        )
+    }
+
+    @Test
+    fun frmDxTarObjWidget_subscribesFrmTargetDistance() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY)))
+        assertEquals(MbCanSignal.FrmTargetDistance, MbCanWidgetSignalMap.signalFor(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY))
+    }
+}

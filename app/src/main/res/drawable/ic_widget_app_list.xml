@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Three rows of app shortcuts: icon square + label bar -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M6,8h8v8h-8zM18,9.5h24v5h-24zM6,20h8v8h-8zM18,21.5h24v5h-24zM6,32h8v8h-8zM18,33.5h24v5h-24z" />
+</vector>

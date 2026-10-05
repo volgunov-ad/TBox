@@ -1,0 +1,21 @@
+---
+description: Новые строки добавлять и в ru (main), и в en flavor
+globs: "**/res/**/*.xml"
+alwaysApply: false
+---
+
+# Строки: ru и en вместе
+
+Flavor `ru` берёт `app/src/main/res/` (русский текст). Flavor `en` перекрывает тем же `name` из `app/src/en/res/`.
+
+- Новый `R.string.*` — **оба** файла: `app/src/main/res/values/strings.xml` и `app/src/en/res/values/strings.xml`.
+- Имя ключа одинаковое; в `main` — русский, в `en` — английский.
+- Не класть английский в `main` «на потом» и не править только один flavor.
+- Hardcoded UI-текст в Compose/Kotlin не заменяет string resource, если соседние строки уже через `R.string`.
+
+```xml
+<!-- ❌ BAD: ключ только в main -->
+<!-- ✅ GOOD: один name в обоих strings.xml -->
+<string name="action_save">Сохранить</string>  <!-- main, ru -->
+<string name="action_save">Save</string>         <!-- src/en, en -->
+```

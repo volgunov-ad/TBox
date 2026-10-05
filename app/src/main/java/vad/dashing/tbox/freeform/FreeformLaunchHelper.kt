@@ -4,6 +4,7 @@ import android.app.ActivityOptions
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
@@ -13,10 +14,13 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import android.widget.Toast
+import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.BackgroundService
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
  * Freeform launch for companion apps only (Taskbar-style).
@@ -84,18 +88,59 @@ object FreeformLaunchHelper {
         }
     }
 
+    /**
+     * Whether we should attempt freeform companion launch.
+     *
+     * Adayo Android 10 HUs (Jetour) often honor [ActivityOptions] freeform windowing/bounds
+     * without advertising [PackageManager.FEATURE_FREEFORM_WINDOW_MANAGEMENT] or setting
+     * `enable_freeform_support`. Gating only on those flags produced a false
+     * “window mode unavailable” toast on A10.
+     */
     fun hasFreeformSupport(context: Context): Boolean {
+        val advertised = hasAdvertisedFreeformSupport(context)
+        val adayoOrA10 =
+            AdayoStockAppWindow.isAvailable(context) ||
+                UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal
+        return FreeformSupportDecision.evaluate(
+            advertised = advertised,
+            adayoOrAndroid10Hu = adayoOrA10,
+            canBuildActivityOptions = canBuildFreeformActivityOptions(),
+        )
+    }
+
+    private fun hasAdvertisedFreeformSupport(context: Context): Boolean {
         val pm = context.packageManager
         if (pm.hasSystemFeature(PackageManager.FEATURE_FREEFORM_WINDOW_MANAGEMENT)) {
             return true
         }
+        try {
+            val cr = context.contentResolver
+            if (Settings.Global.getInt(cr, "enable_freeform_support", 0) != 0) {
+                return true
+            }
+            if (Settings.Global.getInt(cr, "force_resizable_activities", 0) != 0) {
+                return true
+            }
+        } catch (_: Exception) {
+            // Fall through to framework config / HU heuristics.
+        }
         return try {
-            Settings.Global.getInt(context.contentResolver, "enable_freeform_support", 0) != 0 ||
-                (Build.VERSION.SDK_INT <= 25 &&
-                    Settings.Global.getInt(context.contentResolver, "force_resizable_activities", 0) != 0)
+            val res = Resources.getSystem()
+            val id = res.getIdentifier(
+                "config_supportsFreeformWindowManagement",
+                "bool",
+                "android",
+            )
+            id != 0 && res.getBoolean(id)
         } catch (_: Exception) {
             false
         }
+    }
+
+    /** True when hidden [ActivityOptions] freeform setters are present (API 28+). */
+    private fun canBuildFreeformActivityOptions(): Boolean {
+        val tiny = Rect(0, 0, 1, 1)
+        return activityOptionsBundle(freeformWindowingModeId(), tiny, launchDisplayId = null) != null
     }
 
     /**
@@ -210,6 +255,24 @@ object FreeformLaunchHelper {
      * overlay does not stay on top of the newly launched app.
      */
     fun runAfterExitingWindowMode(context: Context, action: () -> Unit) {
+        runAfterExitingWindowMode(context, restoreMainActivity = false, action = action)
+    }
+
+    /**
+     * Like [runAfterExitingWindowMode], but restores [vad.dashing.tbox.MainActivity] after teardown.
+     *
+     * Used for UI that needs a focusable Activity (Compose [androidx.compose.ui.window.Dialog]),
+     * e.g. the app-list dialog — TYPE_APPLICATION_OVERLAY with FLAG_NOT_FOCUSABLE cannot host it.
+     */
+    fun runAfterExitingWindowModeToFullscreen(context: Context, action: () -> Unit) {
+        runAfterExitingWindowMode(context, restoreMainActivity = true, action = action)
+    }
+
+    private fun runAfterExitingWindowMode(
+        context: Context,
+        restoreMainActivity: Boolean,
+        action: () -> Unit,
+    ) {
         val appContext = context.applicationContext
         val needsExit = FreeformCompanionSession.isActive ||
             exitInProgress ||
@@ -221,7 +284,8 @@ object FreeformLaunchHelper {
         pendingAppContext = appContext
         pendingAfterExit = PendingAfterExit.Action(action)
         dbg(
-            "queue action after full exit exitInProgress=$exitInProgress " +
+            "queue action after full exit restoreMain=$restoreMainActivity " +
+                "exitInProgress=$exitInProgress " +
                 "session=${FreeformCompanionSession.isActive} " +
                 "anchor=${FreeformInvisibleAnchorActivity.isRunning}",
         )
@@ -229,7 +293,7 @@ object FreeformLaunchHelper {
             beginExitWindowMode(
                 appContext,
                 EXIT_DEFER_FROM_CLICK_MS,
-                restoreMainActivity = false,
+                restoreMainActivity = restoreMainActivity,
             )
         }
     }

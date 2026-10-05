@@ -14,7 +14,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,7 +32,7 @@ fun DashboardParkingRadarWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.parkingRadarState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -59,7 +58,7 @@ fun DashboardParkingRadarWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -68,11 +67,11 @@ fun DashboardParkingRadarWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_parking_radar),
+                    painter = customizableUiPainter(id = R.drawable.ic_widget_parking_radar),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_parking_radar, iconColor)
                 )
             }
         }

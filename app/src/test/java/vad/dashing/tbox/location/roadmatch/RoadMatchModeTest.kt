@@ -14,10 +14,10 @@ class RoadMatchModeTest {
     }
 
     @Test
-    fun fromStorage_acceptsRailsAliases() {
-        assertEquals(RoadMatchMode.RAILS, RoadMatchMode.fromStorage("RAILS"))
-        assertEquals(RoadMatchMode.RAILS, RoadMatchMode.fromStorage("rails"))
-        assertEquals(RoadMatchMode.RAILS, RoadMatchMode.fromStorage("RAIL"))
-        assertEquals(RoadMatchMode.RAILS, RoadMatchMode.fromStorage(" rail "))
+    fun fromStorage_acceptsFreeTurnsAliases() {
+        assertEquals(RoadMatchMode.FREE_TURNS, RoadMatchMode.fromStorage("FREE_TURNS"))
+        assertEquals(RoadMatchMode.FREE_TURNS, RoadMatchMode.fromStorage("freeturns"))
+        assertEquals(RoadMatchMode.FREE_TURNS, RoadMatchMode.fromStorage("FREE"))
+        assertEquals(RoadMatchMode.FREE_TURNS, RoadMatchMode.fromStorage(" free "))
     }
 }

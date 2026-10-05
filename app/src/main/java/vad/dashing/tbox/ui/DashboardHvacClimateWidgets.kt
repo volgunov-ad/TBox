@@ -24,14 +24,15 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.mbcan.HvacBlowMode
+import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacClimateDomain
 import vad.dashing.tbox.mbcan.MbCanBinaryState
@@ -41,7 +42,12 @@ import vad.dashing.tbox.mbcan.adjustHvacTempLeft
 import vad.dashing.tbox.mbcan.adjustHvacTempRight
 import vad.dashing.tbox.mbcan.launchHvacClimateCommand
 import vad.dashing.tbox.mbcan.setHvacBlowMode
+import vad.dashing.tbox.mbcan.setHvacCustomMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
+import vad.dashing.tbox.ui.theme.WidgetActiveColors
+
+private val HvacCustomEcoColor = Color(0xD900A400)
+private val HvacCustomComfortColor = Color(0xD900C8FF)
 
 private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
     HvacBlowMode.Face -> R.drawable.ic_widget_hvac_blow_face
@@ -61,7 +67,7 @@ fun DashboardHvacSyncWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by HvacClimateCanRepository.hvacSyncState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
@@ -87,7 +93,7 @@ fun DashboardHvacSyncWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -96,11 +102,11 @@ fun DashboardHvacSyncWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_hvac_sync),
+                    painter = customizableUiPainter(id = R.drawable.ic_widget_hvac_sync),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_hvac_sync, iconColor)
                 )
             }
         }
@@ -137,8 +143,8 @@ fun DashboardHvacFanWidgetItem(
         adjustIconStyle = stepperAdjustIconStyle,
         controlsActive = !frontOffActive,
         centerIcon = { contentColor ->
-            Icon(
-                painter = painterResource(R.drawable.ic_widget_hvac_fan),
+            CustomizableUiIcon(
+                drawableRes = R.drawable.ic_widget_hvac_fan,
                 contentDescription = stringResource(R.string.widget_hvac_front_off_toggle),
                 tint = contentColor,
                 modifier = Modifier.fillMaxSize(),
@@ -178,6 +184,7 @@ fun DashboardHvacTempLeftWidgetItem(
     showTitle: Boolean = true,
     titleOverride: String = "",
     stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -193,6 +200,7 @@ fun DashboardHvacTempLeftWidgetItem(
         titleOverride = titleOverride,
         defaultTitleRes = R.string.data_title_hvac_temp_left_widget,
         stepperAdjustIconStyle = stepperAdjustIconStyle,
+        hvacTempStepTenths = hvacTempStepTenths,
     )
 }
 
@@ -209,6 +217,7 @@ fun DashboardHvacTempRightWidgetItem(
     showTitle: Boolean = true,
     titleOverride: String = "",
     stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
 ) {
     HvacTempStepperWidget(
         isVertical = isVertical,
@@ -224,6 +233,7 @@ fun DashboardHvacTempRightWidgetItem(
         titleOverride = titleOverride,
         defaultTitleRes = R.string.data_title_hvac_temp_right_widget,
         stepperAdjustIconStyle = stepperAdjustIconStyle,
+        hvacTempStepTenths = hvacTempStepTenths,
     )
 }
 
@@ -242,6 +252,7 @@ private fun HvacTempStepperWidget(
     titleOverride: String,
     defaultTitleRes: Int,
     stepperAdjustIconStyle: Int,
+    hvacTempStepTenths: Int,
 ) {
     val scope = rememberCoroutineScope()
     val tempLeft by HvacClimateCanRepository.hvacTempLeftCelsius.collectAsStateWithLifecycle()
@@ -264,12 +275,20 @@ private fun HvacTempStepperWidget(
         enableInnerInteractions = enableInnerInteractions,
         onDecrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) adjustHvacTempLeft(increase = false) else adjustHvacTempRight(increase = false)
+                if (isLeftZone) {
+                    adjustHvacTempLeft(increase = false, stepTenths = hvacTempStepTenths)
+                } else {
+                    adjustHvacTempRight(increase = false, stepTenths = hvacTempStepTenths)
+                }
             }
         },
         onIncrease = {
             UniversalCanRepository.launchHvacClimateCommand(scope) {
-                if (isLeftZone) adjustHvacTempLeft(increase = true) else adjustHvacTempRight(increase = true)
+                if (isLeftZone) {
+                    adjustHvacTempLeft(increase = true, stepTenths = hvacTempStepTenths)
+                } else {
+                    adjustHvacTempRight(increase = true, stepTenths = hvacTempStepTenths)
+                }
             }
         },
         onCenterClick = {
@@ -298,7 +317,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
@@ -341,7 +360,7 @@ fun DashboardHvacBlowModeCycleWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            modifier = Modifier.fillMaxSize().padding(4.dp),
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
         ) { contentModifier ->
             Box(
                 modifier = contentModifier.fillMaxWidth(),
@@ -364,13 +383,16 @@ fun DashboardHvacBlowModeCycleWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(
+                        painter = customizableUiPainter(
                             if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face
                         ),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.matchParentSize().scale(scale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        modifier = Modifier.matchParentSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(
+                            if (mode != null) hvacBlowModeIconRes(mode) else R.drawable.ic_widget_hvac_blow_face,
+                            iconColor,
+                        ),
                     )
                 }
             }
@@ -390,6 +412,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = true,
     titleOverride: String = "",
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val blowMode by HvacClimateCanRepository.hvacBlowMode.collectAsStateWithLifecycle()
@@ -418,7 +441,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
             titleText = titleText,
             availableHeight = availableHeight,
             resolvedTextColor = resolvedTextColor,
-            modifier = Modifier.fillMaxSize().padding(6.dp),
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) { contentModifier ->
             if (isVertical) {
@@ -433,6 +456,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
                             textColor = LocalWidgetControlAppearance.current.inactiveContent,
+                            iconScale = iconScale,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -453,6 +477,7 @@ fun DashboardHvacBlowModePanelWidgetItem(
                             selected = displayMode == mode,
                             enabled = enableInnerInteractions,
                             textColor = LocalWidgetControlAppearance.current.inactiveContent,
+                            iconScale = iconScale,
                             onClick = {
                                 pendingMode = mode
                                 debounceHost.schedule(scope)
@@ -473,6 +498,7 @@ private fun BlowModePanelButton(
     selected: Boolean,
     enabled: Boolean,
     textColor: Color,
+    iconScale: Float,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -485,14 +511,117 @@ private fun BlowModePanelButton(
             .combinedClickableWithSound(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
     ) {
         Image(
-            painter = painterResource(hvacBlowModeIconRes(mode)),
+            painter = customizableUiPainter(hvacBlowModeIconRes(mode)),
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp),
-            colorFilter = ColorFilter.tint(iconColor)
+                .padding(4.dp)
+                .scale(iconScale),
+            colorFilter = uiIconColorFilter(hvacBlowModeIconRes(mode), iconColor),
         )
+    }
+}
+
+private fun hvacCustomModeIconRes(mode: HvacCustomMode): Int = when (mode) {
+    HvacCustomMode.Eco -> R.drawable.ic_widget_hvac_mode_eco
+    HvacCustomMode.Comfort -> R.drawable.ic_widget_hvac_mode_comfort
+    HvacCustomMode.Strong -> R.drawable.ic_widget_hvac_mode_strong
+}
+
+private fun HvacCustomMode.activeColor(): Color = when (this) {
+    HvacCustomMode.Eco -> HvacCustomEcoColor
+    HvacCustomMode.Comfort -> HvacCustomComfortColor
+    HvacCustomMode.Strong -> WidgetActiveColors.Secondary
+}
+
+@Composable
+fun DashboardHvacCustomModeCycleWidgetItem(
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    enableInnerInteractions: Boolean,
+    elevation: Dp,
+    shape: Dp,
+    textColor: Color,
+    backgroundColor: Color,
+    showTitle: Boolean = false,
+    titleOverride: String = "",
+    iconScale: Float = 1f,
+) {
+    val scope = rememberCoroutineScope()
+    val customMode by HvacClimateCanRepository.hvacCustomMode.collectAsStateWithLifecycle()
+    var pendingMode by remember { mutableStateOf<HvacCustomMode?>(null) }
+    val displayMode = pendingMode ?: customMode
+    val debounceHost = rememberDebouncedCanCommandHost(HVAC_BLOW_MODE_DEBOUNCE_MS) {
+        val target = pendingMode ?: return@rememberDebouncedCanCommandHost
+        UniversalCanRepository.setHvacCustomMode(target)
+        pendingMode = null
+    }
+
+    val defaultTitle = stringResource(R.string.data_title_hvac_custom_mode_cycle_widget)
+    val titleText = titleOverride.trim().ifBlank { defaultTitle }
+    val controls = LocalWidgetControlAppearance.current
+    val useDefaults = LocalWidgetControlUsesDefaults.current
+
+    DashboardWidgetScaffold(
+        onClick = {
+            if (enableInnerInteractions) {
+                val next = HvacCustomMode.nextInCycle(displayMode)
+                pendingMode = next
+                debounceHost.schedule(scope)
+            } else {
+                onClick()
+            }
+        },
+        onLongClick = onLongClick,
+        elevation = elevation,
+        shape = shape,
+        textColor = textColor,
+        backgroundColor = backgroundColor
+    ) { availableHeight, resolvedTextColor ->
+        DashboardWidgetContentWithOptionalTitle(
+            showTitle = showTitle,
+            titleText = titleText,
+            availableHeight = availableHeight,
+            resolvedTextColor = resolvedTextColor,
+            modifier = Modifier.fillMaxSize().padding(LocalWidgetControlAppearance.current.paddingDp),
+        ) { contentModifier ->
+            Box(
+                modifier = contentModifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                val mode = displayMode
+                val iconColor = when {
+                    mode == null -> controls.inactiveContent.copy(alpha = 0.25f)
+                    useDefaults -> mode.activeColor()
+                    else -> controls.activeContent
+                }
+                WidgetControlChrome(
+                    background = if (mode != null) {
+                        controls.activeBackground
+                    } else {
+                        controls.inactiveBackground
+                    },
+                    shapeDp = controls.shapeDp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Image(
+                        painter = customizableUiPainter(
+                            if (mode != null) hvacCustomModeIconRes(mode)
+                            else R.drawable.ic_widget_hvac_mode_eco
+                        ),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.matchParentSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(
+                            if (mode != null) hvacCustomModeIconRes(mode)
+                            else R.drawable.ic_widget_hvac_mode_eco,
+                            iconColor,
+                        ),
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -4,7 +4,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -32,7 +37,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -43,10 +50,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.location.GeoCoordinateParse
@@ -56,11 +63,18 @@ import vad.dashing.tbox.location.roadmatch.OverlayPoseMarker
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
 import vad.dashing.tbox.location.roadmatch.RoadMatchCanvasProjection
 import vad.dashing.tbox.location.roadmatch.RoadMatchCanvasViewport
+import vad.dashing.tbox.location.roadmatch.RoadMatchLeashMath
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeed
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
+import vad.dashing.tbox.location.roadmatch.RoadMatchSeedBearing
 import vad.dashing.tbox.location.roadmatch.RoadMatchSeedMath
+import vad.dashing.tbox.location.roadmatch.RoadMatchSetGestureKind
+import vad.dashing.tbox.speedcam.SpeedCamMapCoverage
+import vad.dashing.tbox.speedcam.SpeedCamMapMarker
+import vad.dashing.tbox.speedcam.SpeedCamRepository
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -73,8 +87,8 @@ private const val PASTE_COORDS_ERROR_MS = 2_000L
 internal const val HEADING_UP_LATCH_BASE_ICON_DP = 18f
 internal const val HEADING_UP_LATCH_HIT_TO_ICON = 28f / 18f
 
-internal fun headingUpLatchIconDp(unitFontSizeDp: Float, textScale: Float): Float {
-    val scale = textScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+internal fun headingUpLatchIconDp(unitFontSizeDp: Float, iconScale: Float): Float {
+    val scale = iconScale.takeIf { it.isFinite() && it > 0f } ?: 1f
     val floor = HEADING_UP_LATCH_BASE_ICON_DP * scale
     val fromUnit = unitFontSizeDp.takeIf { it.isFinite() && it > 0f } ?: floor
     return maxOf(floor, fromUnit)
@@ -102,9 +116,13 @@ fun DashboardRoadMatchMapWidgetItem(
     titleOverride: String = "",
     headingUp: Boolean = false,
     onHeadingUpChange: (Boolean) -> Unit = {},
+    mapKitBasemap: Boolean = false,
+    basemapTransparencyPercent: Int = 0,
+    mapkitApiKey: String = "",
 ) {
     val live by RoadMatchOverlayRepository.state.collectAsStateWithLifecycle()
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
+    val speedCam by SpeedCamRepository.state.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
     val defaultTitle = stringResource(R.string.data_title_road_match_map_widget)
     val title = titleOverride.trim().ifBlank { defaultTitle }
@@ -135,6 +153,8 @@ fun DashboardRoadMatchMapWidgetItem(
     }
     var displayedHeading by remember { mutableFloatStateOf(0f) }
     var displayedAheadFrac by remember { mutableFloatStateOf(0f) }
+    var displayedLat by remember { mutableDoubleStateOf(Double.NaN) }
+    var displayedLon by remember { mutableDoubleStateOf(Double.NaN) }
     var followCameraReady by remember { mutableStateOf(false) }
     var setRotationDeg by remember { mutableFloatStateOf(0f) }
 
@@ -202,6 +222,9 @@ fun DashboardRoadMatchMapWidgetItem(
     val targetAheadLatest by rememberUpdatedState(
         if (headingUp) RoadMatchCanvasProjection.HEADING_UP_AHEAD_FRACTION else 0f,
     )
+    val targetLatLatest by rememberUpdatedState(displayState.shadow.lat)
+    val targetLonLatest by rememberUpdatedState(displayState.shadow.lon)
+    val shadowVisibleLatest by rememberUpdatedState(displayState.shadow.visible)
     LaunchedEffect(setMode) {
         if (setMode) {
             followCameraReady = false
@@ -216,13 +239,21 @@ fun DashboardRoadMatchMapWidgetItem(
                     ((now - lastNs).toDouble() / 1_000_000_000.0).coerceIn(0.0, 0.05)
                 }
                 lastNs = now
+                if (!shadowVisibleLatest) {
+                    followCameraReady = false
+                    return@withFrameNanos
+                }
                 val targetHalf = targetHalfLatest
                 val targetHeading = targetHeadingLatest
                 val targetAhead = targetAheadLatest
+                val targetLat = targetLatLatest
+                val targetLon = targetLonLatest
                 if (!followCameraReady) {
                     displayedHalfHeight = targetHalf
                     displayedHeading = targetHeading
                     displayedAheadFrac = targetAhead
+                    displayedLat = targetLat
+                    displayedLon = targetLon
                     followCameraReady = true
                     return@withFrameNanos
                 }
@@ -233,6 +264,10 @@ fun DashboardRoadMatchMapWidgetItem(
                 val headT = RoadMatchCanvasProjection.followBlendT(
                     dt,
                     RoadMatchCanvasProjection.FOLLOW_HEADING_TAU_SEC,
+                )
+                val posT = RoadMatchCanvasProjection.followBlendT(
+                    dt,
+                    RoadMatchCanvasProjection.FOLLOW_POS_TAU_SEC,
                 )
                 displayedHalfHeight = RoadMatchCanvasProjection.lerpSpan(
                     displayedHalfHeight,
@@ -245,6 +280,26 @@ fun DashboardRoadMatchMapWidgetItem(
                     headT,
                 )
                 displayedAheadFrac += (targetAhead - displayedAheadFrac) * headT
+                val jumpM = RoadMatchCanvasProjection.approxDistanceM(
+                    displayedLat,
+                    displayedLon,
+                    targetLat,
+                    targetLon,
+                )
+                if (jumpM >= RoadMatchCanvasProjection.FOLLOW_POS_SNAP_M) {
+                    displayedLat = targetLat
+                    displayedLon = targetLon
+                } else {
+                    val blended = RoadMatchCanvasProjection.lerpLatLon(
+                        displayedLat,
+                        displayedLon,
+                        targetLat,
+                        targetLon,
+                        posT.toDouble(),
+                    )
+                    displayedLat = blended.lat
+                    displayedLon = blended.lon
+                }
             }
         }
     }
@@ -263,6 +318,8 @@ fun DashboardRoadMatchMapWidgetItem(
             halfHeightM = displayedHalfHeight,
             headingDeg = displayedHeading,
             aheadFraction = displayedAheadFrac,
+            followLat = displayedLat,
+            followLon = displayedLon,
         )
     }
 
@@ -302,6 +359,12 @@ fun DashboardRoadMatchMapWidgetItem(
         pasteFailed = false
         draftLat = parsed.lat
         draftLon = parsed.lon
+        // Align draft course to nearest edge (≤30 m, oneway-aware); else keep ring bearing.
+        draftBearing = RoadMatchSeedBearing.snapOrKeep(
+            lat = parsed.lat,
+            lon = parsed.lon,
+            currentBearingDeg = draftBearing,
+        )
     }
 
     DashboardWidgetScaffold(
@@ -320,56 +383,62 @@ fun DashboardRoadMatchMapWidgetItem(
             val setRotationLatest by rememberUpdatedState(setRotationDeg)
             val gestureModifier = if (setMode) {
                 Modifier.pointerInput(setMode) {
-                    detectTransformGestures { centroid, pan, zoom, _ ->
-                        val widthPx = size.width.toFloat()
-                        val heightPx = size.height.toFloat()
-                        val minDim = min(widthPx, heightPx)
-                        val ringR = RoadMatchSeedMath.headingRingRadiusPx(minDim)
-                        val band = RoadMatchSeedMath.headingRingBandPx(minDim)
-                        val dx = centroid.x - widthPx * 0.5f
-                        val dy = centroid.y - heightPx * 0.5f
-                        val rot = setRotationLatest
-                        val onRing = zoom == 1f &&
-                            RoadMatchSeedMath.isOnHeadingRing(dx, dy, ringR - band, ringR + band)
-                        if (onRing) {
-                            draftBearing = RoadMatchSeedMath.bearingFromCanvasDelta(dx, dy, rot)
-                            return@detectTransformGestures
-                        }
-                        var span = halfHeightLatest
-                        if (zoom != 1f) {
-                            span = RoadMatchSeedMath.applyPinchZoom(span, zoom)
-                            halfHeightM = span
-                        }
-                        if (pan.x != 0f || pan.y != 0f) {
-                            val vp = RoadMatchCanvasProjection.viewportAt(
-                                centerLat = draftLatLatest,
-                                centerLon = draftLonLatest,
-                                halfHeightM = span,
-                                aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
-                                rotationDeg = rot,
-                            )
-                            val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
-                                panXpx = pan.x,
-                                panYpx = pan.y,
-                                widthPx = widthPx,
-                                heightPx = heightPx,
-                                halfWidthM = vp.halfWidthM,
-                                halfHeightM = vp.halfHeightM,
-                                rotationDeg = rot,
-                            )
-                            val moved = RoadMatchSeedMath.shiftCenter(
-                                lat = draftLatLatest,
-                                lon = draftLonLatest,
-                                eastM = eastM,
-                                northM = northM,
-                            )
-                            draftLat = moved.lat
-                            draftLon = moved.lon
-                        }
-                    }
+                    detectRoadMatchSetGestures(
+                        rotationDeg = { setRotationLatest },
+                        onHeading = { bearing -> draftBearing = bearing },
+                        onPanZoom = { pan, zoom ->
+                            val widthPx = size.width.toFloat()
+                            val heightPx = size.height.toFloat()
+                            val rot = setRotationLatest
+                            var span = halfHeightLatest
+                            if (zoom != 1f) {
+                                span = RoadMatchSeedMath.applyPinchZoom(span, zoom)
+                                halfHeightM = span
+                            }
+                            if (pan.x != 0f || pan.y != 0f) {
+                                val vp = RoadMatchCanvasProjection.viewportAt(
+                                    centerLat = draftLatLatest,
+                                    centerLon = draftLonLatest,
+                                    halfHeightM = span,
+                                    aspectRatio = widthPx / heightPx.coerceAtLeast(1f),
+                                    rotationDeg = rot,
+                                )
+                                val (eastM, northM) = RoadMatchSeedMath.panToEastNorthM(
+                                    panXpx = pan.x,
+                                    panYpx = pan.y,
+                                    widthPx = widthPx,
+                                    heightPx = heightPx,
+                                    halfWidthM = vp.halfWidthM,
+                                    halfHeightM = vp.halfHeightM,
+                                    rotationDeg = rot,
+                                )
+                                val moved = RoadMatchSeedMath.shiftCenter(
+                                    lat = draftLatLatest,
+                                    lon = draftLonLatest,
+                                    eastM = eastM,
+                                    northM = northM,
+                                )
+                                draftLat = moved.lat
+                                draftLon = moved.lon
+                            }
+                        },
+                    )
                 }
             } else {
                 Modifier
+            }
+            if (BuildConfig.MAPKIT_ENABLED && mapKitBasemap &&
+                viewport != null && canvasSize.height > 0
+            ) {
+                RoadMatchMapKitBasemap(
+                    viewport = viewport,
+                    viewHeightPx = canvasSize.height,
+                    transparencyPercent = basemapTransparencyPercent,
+                    userMapkitApiKey = mapkitApiKey,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(if (showTitle) 18.dp else 6.dp),
+                )
             }
             Canvas(
                 modifier = Modifier
@@ -418,8 +487,16 @@ fun DashboardRoadMatchMapWidgetItem(
                         rotationDeg = setRotationDeg,
                     )
                 }
+                // Follow: pin the pose to the smoothed follow base so it stays fixed on
+                // screen while roads/GNSS (true geo) slide under the chase camera.
+                // Set-mode: pose is already the viewport center (draft).
+                val poseForDraw = if (setMode || !displayedLat.isFinite() || !displayedLon.isFinite()) {
+                    displayState.shadow
+                } else {
+                    displayState.shadow.copy(lat = displayedLat, lon = displayedLon)
+                }
                 drawPoseMarker(
-                    marker = displayState.shadow,
+                    marker = poseForDraw,
                     viewport = vp,
                     color = Color(0xFF35C46A),
                     radiusPx = 6.dp.toPx(),
@@ -432,14 +509,32 @@ fun DashboardRoadMatchMapWidgetItem(
                         radiusPx = 7.dp.toPx(),
                     )
                 }
+                speedCam.nearbyForMap.forEach { cam ->
+                    drawSpeedCamCoverage(cam = cam, viewport = vp)
+                }
+                speedCam.nearbyForMap.forEach { cam ->
+                    val center = toOffset(cam.lat, cam.lon, vp)
+                    val r = if (cam.isAlertTarget) 5.5.dp.toPx() else 3.5.dp.toPx()
+                    val color = if (cam.isAlertTarget) {
+                        Color(0xFFE53935)
+                    } else {
+                        Color(0xFFB0BEC5)
+                    }
+                    drawCircle(color = Color.Black.copy(alpha = 0.35f), radius = r + 1.5f, center = center)
+                    drawCircle(color = color, radius = r, center = center)
+                }
             }
 
             if (showTitle) {
+                val titleStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
+                ).copy(fontWeight = FontWeight.SemiBold)
                 Text(
                     text = title,
                     color = resolvedTextColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = titleStyle,
                     maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -447,10 +542,14 @@ fun DashboardRoadMatchMapWidgetItem(
                 )
             }
             if (!displayState.shadow.visible) {
+                val noDataStyle = calculateResponsiveTextStyle(
+                    containerHeight = availableHeight,
+                    textType = TextType.UNIT,
+                )
                 Text(
                     text = noData,
                     color = resolvedTextColor.copy(alpha = 0.72f),
-                    fontSize = 11.sp,
+                    style = noDataStyle,
                     maxLines = 2,
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -526,9 +625,9 @@ private fun HeadingUpLatchButton(
         containerHeight = availableHeight,
         textType = TextType.UNIT,
     )
-    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     val unitDp = with(LocalDensity.current) { unitStyle.fontSize.toDp() }
-    val iconDp = headingUpLatchIconDp(unitDp.value, textScale).dp
+    val iconDp = headingUpLatchIconDp(unitDp.value, iconScale).dp
     val hitDp = iconDp * HEADING_UP_LATCH_HIT_TO_ICON
     Box(
         modifier = modifier
@@ -575,6 +674,156 @@ private fun SeedActionText(
             .clickable(onClick = onClick)
             .padding(horizontal = 4.dp, vertical = 2.dp),
     )
+}
+
+/**
+ * F3 set-mode gestures with intent latch: the first pointer-down chooses Heading vs
+ * PanZoom, and that choice sticks until all pointers are up — even if the finger
+ * later crosses the heading ring boundary.
+ */
+private suspend fun PointerInputScope.detectRoadMatchSetGestures(
+    rotationDeg: () -> Float,
+    onHeading: (bearingDeg: Float) -> Unit,
+    onPanZoom: (pan: Offset, zoom: Float) -> Unit,
+) {
+    val touchSlop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val widthPx = size.width.toFloat()
+        val heightPx = size.height.toFloat()
+        if (widthPx <= 0f || heightPx <= 0f) return@awaitEachGesture
+        val minDim = min(widthPx, heightPx)
+        val dx0 = down.position.x - widthPx * 0.5f
+        val dy0 = down.position.y - heightPx * 0.5f
+        val kind = RoadMatchSeedMath.resolveSetGestureKind(dx0, dy0, minDim)
+
+        var pastTouchSlop = false
+        var pan = Offset.Zero
+        var zoom = 1f
+        do {
+            val event = awaitPointerEvent()
+            val canceled = event.changes.any { it.isConsumed }
+            if (canceled) break
+
+            val zoomChange = event.calculateZoom()
+            val panChange = event.calculatePan()
+            val centroidSize = event.calculateCentroidSize(useCurrent = false)
+
+            if (!pastTouchSlop) {
+                zoom *= zoomChange
+                pan += panChange
+                val zoomMotion = abs(1f - zoom) * centroidSize
+                val panMotion = pan.getDistance()
+                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                    pastTouchSlop = true
+                    // Spend accumulated slop so the first reported delta is relative
+                    // to the threshold, matching detectTransformGestures.
+                    if (panMotion > 0f) {
+                        val capped = pan - (pan / panMotion) * touchSlop
+                        pan = capped
+                    }
+                    if (kind == RoadMatchSetGestureKind.Heading) {
+                        val centroid = event.calculateCentroid(useCurrent = true)
+                        if (centroid != Offset.Unspecified) {
+                            val dx = centroid.x - widthPx * 0.5f
+                            val dy = centroid.y - heightPx * 0.5f
+                            if (RoadMatchSeedMath.isUsableBearingPointer(dx, dy)) {
+                                onHeading(
+                                    RoadMatchSeedMath.bearingFromCanvasDelta(
+                                        dx,
+                                        dy,
+                                        rotationDeg(),
+                                    ),
+                                )
+                            }
+                        }
+                    } else {
+                        onPanZoom(pan, zoom)
+                    }
+                    event.changes.forEach { change ->
+                        if (change.positionChanged()) change.consume()
+                    }
+                    pan = Offset.Zero
+                    zoom = 1f
+                }
+            } else {
+                when (kind) {
+                    RoadMatchSetGestureKind.Heading -> {
+                        val centroid = event.calculateCentroid(useCurrent = true)
+                        if (centroid != Offset.Unspecified) {
+                            val dx = centroid.x - widthPx * 0.5f
+                            val dy = centroid.y - heightPx * 0.5f
+                            if (RoadMatchSeedMath.isUsableBearingPointer(dx, dy)) {
+                                onHeading(
+                                    RoadMatchSeedMath.bearingFromCanvasDelta(
+                                        dx,
+                                        dy,
+                                        rotationDeg(),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                    RoadMatchSetGestureKind.PanZoom -> {
+                        if (panChange != Offset.Zero || zoomChange != 1f) {
+                            onPanZoom(panChange, zoomChange)
+                        }
+                    }
+                }
+                event.changes.forEach { change ->
+                    if (change.positionChanged()) change.consume()
+                }
+            }
+        } while (event.changes.any { it.pressed })
+    }
+}
+
+private val SPEED_CAM_BEAM_PRIMARY = Color(0xFFE53935)
+private val SPEED_CAM_BEAM_OPPOSITE = Color(0xFF5C6BC0)
+private val SPEED_CAM_BEAM_ALL = Color(0xFFAB47BC)
+
+private fun DrawScope.drawSpeedCamCoverage(
+    cam: SpeedCamMapMarker,
+    viewport: RoadMatchCanvasViewport,
+) {
+    val beams = SpeedCamMapCoverage.beamsFor(
+        lat = cam.lat,
+        lon = cam.lon,
+        dirType = cam.dirType,
+        directionDeg = cam.directionDeg,
+    )
+    for (beam in beams) {
+        val fill = when (beam.kind) {
+            SpeedCamMapCoverage.BeamKind.PRIMARY -> SPEED_CAM_BEAM_PRIMARY.copy(alpha = 0.34f)
+            SpeedCamMapCoverage.BeamKind.OPPOSITE -> SPEED_CAM_BEAM_OPPOSITE.copy(alpha = 0.34f)
+            SpeedCamMapCoverage.BeamKind.ALL -> SPEED_CAM_BEAM_ALL.copy(alpha = 0.28f)
+        }
+        when (beam.kind) {
+            SpeedCamMapCoverage.BeamKind.ALL -> {
+                val center = beam.points.firstOrNull() ?: continue
+                val c = toOffset(center.lat, center.lon, viewport)
+                val edge = RoadMatchLeashMath.destination(
+                    center.lat,
+                    center.lon,
+                    0f,
+                    beam.radiusM,
+                )
+                val edgePx = toOffset(edge.first, edge.second, viewport)
+                val radiusPx = (edgePx - c).getDistance().coerceAtLeast(4f)
+                drawCircle(color = fill, radius = radiusPx, center = c)
+            }
+            else -> {
+                if (beam.points.size < 3) continue
+                val path = Path()
+                beam.points.forEachIndexed { index, point ->
+                    val p = toOffset(point.lat, point.lon, viewport)
+                    if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
+                }
+                path.close()
+                drawPath(path = path, color = fill)
+            }
+        }
+    }
 }
 
 private fun DrawScope.toOffset(

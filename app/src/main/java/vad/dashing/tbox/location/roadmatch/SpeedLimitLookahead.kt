@@ -10,7 +10,8 @@ package vad.dashing.tbox.location.roadmatch
  * ends the walk. Ambiguous straight forks hide [Result.nextKmh].
  */
 object SpeedLimitLookahead {
-    const val MAX_DISTANCE_M = 500.0
+    /** Default horizon; widgets may override via [compute]/[Tracker.update] maxDistanceM. */
+    const val MAX_DISTANCE_M = 1000.0
     const val STRAIGHT_MAX_DEG = RoadMapMatcher.HEADING_TOLERANCE_DEG
     const val MAX_HOPS = 120
     /** Re-walk after this much travel on the same edge (or [REFRESH_MS]). */
@@ -36,11 +37,13 @@ object SpeedLimitLookahead {
         alongTrackM: Double?,
         travelAgainstCoords: Boolean?,
         allowAgainstOneway: Boolean = false,
+        maxDistanceM: Double = MAX_DISTANCE_M,
     ): Result {
         if (edgeId == null || alongTrackM == null || travelAgainstCoords == null) {
             return Result.EMPTY
         }
         if (!alongTrackM.isFinite() || alongTrackM < 0.0) return Result.EMPTY
+        val horizon = maxDistanceM.takeIf { it.isFinite() && it > 0.0 } ?: MAX_DISTANCE_M
         val edge = RoadMapMatcher.findEdgeAcrossGraphs(graphs, regionId, edgeId)
             ?: return Result.EMPTY
         val resolvedRegion = regionId
@@ -50,7 +53,7 @@ object SpeedLimitLookahead {
         val along = alongTrackM.coerceIn(0.0, length)
         val currentKmh = edge.speedLimitKmh(travelAgainstCoords)
         val remainingOnEdge = if (travelAgainstCoords) along else length - along
-        if (remainingOnEdge > MAX_DISTANCE_M) {
+        if (remainingOnEdge > horizon) {
             return Result(currentKmh = currentKmh)
         }
         val walked = walkFromOutgoing(
@@ -63,6 +66,7 @@ object SpeedLimitLookahead {
             hopsLeft = MAX_HOPS,
             visited = linkedSetOf(edge.id),
             allowAgainstOneway = allowAgainstOneway,
+            maxDistanceM = horizon,
         )
         return Result(
             currentKmh = currentKmh,
@@ -93,6 +97,7 @@ object SpeedLimitLookahead {
         hopsLeft: Int,
         visited: Set<Long>,
         allowAgainstOneway: Boolean,
+        maxDistanceM: Double,
     ): Branch {
         if (hopsLeft <= 0) return Branch.NONE
         val straight = RoadMapMatcher.straightSuccessors(
@@ -115,6 +120,7 @@ object SpeedLimitLookahead {
                 hopsLeft = hopsLeft,
                 visited = visited,
                 allowAgainstOneway = allowAgainstOneway,
+                maxDistanceM = maxDistanceM,
             )
         }
         val outcomes = straight.map { successor ->
@@ -127,6 +133,7 @@ object SpeedLimitLookahead {
                 hopsLeft = hopsLeft,
                 visited = visited,
                 allowAgainstOneway = allowAgainstOneway,
+                maxDistanceM = maxDistanceM,
             )
         }
         if (outcomes.any { it.hidden }) return Branch.HIDDEN
@@ -146,8 +153,9 @@ object SpeedLimitLookahead {
         hopsLeft: Int,
         visited: Set<Long>,
         allowAgainstOneway: Boolean,
+        maxDistanceM: Double,
     ): Branch {
-        if (distanceAtStartM > MAX_DISTANCE_M) return Branch.NONE
+        if (distanceAtStartM > maxDistanceM) return Branch.NONE
         val limit = next.edge.speedLimitKmh(next.travelAgainstCoords)
         if (limit != currentKmh) {
             if (limit == null) return Branch.NONE
@@ -155,7 +163,7 @@ object SpeedLimitLookahead {
         }
         val length = RoadMapMatcher.polylineLengthM(next.edge)
         val distanceAtEndM = distanceAtStartM + length
-        if (distanceAtEndM > MAX_DISTANCE_M) return Branch.NONE
+        if (distanceAtEndM > maxDistanceM) return Branch.NONE
         return walkFromOutgoing(
             graphs = graphs,
             regionId = regionId,
@@ -166,6 +174,7 @@ object SpeedLimitLookahead {
             hopsLeft = hopsLeft - 1,
             visited = visited + next.edge.id,
             allowAgainstOneway = allowAgainstOneway,
+            maxDistanceM = maxDistanceM,
         )
     }
 
@@ -196,7 +205,9 @@ object SpeedLimitLookahead {
             allowAgainstOneway: Boolean = false,
             nowElapsedMs: Long,
             pose: RoadMatchPose? = null,
+            maxDistanceM: Double = MAX_DISTANCE_M,
         ): Result {
+            val horizon = maxDistanceM.takeIf { it.isFinite() && it > 0.0 } ?: MAX_DISTANCE_M
             if (edgeId == null || travelAgainstCoords == null) {
                 cache = null
                 return Result.EMPTY
@@ -208,7 +219,9 @@ object SpeedLimitLookahead {
                 }
             val along = resolveAlong(edge, alongTrackM, pose) ?: run {
                 val held = cache
-                if (held != null && held.edgeId == edgeId && held.against == travelAgainstCoords) {
+                if (held != null && held.edgeId == edgeId && held.against == travelAgainstCoords &&
+                    held.maxDistanceM == horizon
+                ) {
                     return Result(
                         currentKmh = edge.speedLimitKmh(travelAgainstCoords),
                         nextKmh = held.result.nextKmh,
@@ -227,7 +240,8 @@ object SpeedLimitLookahead {
                 prev.edgeId == edgeId &&
                 prev.regionId == regionId &&
                 prev.against == travelAgainstCoords &&
-                prev.allowAgainstOneway == allowAgainstOneway
+                prev.allowAgainstOneway == allowAgainstOneway &&
+                prev.maxDistanceM == horizon
             val progress = if (sameIdentity) {
                 travelProgress(prev.walkAlongM, along, travelAgainstCoords)
             } else {
@@ -235,20 +249,21 @@ object SpeedLimitLookahead {
             }
             val alongJump = sameIdentity && kotlin.math.abs(along - prev.lastAlongM) > JUMP_M
             val countdown = prev?.result?.nextDistanceM?.let { it - progress }
-            val horizonOpened = remaining <= MAX_DISTANCE_M &&
-                (prev == null || prev.remainingOnEdge > MAX_DISTANCE_M)
+            val horizonOpened = remaining <= horizon &&
+                (prev == null || prev.remainingOnEdge > horizon)
             val periodicDue = sameIdentity &&
-                remaining <= MAX_DISTANCE_M &&
+                remaining <= horizon &&
                 (nowElapsedMs - prev.walkedAtMs >= REFRESH_MS ||
                     kotlin.math.abs(progress) >= REFRESH_M)
             val countdownExpired = countdown != null && countdown <= 0.0
-            if (remaining > MAX_DISTANCE_M) {
+            if (remaining > horizon) {
                 val cheap = Result(currentKmh = currentKmh)
                 cache = Cache(
                     regionId = regionId,
                     edgeId = edgeId,
                     against = travelAgainstCoords,
                     allowAgainstOneway = allowAgainstOneway,
+                    maxDistanceM = horizon,
                     walkAlongM = along,
                     lastAlongM = along,
                     remainingOnEdge = remaining,
@@ -278,13 +293,15 @@ object SpeedLimitLookahead {
                 alongTrackM = along,
                 travelAgainstCoords = travelAgainstCoords,
                 allowAgainstOneway = allowAgainstOneway,
+                maxDistanceM = horizon,
             )
-            if (remaining <= MAX_DISTANCE_M) walkCount++
+            if (remaining <= horizon) walkCount++
             cache = Cache(
                 regionId = regionId,
                 edgeId = edgeId,
                 against = travelAgainstCoords,
                 allowAgainstOneway = allowAgainstOneway,
+                maxDistanceM = horizon,
                 walkAlongM = along,
                 lastAlongM = along,
                 remainingOnEdge = remaining,
@@ -323,6 +340,7 @@ object SpeedLimitLookahead {
             val edgeId: Long,
             val against: Boolean,
             val allowAgainstOneway: Boolean,
+            val maxDistanceM: Double,
             val walkAlongM: Double,
             val lastAlongM: Double,
             val remainingOnEdge: Double,

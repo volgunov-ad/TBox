@@ -15,14 +15,18 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
+import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.seatModeToString
 import vad.dashing.tbox.utils.GEARBOX_MODE_CURRENT_GEAR_DATA_KEY
 import vad.dashing.tbox.utils.SystemMetricsReader
@@ -59,10 +63,15 @@ const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
 const val GEAR_BOX_MODE_CAN_FLOW_KEY = "gearBoxMode_can"
+const val GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY = "gearBoxCurrentGear_can"
+const val GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY = "gearBoxPreparedGear_can"
 const val ODOMETER_CAN_FLOW_KEY = "odometer_can"
 const val FUEL_LEVEL_PERCENTAGE_CAN_FLOW_KEY = "fuelLevelPercentage_can"
 const val OUTSIDE_TEMPERATURE_CAN_FLOW_KEY = "outsideTemperature_can"
 const val CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY = "currentFuelConsumption_can"
+const val AVERAGE_FUEL_CONSUMPTION_CAN_FLOW_KEY = "averageFuelConsumption_can"
+const val AVERAGE_FUEL_CONSUMPTION_CURRENT_TRIP_FLOW_KEY = "averageFuelConsumption_currentTrip"
+const val AVERAGE_FUEL_CONSUMPTION_DAILY_TRIP_FLOW_KEY = "averageFuelConsumption_dailyTrip"
 const val DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY = "distanceToNextMaintenance_can"
 const val DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY = "distanceToFuelEmpty_can"
 const val INSIDE_AIR_QUALITY_CAN_FLOW_KEY = "insideAirQuality_can"
@@ -157,6 +166,9 @@ class TboxDataProvider(
             "carSpeed" -> canViewModel.carSpeed.mapState { valueToString(it, eff(1)) }
             CAR_SPEED_CAN_FLOW_KEY -> UniversalCanRepository.carSpeedState.mapState { valueToString(it, eff(1)) }
             "carSpeedAccurate" -> canViewModel.carSpeedAccurate.mapState { valueToString(it, eff(1)) }
+            GAS_BRAKE_WIDGET_DATA_KEY -> UniversalCanRepository.gasPedalPercentState.mapState {
+                valueToString(it, eff(0), default = "-")
+            }
             "wheel1Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel1, eff(1)) }
             "wheel2Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel2, eff(1)) }
             "wheel3Speed" -> canViewModel.wheelsSpeed.mapState { valueToString(it.wheel3, eff(1)) }
@@ -245,6 +257,31 @@ class TboxDataProvider(
                 UniversalCanRepository.currentFuelConsumptionState.mapState {
                     valueToString(it, eff(1))
                 }
+            AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY,
+            AVERAGE_FUEL_CONSUMPTION_CAN_FLOW_KEY ->
+                UniversalCanRepository.averageFuelConsumptionState.mapState {
+                    valueToString(it, eff(1))
+                }
+            AVERAGE_FUEL_CONSUMPTION_CURRENT_TRIP_FLOW_KEY ->
+                combine(appDataViewModel.activeTrip, appDataViewModel.trips) { active, trips ->
+                    val trip = active ?: TripRepository.latestFinishedTrip(trips)
+                    valueToString(
+                        trip?.let { TripRepository.averageFuelConsumptionLitersPer100Km(it) },
+                        eff(1),
+                    )
+                }.distinctUntilChanged().stateIn(
+                    scope = viewModel.viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5000),
+                    initialValue = "",
+                )
+            AVERAGE_FUEL_CONSUMPTION_DAILY_TRIP_FLOW_KEY ->
+                appDataViewModel.trips.mapState { trips ->
+                    val trip = trips.firstOrNull { it.isPersistent }
+                    valueToString(
+                        trip?.let { TripRepository.averageFuelConsumptionLitersPer100Km(it) },
+                        eff(1),
+                    )
+                }
             "engineTemperature" -> canViewModel.engineTemperature.mapState { valueToString(it, eff(1)) }
             ENGINE_TEMPERATURE_CAN_FLOW_KEY -> UniversalCanRepository.engineTemperatureState.mapState {
                 valueToString(it, eff(1))
@@ -261,7 +298,13 @@ class TboxDataProvider(
                 valueToString(it, eff(0))
             }
             "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY ->
+                UniversalCanRepository.currentGearNumberState.mapState { valueToString(it, eff(1)) }
             "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY ->
+                UniversalCanRepository.targetGearNumberState.mapState { valueToString(it, eff(1)) }
+            FRM_DX_TAR_OBJ_WIDGET_DATA_KEY ->
+                UniversalCanRepository.frmDxTarObjState.mapState { valueToString(it, eff(1)) }
             "gearBoxChangeGear" -> canViewModel.gearBoxChangeGear.mapState {
                 valueToString(it, booleanTrue = switchingLabel, booleanFalse = noLabel)
             }

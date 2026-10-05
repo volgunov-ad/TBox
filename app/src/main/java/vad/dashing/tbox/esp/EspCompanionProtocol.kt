@@ -68,6 +68,55 @@ object EspCompanionProtocol {
     const val TYPE_CAN_LIGHT_END = "canLightEnd"
     const val TYPE_CAN_ACK = "canAck"
     const val TYPE_CAN_RX = "canRx"
+    const val TYPE_MAG = "mag"
+    const val TYPE_MAG_CHIP = "magChip"
+    const val TYPE_MAG_CHIP_SET = "magChipSet"
+    const val TYPE_BLE_BTN = "bleBtn"
+    const val TYPE_BLE_STATUS = "bleStatus"
+    const val TYPE_BLE_SEEN = "bleSeen"
+    const val TYPE_BLE_ACK = "bleAck"
+    const val TYPE_BLE_SET = "bleSet"
+    const val TYPE_BLE_LEARN_BEGIN = "bleLearnBegin"
+    const val TYPE_BLE_LEARN_END = "bleLearnEnd"
+    const val TYPE_BLE_ALLOW = "bleAllow"
+    const val TYPE_BLE_FORGET = "bleForget"
+    const val TYPE_AP_CFG = "apCfg"
+    const val TYPE_AP_STATUS = "apStatus"
+
+    const val BLE_BTN_ACT_PRESS = "press"
+    const val BLE_BTN_ACT_DOUBLE = "double"
+    const val BLE_BTN_ACT_TRIPLE = "triple"
+    const val BLE_BTN_ACT_LONG = "long"
+    const val BLE_BTN_ACT_HOLD = "hold"
+
+    val BLE_BTN_ACTIONS: List<String> = listOf(
+        BLE_BTN_ACT_PRESS,
+        BLE_BTN_ACT_DOUBLE,
+        BLE_BTN_ACT_TRIPLE,
+        BLE_BTN_ACT_LONG,
+        BLE_BTN_ACT_HOLD,
+    )
+
+    const val MAG_CHIP_RM3100 = "rm3100"
+    const val MAG_CHIP_MMC5983 = "mmc5983"
+    const val MAG_CHIP_IST8310 = "ist8310"
+    const val MAG_CHIP_QMC5883L = "qmc5883l"
+    const val MAG_CHIP_HMC5883L = "hmc5883l"
+    const val MAG_CHIP_HMC5983 = "hmc5983"
+
+    val MAG_CHIP_IDS: List<String> = listOf(
+        MAG_CHIP_RM3100,
+        MAG_CHIP_MMC5983,
+        MAG_CHIP_IST8310,
+        MAG_CHIP_QMC5883L,
+        MAG_CHIP_HMC5883L,
+        MAG_CHIP_HMC5983,
+    )
+
+    const val GNSS_CHIP_UM980 = "um980"
+    const val GNSS_CHIP_NEO_M8N = "neo-m8n"
+    const val GNSS_CHIP_UBLOX = "ublox"
+    const val GNSS_CHIP_NMEA = "nmea"
 
     const val CAN_LIGHT_FRAME_LEN = 14
     const val CAN_LIGHT_FLAG_EXT = 0x01
@@ -149,6 +198,59 @@ object EspCompanionProtocol {
     fun encodeCanLightBegin(): String = line(TYPE_CAN_LIGHT_BEGIN)
 
     fun encodeCanLightEnd(): String = line(TYPE_CAN_LIGHT_END)
+
+    fun encodeMagChipSet(chip: String): String =
+        line(TYPE_MAG_CHIP_SET, mapOf("chip" to chip))
+
+    fun encodeBleSet(on: Boolean): String =
+        line(TYPE_BLE_SET, mapOf("on" to on))
+
+    fun encodeBleLearnBegin(timeoutMs: Long = 30_000L): String =
+        line(TYPE_BLE_LEARN_BEGIN, mapOf("timeoutMs" to timeoutMs))
+
+    fun encodeBleLearnEnd(): String = line(TYPE_BLE_LEARN_END)
+
+    fun encodeBleAllow(mac: String): String =
+        line(TYPE_BLE_ALLOW, mapOf("mac" to mac.trim().lowercase(Locale.US)))
+
+    fun encodeBleForget(mac: String): String =
+        line(TYPE_BLE_FORGET, mapOf("mac" to mac.trim().lowercase(Locale.US)))
+
+    fun encodeBleForgetAll(): String =
+        line(TYPE_BLE_FORGET, mapOf("all" to true))
+
+    fun encodeApCfg(
+        on: Boolean,
+        huSsid: String,
+        huPsk: String,
+        port: Int,
+        apSsid: String,
+        apPsk: String,
+    ): String =
+        line(
+            TYPE_AP_CFG,
+            mapOf(
+                "on" to on,
+                "huSsid" to huSsid,
+                "huPsk" to huPsk,
+                "port" to port,
+                "apSsid" to apSsid,
+                "apPsk" to apPsk,
+            ),
+        )
+
+    fun isKnownMagChip(chip: String): Boolean =
+        MAG_CHIP_IDS.any { it.equals(chip, ignoreCase = true) }
+
+    fun normalizeBleBtnAct(raw: String?): String? {
+        val lower = raw?.trim()?.lowercase(Locale.US) ?: return null
+        return BLE_BTN_ACTIONS.firstOrNull { it == lower }
+    }
+
+    private fun normalizeMagChipId(raw: String): String? {
+        val lower = raw.lowercase(Locale.US)
+        return MAG_CHIP_IDS.firstOrNull { it == lower }
+    }
 
     /**
      * Compact light-mode records: N × 14 bytes (not OTA-wrapped).
@@ -322,17 +424,33 @@ object EspCompanionProtocol {
             val v = o.optInt("v", PROTOCOL_VERSION)
             if (v != PROTOCOL_VERSION) return null
             when (o.optString("t")) {
-                TYPE_HELLO -> EspMessage.Hello(
-                    fw = o.optString("fw", ""),
-                    gpioInCount = o.optInt("gpioIn", 0),
-                    relayCount = o.optInt("relays", 0),
-                    um980 = o.optBoolean("um980", false),
-                    baud = o.optInt("baud", 115200),
-                    can = o.optBoolean("can", false),
-                    canBackend = o.optString("canBackend", "").ifBlank { null },
-                    canBaud = o.optInt("canBaud", 0),
-                    canLight = o.optBoolean("canLight", false),
-                )
+                TYPE_HELLO -> {
+                    val magSupported = o.has("mag") || o.has("magChip")
+                    val gnssChip = o.optString("gnssChip", "")
+                        .ifBlank { if (o.optBoolean("um980", false)) GNSS_CHIP_UM980 else "" }
+                    EspMessage.Hello(
+                        fw = o.optString("fw", ""),
+                        gpioInCount = o.optInt("gpioIn", 0),
+                        relayCount = o.optInt("relays", 0),
+                        gnss = o.optBoolean("gnss", o.optBoolean("um980", false)),
+                        gnssChip = gnssChip.ifBlank { null },
+                        gnssModel = o.optString("gnssModel", "").ifBlank { null },
+                        um980 = o.optBoolean("um980", false),
+                        baud = o.optInt("baud", 115200),
+                        can = o.optBoolean("can", false),
+                        canBackend = o.optString("canBackend", "").ifBlank { null },
+                        canBaud = o.optInt("canBaud", 0),
+                        canLight = o.optBoolean("canLight", false),
+                        mag = o.optBoolean("mag", false),
+                        magChip = o.optString("magChip", "").ifBlank { null },
+                        magSeen = parseStringIdArray(o, "magSeen"),
+                        magSupported = magSupported,
+                        ble = o.optBoolean("ble", false),
+                        bleOn = o.optBoolean("bleOn", false),
+                        bleMacs = parseStringList(o, "bleMacs"),
+                        ap = o.optBoolean("ap", false),
+                    )
+                }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
                 TYPE_GPS -> EspMessage.Gps(
                     fix = o.optInt("fix", 0),
@@ -419,6 +537,61 @@ object EspCompanionProtocol {
                         ),
                     )
                 }
+                TYPE_MAG -> EspMessage.Mag(
+                    chip = o.optString("chip", MAG_CHIP_RM3100),
+                    hx = o.optDouble("hx", 0.0).toFloat(),
+                    hy = o.optDouble("hy", 0.0).toFloat(),
+                    hz = o.optDouble("hz", 0.0).toFloat(),
+                    headingDeg = o.optDouble("heading", 0.0).toFloat(),
+                    fs = o.optDouble("fs", 0.0).toFloat(),
+                    ok = o.optBoolean("ok", false),
+                )
+                TYPE_MAG_CHIP -> EspMessage.MagChip(
+                    chip = o.optString("chip", MAG_CHIP_RM3100),
+                    ok = o.optBoolean("ok", false),
+                    mag = o.optBoolean("mag", false),
+                    seen = parseStringIdArray(o, "seen").ifEmpty {
+                        parseStringIdArray(o, "magSeen")
+                    },
+                )
+                TYPE_BLE_BTN -> EspMessage.BleBtn(
+                    mac = o.optString("mac", "").trim().lowercase(Locale.US),
+                    btn = o.optInt("btn", 0),
+                    act = normalizeBleBtnAct(o.optString("act", "")) ?: "",
+                    bat = o.optInt("bat", -1),
+                    rssi = o.optInt("rssi", 0),
+                    ms = o.optLong("ms", 0L),
+                )
+                TYPE_BLE_STATUS -> EspMessage.BleStatus(
+                    on = o.optBoolean("on", false),
+                    learn = o.optBoolean("learn", false),
+                    macs = parseStringList(o, "macs"),
+                    lastBat = if (o.has("lastBat")) o.optInt("lastBat", -1) else -1,
+                    lastRssi = if (o.has("lastRssi")) o.optInt("lastRssi", 0) else 0,
+                    lastMac = o.optString("lastMac", "").trim().lowercase(Locale.US)
+                        .ifBlank { null },
+                )
+                TYPE_BLE_SEEN -> EspMessage.BleSeen(
+                    mac = o.optString("mac", "").trim().lowercase(Locale.US),
+                    rssi = o.optInt("rssi", 0),
+                    ms = o.optLong("ms", 0L),
+                )
+                TYPE_BLE_ACK -> EspMessage.BleAck(
+                    phase = o.optString("phase", ""),
+                    ok = o.optBoolean("ok", false),
+                    err = o.optString("err", "").ifBlank { null },
+                )
+                TYPE_AP_STATUS -> EspMessage.ApStatus(
+                    on = o.optBoolean("on", false),
+                    sta = o.optBoolean("sta", false),
+                    ssid = o.optString("ssid", ""),
+                    password = o.optString("psk", ""),
+                    ip = o.optString("ip", ""),
+                    freqMhz = o.optInt("freq", 0),
+                    channel = o.optInt("ch", 0),
+                    huIp = o.optString("huIp", ""),
+                    panelPort = o.optInt("panel", 8765),
+                )
                 else -> null
             }
         } catch (_: Exception) {
@@ -449,6 +622,26 @@ object EspCompanionProtocol {
             diffAgeSec = gps.diffAge,
             updateTime = now,
         )
+    }
+
+    private fun parseStringIdArray(o: JSONObject, key: String): List<String> {
+        val arr = o.optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val normalized = normalizeMagChipId(arr.optString(i, ""))
+                if (normalized != null) add(normalized)
+            }
+        }.distinct()
+    }
+
+    private fun parseStringList(o: JSONObject, key: String): List<String> {
+        val arr = o.optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val raw = arr.optString(i, "").trim().lowercase(Locale.US)
+                if (raw.isNotEmpty()) add(raw)
+            }
+        }.distinct()
     }
 
     private fun parseUtc(utc: String?): UtcTime? {
@@ -490,12 +683,26 @@ sealed class EspMessage {
         val fw: String,
         val gpioInCount: Int,
         val relayCount: Int,
+        val gnss: Boolean = false,
+        val gnssChip: String? = null,
+        val gnssModel: String? = null,
         val um980: Boolean,
         val baud: Int = 115200,
         val can: Boolean = false,
         val canBackend: String? = null,
         val canBaud: Int = 0,
         val canLight: Boolean = false,
+        val mag: Boolean = false,
+        val magChip: String? = null,
+        val magSeen: List<String> = emptyList(),
+        /** Firmware advertises magnetometer protocol (`mag` / `magChip` in hello). */
+        val magSupported: Boolean = false,
+        /** Firmware advertises Shelly Blu / BTHome BLE observer. */
+        val ble: Boolean = false,
+        val bleOn: Boolean = false,
+        val bleMacs: List<String> = emptyList(),
+        /** Firmware 0.9+ SoftAP router. */
+        val ap: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -570,6 +777,65 @@ sealed class EspMessage {
 
     data class CanRx(
         val frame: CanFrame,
+    ) : EspMessage()
+
+    data class Mag(
+        val chip: String,
+        val hx: Float,
+        val hy: Float,
+        val hz: Float,
+        val headingDeg: Float,
+        val fs: Float,
+        val ok: Boolean,
+    ) : EspMessage()
+
+    data class MagChip(
+        val chip: String,
+        val ok: Boolean,
+        val mag: Boolean,
+        val seen: List<String> = emptyList(),
+    ) : EspMessage()
+
+    data class BleBtn(
+        val mac: String,
+        val btn: Int,
+        val act: String,
+        val bat: Int = -1,
+        val rssi: Int = 0,
+        val ms: Long = 0L,
+    ) : EspMessage()
+
+    data class BleStatus(
+        val on: Boolean,
+        val learn: Boolean,
+        val macs: List<String> = emptyList(),
+        val lastBat: Int = -1,
+        val lastRssi: Int = 0,
+        val lastMac: String? = null,
+    ) : EspMessage()
+
+    data class BleSeen(
+        val mac: String,
+        val rssi: Int = 0,
+        val ms: Long = 0L,
+    ) : EspMessage()
+
+    data class BleAck(
+        val phase: String,
+        val ok: Boolean,
+        val err: String? = null,
+    ) : EspMessage()
+
+    data class ApStatus(
+        val on: Boolean,
+        val sta: Boolean,
+        val ssid: String,
+        val password: String,
+        val ip: String,
+        val freqMhz: Int,
+        val channel: Int,
+        val huIp: String,
+        val panelPort: Int,
     ) : EspMessage()
 }
 

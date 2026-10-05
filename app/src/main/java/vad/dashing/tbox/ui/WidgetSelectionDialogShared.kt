@@ -6,6 +6,7 @@ import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
@@ -48,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
@@ -82,15 +88,38 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.isValidDateTimeWidgetFormat
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.isActiveTripWidgetDataKey
+import vad.dashing.tbox.isTripMetricWidgetDataKey
+import vad.dashing.tbox.isObdMetricWidgetDataKey
+import vad.dashing.tbox.obd.ObdPid
+import vad.dashing.tbox.usesTripWidgetSource
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
+import vad.dashing.tbox.isAverageFuelConsumptionWidgetDataKey
+import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
+import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.MAPS_CAM_DISTANCE_STEP_M
+import vad.dashing.tbox.MAX_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.MAX_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.MIN_MAPS_CAM_LOOKAHEAD_M
+import vad.dashing.tbox.MIN_MAPS_CAM_RADAR_HOLD_M
+import vad.dashing.tbox.normalizeMapsCamLookaheadM
+import vad.dashing.tbox.normalizeMapsCamRadarHoldM
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
+import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
+import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
+import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.supportsMusicAlbumArtLayoutSettings
 import vad.dashing.tbox.supportsMusicAlbumArtToggle
 import vad.dashing.tbox.supportsMusicControlsHeightSetting
@@ -101,8 +130,12 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.WidgetPickerActivity
+import vad.dashing.tbox.WidgetTypeSectionId
+import vad.dashing.tbox.WidgetTypeSections
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.SettingsViewModel
@@ -113,6 +146,7 @@ import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.normalizePanelShape
 import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
+import vad.dashing.tbox.normalizeWidgetControlPadding
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
@@ -123,11 +157,18 @@ import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.normalizeStepperAdjustIconStyle
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS
+import vad.dashing.tbox.normalizeHvacTempWidgetStepTenths
+import vad.dashing.tbox.isHvacTempWidgetDataKey
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.isEspRelayWidgetDataKey
 import vad.dashing.tbox.normalizePanelGridSpacingDp
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK
@@ -137,11 +178,13 @@ import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
+import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.normalizeWidgetPaddingPercent
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
@@ -162,6 +205,8 @@ import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
 val WidgetDialogDropdownSelectorWidth = 300.dp
+/** Wider selector for long OBD PID labels (+ discovery hints) in Additional. */
+val WidgetDialogObdPidDropdownSelectorWidth = 480.dp
 
 /** Label + stored value for the per-tile numeric accuracy dropdown ([SettingDropdownGeneric] uses [toString]). */
 internal data class ValueAccuracyDropdownEntry(
@@ -199,7 +244,35 @@ internal data class StepperAdjustIconStyleDropdownEntry(
     override fun toString(): String = display
 }
 
+internal data class HvacTempStepDropdownEntry(
+    private val display: String,
+    val stored: Int,
+) {
+    override fun toString(): String = display
+}
+
 internal data class TripWidgetSourceDropdownEntry(
+    val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class ObdPidDropdownEntry(
+    val pidId: String,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+data class TripMetricFieldDropdownEntry(
+    val fieldId: String,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class AvgFuelConsumptionSourceDropdownEntry(
     val source: Int,
     val display: String,
 ) {
@@ -218,6 +291,13 @@ internal data class EspRelayModeDropdownEntry(
     val display: String,
 ) {
     override fun toString(): String = display
+}
+
+internal data class RoadMatchBasemapTransparencyDropdownEntry(
+    val percent: Int,
+    val label: String,
+) {
+    override fun toString(): String = label
 }
 
 internal data class CruiseControlTypeDropdownEntry(
@@ -246,7 +326,9 @@ internal class WidgetSelectionDialogState(
         initialConfig.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(initialConfig.dataKey)
     )
-    var scale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.scale))
+    var titleScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.titleScale))
+    var iconScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.iconScale))
+    var textScale by mutableFloatStateOf(normalizeWidgetScale(initialConfig.textScale))
     var shape by mutableIntStateOf(normalizeWidgetShape(initialConfig.shape))
     var paddingTopPercent by mutableIntStateOf(
         normalizeWidgetPaddingPercent(initialConfig.paddingTopPercent)
@@ -291,6 +373,51 @@ internal class WidgetSelectionDialogState(
     var roadMatchHeadingUp by mutableStateOf(
         isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.roadMatchHeadingUp
     )
+    var roadMatchMapKitBasemap by mutableStateOf(
+        isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.roadMatchMapKitBasemap
+    )
+    var roadMatchBasemapTransparencyPercent by mutableIntStateOf(
+        if (isRoadMatchMapWidgetDataKey(initialConfig.dataKey)) {
+            vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                initialConfig.roadMatchBasemapTransparencyPercent,
+            )
+        } else {
+            0
+        },
+    )
+    var speedCamOverageKmh by mutableIntStateOf(
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
+            normalizeSpeedCamOverageKmh(initialConfig.speedCamOverageKmh)
+        } else {
+            DEFAULT_SPEED_CAM_OVERAGE_KMH
+        },
+    )
+    var mapsCamLookaheadDistanceM by mutableIntStateOf(
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
+            normalizeMapsCamLookaheadM(initialConfig.mapsCamLookaheadDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+        },
+    )
+    var mapsCamRadarHoldDistanceM by mutableIntStateOf(
+        if (isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey)) {
+            normalizeMapsCamRadarHoldM(initialConfig.mapsCamRadarHoldDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_RADAR_HOLD_M
+        },
+    )
+    var speedCamShowOnMap by mutableStateOf(
+        isRoadMatchMapWidgetDataKey(initialConfig.dataKey) && initialConfig.speedCamShowOnMap,
+    )
+    var mapsCamShowCameras by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowCameras,
+    )
+    var mapsCamShowCurrentLimit by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowCurrentLimit,
+    )
+    var mapsCamShowAheadLimit by mutableStateOf(
+        !isOsmSpeedLimitWidgetDataKey(initialConfig.dataKey) || initialConfig.mapsCamShowAheadLimit,
+    )
     var mediaShowLikeButton by mutableStateOf(
         isMusicWidgetDataKey(initialConfig.dataKey) && initialConfig.mediaShowLikeButton
     )
@@ -330,6 +457,13 @@ internal class WidgetSelectionDialogState(
     var stepperAdjustIconStyle by mutableIntStateOf(
         normalizeStepperAdjustIconStyle(initialConfig.stepperAdjustIconStyle)
     )
+    var hvacTempStepTenths by mutableIntStateOf(
+        if (isHvacTempWidgetDataKey(initialConfig.dataKey)) {
+            normalizeHvacTempWidgetStepTenths(initialConfig.hvacTempStepTenths)
+        } else {
+            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+        }
+    )
     var selectedDriveMode by mutableIntStateOf(
         if (initialConfig.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(initialConfig.selectedDriveMode)
@@ -360,6 +494,7 @@ internal class WidgetSelectionDialogState(
     var wholePanelClickAction by mutableStateOf(false)
     var wholePanelCollapseEdge by mutableStateOf(PanelCollapseEdge.NONE.storageValue)
     var wholePanelCollapseStripThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+    var wholePanelCollapseTouchZoneThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
     var wholePanelCollapseStripColorLight by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT)
     var wholePanelCollapseStripColorDark by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK)
     var wholePanelCollapseStripExpandedColorLight by mutableIntStateOf(
@@ -368,6 +503,8 @@ internal class WidgetSelectionDialogState(
     var wholePanelCollapseStripExpandedColorDark by mutableIntStateOf(
         DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
     )
+    var wholePanelCollapseOnStripTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP)
+    var wholePanelCollapseOnStripDoubleTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP)
     var wholePanelCollapseOnTileTap by mutableStateOf(DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP)
     var wholePanelCollapseOnTileTapDelaySec by mutableIntStateOf(
         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
@@ -401,10 +538,13 @@ internal class WidgetSelectionDialogState(
         wholePanelPageNumber = cfg.pageNumber
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
+        wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
+        wholePanelCollapseOnStripTap = cfg.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = cfg.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
@@ -423,10 +563,13 @@ internal class WidgetSelectionDialogState(
         wholePanelClickAction = cfg.clickAction
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
+        wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = cfg.collapseStripExpandedColorDark
+        wholePanelCollapseOnStripTap = cfg.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = cfg.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = cfg.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = cfg.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = cfg.panelBackgroundColorLight
@@ -485,6 +628,27 @@ internal class WidgetSelectionDialogState(
         initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
             initialConfig.launcherFreeformOverlayCrop,
     )
+    var launcherVirtualDisplayId by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayId
+        } else {
+            null
+        },
+    )
+    var launcherVirtualDisplayWidthPx by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayWidthPx
+        } else {
+            null
+        },
+    )
+    var launcherVirtualDisplayHeightPx by mutableStateOf(
+        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            initialConfig.launcherVirtualDisplayHeightPx
+        } else {
+            null
+        },
+    )
     var httpRequestYaml by mutableStateOf(
         if (initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             initialConfig.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -497,6 +661,13 @@ internal class WidgetSelectionDialogState(
             initialConfig.httpOpenBrowser
         } else {
             false
+        }
+    )
+    var automationTriggerId by mutableStateOf(
+        if (initialConfig.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            normalizeAutomationTriggerId(initialConfig.automationTriggerId)
+        } else {
+            ""
         }
     )
 
@@ -525,6 +696,19 @@ internal class WidgetSelectionDialogState(
     )
     var tripWidgetSource by mutableIntStateOf(
         normalizeTripWidgetSource(initialConfig.tripWidgetSource),
+    )
+    var tripMetricFieldId by mutableStateOf(
+        TripMetricFormatter.normalizeFieldId(initialConfig.tripMetricFieldId),
+    )
+    var obdPidId by mutableStateOf(
+        ObdPid.normalizeId(initialConfig.obdPidId),
+    )
+    var avgFuelConsumptionSource by mutableIntStateOf(
+        if (isAverageFuelConsumptionWidgetDataKey(initialConfig.dataKey)) {
+            normalizeAvgFuelConsumptionSource(initialConfig.avgFuelConsumptionSource)
+        } else {
+            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        },
     )
     var espRelayMode by mutableStateOf(
         if (isEspRelayWidgetDataKey(initialConfig.dataKey)) {
@@ -591,6 +775,8 @@ internal class WidgetSelectionDialogState(
     )
     /** `null` = class default shape; otherwise explicit 0..50. */
     var controlShape by mutableStateOf(initialConfig.controlShape)
+    /** `null` = class default outer padding; otherwise explicit 0..50. */
+    var controlPadding by mutableStateOf(initialConfig.controlPadding)
 
     /** Draft system app-widget id for [WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY]. */
     var draftAppWidgetId by mutableStateOf(
@@ -693,6 +879,9 @@ internal class WidgetSelectionDialogState(
         if (!WidgetsRepository.supportsStepperAdjustIconStyle(key)) {
             stepperAdjustIconStyle = STEPPER_ADJUST_ICON_PLUS_MINUS
         }
+        if (!WidgetsRepository.supportsHvacTempStep(key)) {
+            hvacTempStepTenths = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+        }
         if (!WidgetsRepository.supportsEspRelayMode(key)) {
             espRelayMode = EspRelayWidgetMode.DEFAULT
         }
@@ -704,6 +893,18 @@ internal class WidgetSelectionDialogState(
             accCruiseIncreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
             accCruiseDecreaseIntervalMs = ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
         }
+        if (!isAverageFuelConsumptionWidgetDataKey(key)) {
+            avgFuelConsumptionSource = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
+        if (!isTripMetricWidgetDataKey(key)) {
+            tripMetricFieldId = ActiveTripCustomWidgetField.DISTANCE.id
+        }
+        if (!isObdMetricWidgetDataKey(key)) {
+            obdPidId = ObdPid.RPM.id
+        }
+        if (!usesTripWidgetSource(key)) {
+            tripWidgetSource = TRIP_WIDGET_SOURCE_CURRENT
+        }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
         }
@@ -712,6 +913,20 @@ internal class WidgetSelectionDialogState(
         }
         if (!isDriveModeCycleWidgetDataKey(key)) {
             selectedDriveModes = DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
+        }
+        if (!isRoadMatchMapWidgetDataKey(key)) {
+            roadMatchHeadingUp = false
+            roadMatchMapKitBasemap = false
+            roadMatchBasemapTransparencyPercent = 0
+            speedCamShowOnMap = false
+        }
+        if (!isOsmSpeedLimitWidgetDataKey(key)) {
+            speedCamOverageKmh = DEFAULT_SPEED_CAM_OVERAGE_KMH
+            mapsCamLookaheadDistanceM = DEFAULT_MAPS_CAM_LOOKAHEAD_M
+            mapsCamRadarHoldDistanceM = DEFAULT_MAPS_CAM_RADAR_HOLD_M
+            mapsCamShowCameras = true
+            mapsCamShowCurrentLimit = true
+            mapsCamShowAheadLimit = true
         }
         if (supportsMusicControlsHeightSetting(key)) {
             val previousDefault = if (supportsMusicControlsHeightSetting(previousKey)) {
@@ -739,6 +954,9 @@ internal class WidgetSelectionDialogState(
     val isHttpRequestWidgetSelected: Boolean
         get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
 
+    val isAutomationTriggerWidgetSelected: Boolean
+        get() = selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
@@ -746,9 +964,13 @@ internal class WidgetSelectionDialogState(
         get() = selectedDataKey.isNotEmpty()
 
     fun toDraftWidgetConfig(): FloatingDashboardWidgetConfig {
-        val normalizedScale = normalizeWidgetScale(scale)
+        val normalizedTitleScale = normalizeWidgetScale(titleScale)
+        val normalizedIconScale = normalizeWidgetScale(iconScale)
+        val normalizedTextScale = normalizeWidgetScale(textScale)
         val normalizedShape = normalizeWidgetShape(shape)
-        scale = normalizedScale
+        titleScale = normalizedTitleScale
+        iconScale = normalizedIconScale
+        textScale = normalizedTextScale
         shape = normalizedShape
         val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
             valueAccuracy?.takeIf { it in 0..2 }
@@ -765,7 +987,9 @@ internal class WidgetSelectionDialogState(
             } else {
                 false
             },
-            scale = normalizedScale,
+            titleScale = normalizedTitleScale,
+            iconScale = normalizedIconScale,
+            textScale = normalizedTextScale,
             shape = normalizedShape,
             textColorLight = textColorLight,
             textColorDark = textColorDark,
@@ -873,6 +1097,30 @@ internal class WidgetSelectionDialogState(
                 selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM &&
                     launcherFreeformOverlayCrop,
+            launcherVirtualDisplayId =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayId?.takeIf { it > 0 }
+                } else {
+                    null
+                },
+            launcherVirtualDisplayWidthPx =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayWidthPx?.takeIf { it > 0 }
+                } else {
+                    null
+                },
+            launcherVirtualDisplayHeightPx =
+                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                    launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
+                ) {
+                    launcherVirtualDisplayHeightPx?.takeIf { it > 0 }
+                } else {
+                    null
+                },
             httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
             } else {
@@ -882,6 +1130,11 @@ internal class WidgetSelectionDialogState(
                 httpOpenBrowser
             } else {
                 false
+            },
+            automationTriggerId = if (selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+                normalizeAutomationTriggerId(automationTriggerId)
+            } else {
+                ""
             },
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
@@ -915,6 +1168,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 STEPPER_ADJUST_ICON_PLUS_MINUS
             },
+            hvacTempStepTenths = if (WidgetsRepository.supportsHvacTempStep(selectedDataKey)) {
+                normalizeHvacTempWidgetStepTenths(hvacTempStepTenths)
+            } else {
+                HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+            },
             tileBackgroundImageRelPathLight = tileBackgroundImageRelPathLight?.takeIf {
                 TileBackgroundImageStorage.isAllowedStoredRelPath(it)
             },
@@ -933,10 +1191,25 @@ internal class WidgetSelectionDialogState(
             } else {
                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT
             },
-            tripWidgetSource = if (isActiveTripWidgetDataKey(selectedDataKey)) {
+            tripWidgetSource = if (usesTripWidgetSource(selectedDataKey)) {
                 normalizeTripWidgetSource(tripWidgetSource)
             } else {
                 TRIP_WIDGET_SOURCE_CURRENT
+            },
+            tripMetricFieldId = if (isTripMetricWidgetDataKey(selectedDataKey)) {
+                TripMetricFormatter.normalizeFieldId(tripMetricFieldId)
+            } else {
+                ActiveTripCustomWidgetField.DISTANCE.id
+            },
+            obdPidId = if (isObdMetricWidgetDataKey(selectedDataKey)) {
+                ObdPid.normalizeId(obdPidId)
+            } else {
+                ObdPid.RPM.id
+            },
+            avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
+                normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource)
+            } else {
+                AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
             },
             espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
                 espRelayMode
@@ -995,8 +1268,44 @@ internal class WidgetSelectionDialogState(
                 controlActiveBackgroundColorDark
             },
             controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+            controlPadding = controlPadding?.let { normalizeWidgetControlPadding(it) },
             roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
                 roadMatchHeadingUp,
+            roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+                roadMatchMapKitBasemap,
+            roadMatchBasemapTransparencyPercent = if (isRoadMatchMapWidgetDataKey(selectedDataKey)) {
+                vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                    roadMatchBasemapTransparencyPercent,
+                )
+            } else {
+                0
+            },
+            speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeSpeedCamOverageKmh(speedCamOverageKmh)
+            } else {
+                DEFAULT_SPEED_CAM_OVERAGE_KMH
+            },
+            speedCamRadiusM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamLookaheadM(mapsCamLookaheadDistanceM)
+            } else {
+                DEFAULT_MAPS_CAM_LOOKAHEAD_M
+            },
+            speedCamShowOnMap = isRoadMatchMapWidgetDataKey(selectedDataKey) && speedCamShowOnMap,
+            mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || mapsCamShowCameras,
+            mapsCamShowCurrentLimit = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) ||
+                mapsCamShowCurrentLimit,
+            mapsCamShowAheadLimit = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) ||
+                mapsCamShowAheadLimit,
+            mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamLookaheadM(mapsCamLookaheadDistanceM)
+            } else {
+                DEFAULT_MAPS_CAM_LOOKAHEAD_M
+            },
+            mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+                normalizeMapsCamRadarHoldM(mapsCamRadarHoldDistanceM)
+            } else {
+                DEFAULT_MAPS_CAM_RADAR_HOLD_M
+            },
         )
     }
 
@@ -1014,6 +1323,7 @@ internal class WidgetSelectionDialogState(
                 controlActiveBackgroundColorLight = controlActiveBackgroundColorLight,
                 controlActiveBackgroundColorDark = controlActiveBackgroundColorDark,
                 controlShape = controlShape?.let { normalizeWidgetControlShape(it) },
+                controlPadding = controlPadding?.let { normalizeWidgetControlPadding(it) },
             ),
             controlColorsUseDefaults = controlColorsUseDefaults,
         )
@@ -1043,7 +1353,9 @@ internal class WidgetSelectionDialogState(
         customTitle = cfg.customTitle
         singleLineDualMetrics = cfg.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)
-        scale = normalizeWidgetScale(cfg.scale)
+        titleScale = normalizeWidgetScale(cfg.titleScale)
+        iconScale = normalizeWidgetScale(cfg.iconScale)
+        textScale = normalizeWidgetScale(cfg.textScale)
         shape = normalizeWidgetShape(cfg.shape)
         paddingTopPercent = normalizeWidgetPaddingPercent(cfg.paddingTopPercent)
         paddingBottomPercent = normalizeWidgetPaddingPercent(cfg.paddingBottomPercent)
@@ -1126,6 +1438,11 @@ internal class WidgetSelectionDialogState(
         } else {
             STEPPER_ADJUST_ICON_PLUS_MINUS
         }
+        hvacTempStepTenths = if (WidgetsRepository.supportsHvacTempStep(selectedDataKey)) {
+            normalizeHvacTempWidgetStepTenths(cfg.hvacTempStepTenths)
+        } else {
+            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+        }
         selectedDriveMode = if (selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
             normalizeDriveModeWidgetRawValue(cfg.selectedDriveMode)
         } else {
@@ -1166,6 +1483,21 @@ internal class WidgetSelectionDialogState(
         }
         launcherFreeformOverlayCrop =
             selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY && cfg.launcherFreeformOverlayCrop
+        launcherVirtualDisplayId = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayId
+        } else {
+            null
+        }
+        launcherVirtualDisplayWidthPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayWidthPx
+        } else {
+            null
+        }
+        launcherVirtualDisplayHeightPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            cfg.launcherVirtualDisplayHeightPx
+        } else {
+            null
+        }
         httpRequestYaml = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             cfg.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
         } else {
@@ -1175,6 +1507,11 @@ internal class WidgetSelectionDialogState(
             cfg.httpOpenBrowser
         } else {
             false
+        }
+        automationTriggerId = if (selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            normalizeAutomationTriggerId(cfg.automationTriggerId)
+        } else {
+            ""
         }
         tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
             TileBackgroundImageStorage.isAllowedStoredRelPath(it)
@@ -1194,6 +1531,21 @@ internal class WidgetSelectionDialogState(
                 cfg.tripWidgetLabelColumnWidthPercent,
             )
         tripWidgetSource = normalizeTripWidgetSource(cfg.tripWidgetSource)
+        tripMetricFieldId = if (isTripMetricWidgetDataKey(selectedDataKey)) {
+            TripMetricFormatter.normalizeFieldId(cfg.tripMetricFieldId)
+        } else {
+            ActiveTripCustomWidgetField.DISTANCE.id
+        }
+        obdPidId = if (isObdMetricWidgetDataKey(selectedDataKey)) {
+            ObdPid.normalizeId(cfg.obdPidId)
+        } else {
+            ObdPid.RPM.id
+        }
+        avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(selectedDataKey)) {
+            normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
+        } else {
+            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
         espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
             cfg.espRelayMode
         } else {
@@ -1245,8 +1597,39 @@ internal class WidgetSelectionDialogState(
                 cfg.controlActiveBackgroundColorDark ?: 0x00000000
         }
         controlShape = cfg.controlShape
+        controlPadding = cfg.controlPadding
         roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
             cfg.roadMatchHeadingUp
+        roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(selectedDataKey) &&
+            cfg.roadMatchMapKitBasemap
+        roadMatchBasemapTransparencyPercent = if (isRoadMatchMapWidgetDataKey(selectedDataKey)) {
+            vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                cfg.roadMatchBasemapTransparencyPercent,
+            )
+        } else {
+            0
+        }
+        speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+            normalizeSpeedCamOverageKmh(cfg.speedCamOverageKmh)
+        } else {
+            DEFAULT_SPEED_CAM_OVERAGE_KMH
+        }
+        mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+            normalizeMapsCamLookaheadM(cfg.mapsCamLookaheadDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+        }
+        mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(selectedDataKey)) {
+            normalizeMapsCamRadarHoldM(cfg.mapsCamRadarHoldDistanceM)
+        } else {
+            DEFAULT_MAPS_CAM_RADAR_HOLD_M
+        }
+        speedCamShowOnMap = isRoadMatchMapWidgetDataKey(selectedDataKey) && cfg.speedCamShowOnMap
+        mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCameras
+        mapsCamShowCurrentLimit =
+            !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowCurrentLimit
+        mapsCamShowAheadLimit =
+            !isOsmSpeedLimitWidgetDataKey(selectedDataKey) || cfg.mapsCamShowAheadLimit
         controlAppearanceEpoch++
     }
 
@@ -1279,10 +1662,13 @@ internal class WidgetSelectionDialogState(
             clickAction = wholePanelClickAction,
             collapseEdge = wholePanelCollapseEdge,
             collapseStripThicknessDp = wholePanelCollapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = wholePanelCollapseTouchZoneThicknessDp,
             collapseStripColorLight = wholePanelCollapseStripColorLight,
             collapseStripColorDark = wholePanelCollapseStripColorDark,
             collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
             collapseStripExpandedColorDark = wholePanelCollapseStripExpandedColorDark,
+            collapseOnStripTap = wholePanelCollapseOnStripTap,
+            collapseOnStripDoubleTap = wholePanelCollapseOnStripDoubleTap,
             collapseOnTileTap = wholePanelCollapseOnTileTap,
             collapseOnTileTapDelaySec = wholePanelCollapseOnTileTapDelaySec,
             panelBackgroundColorLight = wholePanelBackgroundColorLight,
@@ -1307,10 +1693,13 @@ internal class WidgetSelectionDialogState(
         wholePanelClickAction = snapshot.clickAction
         wholePanelCollapseEdge = snapshot.collapseEdge
         wholePanelCollapseStripThicknessDp = snapshot.collapseStripThicknessDp
+        wholePanelCollapseTouchZoneThicknessDp = snapshot.collapseTouchZoneThicknessDp
         wholePanelCollapseStripColorLight = snapshot.collapseStripColorLight
         wholePanelCollapseStripColorDark = snapshot.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
         wholePanelCollapseStripExpandedColorDark = snapshot.collapseStripExpandedColorDark
+        wholePanelCollapseOnStripTap = snapshot.collapseOnStripTap
+        wholePanelCollapseOnStripDoubleTap = snapshot.collapseOnStripDoubleTap
         wholePanelCollapseOnTileTap = snapshot.collapseOnTileTap
         wholePanelCollapseOnTileTapDelaySec = snapshot.collapseOnTileTapDelaySec
         wholePanelBackgroundColorLight = snapshot.panelBackgroundColorLight
@@ -1333,7 +1722,14 @@ internal class WidgetSelectionDialogState(
             isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
             isDriveModeCycleWidgetSelected ->
                 normalizeDriveModeCycleSelection(selectedDriveModes).isNotEmpty()
-            isAppLauncherWidgetSelected -> launcherAppPackage.isNotBlank()
+            isAppLauncherWidgetSelected -> {
+                val displayId = launcherVirtualDisplayId
+                launcherAppPackage.isNotBlank() &&
+                    (
+                        launcherLaunchMode != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
+                            (displayId != null && displayId > 0)
+                        )
+            }
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
@@ -1539,10 +1935,53 @@ private fun PanelCollapseWholeSettingsSection(
         options = edgeOptions,
         selectorWidth = WidgetDialogDropdownSelectorWidth,
     )
+    val collapseEdgeSelected =
+        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
+    val collapseSettingsEnabled = enabled && collapseEdgeSelected
+    SettingSwitch(
+        state.wholePanelCollapseOnStripTap,
+        { state.wholePanelCollapseOnStripTap = it },
+        stringResource(R.string.settings_panel_collapse_on_strip_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_strip_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseOnStripDoubleTap,
+        { state.wholePanelCollapseOnStripDoubleTap = it },
+        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseOnTileTap,
+        { state.wholePanelCollapseOnTileTap = it },
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
+        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseOnTileTapDelaySec,
+        onValueChange = {
+            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_on_tile_tap_delay_title,
+            state.wholePanelCollapseOnTileTapDelaySec,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
+        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
+        enabled = collapseSettingsEnabled && state.wholePanelCollapseOnTileTap,
+    )
     SettingSliderInt(
         value = state.wholePanelCollapseStripThicknessDp,
         onValueChange = {
-            state.wholePanelCollapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(it)
+            val strip = normalizePanelCollapseStripThicknessDp(it)
+            state.wholePanelCollapseStripThicknessDp = strip
+            state.wholePanelCollapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                state.wholePanelCollapseTouchZoneThicknessDp,
+                strip,
+            )
         },
         text = stringResource(
             R.string.settings_panel_collapse_thickness_title,
@@ -1552,6 +1991,27 @@ private fun PanelCollapseWholeSettingsSection(
         minValue = MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
         maxValue = MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
         enabled = enabled,
+    )
+    val touchZoneMin = maxOf(
+        MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseTouchZoneThicknessDp,
+        onValueChange = {
+            state.wholePanelCollapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                it,
+                state.wholePanelCollapseStripThicknessDp,
+            )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_touch_zone_thickness_title,
+            state.wholePanelCollapseTouchZoneThicknessDp,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_touch_zone_thickness_desc),
+        minValue = touchZoneMin,
+        maxValue = MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP,
+        enabled = collapseSettingsEnabled,
     )
     WidgetColorThemeSegmentRow(
         selectedSegment = state.wholePanelCollapseColorThemeSegment,
@@ -1604,30 +2064,6 @@ private fun PanelCollapseWholeSettingsSection(
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 8.dp),
-    )
-    val collapseEdgeSelected =
-        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
-    val autoCollapseEnabled = enabled && collapseEdgeSelected
-    SettingSwitch(
-        state.wholePanelCollapseOnTileTap,
-        { state.wholePanelCollapseOnTileTap = it },
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
-        autoCollapseEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseOnTileTapDelaySec,
-        onValueChange = {
-            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_on_tile_tap_delay_title,
-            state.wholePanelCollapseOnTileTapDelaySec,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
-        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        enabled = autoCollapseEnabled && state.wholePanelCollapseOnTileTap,
     )
 }
 
@@ -1845,6 +2281,70 @@ internal fun resolveWidgetSelectionDescriptionResources(
         descriptionRes = descriptionRes,
         actionsRes = WidgetsRepository.getActionsDescriptionResForDataKey(dataKey),
     )
+}
+
+@Composable
+private fun WidgetTypePickerRadioOption(
+    dataKey: String,
+    displayName: String,
+    selectedDataKey: String,
+    onSelect: () -> Unit,
+) {
+    val selectKey = rememberWrappedOnClick(onSelect)
+    val selected = selectedDataKey == dataKey
+    val descriptionResources = resolveWidgetSelectionDescriptionResources(
+        dataKey = dataKey,
+        selectedDataKey = selectedDataKey,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickableWithSound(onClick = onSelect)
+            .padding(vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = selectKey
+            )
+            Text(
+                text = displayName,
+                style = MaterialTheme.typography.tboxTitle,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (descriptionResources != null) {
+            Text(
+                text = stringResource(descriptionResources.descriptionRes),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 56.dp, end = 8.dp)
+            )
+            val actionsRes = descriptionResources.actionsRes
+            if (actionsRes != null) {
+                Text(
+                    text = stringResource(
+                        R.string.widget_actions_template,
+                        stringResource(actionsRes)
+                    ),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(
+                        start = 56.dp,
+                        top = 4.dp,
+                        end = 8.dp
+                    )
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -2074,6 +2574,10 @@ internal fun WidgetSelectionDialogForm(
                         widgetIndex = widgetIndex,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
+                    AutomationTriggerWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -2233,6 +2737,34 @@ internal fun WidgetSelectionDialogForm(
                             state.togglesEnabled
                         )
                     }
+                    if (isAverageFuelConsumptionWidgetDataKey(state.selectedDataKey)) {
+                        val avgFuelSourceOptions = listOf(
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
+                                stringResource(R.string.widget_avg_fuel_source_mbcan_vhal),
+                            ),
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP,
+                                stringResource(R.string.trips_widget_source_current),
+                            ),
+                            AvgFuelConsumptionSourceDropdownEntry(
+                                AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP,
+                                stringResource(R.string.trips_widget_source_persistent),
+                            ),
+                        )
+                        val selectedAvgFuelSource = avgFuelSourceOptions.firstOrNull {
+                            it.source == normalizeAvgFuelConsumptionSource(state.avgFuelConsumptionSource)
+                        } ?: avgFuelSourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedAvgFuelSource,
+                            onValueChange = { state.avgFuelConsumptionSource = it.source },
+                            text = stringResource(R.string.trips_widget_source_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = avgFuelSourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
                     if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
                         val stepperIconEntries = listOf(
                             StepperAdjustIconStyleDropdownEntry(
@@ -2254,6 +2786,30 @@ internal fun WidgetSelectionDialogForm(
                             description = stringResource(R.string.widget_stepper_adjust_icon_style_desc),
                             enabled = state.togglesEnabled,
                             options = stepperIconEntries,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (WidgetsRepository.supportsHvacTempStep(state.selectedDataKey)) {
+                        val tempStepEntries = listOf(
+                            HvacTempStepDropdownEntry(
+                                stringResource(R.string.widget_hvac_temp_step_0_5),
+                                HVAC_TEMP_WIDGET_STEP_HALF_TENTHS,
+                            ),
+                            HvacTempStepDropdownEntry(
+                                stringResource(R.string.widget_hvac_temp_step_1_0),
+                                HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS,
+                            ),
+                        )
+                        val selectedTempStepEntry = tempStepEntries.find {
+                            it.stored == state.hvacTempStepTenths
+                        } ?: tempStepEntries.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedTempStepEntry,
+                            onValueChange = { state.hvacTempStepTenths = it.stored },
+                            text = stringResource(R.string.widget_hvac_temp_step_title),
+                            description = stringResource(R.string.widget_hvac_temp_step_desc),
+                            enabled = state.togglesEnabled,
+                            options = tempStepEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
@@ -2279,6 +2835,127 @@ internal fun WidgetSelectionDialogForm(
                             enabled = state.togglesEnabled,
                             options = relayModeEntries,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isRoadMatchMapWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            isChecked = state.speedCamShowOnMap,
+                            onCheckedChange = { state.speedCamShowOnMap = it },
+                            text = stringResource(R.string.speed_cam_show_on_map_title),
+                            description = stringResource(R.string.speed_cam_show_on_map_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                    }
+                    if (BuildConfig.MAPKIT_ENABLED &&
+                        isRoadMatchMapWidgetDataKey(state.selectedDataKey)
+                    ) {
+                        SettingSwitch(
+                            isChecked = state.roadMatchMapKitBasemap,
+                            onCheckedChange = { state.roadMatchMapKitBasemap = it },
+                            text = stringResource(R.string.widget_road_match_mapkit_basemap_title),
+                            description = stringResource(R.string.widget_road_match_mapkit_basemap_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        if (state.roadMatchMapKitBasemap) {
+                            val opacityEntries = vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity
+                                .STEPS
+                                .map { percent ->
+                                    RoadMatchBasemapTransparencyDropdownEntry(
+                                        percent = percent,
+                                        label = if (percent == 0) {
+                                            stringResource(R.string.widget_road_match_basemap_opaque)
+                                        } else {
+                                            stringResource(
+                                                R.string.widget_road_match_basemap_transparency_percent,
+                                                percent,
+                                            )
+                                        },
+                                    )
+                                }
+                            val selectedOpacity = opacityEntries.firstOrNull {
+                                it.percent == state.roadMatchBasemapTransparencyPercent
+                            } ?: opacityEntries.first()
+                            SettingDropdownGeneric(
+                                selectedValue = selectedOpacity,
+                                onValueChange = {
+                                    state.roadMatchBasemapTransparencyPercent = it.percent
+                                },
+                                text = stringResource(R.string.widget_road_match_basemap_opacity_title),
+                                description = stringResource(
+                                    R.string.widget_road_match_basemap_opacity_desc,
+                                ),
+                                enabled = state.togglesEnabled,
+                                options = opacityEntries,
+                                selectorWidth = WidgetDialogDropdownSelectorWidth,
+                            )
+                        }
+                    }
+                    if (isOsmSpeedLimitWidgetDataKey(state.selectedDataKey)) {
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowCameras,
+                            onCheckedChange = { state.mapsCamShowCameras = it },
+                            text = stringResource(R.string.maps_cam_show_cameras_title),
+                            description = stringResource(R.string.maps_cam_show_cameras_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowCurrentLimit,
+                            onCheckedChange = { state.mapsCamShowCurrentLimit = it },
+                            text = stringResource(R.string.maps_cam_show_current_title),
+                            description = stringResource(R.string.maps_cam_show_current_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSwitch(
+                            isChecked = state.mapsCamShowAheadLimit,
+                            onCheckedChange = { state.mapsCamShowAheadLimit = it },
+                            text = stringResource(R.string.maps_cam_show_ahead_title),
+                            description = stringResource(R.string.maps_cam_show_ahead_desc),
+                            enabled = state.togglesEnabled,
+                        )
+                        SettingSliderInt(
+                            value = state.mapsCamLookaheadDistanceM,
+                            onValueChange = {
+                                state.mapsCamLookaheadDistanceM = normalizeMapsCamLookaheadM(it)
+                            },
+                            text = stringResource(
+                                R.string.maps_cam_lookahead_title,
+                                state.mapsCamLookaheadDistanceM,
+                            ),
+                            description = stringResource(R.string.maps_cam_lookahead_desc),
+                            minValue = MIN_MAPS_CAM_LOOKAHEAD_M,
+                            maxValue = MAX_MAPS_CAM_LOOKAHEAD_M,
+                            enabled = state.togglesEnabled,
+                            step = MAPS_CAM_DISTANCE_STEP_M,
+                        )
+                        SettingSliderInt(
+                            value = state.mapsCamRadarHoldDistanceM,
+                            onValueChange = {
+                                state.mapsCamRadarHoldDistanceM = normalizeMapsCamRadarHoldM(it)
+                            },
+                            text = stringResource(
+                                R.string.maps_cam_radar_hold_title,
+                                state.mapsCamRadarHoldDistanceM,
+                            ),
+                            description = stringResource(R.string.maps_cam_radar_hold_desc),
+                            minValue = MIN_MAPS_CAM_RADAR_HOLD_M,
+                            maxValue = MAX_MAPS_CAM_RADAR_HOLD_M,
+                            enabled = state.togglesEnabled,
+                            step = MAPS_CAM_DISTANCE_STEP_M,
+                        )
+                        SettingSliderInt(
+                            value = state.speedCamOverageKmh,
+                            onValueChange = {
+                                state.speedCamOverageKmh = normalizeSpeedCamOverageKmh(it)
+                            },
+                            text = stringResource(
+                                R.string.speed_cam_overage_title,
+                                state.speedCamOverageKmh,
+                            ),
+                            description = stringResource(R.string.speed_cam_overage_desc),
+                            minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
+                            maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
+                            enabled = state.togglesEnabled,
+                            step = 1,
                         )
                     }
                     if (isCruiseWidgetDataKey(state.selectedDataKey)) {
@@ -2397,7 +3074,9 @@ internal fun WidgetSelectionDialogForm(
                             }
                         }
                     }
-                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey) ||
+                        isTripMetricWidgetDataKey(state.selectedDataKey)
+                    ) {
                         val sourceOptions = listOf(
                             TripWidgetSourceDropdownEntry(
                                 TRIP_WIDGET_SOURCE_CURRENT,
@@ -2420,6 +3099,69 @@ internal fun WidgetSelectionDialogForm(
                             options = sourceOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
+                    }
+                    if (isTripMetricWidgetDataKey(state.selectedDataKey)) {
+                        val fieldOptions = ActiveTripCustomWidgetField.entries.map { field ->
+                            TripMetricFieldDropdownEntry(
+                                fieldId = field.id,
+                                display = stringResource(field.labelRes),
+                            )
+                        }
+                        val selectedField = fieldOptions.firstOrNull {
+                            it.fieldId == TripMetricFormatter.normalizeFieldId(state.tripMetricFieldId)
+                        } ?: fieldOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedField,
+                            onValueChange = { state.tripMetricFieldId = it.fieldId },
+                            text = stringResource(R.string.trips_metric_field_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = fieldOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isObdMetricWidgetDataKey(state.selectedDataKey)) {
+                        val supportedRaw by settingsViewModel.elm327SupportedPids
+                            .collectAsStateWithLifecycle()
+                        val discoveryAtMs by settingsViewModel.elm327DiscoveryAtMs
+                            .collectAsStateWithLifecycle()
+                        val supportedMode01 = remember(supportedRaw) {
+                            vad.dashing.tbox.obd.Elm327Protocol.decodeSupportedPids(supportedRaw)
+                        }
+                        val discoveryDone = discoveryAtMs > 0L
+                        val unsupportedHint =
+                            stringResource(R.string.obd_metric_pid_unsupported_hint)
+                        val pidOptions = ObdPid.entries.map { pid ->
+                            val base = stringResource(pid.labelRes)
+                            val mark = when {
+                                pid.mode01Pid == null -> ""
+                                !discoveryDone -> ""
+                                pid.mode01Pid in supportedMode01 -> ""
+                                else -> " — $unsupportedHint"
+                            }
+                            ObdPidDropdownEntry(
+                                pidId = pid.id,
+                                display = base + mark,
+                            )
+                        }
+                        val selectedPid = pidOptions.firstOrNull {
+                            it.pidId == ObdPid.normalizeId(state.obdPidId)
+                        } ?: pidOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedPid,
+                            onValueChange = { state.obdPidId = it.pidId },
+                            text = stringResource(R.string.obd_metric_pid_title),
+                            description = if (discoveryDone) {
+                                stringResource(R.string.obd_metric_pid_discovery_hint)
+                            } else {
+                                ""
+                            },
+                            enabled = state.togglesEnabled,
+                            options = pidOptions,
+                            selectorWidth = WidgetDialogObdPidDropdownSelectorWidth,
+                        )
+                    }
+                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
                         SettingSwitch(
                             state.tripWidgetShowRowDividers,
                             { state.tripWidgetShowRowDividers = it },
@@ -2442,7 +3184,7 @@ internal fun WidgetSelectionDialogForm(
                             .padding(vertical = 8.dp)
                     ) {
                         Text(
-                            text = stringResource(R.string.widget_scale, state.scale),
+                            text = stringResource(R.string.widget_title_scale, state.titleScale),
                             style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -2452,9 +3194,61 @@ internal fun WidgetSelectionDialogForm(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Slider(
-                            value = state.scale,
+                            value = state.titleScale,
                             onValueChange = { newValue ->
-                                state.scale = normalizeWidgetScale(newValue)
+                                state.titleScale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_icon_scale, state.iconScale),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_scale_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.iconScale,
+                            onValueChange = { newValue ->
+                                state.iconScale = normalizeWidgetScale(newValue)
+                            },
+                            valueRange = 0.1f..2.0f,
+                            steps = 18,
+                            enabled = state.togglesEnabled,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.widget_text_scale, state.textScale),
+                            style = MaterialTheme.typography.tboxTitle,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_scale_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = state.textScale,
+                            onValueChange = { newValue ->
+                                state.textScale = normalizeWidgetScale(newValue)
                             },
                             valueRange = 0.1f..2.0f,
                             steps = 18,
@@ -2743,6 +3537,30 @@ internal fun WidgetSelectionDialogForm(
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
                     )
+                    val controlPaddingDisplay = state.controlPadding
+                        ?: defaultControlPaddingDpForDataKey(state.selectedDataKey)
+                    Text(
+                        text = stringResource(R.string.widget_control_padding, controlPaddingDisplay),
+                        style = MaterialTheme.typography.tboxTitle,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.widget_control_padding_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Slider(
+                        value = controlPaddingDisplay.toFloat(),
+                        onValueChange = { newValue ->
+                            state.controlPadding = normalizeWidgetControlPadding(newValue.toInt())
+                        },
+                        valueRange = 0f..50f,
+                        steps = 49,
+                        enabled = state.togglesEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
                 }
                 }
 
@@ -2752,8 +3570,9 @@ internal fun WidgetSelectionDialogForm(
                         state.selectedDataKey
                     }
                     val needle = dataKeyFilterText.trim().lowercase()
+                    val searching = needle.isNotEmpty()
                     fun optionMatches(pair: Pair<String, String>): Boolean {
-                        if (needle.isEmpty()) return true
+                        if (!searching) return true
                         val description = WidgetsRepository
                             .getDescriptionResForDataKey(pair.first)
                             ?.let(context::getString)
@@ -2768,17 +3587,32 @@ internal fun WidgetSelectionDialogForm(
                             actions.lowercase().contains(needle)
                     }
                     val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
-                    val filteredTileOptions = buildList {
+                    val defaultExpandedSection = remember(initialListSelectedKey, widgetPairs) {
+                        WidgetTypeSections.sectionFor(initialListSelectedKey)?.name
+                            ?: widgetPairs.firstNotNullOfOrNull {
+                                WidgetTypeSections.sectionFor(it.first)?.name
+                            }
+                    }
+                    var expandedSectionId by rememberSaveable {
+                        mutableStateOf(defaultExpandedSection)
+                    }
+                    var wasSearching by rememberSaveable { mutableStateOf(false) }
+                    LaunchedEffect(searching, state.selectedDataKey, defaultExpandedSection) {
+                        if (searching) {
+                            wasSearching = true
+                        } else if (wasSearching) {
+                            wasSearching = false
+                            expandedSectionId = WidgetTypeSections.sectionFor(state.selectedDataKey)?.name
+                                ?: defaultExpandedSection
+                        } else if (expandedSectionId == null) {
+                            expandedSectionId = defaultExpandedSection
+                        }
+                    }
+                    val stickyOptions = buildList {
                         add("" to notSelectedLabel)
                         if (initialListSelectedKey.isNotEmpty() && selectedPair != null) {
                             add(selectedPair)
                         }
-                        addAll(
-                            widgetPairs
-                                .filter { it.first != initialListSelectedKey }
-                                .filter { optionMatches(it) }
-                                .sortedBy { it.second }
-                        )
                     }
                     Column(
                         modifier = Modifier
@@ -2786,82 +3620,83 @@ internal fun WidgetSelectionDialogForm(
                             .verticalScroll(androidx.compose.foundation.rememberScrollState())
                             .padding(12.dp)
                     ) {
-                    OutlinedTextField(
-                        value = dataKeyFilterText,
-                        onValueChange = { dataKeyFilterText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        textStyle = MaterialTheme.typography.tboxTitle,
-                        label = {
-                            Text(
-                                text = stringResource(R.string.widget_app_launcher_search),
-                                style = MaterialTheme.typography.tboxBody
-                            )
-                        },
-                        singleLine = true,
-                    )
-                    filteredTileOptions.forEach { (key, displayName) ->
-                        key(key) {
-                            val selectKey = rememberWrappedOnClick { state.applySelectedDataKey(key) }
-                            val selected = state.selectedDataKey == key
-                            val descriptionResources = resolveWidgetSelectionDescriptionResources(
-                                dataKey = key,
-                                selectedDataKey = state.selectedDataKey,
-                            )
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickableWithSound {
-                                        state.applySelectedDataKey(key)
-                                    }
-                                    .padding(vertical = 8.dp)
-                            ) {
+                        OutlinedTextField(
+                            value = dataKeyFilterText,
+                            onValueChange = { dataKeyFilterText = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            textStyle = MaterialTheme.typography.tboxTitle,
+                            label = {
+                                Text(
+                                    text = stringResource(R.string.widget_app_launcher_search),
+                                    style = MaterialTheme.typography.tboxBody
+                                )
+                            },
+                            singleLine = true,
+                        )
+                        stickyOptions.forEach { (optionKey, displayName) ->
+                            key("sticky-$optionKey") {
+                                WidgetTypePickerRadioOption(
+                                    dataKey = optionKey,
+                                    displayName = displayName,
+                                    selectedDataKey = state.selectedDataKey,
+                                    onSelect = { state.applySelectedDataKey(optionKey) },
+                                )
+                            }
+                        }
+                        WidgetTypeSectionId.entries.forEach { section ->
+                            val sectionItems = widgetPairs
+                                .filter { WidgetTypeSections.sectionFor(it.first) == section }
+                                .filter { it.first != initialListSelectedKey }
+                                .filter { optionMatches(it) }
+                                .sortedBy { it.second }
+                            if (sectionItems.isEmpty()) return@forEach
+                            val sectionExpanded = searching || expandedSectionId == section.name
+                            key(section.name) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickableWithSound(enabled = !searching) {
+                                            expandedSectionId =
+                                                if (expandedSectionId == section.name) null
+                                                else section.name
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    RadioButton(
-                                        selected = selected,
-                                        onClick = selectKey
-                                    )
                                     Text(
-                                        text = displayName,
-                                        style = MaterialTheme.typography.tboxTitle,
-                                        modifier = Modifier
-                                            .padding(start = 8.dp)
-                                            .weight(1f),
+                                        text = stringResource(section.titleRes),
+                                        style = MaterialTheme.typography.tboxHeadline,
+                                        modifier = Modifier.weight(1f),
                                         maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Filled.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.rotate(if (sectionExpanded) 180f else 0f),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                if (descriptionResources != null) {
-                                    Text(
-                                        text = stringResource(descriptionResources.descriptionRes),
-                                        style = MaterialTheme.typography.tboxBody,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(start = 56.dp, end = 8.dp)
-                                    )
-                                    val actionsRes = descriptionResources.actionsRes
-                                    if (actionsRes != null) {
-                                        Text(
-                                            text = stringResource(
-                                                R.string.widget_actions_template,
-                                                stringResource(actionsRes)
-                                            ),
-                                            style = MaterialTheme.typography.tboxCaption,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(
-                                                start = 56.dp,
-                                                top = 4.dp,
-                                                end = 8.dp
-                                            )
-                                        )
+                                AnimatedVisibility(visible = sectionExpanded) {
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        sectionItems.forEach { (optionKey, displayName) ->
+                                            key(optionKey) {
+                                                WidgetTypePickerRadioOption(
+                                                    dataKey = optionKey,
+                                                    displayName = displayName,
+                                                    selectedDataKey = state.selectedDataKey,
+                                                    onSelect = {
+                                                        state.applySelectedDataKey(optionKey)
+                                                    },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
                     }
                 }
             }
@@ -3166,10 +4001,16 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
             state.wholePanelCollapseStripThicknessDp,
         ),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            state.wholePanelCollapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
+        ),
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
         collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
+        collapseOnStripTap = state.wholePanelCollapseOnStripTap,
+        collapseOnStripDoubleTap = state.wholePanelCollapseOnStripDoubleTap,
         collapseOnTileTap = state.wholePanelCollapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,
@@ -3197,10 +4038,16 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
             state.wholePanelCollapseStripThicknessDp,
         ),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            state.wholePanelCollapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
+        ),
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
         collapseStripExpandedColorDark = state.wholePanelCollapseStripExpandedColorDark,
+        collapseOnStripTap = state.wholePanelCollapseOnStripTap,
+        collapseOnStripDoubleTap = state.wholePanelCollapseOnStripDoubleTap,
         collapseOnTileTap = state.wholePanelCollapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             state.wholePanelCollapseOnTileTapDelaySec,

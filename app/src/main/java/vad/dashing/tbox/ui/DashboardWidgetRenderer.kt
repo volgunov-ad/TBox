@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
@@ -29,16 +30,24 @@ import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY
+import vad.dashing.tbox.TRIP_METRIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.OBD_METRIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.GEOPOSITION_DATA_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.MOCK_LOCATION_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
-import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
+import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.normalizeTripWidgetSource
+import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.EspRelayWidgetMode
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -66,12 +75,31 @@ import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
+import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_FOLD_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.SLA_SPEED_LIMIT_WIDGET_DATA_KEY
+import vad.dashing.tbox.OSM_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
@@ -114,6 +142,7 @@ fun DashboardWidgetRenderer(
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
+    val mapkitApiKey by settingsViewModel.mapkitApiKey.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -140,7 +169,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -157,7 +186,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -174,7 +203,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 defaultTitleRes = R.string.data_title_net_widget_colored,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -203,7 +232,7 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -237,6 +266,10 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 headingUp = widgetConfig.roadMatchHeadingUp,
                 onHeadingUpChange = onRoadMatchHeadingUpChange,
+                mapKitBasemap = BuildConfig.MAPKIT_ENABLED &&
+                    widgetConfig.roadMatchMapKitBasemap,
+                basemapTransparencyPercent = widgetConfig.roadMatchBasemapTransparencyPercent,
+                mapkitApiKey = mapkitApiKey,
             )
         }
 
@@ -435,7 +468,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -449,7 +482,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -463,7 +496,213 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        REAR_FOG_WIDGET_DATA_KEY -> {
+            DashboardRearFogWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY -> {
+            DashboardHeadlightModeCycleWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        AVH_WIDGET_DATA_KEY -> {
+            DashboardAvhWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        HDC_WIDGET_DATA_KEY -> {
+            DashboardHdcWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        ESP_OFF_WIDGET_DATA_KEY -> {
+            DashboardEspOffWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        LDW_WIDGET_DATA_KEY -> {
+            DashboardLdwWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        LKA_WIDGET_DATA_KEY -> {
+            DashboardLkaWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        TJA_ICA_WIDGET_DATA_KEY -> {
+            DashboardTjaIcaWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        HMA_WIDGET_DATA_KEY -> {
+            DashboardHmaWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        HIGH_BEAM_WIDGET_DATA_KEY -> {
+            DashboardHighBeamWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        EPB_PARK_LAMP_WIDGET_DATA_KEY -> {
+            DashboardEpbParkLampWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY -> {
+            DashboardEngineOilPressureWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        BRAKE_FLUID_WIDGET_DATA_KEY -> {
+            DashboardBrakeFluidWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> {
+            DashboardHvacCustomModeCycleWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        HVAC_AC_MAX_WIDGET_DATA_KEY -> {
+            DashboardHvacAcMaxWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -477,6 +716,26 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+            )
+        }
+
+        OSM_SPEED_LIMIT_WIDGET_DATA_KEY -> {
+            DashboardOsmSpeedLimitWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                activeColor = controlAppearance.activeContent,
+                inactiveColor = controlAppearance.inactiveContent,
+                showCameras = widgetConfig.mapsCamShowCameras,
+                showCurrentLimit = widgetConfig.mapsCamShowCurrentLimit,
+                showAheadLimit = widgetConfig.mapsCamShowAheadLimit,
+                overageKmh = widgetConfig.speedCamOverageKmh,
+                radarHoldDistanceM = widgetConfig.mapsCamRadarHoldDistanceM,
             )
         }
 
@@ -507,7 +766,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -521,7 +780,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -535,7 +794,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -549,7 +808,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -563,7 +822,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -577,7 +836,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -591,7 +850,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -605,7 +864,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -654,6 +913,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -670,6 +930,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -686,6 +947,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -702,6 +964,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+                hvacTempStepTenths = widgetConfig.hvacTempStepTenths,
             )
         }
 
@@ -717,7 +980,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -732,7 +995,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -747,7 +1011,8 @@ fun DashboardWidgetRenderer(
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
-                titleOverride = titleOverride
+                titleOverride = titleOverride,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -763,7 +1028,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -779,7 +1044,39 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
+            )
+        }
+
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardMainScreenPageSelectorWidgetItem(
+                isVertical = false,
+                settingsViewModel = settingsViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+            )
+        }
+
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardMainScreenPageSelectorWidgetItem(
+                isVertical = true,
+                settingsViewModel = settingsViewModel,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
             )
         }
 
@@ -793,7 +1090,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -809,7 +1106,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -830,7 +1127,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -847,7 +1144,7 @@ fun DashboardWidgetRenderer(
                 backgroundColor = widgetBackgroundColor,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale,
+                iconScale = widgetConfig.iconScale,
             )
         }
 
@@ -863,7 +1160,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -880,7 +1177,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -896,7 +1193,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -913,7 +1210,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -928,7 +1225,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -943,7 +1240,7 @@ fun DashboardWidgetRenderer(
                 enableInnerInteractions = enableInnerInteractions,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
-                scale = widgetConfig.scale
+                iconScale = widgetConfig.iconScale
             )
         }
 
@@ -966,9 +1263,11 @@ fun DashboardWidgetRenderer(
         }
 
         APP_LAUNCHER_WIDGET_DATA_KEY -> {
+            val context = LocalContext.current
+            val pkg = widgetConfig.launcherAppPackage
             DashboardAppLauncherWidgetItem(
                 widget = widget,
-                packageName = widgetConfig.launcherAppPackage,
+                packageName = pkg,
                 customIconRevision = launcherAppIconRevision,
                 iconLookup = iconLookup,
                 suppressCustomIcon = themeActivating,
@@ -976,10 +1275,30 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onDoubleClick = if (enableInnerInteractions && !isEditMode && pkg.isNotBlank()) {
+                    {
+                        forceStopAppFromWidget(context, pkg, settingsViewModel)
+                    }
+                } else {
+                    null
+                },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        APP_LIST_WIDGET_DATA_KEY -> {
+            DashboardAppListWidgetItem(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
             )
         }
 
@@ -1001,6 +1320,22 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        AUTOMATION_TRIGGER_WIDGET_DATA_KEY -> {
+            DashboardAutomationTriggerWidgetItem(
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_automation_trigger_widget),
+                automationTriggerId = widgetConfig.automationTriggerId
             )
         }
 
@@ -1119,7 +1454,6 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = false,
-                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -1137,7 +1471,6 @@ fun DashboardWidgetRenderer(
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
                 isVertical = true,
-                useMbCan = widgetConfig.useMbCanVhal,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 onClick = onClick,
@@ -1173,6 +1506,7 @@ fun DashboardWidgetRenderer(
         }
 
         ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
@@ -1188,11 +1522,17 @@ fun DashboardWidgetRenderer(
                 onDoubleClick = {
                     // Read TripRepository directly: AppDataViewModel.activeTrip is stateIn
                     // (WhileSubscribed) and can lag behind the live active trip on overlays.
-                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
-                        TRIP_WIDGET_SOURCE_CURRENT &&
-                        TripRepository.activeTrip.value?.isCurrentActive == true
-                    ) {
-                        onTripFinishAndStart()
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
                     }
                 },
                 elevation = elevation,
@@ -1203,6 +1543,7 @@ fun DashboardWidgetRenderer(
         }
 
         ACTIVE_TRIP_WIDGET_DATA_KEY, ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY, ACTIVE_TRIP_WIDGET_MINI_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
             DashboardActiveTripWidgetItem(
                 widget = widget,
                 appDataViewModel = appDataViewModel,
@@ -1215,17 +1556,72 @@ fun DashboardWidgetRenderer(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {
-                    if (normalizeTripWidgetSource(widgetConfig.tripWidgetSource) ==
-                        TRIP_WIDGET_SOURCE_CURRENT &&
-                        TripRepository.activeTrip.value?.isCurrentActive == true
-                    ) {
-                        onTripFinishAndStart()
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
                     }
                 },
                 elevation = elevation,
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        TRIP_METRIC_WIDGET_DATA_KEY -> {
+            val persistentTripDefaultName = stringResource(R.string.trips_persistent_trip)
+            DashboardTripMetricWidgetItem(
+                appDataViewModel = appDataViewModel,
+                tripWidgetSource = widgetConfig.tripWidgetSource,
+                tripMetricFieldId = widgetConfig.tripMetricFieldId,
+                valueAccuracy = widgetConfig.valueAccuracy,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showUnit = widgetConfig.showUnit,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onDoubleClick = {
+                    when (normalizeTripWidgetSource(widgetConfig.tripWidgetSource)) {
+                        TRIP_WIDGET_SOURCE_PERSISTENT -> {
+                            if (TripRepository.persistentTrip() != null) {
+                                appDataViewModel.resetPersistentTrip(persistentTripDefaultName)
+                            }
+                        }
+                        else -> {
+                            if (TripRepository.activeTrip.value?.isCurrentActive == true) {
+                                onTripFinishAndStart()
+                            }
+                        }
+                    }
+                },
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+            )
+        }
+
+        OBD_METRIC_WIDGET_DATA_KEY -> {
+            DashboardObdMetricWidgetItem(
+                obdPidId = widgetConfig.obdPidId,
+                valueAccuracy = widgetConfig.valueAccuracy,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                showUnit = widgetConfig.showUnit,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
             )
         }
 
@@ -1374,6 +1770,50 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "gearBoxCurrentGear" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        "gearBoxPreparedGear" -> {
+            DashboardWidgetItem(
+                widget = if (widgetConfig.useMbCanVhal) {
+                    widget.copy(dataKey = GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         "odometer" -> {
             DashboardWidgetItem(
                 widget = if (widgetConfig.useMbCanVhal) {
@@ -1447,6 +1887,33 @@ fun DashboardWidgetRenderer(
                 } else {
                     widget
                 },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY -> {
+            val remappedKey = when (
+                normalizeAvgFuelConsumptionSource(widgetConfig.avgFuelConsumptionSource)
+            ) {
+                AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP ->
+                    AVERAGE_FUEL_CONSUMPTION_CURRENT_TRIP_FLOW_KEY
+                AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP ->
+                    AVERAGE_FUEL_CONSUMPTION_DAILY_TRIP_FLOW_KEY
+                else -> AVERAGE_FUEL_CONSUMPTION_CAN_FLOW_KEY
+            }
+            DashboardWidgetItem(
+                widget = widget.copy(dataKey = remappedKey),
                 dataProvider = dataProvider,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -1646,6 +2113,24 @@ fun DashboardWidgetRenderer(
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor
+            )
+        }
+
+        GAS_BRAKE_WIDGET_DATA_KEY -> {
+            DashboardGasBrakeWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
             )
         }
 

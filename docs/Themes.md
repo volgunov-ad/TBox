@@ -29,7 +29,7 @@
 
 Переключение ECO/NOR/SPT — это **второй** слой. Переключение день/ночь на головном устройстве — **первый**; оно влияет на то, из какой подпапки `wallpaper/light` или `wallpaper/dark` читаются обои и какие цвета берутся из настроек темы.
 
-Штатную тему день/ночь ГУ можно менять плиткой **«Тема день/ночь»** (см. [USER_GUIDE_RU.md](USER_GUIDE_RU.md) §1.4b и [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md)): нужны **изменение системных настроек** в Android и ADB `pm grant … WRITE_SECURE_SETTINGS`.
+Штатную тему день/ночь ГУ можно менять плиткой **«Тема день/ночь»** (см. [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md)): нужны **изменение системных настроек** в Android и ADB `pm grant … WRITE_SECURE_SETTINGS`.
 
 В **Настройки → Прочее** есть переключатель **«Следить за темой день/ночь (светлая/темная) системы»** (по умолчанию вкл.). Если его выключить, `ThemeObserver` перестаёт слушать Settings ГУ, а виджет меняет только тему приложения (`currentTheme`) — без ADB. Двойной тап по виджету в этом режиме снова включает слежение (с тостом).
 
@@ -71,8 +71,8 @@
 │  • manifest.json     — метаданные materialize                     │
 │  • theme.json        — снимок при экспорте / первой распаковке   │
 │  • runtime.json      — живое состояние темы (обои, страница)    │
-│  • wallpaper/light|dark/, icons/, tile_backgrounds/,            │
-│    panel_backgrounds/                                           │
+│  • wallpaper/light|dark/, icons/, ui_icons/,                    │
+│    tile_backgrounds/, panel_backgrounds/                        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -129,6 +129,7 @@ theme.json
 assets/wallpaper/light/
 assets/wallpaper/dark/
 assets/icons/
+assets/ui_icons/
 assets/tile_backgrounds/
 assets/panel_backgrounds/
 ```
@@ -166,17 +167,52 @@ PNG для виджетов «Ярлык приложения» и «HTTP-зап
 
 Иконки HTTP-запросов привязаны не к URL, а к конкретной плитке конкретной панели. Поэтому при экспорте темы собираются только ключи реально используемых виджетов «HTTP-запрос» из выбранных разделов `mainScreen` и/или `floatingPanels`.
 
+#### 4. `uiIcons`
+
+Пользовательские иконки встроенных виджетов, левого меню и угловых кнопок главного экрана.
+Идентификаторы стабильны и не зависят от числовых Android resource id. Файлы находятся в
+`assets/ui_icons/{iconKey}`, после materialize — в `files/themes/{cacheKey}/ui_icons/{iconKey}`.
+
+Ключи угловых кнопок главного экрана: `main_screen.button.settings`, `main_screen.button.add`,
+`main_screen.button.wallpaper.prev` / `.next`, `main_screen.button.window.exit` / `.restore`.
+
+Для иконок с опцией «Не менять цвета» дополнительно может быть файл
+`assets/ui_icons/{iconKey}.dark` (тёмная тема). Если загружен только один из day/night файлов,
+он используется для обеих тем. В `theme.json` секция выглядит так:
+
+```json
+"uiIcons": {
+  "keys": ["menu.tab.modem", "dashboard.vehicle.trunk"],
+  "preserveColors": ["menu.tab.modem"]
+}
+```
+
+`preserveColors` — список ключей, для которых приложение не подменяет цвет (день/ночь и
+active/inactive). При активации темы флаги мержатся в DataStore для ключей из `keys`.
+
+Область применения `uiIcons` независима от `appIcons`. Если она выключена, кэш темы не
+участвует в чтении или записи UI-иконок: используются `files/ui_icons/`, затем встроенные
+drawable/Material Icons. Дисковый кэш темы при этом не удаляется.
+
 ### Иконки и фоны плиток (два уровня путей)
 
 **Иконки приложений** — приоритет: кэш активной темы → `files/launcher_app_icons/` → системная.
 
 **Иконки HTTP-запросов** — приоритет: кэш активной темы → `files/http_request_icons/` → заглушка `?`.
 
+**Иконки виджетов и меню** — приоритет при включённой области `uiIcons`: кэш активной темы →
+`files/ui_icons/` → встроенная иконка. При выключенной области кэш темы пропускается, а новые
+изменения записываются в общую папку.
+
 **Фоны плиток** — приоритет: `files/themes/{cacheKey}/tile_backgrounds/` → `files/tile_backgrounds/` → только цвет.
 
 **Фоны панелей** (цвет / картинка / скругление всей панели) — JSON-поля в `panels[]`; картинки: `files/themes/{cacheKey}/panel_backgrounds/` → `files/panel_backgrounds/` → только цвет. Едут вместе с целями `mainScreenPanels` / `floatingPanels` (отдельного apply target нет).
 
 При активации темы файлы **не копируются** в общие папки — виджеты читают пути из кэша активной темы.
+
+**Запись картинок при активной теме:** если в apply targets темы есть соответствующий раздел, новый выбор файла пишется **в кэш этой темы** (`wallpaper/`, `tile_backgrounds/`, `panel_backgrounds/`, `icons/`, `http_request_icons/`), а не в shared. Без активной темы (или без нужного target) — по-прежнему shared / внешняя папка обоев.
+
+**Лимит размера картинок фона:** при выборе файла в UI и при распаковке темы длинная сторона не должна превышать **1920 px** (`UI_IMAGE_DECODE_MAX_EDGE_PX`). Более крупные файлы из чужой темы ужимаются при materialize / на старте приложения; декод в UI всегда идёт с downsampling — иначе полный кадр с телефона в плавающей панели может уронить ГУ по OOM.
 
 ---
 
@@ -236,13 +272,14 @@ sequenceDiagram
 1. `seedFromThemeJsonIfMissing` — создать `runtime.json` из `theme.json`, если файла нет.
 2. `saveActiveTheme` — записать `active_theme_uri` (cache key) в DataStore.
 3. `ThemeLayoutExport.importJson` — панели, pageCount, цвета, кнопки; при цели `MAIN_SCREEN_PANELS` также `currentPage` из `theme.json`.
-4. **`ThemeRuntimeState.applyActivationOverrides`** — **всегда** перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
+4. **`ThemeRuntimeState.applyActivationOverrides`** — при включённой цели обоев перезаписать `main_screen_wallpaper_selection_by_page` в DataStore:
    - из `runtime.json`, если есть секция обоев;
    - иначе из `theme.json` `mainScreen.wallpaperSelectionByPage`;
    - иначе **пусто** (старые обои предыдущей темы в DataStore **не** сохраняются).
 5. При наличии `currentPage` в `runtime.json` — переопределить страницу в DataStore.
 6. `applyWallpaperDirsFromCache` — `file://…/wallpaper/light|dark`.
-7. Bump ревизий обоев, иконок приложений, иконок HTTP-запросов, фонов плиток.
+7. Обновить только ревизии областей, применённых темой или сменивших фактический источник
+   (кэш темы ↔ общая папка). Области, не затронутые обеими темами, не инвалидируются.
 
 ### `ThemeActivationCoordinator`
 
@@ -305,6 +342,7 @@ effectiveSelection = combine(
 1. Отменяет debounce-задачи.
 2. Flush pending → DataStore + `runtime.json` **исходящей** темы.
 3. `snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)` — явный ключ уходящей темы (не путать с уже записанным `active_theme_uri`).
+4. `snapshotLiveLayoutToThemeCache(outgoingCacheKey)` — экспорт текущего layout из DataStore в `theme.json` уходящей темы и обновление fingerprint в `manifest.json`, чтобы ECO→NOR→ECO восстанавливал правки панелей/плиток, а не исходный снимок при materialize.
 
 ---
 
@@ -377,6 +415,7 @@ files/themes/{cacheKey}/
   wallpaper/light/
   wallpaper/dark/
   icons/
+  ui_icons/
   tile_backgrounds/
   panel_backgrounds/
 ```
@@ -444,6 +483,10 @@ files/themes/{cacheKey}/
 
 Выбор пишется в DataStore и `runtime.json` активной темы; при смене ECO→NOR→ECO для ECO восстановится последний выбор из `runtime.json` этой темы.
 
+### Правки при активной теме режима
+
+Картинки (обои, фоны плиток/панелей, иконки) при наличии нужного apply target пишутся в `files/themes/{cacheKey}/…`. Перед сменой режима (в т.ч. CAN) layout из DataStore сохраняется в `theme.json` уходящей темы — после возврата на режим правки не откатываются к первому materialize.
+
 ---
 
 ## Техническая справка (для разработчиков)
@@ -502,6 +545,8 @@ files/themes/{cacheKey}/
 - **Импорт JSON backup** с `drive_mode_theme_paths` без кэша: watcher не materialize — нужно вручную «Выбрать файл» (можно добавить materialize при импорте).
 - **`ThemeSettingsValidator`** и активация не под одним mutex — теоретическая гонка `clearActiveTheme` vs activate.
 - **Debug-панель** `runtime.json` на вкладке «Темы» закомментирована в коде; можно включить для диагностики рассинхрона DataStore/runtime.
+- **Фоны плиток/панелей в `.tboxtheme`:** при materialize и на старте (`ThemeSettingsValidator`) картинки с ребром > [UI_IMAGE_DECODE_MAX_EDGE_PX] (1920) ужимаются на диске; UI декодирует с `inSampleSize`. Иначе полный JPEG с телефона (например 2160×3840) в enabled-плавающей панели даёт OOM и перезагрузку ГУ (A10). При применении через SAF лимит того же размера.
+- **Повторный sync-materialize** из исходного `.tboxtheme`: файлы с тем же именем в assets не перезаписываются; live-правки в кэше (другие имена обоев, изменённый `theme.json`) остаются, пока кэш не очистят.
 
 ---
 

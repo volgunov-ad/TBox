@@ -15,4 +15,7 @@ object WidgetActiveColors {
 
   /** Stock `wt_secondary_main_color` (#FFF3A721). */
   val Secondary = Color(0xFFF3A721)
+
+  /** Alert / warning active accent (EPB park lamp, etc.). */
+  val Danger = Color(0xFFE53935)
 }

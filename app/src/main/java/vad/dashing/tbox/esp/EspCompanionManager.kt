@@ -1,6 +1,7 @@
 package vad.dashing.tbox.esp
 
 import android.content.Context
+import android.os.Environment
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -17,8 +18,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.externalapi.ExternalApiConstants
+import vad.dashing.tbox.hotspot.HuSoftApRouter
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.automation.AutomationEspBleBtnEvent
+import vad.dashing.tbox.automation.AutomationTriggerEspBleBtnEventBus
 import vad.dashing.tbox.location.LocationMockManager
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import java.io.File
@@ -46,9 +51,32 @@ class EspCompanionManager(
         private const val TAG = "EspCompanionManager"
         private const val WATCHDOG_MS = 1_000L
         private val REOPEN_BACKOFF_MS = longArrayOf(3_000L, 10_000L, 30_000L)
-        private const val OTA_BEGIN_TIMEOUT_MS = 15_000L
-        private const val OTA_DONE_TIMEOUT_MS = 60_000L
-        private const val OTA_CHUNK = 1024
+        /**
+         * Do not "simplify" this OTA path. The rules that made 0.8 → 0.9.0
+         * succeed (1 043 776 bytes on the A9 head unit) are in
+         * docs/ESP32_COMPANION_RU.md, section «Что нельзя ломать».
+         * In particular: 512-byte payloads, ~100 ms gap, keep the read thread,
+         * send the image even if begin ack never arrives, and do not abort
+         * on a single missed chunk ack.
+         */
+        private const val OTA_BEGIN_TIMEOUT_MS = 120_000L
+        private const val OTA_DONE_TIMEOUT_MS = 120_000L
+        private const val OTA_CHUNK = 512
+        /** Matches firmware `s_ota_ack_every`. */
+        private const val OTA_ACK_EVERY = 8
+        private const val OTA_CHUNK_ACK_TIMEOUT_MS = 10_000L
+        /**
+         * Pause after each frame so `esp_ota_write` (including a sector erase)
+         * finishes before the next frame is queued. The companion CDC RX ring
+         * is 2048 bytes and a frame is 1032; the USB ACK happens when the ring
+         * accepts the data, which is before the flash write returns. A second
+         * frame during that window overflows the ring, the image never reaches
+         * the expected size, and `otaEnd` is consumed as binary — the host
+         * then waits until [OTA_DONE_TIMEOUT_MS] and reports timeout.
+         */
+        private const val OTA_CHUNK_GAP_MS = 100L
+        /** Magic + u16be len=0. In binary mode this is "bad len" and leaves OTA. */
+        private val OTA_ABORT_FRAME = byteArrayOf(0xA5.toByte(), 0x5A, 0, 0, '\n'.code.toByte())
         /** FW may block ~1.2s per UM980 cmd on older builds; keep USB open. */
         private const val UM980_CMD_GUARD_MS = 20_000L
         private const val UM980_RSP_TIMEOUT_MS = 2_500L
@@ -64,6 +92,7 @@ class EspCompanionManager(
     private var lastReconnectAttemptMs = 0L
     private var reopenFailureStreak = 0
     private var lastOtaProgressLogPct = -1
+    private var otaRxTraceLeft = 0
     /** One optional VTG/ZDA/GST batch per companion USB link session. */
     private var optionalNmeaEnableSentForLink = false
     private val um980BusyGeneration = AtomicInteger(0)
@@ -571,6 +600,75 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeCanBaud(baud))
     }
 
+    fun setMagChip(chip: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        if (!EspCompanionProtocol.isKnownMagChip(chip)) return
+        val id = chip.lowercase()
+        Log.i(TAG, "mag chip request: $id")
+        writeLine(EspCompanionProtocol.encodeMagChipSet(id))
+    }
+
+    private var panelPort = ExternalApiConstants.DEFAULT_PORT
+    private var companionApSsid = ""
+    private var companionApPsk = ""
+
+    fun setCompanionAp(ssid: String, psk: String) {
+        companionApSsid = ssid
+        companionApPsk = psk
+    }
+
+    fun sendApCfg(on: Boolean, huSsid: String, huPsk: String, port: Int) {
+        if (EspCompanionRepository.otaBusy.value) return
+        panelPort = port.coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
+        Log.i(TAG, "apCfg on=$on huSsid=$huSsid apSsid=$companionApSsid port=$panelPort")
+        writeLine(
+            EspCompanionProtocol.encodeApCfg(
+                on,
+                huSsid,
+                huPsk,
+                panelPort,
+                companionApSsid,
+                companionApPsk,
+            ),
+        )
+    }
+
+    fun sendRememberedApCfg() {
+        val push = HuSoftApRouter.current() ?: return
+        sendApCfg(true, push.ssid, push.password, panelPort)
+    }
+
+    fun setBleOn(on: Boolean) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE set on=$on")
+        writeLine(EspCompanionProtocol.encodeBleSet(on))
+    }
+
+    fun beginBleLearn(timeoutMs: Long = 30_000L) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs")
+        EspCompanionRepository.setBleLearnActive(true)
+        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs))
+    }
+
+    fun endBleLearn() {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE learn end")
+        writeLine(EspCompanionProtocol.encodeBleLearnEnd())
+    }
+
+    fun forgetBleMac(mac: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE forget mac=$mac")
+        writeLine(EspCompanionProtocol.encodeBleForget(mac))
+    }
+
+    fun forgetAllBleMacs() {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE forget all")
+        writeLine(EspCompanionProtocol.encodeBleForgetAll())
+    }
+
     fun setCanFilterAcceptAll() {
         if (EspCompanionRepository.otaBusy.value) return
         writeLine(EspCompanionProtocol.encodeCanFilter(acceptAll = true))
@@ -717,7 +815,14 @@ class EspCompanionManager(
         EspCompanionRepository.beginOta()
         lastOtaProgressLogPct = -1
         sess.beginCriticalIo()
+        var phase = "begin"
         return try {
+            runCatching {
+                File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "esp_ota_trace.txt",
+                ).delete()
+            }
             val image = file.readBytes()
             val imageSize = image.size.toLong()
             if (image.isEmpty()) throw IllegalArgumentException("empty")
@@ -727,21 +832,31 @@ class EspCompanionManager(
             val crc = EspCompanionProtocol.crc32Ieee(image)
             Log.i(TAG, "OTA begin size=$imageSize crc=0x${crc.toString(16)}")
             TboxRepository.addLog("INFO", "Companion", "OTA begin ($imageSize bytes)")
-            if (!sess.writeBytes(
-                    EspCompanionProtocol.encodeOtaBegin(imageSize, crc).toByteArray(Charsets.UTF_8),
-                    ota = true,
-                )
-            ) {
+            traceOta("begin size=$imageSize")
+            otaRxTraceLeft = 40
+            val beginPayload = EspCompanionProtocol.encodeOtaBegin(imageSize, crc)
+                .toByteArray(Charsets.UTF_8)
+            if (!sess.writeBytes(beginPayload, ota = true)) {
                 throw IllegalStateException("no_usb")
             }
-            val beginAck = awaitOta(channel, OTA_BEGIN_TIMEOUT_MS) {
-                it is EspMessage.OtaAck && it.phase == "begin"
-            } as EspMessage.OtaAck
-            if (!beginAck.ok) {
+            val beginAck = try {
+                awaitOta(channel, OTA_BEGIN_TIMEOUT_MS) {
+                    it is EspMessage.OtaAck && it.phase == "begin"
+                } as EspMessage.OtaAck
+            } catch (e: TimeoutCancellationException) {
+                traceOta("no begin ack, writing image")
+                null
+            }
+            if (beginAck != null && !beginAck.ok) {
                 throw IllegalStateException(beginAck.err ?: "begin_failed")
             }
-            Log.i(TAG, "OTA begin ack ok")
+            if (beginAck != null) {
+                Log.i(TAG, "OTA begin ack ok")
+                traceOta("begin ack")
+            }
             var offset = 0
+            var chunksSinceAck = 0
+            var missedAcks = 0
             while (offset < image.size) {
                 val end = minOf(offset + OTA_CHUNK, image.size)
                 val chunk = image.copyOfRange(offset, end)
@@ -750,29 +865,37 @@ class EspCompanionManager(
                     throw IllegalStateException("no_usb")
                 }
                 offset = end
+                chunksSinceAck++
                 val pct = ((offset.toLong() * 100L) / imageSize).toInt().coerceIn(0, 99)
                 EspCompanionRepository.updateOtaProgress(pct)
                 logOtaProgress(pct)
-                while (true) {
-                    val msg = channel.tryReceive().getOrNull() ?: break
-                    when (msg) {
-                        is EspMessage.OtaAck -> {
-                            if (!msg.ok) {
-                                throw IllegalStateException(msg.err ?: "chunk_failed")
-                            }
-                            if (msg.offset > 0 && imageSize > 0) {
-                                val ackPct = ((msg.offset * 100L) / imageSize).toInt().coerceIn(0, 99)
-                                EspCompanionRepository.updateOtaProgress(ackPct)
-                                logOtaProgress(ackPct)
-                            }
+                phase = "chunk@$offset"
+                delay(OTA_CHUNK_GAP_MS)
+                val sent = offset.toLong()
+                if (chunksSinceAck >= OTA_ACK_EVERY || sent >= imageSize) {
+                    try {
+                        val ack = awaitOta(channel, OTA_CHUNK_ACK_TIMEOUT_MS) {
+                            it is EspMessage.OtaAck && it.phase == "chunk" && it.offset >= sent
+                        } as EspMessage.OtaAck
+                        chunksSinceAck = 0
+                        missedAcks = 0
+                        traceOta("ack offset=${ack.offset}")
+                        if (imageSize > 0) {
+                            val ackPct = ((ack.offset * 100L) / imageSize).toInt().coerceIn(0, 99)
+                            EspCompanionRepository.updateOtaProgress(ackPct)
+                            logOtaProgress(ackPct)
                         }
-                        is EspMessage.OtaDone -> {
-                            if (!msg.ok) throw IllegalStateException(msg.err ?: "ota_failed")
-                        }
-                        else -> Unit
+                    } catch (e: TimeoutCancellationException) {
+                        // 0.8 still emits heartbeats during OTA and sometimes drops one ack.
+                        chunksSinceAck = 0
+                        missedAcks++
+                        traceOta("ack miss @$sent ($missedAcks)")
+                        if (missedAcks >= 3) throw e
                     }
                 }
             }
+            phase = "end"
+            traceOta("tx end offset=$offset")
             if (!sess.writeBytes(
                     EspCompanionProtocol.encodeOtaEnd().toByteArray(Charsets.UTF_8),
                     ota = true,
@@ -780,37 +903,30 @@ class EspCompanionManager(
             ) {
                 throw IllegalStateException("no_usb")
             }
-            val done = withTimeout(OTA_DONE_TIMEOUT_MS) {
-                while (true) {
-                    when (val msg = channel.receive()) {
-                        is EspMessage.OtaAck -> {
-                            if (msg.phase == "end" && !msg.ok) {
-                                throw IllegalStateException(msg.err ?: "end_failed")
-                            }
-                        }
-                        is EspMessage.OtaDone -> return@withTimeout msg
-                        else -> Unit
-                    }
-                }
-                @Suppress("UNREACHABLE_CODE")
-                error("unreachable")
-            }
+            val done = awaitOta(channel, OTA_DONE_TIMEOUT_MS) {
+                it is EspMessage.OtaDone
+            } as EspMessage.OtaDone
             if (!done.ok) {
                 throw IllegalStateException(done.err ?: "ota_failed")
             }
             EspCompanionRepository.finishOta(null)
+            traceOta("done ok")
             Log.i(TAG, "OTA complete, companion rebooting")
             TboxRepository.addLog("INFO", "Companion", "OTA complete, companion rebooting")
             runCatching { file.delete() }
             Result.success(Unit)
         } catch (e: TimeoutCancellationException) {
-            Log.w(TAG, "OTA timeout")
-            EspCompanionRepository.finishOta("timeout")
-            TboxRepository.addLog("WARN", "Companion", "OTA timeout")
+            Log.w(TAG, "OTA timeout ($phase)")
+            traceOta("timeout $phase")
+            runCatching { sess.writeBytes(OTA_ABORT_FRAME, ota = true) }
+            EspCompanionRepository.finishOta("timeout:$phase")
+            TboxRepository.addLog("WARN", "Companion", "OTA timeout ($phase)")
             runCatching { file.delete() }
             Result.failure(e)
         } catch (e: Exception) {
             Log.w(TAG, "OTA failed: ${e.message}")
+            traceOta("fail ${e.message}")
+            runCatching { sess.writeBytes(OTA_ABORT_FRAME, ota = true) }
             EspCompanionRepository.finishOta(e.message ?: "ota_failed")
             TboxRepository.addLog("WARN", "Companion", "OTA failed: ${e.message}")
             runCatching { file.delete() }
@@ -851,6 +967,27 @@ class EspCompanionManager(
         }
     }
 
+    private fun extractOtaJson(line: String): String {
+        val markers = arrayOf(
+            "\"t\":\"otaAck\"",
+            "\"t\":\"otaDone\"",
+            "\"t\": \"otaAck\"",
+            "\"t\": \"otaDone\"",
+        )
+        for (marker in markers) {
+            val at = line.indexOf(marker)
+            if (at < 0) continue
+            val start = line.lastIndexOf('{', at)
+            val end = line.indexOf('}', at)
+            if (start >= 0 && end > start) return line.substring(start, end + 1)
+        }
+        val start = line.indexOf('{')
+        if (start < 0) return line
+        val end = line.indexOf('}', start)
+        if (end > start) return line.substring(start, end + 1)
+        return line.substring(start)
+    }
+
     private suspend fun awaitOta(
         channel: Channel<EspMessage>,
         timeoutMs: Long,
@@ -870,8 +1007,20 @@ class EspCompanionManager(
         error("unreachable")
     }
 
+    private fun traceOta(message: String) {
+        runCatching {
+            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            if (!dir.exists()) dir.mkdirs()
+            File(dir, "esp_ota_trace.txt").appendText("$message\n")
+        }
+    }
+
     private fun handleLine(line: String) {
-        val msg = EspCompanionProtocol.parseLine(line) ?: return
+        if (otaRxTraceLeft > 0 && otaInbox.get() != null) {
+            otaRxTraceLeft--
+            traceOta("rx " + line.take(160).replace('\u0000', '?'))
+        }
+        val msg = EspCompanionProtocol.parseLine(extractOtaJson(line)) ?: return
         EspCompanionRepository.noteRxMessage()
         noteSuccessfulRx()
         logCompanionRx(msg, line)
@@ -879,22 +1028,35 @@ class EspCompanionManager(
             is EspMessage.Hello -> {
                 Log.i(
                     TAG,
-                    "hello fw=${msg.fw} baud=${msg.baud} um980=${msg.um980} " +
-                        "can=${msg.can} canBackend=${msg.canBackend} canBaud=${msg.canBaud}",
+                    "hello fw=${msg.fw} baud=${msg.baud} gnss=${msg.gnss} gnssChip=${msg.gnssChip} " +
+                        "um980=${msg.um980} can=${msg.can} canBackend=${msg.canBackend} " +
+                        "canBaud=${msg.canBaud} mag=${msg.mag} magChip=${msg.magChip} magSeen=${msg.magSeen}",
                 )
                 EspCompanionRepository.updateDeviceInfo(
                     EspDeviceInfo(
                         firmwareVersion = msg.fw,
                         gpioInCount = msg.gpioInCount,
                         relayCount = msg.relayCount,
+                        gnss = msg.gnss,
+                        gnssChip = msg.gnssChip.orEmpty(),
+                        gnssModel = msg.gnssModel.orEmpty(),
                         um980 = msg.um980,
                         um980Baud = msg.baud,
                         can = msg.can,
                         canBackend = msg.canBackend.orEmpty(),
                         canBaud = if (msg.canBaud > 0) msg.canBaud else 500_000,
                         canLight = msg.canLight,
+                        mag = msg.mag,
+                        magChip = msg.magChip.orEmpty(),
+                        magSeen = msg.magSeen,
+                        magSupported = msg.magSupported,
+                        ble = msg.ble,
+                        bleOn = msg.bleOn,
+                        bleMacs = msg.bleMacs,
+                        ap = msg.ap,
                     )
                 )
+                sendRememberedApCfg()
                 EspCompanionRepository.updateHeartbeat(0L)
                 EspCompanionRepository.updateConnected(true)
                 EspCompanionRepository.updateLastError(null)
@@ -917,7 +1079,7 @@ class EspCompanionManager(
                     publishActiveLocation(loc)
                 }
             }
-            is EspMessage.Gpio -> EspCompanionRepository.updateGpioMask(msg.mask)
+            is EspMessage.Gpio -> EspCompanionRepository.confirmGpioSnapshot(msg.mask)
             is EspMessage.GpioEvent -> {
                 Log.d(TAG, "gpioEvent ch=${msg.channel} level=${msg.level}")
                 EspCompanionRepository.applyGpioEvent(msg.channel, msg.level)
@@ -948,7 +1110,12 @@ class EspCompanionManager(
                 TboxRepository.addLog("INFO", "Companion", "Companion reboot acknowledged")
             }
             is EspMessage.OtaAck, is EspMessage.OtaDone -> {
-                otaInbox.get()?.trySend(msg)
+                val inbox = otaInbox.get() ?: return
+                if (!inbox.trySend(msg).isSuccess) {
+                    // Keep the newest ack: a full buffer of chunk acks must not drop otaDone.
+                    inbox.tryReceive()
+                    inbox.trySend(msg)
+                }
             }
             is EspMessage.Um980BridgeAck -> {
                 bridgeAckWaiter.getAndSet(null)?.complete(msg)
@@ -1001,6 +1168,105 @@ class EspCompanionManager(
                     EspCompanionProtocol.formatCanFrame(msg.frame),
                 )
             }
+            is EspMessage.Mag -> {
+                EspCompanionRepository.updateMag(
+                    EspMagSample(
+                        chip = msg.chip,
+                        hx = msg.hx,
+                        hy = msg.hy,
+                        hz = msg.hz,
+                        headingDeg = msg.headingDeg,
+                        fs = msg.fs,
+                        ok = msg.ok,
+                    ),
+                )
+            }
+            is EspMessage.MagChip -> {
+                val info = EspCompanionRepository.deviceInfo.value
+                EspCompanionRepository.updateDeviceInfo(
+                    info.copy(
+                        mag = msg.mag,
+                        magChip = msg.chip,
+                        magSeen = msg.seen,
+                        magSupported = true,
+                    ),
+                )
+                if (msg.ok) {
+                    Log.i(TAG, "mag chip ok: ${msg.chip} mag=${msg.mag}")
+                } else {
+                    Log.w(TAG, "mag chip rejected: ${msg.chip}")
+                    EspCompanionRepository.updateLastError("mag chip rejected: ${msg.chip}")
+                }
+            }
+            is EspMessage.BleBtn -> {
+                if (msg.btn !in 1..4 || msg.act.isEmpty()) return
+                val event = EspBleBtnEvent(
+                    mac = msg.mac,
+                    btn = msg.btn,
+                    act = msg.act,
+                    bat = msg.bat,
+                    rssi = msg.rssi,
+                    ms = msg.ms,
+                )
+                EspCompanionRepository.applyBleBtn(event)
+                AutomationTriggerEspBleBtnEventBus.publish(
+                    AutomationEspBleBtnEvent(
+                        mac = msg.mac,
+                        btn = msg.btn,
+                        act = msg.act,
+                    ),
+                )
+                Log.i(TAG, "bleBtn mac=${msg.mac} btn=${msg.btn} act=${msg.act} bat=${msg.bat}")
+            }
+            is EspMessage.BleStatus -> {
+                EspCompanionRepository.applyBleStatus(
+                    on = msg.on,
+                    learn = msg.learn,
+                    macs = msg.macs,
+                    lastBat = msg.lastBat,
+                    lastRssi = msg.lastRssi,
+                    lastMac = msg.lastMac,
+                )
+            }
+            is EspMessage.BleSeen -> {
+                Log.i(TAG, "bleSeen mac=${msg.mac} rssi=${msg.rssi}")
+            }
+            is EspMessage.ApStatus -> {
+                EspCompanionRepository.applyApStatus(
+                    EspApStatus(
+                        on = msg.on,
+                        sta = msg.sta,
+                        ssid = msg.ssid,
+                        password = msg.password,
+                        ip = msg.ip,
+                        freqMhz = msg.freqMhz,
+                        channel = msg.channel,
+                        huIp = msg.huIp,
+                        panelPort = msg.panelPort,
+                    ),
+                )
+                Log.i(TAG, "apStatus on=${msg.on} sta=${msg.sta} ip=${msg.ip} freq=${msg.freqMhz}")
+            }
+            is EspMessage.BleAck -> {
+                when (msg.phase) {
+                    "learnBegin" -> {
+                        if (msg.ok) EspCompanionRepository.setBleLearnActive(true)
+                        else {
+                            EspCompanionRepository.setBleLearnActive(false)
+                            EspCompanionRepository.updateLastError(msg.err ?: "ble learn begin")
+                        }
+                    }
+                    "learnEnd" -> EspCompanionRepository.setBleLearnActive(false)
+                    else -> {
+                        if (!msg.ok) {
+                            Log.w(TAG, "bleAck phase=${msg.phase} err=${msg.err}")
+                            EspCompanionRepository.updateLastError(
+                                msg.err ?: "ble ${msg.phase} failed",
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1018,6 +1284,12 @@ class EspCompanionManager(
                 ) {
                     CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
                 }
+            }
+            is EspMessage.Mag -> {
+                if (!EspCompanionRepository.shouldLogMagSample()) return
+                val text = formatMagLog(msg)
+                EspCompanionRepository.appendCompanionTrafficLog(CompanionLogDirection.RX, text)
+                CompanionProtocolLogRecorder.append(CompanionLogDirection.RX, text)
             }
             is EspMessage.Um980Rsp -> {
                 val text = formatUm980RspLog(msg)
@@ -1039,6 +1311,10 @@ class EspCompanionManager(
     private fun formatGpsLog(msg: EspMessage.Gps): String {
         return "gps fix=${msg.fix} lat=${msg.lat} lon=${msg.lon} " +
             "sats=${msg.satsUsed}/${msg.satsVis} spd=${msg.speedKmh}"
+    }
+
+    private fun formatMagLog(msg: EspMessage.Mag): String {
+        return "mag chip=${msg.chip} hdg=${msg.headingDeg} fs=${msg.fs} ok=${msg.ok}"
     }
 
     private fun formatUm980RspLog(msg: EspMessage.Um980Rsp): String {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.AppLauncherLaunchMode
@@ -12,6 +13,7 @@ import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 private val steeringHeatToggleLock = Any()
 private var steeringHeatToggleBlockedUntilMs = 0L
@@ -25,6 +27,30 @@ private var wiperMaintenanceToggleBlockedUntilMs = 0L
 
 private val parkingRadarToggleLock = Any()
 private var parkingRadarToggleBlockedUntilMs = 0L
+
+private val rearFogToggleLock = Any()
+private var rearFogToggleBlockedUntilMs = 0L
+
+private val avhToggleLock = Any()
+private var avhToggleBlockedUntilMs = 0L
+
+private val hdcToggleLock = Any()
+private var hdcToggleBlockedUntilMs = 0L
+
+private val espOffToggleLock = Any()
+private var espOffToggleBlockedUntilMs = 0L
+
+private val tjaIcaToggleLock = Any()
+private var tjaIcaToggleBlockedUntilMs = 0L
+
+private val hmaToggleLock = Any()
+private var hmaToggleBlockedUntilMs = 0L
+
+private val hvacAcMaxToggleLock = Any()
+private var hvacAcMaxToggleBlockedUntilMs = 0L
+
+private val lasModeToggleLock = Any()
+private var lasModeToggleBlockedUntilMs = 0L
 
 private val hvacDefrosterToggleLock = Any()
 private var hvacDefrosterToggleBlockedUntilMs = 0L
@@ -53,6 +79,22 @@ internal fun launchAppFromWidget(context: Context, packageName: String) {
     }
 }
 
+/**
+ * Same path as App Shortcut widget mode [AppLauncherLaunchMode.STOCK_WINDOW]:
+ * Adayo launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`), with fullscreen fallback.
+ */
+internal fun launchAppInStockWindow(context: Context, packageName: String) {
+    val pkg = packageName.trim()
+    if (pkg.isBlank()) return
+    // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
+    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+        val ok = AdayoStockAppWindow.launchInAppWindow(context, pkg)
+        if (!ok) {
+            launchAppFullscreen(context, pkg)
+        }
+    }
+}
+
 internal fun launchAppFromWidget(
     context: Context,
     config: FloatingDashboardWidgetConfig,
@@ -68,13 +110,7 @@ internal fun launchAppFromWidget(
 
     when (launchMode) {
         AppLauncherLaunchMode.STOCK_WINDOW -> {
-            // Exit freeform + main-screen overlay first so it does not cover the stock/fullscreen app.
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                val ok = AdayoStockAppWindow.launchInAppWindow(context, packageName)
-                if (!ok) {
-                    launchAppFullscreen(context, packageName)
-                }
-            }
+            launchAppInStockWindow(context, packageName)
             return
         }
         AppLauncherLaunchMode.FREEFORM -> {
@@ -107,6 +143,86 @@ internal fun launchAppFromWidget(
                 launchAppFullscreen(context, packageName)
             }
         }
+        AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
+            val displayId = config.launcherVirtualDisplayId
+            if (displayId == null || displayId <= 0) return
+            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
+                settingsViewModel.launchAppOnVirtualDisplay(
+                    context = context,
+                    packageName = packageName,
+                    displayId = displayId,
+                    displayWidthPx = config.launcherVirtualDisplayWidthPx,
+                    displayHeightPx = config.launcherVirtualDisplayHeightPx,
+                ) { outcome ->
+                    when (outcome) {
+                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
+                            val detail = outcome.detail.ifBlank { outcome.reason.name }
+                            if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+                                    detail,
+                                    context,
+                                )
+                            ) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
+                                        detail,
+                                    ),
+                                    android.widget.Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success -> {
+                            if (outcome.remapped) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_remapped,
+                                        displayId,
+                                        outcome.displayId,
+                                        outcome.widthPx,
+                                        outcome.heightPx,
+                                    ),
+                                    android.widget.Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Double-tap on an app-shortcut tile: ADB `am force-stop` only (no relaunch),
+ * for every [AppLauncherLaunchMode]. Toast only on failure (like App List advanced
+ * error path); success is silent.
+ */
+internal fun forceStopAppFromWidget(
+    context: Context,
+    packageName: String,
+    settingsViewModel: SettingsViewModel,
+) {
+    val pkg = packageName.trim()
+    if (pkg.isBlank()) return
+    settingsViewModel.forceStopAppViaAdb(context, pkg) { result ->
+        if (result.success) return@forceStopAppViaAdb
+        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+                result.message,
+                context,
+            )
+        ) {
+            return@forceStopAppViaAdb
+        }
+        android.widget.Toast.makeText(
+            context,
+            context.getString(
+                vad.dashing.tbox.R.string.app_list_adb_toast_fail,
+                result.message.ifBlank { "ADB" },
+            ),
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
     }
 }
 
@@ -122,11 +238,22 @@ private fun launchAppFullscreen(context: Context, packageName: String) {
 }
 
 internal fun openMainActivityFromWidget(context: Context) {
-    try {
-        val intent = MainActivityIntentHelper.createBringToFrontIntent(context)
-        context.startActivity(intent)
-    } catch (e: Exception) {
-        e.printStackTrace()
+    MainActivityIntentHelper.bringToFront(context)
+}
+
+/**
+ * Opens the shared app-list dialog in [vad.dashing.tbox.MainActivity].
+ *
+ * Window-mode main-screen overlay cannot host a Compose Dialog (non-focusable overlay),
+ * so exit to fullscreen first, then request the dialog once MainActivity is restored.
+ * From a floating overlay (no window mode), still bring MainActivity to the front.
+ */
+internal fun openAppListDialog(context: Context) {
+    FreeformLaunchHelper.runAfterExitingWindowModeToFullscreen(context) {
+        AppListDialogRequestBus.requestShow()
+        if (context !is android.app.Activity) {
+            MainActivityIntentHelper.bringToFront(context)
+        }
     }
 }
 
@@ -264,6 +391,194 @@ internal fun sendToggleParkingRadar(context: Context) {
         )
     } catch (_: Exception) {
     }
+}
+
+internal fun sendToggleRearFog(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(rearFogToggleLock) {
+        if (now < rearFogToggleBlockedUntilMs) return
+        rearFogToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleAvh(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(avhToggleLock) {
+        if (now < avhToggleBlockedUntilMs) return
+        avhToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.AVH_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHdc(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hdcToggleLock) {
+        if (now < hdcToggleBlockedUntilMs) return
+        hdcToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HDC_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleEspOff(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(espOffToggleLock) {
+        if (now < espOffToggleBlockedUntilMs) return
+        espOffToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleTjaIca(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(tjaIcaToggleLock) {
+        if (now < tjaIcaToggleBlockedUntilMs) return
+        tjaIcaToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHma(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hmaToggleLock) {
+        if (now < hmaToggleBlockedUntilMs) return
+        hmaToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HMA_SWITCH
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+internal fun sendToggleHvacAcMax(context: Context) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(hvacAcMaxToggleLock) {
+        if (now < hvacAcMaxToggleBlockedUntilMs) return
+        hvacAcMaxToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    try {
+        context.startService(
+            Intent(context, BackgroundService::class.java).apply {
+                action = BackgroundService.ACTION_MBCAN_COMMAND
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_COMMAND_TYPE,
+                    BackgroundService.MBCAN_COMMAND_TOGGLE_PROPERTY
+                )
+                putExtra(
+                    BackgroundService.EXTRA_MBCAN_PROPERTY_ID,
+                    MbCanKnownVehiclePropertyId.HVAC_AC_MAX
+                )
+            }
+        )
+    } catch (_: Exception) {
+    }
+}
+
+/** LDW active→OFF(3); inactive→LDW(1). LKA active→OFF(3); inactive→LKA(2). */
+internal fun sendToggleLaneMode(context: Context, targetMode: Int) {
+    val now = SystemClock.uptimeMillis()
+    synchronized(lasModeToggleLock) {
+        if (now < lasModeToggleBlockedUntilMs) return
+        lasModeToggleBlockedUntilMs = now + STEERING_HEAT_TOGGLE_LOCKOUT_MS
+    }
+    val current = UniversalCanRepository.lasModeRaw.value
+    val writeValue = if (current == targetMode) {
+        MbCanKnownVehiclePropertyId.LAS_MODE_OFF
+    } else {
+        targetMode
+    }
+    sendSetMbCanProperty(
+        context = context,
+        propertyId = MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
+        value = writeValue,
+    )
 }
 
 internal fun sendToggleRearWindowMirrorsDefrost(context: Context) {

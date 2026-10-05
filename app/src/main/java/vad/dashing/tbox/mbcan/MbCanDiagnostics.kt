@@ -22,6 +22,14 @@ object MbCanDiagnostics {
         _enabled.value = value
     }
 
+    /** Session-only deep mode (all-parameters subscription + raw event journal). */
+    private val _deepEnabled = MutableStateFlow(false)
+    val deepEnabled: StateFlow<Boolean> = _deepEnabled.asStateFlow()
+
+    fun setDeepEnabled(value: Boolean) {
+        _deepEnabled.value = value
+    }
+
     fun log(level: String, message: String) {
         log(level = level, tag = DEFAULT_TAG, message = message)
     }

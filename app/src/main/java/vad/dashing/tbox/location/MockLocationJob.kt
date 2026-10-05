@@ -7,6 +7,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -19,8 +21,10 @@ import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.location.roadmatch.RoadGraphStore
 import vad.dashing.tbox.location.roadmatch.RoadMatchController
 import vad.dashing.tbox.location.roadmatch.RoadMatchDemand
+import vad.dashing.tbox.location.roadmatch.RoadMatchGnssTrust
 import vad.dashing.tbox.location.roadmatch.RoadMatchManualSeedRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayBuilder
+import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayPublisher
 import vad.dashing.tbox.location.roadmatch.RoadMatchOverlayRepository
 import vad.dashing.tbox.location.roadmatch.RoadMatchPose
 import vad.dashing.tbox.location.roadmatch.RoadMatchRuntimeDebug
@@ -41,7 +45,8 @@ import kotlin.math.sin
  * [MockCanSpeedMode.CONSTANT]: continuous shadow + soft GNSS blend (Advanced);
  * when the junk filter is on, junk GNSS is not blended and not stored as last-good.
  *
- * DR path length uses [SpeedIntegrator] (trapezoid over accounting-speed samples
+ * DR path length uses wheel pulse (`WheelPulseOdometer.flushDrDistanceM`) when that
+ * toggle is on, otherwise [SpeedIntegrator] (trapezoid over accounting-speed samples
  * between DR ticks) instead of a single `v_end · Δt`. Heading uses gyro or
  * steering via [applyHeadingDelta] / [SteerHeadingIntegrator].
  * Pose + road-match advance on [INNER_CALC_MS]; system mock inject uses [periodMs].
@@ -63,6 +68,8 @@ class MockLocationJob(
     private val mockPower: StateFlow<MockPowerState>,
     private val locationSource: StateFlow<LocationSource>,
     private val periodMs: StateFlow<Long>,
+    private val retentionAccuracyCeilingM: StateFlow<Float> =
+        kotlinx.coroutines.flow.MutableStateFlow(MockRetentionAccuracy.DEFAULT_CEILING_M),
     private val canSpeedMode: StateFlow<MockCanSpeedMode>,
     private val headingSource: StateFlow<MockHeadingSource> =
         kotlinx.coroutines.flow.MutableStateFlow(MockHeadingSource.GYRO),
@@ -72,6 +79,11 @@ class MockLocationJob(
     private val considerReverseEnabled: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(true),
     private val roadMatchDemand: StateFlow<RoadMatchDemand> =
         kotlinx.coroutines.flow.MutableStateFlow(RoadMatchDemand.NONE),
+    private val roadMatchTuning:
+        StateFlow<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        kotlinx.coroutines.flow.MutableStateFlow(
+            vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+        ),
     /** Process-wide matcher from [vad.dashing.tbox.BackgroundService]; fallback is local. */
     private val roadMatch: RoadMatchController? = null,
     private val roadMapsDir: () -> java.io.File = { java.io.File(".") },
@@ -227,8 +239,35 @@ class MockLocationJob(
         fun roadMatchTurnFlashCount(): Int =
             vad.dashing.tbox.mbcan.UniversalCanRepository.turnSignalIntentSnapshot().flashCount
 
+        fun applyTurnSignalLatchTuning(
+            tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+        ) {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.configureTurnSignalLatch(
+                holdMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_LATCH_HOLD_MS,
+                ),
+                minFlashesForIntent = tuning.int(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_MIN_FLASHES_FOR_INTENT,
+                ),
+                continuousStalkMs = tuning.long(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.TS_CONTINUOUS_STALK_MS,
+                ),
+            )
+        }
+
+        /**
+         * Coordinates safe for mock inject, disk seed, and CONSTANT origin.
+         * Rejects 0/0, non-finite, and out-of-range (NaN previously passed `!= 0`
+         * and was written into the system GPS mock — field 2026-08-31).
+         */
         fun hasValidCoordinates(loc: LocValues): Boolean =
-            loc.latitude != 0.0 || loc.longitude != 0.0
+            isUsableGeoPose(loc.latitude, loc.longitude)
+
+        fun isUsableGeoPose(lat: Double, lon: Double): Boolean {
+            if (!lat.isFinite() || !lon.isFinite()) return false
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return false
+            return lat != 0.0 || lon != 0.0
+        }
 
         fun isLiveUsable(
             loc: LocValues,
@@ -289,13 +328,80 @@ class MockLocationJob(
          * Do not feed the matcher a held / disk heading while live GNSS has no
          * course (NMEA 0). Field `132038`: parked course=0, disk bearing 70°
          * ranked the interchange ramp as already 75 m along.
+         *
+         * While parked (below [COURSE_HOLD_MIN_KMH]) a pose is still fed so the
+         * road-match map can seed edges and draw neighbors without waiting for DR.
          */
         fun shouldFeedHeadingToMatcher(
             gnssPresent: Boolean,
             gnssCourseDeg: Float,
+            speedKmh: Float,
         ): Boolean {
             if (!gnssPresent) return true
+            if (speedKmh < COURSE_HOLD_MIN_KMH) return true
             return gnssCourseDeg != 0f && gnssCourseDeg.isFinite()
+        }
+
+        internal fun buildConstantMatchPose(
+            lat: Double,
+            lon: Double,
+            travelBearingDeg: Float?,
+            gnssPresent: Boolean,
+            gnssCourseDeg: Float,
+            speedKmh: Float,
+        ): RoadMatchPose? {
+            if (!lat.isFinite() || !lon.isFinite()) return null
+            if (lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+            if (lat == 0.0 && lon == 0.0) return null
+            val bearing = travelBearingDeg ?: return null
+            if (!bearing.isFinite()) return null
+            if (!shouldFeedHeadingToMatcher(gnssPresent, gnssCourseDeg, speedKmh)) {
+                return null
+            }
+            return RoadMatchPose(lat, lon, bearing)
+        }
+
+        /**
+         * Live GNSS trust for road-match class-penalty relaxation.
+         * [shadowLat]/[shadowLon] optional; when set, a large shadow↔GNSS gap zeros trust.
+         */
+        fun roadMatchGnssPositionTrust(
+            liveGnss: Boolean,
+            live: LocValues,
+            shadowLat: Double? = null,
+            shadowLon: Double? = null,
+            tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning =
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+        ): Float {
+            if (!liveGnss || !hasValidCoordinates(live)) return 0f
+            val accuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
+            val gapM = if (
+                shadowLat != null && shadowLon != null &&
+                shadowLat.isFinite() && shadowLon.isFinite()
+            ) {
+                ConstantDrMath.distanceMeters(
+                    shadowLat,
+                    shadowLon,
+                    live.latitude,
+                    live.longitude,
+                )
+            } else {
+                null
+            }
+            return RoadMatchGnssTrust.fromLive(
+                liveGnss = true,
+                accuracyM = accuracyM,
+                shadowGnssGapM = gapM,
+                maxAccuracyM = tuning.float(
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.GNSS_MAX_ACCURACY_M,
+                ),
+                maxShadowGapM = tuning[
+                    vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.GNSS_MAX_SHADOW_GAP_M
+                ],
+            )
         }
 
         /**
@@ -474,6 +580,7 @@ class MockLocationJob(
 
         /**
          * Equirectangular step: move [distanceM] along [bearingDeg] from [lat]/[lon].
+         * Non-finite bearing or pose leaves the point unchanged (do not invent NaN coords).
          */
         fun extrapolateLatLon(
             lat: Double,
@@ -482,6 +589,7 @@ class MockLocationJob(
             distanceM: Double,
         ): Pair<Double, Double> {
             if (distanceM <= 0.0 || !distanceM.isFinite()) return lat to lon
+            if (!bearingDeg.isFinite() || !lat.isFinite() || !lon.isFinite()) return lat to lon
             val bearingRad = Math.toRadians(bearingDeg.toDouble())
             val north = distanceM * cos(bearingRad)
             val east = distanceM * sin(bearingRad)
@@ -505,9 +613,17 @@ class MockLocationJob(
     private var lastPushElapsedMs: Long = 0L
     /** Last time the mock provider was written (or explicitly stopped) on an inject cadence tick. */
     private var lastInjectElapsedMs: Long = 0L
+    /** Previous [takeDrDistanceM] pulse-DR flag; rising/falling edges sync cursors. */
+    private var drUsedPulseLastTick: Boolean = false
     /** True on ticks that may call [LocationMockManager.setMockLocation] / stop. */
     private var mockWriteDue: Boolean = true
     private var wasRetaining: Boolean = false
+    /** ElapsedRealtime when current retention / non-live mock stretch began; 0 = not retaining. */
+    private var retentionStartedAtElapsedMs: Long = 0L
+    /** Horizontal accuracy (m) at the moment retention began (last live estimate). */
+    private var retentionBaseAccuracyM: Float = LocationMockManager.FIX_ACCURACY_M
+    /** Last live horizontal accuracy while GNSS was driving the mock point. */
+    private var lastLiveAccuracyM: Float = LocationMockManager.FIX_ACCURACY_M
     /**
      * Last held nose/travel heading for mock (degrees).
      * `null` = unknown; **`0f` = north (valid)** once seeded from GNSS/DR/road-match.
@@ -555,11 +671,38 @@ class MockLocationJob(
                 persistedSeed = loadPersistedLastGood()
                 persistedSeedLoaded = true
             }
-            while (isActive) {
-                restartInner()
-                delay(500)
-            }
+            combine(
+                mockPower,
+                locationSource,
+                periodMs,
+                canSpeedMode,
+                headingSource,
+            ) { _, _, _, _, _ -> supervisorConfigSignature() }
+                .combine(
+                    combine(
+                        junkFixFilterEnabled,
+                        constantAutoCalibEnabled,
+                        onlineYawCalibEnabled,
+                        considerReverseEnabled,
+                    ) { _, _, _, _ -> Unit },
+                ) { sig, _ -> sig }
+                .distinctUntilChanged()
+                .collect { restartInner() }
         }
+    }
+
+    private fun supervisorConfigSignature(): String {
+        val power = mockPower.value
+        val enabled = shouldPushMock(power, locationSource.value)
+        val period = periodMs.value.coerceAtLeast(200L)
+        val storedMode = canSpeedMode.value
+        val mode = power.effectiveCanSpeedMode(storedMode)
+        val heading = headingSource.value
+        val filterOn = junkFixFilterEnabled.value
+        val autoCalib = constantAutoCalibEnabled.value
+        val onlineYawOn = onlineYawCalibEnabled.value
+        val considerRev = considerReverseEnabled.value
+        return "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
     }
 
     fun stop() {
@@ -578,6 +721,9 @@ class MockLocationJob(
         lastGoodLoc = null
         lastGoodAtElapsedMs = 0L
         wasRetaining = false
+        retentionStartedAtElapsedMs = 0L
+        retentionBaseAccuracyM = LocationMockManager.FIX_ACCURACY_M
+        lastLiveAccuracyM = LocationMockManager.FIX_ACCURACY_M
         lastKnownBearingDeg = null
         usingPersistedSeed = false
         lastPushElapsedMs = 0L
@@ -598,6 +744,7 @@ class MockLocationJob(
         YawIntegrator.discard()
         SteerHeadingIntegrator.reset()
         SpeedIntegrator.reset()
+        drUsedPulseLastTick = false
         MockJunkFixFilter.resetSession()
         locationMockManager.stopMockLocation()
         // Leave GeoDisplayRepository to live passthrough from BackgroundService.
@@ -649,11 +796,34 @@ class MockLocationJob(
      * StateFlow re-emits still cover the full mock period (1–5 s). Then refresh
      * the held sample with current [canKmh] at the same timestamp (no extra gap).
      * When [stepAllowed] is false, pending distance is discarded.
+     *
+     * Pulse DR never falls through to [SpeedIntegrator]: a 0-pulse tick must not
+     * dump the CAN backlog that accumulated while pulse was the source. Enabling
+     * pulse syncs the wheel cursor; disabling discards pending CAN metres.
      */
     private fun takeDrDistanceM(now: Long, canKmh: Float?, stepAllowed: Boolean): Double {
         if (!stepAllowed) {
             SpeedIntegrator.discardThrough(now)
             return 0.0
+        }
+        val pulseOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()
+        if (pulseOn != drUsedPulseLastTick) {
+            if (pulseOn) {
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+            }
+            SpeedIntegrator.discardThrough(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
+            drUsedPulseLastTick = pulseOn
+        }
+        if (pulseOn) {
+            SpeedIntegrator.discardThrough(now)
+            if (canKmh != null) {
+                SpeedIntegrator.onRawSample(canKmh, now)
+            }
+            val pulseM = vad.dashing.tbox.vehicle.WheelPulseOdometer.flushDrDistanceM().toDouble()
+            return if (pulseM.isFinite() && pulseM > 0.0) pulseM else 0.0
         }
         SpeedIntegrator.flushTo(now)
         if (canKmh != null) {
@@ -844,7 +1014,25 @@ class MockLocationJob(
         speedKmh: Float,
         dtSec: Double,
     ): Triple<Float, Boolean, Double> {
+        // Non-finite nose must not drive extrapolate (NaN bearing → NaN lat/lon).
+        if (!noseIn.isFinite()) {
+            applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
+        if (!isUsableGeoPose(retainLat, retainLon)) {
+            applyHeadingDelta(noseIn, headingSource.value, allowIntegrate = false, now = now)
+            refreshSpeedIntegratorWhileGated(now, canKmh.takeIf { useCan })
+            return Triple(noseIn, false, 0.0)
+        }
         var pending = SpeedIntegrator.pendingDistanceM()
+        val pulseOn = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isMockDrPulseEnabled()
+        if (pulseOn) {
+            pending = maxOf(
+                pending,
+                vad.dashing.tbox.vehicle.WheelPulseOdometer.peekDrPendingM().toDouble(),
+            )
+        }
         var gate = classifyDrMotion(speedKmh, pending, dtSec)
         if (gate == DrMotionGate.HOLD_CRAWL) {
             if (!useCan) {
@@ -852,11 +1040,18 @@ class MockLocationJob(
                 refreshSpeedIntegratorWhileGated(now, null)
                 return Triple(noseIn, false, 0.0)
             }
-            SpeedIntegrator.flushTo(now)
-            if (canKmh != null) {
-                SpeedIntegrator.onRawSample(canKmh, now)
+            if (pulseOn) {
+                pending = maxOf(
+                    SpeedIntegrator.pendingDistanceM(),
+                    vad.dashing.tbox.vehicle.WheelPulseOdometer.peekDrPendingM().toDouble(),
+                )
+            } else {
+                SpeedIntegrator.flushTo(now)
+                if (canKmh != null) {
+                    SpeedIntegrator.onRawSample(canKmh, now)
+                }
+                pending = SpeedIntegrator.pendingDistanceM()
             }
-            pending = SpeedIntegrator.pendingDistanceM()
             gate = classifyDrMotion(speedKmh, pending, dtSec)
         }
         if (gate == DrMotionGate.DISCARD) {
@@ -950,7 +1145,7 @@ class MockLocationJob(
 
     private fun currentShadowFix(): MockLastGoodFix? {
         if (!constantHasOrigin) return null
-        if (retainLat == 0.0 && retainLon == 0.0) return null
+        if (!isUsableGeoPose(retainLat, retainLon)) return null
         val bearing = lastKnownBearingDeg?.takeIf { it.isFinite() } ?: 0f
         return MockLastGoodFix.fromShadow(
             latitude = retainLat,
@@ -992,16 +1187,11 @@ class MockLocationJob(
     private fun restartInner() {
         val power = mockPower.value
         val enabled = shouldPushMock(power, locationSource.value)
-        val period = periodMs.value.coerceAtLeast(200L)
         val storedMode = canSpeedMode.value
         val mode = power.effectiveCanSpeedMode(storedMode)
         val heading = headingSource.value
         val filterOn = junkFixFilterEnabled.value
-        val autoCalib = constantAutoCalibEnabled.value
-        val onlineYawOn = onlineYawCalibEnabled.value
-        val considerRev = considerReverseEnabled.value
-        val sig =
-            "$enabled:${power.name}:$period:${locationSource.value}:$mode:$heading:$filterOn:$autoCalib:$onlineYawOn:$considerRev"
+        val sig = supervisorConfigSignature()
 
         if (sig == lastSig) {
             if (!enabled) return
@@ -1068,7 +1258,11 @@ class MockLocationJob(
                     Log.e(TAG, "mock push failed", t)
                 }
                 if (mockWriteDue) lastInjectElapsedMs = now
-                delay(INNER_CALC_MS)
+                delay(
+                    roadMatchTuning.value.long(
+                        vad.dashing.tbox.location.roadmatch.RoadMatchTuningKey.MATCH_CADENCE_MS,
+                    ),
+                )
             }
         }
     }
@@ -1142,6 +1336,12 @@ class MockLocationJob(
                 turnHint = roadMatchTurnHint(),
                 turnIntent = roadMatchTurnIntent(),
                 turnFlashCount = roadMatchTurnFlashCount(),
+                gnssPositionTrust = roadMatchGnssPositionTrust(
+                    liveGnss = livePose != null && gnssTruthful,
+                    live = live,
+                    tuning = roadMatchTuning.value,
+                ),
+                tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
             )
             RoadMatchOverlayRepository.clear()
         }
@@ -1174,14 +1374,25 @@ class MockLocationJob(
             onlineYawCalib.reset()
             OnlineYawCalibRuntimeDebug.clear()
             wasRetaining = false
+            retentionStartedAtElapsedMs = 0L
             usingPersistedSeed = false
             lastPushElapsedMs = now
             if (liveUsable) {
+                lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                    hdop = live.hdop,
+                    hrms = live.hrms,
+                )
                 publishLivePassthrough(live, liveUsable = true, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
             } else if (isJunkLive(live, junkFilterOn, liveUsable)) {
                 val good = lastGoodLoc
                 if (good != null && hasValidCoordinates(good)) {
-                    publishStaticLastGood(good, liveUsable = false, gnssTruthful = gnssTruthful, injectToSystem = injectToSystem)
+                    publishStaticLastGood(
+                        good,
+                        liveUsable = false,
+                        gnssTruthful = gnssTruthful,
+                        injectToSystem = injectToSystem,
+                        nowElapsedMs = now,
+                    )
                 } else {
                     // No last good yet — do not push junk into mock.
                     publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
@@ -1217,6 +1428,11 @@ class MockLocationJob(
             base = live
             retaining = false
             wasRetaining = false
+            retentionStartedAtElapsedMs = 0L
+            lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
             retainLat = live.latitude
             retainLon = live.longitude
             if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
@@ -1348,6 +1564,7 @@ class MockLocationJob(
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = now,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1438,6 +1655,72 @@ class MockLocationJob(
             }
         }
 
+        // NaN/∞ shadow cannot soft-blend back; do not wait for hard-resync trust
+        // (field: mock.lat=NaN for minutes while posW looked LIVE and Yandex drank GPS).
+        var recoveredPoisonedShadow = false
+        if (constantHasOrigin && !isUsableGeoPose(retainLat, retainLon)) {
+            if (gnssPresent && hasValidCoordinates(live)) {
+                retainLat = live.latitude
+                retainLon = live.longitude
+                constantAlt = live.altitude
+                constantVisibleSats = live.visibleSatellites
+                constantUsingSats = live.usingSatellites
+                constantMismatchStreak = 0
+                hardResyncTrustSinceElapsedMs = 0L
+                recoveredPoisonedShadow = true
+                sharedRoadMatch.reset()
+                RoadMatchRuntimeDebug.clear()
+                if (shouldAcceptGnssCourse(canKmh, live.speed, live.trueDirection)) {
+                    lastKnownBearingDeg = ConstantDrMath.noseHeadingFromCourseOverGround(
+                        live.trueDirection,
+                        reverse,
+                    )
+                }
+            } else {
+                clearConstantOrigin()
+                if (lastGoodLoc == null) {
+                    trySeedFromPersisted(MockCanSpeedMode.CONSTANT, now)
+                }
+                val good = lastGoodLoc
+                if (good != null && hasValidCoordinates(good)) {
+                    retainLat = good.latitude
+                    retainLon = good.longitude
+                    constantAlt = good.altitude
+                    constantVisibleSats = good.visibleSatellites
+                    constantUsingSats = good.usingSatellites
+                    constantHasOrigin = true
+                    wasRetaining = true
+                    recoveredPoisonedShadow = true
+                    sharedRoadMatch.reset()
+                    RoadMatchRuntimeDebug.clear()
+                    if (shouldAcceptGnssCourse(good.speed, good.trueDirection) ||
+                        (good.trueDirection != 0f && lastKnownBearingDeg == null)
+                    ) {
+                        lastKnownBearingDeg = good.trueDirection
+                    }
+                } else if (applyPendingManualSeed(reverse)) {
+                    wasRetaining = true
+                    originFromManualSeed = true
+                    recoveredPoisonedShadow = true
+                    sharedRoadMatch.reset()
+                    RoadMatchRuntimeDebug.clear()
+                } else {
+                    ConstantDrRuntimeDebug.publish(
+                        ConstantDrRuntimeDebug.Snapshot(
+                            active = true,
+                            constantHasOrigin = false,
+                        ),
+                    )
+                    YawIntegrator.discardThrough(now)
+                    SteerHeadingIntegrator.discardThrough(now)
+                    refreshSpeedIntegratorWhileGated(now, canKmh)
+                    publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                    lastPushElapsedMs = now
+                    return
+                }
+            }
+        }
+
         val useCan = canKmh != null
         val speedKmh = if (useCan) {
             DriveCalibrationStore.applyCanSpeed(canKmh!!)
@@ -1447,7 +1730,11 @@ class MockLocationJob(
         val speedSource = if (useCan) GeoSpeedSource.CAN else GeoSpeedSource.RETENTION
         val speedMps = speedKmh / 3.6f
 
-        var nose = lastKnownBearingDeg
+        var nose = lastKnownBearingDeg?.takeIf { it.isFinite() }
+        if (lastKnownBearingDeg != null && nose == null) {
+            // Scrub stored NaN/∞ so later ticks can re-acquire GNSS course.
+            lastKnownBearingDeg = null
+        }
         var bearingSource = GeoBearingSource.RETENTION
 
         val dtSec = if (lastPushElapsedMs > 0L) {
@@ -1468,10 +1755,12 @@ class MockLocationJob(
                 dtSec = dtSec,
             )
             drTravelDistanceM = travelledM
-            nose = nextNose
-            if (applied) {
+            nose = nextNose.takeIf { it.isFinite() }
+            if (applied && nose != null) {
                 lastKnownBearingDeg = nose
                 bearingSource = GeoBearingSource.RETENTION
+            } else if (nose == null) {
+                lastKnownBearingDeg = null
             }
         } else {
             applyHeadingDelta(0f, headingSource.value, allowIntegrate = false, now = now)
@@ -1482,7 +1771,7 @@ class MockLocationJob(
         var shadowDistM: Double? = null
         var thresholdMOut: Double? = null
         var accuracyMOut: Float? = null
-        var didHardResync = false
+        var didHardResync = recoveredPoisonedShadow
         var didManualSeed = originFromManualSeed
 
         if (gnssPresent) {
@@ -1683,23 +1972,19 @@ class MockLocationJob(
 
         lastPushElapsedMs = now
         persistShadow(now)
-        var outBearing = nose?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+        var outBearing = nose
+            ?.takeIf { it.isFinite() }
+            ?.let { ConstantDrMath.travelBearingFromNoseHeading(it, reverse) }
+            ?.takeIf { it.isFinite() }
         val demand = roadMatchDemand.value
-        val feedHeading = shouldFeedHeadingToMatcher(
+        val matchPose = buildConstantMatchPose(
+            lat = retainLat,
+            lon = retainLon,
+            travelBearingDeg = outBearing,
             gnssPresent = gnssPresent,
             gnssCourseDeg = live.trueDirection,
+            speedKmh = speedKmh,
         )
-        val matchPose = if (feedHeading) {
-            outBearing?.let { bearing ->
-                RoadMatchPose(
-                    lat = retainLat,
-                    lon = retainLon,
-                    bearingDeg = bearing,
-                )
-            }
-        } else {
-            null
-        }
         val matched = sharedRoadMatch.tick(
             demand = demand,
             pose = matchPose,
@@ -1709,6 +1994,15 @@ class MockLocationJob(
             turnHint = roadMatchTurnHint(),
             turnIntent = roadMatchTurnIntent(),
             turnFlashCount = roadMatchTurnFlashCount(),
+            gnssPositionTrust = roadMatchGnssPositionTrust(
+                liveGnss = gnssPresent,
+                live = live,
+                shadowLat = retainLat,
+                shadowLon = retainLon,
+                tuning = roadMatchTuning.value,
+            ),
+            tuning = roadMatchTuning.value.also { applyTurnSignalLatchTuning(it) },
+            instrumentStepM = drTravelDistanceM,
         )
         // Published mock / overlay pose (may be rail while retain stays free in Rails).
         var publishLat = retainLat
@@ -1738,7 +2032,22 @@ class MockLocationJob(
                 bearingSource = GeoBearingSource.RETENTION
             }
         }
-        if (demand.correctPose && outBearing != null) {
+        // Last line of defense: never publish / inject a poisoned CONSTANT pose.
+        if (!isUsableGeoPose(publishLat, publishLon)) {
+            if (gnssPresent && hasValidCoordinates(live)) {
+                publishLat = live.latitude
+                publishLon = live.longitude
+                retainLat = publishLat
+                retainLon = publishLon
+                didHardResync = true
+                effectivePosWeight = 1f
+            } else {
+                RoadMatchOverlayRepository.clear()
+                publishLostDisplay(liveUsable = false, live = live, gnssTruthful = gnssTruthful)
+                return
+            }
+        }
+        if (demand.matchNeeded && constantHasOrigin) {
             // Overlay GNSS: show live or last-good even when the fix is frozen / USB down,
             // but only while the gap to the green shadow is ≤ 1000 m.
             val overlayGnss = when {
@@ -1757,7 +2066,8 @@ class MockLocationJob(
             }
             val gnssForOverlay = overlayGnss != null &&
                 gnssGapM <= RoadMatchOverlayBuilder.GNSS_MAX_GAP_FROM_SHADOW_M
-            publishRoadMatchOverlay(
+            RoadMatchOverlayPublisher.publish(
+                controller = sharedRoadMatch,
                 matchEnabled = true,
                 shadowLat = publishLat,
                 shadowLon = publishLon,
@@ -1767,12 +2077,19 @@ class MockLocationJob(
                 gnssBearingDeg = overlayGnss?.trueDirection?.takeIf { gnssForOverlay && it != 0f },
                 gnssVisible = gnssForOverlay,
             )
-        } else {
+        } else if (!demand.matchNeeded) {
             RoadMatchOverlayRepository.clear()
         }
         // Green when GNSS contributes (soft blend or hard resync); blue when shadow alone.
         val liveUsableOut = gnssPresent && effectivePosWeight > 0.05f
         val retainingOut = !liveUsableOut
+        if (liveUsableOut) {
+            lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                hdop = live.hdop,
+                hrms = live.hrms,
+            )
+            retentionStartedAtElapsedMs = 0L
+        }
         ConstantDrRuntimeDebug.publish(
             ConstantDrRuntimeDebug.Snapshot(
                 active = true,
@@ -1802,6 +2119,7 @@ class MockLocationJob(
             hasReliableSpeed = true,
             hasReliableBearing = outBearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = now,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
@@ -1834,14 +2152,37 @@ class MockLocationJob(
         hasReliableSpeed: Boolean,
         hasReliableBearing: Boolean,
         injectToSystem: Boolean,
+        nowElapsedMs: Long = lastPushElapsedMs,
     ) {
+        if (retainingFix) {
+            if (retentionStartedAtElapsedMs <= 0L) {
+                retentionStartedAtElapsedMs = nowElapsedMs.takeIf { it > 0L }
+                    ?: android.os.SystemClock.elapsedRealtime()
+                retentionBaseAccuracyM = lastLiveAccuracyM
+            }
+        } else {
+            retentionStartedAtElapsedMs = 0L
+            // Prefer GST/HDOP on this sample; LocValues from CONSTANT shadow often omit them.
+            if ((locValues.hrms != null && locValues.hrms > 0f) ||
+                (locValues.hdop != null && locValues.hdop > 0f)
+            ) {
+                lastLiveAccuracyM = LocationMockManager.liveHorizontalAccuracyMeters(
+                    hdop = locValues.hdop,
+                    hrms = locValues.hrms,
+                )
+            }
+        }
         if (!mockWriteDue) return
         if (injectToSystem) {
+            val ageMs = MockRetentionAccuracy.ageMs(retentionStartedAtElapsedMs, nowElapsedMs)
             locationMockManager.setMockLocation(
                 locValues = locValues,
                 retainingFix = retainingFix,
                 hasReliableSpeed = hasReliableSpeed,
                 hasReliableBearing = hasReliableBearing,
+                retentionAgeMs = ageMs,
+                retentionBaseAccuracyM = retentionBaseAccuracyM,
+                retentionCeilingM = retentionAccuracyCeilingM.value,
             )
         } else {
             locationMockManager.stopMockLocation()
@@ -1930,6 +2271,7 @@ class MockLocationJob(
         liveUsable: Boolean,
         gnssTruthful: Boolean,
         injectToSystem: Boolean,
+        nowElapsedMs: Long = android.os.SystemClock.elapsedRealtime(),
     ) {
         val bearing = lastKnownBearingDeg
             ?: good.trueDirection.takeIf { it != 0f }
@@ -1939,15 +2281,16 @@ class MockLocationJob(
         )
         applyMockProvider(
             locValues = out,
-            retainingFix = false,
+            retainingFix = true,
             hasReliableSpeed = true,
             hasReliableBearing = bearing != null,
             injectToSystem = injectToSystem,
+            nowElapsedMs = nowElapsedMs,
         )
         GeoDisplayRepository.publish(
             GeoDisplayState(
                 liveUsable = liveUsable,
-                retaining = false,
+                retaining = true,
                 locateStatus = true,
                 latitude = good.latitude,
                 longitude = good.longitude,
@@ -2084,33 +2427,6 @@ class MockLocationJob(
         sharedRoadMatch.reset()
         RoadMatchRuntimeDebug.clear()
         return true
-    }
-
-    /** Phase F1: publish map-agnostic overlay for the future MapKit host (F2). */
-    private fun publishRoadMatchOverlay(
-        matchEnabled: Boolean,
-        shadowLat: Double,
-        shadowLon: Double,
-        shadowBearingDeg: Float?,
-        gnssLat: Double?,
-        gnssLon: Double?,
-        gnssBearingDeg: Float?,
-        gnssVisible: Boolean,
-    ) {
-        val graphs = RoadGraphStore.cachedGraphs()
-        val state = RoadMatchOverlayBuilder.build(
-            matchEnabled = matchEnabled,
-            shadowLat = shadowLat,
-            shadowLon = shadowLon,
-            shadowBearingDeg = shadowBearingDeg,
-            gnssLat = gnssLat,
-            gnssLon = gnssLon,
-            gnssBearingDeg = gnssBearingDeg,
-            gnssVisible = gnssVisible,
-            debug = sharedRoadMatch.runtime.debug,
-            graphs = graphs,
-        )
-        RoadMatchOverlayRepository.publish(state)
     }
 }
 

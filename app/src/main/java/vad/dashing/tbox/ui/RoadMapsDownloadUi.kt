@@ -1,9 +1,9 @@
 package vad.dashing.tbox.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,6 +14,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxRepository
@@ -82,28 +85,24 @@ fun RoadMapsDownloadHubDialog(
     }
     val snap by manager.snapshot.collectAsStateWithLifecycle()
     val loc by TboxRepository.locValues.collectAsStateWithLifecycle()
-    val isRu = remember {
-        Locale.getDefault().language.equals("ru", ignoreCase = true)
-    }
-    val regionComparator = remember(isRu) {
-        RoadMapCatalog.alphabeticalComparator(isRu)
+    val language = BuildConfig.FLAVOR
+    val regionComparator = remember(language) {
+        RoadMapCatalog.alphabeticalComparator(language)
     }
     val covering = remember(snap, loc.latitude, loc.longitude) {
         manager.coveringInstalled(loc.latitude, loc.longitude)
     }
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
-    val pendingDeleteTitle = remember(pendingDeleteId, snap, isRu) {
+    val pendingDeleteTitle = remember(pendingDeleteId, snap, language) {
         pendingDeleteId?.let { id ->
-            snap.regions.firstOrNull { it.region.id == id }?.region?.title(isRu)
+            snap.regions.firstOrNull { it.region.id == id }?.region?.title(language)
         }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
-        modifier = Modifier
-            .fillMaxWidth(0.96f)
-            .fillMaxHeight(0.92f),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         title = { AppAlertDialogTitle(stringResource(R.string.road_maps_hub_title)) },
         text = {
             Column(
@@ -120,7 +119,7 @@ fun RoadMapsDownloadHubDialog(
                 Text(
                     text = stringResource(
                         R.string.road_maps_disk_usage,
-                        formatBytes(snap.totalBytesOnDisk),
+                        formatBytes(context, snap.totalBytesOnDisk),
                     ),
                     style = MaterialTheme.typography.tboxBody,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -132,7 +131,7 @@ fun RoadMapsDownloadHubDialog(
                     } else {
                         stringResource(
                             R.string.road_maps_coverage_ok,
-                            covering.joinToString { it.title(isRu) },
+                            covering.joinToString { it.title(language) },
                         )
                     },
                     style = MaterialTheme.typography.tboxBody,
@@ -154,6 +153,8 @@ fun RoadMapsDownloadHubDialog(
                     )
                 }
 
+                RoadMapsUsbInstallSection(downloadManager = manager)
+
                 val byCountry = snap.regions.groupBy { it.region.country }
                 for (country in RoadMapCatalog.COUNTRY_ORDER) {
                     val list = byCountry[country].orEmpty().sortedWith { left, right ->
@@ -169,12 +170,16 @@ fun RoadMapsDownloadHubDialog(
                     for (row in list) {
                         RoadMapRegionRow(
                             state = row,
-                            isRussian = isRu,
+                            language = language,
                             onDownload = { manager.enqueueDownload(row.region.id) },
                             onDelete = { pendingDeleteId = row.region.id },
                             onCancel = { manager.cancelQueued(row.region.id) },
                         )
                     }
+                }
+
+                if (BuildConfig.MAPKIT_ENABLED) {
+                    MapKitApiKeySettings(settingsViewModel = settingsViewModel)
                 }
 
                 Text(
@@ -239,11 +244,12 @@ private fun countryTitle(code: String): String {
 @Composable
 private fun RoadMapRegionRow(
     state: RoadMapRegionUiState,
-    isRussian: Boolean,
+    language: String,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
 ) {
+    val context = LocalContext.current
     val region = state.region
     val installed = state.installed
     val statusText = when (state.status) {
@@ -251,7 +257,7 @@ private fun RoadMapRegionRow(
             if (region.bytes > 0L) {
                 stringResource(
                     R.string.road_maps_status_not_installed_size,
-                    formatBytes(region.bytes),
+                    formatBytes(context, region.bytes),
                 )
             } else {
                 stringResource(R.string.road_maps_status_not_installed)
@@ -281,7 +287,7 @@ private fun RoadMapRegionRow(
             .padding(vertical = 6.dp),
     ) {
         Text(
-            text = region.title(isRussian),
+            text = region.title(language),
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -295,7 +301,7 @@ private fun RoadMapRegionRow(
             Text(
                 text = stringResource(
                     R.string.road_maps_installed_details,
-                    formatBytes(installed.bytesOnDisk.takeIf { it > 0 } ?: region.bytes),
+                    formatBytes(context, installed.bytesOnDisk.takeIf { it > 0 } ?: region.bytes),
                     installed.graphVersion,
                     formatInstalledDate(installed.installedAtEpochMs),
                 ),
@@ -373,19 +379,73 @@ private fun RoadMapRegionRow(
     }
 }
 
-private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0L) return "0 B"
-    if (bytes < 1024L) return "$bytes B"
-    val kb = bytes / 1024.0
-    if (kb < 1024.0) {
-        return if (kb < 10.0) {
-            String.format(Locale.US, "%.1f KB", kb)
-        } else {
-            String.format(Locale.US, "%.0f KB", kb)
+@Composable
+private fun MapKitApiKeySettings(settingsViewModel: SettingsViewModel) {
+    val storedKey by settingsViewModel.mapkitApiKey.collectAsStateWithLifecycle()
+    var draftKey by remember(storedKey) { mutableStateOf(storedKey) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_mapkit_api_key_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 4.dp),
+        )
+        Text(
+            text = stringResource(R.string.settings_mapkit_api_key_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+        OutlinedTextField(
+            value = draftKey,
+            onValueChange = { draftKey = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.settings_mapkit_api_key_placeholder)) },
+            colors = OutlinedTextFieldDefaults.colors(),
+        )
+        if (draftKey.trim() != storedKey.trim()) {
+            TextButton(
+                onClick = rememberWrappedOnClick {
+                    settingsViewModel.saveMapkitApiKey(draftKey)
+                },
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_mapkit_api_key_save),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
         }
     }
+}
+
+private fun formatBytes(context: Context, bytes: Long): String {
+    val unitB = context.getString(R.string.unit_byte)
+    val unitKb = context.getString(R.string.unit_kilobyte)
+    val unitMb = context.getString(R.string.unit_megabyte)
+    if (bytes <= 0L) {
+        return context.getString(R.string.unit_bytes_fmt, "0", unitB)
+    }
+    if (bytes < 1024L) {
+        return context.getString(R.string.unit_bytes_fmt, bytes.toString(), unitB)
+    }
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) {
+        val num = if (kb < 10.0) {
+            String.format(Locale.US, "%.1f", kb)
+        } else {
+            String.format(Locale.US, "%.0f", kb)
+        }
+        return context.getString(R.string.unit_bytes_frac_fmt, num, unitKb)
+    }
     val mb = kb / 1024.0
-    return String.format(Locale.US, "%.1f MB", mb)
+    val num = String.format(Locale.US, "%.1f", mb)
+    return context.getString(R.string.unit_bytes_frac_fmt, num, unitMb)
 }
 
 private fun formatInstalledDate(epochMs: Long): String {

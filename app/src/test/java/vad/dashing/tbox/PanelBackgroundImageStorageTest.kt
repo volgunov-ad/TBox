@@ -109,4 +109,22 @@ class PanelBackgroundImageStorageTest {
         )
         assertEquals(setOf("panel_backgrounds/ok_light"), paths)
     }
+
+    @Test
+    fun destinationFile_writesIntoThemeCacheWhenPanelsActive() {
+        val root = createTempDir()
+        val rel = PanelBackgroundImageStorage.relativePathFor("panel_w", darkTheme = true)
+        val lookup = LauncherAppIconPaths.Lookup(
+            activeThemeCacheKey = "theme_panel_w",
+            activeThemeApplyTargets = setOf(ThemeApplyTarget.MAIN_SCREEN_PANELS),
+        )
+        val dest = PanelBackgroundImageStorage.destinationFile(root, rel, lookup)
+        assertNotNull(dest)
+        assertTrue(
+            dest!!.absolutePath.contains(
+                "themes${File.separator}theme_panel_w${File.separator}panel_backgrounds",
+            ),
+        )
+        root.deleteRecursively()
+    }
 }

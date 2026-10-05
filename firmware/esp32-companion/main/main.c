@@ -10,10 +10,14 @@
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
 
+#include "ble_btn.h"
+#include "gnss_detect.h"
 #include "gpio_io.h"
+#include "mag.h"
 #include "mcp2515.h"
 #include "protocol.h"
 #include "um980_uart.h"
+#include "wifi_router.h"
 
 static const char *TAG = "esp32_companion";
 
@@ -125,6 +129,19 @@ static void on_can_light(bool enable)
     ESP_LOGI(TAG, "CAN light mode %s", enable ? "on" : "off");
 }
 
+static void on_mag_chip(const char *chip)
+{
+    mag_chip_t c;
+    if (!mag_chip_from_name(chip, &c)) {
+        const char *seen[MAG_SEEN_MAX];
+        int count = mag_get_seen_ids(seen, MAG_SEEN_MAX);
+        protocol_send_mag_chip(mag_chip_name(mag_get_chip()), false, mag_is_present(),
+                               seen, count);
+        return;
+    }
+    mag_request_chip(c);
+}
+
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
     (void)event;
@@ -221,9 +238,16 @@ void app_main(void)
     protocol_set_can_baud_callback(on_can_baud);
     protocol_set_can_filter_callback(on_can_filter);
     protocol_set_can_light_callback(on_can_light);
+    protocol_set_mag_chip_callback(on_mag_chip);
     um980_uart_init();
+    gnss_detect_run();
+    protocol_set_gnss_for_hello(gnss_uart_active(), gnss_chip_id(), gnss_model_label(),
+                                um980_uart_get_baud());
     protocol_set_um980_baud_for_hello(um980_uart_get_baud());
     gpio_io_init();
+    mag_init();
+    ble_btn_init();
+    wifi_router_init();
 
     s_can_present = mcp2515_init(MCP2515_DEFAULT_BAUD, MCP2515_DEFAULT_XTAL_HZ);
     if (s_can_present) {
@@ -276,9 +300,9 @@ void app_main(void)
                 protocol_send_relay(gpio_io_get_relays());
                 sent_hello = true;
             }
-            // During OTA keep a rare heartbeat so HU soft-watchdog stays calm.
-            const uint32_t hb_period = ota_busy ? 5000u : 1000u;
-            if (now_ms - last_hb_ms >= hb_period) {
+            // No heartbeat during OTA. A blocked USB callback cannot drain TX,
+            // so heartbeats fill the FIFO and the begin ack is dropped.
+            if (!ota_busy && now_ms - last_hb_ms >= 1000u) {
                 protocol_send_hb(now_ms);
                 last_hb_ms = now_ms;
             }
@@ -301,6 +325,7 @@ void app_main(void)
                 protocol_send_gpio(gpio_io_read_inputs(), now_ms);
                 last_gpio_ms = now_ms;
             }
+            ble_btn_poll(now_ms);
         }
 
         vTaskDelay(pdMS_TO_TICKS(protocol_can_light_active() ? 5 : 20));

@@ -240,6 +240,7 @@ class UsbNmeaGnssSession(
 
     /**
      * Change baud on the open link without tearing down the session (FW upgrade).
+     * Prefer [reopenExclusiveAtBaud] for CP210x/CH340 — live line-coding alone is often ignored.
      */
     fun setBaudLive(baud: Int): Boolean {
         val b = baud.coerceIn(1_200, 2_000_000)
@@ -259,6 +260,70 @@ class UsbNmeaGnssSession(
                 baud = b,
             )
             true
+        }
+    }
+
+    /**
+     * Close and reopen the USB-UART at [baud] while keeping exclusive FW mode.
+     * Auto-baud already uses full reopen; Soft UM980 upgrade needs the same for 460800.
+     */
+    fun reopenExclusiveAtBaud(baud: Int): Boolean {
+        val b = baud.coerceIn(1_200, 2_000_000)
+        if (!running.get()) return false
+        targetBaud = b
+        val keepExclusive = exclusiveMode
+        Log.i(TAG, "reopenExclusiveAtBaud baud=$b exclusive=$keepExclusive")
+        return try {
+            runOnUsbIo(timeoutMs = OPEN_TIMEOUT_MS) {
+                closeConnectionOnly()
+                // Find current target device and open at new baud (tryConnect ? openDevice).
+                tryConnect()
+            }
+            if (keepExclusive) {
+                exclusiveMode = true
+                synchronized(exclusiveRxLock) { exclusiveRx.reset() }
+                synchronized(lineBuffer) { lineBuffer.setLength(0) }
+            }
+            val ok = isConnected()
+            if (!ok) Log.w(TAG, "reopenExclusiveAtBaud: not connected after reopen")
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "reopenExclusiveAtBaud failed: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Drop and re-assert DTR while the port stays open so RX is already running.
+     * Full USB reopen misses the ~2s N4 menu: close/open is slower than the banner.
+     */
+    fun pulseDtrReset(): Boolean {
+        val conn: UsbDeviceConnection
+        val device: UsbDevice
+        val dataIfId: Int
+        val comm: UsbInterface?
+        synchronized(ioLock) {
+            conn = connection ?: return false
+            device = usbManager.deviceList.values.firstOrNull { it.deviceId == openDeviceId }
+                ?: return false
+            dataIfId = usbInterface?.id ?: 0
+            comm = commInterface
+        }
+        fun apply(dtr: Boolean) {
+            UsbUartBridgeInit.setDtrRts(device, conn, dataIfId, dtr = dtr, rts = true)
+            if (comm != null) {
+                assertCdcControlLineState(conn, comm.id, dtr = dtr, rts = true)
+            }
+        }
+        return try {
+            Log.i(TAG, "pulseDtrReset")
+            apply(dtr = false)
+            Thread.sleep(150)
+            apply(dtr = true)
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "pulseDtrReset failed: ${e.message}", e)
+            false
         }
     }
 
@@ -316,9 +381,19 @@ class UsbNmeaGnssSession(
         try {
             if (!writeAsciiLine(cmd)) return emptyList()
             val deadline = System.currentTimeMillis() + timeoutMs.coerceAtLeast(200L)
+            var quietSince = System.currentTimeMillis()
+            var replyLines = 0
             while (System.currentTimeMillis() < deadline) {
                 Thread.sleep(40)
-                if (GnssModuleCommands.parseProbeReplies(collected.toList()) != null) break
+                val lines = collected.toList()
+                if (GnssModuleCommands.parseProbeReplies(lines) != null) break
+                val replies = lines.count { !UsbAsciiReplyCollect.isStreamingNmea(it) }
+                val now = System.currentTimeMillis()
+                if (replies != replyLines) {
+                    replyLines = replies
+                    quietSince = now
+                }
+                if (UsbAsciiReplyCollect.ready(lines, now - quietSince)) break
             }
             return collected.toList()
         } finally {
@@ -512,7 +587,11 @@ class UsbNmeaGnssSession(
         if (commIntf != null) {
             assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
         }
-        sendOptionalNmeaEnableCommands()
+        // Soft FW reopen must not re-enable NMEA mid-upgrade (and DTR reopen already
+        // risks a module reset — keep the exclusive pipe quiet).
+        if (!exclusiveMode) {
+            sendOptionalNmeaEnableCommands()
+        }
         // Persist serial once readable after permission / open.
         val resolvedSerial = actualSerial.ifEmpty {
             runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()

@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.app.Service
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
@@ -14,11 +15,17 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import vad.dashing.tbox.automation.AutomationSystemEvent
+import vad.dashing.tbox.automation.AutomationSystemEventBus
 import vad.dashing.tbox.ui.FloatingDashboardUI
 import vad.dashing.tbox.ui.MainScreenWindowOverlayUI
 import vad.dashing.tbox.ui.MyLifecycleOwner
@@ -26,8 +33,9 @@ import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformDisplaySpaces
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.MainScreenWindowOverlayLayout
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import kotlin.math.roundToInt
-
+import java.util.concurrent.atomic.AtomicLong
 /**
  * Foreground package + persisted usage-stats rule sets from [BackgroundService] polling.
  * Hide wins when it actually applies to a panel ([isUsageStatsForceHidden]).
@@ -110,6 +118,7 @@ internal class FloatingOverlayController(
     private val service: Service,
     private val settingsManager: SettingsManager,
     private val appDataManager: AppDataManager,
+    private val overlayScope: CoroutineScope,
     private val onRebootTbox: () -> Unit,
     private val onTripFinishAndStart: () -> Unit,
 ) {
@@ -121,9 +130,26 @@ internal class FloatingOverlayController(
     /** Panels temporarily closed by the «hide other floating panels» tile; cleared on restore or global suspend. */
     private val hiddenFloatingPanelIds = mutableSetOf<String>()
     private var usageStatsOverlayRules: UsageStatsOverlayRulesState = UsageStatsOverlayRulesState.EMPTY
+    /**
+     * ElapsedRealtime after which new floating overlays may be mounted (service-start quiet period).
+     * [Long.MAX_VALUE] until [armFirstShowGate]; hide/close paths are never gated.
+     */
+    private val firstShowAllowedAfterElapsedMs = AtomicLong(
+        FloatingPanelsShowOnServiceStartDelay.UNARMED_ALLOWED_AFTER_ELAPSED_MS,
+    )
     private var overlaysSuspended = false
     private val lifecycleOwner by lazy { MyLifecycleOwner() }
     private val overlaySyncMutex = Mutex()
+    /** Serializes staged [WindowManager.addView] bursts after large theme / config imports. */
+    private var stagedOpenJob: Job? = null
+    private var stagedOpenGeneration = 0L
+
+    private data class OverlayOpenWork(
+        val visibleConfigs: List<FloatingDashboardConfig>,
+        val pendingOpens: List<FloatingDashboardConfig>,
+        val myPkg: String,
+        val reorderZOrder: Boolean,
+    )
 
     /** Dedicated MainScreen window-mode overlay (not a floating panel id). */
     private var mainScreenWindowView: ComposeView? = null
@@ -142,9 +168,20 @@ internal class FloatingOverlayController(
     companion object {
         private const val TAG = "Floating Dashboard"
         private const val MAX_OVERLAY_RETRIES = 3
-        private const val MIN_OVERLAY_SIZE = 50
+        private const val MIN_OVERLAY_SIZE = MIN_FLOATING_PANEL_SIZE_PX
         private const val OVERLAY_FADE_MS = 300L
         private const val MAIN_SCREEN_WINDOW_TAG = "MainScreenWindow"
+
+        private fun floatingOverlayWindowFlags(allowBeyondScreen: Boolean): Int {
+            var flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+            if (allowBeyondScreen) {
+                flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            }
+            return flags
+        }
     }
 
     val isMainScreenWindowVisible: Boolean
@@ -153,8 +190,55 @@ internal class FloatingOverlayController(
     @Volatile
     private var overlaysClosing = false
 
+    @Volatile
+    private var allowBeyondScreen = false
+
+    init {
+        overlayScope.launch {
+            settingsManager.floatingPanelsAllowBeyondScreenFlow.collect { enabled ->
+                val previous = allowBeyondScreen
+                allowBeyondScreen = enabled
+                if (previous != enabled) {
+                    withContext(Dispatchers.Main) {
+                        applyAllowBeyondScreenToMountedOverlays(enabled)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Arms the service-start quiet period. Call once per startup pipeline **before**
+     * Usage Stats / settings listeners can sync floating panels.
+     */
+    fun armFirstShowGate(allowedAfterElapsedRealtimeMs: Long) {
+        firstShowAllowedAfterElapsedMs.set(allowedAfterElapsedRealtimeMs)
+    }
+
+    /** Resets the gate to blocked (e.g. service stop) until the next [armFirstShowGate]. */
+    fun disarmFirstShowGate() {
+        firstShowAllowedAfterElapsedMs.set(
+            FloatingPanelsShowOnServiceStartDelay.UNARMED_ALLOWED_AFTER_ELAPSED_MS,
+        )
+    }
+
+    fun isFirstShowAllowed(
+        nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
+    ): Boolean = FloatingPanelsShowOnServiceStartDelay.isAllowed(
+        nowElapsedRealtimeMs,
+        firstShowAllowedAfterElapsedMs.get(),
+    )
+
+    fun remainingMsUntilFirstShowAllowed(
+        nowElapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
+    ): Long = FloatingPanelsShowOnServiceStartDelay.remainingDelayMs(
+        nowElapsedRealtimeMs,
+        firstShowAllowedAfterElapsedMs.get(),
+    )
+
     fun suspendOverlays() {
         try {
+            cancelStagedOverlayOpens()
             overlaysSuspended = true
             hiddenFloatingPanelIds.clear()
             usageStatsOverlayRules = UsageStatsOverlayRulesState.EMPTY
@@ -177,6 +261,7 @@ internal class FloatingOverlayController(
     }
 
     fun closeAllOverlays() {
+        cancelStagedOverlayOpens()
         overlaysClosing = true
         try {
             val ids = overlayViews.keys.toList()
@@ -199,6 +284,7 @@ internal class FloatingOverlayController(
 
     fun onDestroy() {
         try {
+            cancelStagedOverlayOpens()
             hiddenFloatingPanelIds.clear()
             usageStatsOverlayRules = UsageStatsOverlayRulesState.EMPTY
             closeAllOverlays()
@@ -355,6 +441,7 @@ internal class FloatingOverlayController(
             val owner = MyLifecycleOwner().also { created ->
                 created.setCurrentState(Lifecycle.State.CREATED)
                 created.setCurrentState(Lifecycle.State.STARTED)
+                created.setCurrentState(Lifecycle.State.RESUMED)
             }
             mainScreenLifecycleOwner = owner
 
@@ -401,6 +488,7 @@ internal class FloatingOverlayController(
                 mainScreenWindowManager = msWm
                 mainScreenWindowView = composeView
                 mainScreenWindowParams = layoutParams
+                AutomationSystemEventBus.publish(AutomationSystemEvent.MAIN_SCREEN_OPENED)
                 composeView.animate()
                     .alpha(1f)
                     .setDuration(OVERLAY_FADE_MS)
@@ -537,7 +625,7 @@ internal class FloatingOverlayController(
         reorderZOrder: Boolean = true,
         closeImmediate: Boolean = false,
     ) {
-        overlaySyncMutex.withLock {
+        val stagedWork = overlaySyncMutex.withLock {
             withContext(Dispatchers.Main) {
                 try {
                     FloatingOverlayLoadTimings.reset()
@@ -548,7 +636,7 @@ internal class FloatingOverlayController(
                         }
                         FloatingOverlayLoadTimings.mark("float_sync_suspended")
                         FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
-                        return@withContext
+                        return@withContext null
                     }
                     val myPkg = service.packageName
                     val configMap = configs.associateBy { it.id }
@@ -559,7 +647,6 @@ internal class FloatingOverlayController(
                     val visibleIds = visibleConfigs.map { it.id }.toSet()
                     val existingIds = overlayViews.keys.toSet()
 
-                    // Remove counters for configs that no longer exist.
                     val removedIds = overlayRetryCounts.keys - configMap.keys
                     removedIds.forEach { id ->
                         overlayRetryCounts.remove(id)
@@ -567,6 +654,7 @@ internal class FloatingOverlayController(
                         hiddenFloatingPanelIds.remove(id)
                     }
 
+                    val pendingOpens = mutableListOf<FloatingDashboardConfig>()
                     visibleConfigs.forEach { config ->
                         try {
                             if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
@@ -583,8 +671,8 @@ internal class FloatingOverlayController(
                             val view = overlayViews[config.id]
                             if (view != null) {
                                 updateOverlayLayout(config)
-                            } else {
-                                openOverlay(config, myPkg)
+                            } else if (shouldQueueOverlayOpen(config, myPkg)) {
+                                pendingOpens.add(config)
                             }
                         } catch (e: CancellationException) {
                             throw e
@@ -616,35 +704,54 @@ internal class FloatingOverlayController(
                         overlayOffIds.remove(id)
                         hiddenFloatingPanelIds.remove(id)
                     }
-                    if (reorderZOrder && !FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide()) {
-                        // Only panels actually in WM (temp-hidden already closed); remount only
-                        // geometrically overlapping clusters so non-overlapping panels do not flicker.
-                        val mountedInConfigOrder = visibleConfigs.map { it.id }.filter { id ->
-                            overlayViews.containsKey(id)
-                        }
-                        try {
-                            reorderVisibleOverlays(mountedInConfigOrder)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e(TAG, "reorderVisibleOverlays failed", e)
-                            TboxRepository.addLog("ERROR", TAG, "reorder: ${e.message}")
-                        }
+
+                    if (pendingOpens.isEmpty()) {
+                        maybeReorderVisibleOverlays(visibleConfigs, reorderZOrder)
+                        FloatingOverlayLoadTimings.mark("float_sync_done")
+                        FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
+                        return@withContext null
                     }
-                    FloatingOverlayLoadTimings.mark("float_sync_done")
+
+                    if (!FloatingOverlayOpenPlan.shouldUseStagedOpen(pendingOpens.size)) {
+                        pendingOpens.forEach { config ->
+                            try {
+                                openOverlay(config, myPkg)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e(TAG, "sync open failed id=${config.id}", e)
+                                TboxRepository.addLog("ERROR", TAG, "sync open ${config.id}: ${e.message}")
+                            }
+                        }
+                        maybeReorderVisibleOverlays(visibleConfigs, reorderZOrder)
+                        FloatingOverlayLoadTimings.mark("float_sync_done")
+                        FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
+                        return@withContext null
+                    }
+
+                    FloatingOverlayLoadTimings.mark("float_sync_staged_${pendingOpens.size}")
                     FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.sync")
+                    OverlayOpenWork(
+                        visibleConfigs = visibleConfigs,
+                        pendingOpens = pendingOpens,
+                        myPkg = myPkg,
+                        reorderZOrder = reorderZOrder,
+                    )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "syncFloatingDashboards failed", e)
                     TboxRepository.addLog("ERROR", TAG, "sync failed: ${e.message}")
+                    null
                 }
             }
         }
+        stagedWork?.let { scheduleStagedOverlayOpens(it) }
     }
 
     suspend fun ensureFloatingDashboards(configs: List<FloatingDashboardConfig>) {
-        overlaySyncMutex.withLock {
+        if (stagedOpenJob?.isActive == true) return
+        val stagedWork = overlaySyncMutex.withLock {
             withContext(Dispatchers.Main) {
                 try {
                     FloatingOverlayLoadTimings.reset()
@@ -652,51 +759,154 @@ internal class FloatingOverlayController(
                     if (overlaysSuspended || overlaysClosing) {
                         FloatingOverlayLoadTimings.mark("float_ensure_suspended")
                         FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
-                        return@withContext
+                        return@withContext null
                     }
                     val myPkg = service.packageName
                     val visibleConfigs = configs.filter { cfg -> shouldShowFloatingOverlay(cfg, myPkg) }
-                    visibleConfigs.forEach { config ->
-                        try {
-                            if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) return@forEach
-                            if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
-                                overlayOffIds.remove(config.id)
-                            }
-                            if (overlayOffIds.contains(config.id)) return@forEach
-                            if (overlayViews.containsKey(config.id)) {
-                                overlayRetryCounts[config.id] = 0
-                                return@forEach
-                            }
-
-                            val retryCount = overlayRetryCounts[config.id] ?: 0
-                            if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
-                                TboxRepository.addLog("ERROR", TAG, "Can't show: ${config.id}")
-                                overlayOffIds.add(config.id)
-                                return@forEach
-                            }
-                            overlayRetryCounts[config.id] = retryCount + 1
-                            openOverlay(config, myPkg)
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.e(TAG, "ensure panel failed id=${config.id}", e)
-                            TboxRepository.addLog(
-                                "ERROR",
-                                TAG,
-                                "ensure panel ${config.id}: ${e.message}",
-                            )
-                        }
+                    val pendingOpens = FloatingOverlayOpenPlan.pendingOpensInConfigOrder(
+                        visibleConfigs = visibleConfigs,
+                        alreadyMountedIds = overlayViews.keys,
+                        shouldOpen = { config -> shouldQueueOverlayOpenForEnsure(config, myPkg) },
+                    )
+                    if (pendingOpens.isEmpty()) {
+                        FloatingOverlayLoadTimings.mark("float_ensure_done")
+                        FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
+                        return@withContext null
                     }
-                    FloatingOverlayLoadTimings.mark("float_ensure_done")
+                    if (!FloatingOverlayOpenPlan.shouldUseStagedOpen(pendingOpens.size)) {
+                        pendingOpens.forEach { config ->
+                            try {
+                                openOverlay(config, myPkg)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e(TAG, "ensure open failed id=${config.id}", e)
+                                TboxRepository.addLog("ERROR", TAG, "ensure open ${config.id}: ${e.message}")
+                            }
+                        }
+                        FloatingOverlayLoadTimings.mark("float_ensure_done")
+                        FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
+                        return@withContext null
+                    }
+                    FloatingOverlayLoadTimings.mark("float_ensure_staged_${pendingOpens.size}")
                     FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.ensure")
+                    OverlayOpenWork(
+                        visibleConfigs = visibleConfigs,
+                        pendingOpens = pendingOpens,
+                        myPkg = myPkg,
+                        reorderZOrder = false,
+                    )
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "ensureFloatingDashboards failed", e)
                     TboxRepository.addLog("ERROR", TAG, "ensure failed: ${e.message}")
+                    null
                 }
             }
         }
+        stagedWork?.let { scheduleStagedOverlayOpens(it) }
+    }
+
+    private fun cancelStagedOverlayOpens() {
+        stagedOpenGeneration += 1
+        stagedOpenJob?.cancel()
+        stagedOpenJob = null
+    }
+
+    private fun scheduleStagedOverlayOpens(work: OverlayOpenWork) {
+        cancelStagedOverlayOpens()
+        val generation = stagedOpenGeneration
+        stagedOpenJob = overlayScope.launch {
+            runStagedOverlayOpens(generation, work)
+        }
+    }
+
+    private suspend fun runStagedOverlayOpens(generation: Long, work: OverlayOpenWork) {
+        FloatingOverlayLoadTimings.reset()
+        FloatingOverlayLoadTimings.mark("float_staged_enter_${work.pendingOpens.size}")
+        val openStepSize = FloatingOverlayOpenPlan.stagedOpenStepSize(
+            settingsManager.headUnitCanModeFlow.first(),
+        )
+        val batches = FloatingOverlayOpenPlan.pendingOpenBatches(work.pendingOpens, openStepSize)
+        for (batch in batches) {
+            for (config in batch) {
+                if (generation != stagedOpenGeneration) return
+                overlaySyncMutex.withLock {
+                    withContext(Dispatchers.Main) {
+                        if (generation != stagedOpenGeneration) return@withContext
+                        if (overlaysSuspended || overlaysClosing) return@withContext
+                        if (!shouldShowFloatingOverlay(config, work.myPkg)) return@withContext
+                        if (isFloatingPanelTemporarilyHidden(config.id, work.myPkg)) return@withContext
+                        if (overlayOffIds.contains(config.id)) return@withContext
+                        if (overlayViews.containsKey(config.id)) return@withContext
+                        try {
+                            openOverlay(config, work.myPkg)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e(TAG, "staged open failed id=${config.id}", e)
+                            TboxRepository.addLog("ERROR", TAG, "staged open ${config.id}: ${e.message}")
+                        }
+                    }
+                }
+            }
+            if (generation != stagedOpenGeneration) return
+            delay(FloatingOverlayOpenPlan.STAGED_OPEN_DELAY_MS)
+        }
+        if (generation != stagedOpenGeneration) return
+        overlaySyncMutex.withLock {
+            withContext(Dispatchers.Main) {
+                if (generation != stagedOpenGeneration) return@withContext
+                maybeReorderVisibleOverlays(work.visibleConfigs, work.reorderZOrder)
+                FloatingOverlayLoadTimings.mark("float_staged_done")
+                FloatingOverlayLoadTimings.log("Timings.FloatingOverlay.staged")
+            }
+        }
+    }
+
+    private fun maybeReorderVisibleOverlays(
+        visibleConfigs: List<FloatingDashboardConfig>,
+        reorderZOrder: Boolean,
+    ) {
+        if (!reorderZOrder || FloatingPanelEditModeTracker.shouldSuppressUsageStatsHide()) return
+        val mountedInConfigOrder = visibleConfigs.map { it.id }.filter { id ->
+            overlayViews.containsKey(id)
+        }
+        try {
+            reorderVisibleOverlays(mountedInConfigOrder)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "reorderVisibleOverlays failed", e)
+            TboxRepository.addLog("ERROR", TAG, "reorder: ${e.message}")
+        }
+    }
+
+    private fun shouldQueueOverlayOpen(config: FloatingDashboardConfig, myPkg: String): Boolean {
+        if (!isFirstShowAllowed()) return false
+        if (overlayOffIds.contains(config.id)) return false
+        return true
+    }
+
+    private fun shouldQueueOverlayOpenForEnsure(
+        config: FloatingDashboardConfig,
+        myPkg: String,
+    ): Boolean {
+        if (!isFirstShowAllowed()) return false
+        if (isFloatingPanelTemporarilyHidden(config.id, myPkg)) return false
+        if (usageStatsOverlayRules.isUsageStatsForceShowing(config.id, myPkg)) {
+            overlayOffIds.remove(config.id)
+        }
+        if (overlayOffIds.contains(config.id)) return false
+        val retryCount = overlayRetryCounts[config.id] ?: 0
+        if (retryCount >= MAX_OVERLAY_RETRIES * 2) {
+            TboxRepository.addLog("ERROR", TAG, "Can't show: ${config.id}")
+            overlayOffIds.add(config.id)
+            return false
+        }
+        overlayRetryCounts[config.id] = retryCount + 1
+        return true
     }
 
     private fun shouldShowFloatingOverlay(config: FloatingDashboardConfig, myPackageName: String): Boolean =
@@ -716,6 +926,10 @@ internal class FloatingOverlayController(
         )
 
     private suspend fun openOverlay(config: FloatingDashboardConfig, myPackageName: String) {
+        if (!isFirstShowAllowed()) {
+            TboxRepository.addLog("DEBUG", TAG, "Deferred until service-start delay: ${config.id}")
+            return
+        }
         ensureWindowManager()
         if (windowManager == null) return
 
@@ -746,10 +960,7 @@ internal class FloatingOverlayController(
             bounds.width,
             bounds.height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            floatingOverlayWindowFlags(allowBeyondScreen),
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -814,14 +1025,26 @@ internal class FloatingOverlayController(
 
             val lifecycleState = lifecycleOwner.lifecycle.currentState
             if (lifecycleState != Lifecycle.State.DESTROYED &&
-                (!lifecycleOwner.isInitialized || !lifecycleState.isAtLeast(Lifecycle.State.STARTED))
+                (!lifecycleOwner.isInitialized || !lifecycleState.isAtLeast(Lifecycle.State.RESUMED))
             ) {
-                // Step through CREATED — jumping INITIALIZED → STARTED can throw and leave
-                // the shared overlay owner stuck below STARTED (breaks collectors / double-taps).
+                // Step CREATED → STARTED → RESUMED. Jumping INITIALIZED → STARTED can throw and
+                // leave the shared overlay owner stuck (breaks collectAsStateWithLifecycle).
                 if (!lifecycleState.isAtLeast(Lifecycle.State.CREATED)) {
                     lifecycleOwner.setCurrentState(Lifecycle.State.CREATED)
                 }
-                lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+                if (!lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    lifecycleOwner.setCurrentState(Lifecycle.State.STARTED)
+                }
+                lifecycleOwner.setCurrentState(Lifecycle.State.RESUMED)
+            }
+
+            // A10: ensure Car/VHAL session + push listeners are armed when only overlays show
+            // (MainActivity / Car Settings warm-up may never run).
+            overlayScope.launch {
+                runCatching { UniversalCanRepository.warmUpAvailabilityForUi() }
+                    .onFailure { e ->
+                        Log.w(TAG, "VHAL warm-up on floating open failed", e)
+                    }
             }
 
             overlayRetryCounts[config.id] = 0
@@ -892,9 +1115,10 @@ internal class FloatingOverlayController(
 
     private fun updateWindowPosition(panelId: String, x: Int, y: Int) {
         val params = overlayParams[panelId] ?: return
-        if (params.x == x && params.y == y) return
-        params.x = x.coerceAtLeast(0)
-        params.y = y.coerceAtLeast(0)
+        val origin = clampFloatingPanelOrigin(x, y, allowBeyondScreen)
+        if (params.x == origin.x && params.y == origin.y) return
+        params.x = origin.x
+        params.y = origin.y
         overlayViews[panelId]?.let { view ->
             try {
                 if (view.isAttachedToWindow) {
@@ -928,8 +1152,9 @@ internal class FloatingOverlayController(
      */
     private fun updateOverlayFrame(panelId: String, x: Int, y: Int, width: Int, height: Int) {
         val params = overlayParams[panelId] ?: return
-        val newX = x.coerceAtLeast(0)
-        val newY = y
+        val origin = clampFloatingPanelOrigin(x, y, allowBeyondScreen)
+        val newX = origin.x
+        val newY = origin.y
         val newW = width.coerceAtLeast(1)
         val newH = height.coerceAtLeast(1)
         if (params.x == newX && params.y == newY && params.width == newW && params.height == newH) {
@@ -960,6 +1185,7 @@ internal class FloatingOverlayController(
             Log.w(TAG, "updateOverlayLayout bounds failed for ${config.id}", e)
             return
         }
+        val desiredFlags = floatingOverlayWindowFlags(allowBeyondScreen)
         val newWidth = bounds.width
         val newHeight = bounds.height
         val newX = bounds.x
@@ -967,7 +1193,8 @@ internal class FloatingOverlayController(
         if (params.width == newWidth &&
             params.height == newHeight &&
             params.x == newX &&
-            params.y == newY
+            params.y == newY &&
+            params.flags == desiredFlags
         ) {
             return
         }
@@ -975,6 +1202,7 @@ internal class FloatingOverlayController(
         params.height = newHeight
         params.x = newX
         params.y = newY
+        params.flags = desiredFlags
         overlayViews[config.id]?.let { view ->
             try {
                 if (view.isAttachedToWindow) {
@@ -987,9 +1215,14 @@ internal class FloatingOverlayController(
     }
 
     private suspend fun effectiveOverlayBounds(config: FloatingDashboardConfig): PanelPxBounds {
+        val origin = clampFloatingPanelOrigin(
+            x = config.startX,
+            y = config.startY,
+            allowBeyondScreen = allowBeyondScreen,
+        )
         val expanded = PanelPxBounds(
-            x = config.startX.coerceAtLeast(0),
-            y = config.startY.coerceAtLeast(0),
+            x = origin.x,
+            y = origin.y,
             width = config.width.coerceAtLeast(1),
             height = config.height.coerceAtLeast(1),
         )
@@ -1007,11 +1240,48 @@ internal class FloatingOverlayController(
             return expanded
         }
         if (!PanelCollapseStates.isCollapsed(states, config.id)) return expanded
-        val thicknessPx = (
+        val stripThicknessPx = (
             normalizePanelCollapseStripThicknessDp(config.collapseStripThicknessDp) *
                 service.resources.displayMetrics.density
             ).roundToInt()
-        return collapsedPanelBounds(expanded, edge, thicknessPx)
+        val touchZoneThicknessPx = (
+            normalizePanelCollapseTouchZoneThicknessDp(
+                config.collapseTouchZoneThicknessDp,
+                config.collapseStripThicknessDp,
+            ) * service.resources.displayMetrics.density
+            ).roundToInt()
+        return collapsedPanelInteractionBounds(
+            expanded = expanded,
+            edge = edge,
+            stripThicknessPx = stripThicknessPx,
+            touchZoneThicknessPx = touchZoneThicknessPx,
+        )
+    }
+
+    /**
+     * Updates [FLAG_LAYOUT_NO_LIMITS] and re-floors origins when the beyond-screen setting changes
+     * while overlays are already mounted.
+     */
+    private fun applyAllowBeyondScreenToMountedOverlays(enabled: Boolean) {
+        val wm = windowManager ?: return
+        val desiredFlags = floatingOverlayWindowFlags(enabled)
+        for ((panelId, params) in overlayParams) {
+            val origin = clampFloatingPanelOrigin(params.x, params.y, enabled)
+            val flagsChanged = params.flags != desiredFlags
+            val originChanged = params.x != origin.x || params.y != origin.y
+            if (!flagsChanged && !originChanged) continue
+            params.flags = desiredFlags
+            params.x = origin.x
+            params.y = origin.y
+            val view = overlayViews[panelId] ?: continue
+            try {
+                if (view.isAttachedToWindow) {
+                    wm.updateViewLayout(view, params)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "applyAllowBeyondScreen failed for $panelId", e)
+            }
+        }
     }
 
     /**
@@ -1087,16 +1357,7 @@ internal class FloatingOverlayController(
                 } else {
                     currentlyShownIds
                 }
-                hiddenFloatingPanelIds.addAll(toHide)
-                toHide.forEach { panelId ->
-                    try {
-                        if (overlayViews.containsKey(panelId)) {
-                            closeOverlay(panelId, immediate = true)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "toggleHide close failed id=$panelId", e)
-                    }
-                }
+                setFloatingPanelsHiddenInternal(toHide, hidden = true)
                 false
             } catch (e: CancellationException) {
                 throw e
@@ -1104,6 +1365,78 @@ internal class FloatingOverlayController(
                 Log.e(TAG, "toggleHideOtherFloatingPanels failed", e)
                 TboxRepository.addLog("ERROR", TAG, "toggleHide: ${e.message}")
                 false
+            }
+        }
+    }
+
+    /**
+     * @param panelIds empty set means all currently shown panels for hide, or all temporarily hidden
+     * panels for show.
+     * @return true when at least one panel was restored to the screen.
+     */
+    suspend fun setFloatingPanelsHidden(
+        panelIds: Set<String>,
+        hidden: Boolean,
+        currentlyShownIds: Set<String>,
+    ): Boolean {
+        return withContext(Dispatchers.Main) {
+            try {
+                val targets = if (panelIds.isEmpty()) {
+                    if (hidden) currentlyShownIds else hiddenFloatingPanelIds.toSet()
+                } else {
+                    panelIds
+                }
+                if (hidden) {
+                    setFloatingPanelsHiddenInternal(targets, hidden = true)
+                    false
+                } else {
+                    val revealing = targets.any { it in hiddenFloatingPanelIds }
+                    targets.forEach { hiddenFloatingPanelIds.remove(it) }
+                    revealing
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "setFloatingPanelsHidden failed hidden=$hidden ids=$panelIds", e)
+                TboxRepository.addLog("ERROR", TAG, "setFloatingPanelsHidden: ${e.message}")
+                false
+            }
+        }
+    }
+
+    suspend fun toggleFloatingPanelsHidden(
+        panelIds: Set<String>,
+        currentlyShownIds: Set<String>,
+    ): Boolean {
+        if (panelIds.isEmpty()) {
+            return toggleHideOtherFloatingPanels(
+                originPanelId = "",
+                currentlyShownIds = currentlyShownIds,
+                excludeOriginPanel = false,
+            )
+        }
+        val toReveal = panelIds.filter { it in hiddenFloatingPanelIds }.toSet()
+        val toHide = panelIds.filter { it !in hiddenFloatingPanelIds }.toSet()
+        if (toHide.isNotEmpty()) {
+            setFloatingPanelsHidden(toHide, hidden = true, currentlyShownIds = currentlyShownIds)
+        }
+        return if (toReveal.isNotEmpty()) {
+            setFloatingPanelsHidden(toReveal, hidden = false, currentlyShownIds = currentlyShownIds)
+        } else {
+            false
+        }
+    }
+
+    private fun setFloatingPanelsHiddenInternal(panelIds: Set<String>, hidden: Boolean) {
+        if (!hidden) return
+        hiddenFloatingPanelIds.addAll(panelIds)
+        panelIds.forEach { panelId ->
+            try {
+                if (overlayViews.containsKey(panelId)) {
+                    closeOverlay(panelId, immediate = true)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "setFloatingPanelsHidden close failed id=$panelId", e)
             }
         }
     }

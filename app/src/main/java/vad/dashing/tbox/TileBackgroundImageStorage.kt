@@ -7,9 +7,12 @@ import java.io.File
  * Tile background images stored as paths relative to [Context.filesDir] (e.g. `tile_backgrounds/panel/0_light`).
  *
  * Resolution order when reading:
- * 1. Active theme cache `files/themes/{cacheKey}/tile_backgrounds/…` when main screen or floating panels are in the active theme
- * 2. Shared [DIR_NAME]/… — user overrides (written by [SettingsManager.setTileBackgroundImageFromUri])
+ * 1. Active theme cache `files/themes/{cacheKey}/tile_backgrounds/…` when [ThemeApplyTarget.TILE_BACKGROUNDS] is active
+ * 2. Shared [DIR_NAME]/… — used when no theme tile-background target (or theme file missing)
  * 3. Tile background color only (callers when this returns null)
+ *
+ * Writes: when the active theme includes tile backgrounds, [destinationFile] targets the theme cache;
+ * otherwise the shared folder.
  */
 object TileBackgroundImageStorage {
     const val DIR_NAME = "tile_backgrounds"
@@ -54,6 +57,23 @@ object TileBackgroundImageStorage {
 
     fun themeTargetsIncludeTileBackgrounds(lookup: LauncherAppIconPaths.Lookup): Boolean =
         ThemeApplyTarget.TILE_BACKGROUNDS in lookup.activeThemeApplyTargets
+
+    /**
+     * Absolute file for a new write of [relPath]. Prefers the active theme cache when tile
+     * backgrounds are in apply targets and [cacheKey] looks valid.
+     */
+    fun destinationFile(filesDir: File, relPath: String?, lookup: LauncherAppIconPaths.Lookup): File? {
+        val normalized = relPath?.trim()?.replace('\\', '/') ?: return null
+        if (!isAllowedStoredRelPath(normalized)) return null
+        val relInStorage = normalized.removePrefix("$DIR_NAME/")
+        if (themeTargetsIncludeTileBackgrounds(lookup)) {
+            val key = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(key)) {
+                return File(themeCacheDir(filesDir, key), relInStorage.replace('/', File.separatorChar))
+            }
+        }
+        return File(filesDir, normalized.replace('/', File.separatorChar))
+    }
 
     /** Shared folder only (export helpers, legacy). */
     fun resolveFile(context: Context, relPath: String?): File? =

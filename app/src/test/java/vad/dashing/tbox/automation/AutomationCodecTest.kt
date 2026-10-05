@@ -1,0 +1,741 @@
+package vad.dashing.tbox.automation
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.freeform.FreeformLaunchSide
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
+class AutomationCodecTest {
+    @Test
+    fun roundTrip_preservesTriggersConditionsAndNestedActions() {
+        val canEntry = AutomationCanCatalog.entries.first()
+        val triggers = listOf(
+            AutomationTrigger.SystemEvent(
+                id = "service-ready",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+            ),
+            AutomationTrigger.SystemEvent(
+                id = "main-open",
+                event = AutomationSystemEvent.MAIN_SCREEN_OPENED,
+            ),
+            AutomationTrigger.SystemEvent(
+                id = "menu-open",
+                event = AutomationSystemEvent.MENU_OPENED,
+            ),
+            AutomationTrigger.Interval(
+                id = "periodic",
+                intervalMillis = 30_000L,
+            ),
+            AutomationTrigger.NumericThreshold(
+                id = "rpm",
+                signal = AutomationSignalId.ENGINE_RPM,
+                source = AutomationSignalSource.HEAD_UNIT,
+                direction = AutomationThresholdDirection.ABOVE,
+                threshold = 1_000.0,
+                resetThreshold = 900.0,
+                rearmEnabled = false,
+                holdMillis = 2_500L,
+                startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+            ),
+            AutomationTrigger.Geofence(
+                id = "home",
+                queryText = "55.750000, 37.620000",
+                latitude = 55.75,
+                longitude = 37.62,
+                direction = AutomationGeofenceDirection.ENTER,
+                zoneRadiusMeters = 50.0,
+                rearmRadiusMeters = 60.0,
+                holdMillis = 3_000L,
+                startupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+            ),
+            AutomationTrigger.Time(
+                id = "morning",
+                at = AutomationTimeOfDay(7, 30),
+                weekdays = setOf(AutomationWeekday.MONDAY, AutomationWeekday.FRIDAY),
+                startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+            ),
+            AutomationTrigger.Solar(
+                id = "dusk",
+                event = AutomationSolarEvent.SUNSET,
+                offsetMinutes = 30,
+                offsetDirection = AutomationSolarOffsetDirection.AFTER,
+                weekdays = setOf(AutomationWeekday.SATURDAY),
+                startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+            ),
+        )
+        val definition = AutomationDefinition(
+            id = "automation-1",
+            name = "Проверка",
+            description = "Полная модель",
+            enabled = true,
+            triggers = triggers,
+            conditions = listOf(
+                AutomationCondition.TriggeredBy(setOf("rpm", "service-ready")),
+                AutomationCondition.Time(
+                    after = AutomationTimeOfDay(22, 0),
+                    before = AutomationTimeOfDay(6, 0),
+                    weekdays = setOf(AutomationWeekday.SATURDAY, AutomationWeekday.SUNDAY),
+                ),
+                AutomationCondition.Solar(
+                    after = AutomationSolarInstant(
+                        event = AutomationSolarEvent.SUNSET,
+                    ),
+                    before = AutomationSolarInstant(
+                        event = AutomationSolarEvent.SUNRISE,
+                    ),
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.IfThenElse(
+                    condition = AutomationCondition.Numeric(
+                        signal = AutomationSignalId.CAR_SPEED,
+                        source = AutomationSignalSource.TBOX,
+                        comparison = AutomationComparison.AT_MOST,
+                        expectedValue = 1.0,
+                    ),
+                    thenActions = listOf(
+                        AutomationAction.CanCommand(
+                            bus = canEntry.bus,
+                            propertyId = canEntry.propertyId,
+                            operation = canEntry.allowedOperations.first(),
+                            value = canEntry.defaultValue,
+                        ),
+                        AutomationAction.Delay(2_000L),
+                    ),
+                    elseActions = listOf(
+                        AutomationAction.OpenMainScreen(2),
+                    ),
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "Toast текст",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Сообщение на экране",
+                ),
+                AutomationAction.LaunchApplication(
+                    packageName = "example.navigation",
+                    launchMode = AppLauncherLaunchMode.FREEFORM,
+                    freeformSide = FreeformLaunchSide.RIGHT,
+                    freeformPercent = 40,
+                    freeformOverlayPage = 2,
+                    freeformOverlayCrop = true,
+                ),
+                AutomationAction.LaunchApplication(
+                    packageName = "ru.yandex.yandexmaps",
+                    launchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+                    virtualDisplayId = 5,
+                    virtualDisplayWidthPx = 1320,
+                    virtualDisplayHeightPx = 856,
+                ),
+            ),
+            runMode = AutomationRunMode.QUEUED,
+            maxRuns = 3,
+            conditionWaitMillis = 15_000L,
+        )
+        val document = AutomationDocument(automations = listOf(definition))
+
+        val decoded = AutomationCodec.decode(AutomationCodec.encode(document)).getOrThrow()
+
+        assertEquals(document, decoded)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+        val vd = decoded.automations.single().actions
+            .filterIsInstance<AutomationAction.LaunchApplication>()
+            .single { it.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY }
+        assertEquals(5, vd.virtualDisplayId)
+        assertEquals(1320, vd.virtualDisplayWidthPx)
+        assertEquals(856, vd.virtualDisplayHeightPx)
+    }
+
+    @Test
+    fun launchApplication_virtualDisplay_dropsLegacyLaunchPolicy() {
+        val json = """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"vd",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{
+                  "type":"launch_application",
+                  "packageName":"com.example",
+                  "launchMode":"virtual_display",
+                  "freeformSide":"right",
+                  "freeformPercent":50,
+                  "freeformOverlayPage":null,
+                  "freeformOverlayCrop":false,
+                  "virtualDisplayId":5,
+                  "virtualDisplayWidthPx":1320,
+                  "virtualDisplayHeightPx":856,
+                  "virtualDisplayLaunchPolicy":"new_instance"
+                }],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+        """.trimIndent()
+        val decoded = AutomationCodec.decode(json).getOrThrow()
+        val action = decoded.automations.single().actions.single()
+            as AutomationAction.LaunchApplication
+        assertEquals(5, action.virtualDisplayId)
+        assertEquals(1320, action.virtualDisplayWidthPx)
+        assertEquals(856, action.virtualDisplayHeightPx)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+        val encoded = org.json.JSONObject(AutomationCodec.encode(
+            AutomationDocument(automations = listOf(
+                decoded.automations.single().copy(actions = listOf(action))
+            ))
+        )).getJSONArray("automations").getJSONObject(0)
+            .getJSONArray("actions").getJSONObject(0)
+        assertTrue(!encoded.has("virtualDisplayLaunchPolicy"))
+    }
+
+    @Test
+    fun launchApplication_virtualDisplay_rejectsDisplay0() {
+        val action = AutomationAction.LaunchApplication(
+            packageName = "com.example",
+            launchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+            virtualDisplayId = 0,
+        )
+        val issues = AutomationValidator.validate(
+            AutomationDocument(
+                automations = listOf(
+                    AutomationDefinition(
+                        id = "a",
+                        name = "x",
+                        triggers = listOf(
+                            AutomationTrigger.SystemEvent(
+                                id = "t",
+                                event = AutomationSystemEvent.MENU_OPENED,
+                            ),
+                        ),
+                        actions = listOf(action),
+                    ),
+                ),
+            ),
+        )
+        assertTrue(issues.any { it.path.contains("virtualDisplayId") })
+    }
+
+    @Test
+    fun decode_rejectsMissingRequiredFields() {
+        val result = AutomationCodec.decode(
+            """{"formatVersion":1,"automations":[{"id":"a","enabled":true}]}""",
+        )
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decode_missingConditionWaitDefaultsToZero() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val decoded = result.getOrThrow()
+        assertEquals(0L, decoded.automations.single().conditionWaitMillis)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decode_missingRearmEnabledDefaultsToTrue() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"numeric_threshold",
+                  "id":"rpm",
+                  "signal":"engine_rpm",
+                  "source":"tbox",
+                  "direction":"above",
+                  "threshold":1000,
+                  "resetThreshold":900,
+                  "holdMillis":0,
+                  "startupBehavior":"initialize_only"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val trigger = result.getOrThrow().automations.single().triggers.single()
+            as AutomationTrigger.NumericThreshold
+        assertTrue(trigger.rearmEnabled)
+        assertTrue(AutomationValidator.validate(result.getOrThrow()).isEmpty())
+    }
+
+    @Test
+    fun decode_missingTimeStartupBehaviorDefaultsToInitializeOnly() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"time","id":"morning","at":"07:30","weekdays":[]}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        val trigger = result.getOrThrow().automations.single().triggers.single()
+            as AutomationTrigger.Time
+        assertEquals(AutomationStartupBehavior.INITIALIZE_ONLY, trigger.startupBehavior)
+        assertTrue(AutomationValidator.validate(result.getOrThrow()).isEmpty())
+    }
+
+    @Test
+    fun decode_rejectsUnknownActionType() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":false,
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{"type":"raw_can"}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decode_rejectsNonBooleanEnabled() {
+        val result = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"x",
+                "description":"",
+                "enabled":"yes",
+                "triggers":[{"type":"system_event","id":"t","event":"menu_opened"}],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        )
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decode_rejectsUnsupportedVersion() {
+        val result = AutomationCodec.decode("""{"formatVersion":99,"automations":[]}""")
+
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decodeImport_acceptsDocumentSingleDefinitionAndArray() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "import-1",
+            name = "Импорт",
+            actions = listOf(AutomationAction.Delay(0L)),
+        )
+        val documentJson = AutomationCodec.encodeDefinitionDocument(definition, pretty = true)
+        val singleJson = org.json.JSONObject(documentJson)
+            .getJSONArray("automations")
+            .getJSONObject(0)
+            .toString()
+
+        assertEquals(
+            listOf(definition),
+            AutomationCodec.decodeImport(documentJson).getOrThrow(),
+        )
+        assertEquals(
+            listOf(definition),
+            AutomationCodec.decodeImport(singleJson).getOrThrow(),
+        )
+        assertEquals(
+            listOf(definition, definition),
+            AutomationCodec.decodeImport("[$singleJson,$singleJson]").getOrThrow(),
+        )
+        assertTrue(AutomationCodec.decodeImport("").isFailure)
+        assertTrue(AutomationCodec.decodeImport("""{"formatVersion":1,"automations":[]}""").isFailure)
+    }
+
+    @Test
+    fun roundTrip_preservesWifiActionsAndSsidTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "wifi-1",
+            name = "Wi-Fi",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.WIFI_ASSOCIATED,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "off",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_CONNECT,
+                    stringValue = "home",
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_DISCONNECT),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_MODEM_SET_DATA,
+                    boolValue = false,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_MODEM_REBOOT),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesAdbTcpAndShellBuiltins() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "adb-1",
+            name = "ADB",
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "pm grant vad.dashing.tbox android.permission.WRITE_SECURE_SETTINGS",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "com.example.app",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = false,
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesHuInternetStatusTriggerAndCondition() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "hu-net-1",
+            name = "HU internet",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.HU_INTERNET_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "online",
+                ),
+            ),
+            conditions = listOf(
+                AutomationCondition.State(
+                    signal = AutomationSignalId.HU_INTERNET_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "offline",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Delay(1_000L),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesModemStateTriggersAndConditions() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "modem-1",
+            name = "Modem states",
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "1",
+                    signal = AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "unreachable",
+                ),
+                AutomationTrigger.StateEquals(
+                    id = "2",
+                    signal = AutomationSignalId.MODEM_MOBILE_DATA,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "off",
+                ),
+            ),
+            conditions = listOf(
+                AutomationCondition.State(
+                    signal = AutomationSignalId.MODEM_NET_TYPE,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "4g",
+                ),
+                AutomationCondition.State(
+                    signal = AutomationSignalId.MODEM_SIM_STATUS,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "ready",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_MODEM_SET_DATA,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_MODEM_REBOOT),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesWidgetPressedTriggerAndBuiltin() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "widget-1",
+            name = "Widget",
+            triggers = listOf(
+                AutomationTrigger.WidgetPressed(
+                    id = "1",
+                    triggerId = "button1",
+                ),
+                AutomationTrigger.WidgetPressed(
+                    id = "2",
+                    triggerId = "button1",
+                    pressKind = AutomationWidgetPressKind.DOUBLE,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = "button1",
+                    boolValue = true,
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decode_widgetPressedWithoutPressKind_defaultsToSingle() {
+        val json = """
+            {
+              "formatVersion": 1,
+              "automations": [{
+                "id": "legacy-widget",
+                "name": "Legacy",
+                "description": "",
+                "enabled": true,
+                "triggers": [{
+                  "type": "widget_pressed",
+                  "id": "1",
+                  "triggerId": "button1"
+                }],
+                "conditions": [],
+                "actions": [],
+                "runMode": "single",
+                "maxRuns": 1
+              }]
+            }
+        """.trimIndent()
+        val decoded = AutomationCodec.decode(json).getOrThrow()
+        val trigger = decoded.automations.single().triggers.single() as AutomationTrigger.WidgetPressed
+        assertEquals("button1", trigger.triggerId)
+        assertEquals(AutomationWidgetPressKind.SINGLE, trigger.pressKind)
+    }
+
+    @Test
+    fun roundTrip_preservesHardKeyTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "hardkey-1",
+            name = "HardKey",
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 115),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+                AutomationTrigger.HardKey(
+                    id = "3",
+                    keyCode = 210,
+                    keyStatus = AutomationHardKeyStatus.SINGLE,
+                ),
+                AutomationTrigger.HardKey(
+                    id = "4",
+                    keyCode = 211,
+                    keyStatus = AutomationHardKeyStatus.DOUBLE,
+                ),
+                AutomationTrigger.HardKey(
+                    id = "5",
+                    keyCode = 212,
+                    keyStatus = AutomationHardKeyStatus.LONG,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "нажато",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decodeHardKeyTrigger_unknownStatus_isRejected() {
+        val raw = """
+            {"formatVersion":1,"automations":[{"id":"a","name":"A","description":"","enabled":false,
+            "triggers":[{"type":"hard_key","id":"1","keyCode":115,"keyStatus":"held"}],
+            "actions":[],"runMode":"single","maxRuns":1,"conditionWaitMillis":0}]}
+        """.trimIndent()
+        assertTrue(AutomationCodec.decode(raw).isFailure)
+    }
+
+    @Test
+    fun roundTrip_preservesEspBleBtnTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "ble-1",
+            name = "Shelly",
+            triggers = listOf(
+                AutomationTrigger.EspBleBtn(
+                    id = "1",
+                    mac = "aa:bb:cc:dd:ee:01",
+                    btn = 1,
+                    act = AutomationEspBleBtnAction.PRESS,
+                ),
+                AutomationTrigger.EspBleBtn(
+                    id = "2",
+                    mac = "aa:bb:cc:dd:ee:02",
+                    btn = 3,
+                    act = AutomationEspBleBtnAction.DOUBLE,
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "ble",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun roundTrip_preservesEspBleBatteryMacOnNumericTrigger() {
+        val definition = AutomationDefinition.newDraft().copy(
+            id = "bat-1",
+            name = "Battery",
+            triggers = listOf(
+                AutomationTrigger.NumericThreshold(
+                    id = "1",
+                    signal = AutomationSignalId.ESP_BLE_BATTERY,
+                    source = AutomationSignalSource.APP,
+                    direction = AutomationThresholdDirection.BELOW,
+                    threshold = 20.0,
+                    resetThreshold = 30.0,
+                    mac = "aa:bb:cc:dd:ee:ff",
+                ),
+            ),
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_TOAST,
+                    stringValue = "low",
+                ),
+            ),
+        )
+        val decoded = AutomationCodec.decode(
+            AutomationCodec.encode(AutomationDocument(automations = listOf(definition))),
+        ).getOrThrow()
+        assertEquals(definition, decoded.automations.single())
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
+    fun decodeActionsPayload_malformedJson_isFailureNotThrow() {
+        val result = AutomationCodec.decodeActionsPayload("not-json{")
+        assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun decodeActionsPayload_validDelay_roundTrips() {
+        val result = AutomationCodec.decodeActionsPayload(
+            """{"actions":[{"type":"delay","durationMillis":250}]}""",
+        )
+        assertTrue(result.isSuccess)
+        val delay = result.getOrThrow().single() as AutomationAction.Delay
+        assertEquals(250L, delay.durationMillis)
+    }
+}

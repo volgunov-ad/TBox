@@ -30,7 +30,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,7 +62,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_widget)
@@ -85,7 +84,7 @@ fun DashboardFrontLeftSeatHeatVentWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -101,7 +100,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_widget)
@@ -123,7 +122,7 @@ fun DashboardFrontRightSeatHeatVentWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -140,7 +139,7 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_left_seat_heat_vent_single_widget)
@@ -162,7 +161,7 @@ fun DashboardFrontLeftSeatHeatVentSingleWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -179,7 +178,7 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.frontRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_front_right_seat_heat_vent_single_widget)
@@ -201,7 +200,7 @@ fun DashboardFrontRightSeatHeatVentSingleWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -216,7 +215,7 @@ fun DashboardRearLeftSeatHeatWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.rearLeftSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_left_seat_heat_widget)
@@ -238,7 +237,7 @@ fun DashboardRearLeftSeatHeatWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -253,7 +252,7 @@ fun DashboardRearRightSeatHeatWidgetItem(
     enableInnerInteractions: Boolean = true,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val mode by UniversalCanRepository.rearRightSeatModeState.collectAsStateWithLifecycle()
     val defaultTitle = stringResource(R.string.data_title_rear_right_seat_heat_widget)
@@ -275,7 +274,7 @@ fun DashboardRearRightSeatHeatWidgetItem(
         showTitle = showTitle,
         titleOverride = titleOverride,
         defaultTitle = defaultTitle,
-        scale = scale
+        iconScale = iconScale
     )
 }
 
@@ -298,7 +297,7 @@ private fun SeatHeatVentWidget(
     showTitle: Boolean,
     titleOverride: String,
     defaultTitle: String,
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val context = LocalContext.current
     var seatActionBlockedUntil by remember { mutableLongStateOf(0L) }
@@ -348,7 +347,7 @@ private fun SeatHeatVentWidget(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             Box(
@@ -380,7 +379,7 @@ private fun SeatHeatVentWidget(
                                 onLongClick = onLongClick,
                                 onClick = onHeatClick,
                                 onDoubleClick = onDouble,
-                                scale = scale
+                                iconScale = iconScale
                             )
                         }
                     }
@@ -435,7 +434,7 @@ private fun SeatHeatVentWidget(
                                     optimisticVariant = next
                                     onSelectedVariantChange(next)
                                 },
-                                scale = scale
+                                iconScale = iconScale
                             )
                         }
                     }
@@ -463,7 +462,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                         SeatActionButton(
                             modifier = Modifier
@@ -482,7 +481,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                     }
                 } else {
@@ -507,7 +506,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                         SeatActionButton(
                             modifier = Modifier
@@ -526,7 +525,7 @@ private fun SeatHeatVentWidget(
                             } else {
                                 {}
                             },
-                            scale = scale
+                            iconScale = iconScale
                         )
                     }
                 }
@@ -550,7 +549,7 @@ private fun SeatActionButton(
     horizontalSwipePointerKey: Any? = null,
     horizontalSwipeThresholdPx: Float? = null,
     onHorizontalSwipeConfirmed: () -> Unit = {},
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val controls = LocalWidgetControlAppearance.current
     val useDefaults = LocalWidgetControlUsesDefaults.current
@@ -590,100 +589,100 @@ private fun SeatActionButton(
                 if (side in listOf(SeatSide.FrontLeft, SeatSide.BackLeft)) { 1f } else { -1f } },
     ) {
         Image(
-            painter = painterResource(id = R.drawable.ic_widget_seat),
+            painter = customizableUiPainter(id = R.drawable.ic_widget_seat),
             contentDescription = null,
             modifier = Modifier
                 .fillMaxSize()
-                .scale(scale),
-            colorFilter = ColorFilter.tint(iconColor),
+                .scale(iconScale),
+            colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat, iconColor),
             contentScale = ContentScale.Fit,
         )
         if (side == SeatSide.BackLeft) {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_back_left),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_back_left),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_back_left, iconColor),
                 contentScale = ContentScale.Fit,
             )
         }
         else if (side == SeatSide.BackRight) {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_back_right),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_back_right),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_back_right, iconColor),
                 contentScale = ContentScale.Fit,
             )
         }
 
         if (modeType == "heat") {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_1),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_1),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) heatOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_1, if (level in listOf(1, 2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_2),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_2),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) heatOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_2, if (level in listOf(2, 3)) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_heat_3),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_heat_3),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) heatOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_heat_3, if (level == 3) heatOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         } else if (modeType == "vent") {
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_0),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_0),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_0, if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_1),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_1),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(1, 2, 3)) ventOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_1, if (level in listOf(1, 2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_2),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_2),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level in listOf(2, 3)) ventOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_2, if (level in listOf(2, 3)) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
             Image(
-                painter = painterResource(id = R.drawable.ic_widget_seat_vent_3),
+                painter = customizableUiPainter(id = R.drawable.ic_widget_seat_vent_3),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(scale),
-                colorFilter = ColorFilter.tint(if (level == 3) ventOn else iconColor),
+                    .scale(iconScale),
+                colorFilter = uiIconColorFilter(R.drawable.ic_widget_seat_vent_3, if (level == 3) ventOn else iconColor),
                 contentScale = ContentScale.Fit,
             )
         }

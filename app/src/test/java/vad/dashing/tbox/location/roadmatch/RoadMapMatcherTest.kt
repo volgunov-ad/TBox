@@ -486,6 +486,118 @@ class RoadMapMatcherTest {
     }
 
     @Test
+    fun withoutGnssTrustPrefersFartherMotorwayOverNearerService() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~10 m north of motorway (0.00009° ≈ 10 m).
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        // ~9 m from motorway, ~1 m from service.
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 0f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustPrefersNearerServiceOverFartherMotorway() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75009, 37.62, 55.75009),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75008, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = null,
+            previousRegionId = null,
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(2L, best!!.edge.id)
+    }
+
+    @Test
+    fun withGnssTrustStillKeepsStickyMotorwayWhenServiceOnlySlightlyNearer() {
+        val motorway = RoadEdge(
+            id = 1L,
+            highwayClass = "motorway",
+            lengthM = 500.0,
+            fromNode = 0,
+            toNode = 1,
+            coords = doubleArrayOf(37.60, 55.75, 37.62, 55.75),
+        )
+        // ~4.4 m north — pose almost midway, service only ~1–2 m nearer.
+        val service = RoadEdge(
+            id = 2L,
+            highwayClass = "service",
+            lengthM = 500.0,
+            fromNode = 10,
+            toNode = 11,
+            coords = doubleArrayOf(37.60, 55.75004, 37.62, 55.75004),
+        )
+        val graph = RoadGraph(
+            regionId = "parallel",
+            graphVersion = 1,
+            bbox = doubleArrayOf(37.59, 55.74, 37.63, 55.76),
+            edges = listOf(motorway, service),
+        )
+        val pose = RoadMatchPose(lat = 55.75003, lon = 37.61, bearingDeg = 90f)
+        val best = RoadMapMatcher.pickBest(
+            pose,
+            listOf(graph),
+            previousEdgeId = 1L,
+            previousRegionId = "parallel",
+            previousHighwayClass = "motorway",
+            gnssPositionTrust = 1f,
+        )
+        assertNotNull(best)
+        assertEquals(1L, best!!.edge.id)
+    }
+
+    @Test
     fun spatialEndpointsConnectAdjacentEdges() {
         val a = RoadEdge(
             id = 1L,
@@ -996,6 +1108,28 @@ class RoadMapMatcherTest {
         assertTrue(
             RoadMapMatcher.smallestAngleDeg(corrected.bearingDeg, cand.edgeAzimuthDeg) < residual,
         )
+    }
+
+    @Test
+    fun softCorrectFreeTurnsCatchUpUsesLargerBearingStep() {
+        val graph = horizontalEdge()
+        val pose = RoadMatchPose(lat = 55.75, lon = 37.61, bearingDeg = 50f)
+        val cand = RoadMapMatcher.pickBest(pose, listOf(graph), null, null)!!
+        val ordinary = RoadMapMatcher.softCorrect(
+            pose, cand, catchUpHeading = true, lateralSnap = false,
+        )
+        val free = RoadMapMatcher.softCorrect(
+            pose,
+            cand,
+            catchUpHeading = true,
+            lateralSnap = false,
+            maxBearingStepCatchupDeg = RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG,
+        )
+        val ordinaryPull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, ordinary.bearingDeg)
+        val freePull = RoadMapMatcher.smallestAngleDeg(pose.bearingDeg, free.bearingDeg)
+        assertEquals(RoadMapMatcher.MAX_BEARING_STEP_EDGE_CATCHUP_DEG, ordinaryPull, 0.05f)
+        assertEquals(RoadMatchFreeTurnsMath.MAX_BEARING_STEP_CATCHUP_DEG, freePull, 0.05f)
+        assertTrue(freePull > ordinaryPull)
     }
 
     @Test
@@ -2581,6 +2715,44 @@ class RoadMapMatcherTest {
         assertEquals(3.0 + RoadMapMatcher.TURN_SIGNAL_STRAIGHT_PENALTY, byId.getValue(2L).score, 1e-6)
         assertEquals(8.0 + RoadMapMatcher.TURN_SIGNAL_TOWARD_BONUS, byId.getValue(3L).score, 1e-6)
         assertEquals(1L, biased.first().edge.id)
+    }
+
+    @Test
+    fun applyTurnSignalForkBiasUsesTunedBonusAndAngles() {
+        fun cand(id: Long, azimuth: Float, score: Double) =
+            RoadMapMatcher.Candidate(
+                edge = RoadEdge(id, "primary", 80.0, id.toInt(), id.toInt() + 1, doubleArrayOf(0.0, 0.0, 1.0, 0.0)),
+                regionId = "r",
+                crossTrackM = 0.0,
+                alongTrackM = 10.0,
+                projLat = 0.0,
+                projLon = 0.0,
+                edgeAzimuthDeg = azimuth,
+                score = score,
+                connectedFromPrevious = true,
+            )
+        val approach = cand(1L, 90f, 2.0)
+        val through = cand(2L, 90f, 3.0)
+        val turn = cand(3L, 110f, 8.0) // only 20° — needs lowered towardMin
+        val forkBias = TurnSignalForkBiasTuning(
+            towardMinDeg = 15f,
+            straightDeg = 12f,
+            towardBonus = 12.0,
+            straightPenalty = 20.0,
+        )
+        val biased = RoadMapMatcher.applyTurnSignalForkBias(
+            ranked = listOf(approach, through, turn),
+            travelBearingDeg = 90f,
+            hint = RoadMapMatcher.TurnHint.Right,
+            previousEdgeId = 1L,
+            previousRegionId = "r",
+            turnIntent = true,
+            forkBias = forkBias,
+        )
+        val byId = biased.associateBy { it.edge.id }
+        assertEquals(2.0, byId.getValue(1L).score, 1e-6)
+        assertEquals(3.0 + 20.0, byId.getValue(2L).score, 1e-6)
+        assertEquals(8.0 - 12.0, byId.getValue(3L).score, 1e-6)
     }
 
     @Test

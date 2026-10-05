@@ -46,6 +46,7 @@ import vad.dashing.tbox.resolvePanelBackgroundImageRelPath
 import vad.dashing.tbox.FloatingDashboardViewModelFactory
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.MainScreenPanelInterestIds
+import vad.dashing.tbox.MainScreenPagePanelMountPlan
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.PanelCollapseStates
@@ -54,12 +55,25 @@ import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
@@ -72,8 +86,12 @@ import vad.dashing.tbox.maybeSnapToGrid
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
 import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
+import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.collapseEdgeOrNone
+import vad.dashing.tbox.collapsedPanelInteractionBounds
+import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.collapsedPanelBounds
 import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
@@ -147,7 +165,7 @@ fun MainScreenDashboardPanel(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val minPanelPx = with(density) { 50.dp.toPx() }
+    val minPanelPx = with(density) { 25.dp.toPx() }
     val mainScreenPanelsLayoutSnapDp by
         settingsViewModel.mainScreenPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val mainScreenPanelsLayoutSnapEnabled by
@@ -182,6 +200,12 @@ fun MainScreenDashboardPanel(
     }
     val requestedMediaPlayers = remember(widgetConfigs) {
         collectMediaPlayersFromWidgetConfigs(widgetConfigs)
+    }
+    var heavySubscriptionsEnabled by remember(panel.id) { mutableStateOf(false) }
+    LaunchedEffect(panel.id) {
+        heavySubscriptionsEnabled = false
+        delay(MainScreenPagePanelMountPlan.HEAVY_SUBSCRIPTIONS_DELAY_MS)
+        heavySubscriptionsEnabled = true
     }
 
     val tboxConnected by tboxViewModel.tboxConnected.collectAsStateWithLifecycle()
@@ -290,7 +314,8 @@ fun MainScreenDashboardPanel(
         )
         dashboardViewModel.dashboardManager.updateWidgets(widgets)
     }
-    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context) {
+    LaunchedEffect(mediaSourceId, requestedMediaPlayers, context, heavySubscriptionsEnabled) {
+        if (!heavySubscriptionsEnabled) return@LaunchedEffect
         SharedMediaControlService.updateSourceSelection(
             context = context,
             sourceId = mediaSourceId,
@@ -356,14 +381,31 @@ fun MainScreenDashboardPanel(
         width = layoutPx.width.roundToInt(),
         height = layoutPx.height.roundToInt(),
     )
-    val collapsedBounds = collapsedPanelBounds(
+    val stripThicknessPx = with(density) {
+        normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
+    }
+    val touchZoneThicknessPx = with(density) {
+        normalizePanelCollapseTouchZoneThicknessDp(
+            panel.collapseTouchZoneThicknessDp,
+            panel.collapseStripThicknessDp,
+        ).dp.roundToPx()
+    }
+    val collapsedVisualBounds = collapsedPanelBounds(
         expanded = expandedBounds,
         edge = collapseEdge,
-        thicknessPx = with(density) {
-            normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp).dp.roundToPx()
-        },
+        thicknessPx = stripThicknessPx,
     )
-    val displayedBounds = lerpPanelBounds(expandedBounds, collapsedBounds, collapseProgress)
+    val collapsedInteractionBounds = collapsedPanelInteractionBounds(
+        expanded = expandedBounds,
+        edge = collapseEdge,
+        stripThicknessPx = stripThicknessPx,
+        touchZoneThicknessPx = touchZoneThicknessPx,
+    )
+    val displayedBounds = if (collapseProgress >= 1f) {
+        collapsedInteractionBounds
+    } else {
+        lerpPanelBounds(expandedBounds, collapsedVisualBounds, collapseProgress)
+    }
     val resizeHandleWidthDp = with(density) { resizeHandleOffsetForDimension(layoutPx.width).toDp() }
     val resizeHandleHeightDp = with(density) { resizeHandleOffsetForDimension(layoutPx.height).toDp() }
 
@@ -468,18 +510,28 @@ fun MainScreenDashboardPanel(
                 .fillMaxSize()
                 .clip(RoundedCornerShape(panelShapeDp))
         ) {
-            DashboardPanelBackgroundUnderlay(
-                relPath = panelBgImagePath,
-                backgroundColor = panelBgColor,
-                shapeDp = panelShapeDp,
-                settingsViewModel = settingsViewModel,
-            )
+            // Collapsed strip must not show panel/tile background through it (or beyond it
+            // when the touch zone is thicker than the strip).
+            if (!effectiveCollapsed) {
+                DashboardPanelBackgroundUnderlay(
+                    relPath = panelBgImagePath,
+                    backgroundColor = panelBgColor,
+                    shapeDp = panelShapeDp,
+                    settingsViewModel = settingsViewModel,
+                )
+            }
             CollapsiblePanelFrame(
                 edge = collapseEdge,
                 collapsed = effectiveCollapsed,
                 stripThicknessDp = normalizePanelCollapseStripThicknessDp(panel.collapseStripThicknessDp),
+                touchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                    panel.collapseTouchZoneThicknessDp,
+                    panel.collapseStripThicknessDp,
+                ),
                 stripColor = Color(panel.resolveStripColor(currentTheme)),
                 stripExpandedColor = Color(panel.resolveStripExpandedColor(currentTheme)),
+                collapseOnStripTap = panel.collapseOnStripTap,
+                collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
                 isEditMode = isEditMode,
                 onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
                 modifier = Modifier.fillMaxSize(),
@@ -522,6 +574,26 @@ fun MainScreenDashboardPanel(
                     sendToggleWiperMaintenance(context)
                 } else if (cfg?.dataKey == PARKING_RADAR_WIDGET_DATA_KEY) {
                     sendToggleParkingRadar(context)
+                } else if (cfg?.dataKey == REAR_FOG_WIDGET_DATA_KEY) {
+                    sendToggleRearFog(context)
+                } else if (cfg?.dataKey == AVH_WIDGET_DATA_KEY) {
+                    sendToggleAvh(context)
+                } else if (cfg?.dataKey == HDC_WIDGET_DATA_KEY) {
+                    sendToggleHdc(context)
+                } else if (cfg?.dataKey == ESP_OFF_WIDGET_DATA_KEY) {
+                    sendToggleEspOff(context)
+                } else if (cfg?.dataKey == LDW_WIDGET_DATA_KEY) {
+                    sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LDW)
+                } else if (cfg?.dataKey == LKA_WIDGET_DATA_KEY) {
+                    sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LKA)
+                } else if (cfg?.dataKey == TJA_ICA_WIDGET_DATA_KEY) {
+                    sendToggleTjaIca(context)
+                } else if (cfg?.dataKey == HMA_WIDGET_DATA_KEY) {
+                    sendToggleHma(context)
+                } else if (cfg?.dataKey == HIGH_BEAM_WIDGET_DATA_KEY) {
+                    sendToggleHma(context)
+                } else if (cfg?.dataKey == HVAC_AC_MAX_WIDGET_DATA_KEY) {
+                    sendToggleHvacAcMax(context)
                 } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
                     sendToggleFrontWindscreenHeat(context)
                 } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
@@ -560,11 +632,20 @@ fun MainScreenDashboardPanel(
                         propertyId = nextMode.propertyId,
                         value = nextMode.propertyValue
                     )
+                } else if (cfg?.dataKey == HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY) {
+                    val next = HeadlightMode.nextInCycle(UniversalCanRepository.headlightModeRaw.value)
+                    sendSetMbCanProperty(
+                        context = context,
+                        propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+                        value = next.rawValue,
+                    )
                 } else if (
                     cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                     cfg.launcherAppPackage.isNotBlank()
                 ) {
                     launchAppFromWidget(context, cfg, settingsViewModel)
+                } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                    openAppListDialog(context)
                 } else if (
                     panel.clickAction &&
                     cfg != null &&
@@ -629,6 +710,7 @@ fun MainScreenDashboardPanel(
             gridSpacingDp = panel.gridSpacingDp.dp,
             externalWidgetHost = appWidgetHost,
             onPanelTileTap = notifyPanelTileTap,
+            heavySubscriptionsEnabled = heavySubscriptionsEnabled,
         )
         }
         if (isEditMode) {

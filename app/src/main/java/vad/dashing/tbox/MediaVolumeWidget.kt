@@ -6,6 +6,8 @@ const val ENGINE_RPM_WIDGET_DATA_KEY = "engineRPM"
 const val ENGINE_TEMPERATURE_WIDGET_DATA_KEY = "engineTemperature"
 const val CAR_SPEED_WIDGET_DATA_KEY = "carSpeed"
 const val GEAR_BOX_MODE_WIDGET_DATA_KEY = "gearBoxMode"
+const val GEAR_BOX_CURRENT_GEAR_WIDGET_DATA_KEY = "gearBoxCurrentGear"
+const val GEAR_BOX_PREPARED_GEAR_WIDGET_DATA_KEY = "gearBoxPreparedGear"
 const val ODOMETER_WIDGET_DATA_KEY = "odometer"
 const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
 const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
@@ -20,6 +22,28 @@ const val WHEEL2_TEMPERATURE_WIDGET_DATA_KEY = "wheel2Temperature"
 const val WHEEL3_TEMPERATURE_WIDGET_DATA_KEY = "wheel3Temperature"
 const val WHEEL4_TEMPERATURE_WIDGET_DATA_KEY = "wheel4Temperature"
 const val CURRENT_FUEL_CONSUMPTION_WIDGET_DATA_KEY = "currentFuelConsumption"
+const val AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY = "averageFuelConsumption"
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: cluster average via mbCAN/VHAL. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL = 0
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: current (or last finished) trip. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP = 1
+
+/** [FloatingDashboardWidgetConfig.avgFuelConsumptionSource]: live persistent (daily) trip. */
+const val AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP = 2
+
+fun normalizeAvgFuelConsumptionSource(raw: Int): Int =
+    when (raw) {
+        AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP -> AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
+        AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP -> AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+        else -> AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+    }
+
+fun isAverageFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+}
+
 const val DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY = "distanceToNextMaintenance"
 const val DISTANCE_TO_FUEL_EMPTY_WIDGET_DATA_KEY = "distanceToFuelEmpty"
 const val INSIDE_AIR_QUALITY_WIDGET_DATA_KEY = "insideAirQuality"
@@ -29,14 +53,23 @@ const val STEER_ANGLE_WIDGET_DATA_KEY = "steerAngle"
 const val STEER_SPEED_WIDGET_DATA_KEY = "steerSpeed"
 const val WIPER_MAINTENANCE_WIDGET_DATA_KEY = "wiperMaintenanceWidget"
 const val PARKING_RADAR_WIDGET_DATA_KEY = "parkingRadarWidget"
+const val AVH_WIDGET_DATA_KEY = "avhWidget"
+const val HDC_WIDGET_DATA_KEY = "hdcWidget"
+const val ESP_OFF_WIDGET_DATA_KEY = "espOffWidget"
+const val LDW_WIDGET_DATA_KEY = "ldwWidget"
+const val LKA_WIDGET_DATA_KEY = "lkaWidget"
+const val TJA_ICA_WIDGET_DATA_KEY = "tjaIcaWidget"
+const val HMA_WIDGET_DATA_KEY = "hmaWidget"
+const val HIGH_BEAM_WIDGET_DATA_KEY = "highBeamWidget"
+const val EPB_PARK_LAMP_WIDGET_DATA_KEY = "epbParkLampWidget"
+const val ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY = "engineOilPressureWidget"
+const val BRAKE_FLUID_WIDGET_DATA_KEY = "brakeFluidWidget"
+const val FRM_DX_TAR_OBJ_WIDGET_DATA_KEY = "frmDxTarObj"
+const val HVAC_AC_MAX_WIDGET_DATA_KEY = "hvacAcMaxWidget"
 
 fun isMediaVolumeWidgetDataKey(dataKey: String): Boolean {
     return dataKey == MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY ||
         dataKey == MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY
-}
-
-fun FloatingDashboardWidgetConfig.isMbCanVhalMediaVolumeEnabled(): Boolean {
-    return isMediaVolumeWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun isEngineRpmWidgetDataKey(dataKey: String): Boolean {
@@ -69,6 +102,22 @@ fun isGearBoxModeWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxModeEnabled(): Boolean {
     return isGearBoxModeWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isGearBoxCurrentGearWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == GEAR_BOX_CURRENT_GEAR_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxCurrentGearEnabled(): Boolean {
+    return isGearBoxCurrentGearWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun isGearBoxPreparedGearWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == GEAR_BOX_PREPARED_GEAR_WIDGET_DATA_KEY
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxPreparedGearEnabled(): Boolean {
+    return isGearBoxPreparedGearWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
 fun isOdometerWidgetDataKey(dataKey: String): Boolean {
@@ -118,6 +167,12 @@ fun isCurrentFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalCurrentFuelConsumptionEnabled(): Boolean {
     return isCurrentFuelConsumptionWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+}
+
+fun FloatingDashboardWidgetConfig.isMbCanVhalAverageFuelConsumptionEnabled(): Boolean {
+    return isAverageFuelConsumptionWidgetDataKey(dataKey) &&
+        normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource) ==
+        AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
 }
 
 fun isDistanceToNextMaintenanceWidgetDataKey(dataKey: String): Boolean {

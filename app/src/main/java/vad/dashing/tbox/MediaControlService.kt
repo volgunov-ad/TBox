@@ -10,6 +10,8 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.provider.Settings
@@ -73,6 +75,9 @@ private const val LAUNCH_PLAYER_VERIFY_DELAY_MS = 4000L
 private const val LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS = 7000L
 /** Poll cadence for early play/session detection after external player launch. */
 private const val PLAYER_LAUNCH_STATE_POLL_MS = 500L
+/** Keep an automation media source subscribed until cold-start and late play retries can see the session. */
+internal const val MEDIA_AUTOMATION_SOURCE_HOLD_MS =
+    LAUNCH_PLAYER_MANUAL_LATE_PLAY_RETRY_DELAY_MS + PLAYER_LAUNCH_STATE_POLL_MS
 /** One extra HTTP attempt after a failed album-art URI decode. */
 private const val ALBUM_ART_URI_MAX_RETRY_ATTEMPTS = 1
 private const val ALBUM_ART_URI_RETRY_DELAY_MS = 1_000L
@@ -217,7 +222,11 @@ object SharedMediaControlService {
     private var notificationAccessGranted: Boolean = false
 
     private val sourceSelections = mutableMapOf<String, Set<String>>()
+    private val sourceHolds = mutableMapOf<String, MediaSourceSelectionHold>()
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var requestedPackages: Set<String> = emptySet()
+    /** Listen to every active session, not only packages pinned by a music widget. */
+    private var followActiveSessions: Boolean = false
 
     private val controllers = mutableMapOf<String, MediaController>()
     private val controllerCallbacks = mutableMapOf<String, MediaController.Callback>()
@@ -237,9 +246,21 @@ object SharedMediaControlService {
     private val activeSessionsListener = MediaSessionManager.OnActiveSessionsChangedListener {
             activeControllers ->
         synchronized(this) {
-            if (requestedPackages.isEmpty()) return@OnActiveSessionsChangedListener
+            if (!shouldMonitorLocked()) return@OnActiveSessionsChangedListener
             syncControllersLocked(activeControllers.orEmpty())
             publishPlayerStatesLocked()
+        }
+    }
+
+    /**
+     * Keep MediaSession callbacks for whatever is playing, including when no music widget
+     * is on screen. Album art is still loaded only for packages a widget asked for.
+     */
+    fun startActiveSessionMonitor(context: Context) {
+        synchronized(this) {
+            initializeLocked(context)
+            followActiveSessions = true
+            refreshRequestedPackagesLocked()
         }
     }
 
@@ -264,9 +285,48 @@ object SharedMediaControlService {
     fun clearSourceSelection(sourceId: String) {
         if (sourceId.isBlank()) return
         synchronized(this) {
+            sourceHolds.remove(sourceId)?.cancel()
             sourceSelections.remove(sourceId)
             refreshRequestedPackagesLocked()
         }
+    }
+
+    /**
+     * Release [sourceId] after [holdMs], unless a newer hold or [clearSourceSelection] cancelled it.
+     * Used so play retries after a cold player launch still see the requested package.
+     */
+    internal fun scheduleSourceSelectionRelease(sourceId: String, holdMs: Long) {
+        if (sourceId.isBlank() || holdMs <= 0L) return
+        val generation: Int
+        synchronized(this) {
+            generation = sourceHoldLocked(sourceId).beginHold(SystemClock.elapsedRealtime(), holdMs)
+        }
+        launchPlayerVerifyScope.launch {
+            delay(holdMs)
+            synchronized(this@SharedMediaControlService) {
+                val hold = sourceHolds[sourceId] ?: return@synchronized
+                if (!hold.consumeRelease(generation)) return@synchronized
+                sourceHolds.remove(sourceId)
+                sourceSelections.remove(sourceId)
+                refreshRequestedPackagesLocked()
+            }
+        }
+    }
+
+    /** Immediate clear unless a play/pause hold from [scheduleSourceSelectionRelease] is still active. */
+    internal fun clearSourceSelectionIfNotHeld(sourceId: String) {
+        if (sourceId.isBlank()) return
+        synchronized(this) {
+            val hold = sourceHolds[sourceId]
+            if (hold != null && hold.isHeld(SystemClock.elapsedRealtime())) return
+            sourceHolds.remove(sourceId)?.cancel()
+            sourceSelections.remove(sourceId)
+            refreshRequestedPackagesLocked()
+        }
+    }
+
+    private fun sourceHoldLocked(sourceId: String): MediaSourceSelectionHold {
+        return sourceHolds.getOrPut(sourceId) { MediaSourceSelectionHold() }
     }
 
     fun resolveWidgetState(
@@ -575,7 +635,7 @@ object SharedMediaControlService {
             .toSet()
         updateNotificationAccessLocked()
 
-        if (requestedPackages.isEmpty()) {
+        if (!shouldMonitorLocked()) {
             stopMonitoringLocked()
             return
         }
@@ -595,7 +655,7 @@ object SharedMediaControlService {
         val manager = mediaSessionManager ?: return
         val component = listenerComponent ?: return
         try {
-            manager.addOnActiveSessionsChangedListener(activeSessionsListener, component)
+            manager.addOnActiveSessionsChangedListener(activeSessionsListener, component, mainHandler)
             activeSessionsListenerRegistered = true
         } catch (_: SecurityException) {
             activeSessionsListenerRegistered = false
@@ -628,7 +688,7 @@ object SharedMediaControlService {
             .mapNotNull { controller ->
                 val canonical = canonicalMediaPlayerPackage(controller.packageName)
                     ?: return@mapNotNull null
-                if (canonical !in requestedPackages) {
+                if (!followActiveSessions && canonical !in requestedPackages) {
                     null
                 } else {
                     canonical to controller
@@ -697,7 +757,7 @@ object SharedMediaControlService {
                 }
             }
         }
-        controller.registerCallback(callback)
+        controller.registerCallback(callback, mainHandler)
         controllers[packageName] = controller
         controllerCallbacks[packageName] = callback
     }
@@ -720,7 +780,7 @@ object SharedMediaControlService {
     ): MediaController? {
         val selected = orderedMediaPlayerPackages(selectedPackages)
         val effectiveSelection = selected.ifEmpty {
-            orderedMediaPlayerPackages(requestedPackages)
+            orderedMediaPlayerPackages(controllers.keys)
         }
         val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
         val prioritizedSelection = if (normalizedPreferred != null && normalizedPreferred in effectiveSelection) {
@@ -755,8 +815,12 @@ object SharedMediaControlService {
         return orderedMediaPlayerPackages(selectedPackages).firstOrNull()
     }
 
+    private fun shouldMonitorLocked(): Boolean =
+        followActiveSessions || requestedPackages.isNotEmpty()
+
     private fun publishPlayerStatesLocked() {
-        if (requestedPackages.isEmpty()) {
+        val orderedPackages = orderedMediaPlayerPackages(controllers.keys)
+        if (orderedPackages.isEmpty()) {
             albumArtCache.clear()
             pendingAlbumArtUriLoads.clear()
             _playerStates.value = emptyMap()
@@ -765,7 +829,6 @@ object SharedMediaControlService {
 
         val previousStates = _playerStates.value
         val nowElapsedRealtimeMs = SystemClock.elapsedRealtime()
-        val orderedPackages = orderedMediaPlayerPackages(requestedPackages)
         val updatedStates = mutableMapOf<String, MediaPlayerState>()
         orderedPackages.forEach { packageName ->
             val player = SupportedMediaPlayer.fromPackage(packageName)
@@ -774,7 +837,13 @@ object SharedMediaControlService {
             val playbackState = controller?.playbackState
             val track = metadata.extractTrackTitle()
             val artist = metadata.extractArtistName()
-            val albumArt = resolveAlbumArtLocked(packageName, metadata, track, artist)
+            val albumArt = if (packageName in requestedPackages) {
+                resolveAlbumArtLocked(packageName, metadata, track, artist)
+            } else {
+                albumArtCache.remove(packageName)
+                pendingAlbumArtUriLoads.remove(packageName)
+                null
+            }
             val isPlaying = playbackState.isPlayingState()
             val previous = previousStates[packageName]
             val lastBecamePlayingElapsedRealtimeMs = when {

@@ -23,6 +23,7 @@ import kotlin.Boolean
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 import android.content.Context
 import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
@@ -30,6 +31,7 @@ import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
+import vad.dashing.tbox.wifimodem.ModemSource
 
 /**
  * Whole-panel fields from the tile dialog, applied in the same persistence write as [widgetsConfig]
@@ -45,10 +47,13 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val gridSpacingDp: Int,
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
+    val collapseTouchZoneThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
+    val collapseOnStripTap: Boolean,
+    val collapseOnStripDoubleTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -67,10 +72,13 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val gridSpacingDp: Int,
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
+    val collapseTouchZoneThicknessDp: Int,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
     val collapseStripExpandedColorDark: Int,
+    val collapseOnStripTap: Boolean,
+    val collapseOnStripDoubleTap: Boolean,
     val collapseOnTileTap: Boolean,
     val collapseOnTileTapDelaySec: Int,
     val panelBackgroundColorLight: Int? = null,
@@ -98,10 +106,16 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
         collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            w.collapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        ),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnStripTap = w.collapseOnStripTap,
+        collapseOnStripDoubleTap = w.collapseOnStripDoubleTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
@@ -132,10 +146,16 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         gridSpacingDp = normalizePanelGridSpacingDp(w.gridSpacingDp),
         collapseEdge = PanelCollapseEdge.fromStorage(w.collapseEdge).storageValue,
         collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+            w.collapseTouchZoneThicknessDp,
+            normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
+        ),
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
         collapseStripExpandedColorDark = w.collapseStripExpandedColorDark,
+        collapseOnStripTap = w.collapseOnStripTap,
+        collapseOnStripDoubleTap = w.collapseOnStripDoubleTap,
         collapseOnTileTap = w.collapseOnTileTap,
         collapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(
             w.collapseOnTileTapDelaySec,
@@ -279,6 +299,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 1000L
         )
 
+    val mockRetentionAccuracyCeilingM = settingsManager.mockRetentionAccuracyCeilingMFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+        )
+
     val mockCanSpeedMode = settingsManager.mockCanSpeedModeFlow
         .stateIn(
             scope = viewModelScope,
@@ -340,6 +367,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
+        )
+
+    val mockRoadMatchTuning = settingsManager.mockRoadMatchTuningFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.location.roadmatch.RoadMatchTuning.DEFAULT,
+        )
+
+    val mapkitApiKey = settingsManager.mapkitApiKeyFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "",
         )
 
     val geoCalibNeeds = settingsManager.geoCalibNeedsFlow
@@ -436,8 +477,83 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val locationSource = settingsManager.locationSourceFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.esp.LocationSource.TBOX)
 
+    val modemSource = settingsManager.modemSourceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.ModemSource.TBOX)
+
+    val wifiModemModel = settingsManager.wifiModemModelFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.WifiModemModel.ZTE_MF79U)
+
+    val wifiModemHost = settingsManager.wifiModemHostFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), vad.dashing.tbox.wifimodem.WifiModemModel.ZTE_MF79U.defaultHost)
+
+    val wifiModemPassword = settingsManager.wifiModemPasswordFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val wifiModemPollIntervalSec = settingsManager.wifiModemPollIntervalSecFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5)
+
+    val huInternetProbeUrl = settingsManager.huInternetProbeUrlFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_URL,
+        )
+
+    val huInternetProbeIntervalSec = settingsManager.huInternetProbeIntervalSecFlow
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+        )
+
+    val huInternetProbeEnabled = settingsManager.huInternetProbeEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+
     val espCompanionEnabled = settingsManager.espCompanionEnabledFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espSoftApRouterEnabled = settingsManager.espSoftApRouterEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val espSoftApSsid = settingsManager.espSoftApSsidFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val espSoftApPsk = settingsManager.espSoftApPskFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val espBleDeviceNames = settingsManager.espBleDeviceNamesFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val adbLastHost = settingsManager.adbLastHostFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "127.0.0.1")
+
+    val adbLastPort = settingsManager.adbLastPortFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 5555)
+
+    val adbMode = settingsManager.adbModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "tcp")
+
+    val huVirtualDisplaysJson = settingsManager.huVirtualDisplaysJsonFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    private val _huVirtualDisplaysRefreshing = MutableStateFlow(false)
+    val huVirtualDisplaysRefreshing: StateFlow<Boolean> = _huVirtualDisplaysRefreshing.asStateFlow()
+
+    val elm327Enabled = settingsManager.elm327EnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val elm327DeviceAddress = settingsManager.elm327DeviceAddressFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val elm327PairingPin = settingsManager.elm327PairingPinFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val elm327SupportedPids = settingsManager.elm327SupportedPidsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    val elm327DiscoveryAtMs = settingsManager.elm327DiscoveryAtMsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     val usbGnssDeviceId = settingsManager.usbGnssDeviceIdFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
@@ -488,6 +604,34 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false
         )
 
+    val externalApiEnabled = settingsManager.externalApiEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val externalApiPort = settingsManager.externalApiPortFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = vad.dashing.tbox.externalapi.ExternalApiConstants.DEFAULT_PORT,
+        )
+
+    val externalApiDangerousEnabled = settingsManager.externalApiDangerousEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val externalApiWebPanelEnabled = settingsManager.externalApiWebPanelEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
@@ -520,6 +664,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptySet()
+        )
+
+    val appListHiddenPackages = settingsManager.appListHiddenPackagesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet(),
         )
 
     val usageStatsHideFloatingPanelIds = settingsManager.usageStatsHideFloatingPanelIdsFlow
@@ -618,6 +769,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
+    val floatingPanelsAllowBeyondScreen = settingsManager.floatingPanelsAllowBeyondScreenFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val floatingPanelsShowOnServiceStartDelaySeconds =
+        settingsManager.floatingPanelsShowOnServiceStartDelaySecondsFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = SettingsManager.DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            )
+
     val floatingDashboardHeight = activeFloatingDashboardConfig
         .map { it.height }
         .stateIn(
@@ -695,6 +861,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         )
 
     val swdVersion = settingsManager.getStringFlow("swd_version", "")
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    val udaVersion = settingsManager.getStringFlow("uda_version", "")
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -857,6 +1030,7 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         flushMainScreenCurrentPageInternal(windowMode = true)
         if (ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)) {
             settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
+            settingsManager.snapshotLiveLayoutToThemeCache(outgoingCacheKey)
         }
     }
 
@@ -1268,6 +1442,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = TboxFontFamily.Default.id
         )
 
+    val appTextSizeScales = settingsManager.appTextSizeScalesFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TboxTextSizeScales.Default,
+        )
+
     val updateChannel = settingsManager.updateChannelFlow
         .stateIn(
             scope = viewModelScope,
@@ -1289,12 +1470,32 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = HeadUnitCanMode.Android9MbCan
         )
 
+    val launchMainInStockAppWindow = settingsManager.launchMainInStockAppWindowFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     init {
         settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
         ThemeActivationCoordinator.markMainScreenUiReady()
         viewModelScope.launch {
             if (!settingsManager.permissionsIntroSeenFlow.first()) {
                 _showPermissionsDialog.value = true
+            }
+        }
+        // Users who enabled «Не подключаться к TBox» before Modem stayed available may still
+        // have the Modem tab off / TBox modem source — re-apply menu + source constraints once.
+        viewModelScope.launch {
+            if (!settingsManager.noTboxConnectFlow.first()) return@launch
+            val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
+            val fixed = LeftMenuLayout.applyNoTboxConnectDisable(layout)
+            if (LeftMenuLayout.serialize(fixed) != LeftMenuLayout.serialize(layout)) {
+                settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(fixed))
+            }
+            if (settingsManager.modemSourceFlow.first() == ModemSource.TBOX) {
+                settingsManager.saveModemSourceSetting(ModemSource.WIFI_HTTP)
             }
         }
         viewModelScope.launch {
@@ -1566,6 +1767,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockRetentionAccuracyCeilingM(ceilingM: Int) {
+        viewModelScope.launch {
+            settingsManager.saveMockRetentionAccuracyCeilingM(ceilingM.toFloat())
+        }
+    }
+
     fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         viewModelScope.launch {
             settingsManager.saveMockCanSpeedModeSetting(mode)
@@ -1620,12 +1827,49 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveMockRoadMatchTuning(
+        tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+    ) {
+        viewModelScope.launch {
+            settingsManager.saveMockRoadMatchTuning(tuning)
+        }
+    }
+
+    fun saveMapkitApiKey(key: String) {
+        viewModelScope.launch {
+            settingsManager.saveMapkitApiKey(key)
+        }
+    }
+
+    suspend fun exportRoadMatchTuningToDownloads(context: android.content.Context): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val tuning = settingsManager.mockRoadMatchTuningFlow.first()
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportToDownloads(
+                    packageName = context.packageName,
+                    tuning = tuning,
+                ).absolutePath
+            }
+        }
+
+    suspend fun importRoadMatchTuningFromJson(
+        json: String,
+    ): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        settingsManager.importRoadMatchTuningJson(json)
+
     fun roadMapDownloadManager(context: android.content.Context): vad.dashing.tbox.location.roadmatch.RoadMapDownloadManager {
         return vad.dashing.tbox.location.roadmatch.RoadMapDownloadManagerHolder.getOrCreate(
             context = context,
             scope = viewModelScope,
             loadManifestJson = { settingsManager.loadRoadMapsInstalledJson() },
             saveManifestJson = { settingsManager.saveRoadMapsInstalledJson(it) },
+        )
+    }
+
+    fun speedCamPackManager(context: android.content.Context): vad.dashing.tbox.speedcam.SpeedCamPackManager {
+        return vad.dashing.tbox.speedcam.SpeedCamPackManagerHolder.get(
+            context = context,
+            settingsManager = settingsManager,
         )
     }
 
@@ -1650,6 +1894,30 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun resetDriveCalibrationOffsets() {
         viewModelScope.launch {
             settingsManager.resetDriveCalibrationOffsets()
+        }
+    }
+
+    fun resetWheelPulseCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetWheelPulseCalibration()
+        }
+    }
+
+    fun setWheelPulseFeatureEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseFeatureEnabled(enabled)
+        }
+    }
+
+    fun setWheelPulseTripsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseTripsEnabled(enabled)
+        }
+    }
+
+    fun setWheelPulseMockDrEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveWheelPulseMockDrEnabled(enabled)
         }
     }
 
@@ -1731,7 +1999,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     /**
      * Enable or disable «Не подключаться к TBox».
-     * When enabling: disables TBox menu tabs, forces Android geo if source was TBox,
+     * When enabling: disables AT/CAN/car_data menu tabs, enables Modem (Wi‑Fi),
+     * forces Android geo if source was TBox, switches modem source to Wi‑Fi if it was TBox,
      * optionally bulk-enables [FloatingDashboardWidgetConfig.useMbCanVhal] on eligible tiles.
      * When disabling: only clears the flag (does not re-enable menu tabs or reset useMbCanVhal).
      */
@@ -1758,6 +2027,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     settingsManager.saveLocationSourceSetting(
                         vad.dashing.tbox.esp.LocationSource.ANDROID,
                     )
+                }
+                if (settingsManager.modemSourceFlow.first() == ModemSource.TBOX) {
+                    settingsManager.saveModemSourceSetting(ModemSource.WIFI_HTTP)
                 }
             }
             settingsManager.saveNoTboxConnectSetting(enabled)
@@ -1806,6 +2078,54 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveModemSourceSetting(source: vad.dashing.tbox.wifimodem.ModemSource) {
+        viewModelScope.launch {
+            settingsManager.saveModemSourceSetting(source)
+        }
+    }
+
+    fun saveWifiModemModelSetting(model: vad.dashing.tbox.wifimodem.WifiModemModel) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemModelSetting(model)
+        }
+    }
+
+    fun saveWifiModemHostSetting(host: String) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemHostSetting(host)
+        }
+    }
+
+    fun saveWifiModemPasswordSetting(password: String) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemPasswordSetting(password)
+        }
+    }
+
+    fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveWifiModemPollIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeUrlSetting(url: String) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeUrlSetting(url)
+        }
+    }
+
+    fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeIntervalSecSetting(seconds)
+        }
+    }
+
+    fun saveHuInternetProbeEnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuInternetProbeEnabledSetting(enabled)
+        }
+    }
+
     fun saveUsbGnssDeviceIdSetting(deviceId: String) {
         viewModelScope.launch {
             settingsManager.saveUsbGnssDeviceIdSetting(deviceId)
@@ -1820,6 +2140,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     fun requestUsbGnssAutoBaudDetect() {
         UsbGnssRepository.requestAutoBaudDetect()
+    }
+
+    fun requestUsbGnssReconnect() {
+        UsbGnssRepository.requestReconnect()
     }
 
     fun saveUsbGnssRequestVtgSetting(enabled: Boolean) {
@@ -1877,9 +2201,226 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveEspSoftApRouterEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveEspSoftApRouterEnabled(enabled)
+        }
+    }
+
+    fun ensureEspSoftApIdentity() {
+        viewModelScope.launch {
+            settingsManager.ensureEspSoftApIdentity()
+        }
+    }
+
+    fun saveEspSoftApIdentity(ssid: String, psk: String, onSaved: () -> Unit = {}) {
+        viewModelScope.launch {
+            if (settingsManager.saveEspSoftApIdentity(ssid, psk)) onSaved()
+        }
+    }
+
+    fun saveEspBleDeviceName(mac: String, name: String) {
+        viewModelScope.launch {
+            settingsManager.saveEspBleDeviceName(mac, name)
+        }
+    }
+
+    fun removeEspBleDeviceName(mac: String) {
+        viewModelScope.launch {
+            settingsManager.removeEspBleDeviceName(mac)
+        }
+    }
+
+    fun clearEspBleDeviceNames(macs: Collection<String>? = null) {
+        viewModelScope.launch {
+            settingsManager.clearEspBleDeviceNames(macs)
+        }
+    }
+
+    fun saveAdbLastHostSetting(host: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastHostSetting(host)
+        }
+    }
+
+    fun saveAdbLastPortSetting(port: Int) {
+        viewModelScope.launch {
+            settingsManager.saveAdbLastPortSetting(port)
+        }
+    }
+
+    fun saveAdbModeSetting(mode: String) {
+        viewModelScope.launch {
+            settingsManager.saveAdbModeSetting(mode)
+        }
+    }
+
+    fun saveElm327EnabledSetting(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveElm327EnabledSetting(enabled)
+        }
+    }
+
+    fun saveElm327DeviceAddressSetting(address: String) {
+        viewModelScope.launch {
+            settingsManager.saveElm327DeviceAddressSetting(address)
+        }
+    }
+
+    fun saveElm327PairingPinSetting(pin: String) {
+        viewModelScope.launch {
+            settingsManager.saveElm327PairingPinSetting(pin)
+        }
+    }
+
+    fun clearElm327PidDiscoveryResult() {
+        viewModelScope.launch {
+            settingsManager.clearElm327PidDiscoveryResult()
+        }
+    }
+
     fun saveExpertModeSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExpertModeSetting(enabled)
+        }
+    }
+
+    fun saveExternalApiEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiEnabled(enabled)
+        }
+    }
+
+    fun saveExternalApiPort(port: Int) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiPort(port)
+        }
+    }
+
+    fun saveExternalApiDangerousEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiDangerousEnabled(enabled)
+        }
+    }
+
+    fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveExternalApiWebPanelEnabled(enabled)
+        }
+    }
+
+    fun refreshHuAdbState() {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+        }
+    }
+
+    fun setHuAdbTcpEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.setTcpEnabled(enabled)
+        }
+    }
+
+    fun setHuAdbUsbEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(enabled)
+        }
+    }
+
+    fun consumeHuAdbError() {
+        vad.dashing.tbox.adb.HuAdbControl.consumeError()
+    }
+
+    /**
+     * Refreshes the global HU display cache via localhost ADB (restores previous TCP state).
+     * [onDone] runs on the main thread.
+     */
+    fun refreshHuVirtualDisplays(
+        context: android.content.Context,
+        onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome) -> Unit,
+    ) {
+        if (_huVirtualDisplaysRefreshing.value) return
+        viewModelScope.launch {
+            _huVirtualDisplaysRefreshing.value = true
+            val outcome = try {
+                val result = withContext(Dispatchers.IO) {
+                    vad.dashing.tbox.adb.VirtualDisplayAdb.refreshDisplayList(context)
+                }
+                if (result is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success) {
+                    settingsManager.saveHuVirtualDisplaysJson(
+                        vad.dashing.tbox.adb.HuDisplayInfo.listToJson(result.displays),
+                    )
+                }
+                result
+            } finally {
+                _huVirtualDisplaysRefreshing.value = false
+            }
+            onDone(outcome)
+        }
+    }
+
+    /**
+     * Launches [packageName] on [displayId] via localhost ADB; leaves ADB TCP enabled.
+     * Remaps by stored [displayWidthPx]×[displayHeightPx] when the launcher recreates VDs.
+     * [onDone] runs on the main thread.
+     */
+    fun launchAppOnVirtualDisplay(
+        context: android.content.Context,
+        packageName: String,
+        displayId: Int,
+        displayWidthPx: Int? = null,
+        displayHeightPx: Int? = null,
+        onDone: (vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            val cached = vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(
+                settingsManager.huVirtualDisplaysJsonFlow.first(),
+            )
+            var refreshedDisplays: List<vad.dashing.tbox.adb.HuDisplayInfo>? = null
+            val outcome = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.adb.VirtualDisplayAdb.launchOnDisplay(
+                    context = context,
+                    packageName = packageName,
+                    displayId = displayId,
+                    displayWidthPx = displayWidthPx,
+                    displayHeightPx = displayHeightPx,
+                    cachedDisplays = cached,
+                    onDisplaysRefreshed = { refreshedDisplays = it },
+                )
+            }
+            refreshedDisplays?.let { displays ->
+                settingsManager.saveHuVirtualDisplaysJson(
+                    vad.dashing.tbox.adb.HuDisplayInfo.listToJson(displays),
+                )
+            }
+            // Refresh expert TCP toggle state if we left TCP on.
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+            onDone(outcome)
+        }
+    }
+
+    /**
+     * Double-tap on an app-shortcut tile: `am force-stop` via localhost ADB (no relaunch).
+     * Restores ADB TCP only if this session enabled it. [onDone] runs on the main thread.
+     */
+    fun forceStopAppViaAdb(
+        context: android.content.Context,
+        packageName: String,
+        onDone: (vad.dashing.tbox.automation.AutomationActionResult) -> Unit = {},
+    ) {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) {
+            onDone(
+                vad.dashing.tbox.automation.AutomationActionResult.failure("empty package"),
+            )
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.adb.AdbAutomationActions.forceStopPackage(context, pkg)
+            }
+            vad.dashing.tbox.adb.HuAdbControl.refresh()
+            onDone(result)
         }
     }
 
@@ -2050,7 +2591,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     }
 
     /**
-     * Picks one image via [GetContent]; uses parent folder when possible so carousel can list siblings.
+     * Picks one image via [GetContent]; copies into the active theme wallpaper folder when
+     * wallpapers are part of the active theme, otherwise uses the parent folder URI for carousel.
      */
     fun applyMainScreenWallpaperFromPickedImage(context: Context, pickedUri: Uri, forLightTheme: Boolean) {
         viewModelScope.launch {
@@ -2066,7 +2608,46 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 return@launch
             }
             val page = liveMainScreenCurrentPage.value
-            if (forLightTheme) {
+            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            val applyTargets = settingsManager.activeThemeApplyTargetsFlow.first()
+            val importedIntoTheme = ThemeCacheKeys.isLikelyCacheKey(syncCacheKey) &&
+                ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in applyTargets &&
+                ThemeMaterialization.isMaterialized(context, syncCacheKey)
+            if (importedIntoTheme) {
+                val storedName = ThemeMaterialization.importPickedWallpaperIntoCache(
+                    context = context,
+                    cacheKey = syncCacheKey,
+                    forLightTheme = forLightTheme,
+                    pickedUri = pickedUri,
+                    preferredFileName = res.selectedFileName,
+                )
+                if (storedName == null) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_main_screen_wallpaper_file_too_large),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    return@launch
+                }
+                val folderUri = Uri.fromFile(
+                    ThemeMaterialization.wallpaperFolderFile(context, syncCacheKey, forLightTheme),
+                ).toString()
+                if (forLightTheme) {
+                    settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
+                        folderUri,
+                        storedName,
+                        page,
+                    )
+                } else {
+                    settingsManager.saveMainScreenWallpaperDarkFolderAndSelection(
+                        folderUri,
+                        storedName,
+                        page,
+                    )
+                }
+            } else if (forLightTheme) {
                 settingsManager.saveMainScreenWallpaperLightFolderAndSelection(
                     res.folderUriString,
                     res.selectedFileName,
@@ -2079,7 +2660,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                     page,
                 )
             }
-            val syncCacheKey = settingsManager.activeThemeUriFlow.first().trim()
             if (ThemeCacheKeys.isLikelyCacheKey(syncCacheKey)) {
                 settingsManager.syncThemeWallpaperSelection(
                     syncCacheKey,
@@ -2186,6 +2766,20 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = 0
         )
 
+    val uiIconRevision = settingsManager.uiIconRevisionFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0,
+        )
+
+    val uiIconPreserveColors = settingsManager.uiIconPreserveColorsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptySet(),
+        )
+
     fun setCustomLauncherAppIconFromUri(
         packageName: String,
         sourceUri: Uri?,
@@ -2232,6 +2826,42 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     suspend fun clearSharedHttpRequestIconsFolder() {
         settingsManager.clearSharedHttpRequestIconsFolder()
+    }
+
+    fun setCustomUiIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+        variant: UiIconPaths.Variant = UiIconPaths.Variant.Day,
+        onResult: (SetLauncherAppCustomIconResult) -> Unit,
+    ) {
+        viewModelScope.launch {
+            onResult(settingsManager.setCustomUiIconFromUri(iconKey, sourceUri, variant))
+        }
+    }
+
+    fun clearCustomUiIcon(iconKey: String) {
+        viewModelScope.launch {
+            settingsManager.clearCustomUiIcon(iconKey)
+        }
+    }
+
+    fun clearCustomUiIconVariant(iconKey: String, variant: UiIconPaths.Variant) {
+        viewModelScope.launch {
+            settingsManager.clearCustomUiIconVariant(iconKey, variant)
+        }
+    }
+
+    fun setUiIconPreserveColors(iconKey: String, enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.setUiIconPreserveColors(iconKey, enabled)
+        }
+    }
+
+    suspend fun hasCustomUiIcon(iconKey: String): Boolean =
+        settingsManager.hasCustomUiIcon(iconKey)
+
+    suspend fun clearSharedUiIconsFolder() {
+        settingsManager.clearSharedUiIconsFolder()
     }
 
     suspend fun clearSharedTileBackgroundsFolder() {
@@ -2585,6 +3215,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsAllowBeyondScreen(enabled)
+        }
+    }
+
+    fun saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds: Int) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds)
+        }
+    }
+
     fun saveFloatingDashboardWidth(width: Int) {
         updateSelectedFloatingDashboard { it.copy(width = width) }
     }
@@ -2611,12 +3253,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         startX: Int,
         startY: Int,
     ) {
+        val origin = clampFloatingPanelOrigin(
+            x = startX,
+            y = startY,
+            allowBeyondScreen = floatingPanelsAllowBeyondScreen.value,
+        )
         updateSelectedFloatingDashboard {
             it.copy(
-                width = width.coerceAtLeast(50),
-                height = height.coerceAtLeast(50),
-                startX = startX.coerceAtLeast(0),
-                startY = startY.coerceAtLeast(0),
+                width = width.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+                height = height.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+                startX = origin.x,
+                startY = origin.y,
             )
         }
     }
@@ -2715,6 +3362,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
                 showWatchPackages,
                 showPanelIds,
             )
+        }
+    }
+
+    fun setAppListPackageHidden(packageName: String, hidden: Boolean) {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty()) return
+        viewModelScope.launch {
+            val current = appListHiddenPackages.value
+            val updated = if (hidden) current + pkg else current - pkg
+            settingsManager.saveAppListHiddenPackages(updated)
         }
     }
 
@@ -2859,9 +3516,21 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveAppTextSizeScales(scales: TboxTextSizeScales) {
+        viewModelScope.launch {
+            settingsManager.saveAppTextSizeScales(scales)
+        }
+    }
+
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)
+        }
+    }
+
+    fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveLaunchMainInStockAppWindow(enabled)
         }
     }
 
@@ -3055,6 +3724,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.clearActiveTheme()
             settingsManager.bumpLauncherAppIconRevision()
+            settingsManager.bumpHttpRequestIconRevision()
+            settingsManager.bumpUiIconRevision()
             settingsManager.bumpTileBackgroundImageRevision()
             settingsManager.bumpPanelBackgroundImageRevision()
         }

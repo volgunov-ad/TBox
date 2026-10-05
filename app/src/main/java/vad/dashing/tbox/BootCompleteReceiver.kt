@@ -20,10 +20,10 @@ class BootCompleteReceiver : BroadcastReceiver() {
             }
             /*Intent.ACTION_LOCKED_BOOT_COMPLETED -> {
                 startService(context, Intent.ACTION_LOCKED_BOOT_COMPLETED)
-            }
+            }*/
             QUICKBOOT_POWERON_ACTION -> {
                 startService(context, QUICKBOOT_POWERON_ACTION)
-            }*/
+            }
         }
     }
 

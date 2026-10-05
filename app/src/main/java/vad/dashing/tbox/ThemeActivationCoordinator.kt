@@ -77,6 +77,7 @@ object ThemeActivationCoordinator {
                     ThemeCacheKeys.isLikelyCacheKey(outgoingCacheKey)
                 ) {
                     settingsManager.snapshotMainScreenRuntimeToThemeCache(outgoingCacheKey)
+                    settingsManager.snapshotLiveLayoutToThemeCache(outgoingCacheKey)
                 }
                 withContext(Dispatchers.Main.immediate) {
                     _themeActivationInProgress.value = true

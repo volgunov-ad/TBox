@@ -51,6 +51,13 @@ object ThemeApplyTargetAvailability {
             }
         }
 
+        if (ThemeSection.UI_ICONS in sections) {
+            val uiIcons = root.optJSONObject(ThemeSection.UI_ICONS.jsonKey)
+            if (parsed.uiIcons.isNotEmpty() || uiIcons?.optJSONArray("keys")?.length().orZero() > 0) {
+                out.add(ThemeApplyTarget.UI_ICONS)
+            }
+        }
+
         if (parsed.tileBackgrounds.isNotEmpty() || themeJsonReferencesTileBackgrounds(root, sections)) {
             out.add(ThemeApplyTarget.TILE_BACKGROUNDS)
         }

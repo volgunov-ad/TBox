@@ -33,11 +33,29 @@ class ThemeApplyTargetTest {
                 ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS,
                 ThemeApplyTarget.FLOATING_PANELS,
                 ThemeApplyTarget.APP_ICONS,
+                ThemeApplyTarget.UI_ICONS,
             ),
         )
         assertEquals(
-            setOf(ThemeSection.MAIN_SCREEN, ThemeSection.FLOATING_PANELS, ThemeSection.APP_ICONS),
+            setOf(
+                ThemeSection.MAIN_SCREEN,
+                ThemeSection.FLOATING_PANELS,
+                ThemeSection.APP_ICONS,
+                ThemeSection.UI_ICONS,
+            ),
             sections,
+        )
+    }
+
+    @Test
+    fun uiIconsRemainIndependentFromAppIcons() {
+        assertEquals(
+            setOf(ThemeApplyTarget.UI_ICONS),
+            ThemeApplyTarget.fromLegacySections(setOf(ThemeSection.UI_ICONS)),
+        )
+        assertFalse(
+            ThemeApplyTarget.APP_ICONS in
+                ThemeApplyTarget.fromLegacySections(setOf(ThemeSection.UI_ICONS)),
         )
     }
 }

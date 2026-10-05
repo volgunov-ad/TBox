@@ -1,0 +1,973 @@
+package vad.dashing.tbox.automation
+
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+
+class AutomationValidatorTest {
+    @Test
+    fun nextTriggerId_usesSmallestUnusedPositiveInteger() {
+        assertEquals("1", nextAutomationTriggerId(emptyList()))
+        assertEquals("2", nextAutomationTriggerId(listOf("1")))
+        assertEquals("3", nextAutomationTriggerId(listOf("1", "2")))
+        assertEquals("2", nextAutomationTriggerId(listOf("1", "3")))
+        assertEquals("1", nextAutomationTriggerId(listOf("home", "rpm")))
+        assertEquals("2", nextAutomationTriggerId(listOf("1", "home")))
+    }
+
+    @Test
+    fun validMinimalDefinition_hasNoIssues() {
+        assertTrue(AutomationValidator.validate(validDefinition()).isEmpty())
+    }
+
+    @Test
+    fun triggerIds_mayRepeatAcrossAutomations() {
+        val first = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.SystemEvent(
+                    id = "1",
+                    event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                ),
+                AutomationTrigger.SystemEvent(
+                    id = "2",
+                    event = AutomationSystemEvent.MENU_OPENED,
+                ),
+            ),
+        ).copy(id = "auto-a", name = "A")
+        val second = first.copy(id = "auto-b", name = "B")
+        val issues = AutomationValidator.validate(
+            AutomationDocument(automations = listOf(first, second)),
+        )
+        assertTrue(issues.isEmpty())
+    }
+
+    @Test
+    fun duplicated_keepsTriggerIdsAndDisablesCopy() {
+        val source = validDefinition().copy(id = "auto-a", name = "Климат", enabled = true)
+        val copy = source.duplicated()
+        assertNotEquals(source.id, copy.id)
+        assertEquals("Климат (копия)", copy.name)
+        assertFalse(copy.enabled)
+        assertEquals(source.triggers, copy.triggers)
+        assertEquals(source.actions, copy.actions)
+    }
+
+    @Test
+    fun blankName_isRejected() {
+        val issues = AutomationValidator.validate(validDefinition().copy(name = "  "))
+        assertTrue(issues.any { it.path.endsWith(".name") })
+    }
+
+    @Test
+    fun unknownState_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "park",
+                    signal = AutomationSignalId.GEAR_MODE,
+                    source = AutomationSignalSource.TBOX,
+                    expectedState = "X",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("expectedState") },
+        )
+    }
+
+    @Test
+    fun listedSeatState_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "heat",
+                    signal = AutomationSignalId.FRONT_LEFT_SEAT_MODE,
+                    source = AutomationSignalSource.HEAD_UNIT,
+                    expectedState = "heat_2",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun foregroundAppPackage_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "maps",
+                    signal = AutomationSignalId.FOREGROUND_APP,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "com.yandex.yandexnavi",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun foregroundAppBlankPackage_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "maps",
+                    signal = AutomationSignalId.FOREGROUND_APP,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "  ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("expectedState") },
+        )
+    }
+
+    @Test
+    fun espRelayStateTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "relay0",
+                    signal = AutomationSignalId.ESP_RELAY_0,
+                    source = AutomationSignalSource.APP,
+                    expectedState = "on",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun resetThresholdOnWrongSide_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.NumericThreshold(
+                    id = "rpm",
+                    signal = AutomationSignalId.ENGINE_RPM,
+                    source = AutomationSignalSource.TBOX,
+                    direction = AutomationThresholdDirection.ABOVE,
+                    threshold = 1_000.0,
+                    resetThreshold = 1_100.0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("resetThreshold") },
+        )
+    }
+
+    @Test
+    fun resetThresholdOnWrongSide_isIgnoredWhenRearmDisabled() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.NumericThreshold(
+                    id = "rpm",
+                    signal = AutomationSignalId.ENGINE_RPM,
+                    source = AutomationSignalSource.TBOX,
+                    direction = AutomationThresholdDirection.ABOVE,
+                    threshold = 1_000.0,
+                    resetThreshold = 1_100.0,
+                    rearmEnabled = false,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun conditionWaitOutOfRange_isRejected() {
+        val issues = AutomationValidator.validate(
+            validDefinition().copy(conditionWaitMillis = -1L),
+        )
+        assertTrue(issues.any { it.path.contains("conditionWaitMillis") })
+    }
+
+    @Test
+    fun conditionWaitZero_isAccepted() {
+        assertTrue(
+            AutomationValidator.validate(validDefinition().copy(conditionWaitMillis = 0L)).isEmpty(),
+        )
+    }
+
+    @Test
+    fun triggeredByUnknownId_isRejected() {
+        val definition = validDefinition().copy(
+            conditions = listOf(AutomationCondition.TriggeredBy(setOf("missing"))),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("triggerIds") },
+        )
+    }
+
+    @Test
+    fun mediaActionWithoutPackage_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(AutomationBuiltinActionType.MEDIA_PLAY),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun espRelaySet_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ESP_RELAY_SET,
+                    intValue = 1,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isNotEmpty())
+    }
+
+    @Test
+    fun espRelayChannelOutOfRange_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
+                    intValue = 8,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("intValue") },
+        )
+    }
+
+    @Test
+    fun userMessageWithoutText_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(AutomationBuiltinActionType.SHOW_TOAST),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun userMessageWithText_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Остановитесь",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun alertAutoCloseNegative_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SHOW_ALERT,
+                    stringValue = "Остановитесь",
+                    intValue = -1,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("intValue") },
+        )
+    }
+
+    @Test
+    fun trunkSet_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
+                    operation = AutomationCanOperation.SET,
+                    value = 1,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.message.contains("безопасном каталоге") },
+        )
+    }
+
+    @Test
+    fun trunkPulse_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL,
+                    operation = AutomationCanOperation.TRUNK_PULSE,
+                    value = 1,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun geofenceRearmOnWrongSide_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Geofence(
+                    id = "home",
+                    queryText = "55.75, 37.62",
+                    latitude = 55.75,
+                    longitude = 37.62,
+                    direction = AutomationGeofenceDirection.ENTER,
+                    zoneRadiusMeters = 50.0,
+                    rearmRadiusMeters = 40.0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("rearmRadiusMeters") },
+        )
+    }
+
+    @Test
+    fun geofenceUnparsedPoint_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.Geofence(id = "home")),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("latitude") },
+        )
+    }
+
+    @Test
+    fun solarTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Solar(
+                    id = "dusk",
+                    event = AutomationSolarEvent.SUNSET,
+                    offsetMinutes = 120,
+                    offsetDirection = AutomationSolarOffsetDirection.AFTER,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun solarOffsetOutOfRange_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Solar(
+                    id = "dusk",
+                    offsetMinutes = AUTOMATION_SOLAR_MAX_OFFSET_MINUTES + 1,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".offsetMinutes") },
+        )
+    }
+
+    @Test
+    fun emptySolarCondition_isRejected() {
+        val definition = validDefinition().copy(
+            conditions = listOf(AutomationCondition.Solar()),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.contains("conditions") })
+    }
+
+    @Test
+    fun timeTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Time(
+                    id = "morning",
+                    at = AutomationTimeOfDay(7, 30),
+                    weekdays = setOf(AutomationWeekday.MONDAY),
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun intervalTrigger_acceptsSupportedRange() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "periodic",
+                    intervalMillis = 30_000L,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun intervalTrigger_rejectsValuesOutsideSupportedRange() {
+        val tooShort = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "short",
+                    intervalMillis = AUTOMATION_MIN_INTERVAL_MS - 1L,
+                ),
+            ),
+        )
+        val tooLong = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "long",
+                    intervalMillis = AUTOMATION_MAX_INTERVAL_MS + 1L,
+                ),
+            ),
+        )
+        val fractionalSecond = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Interval(
+                    id = "fractional",
+                    intervalMillis = 2_500L,
+                ),
+            ),
+        )
+
+        assertTrue(AutomationValidator.validate(tooShort).any { it.path.endsWith(".intervalMillis") })
+        assertTrue(AutomationValidator.validate(tooLong).any { it.path.endsWith(".intervalMillis") })
+        assertTrue(
+            AutomationValidator.validate(fractionalSecond)
+                .any { it.path.endsWith(".intervalMillis") },
+        )
+    }
+
+    @Test
+    fun emptyTimeCondition_isRejected() {
+        val definition = validDefinition().copy(
+            conditions = listOf(AutomationCondition.Time()),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.contains("conditions") })
+    }
+
+    @Test
+    fun invalidTimeOfDay_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.Time(
+                    id = "bad",
+                    at = AutomationTimeOfDay(24, 0),
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).any { it.path.endsWith(".at") })
+    }
+
+    @Test
+    fun shadeRoofWindows_areAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 11,
+                ),
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.SUNROOF_CONTROL,
+                    operation = AutomationCanOperation.SET,
+                    value = 12,
+                ),
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.WINDOW_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 0,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun oneInvalidWindowCommand_doesNotFailDocumentIntegrity() {
+        val good = validDefinition().copy(id = "good", name = "Ок")
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+                    operation = AutomationCanOperation.SET,
+                    value = 5,
+                ),
+            ),
+        ).copy(id = "bad", name = "Стекло 5", enabled = true)
+        val document = AutomationDocument(automations = listOf(good, bad))
+        assertTrue(AutomationValidator.integrityIssues(document).isEmpty())
+        assertTrue(AutomationValidator.validate(document).any { it.path.contains("actions") })
+        assertTrue(AutomationValidator.isRunnable(good))
+        assertFalse(AutomationValidator.isRunnable(bad))
+        val (normalized, disabledIds) = AutomationValidator.withInvalidDisabled(document)
+        assertEquals(listOf("bad"), disabledIds)
+        assertTrue(normalized.automations.single { it.id == "good" }.enabled)
+        assertFalse(normalized.automations.single { it.id == "bad" }.enabled)
+        assertTrue(AutomationValidator.isRunnable(normalized.automations.single { it.id == "good" }))
+    }
+
+    @Test
+    fun rebootProperty_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.CanCommand(
+                    bus = AutomationCanBus.VEHICLE,
+                    propertyId = MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                    operation = AutomationCanOperation.SET,
+                    value = 1,
+                ),
+            ),
+        )
+        assertFalse(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun wifiSsidNone_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.StateEquals(
+                    id = "wifi",
+                    signal = AutomationSignalId.WIFI_SSID,
+                    source = AutomationSignalSource.APP,
+                    expectedState = WifiStaSsid.NONE,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun wifiConnectWithoutSsid_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_CONNECT),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun wifiConnectSavedSsid_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_CONNECT,
+                    stringValue = "home",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.WIFI_SET_ENABLED,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(type = AutomationBuiltinActionType.WIFI_DISCONNECT),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun adbShellBlankCommand_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "   ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun adbShellAndTcp_areAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SET_TCP,
+                    boolValue = true,
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_SHELL,
+                    stringValue = "getprop persist.adb.tcp.port",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "com.example.app",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun adbForceStopBlankPackage_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.ADB_FORCE_STOP,
+                    stringValue = "  ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition)
+                .any { it.path.contains("stringValue") },
+        )
+    }
+
+    @Test
+    fun widgetPressedTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.WidgetPressed(id = "1", triggerId = "button1")),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun widgetPressedTrigger_blankTriggerId_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.WidgetPressed(id = "1", triggerId = "   ")),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".triggerId") },
+        )
+    }
+
+    @Test
+    fun widgetPressedTrigger_tooLongTriggerId_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.WidgetPressed(id = "1", triggerId = "x".repeat(33)),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".triggerId") },
+        )
+    }
+
+    @Test
+    fun hardKeyTrigger_isAccepted() {
+        val definition = validDefinition(
+            triggers = listOf(
+                AutomationTrigger.HardKey(id = "1", keyCode = 158),
+                AutomationTrigger.HardKey(
+                    id = "2",
+                    keyCode = 316,
+                    keyStatus = AutomationHardKeyStatus.RELEASED,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun hardKeyTrigger_rejectedOnAndroid10Vhal() = runBlocking {
+        UniversalCanRepository.setMode(HeadUnitCanMode.Android10Vhal)
+        try {
+            val definition = validDefinition(
+                triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 115)),
+            )
+            assertTrue(
+                AutomationValidator.validate(definition).any {
+                    it.message.contains("Android 9")
+                },
+            )
+        } finally {
+            UniversalCanRepository.setMode(HeadUnitCanMode.Android9MbCan)
+        }
+    }
+
+    @Test
+    fun hardKeyTrigger_outOfRangeKeyCode_isRejected() {
+        val definition = validDefinition(
+            triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 5000)),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".keyCode") },
+        )
+    }
+
+    @Test
+    fun setAutomationTriggerWidgetAction_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = "button1",
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun setHuScreenBrightness_acceptsLevel1to10() {
+        val ok = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 8,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(ok).isEmpty())
+
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS,
+                    intValue = 0,
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".intValue") },
+        )
+    }
+
+    @Test
+    fun setHuScreenAutoBrightness_isAccepted() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS,
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun setHuDayNightTheme_acceptsLightDarkAuto() {
+        listOf("light", "dark", "auto").forEach { key ->
+            val ok = validDefinition(
+                actions = listOf(
+                    AutomationAction.Builtin(
+                        type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                        stringValue = key,
+                    ),
+                ),
+            )
+            assertTrue(AutomationValidator.validate(ok).isEmpty())
+        }
+        val bad = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME,
+                    stringValue = "manual",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(bad).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
+    fun platformVolumeRanges_andHeadrestStates_areValidated() {
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 1,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_NAVI_VOLUME,
+                            intValue = 10,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 2,
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "off",
+                        ),
+                    ),
+                ),
+            ).isEmpty(),
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_PHONE_VOLUME,
+                            intValue = 0,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_VOICE_VOLUME,
+                            intValue = 1,
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.SET_HEADREST_SPEAKER,
+                            stringValue = "mute",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
+    fun setAutomationTriggerWidgetAction_blankId_isRejected() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+                    stringValue = " ",
+                ),
+            ),
+        )
+        assertTrue(
+            AutomationValidator.validate(definition).any { it.path.endsWith(".stringValue") },
+        )
+    }
+
+    @Test
+    fun cruiseBuiltins_acceptAccCcsAndRejectAuto() {
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+                            intValue = 90,
+                            stringValue = "acc",
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_PAUSE,
+                            stringValue = "ccs",
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+                            stringValue = "acc",
+                        ),
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_NUDGE,
+                            intValue = 1,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).isEmpty(),
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_FULL_OFF,
+                            stringValue = "auto",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+                            stringValue = "auto",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".stringValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+                            intValue = 200,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+        assertTrue(
+            AutomationValidator.validate(
+                validDefinition(
+                    actions = listOf(
+                        AutomationAction.Builtin(
+                            type = AutomationBuiltinActionType.CRUISE_NUDGE,
+                            intValue = 2,
+                            stringValue = "acc",
+                        ),
+                    ),
+                ),
+            ).any { it.path.endsWith(".intValue") },
+        )
+    }
+
+    private fun validDefinition(
+        triggers: List<AutomationTrigger> = listOf(
+            AutomationTrigger.SystemEvent(
+                id = "service",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+            ),
+        ),
+        actions: List<AutomationAction> = listOf(AutomationAction.Delay(0L)),
+    ): AutomationDefinition = AutomationDefinition(
+        id = "automation",
+        name = "Test",
+        enabled = true,
+        triggers = triggers,
+        actions = actions,
+    )
+}

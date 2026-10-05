@@ -31,7 +31,20 @@
     public static ** valueOf(java.lang.String);
 }
 
-# Keep native method declarations and classes that expose them.
--keepclasseswithmembernames class * {
-    native <methods>;
+-keep class com.yandex.** { *; }
+-dontwarn com.yandex.**
+
+# app_process loads this class by name from the app APK (shell uid).
+-keep class vad.dashing.tbox.hotspot.HuSoftApMain {
+    public static void main(java.lang.String[]);
+}
+
+# Expert raw Get/Set and HuCanMarkLog resolve names via Class.getDeclaredFields.
+# Kotlin `const val` is inlined then dropped by R8 even under `-keep class { *; }`.
+# The id objects use `@JvmField val` plus this keep so the static ints survive.
+-keep class vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId {
+    public static <fields>;
+}
+-keep class vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId {
+    public static <fields>;
 }

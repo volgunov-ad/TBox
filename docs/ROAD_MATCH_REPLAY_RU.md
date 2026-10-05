@@ -87,10 +87,12 @@ python tools/run_road_match_replay.py \
 нужен сырой поток, а не тики 0,5 с. `dSteerPathDeg` пишется и годится для
 офлайн-оценки `k`, но в `--motion dr` пока не смешивается с гиро.
 
-Опция **`--path-odometer-sync`**: после softCorrect тянет позу к точке на
-связанном графе, пройденной на `∫dDist` от последнего sync-якоря (закрывает
+Опция **`--path-odometer-sync`**: принудительно включает продольный догон
+(production default — выкл.). После softCorrect тянет позу к точке на связанном
+графе по `integ.dDistM` / CAN-пути от последнего sync-якоря (закрывает
 укорочение пути при срезании поворотов). Не срабатывает mid-turn и при
-скачке на несвязанное ребро. Env: `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1`.
+скачке на несвязанное ребро. Env `TBOX_ROADMATCH_PATH_ODOMETER_SYNC=1|0`
+принудительно вкл./выкл.
 
 ## Метрики
 
@@ -142,7 +144,8 @@ intent считается из того же `TurnSignalsLatch` по вспыш�
 
 `--match-mode RAILS` прогоняет тот же журнал через Rails-коридор (навигатор
 Ordinary выбирает ребро; опубликованная поза — free DR + поперечный снэп).
-Default — `ORDINARY`.
+`--match-mode FREE_TURNS` — экспериментальный Ordinary с усиленным курсом
+и отвязкой у узлов >2 линий (3+ рёбра). Default — `ORDINARY`.
 
 Обычный `testRuDebugUnitTest` пропускает field replay, если переменные
 `TBOX_ROADMATCH_REPLAY_*` не заданы; большие журналы и карты в Git не хранятся.

@@ -2,6 +2,8 @@ package vad.dashing.tbox.location
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.LocValues
@@ -58,6 +60,27 @@ class MockLocationJobTest {
     }
 
     @Test
+    fun hasValidCoordinates_rejectsNonFiniteAndOutOfRange() {
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = Double.NaN, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 55.0, longitude = Double.POSITIVE_INFINITY, locateStatus = true),
+            ),
+        )
+        assertFalse(
+            MockLocationJob.hasValidCoordinates(
+                LocValues(latitude = 91.0, longitude = 37.0, locateStatus = true),
+            ),
+        )
+        assertFalse(MockLocationJob.isUsableGeoPose(Double.NaN, Double.NaN))
+        assertTrue(MockLocationJob.isUsableGeoPose(55.83, 37.40))
+    }
+
+    @Test
     fun fixRetentionIsTenMinutes() {
         assertTrue(MockLocationJob.FIX_RETENTION_MS == 600_000L)
     }
@@ -78,6 +101,13 @@ class MockLocationJobTest {
     @Test
     fun extrapolateZeroDistanceKeepsPoint() {
         val (lat, lon) = MockLocationJob.extrapolateLatLon(55.75, 37.62, 90f, 0.0)
+        assertEquals(55.75, lat, 0.0)
+        assertEquals(37.62, lon, 0.0)
+    }
+
+    @Test
+    fun extrapolateNonFiniteBearingKeepsPoint() {
+        val (lat, lon) = MockLocationJob.extrapolateLatLon(55.75, 37.62, Float.NaN, 100.0)
         assertEquals(55.75, lat, 0.0)
         assertEquals(37.62, lon, 0.0)
     }
@@ -390,18 +420,56 @@ class MockLocationJobTest {
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = true,
                 gnssCourseDeg = 0f,
+                speedKmh = 20f,
+            ),
+        )
+        assertTrue(
+            MockLocationJob.shouldFeedHeadingToMatcher(
+                gnssPresent = true,
+                gnssCourseDeg = 0f,
+                speedKmh = 0f,
             ),
         )
         assertTrue(
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = true,
                 gnssCourseDeg = 174f,
+                speedKmh = 20f,
             ),
         )
         assertTrue(
             MockLocationJob.shouldFeedHeadingToMatcher(
                 gnssPresent = false,
                 gnssCourseDeg = 0f,
+                speedKmh = 20f,
+            ),
+        )
+    }
+
+    @Test
+    fun buildConstantMatchPose_allowsParkedGnssWithZeroCourse() {
+        val pose = MockLocationJob.buildConstantMatchPose(
+            lat = 55.75,
+            lon = 37.61,
+            travelBearingDeg = 90f,
+            gnssPresent = true,
+            gnssCourseDeg = 0f,
+            speedKmh = 0f,
+        )
+        assertNotNull(pose)
+        assertEquals(90f, pose!!.bearingDeg, 0.01f)
+    }
+
+    @Test
+    fun buildConstantMatchPose_rejectsMovingGnssWithZeroCourse() {
+        assertNull(
+            MockLocationJob.buildConstantMatchPose(
+                lat = 55.75,
+                lon = 37.61,
+                travelBearingDeg = 90f,
+                gnssPresent = true,
+                gnssCourseDeg = 0f,
+                speedKmh = 20f,
             ),
         )
     }

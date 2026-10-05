@@ -67,11 +67,11 @@ RU_COLUMNS: list[tuple[str, str]] = [
     ("steer_angle", "Угол поворота руля, °"),
     ("steer_speed", "Скорость вращения руля"),
     ("engine_rpm", "Обороты двигателя, об/мин"),
-    ("param1", "Параметр 1"),
-    ("param2", "Параметр 2"),
-    ("param3", "Параметр 3"),
-    ("param4", "Параметр 4"),
-    ("param5", "Параметр 5"),
+    ("param1", "Параметр 1 (педаль газа), %"),
+    ("param2", "Параметр 2 (крутящий момент), Н·м"),
+    ("param3", "Параметр 3 (скорость по колёсам), км/ч"),
+    ("param4", "Параметр 4 (дроссель), %"),
+    ("param5", "Параметр 5 (обороты), об/мин"),
     ("car_speed", "Скорость автомобиля, км/ч"),
     ("car_speed_accurate", "Точная скорость автомобиля, км/ч"),
     ("wheel1_speed", "Скорость колеса 1, км/ч"),
@@ -355,15 +355,18 @@ class CarState:
 
         elif can_id == CAN_ID_ENGINE_PARAMS:
             self.engine_rpm = read_u16_be(payload, 0) / 4.0
-            self.param1 = u8(b[3]) / 100.0
-            self.param2 = float(read_u16_be(payload, 4))
+            # Hypotheses (journals/09): pedal %, engine torque Nm
+            self.param1 = u8(b[3]) / 2.55
+            self.param2 = (read_u16_be(payload, 4) - 2000) / 2.0
 
         elif can_id == CAN_ID_PARAM_3:
-            self.param3 = float(read_u16_be(payload, 4))
+            # Hypothesis: wheel-based vehicle speed km/h
+            self.param3 = read_u16_be(payload, 4) / 100.0
 
         elif can_id == CAN_ID_PARAM_4:
             self.engine_temperature = u8(b[0]) * 0.75 - 48.0
-            self.param4 = float(u8(b[5]))
+            # Hypothesis: throttle position %
+            self.param4 = u8(b[5]) / 2.55
 
         elif can_id == CAN_ID_DISTANCE_TO_MAINTENANCE:
             self.distance_to_next_maintenance = read_u16_be(payload, 4)
@@ -433,7 +436,8 @@ class CarState:
 
         elif can_id == CAN_ID_ENGINE_TEMP:
             self.engine_temperature = u8(b[2]) * 0.75 - 48.0
-            self.param5 = float(u8(b[4])) / 18.0
+            # Hypothesis: coarse RPM copy, step 32 rpm
+            self.param5 = float(u8(b[4])) * 32.0
 
         elif can_id == CAN_ID_SPEED_ACCURATE:
             if b[2] != 0:

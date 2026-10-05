@@ -11,6 +11,7 @@ enum class ThemeApplyTarget(val jsonKey: String) {
     MAIN_SCREEN_WALLPAPERS("mainScreenWallpapers"),
     TILE_BACKGROUNDS("tileBackgrounds"),
     APP_ICONS("appIcons"),
+    UI_ICONS("uiIcons"),
     MAIN_SCREEN_PANELS("mainScreenPanels"),
     FLOATING_PANELS("floatingPanels"),
     ;
@@ -50,6 +51,9 @@ enum class ThemeApplyTarget(val jsonKey: String) {
             if (ThemeSection.APP_ICONS in sections) {
                 add(APP_ICONS)
             }
+            if (ThemeSection.UI_ICONS in sections) {
+                add(UI_ICONS)
+            }
         }
 
         fun resolveActive(
@@ -64,6 +68,7 @@ enum class ThemeApplyTarget(val jsonKey: String) {
             }
             if (FLOATING_PANELS in targets) add(ThemeSection.FLOATING_PANELS)
             if (APP_ICONS in targets) add(ThemeSection.APP_ICONS)
+            if (UI_ICONS in targets) add(ThemeSection.UI_ICONS)
         }
     }
 }

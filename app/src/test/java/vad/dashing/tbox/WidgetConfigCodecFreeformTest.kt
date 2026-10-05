@@ -61,6 +61,56 @@ class WidgetConfigCodecFreeformTest {
     }
 
     @Test
+    fun roundTrip_virtualDisplayMode() {
+        val original = listOf(
+            FloatingDashboardWidgetConfig(
+                dataKey = APP_LAUNCHER_WIDGET_DATA_KEY,
+                launcherAppPackage = "ru.yandex.yandexmaps",
+                launcherLaunchMode = AppLauncherLaunchMode.VIRTUAL_DISPLAY,
+                launcherVirtualDisplayId = 5,
+                launcherVirtualDisplayWidthPx = 1320,
+                launcherVirtualDisplayHeightPx = 856,
+            ),
+        )
+        val json = serializeWidgetConfigs(original)
+        val obj = JSONArray(json).getJSONObject(0)
+        assertEquals("virtual_display", obj.getString("launcherLaunchMode"))
+        assertEquals(5, obj.getInt("launcherVirtualDisplayId"))
+        assertEquals(1320, obj.getInt("launcherVirtualDisplayWidthPx"))
+        assertEquals(856, obj.getInt("launcherVirtualDisplayHeightPx"))
+        assertFalse(obj.has("launcherVirtualDisplayLaunchPolicy"))
+        assertFalse(obj.has("launcherFreeformEnabled"))
+        val cfg = parseWidgetConfigsFromString(json).single()
+        assertEquals(AppLauncherLaunchMode.VIRTUAL_DISPLAY, cfg.launcherLaunchMode)
+        assertEquals(5, cfg.launcherVirtualDisplayId)
+        assertEquals(1320, cfg.launcherVirtualDisplayWidthPx)
+        assertEquals(856, cfg.launcherVirtualDisplayHeightPx)
+        assertFalse(cfg.launcherFreeformEnabled)
+    }
+
+    @Test
+    fun decode_ignoresLegacyVirtualDisplayLaunchPolicy() {
+        val json = JSONArray()
+            .put(
+                JSONObject()
+                    .put("dataKey", APP_LAUNCHER_WIDGET_DATA_KEY)
+                    .put("launcherAppPackage", "com.example.app")
+                    .put("launcherLaunchMode", "virtual_display")
+                    .put("launcherVirtualDisplayId", 5)
+                    .put("launcherVirtualDisplayWidthPx", 1320)
+                    .put("launcherVirtualDisplayHeightPx", 856)
+                    .put("launcherVirtualDisplayLaunchPolicy", "new_instance"),
+            )
+            .toString()
+        val cfg = parseWidgetConfigsFromString(json).single()
+        assertEquals(AppLauncherLaunchMode.VIRTUAL_DISPLAY, cfg.launcherLaunchMode)
+        assertEquals(5, cfg.launcherVirtualDisplayId)
+        // Policy field removed — legacy new_instance migrates by being dropped.
+        val reencoded = JSONArray(serializeWidgetConfigs(listOf(cfg))).getJSONObject(0)
+        assertFalse(reencoded.has("launcherVirtualDisplayLaunchPolicy"))
+    }
+
+    @Test
     fun decode_legacyFreeformEnabled_withoutLaunchMode() {
         val json = JSONArray()
             .put(

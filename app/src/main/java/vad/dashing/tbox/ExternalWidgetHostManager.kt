@@ -13,6 +13,10 @@ import android.util.Log
  * host: the system keeps delivering [IAppWidgetHost.updateAppWidget] and a stopped host produces
  * DeadObjectException in system logs (and widgets stop updating). Ref-counted [releaseHost] only
  * tracks consumers; listening stays active for the process after the first [startListening].
+ *
+ * Host views are **not** cached across compositions — past attempts caused stale RemoteViews /
+ * parent issues on the HU. Callers wait for a measured tile size, push size options, then
+ * defer [AppWidgetHost.createView] with [DEFER_HOST_VIEW_MOUNT_MS].
  */
 object ExternalWidgetHostManager {
     private const val TAG = "ExternalWidgetHost"
@@ -21,6 +25,9 @@ object ExternalWidgetHostManager {
     private var host: AppWidgetHost? = null
     private var refCount = 0
     private var listening = false
+
+    /** Delay before [AppWidgetHost.createView] so the tile / page can paint first. */
+    const val DEFER_HOST_VIEW_MOUNT_MS = 80L
 
     @Synchronized
     private fun ensureHost(context: Context): AppWidgetHost {

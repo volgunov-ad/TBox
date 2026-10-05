@@ -27,6 +27,9 @@ object HvacClimateCanRepository {
     private val _hvacBlowMode = MutableStateFlow<HvacBlowMode?>(null)
     val hvacBlowMode: StateFlow<HvacBlowMode?> = _hvacBlowMode.asStateFlow()
 
+    private val _hvacCustomMode = MutableStateFlow<HvacCustomMode?>(null)
+    val hvacCustomMode: StateFlow<HvacCustomMode?> = _hvacCustomMode.asStateFlow()
+
     fun clearAll() {
         _hvacFrontOffState.value = MbCanBinaryState.Unknown
         _hvacTempLeftCelsius.value = null
@@ -34,6 +37,7 @@ object HvacClimateCanRepository {
         _hvacFanSpeed.value = null
         _hvacSyncState.value = MbCanBinaryState.Unknown
         _hvacBlowMode.value = null
+        _hvacCustomMode.value = null
     }
 
     fun applyFrontOffMbCan(raw: Int) {
@@ -44,21 +48,21 @@ object HvacClimateCanRepository {
         _hvacFrontOffState.value = HvacClimateDomain.decodeHvacFrontOffVhalRaw(raw)
     }
 
-    fun applyTempLeftMbCan(raw: Int) {
-        _hvacTempLeftCelsius.value = HvacClimateDomain.mbCanTempRawToCelsius(raw)
+    fun applyTempLeftReported(raw: Number) {
+        _hvacTempLeftCelsius.value = HvacClimateDomain.decodeHvacSetpointRaw(raw)
     }
 
-    fun applyTempLeftVhal(raw: Int) {
-        _hvacTempLeftCelsius.value = HvacClimateDomain.vhalTempRawToCelsius(raw)
+    fun applyTempRightReported(raw: Number) {
+        _hvacTempRightCelsius.value = HvacClimateDomain.decodeHvacSetpointRaw(raw)
     }
 
-    fun applyTempRightMbCan(raw: Int) {
-        _hvacTempRightCelsius.value = HvacClimateDomain.mbCanTempRawToCelsius(raw)
-    }
+    fun applyTempLeftMbCan(raw: Int) = applyTempLeftReported(raw)
 
-    fun applyTempRightVhal(raw: Int) {
-        _hvacTempRightCelsius.value = HvacClimateDomain.vhalTempRawToCelsius(raw)
-    }
+    fun applyTempLeftVhal(raw: Int) = applyTempLeftReported(raw)
+
+    fun applyTempRightMbCan(raw: Int) = applyTempRightReported(raw)
+
+    fun applyTempRightVhal(raw: Int) = applyTempRightReported(raw)
 
     fun applyFanSpeed(raw: Int) {
         _hvacFanSpeed.value = raw.takeIf { it in HvacClimateDomain.FAN_SPEED_MIN..HvacClimateDomain.FAN_SPEED_MAX }
@@ -78,5 +82,13 @@ object HvacClimateCanRepository {
 
     fun applyBlowModeVhal(raw: Int) {
         _hvacBlowMode.value = HvacBlowMode.fromVhalRaw(raw)
+    }
+
+    fun applyCustomModeMbCan(raw: Int) {
+        _hvacCustomMode.value = HvacCustomMode.fromMbCanRaw(raw)
+    }
+
+    fun applyCustomModeVhal(raw: Int) {
+        _hvacCustomMode.value = HvacCustomMode.fromVhalRaw(raw)
     }
 }

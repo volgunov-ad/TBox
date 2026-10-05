@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.os.Bundle
 
@@ -36,4 +37,62 @@ fun embeddedWidgetSizeHintsMatch(existing: Bundle, merged: Bundle): Boolean {
         }
     }
     return true
+}
+
+/**
+ * Temporary size used to break AppWidgetService identical-options no-ops.
+ * Width is bumped by 1dp; height stays the same so the restore delta is a single axis.
+ */
+fun embeddedWidgetSizeNudgeDp(widthDp: Int, heightDp: Int): Pair<Int, Int> {
+    val w = widthDp.coerceAtLeast(1)
+    val h = heightDp.coerceAtLeast(1)
+    return (w + 1) to h
+}
+
+/**
+ * Writes a temporary nudged size hint, then restores [widthDp]×[heightDp].
+ * Forces providers to receive [AppWidgetManager.updateAppWidgetOptions] even when the
+ * target cell size already matches stored options (common after pre-createView setup).
+ */
+fun forceNotifyEmbeddedWidgetSizeOptions(
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int,
+    widthDp: Int,
+    heightDp: Int,
+) {
+    val targetW = widthDp.coerceAtLeast(1)
+    val targetH = heightDp.coerceAtLeast(1)
+    val (nudgeW, nudgeH) = embeddedWidgetSizeNudgeDp(targetW, targetH)
+    appWidgetManager.updateAppWidgetOptions(
+        appWidgetId,
+        mergeAppWidgetSizeOptions(appWidgetManager, appWidgetId, nudgeW, nudgeH),
+    )
+    appWidgetManager.updateAppWidgetOptions(
+        appWidgetId,
+        mergeAppWidgetSizeOptions(appWidgetManager, appWidgetId, targetW, targetH),
+    )
+}
+
+/**
+ * After [AppWidgetHost.createView], nudge options and ask the host view to re-measure so
+ * RemoteViews stretch (default provider size laid out MATCH_PARENT) is replaced ASAP.
+ */
+fun refreshEmbeddedAppWidgetHostSize(
+    hostView: AppWidgetHostView,
+    appWidgetManager: AppWidgetManager,
+    appWidgetId: Int,
+    widthDp: Int,
+    heightDp: Int,
+) {
+    val w = widthDp.coerceAtLeast(1)
+    val h = heightDp.coerceAtLeast(1)
+    forceNotifyEmbeddedWidgetSizeOptions(appWidgetManager, appWidgetId, w, h)
+    try {
+        @Suppress("DEPRECATION")
+        hostView.updateAppWidgetSize(/* newOptions = */ null, w, h, w, h)
+    } catch (_: Exception) {
+        // Options nudge above is the primary path; HostView size API can fail on some HU builds.
+    }
+    hostView.requestLayout()
+    hostView.invalidate()
 }

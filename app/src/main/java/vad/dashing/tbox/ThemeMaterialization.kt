@@ -26,6 +26,7 @@ object ThemeMaterialization {
     const val WALLPAPER_DARK_DIR = "wallpaper/dark"
     const val ICONS_DIR = "icons"
     const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
+    const val UI_ICONS_DIR = "ui_icons"
     const val TILE_BACKGROUNDS_DIR = "tile_backgrounds"
     const val PANEL_BACKGROUNDS_DIR = "panel_backgrounds"
 
@@ -45,6 +46,7 @@ object ThemeMaterialization {
         val httpRequestIconsWritten: Int,
         val tileBackgroundsWritten: Int,
         val panelBackgroundsWritten: Int = 0,
+        val uiIconsWritten: Int = 0,
         val lightWallpaperCount: Int,
         val darkWallpaperCount: Int,
     )
@@ -57,6 +59,37 @@ object ThemeMaterialization {
     fun isMaterialized(context: Context, cacheKey: String): Boolean {
         val dir = cacheDir(context, cacheKey)
         return File(dir, MANIFEST_FILE).isFile && File(dir, THEME_JSON_FILE).isFile
+    }
+
+    /**
+     * Downscales oversized tile/panel background images already on disk (theme caches + shared dirs).
+     * Safe to call on every cold start; no-op when files are already within [UI_IMAGE_DECODE_MAX_EDGE_PX].
+     */
+    fun shrinkOversizedUiImagesInCaches(context: Context) {
+        val roots = buildList {
+            add(themesRootDir(context))
+            add(File(context.filesDir, TileBackgroundImageStorage.DIR_NAME))
+            add(File(context.filesDir, PanelBackgroundImageStorage.DIR_NAME))
+        }
+        roots.forEach { root ->
+            if (!root.isDirectory) return@forEach
+            if (root.name == THEMES_ROOT_DIR) {
+                root.listFiles()?.forEach { cache ->
+                    if (!cache.isDirectory) return@forEach
+                    shrinkImagesUnder(File(cache, TILE_BACKGROUNDS_DIR))
+                    shrinkImagesUnder(File(cache, PANEL_BACKGROUNDS_DIR))
+                }
+            } else {
+                shrinkImagesUnder(root)
+            }
+        }
+    }
+
+    private fun shrinkImagesUnder(dir: File) {
+        if (!dir.isDirectory) return
+        dir.walkTopDown().filter { it.isFile }.forEach { file ->
+            runCatching { shrinkImageFileIfOversized(file) }
+        }
     }
 
     fun readManifest(context: Context, cacheKey: String): ThemeManifest? {
@@ -161,16 +194,25 @@ object ThemeMaterialization {
             targetDir = File(dir, TILE_BACKGROUNDS_DIR),
             archiveFiles = parsed.tileBackgrounds,
             syncExisting = syncExisting,
+            shrinkOversizedImages = true,
         )
         val panelBackgroundsWritten = syncAssetDirectory(
             targetDir = File(dir, PANEL_BACKGROUNDS_DIR),
             archiveFiles = parsed.panelBackgrounds,
             syncExisting = syncExisting,
+            shrinkOversizedImages = true,
         )
         val httpRequestIconsWritten = syncAssetDirectory(
             targetDir = File(dir, HTTP_REQUEST_ICONS_DIR),
             archiveFiles = parsed.httpRequestIcons,
             syncExisting = syncExisting,
+        )
+        val uiIconsWritten = syncAssetDirectory(
+            targetDir = File(dir, UI_ICONS_DIR),
+            archiveFiles = parsed.uiIcons,
+            syncExisting = syncExisting,
+            shrinkOversizedImages = true,
+            shrinkMaxEdgePx = UiIconPaths.MAX_EDGE_PX,
         )
         val lightWallpaperCount = syncAssetDirectory(
             targetDir = File(dir, WALLPAPER_LIGHT_DIR),
@@ -208,6 +250,7 @@ object ThemeMaterialization {
             httpRequestIconsWritten = httpRequestIconsWritten,
             tileBackgroundsWritten = tileBackgroundsWritten,
             panelBackgroundsWritten = panelBackgroundsWritten,
+            uiIconsWritten = uiIconsWritten,
             lightWallpaperCount = lightWallpaperCount,
             darkWallpaperCount = darkWallpaperCount,
         )
@@ -261,6 +304,9 @@ object ThemeMaterialization {
             if (resolvedTargets.isEmpty()) {
                 throw IllegalArgumentException("theme_apply_targets_empty")
             }
+            val previousCacheKey = settingsManager.activeThemeUriFlow.first().trim()
+            val previousTargets = settingsManager.activeThemeApplyTargetsFlow.first()
+            val normalizedCacheKey = ThemeCacheKeys.sanitizeCacheKey(cacheKey)
 
             val importResult = ThemeLayoutExport.importJson(
                 context = context,
@@ -280,9 +326,7 @@ object ThemeMaterialization {
             )
 
             applyWallpaperDirsFromCache(settingsManager, dir, resolvedTargets)
-            settingsManager.bumpMainScreenWallpaperRevision()
 
-            val normalizedCacheKey = ThemeCacheKeys.sanitizeCacheKey(cacheKey)
             val exportSections = ThemeApplyTarget.exportSectionsFromTargets(resolvedTargets)
             settingsManager.saveActiveTheme(
                 uri = normalizedCacheKey,
@@ -291,10 +335,44 @@ object ThemeMaterialization {
                 applyTargets = resolvedTargets,
             )
 
-            settingsManager.bumpLauncherAppIconRevision()
-            settingsManager.bumpHttpRequestIconRevision()
-            settingsManager.bumpTileBackgroundImageRevision()
-            settingsManager.bumpPanelBackgroundImageRevision()
+            fun targetSourceChanged(target: ThemeApplyTarget): Boolean {
+                val previousSource = previousCacheKey.takeIf { target in previousTargets }.orEmpty()
+                val nextSource = normalizedCacheKey.takeIf { target in resolvedTargets }.orEmpty()
+                return previousSource != nextSource
+            }
+            if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS in resolvedTargets ||
+                targetSourceChanged(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS)
+            ) {
+                settingsManager.bumpMainScreenWallpaperRevision()
+            }
+            if (ThemeApplyTarget.APP_ICONS in resolvedTargets ||
+                targetSourceChanged(ThemeApplyTarget.APP_ICONS)
+            ) {
+                settingsManager.bumpLauncherAppIconRevision()
+                settingsManager.bumpHttpRequestIconRevision()
+            }
+            if (ThemeApplyTarget.UI_ICONS in resolvedTargets ||
+                targetSourceChanged(ThemeApplyTarget.UI_ICONS)
+            ) {
+                if (ThemeApplyTarget.UI_ICONS in resolvedTargets) {
+                    applyUiIconPreserveColorsFromThemeJson(settingsManager, themeJson)
+                }
+                settingsManager.bumpUiIconRevision()
+            }
+            if (ThemeApplyTarget.TILE_BACKGROUNDS in resolvedTargets ||
+                targetSourceChanged(ThemeApplyTarget.TILE_BACKGROUNDS)
+            ) {
+                settingsManager.bumpTileBackgroundImageRevision()
+            }
+            val panelTargets = setOf(
+                ThemeApplyTarget.MAIN_SCREEN_PANELS,
+                ThemeApplyTarget.FLOATING_PANELS,
+            )
+            if (resolvedTargets.any { it in panelTargets } ||
+                panelTargets.any { targetSourceChanged(it) }
+            ) {
+                settingsManager.bumpPanelBackgroundImageRevision()
+            }
 
             val iconsInTheme = if (ThemeApplyTarget.APP_ICONS in resolvedTargets) {
                 LauncherAppIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
@@ -311,6 +389,11 @@ object ThemeMaterialization {
             } else {
                 0
             }
+            val uiIconsInTheme = if (ThemeApplyTarget.UI_ICONS in resolvedTargets) {
+                UiIconPaths.countThemeCacheIcons(context.filesDir, cacheKey)
+            } else {
+                0
+            }
 
             ThemeApply.ApplyResult(
                 sections = exportSections,
@@ -318,6 +401,7 @@ object ThemeMaterialization {
                 iconsImported = iconsInTheme,
                 httpRequestIconsImported = httpRequestIconsInTheme,
                 tileBackgroundsImported = tileBackgroundsInTheme,
+                uiIconsImported = uiIconsInTheme,
             )
         }
     }
@@ -337,6 +421,7 @@ object ThemeMaterialization {
             themeJson = themeJson,
             icons = readAssetDir(ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
             httpRequestIcons = readAssetDir(HTTP_REQUEST_ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
+            uiIcons = readAssetDir(UI_ICONS_DIR).mapKeys { it.key.substringAfterLast('/') },
             tileBackgrounds = readAssetDir(TILE_BACKGROUNDS_DIR),
             panelBackgrounds = readAssetDir(PANEL_BACKGROUNDS_DIR),
             lightWallpapers = readAssetDir(WALLPAPER_LIGHT_DIR).mapKeys { it.key.substringAfterLast('/') },
@@ -406,6 +491,120 @@ object ThemeMaterialization {
         } else {
             null
         }
+    }
+
+    /**
+     * Copies [pickedUri] into the materialized theme wallpaper folder (light or dark) and returns
+     * the stored file name. When the pick already points at a file inside that folder, reuses it.
+     */
+    suspend fun importPickedWallpaperIntoCache(
+        context: Context,
+        cacheKey: String,
+        forLightTheme: Boolean,
+        pickedUri: Uri,
+        preferredFileName: String,
+    ): String? = withContext(Dispatchers.IO) {
+        themeDiskMutex.withLock {
+            if (!isMaterialized(context, cacheKey)) return@withLock null
+            val subDir = if (forLightTheme) WALLPAPER_LIGHT_DIR else WALLPAPER_DARK_DIR
+            val targetDir = File(cacheDir(context, cacheKey), subDir)
+            targetDir.mkdirs()
+            val existingInFolder = localFileFromEmbeddedStoragePath(pickedUri)
+                ?: pickedUri.takeIf { it.scheme.equals("file", ignoreCase = true) }
+                    ?.path?.let { File(it) }
+            if (existingInFolder != null &&
+                existingInFolder.isFile &&
+                existingInFolder.parentFile?.canonicalFile == targetDir.canonicalFile
+            ) {
+                return@withLock existingInFolder.name
+            }
+            if (isWallpaperFileOverSizeLimit(context, pickedUri)) return@withLock null
+            val fileName = uniqueWallpaperFileName(targetDir, preferredFileName)
+            val dest = File(targetDir, fileName)
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(pickedUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.isFile && dest.length() > 0L && dest.length() <= MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withLock null
+            }
+            fileName
+        }
+    }
+
+    fun wallpaperFolderFile(context: Context, cacheKey: String, forLightTheme: Boolean): File =
+        File(cacheDir(context, cacheKey), if (forLightTheme) WALLPAPER_LIGHT_DIR else WALLPAPER_DARK_DIR)
+
+    /**
+     * Writes current DataStore layout/settings covered by the theme's apply targets into
+     * [THEME_JSON_FILE] and refreshes the manifest fingerprint so a later activate restores
+     * live edits (e.g. after drive-mode theme switch).
+     */
+    suspend fun snapshotLiveLayoutToThemeCache(
+        context: Context,
+        settingsManager: SettingsManager,
+        cacheKey: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        themeDiskMutex.withLock {
+            snapshotLiveLayoutToThemeCacheLocked(context, settingsManager, cacheKey)
+        }
+    }
+
+    private suspend fun snapshotLiveLayoutToThemeCacheLocked(
+        context: Context,
+        settingsManager: SettingsManager,
+        cacheKey: String,
+    ): Boolean {
+        val normalizedKey = cacheKey.trim()
+        if (!ThemeCacheKeys.isLikelyCacheKey(normalizedKey)) return false
+        if (!isMaterialized(context, normalizedKey)) return false
+        val manifest = readManifest(context, normalizedKey) ?: return false
+        val targets = ThemeApplyTarget.resolveActive(manifest.applyTargets, manifest.sections)
+        if (targets.isEmpty()) return false
+        val themeJson = ThemeLayoutExport.exportJson(
+            context = context,
+            settingsManager = settingsManager,
+            applyTargets = targets,
+        )
+        val dir = cacheDir(context, normalizedKey)
+        File(dir, THEME_JSON_FILE).writeText(themeJson)
+        val fingerprint = ThemeFingerprint.sha256(themeJson)
+        writeManifest(dir, manifest.copy(fingerprint = fingerprint))
+        val activeKey = settingsManager.activeThemeUriFlow.first().trim()
+        if (activeKey == ThemeCacheKeys.sanitizeCacheKey(normalizedKey) || activeKey == normalizedKey) {
+            settingsManager.saveActiveTheme(
+                uri = ThemeCacheKeys.sanitizeCacheKey(normalizedKey),
+                fingerprint = fingerprint,
+                sections = ThemeApplyTarget.exportSectionsFromTargets(targets),
+                applyTargets = targets,
+            )
+        }
+        return true
+    }
+
+    internal fun uniqueWallpaperFileName(targetDir: File, preferredFileName: String): String {
+        val raw = preferredFileName.trim().replace('\\', '/').substringAfterLast('/')
+        val sanitized = raw.replace(Regex("[^a-zA-Z0-9._-]"), "_").trim('_', '.')
+            .ifBlank { "wallpaper.jpg" }
+        val dot = sanitized.lastIndexOf('.')
+        val (base, ext) = if (dot > 0 && dot < sanitized.length - 1) {
+            sanitized.substring(0, dot) to sanitized.substring(dot)
+        } else {
+            sanitized to ".jpg"
+        }
+        var candidate = "$base$ext"
+        var suffix = 2
+        while (File(targetDir, candidate).exists()) {
+            candidate = "${base}_$suffix$ext"
+            suffix++
+        }
+        return candidate
     }
 
     fun formatRuntimeJsonDebugText(
@@ -499,9 +698,6 @@ object ThemeMaterialization {
         applyTargets: Set<ThemeApplyTarget>,
     ) {
         if (ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS !in applyTargets) {
-            settingsManager.saveMainScreenWallpaperLightFolderUri(null)
-            settingsManager.saveMainScreenWallpaperDarkFolderUri(null)
-            settingsManager.bumpMainScreenWallpaperRevision()
             return
         }
 
@@ -511,27 +707,39 @@ object ThemeMaterialization {
         val darkUri = wallpaperFolderUriFromCacheDir(File(cacheDir, WALLPAPER_DARK_DIR))
         settingsManager.saveMainScreenWallpaperDarkFolderUri(darkUri)
 
-        settingsManager.bumpMainScreenWallpaperRevision()
     }
 
     /**
      * Writes [archiveFiles]; when [syncExisting] is true, keeps existing same-name files and
      * deletes cache files that are not present in the archive.
+     *
+     * When [shrinkOversizedImages] is true (tile/panel backgrounds), newly written files and
+     * already-cached same-name files are downscaled on disk if either edge exceeds
+     * [UI_IMAGE_DECODE_MAX_EDGE_PX] — so a phone photo in a `.tboxtheme` cannot stay at
+     * full resolution for a small overlay.
      */
     private fun syncAssetDirectory(
         targetDir: File,
         archiveFiles: Map<String, ByteArray>,
         syncExisting: Boolean,
+        shrinkOversizedImages: Boolean = false,
+        shrinkMaxEdgePx: Int = UI_IMAGE_DECODE_MAX_EDGE_PX,
     ): Int {
         targetDir.mkdirs()
         var written = 0
         archiveFiles.forEach { (name, bytes) ->
             val dest = File(targetDir, name)
             if (syncExisting && dest.isFile) {
+                if (shrinkOversizedImages) {
+                    shrinkImageFileIfOversized(dest, shrinkMaxEdgePx)
+                }
                 return@forEach
             }
             dest.parentFile?.mkdirs()
             dest.writeBytes(bytes)
+            if (shrinkOversizedImages) {
+                shrinkImageFileIfOversized(dest, shrinkMaxEdgePx)
+            }
             written++
         }
         if (syncExisting) {
@@ -560,6 +768,33 @@ object ThemeMaterialization {
             json.put("applyTargets", ThemeApplyTarget.toJsonArray(manifest.applyTargets))
         }
         File(dir, MANIFEST_FILE).writeText(json.toString(2))
+    }
+
+    private suspend fun applyUiIconPreserveColorsFromThemeJson(
+        settingsManager: SettingsManager,
+        themeJson: String,
+    ) {
+        val root = runCatching { JSONObject(themeJson) }.getOrNull() ?: return
+        val section = root.optJSONObject(ThemeSection.UI_ICONS.jsonKey) ?: return
+        val keysArr = section.optJSONArray("keys") ?: JSONArray()
+        val preserveArr = section.optJSONArray("preserveColors") ?: JSONArray()
+        val keys = buildList {
+            for (i in 0 until keysArr.length()) {
+                val key = keysArr.optString(i).trim()
+                if (UiIconPaths.isValidKey(key)) add(key)
+            }
+        }
+        val preserve = buildList {
+            for (i in 0 until preserveArr.length()) {
+                val key = preserveArr.optString(i).trim()
+                if (UiIconPaths.isValidKey(key)) add(key)
+            }
+        }
+        settingsManager.mergeUiIconPreserveColorsFromTheme(
+            themeKeys = keys,
+            preserveColorsKeys = preserve,
+            bumpRevision = false,
+        )
     }
 
     private fun parseManifest(obj: JSONObject): ThemeManifest {

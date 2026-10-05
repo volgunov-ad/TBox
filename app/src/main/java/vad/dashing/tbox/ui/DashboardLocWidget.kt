@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,7 +59,7 @@ fun DashboardLocWidgetItem(
     backgroundColor: Color? = null,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val geo by GeoDisplayRepository.state.collectAsStateWithLifecycle()
     val gnss by TboxRepository.locValues.collectAsStateWithLifecycle()
@@ -123,7 +122,7 @@ fun DashboardLocWidgetItem(
                         .wrapContentHeight(Alignment.CenterVertically)
                 )
                 Image(
-                    painter = painterResource(id = locIndicatorDrawable),
+                    painter = customizableUiPainter(id = locIndicatorDrawable),
                     contentDescription = stringResource(
                         R.string.dashboard_loc_content_desc,
                         geo.locateStatus,
@@ -135,7 +134,7 @@ fun DashboardLocWidgetItem(
                         .weight(2f)
                         .padding(4.dp)
                         .wrapContentHeight(Alignment.CenterVertically)
-                        .scale(scale)
+                        .scale(iconScale)
                 )
                 Text(
                     text = "$speedText\u2009${stringResource(R.string.unit_kmh)}",

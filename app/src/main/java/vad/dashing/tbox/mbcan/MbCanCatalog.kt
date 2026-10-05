@@ -1,5 +1,7 @@
 package vad.dashing.tbox.mbcan
 
+import vad.dashing.tbox.HeadUnitCanMode
+
 /**
  * Catalog of mbCAN capabilities collected from vendor apps in the mbCAN workspace.
  * These lists are used as a reference/spec and do not imply automatic subscription.
@@ -36,6 +38,19 @@ sealed class MbCanCommandPolicy {
     data class SetExact(
         val allowedValues: Set<Int>
     ) : MbCanCommandPolicy()
+
+    data class SetRange(
+        val allowedValues: IntRange
+    ) : MbCanCommandPolicy()
+
+    /** Write any int as-is (debug / car-settings raw fields). */
+    data object SetAnyInt : MbCanCommandPolicy()
+
+    /**
+     * Power windows: A9 `canSetWindowStatus` 0…100 %, A10 VHAL 1 close / 2 open / 3 vent.
+     * Not [canSetVehicleParam] on Android 9.
+     */
+    data object SetWindowPosition : MbCanCommandPolicy()
 }
 
 data class MbCanCommandSpec(
@@ -88,6 +103,9 @@ object MbCanCatalog {
         MbCanControlParam("Powertrain", "ESC off switch", "eVEHICLE_ESCOFF_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Powertrain", "ISS switch", "eVEHICLE_ISS_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("EV/Charge", "Wireless phone charging switch", "eVEHICLE_CHG_WIRELESS_SWITCH", MbCanConfidence.DECLARED_IN_API),
+        MbCanControlParam("Body/BCM", "Sunroof", "eVEHICLE_PROPERTY_SUNROOF_CONTROL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Body/BCM", "Sunshade", "eVEHICLE_PROPERTY_SUNSHADE_POS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Body/BCM", "Windows", "eVEHICLE_PROPERTY_WINDOW_POS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Door auto lock", "eVEHICLE_PROPERTY_DOOR_AUTO_LOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Ignition-off unlock", "eVEHICLE_PROPERTY_DOOR_IGNOFF_UNLOCK", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Body/BCM", "Mirror reverse turn location", "eVEHICLE_SET_MIRROR_REVERSE_TURN_LOC", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -101,11 +119,26 @@ object MbCanCatalog {
         MbCanControlParam("Climate", "Sterilize strength request", "eVEHICLE_STERILIZE_STRENGTH_REQ", MbCanConfidence.DECLARED_IN_API),
         MbCanControlParam("Climate", "HVAC front defrost blow", "eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "HVAC temperature", "eVEHICLE_PROPERTY_HVAC_TEMPERATURE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Anion air purification", "eVEHICLE_PROPERTY_HVAC_AQS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Climate", "Fragrance switch", "eVEHICLE_PROPERTY_FRAGRANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Fragrance smell", "eVEHICLE_PROPERTY_FRAGRANCE_SMELL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "Fragrance concentration", "eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "FCW switch", "eFCW_SWTICH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "Auto brake switch", "eVEHICLE_PROPERTY_ACC_AUTOBRAKE_SW", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("ADAS", "LKA sensitivity", "eVEHICLE_PROPERTY_LAS_SENSITIVITY_LEVEL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "LAS mode (LDW/LKA/OFF)", "eVEHICLE_PROPERTY_LAS_MODE_SELECTION", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "LDW switch", "eDVD_LDWSWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "TJA/ICA switch", "eVEHICLE_PROPERTY_TJA_ICA", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "ACC time gap", "eTIMEGAPSET1REQ", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("ADAS", "HMA / smart high beam", "eVEHICLE_SMART_HIGHBEAM_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "HVAC custom mode (ECO/Comfort/Strong)", "eHVAC_CUSTOM", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Climate", "AC MAX", "eVEHICLE_SET_RRM_ACMAX_REQ", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "EQ mode", "eAUDIO_PROPERTY_EQMODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ bass band", "eAUDIO_PROPERTY_EQBAND_BASS", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ middle band", "eAUDIO_PROPERTY_EQBAND_MIDDLE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "EQ treble band", "eAUDIO_PROPERTY_EQBAND_TREBLE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "Balance", "eAUDIO_PROPERTY_BALANCE_BALANCE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Multimedia", "Fader", "eAUDIO_PROPERTY_BALANCE_FADER", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "Media volume key mode", "eAUDIO_PROPERTY_VOLUME_KEY", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "Volume vs speed", "eAUDIO_PROPERTY_VOLUME_SPEED", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("Multimedia", "AVM language", "eAVM_SET_LANG", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
@@ -113,140 +146,399 @@ object MbCanCatalog {
         MbCanControlParam("System", "ICM brightness mode", "eVEHICLE_SET_ICM_BRIGHTNESS_MODE", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "Steering wheel heating switch", "eVEHICLE_SET_MFS_HEAT_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
         MbCanControlParam("System", "Wiper maintenance switch", "eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
-        MbCanControlParam("System", "Parking radar switch", "eVEHICLE_SET_PAS_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS)
+        MbCanControlParam("System", "Parking radar switch", "eVEHICLE_SET_PAS_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Chassis", "AVH / Auto Hold switch", "eVEHICLE_AVH_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Chassis", "HDC switch", "eVEHICLE_HDC_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Chassis", "ESP off switch", "eVEHICLE_ESCOFF_SWITCH", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Lights", "Headlight mode", "eVEHICLE_LIGHTCONTROL", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
+        MbCanControlParam("Lights", "Rear fog light", "eVEHICLE_REARFOGLIGHT", MbCanConfidence.CONFIRMED_IN_APP_CALLS),
     )
 }
 
 object MbCanKnownVehiclePropertyId {
     // MBVehicleProperty.eVEHICLE_SET_MFS_HEAT_SWITCH.
-    const val STEERING_WHEEL_HEAT_SWITCH = 188
+    @JvmField val STEERING_WHEEL_HEAT_SWITCH = 188
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_WIPER_MAINTENANCE_SWITCH]. */
-    const val WIPER_MAINTENANCE_SWITCH = 185
+    @JvmField val WIPER_MAINTENANCE_SWITCH = 185
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH]. */
-    const val PARKING_RADAR_SWITCH = 218
+    @JvmField val PARKING_RADAR_SWITCH = 218
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_AVH_SWITCH] — Auto Hold. */
+    @JvmField val AVH_SWITCH = 142
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_HDC_SWITCH] — Hill Descent Control. */
+    @JvmField val HDC_SWITCH = 143
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH] — ESP off. */
+    @JvmField val ESP_OFF_SWITCH = 144
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_LIGHTCONTROL] —
+     * headlight mode: **1** AUTO, **2** PARK, **3** LOW, **4** OFF
+     * (stock A9 [Em_HeadlampControl_ListItem_value] / A10 [CarOutLightFragment]).
+     */
+    @JvmField val LIGHTCONTROL = 135
+    @JvmField val LIGHTCONTROL_AUTO = 1
+    @JvmField val LIGHTCONTROL_PARK = 2
+    @JvmField val LIGHTCONTROL_LOW = 3
+    @JvmField val LIGHTCONTROL_OFF = 4
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_REARFOGLIGHT] —
+     * rear fog; mbCAN **1** off / **2** on; A10 VHAL **1** on / **2** off.
+     */
+    @JvmField val REAR_FOG_LIGHT = 136
+    /** Door auto lock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    @JvmField val DOOR_AUTO_LOCK = 1
+    /** Ignition-off door unlock: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    @JvmField val DOOR_IGNOFF_UNLOCK = 2
+    /** Follow-me-home delay: mbCAN 30/60/3(off), VHAL 1/2/3(off). */
+    @JvmField val HEADLIGHTS_HOMELIGHT_DELAY = 7
+    /** Driver-only (1) or all-door (2) unlock. */
+    @JvmField val DRIVER_UNLOCK_MODE = 131
+    /** Remote lock feedback: light+horn (1), light (2), horn (3). */
+    @JvmField val DEFENCES_PROMPT = 3
+    /** Wiper sensitivity level 1..4. */
+    @JvmField val WIPER_SENSITIVITY = 191
+    /** Rear wiper: mbCAN 1 off / 2 on; VHAL write 2 off / 1 on. */
+    @JvmField val REAR_WIPER = 186
+    /** Low-beam height UI level 1..4 (VHAL feedback/write are inverted). */
+    @JvmField val HIGHBEAM_ADJUST = 129
+    /** Turn-signal flash count 1..3 (VHAL feedback is zero-based). */
+    @JvmField val TURN_FLASH_COUNT = 8
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION] —
+     * lane assist mode: **1** LDW, **2** LKA, **3** OFF.
+     */
+    @JvmField val LAS_MODE_SELECTION = 17
+    @JvmField val LAS_MODE_LDW = 1
+    @JvmField val LAS_MODE_LKA = 2
+    @JvmField val LAS_MODE_OFF = 3
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA] — 1 off, 2 on. */
+    @JvmField val TJA_ICA_SWITCH = 23
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eDVD_LDWSWITCH] —
+     * LDW master switch: mbCAN **1** Off / **2** On (A9 log co-moves with [LAS_MODE_SELECTION]).
+     */
+    @JvmField val LDW_SWITCH = 80
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eTIMEGAPSET1REQ] —
+     * ACC time-gap set request: raw **1…4** (A9 log: 1 with TJA on, 4 with TJA off).
+     */
+    @JvmField val ACC_TIME_GAP_SET = 95
+    /** Blind-spot detection: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
+    @JvmField val BLIND_AREA_DETECTION = 15
+    /** Door-open warning: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
+    @JvmField val DOOR_OPEN_WARNING = 13
+    /** Forward-collision warning master; enabled value is 2 on both backends. */
+    @JvmField val FCW_SWITCH = 96
+    /** Coupled with [FCW_SWITCH] by stock CarSettings. */
+    @JvmField val ACC_AUTOBRAKE_SWITCH = 20
+    /** Coupled with [FCW_SWITCH] by stock CarSettings. */
+    @JvmField val SAFE_DISTANCE_WARNING = 22
+    /** FCW warning-distance setting. */
+    @JvmField val FCW_SENSITIVITY = 97
+    /** LDW sensitivity: mbCAN 0 low / 1 high. */
+    @JvmField val LAS_SENSITIVITY_LEVEL = 16
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH] —
+     * HMA / intelligent high beam on A9: stock CarSettings `switchIntelligentHighBeamsHMA`
+     * binds this id (**19**; enum name is misleading). 1 off / 2 on. The old A9 id
+     * **130** (`eVEHICLE_SMART_HIGHBEAM_SWITCH`) never reflects or drives HMA on this car.
+     */
+    @JvmField val HMA_SWITCH = 19
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_CUSTOM] — ECO/Comfort/Strong; write 1/2/3. */
+    @JvmField val HVAC_CUSTOM = 140
+    @JvmField val HVAC_CUSTOM_ECO = 1
+    @JvmField val HVAC_CUSTOM_COMFORT = 2
+    @JvmField val HVAC_CUSTOM_STRONG = 3
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ] — AC MAX; 1 off, 2 on. */
+    @JvmField val HVAC_AC_MAX = 228
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT] */
-    const val FRONT_WINDSCREEN_HEAT_SWITCH = 316
+    @JvmField val FRONT_WINDSCREEN_HEAT_SWITCH = 316
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_DEFROSTER] — rear window + mirrors. */
-    const val HVAC_DEFROSTER_SWITCH = 41
+    @JvmField val HVAC_DEFROSTER_SWITCH = 41
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AIR_RECIRCULATION] — property id. */
-    const val HVAC_AIR_RECIRCULATION = 39
+    @JvmField val HVAC_AIR_RECIRCULATION = 39
     /** [canSetVehicleParam]/[canGetVehicleParam] value: recirculation on. */
-    const val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
+    @JvmField val HVAC_AIR_RECIRCULATION_VALUE_ON = 1
     /** Same property: recirculation off. */
-    const val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
+    @JvmField val HVAC_AIR_RECIRCULATION_VALUE_OFF = 2
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_POWER] — AC compressor; 1 off, 2 on. */
-    const val HVAC_POWER = 36
+    @JvmField val HVAC_POWER = 36
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_BLOWER_DELAY] —
      * AC clean when locked (stock ACSettings Set switch); mbCAN 1 off, 2 on.
      */
-    const val HVAC_BLOWER_DELAY = 52
+    @JvmField val HVAC_BLOWER_DELAY = 52
     /** mbCAN / [MBWTSwitch] on value for [HVAC_BLOWER_DELAY]. */
-    const val HVAC_BLOWER_DELAY_VALUE_ON = 2
+    @JvmField val HVAC_BLOWER_DELAY_VALUE_ON = 2
     /** mbCAN / [MBWTSwitch] off value for [HVAC_BLOWER_DELAY]. */
-    const val HVAC_BLOWER_DELAY_VALUE_OFF = 1
+    @JvmField val HVAC_BLOWER_DELAY_VALUE_OFF = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_AUTO_STATE] — AUTO mode; 1 off, 2 on. */
-    const val HVAC_AUTO_STATE = 110
+    @JvmField val HVAC_AUTO_STATE = 110
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS] — anion purification; 1 off, 2 on. */
+    @JvmField val HVAC_AQS = 42
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SWITCH] — 1 off, 2 on (A9 only). */
+    @JvmField val FRAGRANCE_SWITCH = 33
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_SMELL] — 1 Meteor, 2 Boss, 3 Tea (A9 only). */
+    @JvmField val FRAGRANCE_SMELL = 34
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION] — 1 low, 2 mid, 3 high (A9 only). */
+    @JvmField val FRAGRANCE_CONCENTRATION = 35
+    /** First blowing after vehicle start: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    @JvmField val POWER_FIRST_BREATH = 53
+    /** Reduce fan speed while Bluetooth is active: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    @JvmField val BT_REDUCED_WIND_SPEED = 51
+    /** Automatic ventilation: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    @JvmField val HVAC_VENTILATION_AUTO_SWITCH = 141
+    /** HUD master switch: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    @JvmField val HUD_SWITCH = 220
+    /** HUD height level, 1..10. */
+    @JvmField val HUD_HEIGHT = 221
+    /** HUD brightness level, 1..10. */
+    @JvmField val HUD_BRIGHTNESS = 222
+    /** HUD display mode: 1 standard, 2 snow. */
+    @JvmField val HUD_DISPLAY_MODE = 223
+    /** HUD automatic brightness: mbCAN 1 off / 2 on; VHAL 2 off / 1 on. */
+    @JvmField val HUD_AUTO_BRIGHTNESS = 227
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_ICM_BRIGHTNESS_MODE] — 0 auto / 1 manual. */
+    @JvmField val ICM_BRIGHTNESS_MODE = 208
+    /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ] — manual level 1..10. */
+    @JvmField val ICM_BRIGHTNESS_MANUAL = 209
+    /** Overspeed alarm threshold, raw value maps to km/h through [CarSettingsHudDomain]. */
+    @JvmField val OVERSPEED_ALARM_SET = 296
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_TEMPERATURE] — left zone, °C×10. */
-    const val HVAC_TEMPERATURE_LEFT = 37
+    @JvmField val HVAC_TEMPERATURE_LEFT = 37
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eHVAC_FR_TEMPERATURE] — right zone, °C×10. */
-    const val HVAC_TEMPERATURE_RIGHT = 111
+    @JvmField val HVAC_TEMPERATURE_RIGHT = 111
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_SPEED] — 0..7. */
-    const val HVAC_FAN_SPEED = 38
+    @JvmField val HVAC_FAN_SPEED = 38
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eFRONT_OFF] — front climate off; 1 running, 2 off. */
-    const val HVAC_FRONT_OFF = 90
+    @JvmField val HVAC_FRONT_OFF = 90
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYNCSWTICH_REQ] — dual-zone sync; 1 off, 2 on. */
-    const val HVAC_SYNC_SWITCH = 94
+    @JvmField val HVAC_SYNC_SWITCH = 94
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PLG_CONTROL] — power liftgate pulse. */
-    const val TRUNK_PLG_CONTROL = 134
+    @JvmField val TRUNK_PLG_CONTROL = 134
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_DOOR_TRUNK_POS] — max opening angle setting (stock dialog). */
-    const val DOOR_TRUNK_POS = 6
+    @JvmField val DOOR_TRUNK_POS = 6
     /** VHAL [R_0402_PLG_1_RearDoorStatus] — 0 closed, 1 open (stock [CarCommon3]). */
-    const val TRUNK_STATUS = 71343
+    @JvmField val TRUNK_STATUS = 71343
     /** PLG movement direction (A10 read); also BCM `nRearDoorMoveDir` push on A9. */
-    const val TRUNK_REAR_DOOR_MOVE_DIR = 71341
+    @JvmField val TRUNK_REAR_DOOR_MOVE_DIR = 71341
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SET_MIRROR_FOLD_SWITCH] — fold=1, unfold=2. */
-    const val MIRROR_FOLD_SWITCH = 230
+    @JvmField val MIRROR_FOLD_SWITCH = 230
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_MIRROR_AUTOFOLD_SW] — 1 off, 2 on. */
+    @JvmField val MIRROR_AUTOFOLD_SW = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION] — blow mode. */
-    const val HVAC_FAN_DIRECTION = 40
+    @JvmField val HVAC_FAN_DIRECTION = 40
     /** mbCAN blow modes (Android 9 [MBFrontDefrostingView]). */
-    const val HVAC_FAN_DIRECTION_FACE = 1
-    const val HVAC_FAN_DIRECTION_FOOT = 2
-    const val HVAC_FAN_DIRECTION_FACE_FOOT = 3
-    const val HVAC_FAN_DIRECTION_DEFROST = 4
-    const val HVAC_FAN_DIRECTION_DEFROST_FOOT = 5
+    @JvmField val HVAC_FAN_DIRECTION_FACE = 1
+    @JvmField val HVAC_FAN_DIRECTION_FOOT = 2
+    @JvmField val HVAC_FAN_DIRECTION_FACE_FOOT = 3
+    @JvmField val HVAC_FAN_DIRECTION_DEFROST = 4
+    @JvmField val HVAC_FAN_DIRECTION_DEFROST_FOOT = 5
     /** VHAL blow modes (Android 10 [AcFragment.mWindModeIds]). */
-    const val HVAC_FAN_DIRECTION_VHAL_FACE = 0
-    const val HVAC_FAN_DIRECTION_VHAL_DEFROST_FOOT = 3
-    const val HVAC_FAN_DIRECTION_VHAL_DEFROST = 4
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_FACE = 0
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_DEFROST_FOOT = 3
+    @JvmField val HVAC_FAN_DIRECTION_VHAL_DEFROST = 4
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_CHG_WIRELESS_SWITCH] — 1 off, 2 on. */
-    const val CHG_WIRELESS_SWITCH = 264
+    @JvmField val CHG_WIRELESS_SWITCH = 264
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_STEERING_MODE] — 0–6. */
-    const val VEHICLE_PROPERTY_STEERING_MODE = 24
+    @JvmField val VEHICLE_PROPERTY_STEERING_MODE = 24
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_EPS_MODE] — 0–6. */
-    const val VEHICLE_PROPERTY_EPS_MODE = 25
+    @JvmField val VEHICLE_PROPERTY_EPS_MODE = 25
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_MODE] — 0–6. */
-    const val SYSTEM_MODE = 73
+    @JvmField val SYSTEM_MODE = 73
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSYSTEM_REBOOT] — head unit reboot via [canSetVehicleParam]. */
-    const val SYSTEM_REBOOT = 74
+    @JvmField val SYSTEM_REBOOT = 74
     /** Value written to [SYSTEM_REBOOT] to request HU reboot. */
-    const val SYSTEM_REBOOT_VALUE = 1
+    @JvmField val SYSTEM_REBOOT_VALUE = 1
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE] — 0–6. */
-    const val VEHICLE_DRIVEMODE = 145
+    @JvmField val VEHICLE_DRIVEMODE = 145
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_POWERMODE] — 0–6. */
-    const val VEHICLE_POWERMODE = 147
+    @JvmField val VEHICLE_POWERMODE = 147
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_DRIVEMODE_6DCT_WET] — 0–6. */
-    const val VEHICLE_DRIVEMODE_6DCT_WET = 149
+    @JvmField val VEHICLE_DRIVEMODE_6DCT_WET = 149
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_TSR_SPEED_LIMIT_SIGN] — SLA/TSR; 1 off, 2 on. */
-    const val VEHICLE_TSR_SWITCH = 18
+    @JvmField val VEHICLE_TSR_SWITCH = 18
     /**
-     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h 0..150.
-     *
-     * Unsupported on Jetour Dashing (this head unit / vehicle): writes do not engage a working
-     * limiter; no verified VHAL map. Kept for protocol completeness / future platforms.
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_VALUESET] — km/h raw.
+     * Live read feeds the speed-limiter widget / car-settings raw field. VHAL map may be missing on some HUs.
      */
-    const val VEHICLE_SPEEDLIMIT_VALUESET = 253
+    @JvmField val VEHICLE_SPEEDLIMIT_VALUESET = 253
     /**
-     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — 1 off, 2 on.
-     *
-     * Unsupported on Jetour Dashing (this head unit / vehicle): switch/state do not work in practice;
-     * no verified VHAL map (identity fallback only). Kept for protocol completeness / future platforms.
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_SPEEDLIMIT_SWITCH] — typically 1 off, 2 on (mbCAN).
+     * Live read feeds widget active state / car-settings raw field. VHAL map may be missing on some HUs.
      */
-    const val VEHICLE_SPEEDLIMIT_SWITCH = 254
+    @JvmField val VEHICLE_SPEEDLIMIT_SWITCH = 254
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PM25_DISPLAY_TOGGLE] — 1 inside, 2 outside. */
-    const val VEHICLE_PM25_DISPLAY_TOGGLE = 163
+    @JvmField val VEHICLE_PM25_DISPLAY_TOGGLE = 163
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_UV_LAMP_REQ] — 1 off, 2 on, 3 auto. */
-    const val VEHICLE_UV_LAMP_REQ = 164
+    @JvmField val VEHICLE_UV_LAMP_REQ = 164
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_STERILIZE_STRENGTH_REQ] — 1 low, 2 medium, 3 high. */
-    const val VEHICLE_STERILIZE_STRENGTH_REQ = 165
+    @JvmField val VEHICLE_STERILIZE_STRENGTH_REQ = 165
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eSOURCE_STATION_MODE] — 1 off, 2 on. */
-    const val SOURCE_STATION_MODE = 127
+    @JvmField val SOURCE_STATION_MODE = 127
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_VEHWASH_MODESET] — 1 off, 2 on. */
-    const val VEHICLE_VEHWASH_MODESET = 252
+    @JvmField val VEHICLE_VEHWASH_MODESET = 252
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICEL_BRAKE_PEDA_FEEL_MODE] — 0–6. */
-    const val VEHICEL_BRAKE_PEDA_FEEL_MODE = 300
-    const val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
-    const val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
+    @JvmField val VEHICEL_BRAKE_PEDA_FEEL_MODE = 300
+    @JvmField val FRONT_LEFT_SEAT_HEAT_VENT_SWITCH = 138
+    @JvmField val FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH = 139
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_LR_HEATVENTSW] — rear heat only (values 1–4). */
-    const val REAR_LEFT_SEAT_HEAT_SWITCH = 318
+    @JvmField val REAR_LEFT_SEAT_HEAT_SWITCH = 318
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVHEICEL_SEAT_RR_HEATVENTSW] — rear heat only (values 1–4). */
-    const val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
+    @JvmField val REAR_RIGHT_SEAT_HEAT_SWITCH = 319
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CRUISE_CONTROL] — main cruise switch (enable / full off). */
-    const val MFS_CRUISE_CONTROL = 210
+    @JvmField val MFS_CRUISE_CONTROL = 210
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_CANCEL] — pause Active→Standby on Dashing. */
-    const val MFS_CANCEL = 212
+    @JvmField val MFS_CANCEL = 212
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_RESPLUS] — RES / +1 km/h pulse. */
-    const val MFS_RES_PLUS = 213
+    @JvmField val MFS_RES_PLUS = 213
     /** [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_MFS_SETMINUS] — SET / −1 km/h pulse. */
-    const val MFS_SET_MINUS = 214
+    @JvmField val MFS_SET_MINUS = 214
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNROOF_CONTROL] —
+     * 1 closed … 11 open, 12 tilt. Same raw on A9 (`canSetVehicleParam`) and A10 VHAL.
+     */
+    @JvmField val SUNROOF_CONTROL = 45
+    /** Sunroof tilt (value of [SUNROOF_CONTROL], not a separate property). */
+    @JvmField val SUNROOF_TILT = 12
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_SUNSHADE_POS] —
+     * 1 closed … 11 open. Own property id, not sunroof.
+     */
+    @JvmField val SUNSHADE_POS = 46
+    /**
+     * [com.mengbo.mbCan.defines.MBVehicleProperty.eVEHICLE_PROPERTY_WINDOW_POS] —
+     * all panes. A9 writes via [MbCanEngineFacade.canSetWindowStatus], not `canSetVehicleParam`.
+     */
+    @JvmField val WINDOW_POS = 47
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_FRWINDOW_POS] */
+    @JvmField val WINDOW_FR_POS = 55
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_FLWINDOW_POS] */
+    @JvmField val WINDOW_FL_POS = 56
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_RRWINDOW_POS] */
+    @JvmField val WINDOW_RR_POS = 57
+    /** [MBVehicleProperty.eVEHICLE_PROPERTY_RLWINDOW_POS] */
+    @JvmField val WINDOW_RL_POS = 58
+    @JvmField val WINDOW_A10_CLOSE = 1
+    @JvmField val WINDOW_A10_OPEN = 2
+    @JvmField val WINDOW_A10_VENT = 3
+}
+
+/**
+ * Shade / sunroof / window write helpers shared by mbCAN, VHAL and automations.
+ *
+ * A9 window JNI takes bytes FR, FL, RR, RL; **−1** leaves that pane unchanged
+ * (stock voice [VehicleWindowBuilder]).
+ */
+object BodyComfortWrite {
+    val SHADE_VALUES: IntRange = 1..11
+    val ROOF_VALUES: Set<Int> = (1..11).toSet() + MbCanKnownVehiclePropertyId.SUNROOF_TILT
+    val WINDOW_A9_PERCENT: IntRange = 0..100
+    /**
+     * A9 panes snap to these four positions. Picker / allowlist match the car,
+     * not a 5% grid (sending 5 settled at 20).
+     */
+    val WINDOW_A9_PERCENT_STEPS: List<Int> = listOf(
+        0,
+        BodyComfortDomain.WINDOW_A9_VENT_PERCENT,
+        BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT,
+        100,
+    )
+    val WINDOW_A10_COMMANDS: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE,
+        MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN,
+        MbCanKnownVehiclePropertyId.WINDOW_A10_VENT,
+    )
+    const val WINDOW_UNCHANGED = -1
+
+    val WINDOW_PANE_IDS: Set<Int> = setOf(
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+    )
+
+    val WINDOW_PROPERTY_IDS: Set<Int> =
+        WINDOW_PANE_IDS + MbCanKnownVehiclePropertyId.WINDOW_POS
+
+    fun isWindowProperty(propertyId: Int): Boolean = propertyId in WINDOW_PROPERTY_IDS
+
+    fun skipsPostSetVerify(propertyId: Int): Boolean =
+        propertyId == MbCanKnownVehiclePropertyId.SUNSHADE_POS ||
+            propertyId == MbCanKnownVehiclePropertyId.SUNROOF_CONTROL ||
+            isWindowProperty(propertyId)
+
+    fun windowValues(mode: HeadUnitCanMode): List<Int> = when (mode) {
+        HeadUnitCanMode.Android9MbCan -> WINDOW_A9_PERCENT_STEPS
+        HeadUnitCanMode.Android10Vhal -> WINDOW_A10_COMMANDS.sorted()
+    }
+
+    fun isAllowedWindowValue(value: Int, android10: Boolean): Boolean =
+        if (android10) value in WINDOW_A10_COMMANDS else value in WINDOW_A9_PERCENT_STEPS
+
+    /**
+     * Remap A9 percent steps ↔ A10 close/open/vent when the raw value belongs to the other
+     * backend. Same-backend values pass through; unknown ints return null.
+     */
+    fun remapWindowValueForMode(value: Int, mode: HeadUnitCanMode): Int? {
+        val android10 = mode == HeadUnitCanMode.Android10Vhal
+        if (isAllowedWindowValue(value, android10)) return value
+        return when (value) {
+            0 -> if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE else null
+            BodyComfortDomain.WINDOW_A9_VENT_PERCENT ->
+                if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_VENT else null
+            BodyComfortDomain.WINDOW_A9_COMFORT_OPEN_PERCENT, 100 ->
+                if (android10) MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE -> if (!android10) 0 else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN -> if (!android10) 100 else null
+            MbCanKnownVehiclePropertyId.WINDOW_A10_VENT ->
+                if (!android10) BodyComfortDomain.WINDOW_A9_VENT_PERCENT else null
+            else -> null
+        }
+    }
+
+    data class A9WindowBytes(
+        val fr: Int,
+        val fl: Int,
+        val rr: Int,
+        val rl: Int,
+    )
+
+    fun a9WindowBytes(propertyId: Int, value: Int): A9WindowBytes {
+        val leave = WINDOW_UNCHANGED
+        return when (propertyId) {
+            MbCanKnownVehiclePropertyId.WINDOW_POS -> A9WindowBytes(value, value, value, value)
+            MbCanKnownVehiclePropertyId.WINDOW_FR_POS -> A9WindowBytes(value, leave, leave, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_FL_POS -> A9WindowBytes(leave, value, leave, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_RR_POS -> A9WindowBytes(leave, leave, value, leave)
+            MbCanKnownVehiclePropertyId.WINDOW_RL_POS -> A9WindowBytes(leave, leave, leave, value)
+            else -> A9WindowBytes(leave, leave, leave, leave)
+        }
+    }
 }
 
 /** [com.mengbo.mbCan.defines.MBAudioProperty] integer ids for [com.mengbo.mbCan.MBCanEngine.canGetAudioParam]. */
 object MbCanKnownAudioPropertyId {
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME] */
-    const val VOLUME = 2
+    @JvmField val VOLUME = 2
     /** [com.mengbo.mbCan.defines.MBAudioProperty.eAUDIO_PROPERTY_VOLUME_SPEED] */
-    const val VOLUME_SPEED = 13
+    @JvmField val VOLUME_SPEED = 13
+    /** `eAUDIO_PROPERTY_BALANCE_BALANCE`: raw 0…14 maps to UI −7…+7. */
+    @JvmField val BALANCE = 3
+    /** `eAUDIO_PROPERTY_BALANCE_FADER`: raw 0…14 maps to UI −7…+7. */
+    @JvmField val FADER = 4
+    /** `eAUDIO_PROPERTY_EQBAND_BASS`: −7…+7. */
+    @JvmField val EQ_BAND_BASS = 5
+    /** `eAUDIO_PROPERTY_EQBAND_MIDDLE`: −7…+7. */
+    @JvmField val EQ_BAND_MIDDLE = 6
+    /** `eAUDIO_PROPERTY_EQBAND_TREBLE`: −7…+7. */
+    @JvmField val EQ_BAND_TREBLE = 7
+    /** `eAUDIO_PROPERTY_EQMODE`: 1 Pop, 2 Rock, 3 Jazz, 4 Classic, 5 Voice, 255 Custom. */
+    @JvmField val EQ_MODE = 10
+    /** `eAUDIO_PROPERTY_VOLUME_RADAS`: 1 Low, 2 Medium, 3 High. */
+    @JvmField val VOLUME_RADAR = 11
+    /** `eAUDIO_PROPERTY_VOLUME_KEY`: 0 Mute, 1 Low, 2 Medium, 3 High. */
+    @JvmField val VOLUME_KEY = 17
+    /** `eAUDIO_AUDIO_HEADREST_SPEAKER`: A9 0 close / 1 headrest / 2 auxiliary. */
+    @JvmField val HEADREST_SPEAKER = 37
 }
 
 data class MbCanAudioCommandSpec(
@@ -262,9 +554,27 @@ object MbCanAudioCommandRegistry {
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
             refreshSignal = MbCanSignal.AudioVolumeSpeed,
         ),
+        MbCanAudioCommandSpec(
+            propertyId = MbCanKnownAudioPropertyId.VOLUME_KEY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1, 2, 3)),
+            refreshSignal = MbCanSignal.AudioKeyToneVolume,
+        ),
+        MbCanAudioCommandSpec(
+            propertyId = MbCanKnownAudioPropertyId.VOLUME_RADAR,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.AudioRadarAlarmVolume,
+        ),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_MODE, MbCanCommandPolicy.SetExact(CarSettingsAudioDomain.eqModes), MbCanSignal.AudioEqMode),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_BASS, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqBass),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_MIDDLE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqMiddle),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.EQ_BAND_TREBLE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.eqBandUiRange), MbCanSignal.AudioEqTreble),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.BALANCE, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.balanceFaderUiRange), MbCanSignal.AudioBalance),
+        MbCanAudioCommandSpec(MbCanKnownAudioPropertyId.FADER, MbCanCommandPolicy.SetRange(CarSettingsAudioDomain.balanceFaderUiRange), MbCanSignal.AudioFader),
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanAudioCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanAudioCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 
 object MbCanCommandRegistry {
@@ -296,6 +606,198 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.ParkingRadar
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.AVH_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.AvhSwitch
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HDC_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.HdcSwitch
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.EspOffSwitch
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = setOf(
+                    MbCanKnownVehiclePropertyId.LIGHTCONTROL_AUTO,
+                    MbCanKnownVehiclePropertyId.LIGHTCONTROL_PARK,
+                    MbCanKnownVehiclePropertyId.LIGHTCONTROL_LOW,
+                    MbCanKnownVehiclePropertyId.LIGHTCONTROL_OFF,
+                )
+            ),
+            refreshSignal = MbCanSignal.LightControl
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.RearFogLight
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoLock,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoUnlock,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(30, 60, 3)),
+            refreshSignal = MbCanSignal.FollowMeHome,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+            refreshSignal = MbCanSignal.DriverUnlockMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DEFENCES_PROMPT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.RemoteLockFeedback,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.WiperSensitivity,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.REAR_WIPER,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.RearWiper,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.MirrorAutoFold,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..4).toSet()),
+            refreshSignal = MbCanSignal.LowBeamHeight,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..3).toSet()),
+            refreshSignal = MbCanSignal.TurnFlashCount,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = setOf(
+                    MbCanKnownVehiclePropertyId.LAS_MODE_LDW,
+                    MbCanKnownVehiclePropertyId.LAS_MODE_LKA,
+                    MbCanKnownVehiclePropertyId.LAS_MODE_OFF,
+                )
+            ),
+            refreshSignal = MbCanSignal.LasModeSelection
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.TjaIca
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LDW_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.LdwSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
+            refreshSignal = MbCanSignal.AccTimeGap,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Bsd,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Dow,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FCW_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.Fcw,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FCW_SENSITIVITY,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FcwSensitivity,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1)),
+            refreshSignal = MbCanSignal.LdwSensitivity,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HMA_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.HmaSwitch
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_CUSTOM,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = setOf(
+                    MbCanKnownVehiclePropertyId.HVAC_CUSTOM_ECO,
+                    MbCanKnownVehiclePropertyId.HVAC_CUSTOM_COMFORT,
+                    MbCanKnownVehiclePropertyId.HVAC_CUSTOM_STRONG,
+                )
+            ),
+            refreshSignal = MbCanSignal.HvacCustomMode
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_AC_MAX,
+            policy = MbCanCommandPolicy.ToggleBinary(
+                offValue = 1,
+                onValue = 2,
+                unknownFallbackValue = 2
+            ),
+            refreshSignal = MbCanSignal.HvacAcMax
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH,
@@ -350,6 +852,83 @@ object MbCanCommandRegistry {
                 unknownFallbackValue = 2
             ),
             refreshSignal = MbCanSignal.HvacAutoState
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_AQS,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HvacAnionPurify,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.FragranceSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_SMELL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FragranceSmell,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.FRAGRANCE_CONCENTRATION,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
+            refreshSignal = MbCanSignal.FragranceConcentration,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.FirstBlowing,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.BtReduceFan,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.AutoVentilation,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_SWITCH,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HudSwitch,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_HEIGHT,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.HudHeight,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.HudBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
+            refreshSignal = MbCanSignal.HudDisplayMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS,
+            policy = MbCanCommandPolicy.ToggleBinary(offValue = 1, onValue = 2, unknownFallbackValue = 2),
+            refreshSignal = MbCanSignal.HudAutoBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(0, 1)),
+            refreshSignal = MbCanSignal.IcmBrightnessMode,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = (1..10).toSet()),
+            refreshSignal = MbCanSignal.IcmManualBrightness,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET,
+            policy = MbCanCommandPolicy.SetExact(
+                allowedValues = CarSettingsHudDomain.OVERSPEED_RAW_RANGE.toSet(),
+            ),
+            refreshSignal = MbCanSignal.OverspeedAlarm,
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.HVAC_FAN_DIRECTION,
@@ -411,22 +990,15 @@ object MbCanCommandRegistry {
             ),
             refreshSignal = MbCanSignal.SlaSpeedLimit
         ),
-        // Unsupported on Jetour Dashing — see VEHICLE_SPEEDLIMIT_* KDoc.
+        // Speed limiter — raw SetAnyInt for car-settings probing; widget ± still clamps in domain.
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH,
-            policy = MbCanCommandPolicy.SetExact(
-                allowedValues = setOf(
-                    SlaSpeedLimitDomain.SPEED_LIMITER_SWITCH_OFF,
-                    SlaSpeedLimitDomain.SPEED_LIMITER_SWITCH_ON,
-                )
-            ),
+            policy = MbCanCommandPolicy.SetAnyInt,
             refreshSignal = MbCanSignal.SpeedLimiter
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET,
-            policy = MbCanCommandPolicy.SetExact(
-                allowedValues = (SlaSpeedLimitDomain.SPEED_LIMITER_KMH_MIN..SlaSpeedLimitDomain.SPEED_LIMITER_KMH_MAX).toSet()
-            ),
+            policy = MbCanCommandPolicy.SetAnyInt,
             refreshSignal = MbCanSignal.SpeedLimiter
         ),
         MbCanCommandSpec(
@@ -536,6 +1108,41 @@ object MbCanCommandRegistry {
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2)),
         ),
         MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SUNSHADE_POS,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = BodyComfortWrite.SHADE_VALUES.toSet()),
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.SUNROOF_CONTROL,
+            policy = MbCanCommandPolicy.SetExact(allowedValues = BodyComfortWrite.ROOF_VALUES),
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
+            propertyId = MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+            policy = MbCanCommandPolicy.SetWindowPosition,
+            refreshSignal = MbCanSignal.BodyComfort,
+        ),
+        MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.MFS_CRUISE_CONTROL,
             policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(AccCruiseDomain.MFS_PULSE_VALUE)),
         ),
@@ -554,5 +1161,7 @@ object MbCanCommandRegistry {
     ).associateBy { it.propertyId }
 
     fun get(propertyId: Int): MbCanCommandSpec? = specsByPropertyId[propertyId]
+
+    fun all(): List<MbCanCommandSpec> = specsByPropertyId.values.sortedBy { it.propertyId }
 }
 

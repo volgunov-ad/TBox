@@ -19,6 +19,7 @@
 | `# maxFileBytes=20971520` | Потолок размера этого файла (20 МБ). Старые файлы с `# maxDurationMin=20` — автостоп 20 мин, без ротации |
 | `# part=1` | Номер куска одной записи (после ротации 2, 3, …) |
 | `# continuedFrom=tbox_geo_debug_….txt` | Предыдущий файл той же записи; нет на первом куске |
+| `# roadMatchTuning.overrides=…` | Непустые отклонения тюнинга привязки от production defaults (`storageName:value`, через запятую). `-` — всё по умолчанию. При смене пресета во время записи та же строка пишется ещё раз как `roadMatchTuning.overrides=…` перед следующим тиком |
 | `# stopped=… auto=… ticks=…` | Ручная/аварийная остановка; `ticks` — число снимков с начала записи |
 | `# stopped=… rotated=true next=… ticks=…` | Этот файл закрыт по размеру, запись идёт в `next` |
 
@@ -149,9 +150,10 @@
 | **matchLagM** | На сколько метров назад по недавнему DR-пути сдвигается **выбор ребра** (`clamp(v/3.6, 10, 30)`). Живая поза не отматывается. `0`/нет — трейл короткий. |
 | **turnHint** | Применённый hint поворотника: `L` / `R`. `-` если поворотник выкл., аварийка, или в ranked нет связанного кандидата ≥25° в сторону стебля (перестроение / ранний `*_link` почти прямо). На изогнутой односторонней дуге (кольцо) тот же `L`/`R` значит только слабый сдвиг score, без снятия look-ahead и без inhibit курса. Не отклеивает шайбу. |
 | **leash** | Поперечный поводок: `stretch` (уход, snap позиции выкл.), `break` (оторвались, чистый DR), `retract` (вернулись на ребро), `-`. В **Rails** `stretch` — xt ≥10 м (мягкий коридор), `break` — сход с ребра по поперечке, не продольный chord-lag. |
-| **matchMode** | `ORDINARY` (softCorrect) или `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп). Default Ordinary. |
+| **matchMode** | `ORDINARY` (softCorrect), `RAILS` (коридор: граф выбирает ребро, поза следует free + поперечный снэп) или экспериментальный `FREE_TURNS` (Обычный + сильный курс + отвязка за 35 м до узла >2 линий / 3+ рёбра до 10 м после). Default Ordinary. |
 | **roadProfile** | `CITY` / `HIGHWAY` (лимит ≥80 или motorway/trunk; дворы всегда city). |
 | **turnIntent** / **turnFlashes** | Зеркало `turn.intent` / `turn.flashes` на тике match. Сильный bias пологого съезда — только при `turnIntent=1` и `roadProfile=HIGHWAY` (Ordinary + Rails). |
+| **pathOdoM** / **pathOdoGapM** | Курсор продольного догона: приборный путь (м) с последнего якоря на графе и разрыв до предсказанной точки. `-` если догон выкл. На манёвре gap может быть, но позу не тянут. |
 | **free** / **freePromote** / **junction** | Виртуальная точка по приборам на сложной развилке (`free=1`); `freePromote=true` когда её сделали основной; `junction=true` пока 3+ направления в ~100 м. В Rails `free.*` — инструментальный retain (не затирается rail-позой). |
 
 Пока `free=1`, отдельная строка **`free.lat` / `free.lon` / `free.bearing`** — координаты виртуальной точки (не mock).
@@ -179,7 +181,7 @@
 | **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
 
 Приоритет: RMC этого тика → опубликованные `LocValues` с ненулевыми координатами (даже при `truth=false`) → `LocationManager.getLastKnownLocation` → последний удачный фикс с растущим `ageMs`. На М8 без USB NMEA это обычно last-known Android или застывший TBox/`WHEN_NO_FIX` кэш.
-| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `-` |
+| **skippedReason** | `disabled` / `stationary` / `throttled` / `no_graph` / `no_candidate` / `low_confidence` / `switch_pending` / `switch_rejected` / `past_end` / `free_turns_junction` / `free_turns_stalk` / `ordinary_stalk` / `-` |
 | **rejectReason** | Почему switch/кандидат отвергнут: `against_oneway_link` / `disconnected_link` / `disconnected_ring` / `early_link` / `parallel_yard` / `low_confidence` / `no_candidate` / `no_candidate_corridor` / `switch_pending` / `past_end` / `rails_break` / `rails_dead_end` / `-` |
 
 На съездах (`*_link`) runtime жёстко режет `againstOneway`, неподтверждённые disconnected jump’ы и ранний почти прямой `*_link` без намёка на поворот (`early_link`). Параллельный двор/жилая с большим xt — `parallel_yard`. На обычных дорогах against-oneway мягко штрафуется; если рядом (xt ≤40 м) есть major «по ходу», against убирается из beam, а heading-regrab на встречку не делается. В логе это `HOLD_EDGE` или `skippedReason=switch_rejected`.
@@ -328,7 +330,7 @@ DR/mock: опция «Учитывать заднюю передачу» + `Vehi
 2. Сравните **gnss.*** и **mock.*** — расхождение = подмена / удержание / тень.
 3. На стоянке: крутящийся **gnss.course** при стабильном **mock.bearing** и `bearingSrc=HELD` — норма для режимов улучшения.
 4. В Advanced смотрите **constant.shadowDistM** / **posW** / **hardResync**.
-5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**.
+5. Привязка к дорогам — **mapMatch.active** / **edgeId** / **cands** / **crossTrackM** / **skippedReason** / **turnHint**. В шапке смотрите **`# roadMatchTuning.overrides`** (какие слайдеры были не default).
 6. Replay / симуляция — **preMatch.*** (вход в match) vs **mock.*** (уже после snap); скрытая опора — **truth.*** (`src`/`ageMs`), не только `$GNRMC`.
 7. Поворотник — сырой **turn.side** vs защёлка **turn.latched** рядом с `mapMatch.turnHint`.
 8. Дыры GNSS — **fix=false**, `nmea` с `V`, нули в lat/lon, `truth.lat=-` или большой `truth.ageMs`.

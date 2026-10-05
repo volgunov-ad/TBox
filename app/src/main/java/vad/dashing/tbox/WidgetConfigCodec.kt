@@ -5,6 +5,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
+import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
+import vad.dashing.tbox.trip.TripMetricFormatter
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import kotlin.math.roundToInt
 
@@ -12,8 +15,8 @@ private const val LEGACY_WIDGETS_SEPARATOR = "|"
 private const val LEGACY_APP_LAUNCHER_WIDGET_DATA_KEY = "launchAppWidget"
 private val REMOVED_WIDGET_DATA_KEYS = setOf(
     "wirelessChargingWidget",
-    // Speed limiter widget: not offered until fully debugged (also commented out in WidgetsRepository).
-    SPEED_LIMITER_WIDGET_DATA_KEY,
+    // Merged into osmSpeedLimitWidget (maps / cameras / radars).
+    vad.dashing.tbox.speedcam.SPEED_CAM_WIDGET_DATA_KEY,
 )
 const val DEFAULT_WIDGET_SCALE = 1.0f
 private const val MIN_WIDGET_SCALE = 0.1f
@@ -37,12 +40,56 @@ fun normalizeWidgetScale(rawScale: Float): Float {
     return (normalized * 10f).roundToInt() / 10f
 }
 
+data class WidgetScaleTriplet(
+    val titleScale: Float,
+    val iconScale: Float,
+    val textScale: Float,
+)
+
+fun parseWidgetScaleTriplet(item: JSONObject): WidgetScaleTriplet {
+    val legacyScale = if (item.has("scale")) {
+        normalizeWidgetScale(item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat())
+    } else {
+        null
+    }
+    fun field(name: String): Float {
+        return if (item.has(name)) {
+            normalizeWidgetScale(item.optDouble(name, DEFAULT_WIDGET_SCALE.toDouble()).toFloat())
+        } else {
+            legacyScale ?: DEFAULT_WIDGET_SCALE
+        }
+    }
+    return WidgetScaleTriplet(
+        titleScale = field("titleScale"),
+        iconScale = field("iconScale"),
+        textScale = field("textScale"),
+    )
+}
+
+private fun putWidgetScaleFields(obj: JSONObject, config: FloatingDashboardWidgetConfig) {
+    val titleScale = normalizeWidgetScale(config.titleScale)
+    val iconScale = normalizeWidgetScale(config.iconScale)
+    val textScale = normalizeWidgetScale(config.textScale)
+    if (titleScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("titleScale", titleScale)
+    }
+    if (iconScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("iconScale", iconScale)
+    }
+    if (textScale != DEFAULT_WIDGET_SCALE) {
+        obj.put("textScale", textScale)
+    }
+}
+
 fun normalizeWidgetShape(rawShape: Int): Int {
     return rawShape.coerceIn(MIN_WIDGET_SHAPE, MAX_WIDGET_SHAPE)
 }
 
 /** Same range as [normalizeWidgetShape]; used when [FloatingDashboardWidgetConfig.controlShape] is set. */
 fun normalizeWidgetControlShape(rawShape: Int): Int = normalizeWidgetShape(rawShape)
+
+/** Outer control padding in dp; same 0..50 range as [normalizeWidgetControlShape]. */
+fun normalizeWidgetControlPadding(rawPadding: Int): Int = normalizeWidgetShape(rawPadding)
 
 /** True when all eight control color fields are null (UI «colors by default»). */
 fun FloatingDashboardWidgetConfig.usesDefaultControlColors(): Boolean {
@@ -91,7 +138,7 @@ fun serializeWidgetConfigsToJsonArray(
         obj.put("showTitle", config.showTitle)
         obj.put("showUnit", config.showUnit)
         obj.put("singleLineDualMetrics", config.singleLineDualMetrics)
-        obj.put("scale", normalizeWidgetScale(config.scale))
+        putWidgetScaleFields(obj, config)
         obj.put("shape", normalizeWidgetShape(config.shape))
         obj.put("textColorLight", config.textColorLight)
         obj.put("textColorDark", config.textColorDark)
@@ -181,10 +228,31 @@ fun serializeWidgetConfigsToJsonArray(
                     obj.put("launcherFreeformOverlayCrop", true)
                 }
             }
+            if (launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+                config.launcherVirtualDisplayId?.let { id ->
+                    if (id >= 0) obj.put("launcherVirtualDisplayId", id)
+                }
+                config.launcherVirtualDisplayWidthPx?.let { w ->
+                    config.launcherVirtualDisplayHeightPx?.let { h ->
+                        if (w > 0 && h > 0) {
+                            obj.put("launcherVirtualDisplayWidthPx", w)
+                            obj.put("launcherVirtualDisplayHeightPx", h)
+                        }
+                    }
+                }
+                // Legacy launcherVirtualDisplayLaunchPolicy (relocate / new_instance) is
+                // ignored: virtual-display launch always relocates (force-stop then start).
+            }
         }
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
+        }
+        if (config.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+            val automationTriggerId = normalizeAutomationTriggerId(config.automationTriggerId)
+            if (automationTriggerId.isNotBlank()) {
+                obj.put("automationTriggerId", automationTriggerId)
+            }
         }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
@@ -220,6 +288,12 @@ fun serializeWidgetConfigsToJsonArray(
                 normalizeStepperAdjustIconStyle(config.stepperAdjustIconStyle),
             )
         }
+        if (isHvacTempWidgetDataKey(config.dataKey)) {
+            val step = normalizeHvacTempWidgetStepTenths(config.hvacTempStepTenths)
+            if (step != HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT) {
+                obj.put("hvacTempStepTenths", step)
+            }
+        }
         config.tileBackgroundImageRelPathLight?.let {
             if (TileBackgroundImageStorage.isAllowedStoredRelPath(it)) {
                 obj.put("tileBackgroundImageRelPathLight", it)
@@ -244,8 +318,28 @@ fun serializeWidgetConfigsToJsonArray(
                     ),
                 )
             }
-            if (config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT) {
-                obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+        }
+        if (usesTripWidgetSource(config.dataKey) &&
+            config.tripWidgetSource != TRIP_WIDGET_SOURCE_CURRENT
+        ) {
+            obj.put("tripWidgetSource", normalizeTripWidgetSource(config.tripWidgetSource))
+        }
+        if (isTripMetricWidgetDataKey(config.dataKey)) {
+            val fieldId = TripMetricFormatter.normalizeFieldId(config.tripMetricFieldId)
+            if (fieldId != "distance") {
+                obj.put("tripMetricFieldId", fieldId)
+            }
+        }
+        if (isObdMetricWidgetDataKey(config.dataKey)) {
+            val pidId = vad.dashing.tbox.obd.ObdPid.normalizeId(config.obdPidId)
+            if (pidId != vad.dashing.tbox.obd.ObdPid.RPM.id) {
+                obj.put("obdPidId", pidId)
+            }
+        }
+        if (isAverageFuelConsumptionWidgetDataKey(config.dataKey)) {
+            val source = normalizeAvgFuelConsumptionSource(config.avgFuelConsumptionSource)
+            if (source != AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL) {
+                obj.put("avgFuelConsumptionSource", source)
             }
         }
         if (isEspRelayWidgetDataKey(config.dataKey) &&
@@ -315,8 +409,45 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("controlActiveBackgroundColorDark", it)
         }
         config.controlShape?.let { obj.put("controlShape", normalizeWidgetControlShape(it)) }
+        config.controlPadding?.let { obj.put("controlPadding", normalizeWidgetControlPadding(it)) }
         if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchHeadingUp) {
             obj.put("roadMatchHeadingUp", true)
+        }
+        if (isRoadMatchMapWidgetDataKey(config.dataKey) && config.roadMatchMapKitBasemap) {
+            obj.put("roadMatchMapKitBasemap", true)
+        }
+        if (isRoadMatchMapWidgetDataKey(config.dataKey)) {
+            val transparency = vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity
+                .normalize(config.roadMatchBasemapTransparencyPercent)
+            if (transparency != 0) {
+                obj.put("roadMatchBasemapTransparencyPercent", transparency)
+            }
+            if (config.speedCamShowOnMap) {
+                obj.put("speedCamShowOnMap", true)
+            }
+        }
+        if (isOsmSpeedLimitWidgetDataKey(config.dataKey)) {
+            val overage = normalizeSpeedCamOverageKmh(config.speedCamOverageKmh)
+            if (overage != DEFAULT_SPEED_CAM_OVERAGE_KMH) {
+                obj.put("speedCamOverageKmh", overage)
+            }
+            if (!config.mapsCamShowCameras) {
+                obj.put("mapsCamShowCameras", false)
+            }
+            if (!config.mapsCamShowCurrentLimit) {
+                obj.put("mapsCamShowCurrentLimit", false)
+            }
+            if (!config.mapsCamShowAheadLimit) {
+                obj.put("mapsCamShowAheadLimit", false)
+            }
+            val lookahead = normalizeMapsCamLookaheadM(config.mapsCamLookaheadDistanceM)
+            if (lookahead != DEFAULT_MAPS_CAM_LOOKAHEAD_M) {
+                obj.put("mapsCamLookaheadDistanceM", lookahead)
+            }
+            val hold = normalizeMapsCamRadarHoldM(config.mapsCamRadarHoldDistanceM)
+            if (hold != DEFAULT_MAPS_CAM_RADAR_HOLD_M) {
+                obj.put("mapsCamRadarHoldDistanceM", hold)
+            }
         }
         array.put(obj)
     }
@@ -408,15 +539,16 @@ private fun parseWidgetConfigsFromJsonArray(
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
                 val tileDark = item.optString("tileBackgroundImageRelPathDark", "").trim()
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+                val widgetScales = parseWidgetScaleTriplet(item)
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
                         showTitle = item.optBoolean("showTitle", false),
                         showUnit = item.optBoolean("showUnit", true),
                         singleLineDualMetrics = item.optBoolean("singleLineDualMetrics", false),
-                        scale = normalizeWidgetScale(
-                            item.optDouble("scale", DEFAULT_WIDGET_SCALE.toDouble()).toFloat()
-                        ),
+                        titleScale = widgetScales.titleScale,
+                        iconScale = widgetScales.iconScale,
+                        textScale = widgetScales.textScale,
                         shape = normalizeWidgetShape(
                             item.optInt("shape", DEFAULT_WIDGET_SHAPE)
                         ),
@@ -539,6 +671,33 @@ private fun parseWidgetConfigsFromJsonArray(
                         launcherFreeformOverlayCrop =
                             dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                                 item.optBoolean("launcherFreeformOverlayCrop", false),
+                        launcherVirtualDisplayId =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayId")
+                            ) {
+                                item.optInt("launcherVirtualDisplayId")
+                                    .takeIf { it >= 0 }
+                            } else {
+                                null
+                            },
+                        launcherVirtualDisplayWidthPx =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayWidthPx")
+                            ) {
+                                item.optInt("launcherVirtualDisplayWidthPx")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
+                        launcherVirtualDisplayHeightPx =
+                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                                item.has("launcherVirtualDisplayHeightPx")
+                            ) {
+                                item.optInt("launcherVirtualDisplayHeightPx")
+                                    .takeIf { it > 0 }
+                            } else {
+                                null
+                            },
                         httpRequestYaml = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optString("httpRequestYaml", DEFAULT_HTTP_REQUEST_WIDGET_YAML)
                                 .ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML }
@@ -549,6 +708,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("httpOpenBrowser", false)
                         } else {
                             false
+                        },
+                        automationTriggerId = if (dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
+                            normalizeAutomationTriggerId(item.optString("automationTriggerId", ""))
+                        } else {
+                            ""
                         },
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
@@ -576,6 +740,16 @@ private fun parseWidgetConfigsFromJsonArray(
                         stepperAdjustIconStyle = normalizeStepperAdjustIconStyle(
                             item.optInt("stepperAdjustIconStyle", STEPPER_ADJUST_ICON_PLUS_MINUS),
                         ),
+                        hvacTempStepTenths = if (isHvacTempWidgetDataKey(dataKey)) {
+                            normalizeHvacTempWidgetStepTenths(
+                                item.optInt(
+                                    "hvacTempStepTenths",
+                                    HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
+                                ),
+                            )
+                        } else {
+                            HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
+                        },
                         tileBackgroundImageRelPathLight = tileLight,
                         tileBackgroundImageRelPathDark = tileDark,
                         tripWidgetShowRowDividers = item.optBoolean(
@@ -588,12 +762,36 @@ private fun parseWidgetConfigsFromJsonArray(
                                 TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
                             ),
                         ),
-                        tripWidgetSource = if (isActiveTripWidgetDataKey(dataKey)) {
+                        tripWidgetSource = if (usesTripWidgetSource(dataKey)) {
                             normalizeTripWidgetSource(
                                 item.optInt("tripWidgetSource", TRIP_WIDGET_SOURCE_CURRENT),
                             )
                         } else {
                             TRIP_WIDGET_SOURCE_CURRENT
+                        },
+                        tripMetricFieldId = if (isTripMetricWidgetDataKey(dataKey)) {
+                            TripMetricFormatter.normalizeFieldId(
+                                item.optString("tripMetricFieldId", "distance"),
+                            )
+                        } else {
+                            "distance"
+                        },
+                        obdPidId = if (isObdMetricWidgetDataKey(dataKey)) {
+                            vad.dashing.tbox.obd.ObdPid.normalizeId(
+                                item.optString("obdPidId", vad.dashing.tbox.obd.ObdPid.RPM.id),
+                            )
+                        } else {
+                            vad.dashing.tbox.obd.ObdPid.RPM.id
+                        },
+                        avgFuelConsumptionSource = if (isAverageFuelConsumptionWidgetDataKey(dataKey)) {
+                            normalizeAvgFuelConsumptionSource(
+                                item.optInt(
+                                    "avgFuelConsumptionSource",
+                                    AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
+                                ),
+                            )
+                        } else {
+                            AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
                         },
                         espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
                             EspRelayWidgetMode.fromStorageKey(
@@ -696,8 +894,71 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
+                        controlPadding = if (item.has("controlPadding")) {
+                            normalizeWidgetControlPadding(item.optInt("controlPadding"))
+                        } else {
+                            null
+                        },
                         roadMatchHeadingUp = isRoadMatchMapWidgetDataKey(dataKey) &&
                             item.optBoolean("roadMatchHeadingUp", false),
+                        roadMatchMapKitBasemap = isRoadMatchMapWidgetDataKey(dataKey) &&
+                            item.optBoolean("roadMatchMapKitBasemap", false),
+                        roadMatchBasemapTransparencyPercent =
+                            if (isRoadMatchMapWidgetDataKey(dataKey)) {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity.normalize(
+                                    item.optInt(
+                                        "roadMatchBasemapTransparencyPercent",
+                                        0,
+                                    ),
+                                )
+                            } else {
+                                0
+                            },
+                        speedCamOverageKmh = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeSpeedCamOverageKmh(
+                                item.optInt("speedCamOverageKmh", DEFAULT_SPEED_CAM_OVERAGE_KMH),
+                            )
+                        } else {
+                            DEFAULT_SPEED_CAM_OVERAGE_KMH
+                        },
+                        speedCamRadiusM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamLookaheadM(
+                                item.optInt(
+                                    "mapsCamLookaheadDistanceM",
+                                    item.optInt("speedCamRadiusM", DEFAULT_MAPS_CAM_LOOKAHEAD_M),
+                                ),
+                            )
+                        } else {
+                            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+                        },
+                        speedCamShowOnMap = isRoadMatchMapWidgetDataKey(dataKey) &&
+                            item.optBoolean("speedCamShowOnMap", false),
+                        mapsCamShowCameras = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowCameras", true),
+                        mapsCamShowCurrentLimit = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowCurrentLimit", true),
+                        mapsCamShowAheadLimit = !isOsmSpeedLimitWidgetDataKey(dataKey) ||
+                            item.optBoolean("mapsCamShowAheadLimit", true),
+                        mapsCamLookaheadDistanceM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamLookaheadM(
+                                item.optInt(
+                                    "mapsCamLookaheadDistanceM",
+                                    item.optInt("speedCamRadiusM", DEFAULT_MAPS_CAM_LOOKAHEAD_M),
+                                ),
+                            )
+                        } else {
+                            DEFAULT_MAPS_CAM_LOOKAHEAD_M
+                        },
+                        mapsCamRadarHoldDistanceM = if (isOsmSpeedLimitWidgetDataKey(dataKey)) {
+                            normalizeMapsCamRadarHoldM(
+                                item.optInt(
+                                    "mapsCamRadarHoldDistanceM",
+                                    DEFAULT_MAPS_CAM_RADAR_HOLD_M,
+                                ),
+                            )
+                        } else {
+                            DEFAULT_MAPS_CAM_RADAR_HOLD_M
+                        },
                     )
                 )
             }

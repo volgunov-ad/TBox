@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -46,6 +47,7 @@ import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 @Composable
@@ -69,6 +71,8 @@ internal fun DashboardHttpRequestWidgetItem(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val invalidYamlTemplate = stringResource(R.string.widget_http_request_invalid_yaml)
+    val requestFailedTemplate = stringResource(R.string.widget_http_request_failed)
     var blockedUntilMs by remember { mutableLongStateOf(0L) }
     var flashColor by remember { mutableStateOf<Color?>(null) }
     var flashDurationMs by remember { mutableIntStateOf(0) }
@@ -88,6 +92,8 @@ internal fun DashboardHttpRequestWidgetItem(
             }.getOrNull()
         }
     }
+
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
 
     LaunchedEffect(flashColor, flashDurationMs) {
         val activeColor = flashColor ?: return@LaunchedEffect
@@ -113,7 +119,7 @@ internal fun DashboardHttpRequestWidgetItem(
                 }.onFailure { e ->
                     android.widget.Toast.makeText(
                         context,
-                        context.getString(R.string.widget_http_request_invalid_yaml, e.message.orEmpty()),
+                        invalidYamlTemplate.format(e.message.orEmpty()),
                         android.widget.Toast.LENGTH_LONG
                     ).show()
                 }
@@ -124,7 +130,7 @@ internal fun DashboardHttpRequestWidgetItem(
                 blockedUntilMs = now + HTTP_REQUEST_POST_ACTION_BLOCK_MS
                 android.widget.Toast.makeText(
                     context,
-                    context.getString(R.string.widget_http_request_invalid_yaml, e.message.orEmpty()),
+                    invalidYamlTemplate.format(e.message.orEmpty()),
                     android.widget.Toast.LENGTH_LONG
                 ).show()
                 flashColor = Color(0xFFB3261E)
@@ -143,10 +149,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     is HttpRequestWidgetResult.Failure -> {
                         android.widget.Toast.makeText(
                             context,
-                            context.getString(
-                                R.string.widget_http_request_failed,
-                                httpRequestWidgetErrorMessage(result)
-                            ),
+                            requestFailedTemplate.format(httpRequestWidgetErrorMessage(result)),
                             android.widget.Toast.LENGTH_LONG
                         ).show()
                         flashColor = Color(0xFFB3261E)
@@ -174,7 +177,8 @@ internal fun DashboardHttpRequestWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && !titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,
@@ -198,7 +202,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     Image(
                         bitmap = imageBitmap,
                         contentDescription = widget.title,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         contentScale = ContentScale.Fit
                     )
                 } else {
@@ -212,7 +216,8 @@ internal fun DashboardHttpRequestWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,

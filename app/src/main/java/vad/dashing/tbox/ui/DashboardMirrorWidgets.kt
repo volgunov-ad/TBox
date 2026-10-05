@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -38,7 +37,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -70,7 +69,7 @@ fun DashboardMirrorAdjustModeWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -79,11 +78,11 @@ fun DashboardMirrorAdjustModeWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_widget_mirror_adjust),
+                    painter = customizableUiPainter(R.drawable.ic_widget_mirror_adjust),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_mirror_adjust, iconColor)
                 )
             }
         }
@@ -102,7 +101,7 @@ fun DashboardMirrorFoldWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val controls = LocalWidgetControlAppearance.current
@@ -136,7 +135,7 @@ fun DashboardMirrorFoldWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             // No on-state: only inactive control colors apply.
@@ -146,11 +145,11 @@ fun DashboardMirrorFoldWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_widget_mirror_fold),
+                    painter = customizableUiPainter(R.drawable.ic_widget_mirror_fold),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(controls.inactiveContent)
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = uiIconColorFilter(R.drawable.ic_widget_mirror_fold, controls.inactiveContent)
                 )
             }
         }

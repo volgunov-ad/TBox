@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +23,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -33,6 +33,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.TripTelemetryRepository
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.CcsRememberedSetpoint
 import vad.dashing.tbox.mbcan.CruiseLogicalState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
@@ -76,11 +77,15 @@ fun DashboardAccCruiseWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
+    LaunchedEffect(Unit) {
+        CcsRememberedSetpoint.ensureStarted()
+    }
     val accMode by UniversalCanRepository.accCruiseMode.collectAsStateWithLifecycle()
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
     val ccsStatus by UniversalCanRepository.ccsCruiseStatus.collectAsStateWithLifecycle()
+    val ccsRemembered by CcsRememberedSetpoint.kmh.collectAsStateWithLifecycle()
     val frmFeedback by UniversalCanRepository.accFrmFeedbackAvailable.collectAsStateWithLifecycle()
     val accEver by UniversalCanRepository.accModeEverNonZero.collectAsStateWithLifecycle()
     val vehicleSpeed by TripTelemetryRepository.carSpeed.collectAsStateWithLifecycle()
@@ -103,6 +108,7 @@ fun DashboardAccCruiseWidgetItem(
         accMode = accMode,
         vSetDisKmh = vSetDis,
         ccsStatus = ccsStatus,
+        rememberedSetpointKmh = ccsRemembered,
         vehicleSpeedKmh = vehicleSpeed,
         targetKmh = target,
     )
@@ -162,7 +168,7 @@ fun DashboardAccCruiseWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -179,11 +185,11 @@ fun DashboardAccCruiseWidgetItem(
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_widget_acc_cruise),
+                        painter = customizableUiPainter(id = R.drawable.ic_widget_acc_cruise),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().scale(scale),
-                        colorFilter = ColorFilter.tint(iconColor),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_acc_cruise, iconColor),
                     )
                     Text(
                         text = target.toString(),

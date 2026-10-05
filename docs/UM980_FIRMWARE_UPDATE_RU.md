@@ -1,36 +1,55 @@
 # Обновление прошивки UM980 с ГУ
 
-Прошивка модуля Unicore UM980 файлом `.pkg` по UART (прямой USB или Компаньон ESP32). Протокол восстановлен по захвату UPrecise Receiver Upgrade + Device Monitoring Studio (`um980.dmslog8`) и подтверждён `VERSIONA` → `R4.10Build25102`.
+Прошивка модуля Unicore UM980 файлом `.pkg` по UART (прямой USB или Компаньон ESP32).
 
-Reference Commands Manual N4 **не** описывает кадры upgrade — только рекомендацию резервировать COM1. Фактический путь: soft/hard reset → **N4 BootLoader** → меню `2` → **XMODEM-1K** (checksum).
+Протокол сверен с захватом **UPrecise Receiver Upgrade** + Device Monitoring Studio [`um980.dmslog8`](https://disk.yandex.ru/d/hqLQeQZOD1qGoA) (Soft-путь, 2026-08-05) и подтверждён `VERSIONA` → `R4.10Build25102`.
 
-## Последовательность (Host)
+Reference Commands Manual N4 **не** описывает кадры upgrade — только рекомендацию резервировать COM1. Фактический путь в приложении: Soft reset → **N4 BootLoader** → меню `2` → **XMODEM-1K**.
+
+## Последовательность (Host) — как в UPrecise
+
+Таймлайн Soft из `um980.dmslog8` (хост уже на рабочей скорости, затем):
+
+| t (отн.) | Событие |
+|----------|---------|
+| 0 | несколько пар `unlog` → `$command,unlog,response: OK` |
+| +0.7 с | `config com1 460800` + `com2` + `com3` **одним блоком** (и тот же блок **ещё раз** ~50 мс) (**без** `SAVECONFIG` в dmslog8) |
+| +~0.9 с | *(прямое USB, не в dmslog8)* импульс DTR без закрытия порта, затем ASCII `reset` на **рабочем** baud; CONFIG 460800 и смена baud **без** reopen |
+| +~2 с | ещё `unlog`; host UART → **460800** (`setBaud`, порт не закрывать) |
+| +~2.6 с | два бурста `reset\r\nreset\r\n` (~50 мс; второй с ведущим `\r\n`) → `$command,reset,response: OK` |
+| +~4.3 с | `system is rebooting` |
+| +~6.1 с | `N4 BootLoader 2020.04` … меню … `boot>` (timeout меню **2 с**, default = print menu) |
+| +~8 с | host шлёт `2\r\n` → `unlock Flash` / `## Ready for binary (xmodem)…` |
+| далее | **XMODEM-1K** checksum (`STX` + blk + `~blk` + 1024 + sum&0xFF); magic `.pkg` = `a5 a4 a3 a2` |
+| конец | `%FreeRTOS:…` |
+
+Hard reset в этом захвате **нет** (только ASCII `reset`).
+
+### Шаги в приложении
 
 1. (Опционально) `version` / `VERSIONA` — снимок до прошивки.
-2. `unlog` (несколько раз) — остановить NMEA.
-3. `config com1 460800`, `config com2 460800`, `config com3 460800` (без `SAVECONFIG` на этом шаге).
-4. Host UART → **460800**.
-5. Сброс в bootloader:
-   - **Soft:** `reset` → ждать `system is rebooting` / баннер BootLoader.
-   - **Hard:** ждать ручной сброс питания/RESET; ASCII `reset` не слать.
+2. `unlog` несколько раз — остановить NMEA.
+3. На **прямом USB** сначала импульс DTR (порт открыт) и ASCII `reset` на рабочем baud — слушать баннер там. Иначе `config com1/com2/com3 460800` одним write ×2, **без** `SAVECONFIG`.
+4. Host UART → **460800** через смену baud на открытом порту (не reopen). Reopen только если на 460800 нет ответа.
+5. Сброс в bootloader: одна пара `reset` / `reset`, сразу поток `T@` до баннера. Ручной Hard reset в приложении нет.
 6. Дождаться баннера `N4 BootLoader` и приглашения `boot>`.
+   - Если Soft уже поймал `BootLoader`/`boot>` — повторно не ждать (байты уже съедены).
+   - Если на 460800 тишина: короткий перебор host baud `current → 460800 → pre → 115200 → 57600 → …`, на каждом срезе `\r\n` и ожидание баннера (~5 с, общий бюджет ~35 с). XMODEM дальше идёт на baud, где баннер увидели.
+   - В Soft-захвате UPrecise баннер приходит на **460800** (~2 с после `system is rebooting`).
+   - `SAVECONFIG` перед `reset` не слать: в `um980-fw.txt` его нет, 460800 только в RAM, сохранённая скорость остаётся прежней. Сразу после одной пары `reset` / `reset` хост шлёт поток `T@` до `N4 BootLoader` / `boot>`, затем `2` дважды. Без `T@` ROM грузит приложение.
 7. Отправить `2\r\n` (*Download from uart to flash*).
-8. Дождаться `unlock Flash` / готовности к binary download; приёмник шлёт **NAK** (`0x15`) для checksum-режима (иногда также виден `'C'` — предпочтителен ответ в режиме, который запросил device).
+8. Дождаться `unlock Flash` / `Ready for binary` / xmodem; приёмник в checksum-режиме (в захвате блок 1: `STX|01|FE|…|csum`).
 9. Передать `.pkg` **XMODEM-1K**:
    - кадр: `STX (0x02) | blk | ~blk | 1024 data | checksum (1 byte = sum & 0xFF)`;
    - ждать `ACK (0x06)` на блок; при `NAK` — повтор блока;
    - после последнего блока: `EOT (0x04)`, ждать `ACK`.
-10. Дождаться выхода в приложение (`%FreeRTOS` / NMEA).
-11. **Baud restore (обязательно):**
-    - Host → pre-upgrade baud;
-    - при тишине — короткий перебор `460800 → pre → 115200 → 57600`;
-    - `CONFIG com1/com2/com3 <baud>` + `SAVECONFIG`;
-    - `VERSIONA` для проверки build.
+10. После `EOT` загрузчик пишет `## Total Size`, `load image type`, `backup succeed` и снова печатает меню. Отправить пункт **6** четыре раза (`Soft reset cpu`). Дальше `resetting the cpu...` и NMEA. Пункт 0 не используется. Порт не закрывать.
+11. Хост возвращается на скорость, которая была до прошивки. `config` / `SAVECONFIG` — только если приложение ответило на 460800, а не на сохранённой скорости. В штатной записи после `6` сразу идёт `$GNRMC` / `$GNGGA`, без смены baud.
 
 ## Файл `.pkg`
 
 - Типичный размер ~3 MB (пример `UM980_R4.10Build25102.pkg` = 3004096).
-- Магия заголовка: `a5 a4 a3 a2`.
+- Магия заголовка: `a5 a4 a3 a2` (подтверждено в первом XMODEM-блоке захвата).
 - Имя часто содержит `BuildNNNNN` — сверять с полем build в `#VERSIONA`.
 
 ## Транспорты
@@ -45,5 +64,7 @@ Reference Commands Manual N4 **не** описывает кадры upgrade — 
 ## Риски
 
 - Не отключать питание/USB во время XMODEM.
-- Обрыв → модуль часто остаётся в BootLoader; повтор Soft/Hard + тот же `.pkg`.
+- Обрыв → модуль часто остаётся в BootLoader; повтор Soft + тот же `.pkg`.
 - Неверный `.pkg` для другой модели — не использовать.
+- После `CONFIG 460800` без `SAVECONFIG` Hard power-cycle возвращает сохранённый baud — нужен baud-sweep на шаге 6.
+- **`no-link@115200`:** прошивка заново открывала USB на скорости из настроек и роняла DTR, хотя VERSIONA только что прошёл по уже открытому порту. Теперь сначала слушаем текущий baud сессии и перебираем скорость **без** reopen; reopen — только если ни на одной скорости нет ответа.

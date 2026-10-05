@@ -57,7 +57,14 @@ internal class MyLifecycleOwner : SavedStateRegistryOwner, ViewModelStoreOwner {
         try {
             mLifecycleRegistry.currentState = state
         } catch (e: IllegalStateException) {
-            // Игнорируем ошибки при переходе состояний
+            // Do not leave overlay collectors stuck below STARTED/RESUMED silently.
+            android.util.Log.e(
+                "FloatingLifecycle",
+                "setCurrentState($state) failed; current=${
+                    runCatching { mLifecycleRegistry.currentState }.getOrNull()
+                }",
+                e,
+            )
         }
     }
 

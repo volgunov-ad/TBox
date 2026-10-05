@@ -38,10 +38,26 @@ class WidgetsRepositoryDescriptionTest {
     }
 
     @Test
-    fun speedLimiterWidgetIsHiddenFromPickerUntilDebugged() {
+    fun osmSpeedLimitWidgetIsOfferedInPicker() {
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets().contains(OSM_SPEED_LIMIT_WIDGET_DATA_KEY),
+        )
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(OSM_SPEED_LIMIT_WIDGET_DATA_KEY))
+        assertNull(WidgetsRepository.getActionsDescriptionResForDataKey(OSM_SPEED_LIMIT_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun speedLimiterWidgetIsHiddenFromPickerButStillCataloged() {
+        assertEquals(true, SPEED_LIMITER_UI_HIDDEN)
         assertFalse(
             WidgetsRepository.getAvailableDataKeysWidgets().contains(SPEED_LIMITER_WIDGET_DATA_KEY),
         )
+        assertFalse(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(SPEED_LIMITER_WIDGET_DATA_KEY),
+        )
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getActionsDescriptionResForDataKey(SPEED_LIMITER_WIDGET_DATA_KEY))
     }
 
     @Test
@@ -74,5 +90,79 @@ class WidgetsRepositoryDescriptionTest {
         assertNotNull(WidgetsRepository.getActionsDescriptionResForDataKey(GNSS_DEBUG_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.supportsShowUnit(GNSS_DEBUG_WIDGET_DATA_KEY))
         assertFalse(WidgetsRepository.requiresTboxConnection(GNSS_DEBUG_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun gasBrakeWidgetIsOfferedWithoutTbox() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(GAS_BRAKE_WIDGET_DATA_KEY),
+        )
+        assertTrue(WidgetsRepository.isWidgetOfferedWhenNoTbox(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertNotNull(WidgetsRepository.getDescriptionResForDataKey(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsShowUnit(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(GAS_BRAKE_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(GAS_BRAKE_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun averageFuelConsumptionWidgetIsOfferedWithoutTbox() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertTrue(
+            WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect = true)
+                .contains(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY),
+        )
+        assertNotNull(
+            WidgetsRepository.getDescriptionResForDataKey(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY),
+        )
+        assertTrue(WidgetsRepository.supportsShowUnit(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertTrue(WidgetsRepository.supportsValueAccuracy(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.supportsUseMbCanVhal(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+        assertFalse(WidgetsRepository.requiresTboxConnection(AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun mainScreenPageSelectorWidgetsAreCatalogedButHiddenFromTilesTab() {
+        val keys = WidgetsRepository.getAvailableDataKeysWidgets()
+        assertTrue(keys.contains(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY))
+        assertTrue(keys.contains(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY))
+        assertNotNull(
+            WidgetsRepository.getDescriptionResForDataKey(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
+        assertNotNull(
+            WidgetsRepository.getActionsDescriptionResForDataKey(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.isOfferedOnMainDashboardTab(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.isOfferedOnMainDashboardTab(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertTrue(WidgetsRepository.isOfferedOnMainDashboardTab(DAY_NIGHT_THEME_WIDGET_DATA_KEY))
+        assertFalse(
+            WidgetsRepository.supportsShowUnit(MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        assertFalse(
+            WidgetsRepository.supportsValueAccuracy(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertFalse(
+            WidgetsRepository.requiresTboxConnection(
+                MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+            ),
+        )
     }
 }

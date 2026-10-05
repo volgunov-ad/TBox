@@ -1,0 +1,794 @@
+package vad.dashing.tbox.automation
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
+import vad.dashing.tbox.AdayoStockAppWindow
+import vad.dashing.tbox.AppDataManager
+import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.CarDataRepository
+import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitDayNightRepository
+import vad.dashing.tbox.MEDIA_AUTOMATION_SOURCE_HOLD_MS
+import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.MirrorAdjustModeRepository
+import vad.dashing.tbox.PagingStateNormalizer
+import vad.dashing.tbox.PlatformAudioDomain
+import vad.dashing.tbox.PlatformAudioRepository
+import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.SharedMediaControlService
+import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.executeHttpRequestWidget
+import vad.dashing.tbox.freeform.FreeformCompanionSession
+import vad.dashing.tbox.freeform.FreeformLaunchBounds
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
+import vad.dashing.tbox.httpRequestWidgetErrorMessage
+import vad.dashing.tbox.httpRequestWidgetIsSuccess
+import vad.dashing.tbox.location.GeoDebugLogRecorder
+import vad.dashing.tbox.location.MockLocationWidgetCycle
+import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
+import vad.dashing.tbox.parseHttpRequestWidgetYaml
+import vad.dashing.tbox.ui.LeftMenuLayout
+import vad.dashing.tbox.voice.VadVoiceLaunchContract
+
+data class AutomationActionResult(
+    val success: Boolean,
+    val message: String = "",
+) {
+    companion object {
+        fun ok(message: String = "") = AutomationActionResult(true, message)
+        fun failure(message: String) = AutomationActionResult(false, message)
+    }
+}
+
+class AutomationActionExecutor(
+    context: Context,
+    private val settingsManager: SettingsManager,
+    private val appDataManager: AppDataManager,
+    private val serviceActions: AutomationServiceActions,
+) {
+    private val appContext = context.applicationContext
+    private val canCommandMutex = Mutex()
+    private val windowActionMutex = Mutex()
+
+    suspend fun execute(
+        actions: List<AutomationAction>,
+        context: AutomationTriggerContext,
+        signalSnapshot: () -> Map<AutomationSignalKey, AutomationSignalValue>,
+    ): AutomationActionResult {
+        actions.forEachIndexed { index, action ->
+            val result = executeOne(action, context, signalSnapshot)
+            if (!result.success) {
+                return AutomationActionResult.failure(
+                    "Действие ${index + 1}: ${result.message}",
+                )
+            }
+        }
+        return AutomationActionResult.ok("Выполнено действий: ${actions.size}")
+    }
+
+    private suspend fun executeOne(
+        action: AutomationAction,
+        context: AutomationTriggerContext,
+        signalSnapshot: () -> Map<AutomationSignalKey, AutomationSignalValue>,
+    ): AutomationActionResult = try {
+        when (action) {
+            is AutomationAction.Delay -> {
+                delay(action.durationMillis)
+                AutomationActionResult.ok()
+            }
+
+            is AutomationAction.IfThenElse -> {
+                val branch = if (
+                    AutomationEvaluator.evaluateCondition(action.condition, context, signalSnapshot())
+                ) {
+                    action.thenActions
+                } else {
+                    action.elseActions
+                }
+                execute(branch, context, signalSnapshot)
+            }
+
+            is AutomationAction.CanCommand -> executeCan(action)
+            is AutomationAction.LaunchApplication -> launchApplication(action)
+            is AutomationAction.OpenMainScreen -> openMainScreen(action)
+            is AutomationAction.HttpRequest -> executeHttp(action)
+            is AutomationAction.Builtin -> executeBuiltin(action)
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        AutomationActionResult.failure(
+            error.message ?: error.javaClass.simpleName,
+        )
+    }
+
+    private suspend fun executeCan(action: AutomationAction.CanCommand): AutomationActionResult {
+        // mbCAN OEM JNI aborts if get/set runs on the main thread. MbCanRepository.execute already
+        // hops onto stateApplyDispatcher; Default keeps VHAL writes off the UI thread as well.
+        return withContext(Dispatchers.Default) {
+            canCommandMutex.withLock {
+                val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                    ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                val canMode = UniversalCanRepository.mode.value
+                if (!entry.isActionAllowed(action)) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                val writeValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
+                    ?: return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                if (action.operation == AutomationCanOperation.SET &&
+                    writeValue !in entry.allowedValuesFor(canMode)
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (action.operation == AutomationCanOperation.TRUNK_PULSE &&
+                    writeValue !in setOf(1, 2)
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (!entry.supports(canMode)) {
+                    return@withLock AutomationActionResult.failure(
+                        "CAN-действие не подтверждено для текущего backend ГУ",
+                    )
+                }
+                val command = when (action.bus) {
+                    AutomationCanBus.VEHICLE -> when (action.operation) {
+                        AutomationCanOperation.SET ->
+                            MbCanCommand.SetProperty(action.propertyId, writeValue)
+
+                        AutomationCanOperation.TOGGLE ->
+                            MbCanCommand.ToggleProperty(action.propertyId)
+
+                        AutomationCanOperation.TRUNK_PULSE ->
+                            MbCanCommand.TrunkPulse(writeValue)
+                    }
+
+                    AutomationCanBus.AUDIO -> when (action.operation) {
+                        AutomationCanOperation.SET ->
+                            MbCanCommand.SetAudioProperty(action.propertyId, writeValue)
+
+                        AutomationCanOperation.TOGGLE ->
+                            MbCanCommand.ToggleAudioProperty(action.propertyId)
+
+                        AutomationCanOperation.TRUNK_PULSE ->
+                            return@withLock AutomationActionResult.failure(
+                                "Импульс багажника не относится к аудио",
+                            )
+                    }
+                }
+                val result = UniversalCanRepository.execute(command)
+                AutomationActionResult(result.success, result.message)
+            }
+        }
+    }
+
+    private suspend fun launchApplication(
+        action: AutomationAction.LaunchApplication,
+    ): AutomationActionResult {
+        val packageName = action.packageName.trim()
+        if (packageName.isEmpty()) {
+            return AutomationActionResult.failure("Не выбрано приложение")
+        }
+        return when (action.launchMode) {
+            AppLauncherLaunchMode.FREEFORM -> {
+                val pageCount = settingsManager.mainScreenPageCountFlow.first()
+                val pinnedPage = action.freeformOverlayPage?.let {
+                    PagingStateNormalizer.normalizeCurrentPage(it, pageCount)
+                }
+                val launched = withContext(Dispatchers.Main) {
+                    FreeformLaunchHelper.launchCompanion(
+                        context = appContext,
+                        packageName = packageName,
+                        side = action.freeformSide,
+                        percent = FreeformLaunchBounds.normalizePercent(action.freeformPercent),
+                        overlayCrop = action.freeformOverlayCrop,
+                        pinnedOverlayPage = pinnedPage,
+                    )
+                }
+                val confirmed = launched && withTimeoutOrNull(WINDOW_ACTION_TIMEOUT_MS) {
+                    FreeformCompanionSession.state
+                        .filter { it?.packageName == packageName }
+                        .first()
+                } != null
+                if (confirmed) {
+                    AutomationActionResult.ok("Freeform запущен")
+                } else {
+                    AutomationActionResult.failure("Не удалось запустить freeform")
+                }
+            }
+
+            AppLauncherLaunchMode.STOCK_WINDOW -> {
+                val launched = awaitAfterWindowModeExit {
+                    if (!AdayoStockAppWindow.launchInAppWindow(appContext, packageName)) {
+                        launchFullscreen(packageName)
+                    } else {
+                        true
+                    }
+                }
+                AutomationActionResult(
+                    launched,
+                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                )
+            }
+
+            AppLauncherLaunchMode.FULLSCREEN -> {
+                if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
+                    return AutomationActionResult.failure("Приложение не установлено")
+                }
+                val launched = awaitAfterWindowModeExit {
+                    launchFullscreen(packageName)
+                }
+                AutomationActionResult(
+                    launched,
+                    if (launched) "Приложение запущено" else "Запуск приложения не удался",
+                )
+            }
+
+            AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
+                val displayId = action.virtualDisplayId
+                if (displayId == null || displayId <= 0) {
+                    return AutomationActionResult.failure("Не выбран виртуальный дисплей")
+                }
+                if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
+                    return AutomationActionResult.failure("Приложение не установлено")
+                }
+                awaitAfterWindowModeExit { true }
+                val cached = vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(
+                    settingsManager.huVirtualDisplaysJsonFlow.first(),
+                )
+                var refreshedDisplays: List<vad.dashing.tbox.adb.HuDisplayInfo>? = null
+                val outcome = withContext(Dispatchers.IO) {
+                    vad.dashing.tbox.adb.VirtualDisplayAdb.launchOnDisplay(
+                        context = appContext,
+                        packageName = packageName,
+                        displayId = displayId,
+                        displayWidthPx = action.virtualDisplayWidthPx,
+                        displayHeightPx = action.virtualDisplayHeightPx,
+                        cachedDisplays = cached,
+                        onDisplaysRefreshed = { refreshedDisplays = it },
+                    )
+                }
+                refreshedDisplays?.let { displays ->
+                    settingsManager.saveHuVirtualDisplaysJson(
+                        vad.dashing.tbox.adb.HuDisplayInfo.listToJson(displays),
+                    )
+                }
+                vad.dashing.tbox.adb.HuAdbControl.refresh()
+                when (outcome) {
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success ->
+                        AutomationActionResult.ok(
+                            "Приложение запущено на дисплее ${outcome.displayId}" +
+                                if (outcome.remapped) " (было $displayId)" else "",
+                        )
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
+                        AutomationActionResult.failure(
+                            outcome.detail.ifBlank { outcome.reason.name },
+                        )
+                }
+            }
+        }
+    }
+
+    private fun launchFullscreen(packageName: String): Boolean {
+        val intent = appContext.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        MainActivityIntentHelper.applyExternalAppLaunchFlags(intent, appContext)
+        return runCatching {
+            appContext.startActivity(intent)
+            true
+        }.getOrDefault(false)
+    }
+
+    private suspend fun openMainScreen(
+        action: AutomationAction.OpenMainScreen,
+    ): AutomationActionResult {
+        val pageCount = settingsManager.mainScreenPageCountFlow.first()
+        val page = PagingStateNormalizer.normalizeCurrentPage(action.page, pageCount)
+        return when (action.target) {
+            AutomationMainScreenTarget.CURRENT_WINDOW -> {
+                if (FreeformCompanionSession.pinOverlayPage(page)) {
+                    AutomationActionResult.ok("Страница оконного режима: $page")
+                } else {
+                    AutomationActionResult.failure("Оконный режим не активен")
+                }
+            }
+
+            AutomationMainScreenTarget.FULLSCREEN -> {
+                settingsManager.saveMainScreenCurrentPage(page)
+                settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
+                val opened = awaitAfterWindowModeExit(::bringMainActivityToFront)
+                AutomationActionResult(
+                    opened,
+                    if (opened) "Главный экран, страница $page" else "Главный экран не открыт",
+                )
+            }
+        }
+    }
+
+    private suspend fun executeHttp(
+        action: AutomationAction.HttpRequest,
+    ): AutomationActionResult {
+        if (action.openBrowser) {
+            val url = browserUrlFromHttpRequestYaml(action.yaml).getOrElse {
+                return AutomationActionResult.failure(it.message ?: "Некорректный URL")
+            }
+            return if (openHttpRequestWidgetUrlInBrowser(appContext, url)) {
+                AutomationActionResult.ok("Браузер открыт")
+            } else {
+                AutomationActionResult.failure("Не удалось открыть браузер")
+            }
+        }
+        val config = parseHttpRequestWidgetYaml(action.yaml).getOrElse {
+            return AutomationActionResult.failure(it.message ?: "Некорректный HTTP YAML")
+        }
+        val result = executeHttpRequestWidget(config)
+        return AutomationActionResult(
+            success = httpRequestWidgetIsSuccess(result),
+            message = if (httpRequestWidgetIsSuccess(result)) {
+                "HTTP выполнен"
+            } else {
+                httpRequestWidgetErrorMessage(result)
+            },
+        )
+    }
+
+    private suspend fun executeBuiltin(
+        action: AutomationAction.Builtin,
+    ): AutomationActionResult = when (action.type) {
+        AutomationBuiltinActionType.OPEN_MENU -> {
+            val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
+            settingsManager.saveSelectedTab(LeftMenuLayout.firstVisibleTabKey(layout))
+            withContext(Dispatchers.Main) { bringMainActivityToFront() }
+            AutomationActionResult.ok("Меню открыто")
+        }
+
+        AutomationBuiltinActionType.FINISH_AND_START_TRIP ->
+            serviceActions.finishAndStartTrip()
+
+        AutomationBuiltinActionType.RESET_MOTOR_HOURS -> {
+            CarDataRepository.setMotorHours(0f)
+            appDataManager.saveMotorHours(0f)
+            CarDataRepository.markPersisted(0f)
+            AutomationActionResult.ok("Моточасы сброшены")
+        }
+
+        AutomationBuiltinActionType.RESTART_TBOX ->
+            serviceActions.restartTbox()
+
+        AutomationBuiltinActionType.TOGGLE_APP_DAY_NIGHT_THEME -> {
+            val ok = withContext(Dispatchers.Main) {
+                HeadUnitDayNightRepository.toggleManualTheme(appContext)
+            }
+            AutomationActionResult(ok, if (ok) "Тема переключена" else "Тема не переключена")
+        }
+
+        AutomationBuiltinActionType.ENABLE_HEAD_UNIT_AUTO_THEME -> {
+            val ok = withContext(Dispatchers.Main) {
+                HeadUnitDayNightRepository.enableAutoMode(appContext)
+            }
+            AutomationActionResult(ok, if (ok) "Автотема включена" else "Автотема недоступна")
+        }
+
+        AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+            val key = action.stringValue.trim().lowercase()
+            val modeValue = when (key) {
+                "light" -> HeadUnitDayNightRepository.NIGHT_MODE_LIGHT_MANUAL
+                "dark" -> HeadUnitDayNightRepository.NIGHT_MODE_DARK_MANUAL
+                "auto" -> HeadUnitDayNightRepository.NIGHT_MODE_AUTO
+                else -> null
+            }
+            if (modeValue == null) {
+                AutomationActionResult.failure("Тема: light / dark / auto")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    if (modeValue == HeadUnitDayNightRepository.NIGHT_MODE_AUTO) {
+                        HeadUnitDayNightRepository.enableAutoMode(appContext)
+                    } else {
+                        HeadUnitDayNightRepository.writeAutoMode(appContext, modeValue)
+                    }
+                }
+                val label = when (key) {
+                    "light" -> "светлая"
+                    "dark" -> "тёмная"
+                    else -> "авто"
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) "Тема ГУ: $label" else "Не удалось установить тему ГУ",
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.TOGGLE_MIRROR_ADJUST_MODE -> {
+            val ok = runCatching {
+                MirrorAdjustModeRepository.toggleMirrorAdjustMode(appContext)
+                true
+            }.getOrDefault(false)
+            AutomationActionResult(ok, if (ok) "Режим зеркал переключён" else "Ошибка режима зеркал")
+        }
+
+        AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS ->
+            serviceActions.applyFloatingPanelVisibility(action)
+
+        AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED ->
+            serviceActions.applyFloatingPanelEnabled(action)
+
+        AutomationBuiltinActionType.ESP_RELAY_SET ->
+            serviceActions.setEspRelayMask(action.intValue)
+
+        AutomationBuiltinActionType.ESP_RELAY_TOGGLE ->
+            serviceActions.toggleEspRelay(action.intValue)
+
+        AutomationBuiltinActionType.ESP_RELAY_PULSE -> serviceActions.pulseEspRelay(
+            channel = action.intValue,
+            durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
+        )
+
+        AutomationBuiltinActionType.MEDIA_PREVIOUS -> mediaAction(action) {
+            packages, preferred -> SharedMediaControlService.skipToPrevious(packages, preferred)
+        }
+
+        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> mediaAction(
+            action,
+            holdForPlayerLaunch = true,
+        ) { packages, preferred ->
+            SharedMediaControlService.playPause(
+                appContext,
+                packages,
+                preferred,
+                keepPlayerForeground = true,
+            )
+        }
+
+        AutomationBuiltinActionType.MEDIA_PLAY -> mediaAction(
+            action,
+            holdForPlayerLaunch = true,
+        ) { packages, preferred ->
+            SharedMediaControlService.play(
+                appContext,
+                packages,
+                preferred,
+                keepPlayerForeground = true,
+            )
+        }
+
+        AutomationBuiltinActionType.MEDIA_NEXT -> mediaAction(action) { packages, preferred ->
+            SharedMediaControlService.skipToNext(packages, preferred)
+        }
+
+        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE -> mediaAction(action) { packages, preferred ->
+            SharedMediaControlService.toggleHeartRating(packages, preferred)
+        }
+
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Media,
+            action.intValue,
+            "медиа",
+        )
+
+        AutomationBuiltinActionType.SET_PHONE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Phone,
+            action.intValue,
+            "телефона",
+        )
+
+        AutomationBuiltinActionType.SET_NAVI_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Navi,
+            action.intValue,
+            "навигатора",
+        )
+
+        AutomationBuiltinActionType.SET_VOICE_VOLUME -> setPlatformVolume(
+            PlatformAudioDomain.VolumeChannel.Voice,
+            action.intValue,
+            "голоса",
+        )
+
+        AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+            val ui = when (action.stringValue.trim().lowercase()) {
+                "only" -> PlatformAudioDomain.HEADREST_ONLY
+                "assist" -> PlatformAudioDomain.HEADREST_ASSIST
+                "off" -> PlatformAudioDomain.HEADREST_OFF
+                else -> null
+            }
+            if (ui == null) {
+                AutomationActionResult.failure("Подголовник: only / assist / off")
+            } else {
+                val ok = PlatformAudioRepository.setHeadrestMode(ui)
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Динамик подголовника установлен"
+                    } else {
+                        "Не удалось установить динамик подголовника"
+                    },
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.CYCLE_MOCK_LOCATION_MODE -> {
+            val next = MockLocationWidgetCycle.next(
+                settingsManager.mockPowerStateFlow.first(),
+                settingsManager.mockCanSpeedModeFlow.first(),
+            )
+            settingsManager.saveMockPowerAndModeSetting(next.power, next.mode)
+            AutomationActionResult.ok("Режим подмены геопозиции переключён")
+        }
+
+        AutomationBuiltinActionType.GNSS_MODULE_REBOOT ->
+            serviceActions.rebootGnssModule()
+
+        AutomationBuiltinActionType.SET_SIMULATED_LOCATION_SOURCE_LOSS ->
+            serviceActions.setSimulatedLocationSourceLoss(action.boolValue)
+
+        AutomationBuiltinActionType.SET_GEO_DEBUG_LOG -> {
+            if (action.boolValue) GeoDebugLogRecorder.start() else GeoDebugLogRecorder.stop()
+            AutomationActionResult.ok(
+                if (action.boolValue) "Запись гео-журнала запущена" else "Запись остановлена",
+            )
+        }
+
+        AutomationBuiltinActionType.WIFI_SET_ENABLED ->
+            WifiStaController.setRadioEnabled(appContext, action.boolValue)
+
+        AutomationBuiltinActionType.WIFI_CONNECT ->
+            WifiStaController.connectToSaved(appContext, action.stringValue)
+
+        AutomationBuiltinActionType.WIFI_DISCONNECT ->
+            WifiStaController.disconnectCurrent(appContext)
+
+        AutomationBuiltinActionType.WIFI_MODEM_SET_DATA ->
+            serviceActions.setWifiModemMobileDataEnabled(action.boolValue)
+
+        AutomationBuiltinActionType.WIFI_MODEM_REBOOT ->
+            serviceActions.rebootWifiModem()
+
+        AutomationBuiltinActionType.ADB_SET_TCP ->
+            vad.dashing.tbox.adb.AdbAutomationActions.setTcpEnabled(action.boolValue)
+
+        AutomationBuiltinActionType.ADB_SHELL ->
+            vad.dashing.tbox.adb.AdbAutomationActions.runShellCommand(
+                appContext,
+                action.stringValue,
+            )
+
+        AutomationBuiltinActionType.ADB_FORCE_STOP ->
+            vad.dashing.tbox.adb.AdbAutomationActions.forceStopPackage(
+                appContext,
+                action.stringValue,
+            )
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Яркость экрана ГУ недоступна")
+            } else {
+                val level = action.intValue.coerceIn(1, 10)
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeBrightnessUiLevel(appContext, level)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        "Яркость экрана ГУ: $level"
+                    } else {
+                        "Не удалось установить яркость экрана ГУ"
+                    },
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> {
+            if (!HeadUnitBrightnessRepository.isAvailable(appContext)) {
+                AutomationActionResult.failure("Автояркость экрана ГУ недоступна")
+            } else {
+                val ok = withContext(Dispatchers.Main) {
+                    HeadUnitBrightnessRepository.writeAutoBrightness(appContext, action.boolValue)
+                }
+                AutomationActionResult(
+                    ok,
+                    if (ok) {
+                        if (action.boolValue) {
+                            "Автояркость экрана ГУ включена"
+                        } else {
+                            "Автояркость экрана ГУ выключена"
+                        }
+                    } else {
+                        "Не удалось изменить автояркость экрана ГУ"
+                    },
+                )
+            }
+        }
+
+        AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET -> {
+            val triggerId = action.stringValue.trim()
+            if (triggerId.isEmpty()) {
+                AutomationActionResult.failure("ID триггера пуст")
+            } else {
+                when (builtinActionTriggerWidgetCommand(action)) {
+                    AutomationTriggerWidgetCommand.ACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, true)
+                        AutomationActionResult.ok("Триггер-виджет активирован")
+                    }
+                    AutomationTriggerWidgetCommand.DEACTIVATE -> {
+                        AutomationTriggerWidgetState.setActive(triggerId, false)
+                        AutomationActionResult.ok("Триггер-виджет деактивирован")
+                    }
+                    AutomationTriggerWidgetCommand.TOGGLE -> {
+                        val nextActive = !AutomationTriggerWidgetState.isActive(triggerId)
+                        AutomationTriggerWidgetState.setActive(triggerId, nextActive)
+                        AutomationActionResult.ok(
+                            if (nextActive) {
+                                "Триггер-виджет активирован"
+                            } else {
+                                "Триггер-виджет деактивирован"
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        AutomationBuiltinActionType.SET_AUTOMATION_ENABLED -> {
+            val automationId = action.stringValue.trim()
+            if (automationId.isEmpty()) {
+                AutomationActionResult.failure("ID автоматизации пуст")
+            } else {
+                serviceActions.setAutomationEnabled(automationId, action.boolValue)
+            }
+        }
+
+        AutomationBuiltinActionType.SHOW_TOAST -> {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                AutomationActionResult.failure("Текст пуст")
+            } else {
+                AutomationUserMessageOverlay.showToast(appContext, text)
+                AutomationActionResult.ok("Toast показан")
+            }
+        }
+
+        AutomationBuiltinActionType.SHOW_ALERT -> {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                AutomationActionResult.failure("Текст пуст")
+            } else if (
+                !AutomationUserMessageOverlay.showCloseableMessage(
+                    context = appContext,
+                    text = text,
+                    autoCloseMillis = action.intValue.toLong().coerceAtLeast(0L),
+                )
+            ) {
+                AutomationActionResult.failure(
+                    "Нет разрешения «поверх других окон» для сообщения на экране",
+                )
+            } else {
+                AutomationActionResult.ok("Сообщение закрыто")
+            }
+        }
+
+        AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
+        AutomationBuiltinActionType.CRUISE_PAUSE,
+        AutomationBuiltinActionType.CRUISE_FULL_OFF,
+        AutomationBuiltinActionType.CRUISE_RESUME,
+        AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+        AutomationBuiltinActionType.CRUISE_NUDGE,
+        -> AutomationCruiseActions.execute(action)
+
+        AutomationBuiltinActionType.START_VAD_VOICE -> startVadVoiceListen()
+    }
+
+    private fun startVadVoiceListen(): AutomationActionResult {
+        val intent = Intent(VadVoiceLaunchContract.ACTION_LISTEN).apply {
+            setPackage(VadVoiceLaunchContract.PACKAGE)
+            putExtra(VadVoiceLaunchContract.EXTRA_SOURCE, VadVoiceLaunchContract.SOURCE_AUTOMATION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return runCatching {
+            appContext.startActivity(intent)
+            AutomationActionResult.ok("VAD Voice: слушаю")
+        }.getOrElse { error ->
+            AutomationActionResult.failure(
+                error.message?.takeIf { it.isNotBlank() }
+                    ?: "VAD Voice не установлен",
+            )
+        }
+    }
+
+    private suspend fun setPlatformVolume(
+        channel: PlatformAudioDomain.VolumeChannel,
+        value: Int,
+        label: String,
+    ): AutomationActionResult {
+        // OpenOS and Adayo SettingsSvc accept mixer writes on the main looper,
+        // the same thread the volume widget uses. The external API runs actions
+        // on a worker thread, and that write comes back as a volume error.
+        val ok = withContext(Dispatchers.Main) {
+            PlatformAudioRepository.setVolume(channel, value)
+        }
+        return AutomationActionResult(
+            ok,
+            if (ok) "Громкость $label установлена" else "Ошибка громкости $label",
+        )
+    }
+
+    private suspend fun mediaAction(
+        action: AutomationAction.Builtin,
+        holdForPlayerLaunch: Boolean = false,
+        block: (Set<String>, String) -> Unit,
+    ): AutomationActionResult {
+        val preferred = action.stringValue.trim()
+        // Empty package = active media session (voice / API without a picker).
+        val packages = if (preferred.isEmpty()) emptySet() else setOf(preferred)
+        // MediaController.registerCallback / startActivity / transportControls on API 28 need a
+        // Looper; automation runs on DefaultDispatcher. Main hop plus main-Handler in
+        // SharedMediaControlService cover both the first command and later play retries.
+        return withContext(Dispatchers.Main) {
+            SharedMediaControlService.updateSourceSelection(appContext, MEDIA_SOURCE_ID, packages)
+            runCatching {
+                block(packages, preferred)
+                AutomationActionResult.ok("Медиа-команда отправлена")
+            }.getOrElse {
+                AutomationActionResult.failure(it.message ?: "Ошибка медиа-команды")
+            }.also { result ->
+                if (holdForPlayerLaunch && result.success) {
+                    SharedMediaControlService.scheduleSourceSelectionRelease(
+                        MEDIA_SOURCE_ID,
+                        MEDIA_AUTOMATION_SOURCE_HOLD_MS,
+                    )
+                } else {
+                    SharedMediaControlService.clearSourceSelectionIfNotHeld(MEDIA_SOURCE_ID)
+                }
+            }
+        }
+    }
+
+    private fun bringMainActivityToFront(): Boolean = runCatching {
+        val intent = MainActivityIntentHelper.createBringToFrontIntent(appContext)
+        if (appContext !is Activity) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        appContext.startActivity(intent)
+        true
+    }.getOrDefault(false)
+
+    private suspend fun awaitAfterWindowModeExit(action: () -> Boolean): Boolean =
+        windowActionMutex.withLock {
+            val completion = CompletableDeferred<Boolean>()
+            withContext(Dispatchers.Main) {
+                FreeformLaunchHelper.runAfterExitingWindowMode(appContext) {
+                    if (completion.isActive) {
+                        completion.complete(runCatching(action).getOrDefault(false))
+                    }
+                }
+            }
+            val result = withTimeoutOrNull(WINDOW_ACTION_TIMEOUT_MS) {
+                completion.await()
+            }
+            if (result == null) completion.cancel()
+            result ?: false
+        }
+
+    companion object {
+        private const val MEDIA_SOURCE_ID = "user-automations"
+        private const val WINDOW_ACTION_TIMEOUT_MS = 10_000L
+    }
+}

@@ -27,8 +27,77 @@ object Um980Commands {
         return listOf("GPGGA $rate", "GPRMC $rate")
     }
 
+    /**
+     * Turn NMEA on or off for one UM980 COM port.
+     * Off is `UNLOG COMx` (all logs on that port). On uses the same sentence periods as the
+     * geo-period controls; if every period is off, GGA+RMC at 1 Hz so the port actually transmits.
+     * Does not SAVECONFIG.
+     */
+    fun nmeaComOutputCommands(
+        port: String,
+        enabled: Boolean,
+        ggaRmcPeriodSec: Double,
+        gsaPeriodSec: Double,
+        gsvPeriodSec: Double,
+        zdaPeriodSec: Double,
+        vtgPeriodSec: Double,
+    ): List<String> {
+        val com = port.trim().uppercase(LocaleUS)
+        if (!enabled) return listOf("UNLOG $com")
+        val cmds = ArrayList<String>(6)
+        fun add(message: String, periodSec: Double) {
+            val rate = periodSecondsToNmeaRate(periodSec)
+            if (rate != "0") cmds.add("$message $com $rate")
+        }
+        add("GPGGA", ggaRmcPeriodSec)
+        add("GPRMC", ggaRmcPeriodSec)
+        add("GPGSA", gsaPeriodSec)
+        add("GPGSV", gsvPeriodSec)
+        add("GPZDA", zdaPeriodSec)
+        add("GPVTG", vtgPeriodSec)
+        if (cmds.isEmpty()) {
+            cmds.add("GPGGA $com 1")
+            cmds.add("GPRMC $com 1")
+        }
+        return cmds
+    }
+
+    /**
+     * Latest `#UNILOGLIST` payload → whether each COM is outputting at least one NMEA sentence.
+     * Null when that payload has not been seen yet (a `$command,UNILOGLIST` ack alone is not enough).
+     * Binary logs (PSRPOSA, …) do not count. Rate 0 counts as off.
+     * Accepts abbreviated lines `< GPGGA COM1 1` and several `MESSAGE COMx rate` tokens on one line.
+     */
+    fun parseNmeaOutputByCom(lines: List<String>): Map<String, Boolean>? {
+        val header = lines.indexOfLast { it.contains("#UNILOGLIST", ignoreCase = true) }
+        if (header < 0) return null
+        val enabled = linkedMapOf("COM1" to false, "COM2" to false, "COM3" to false)
+        val block = ArrayList<String>(lines.size)
+        val inline = lines[header].substringAfter(';', missingDelimiterValue = "")
+        if (inline.isNotBlank()) block.add(inline)
+        for (raw in lines.drop(header + 1)) {
+            val t = raw.trim()
+            if (t.isEmpty()) continue
+            if (t.startsWith("#") || t.startsWith("$") || t.contains("response:", ignoreCase = true)) break
+            block.add(raw)
+        }
+        for (raw in block) {
+            for (match in NMEA_LOG_ENTRY.findAll(raw)) {
+                val message = match.groupValues[1].uppercase(LocaleUS)
+                val com = match.groupValues[2].uppercase(LocaleUS)
+                val rate = match.groupValues[3].toDoubleOrNull() ?: continue
+                if (rate > 0.0 && NMEA_MESSAGE_NAME.matches(message) && com in enabled) {
+                    enabled[com] = true
+                }
+            }
+        }
+        return enabled
+    }
+
     /** UART port wired ESP↔UM980 on this companion hardware. */
     const val UM980_COMPANION_COM = "COM3"
+
+    val NMEA_COM_PORTS: List<String> = listOf("COM1", "COM2", "COM3")
 
     /** Target SIGNALGROUP for presets (sent separately after SAVECONFIG if needed). */
     const val PRESET_SIGNALGROUP = 2
@@ -112,6 +181,7 @@ object Um980Commands {
         "MODE",
         "MASK",
         "VERSIONA",
+        "UNILOGLIST",
     )
 
     fun parseConfigSnapshot(lines: List<String>): Um980ConfigSnapshot {
@@ -313,11 +383,24 @@ object Um980Commands {
             pppTimeout = pppTimeout,
             pppDatum = pppDatum,
             um980Version = um980Version,
+            nmeaOutputByCom = parseNmeaOutputByCom(lines),
             rawLines = lines,
         )
     }
 
     private val LocaleUS = java.util.Locale.US
+
+    /**
+     * One log entry inside UNILOGLIST: `GPGGA COM1 1`, optional `<` and `ONTIME`/`ONCE`.
+     * Several entries may share a line.
+     */
+    private val NMEA_LOG_ENTRY = Regex(
+        """(?:^|[\s<])\s*([A-Za-z][A-Za-z0-9]+)\s+(COM[123])\s+(?:(?:ONTIME|ONCE)\s+)?([0-9]+(?:\.[0-9]+)?)""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** NMEA sentence name: talker GP/GN/GL/GA/GB/GQ + 3-letter type (GPGGA, GNRMC, …). */
+    private val NMEA_MESSAGE_NAME = Regex("""^G[PNLABQ][A-Z]{3}$""")
 
     /**
      * True for a Unicore ASCII VERSIONA **payload** (`#VERSIONA,…`), not the bare
@@ -387,6 +470,11 @@ data class Um980ConfigSnapshot(
     /** WGS84 / PPPORIGINAL */
     val pppDatum: String? = null,
     val um980Version: String? = null,
+    /**
+     * NMEA output per COM from the latest UNILOGLIST.
+     * Null until that list has been read. Missing port in a seen list is false.
+     */
+    val nmeaOutputByCom: Map<String, Boolean>? = null,
     val rawLines: List<String> = emptyList(),
 ) {
     val antijamForce: Boolean? get() = when (antijamMode) {

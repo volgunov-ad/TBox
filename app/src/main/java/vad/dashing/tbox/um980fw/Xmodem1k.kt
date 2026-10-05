@@ -1,5 +1,7 @@
 package vad.dashing.tbox.um980fw
 
+import java.nio.charset.Charset
+
 /**
  * XMODEM-1K sender matching Unicore N4 BootLoader (UPrecise capture):
  * STX | blk | ~blk | 1024 data | checksum (sum & 0xFF); ACK/NAK; EOT.
@@ -43,8 +45,32 @@ object Xmodem1k {
         return crc
     }
 
+    /**
+     * Mode byte that follows `Ready for binary (xmodem)`.
+     * `C` in earlier menu text (Copyright, CPU) must not count.
+     * Null when the prompt is not in [bytes] yet, or the C/NAK after it has not arrived.
+     */
+    fun startModeAfterReady(bytes: ByteArray): CheckMode? {
+        val hay = bytes.toString(Charset.forName("US-ASCII"))
+        val xmodemAt = hay.indexOf("xmodem", ignoreCase = true)
+        val readyAt = hay.indexOf("Ready", ignoreCase = true)
+        val mark = when {
+            xmodemAt >= 0 && readyAt >= 0 -> minOf(xmodemAt, readyAt)
+            xmodemAt >= 0 -> xmodemAt
+            readyAt >= 0 -> readyAt
+            else -> return null
+        }
+        for (i in mark until bytes.size) {
+            when (bytes[i]) {
+                CRC_LETTER -> return CheckMode.CRC16
+                NAK -> return CheckMode.CHECKSUM
+            }
+        }
+        return null
+    }
+
     fun buildBlock(seq: Int, payload: ByteArray, mode: CheckMode): ByteArray {
-        require(seq in 1..255)
+        require(seq in 0..255)
         require(payload.size <= BLOCK_SIZE)
         val data = ByteArray(BLOCK_SIZE)
         System.arraycopy(payload, 0, data, 0, payload.size)

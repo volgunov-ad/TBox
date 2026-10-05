@@ -19,10 +19,12 @@
 
 | Механизм | Android 9 (mbCAN) | Android 10 (VHAL) |
 |----------|-------------------|-------------------|
-| **Pull (опрос)** | `MbCanJobManager`: каждые **30 с**; после команды — **burst 1,5 с** в течение **15 с** (`requestBurst`) | Аналогично: **30 с** / burst **1,5 с × 15 с** (`requestBurstPolling`) |
+| **Pull (опрос)** | `MbCanJobManager`: один последовательный цикл каждые **30 с**; после команды — **burst 1,5 с** в течение **15 с** (`requestBurst`). Новые интересы **будят** цикл (не ждут 30 с); приоритет — новые и видимые сигналы | Аналогично: **30 с** / burst **1,5 с × 15 с**; `setSourceSignals` сразу перезапускает poll, новые сигналы первыми |
 | **Push (события)** | Coalesce **200 ms**, затем запись в `StateFlow` | `onChangeEvent` VHAL, coalesce **200 ms** |
 | **Подписка на pull** | По `MbCanSignal` → `subscribeDataTypes` (например `eMBCAN_CFG_VEHICLE`) | По `MbCanSignal` → `signalReadPropertyIds` + `syncPushSubscriptions` |
 | **После записи** | `canSetVehicleParam` / `canSetAudioParam` + burst + `refreshSignal` | `setIntProperty` + burst + `refreshSignal` |
+
+**Car Settings tab:** пока открыта вкладка «Настройки авто», интерес — **объединение сигналов всех секций** (`carSettingsTabMbCanSignals`), а не только текущей. Так не дёргаются `eMBCAN_CFG_AUDIO` ↔ `eMBCAN_CFG_VEHICLE` при быстром переключении пунктов меню. Текущая секция сразу читается через `refreshSignalsNow` (видимые пункты первыми); остальные догоняет общий последовательный poll. Числовые UI-значения (`Int?`) удерживают последнее валидное (`HoldLastKnown`) на **A9 mbCAN и A10 VHAL**: сырые `-1` / out-of-range / transient unavailable при poll/push не гасят выбранные кнопки режима.
 
 Типы push на Android 9:
 
@@ -30,11 +32,63 @@
 |-------|--------|---------------|
 | `eMBCAN_CFG_VEHICLE` → `scheduleVehicleCfgPush` | Изменение vehicle-cfg property | Бинарные переключатели, HVAC, сиденья, SLA/limiter switch, car settings EPS/drive |
 | `eMBCAN_VEHICLE_LKA_STATUS` → `scheduleLkaSlaPush` | LKA/SLA от камеры | Знак: `FCM_2_SLAOnOffsts` + `FCM_2_SLAState` + `FCM_2_SLASpdlimit` (AdasCard) |
-| `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` | FRM ACC | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS) |
-| `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` | CCS status | `nCruiseControlStatus` (обычный круиз) |
+| `eMBCAN_VEHICLE_FRM_INFO` → `scheduleFrmAccPush` / `scheduleFrmDxTarObjPush` | FRM ACC + DxTarObj | `FRM_3_ACCMode` + `FRM_3_VSetDis` (виджет ACC/CCS); `FRM_3_DxTarObj` + `FRM_3_ObjValid` |
+| `eMBCAN_VEHICLE_GASPED_STATUS` → `scheduleGaspedCcsPush` / `scheduleGasPedalPush` | CCS status + педаль газа | `nCruiseControlStatus`; `fGasPedalPosition` + `nGasPedalPositionInvalidData` |
 | BCM telemetry → `scheduleTrunkBcmPush` | Движение/статус багажника | `TrunkDoorRepository` |
-| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed |
+| `eMBCAN_CFG_AUDIO` → `scheduleAudioCfgPush` | Аудио-cfg | Громкость, volume-vs-speed, EQ, balance/fader |
 | Engine/speed telemetry → `schedule*Push` | RPM, температура, скорость | Соответствующие `StateFlow` |
+
+Диагностическое окно **Настройки → Прочее → Тест кнопок руля** подписывается только на время показа. На A9 оно использует `eMBCAN_HARDKEY` / `IMBHardKeyListener` и показывает `keyCode`, `keyStatus`, `keyType` (с расшифровкой известных кодов и статуса). На A10 оно отдельным listener, не меняющим production-набор `syncPushSubscriptions`, пробует неподтверждённые кандидаты `HW_KEY_INPUT` **289475088**, `MPU_SEND_KEY_VALUE` **560991239**, `MCU_REPLY_KEY_STATUS` **557845512**, `MCU_SWC_SETTINGINFO_CMD` **561003776** и показывает raw value/type/area/timestamp/status либо ошибку регистрации. Это диагностические кандидаты, а не подтверждённые рабочие свойства; окно также на время показа регистрирует экспортированный receiver для OEM broadcast `adayo.keyEvent.onKeyDown`/`onKeyUp`/`onKeyLongPress`/`onSingleValue`, логирует `action` и строковый extra `hardKey` (если рассылка на конкретном ГУ активна), и пытается получить обычные Android `KeyEvent` в фокусе с `scanCode`/`androidKeyCode`/`deviceId`/`source`/`meta`/`repeat` нативного события. Рассылка OEM зависит от `keyeventservice`: при отсутствующем `usedkeyeventservice` конфигурация APK по умолчанию отключает её; подписка не запускает службу и не гарантирует получение событий, особенно для клавиш вне её конфигурации. Прямое подключение к нативному MCU/JNI этим окном не выполняется.
+
+Экспертное окно **Настройки → Система → Сырой Get/Set mbCAN/VHAL** (кнопка рядом с тестом кнопок руля) — ручной Get/Set любого id из каталога `MbCanKnownVehiclePropertyId` / `MbCanKnownAudioPropertyId`. **Получить** читает raw через существующие каналы (`MbCanEngineFacade.canGet*Param` на A9; `resolveReadPropertyId` + VHAL `getIntProperty` на A10). **Задать** требует тумблер «разрешить запись» (по умолчанию выкл.) и явное подтверждение; значение уходит как целое без политик `MbCanCommandRegistry` / VHAL-encode. На A10 отдельно показываются read/write id, если они различаются. Попытки пишутся в DEBUG-журнал тегом `EXPERT_CAN` (при включённой диагностике) и в `HuCanMarkLog` (`expertGet` / `expertSet`).
+
+**Расширенная диагностика mbCAN/VHAL** (`ACTION_SET_MBCAN_DEEP_DIAGNOSTICS`, тумблер в экспертном режиме рядом с обычной диагностикой) — сессионный режим «подписаться на всё и записывать изменения»: A10 подписывает весь каталог `DeepDiagnosticsCatalog` (VHAL-константы + `explicitReadIdMap` + экспериментальные id) отдельным deep-listener порциями по 10 id / 500 мс; A9 подписывает все `MBCanDataType` каталога и логирует raw `onCmdChanged` (не-CFG типы — отдельные `IMBCmdListener`, CFG — fan-out из production-листенеров). События идут в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` с delta-фильтром и коалессингом 1 с / 5 с. Режим только читает; write-only `T_*` id в каталоге отсутствуют. Подробности — [CAN_BACKENDS_RU.md §4.6.1](CAN_BACKENDS_RU.md).
+
+### Верифицированные коды кнопок (Jetour Dashing, замер через окно теста)
+
+**A9 mbCAN (`keyStatus`):** 0 = нажата, 1 = отпущена.
+
+| Кнопка | keyCode | Кнопка | keyCode |
+|--------|---------|--------|---------|
+| Руль слева, джойстик вверх | 29 | Руль справа, джойстик вверх | 115 |
+| Руль слева, джойстик вниз | 30 | Руль справа, джойстик вниз | 114 |
+| Руль слева, джойстик влево | 31 | Руль справа, джойстик влево | 163 |
+| Руль слева, джойстик вправо | 32 | Руль справа, джойстик вправо | 165 |
+| Руль слева, нажатие джойстика | 33 | Руль справа, нажатие джойстика | 28 |
+| Руль слева, кнопка снизу | 316 | Руль справа, кнопка сверху | 158 |
+| Дверь пассажира | 210 | Руль справа, кнопка снизу | 582 |
+| Дверь сзади справа | 211 | | |
+| Дверь сзади слева | 212 | | |
+
+Код **верхней левой кнопки руля зависит от модификации** авто — на тестовой машине не определён (см. raw `keyCode` в окне).
+
+Окно дополнительно расшифровывает прочие известные коды (не руль/двери): 103 `UP`, 105 `LEFT`, 106 `RIGHT`, 108 `DOWN`, 116 `POWER`, 587 `HOME`. Код 28 на этом ГУ подтверждён как нажатие правого джойстика руля (а не отдельная кнопка OK).
+
+**A10 VHAL:** кандидаты `289475088`/`560991239`/`557845512`/`561003776` подписываются, но событий не дают (начальные значения 0/`[0]`/`[0, 0]`). Реагируют только **две правые кнопки руля** (верхняя и нижняя) — приходят как Android `KeyEvent` с compose `keyCode=17179869184`; различие кнопок пока не подтверждено (нужен `scanCode` из нативного события, логируется окном). Левая клавиша джойстика и дверные кнопки на A10 событий не дают.
+
+**Production-использование кодов:** триггер автоматизаций `hard_key` (см. docs/AUTOMATIONS_AI_JSON_GUIDE_RU.md) получает те же `eMBCAN_HARDKEY` события через `MbCanRepository.setAutomationHardKeyTrackingEnabled` (fan-out `MbCanEngineFacade.addHardKeyListener`). Подписка включается только на A9 (`UniversalCanRepository.mode == Android9MbCan`) и только пока существует включённое runnable-правило с триггером `hard_key`; повторные события той же кнопки и статуса в течение 120 мс подавляются (`AutomationHardKeyForwarder`). Синтетические жесты `single` / `double` / `long` вычисляет `AutomationHardKeyGestureRecognizer` (окно двойного 400 мс, долгое ≥ 500 мс). CCS-трекинг `RES+`/`SET−` (`CcsRememberedSetpoint`) использует ту же OEM-подписку независимо.
+
+---
+
+## Car Settings: климат, экраны и overspeed
+
+| Функция | Android 9 mbCAN R/W | Android 10 VHAL read → write | Значения / декодирование |
+|---------|---------------------|-------------------------------|--------------------------|
+| First blowing | **53** `eVEHICLE_PROPERTY_POWER_FIRST_BREATH` | **289415188** → **289412677** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| BT reduce fan | **51** `eVEHICLE_PROPERTY_BT_REDUCED_WIND_SPEED` | **289415190** → **289412667** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Auto ventilation | **141** `eHVAC_VENTILATION_AUTO_SWITCH` | **289415187** → **289412704** | A9: 1 Off / 2 On; A10 read: **0 On**, **1 Off** (штатный `AcFragment`); write: **1 On / 2 Off** |
+| Anion / очистка воздуха | **42** `eVEHICLE_PROPERTY_HVAC_AQS` | **289415191** `R_0200_CEM_IPM_AnionPurify` → **289415310** `T_0201_IHU_5_AnionPurify_Req` | A9: 1 Off / 2 On; A10 read: **1 On**, write: **2 On / 1 Off**. A9 cfg push **в allowlist** `scheduleVehicleCfgPush` |
+| Fragrance switch | **33** `eVEHICLE_PROPERTY_FRAGRANCE_SWITCH` | — (A9-only) | 1 Off / 2 On |
+| Fragrance smell | **34** `eVEHICLE_PROPERTY_FRAGRANCE_SMELL` | — (A9-only) | 1 Meteor / 2 Boss / 3 Tea |
+| Fragrance concentration | **35** `eVEHICLE_PROPERTY_FRAGRANCE_CONCENTRATION` | — (A9-only) | 1 low / 2 mid / 3 high |
+| HUD on/off | **220** | **289412235** → **289412716** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| HUD height | **221** | **289412236** → **289412717** | 1…10 |
+| HUD brightness | **222** | **289412238** → **289412719** | 1…10 |
+| HUD display mode | **223** | **289412239** → **289412718** | 1 standard, 2 snow |
+| HUD auto brightness | **227** | **289412243** → **289412723** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
+| Overspeed alarm | **296** `eVEHICLE_OVERSPEEDALARM_SET` (best effort) | **289415091** `T_0901_IHU_21_OverspeedAlarm_Set` read/write | `raw = (km/h − 30) / 5`, display = `raw×5 + 30` |
+
+Это settings-only сигналы (`MbCanSignal`); виджеты для них намеренно не добавлены. Anion использует split backend: A9 `HVAC_AQS` и отдельные A10 read/write VHAL ID. Fragrance реализован только через A9 mbCAN; на Android 10 не используются неподтверждённые stub VHAL ID, поэтому controls disabled.
 
 ---
 
@@ -58,17 +112,16 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`) | mbCAN **254** | **1** / **2** (`encodeSpeedLimiterSwitchOn`) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
-| **Android 10** — Limiter switch | VHAL id из `resolveReadPropertyId(254)` или **254** | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`) | VHAL id из `resolveWritePropertyId(254)` или **254** | **1** / **2** (identity) | **Push:** onChange (если property в firmware). **Pull:** `refreshSignal(SpeedLimiter)` |
+| **Android 9** — Limiter switch | mbCAN **254** `eVEHICLE_SPEEDLIMIT_SWITCH` | **1** → Off, **2** → On (`decodeSpeedLimiterSwitchRaw`); UI/settings also keep raw Int | mbCAN **254** | as-is (`SetAnyInt`; widget encode **1**/**2**) | **Push:** cfg_vehicle 254. **Pull:** `refreshSpeedLimiter()` |
+| **Android 9** — Limiter target | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` → `speedLimiterValueSetRaw` | identity Int? (нет данных → виджет «—») | mbCAN **253** | виджет: clamp 0…150 шаг 5; без данных первый ± → **30**; settings: as-is (`SetAnyInt`) | **Push:** cfg_vehicle 253. **Pull:** `refreshSpeedLimiter()` |
+| **Android 10** — Limiter switch | VHAL id из **явного** `resolveReadPropertyId(254)` (без fallback на 254) | raw == 1 On (`decodeSpeedLimiterSwitchVhalRaw`); raw Int retained | VHAL id из явного `resolveWritePropertyId(254)` | as-is | **Push/Pull только при remap.** На Dashing без карты — `Unavailable`, подписка на 253/254 не ставится |
+| **Android 10** — Limiter target | VHAL id из **явного** `resolveReadPropertyId(253)` (без fallback на 253) | то же | VHAL id из явного `resolveWritePropertyId(253)` | то же | то же |
 
-> **Jetour Dashing:** ограничитель скорости **не работает** на данной машине (нет verified VHAL map; 253/254 на целевом ГУ неэффективны). Код/виджет оставлены, но функциональность не поддерживать.
+> На Jetour Dashing карта VHAL для 253/254 обычно отсутствует. A10 больше **не** подписывается на сырые mbCAN-ordinals 253/254 (это не VHAL property id) — иначе WARN `property config not found` / `unregister failed`. Виджет без remap → unavailable.
 
-### Ограничитель скорости — целевая скорость (km/h)
+DataStore `speedLimiterTargetKmh` пока сохраняется виджетом при ± (возможный будущий fallback), но **отображение** идёт только с CAN VALUESET.
 
-| Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
-|--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Limiter target | **DataStore** (`speedLimiterTargetKmh`), не CAN | 0…150, шаг 5 (`clampLimiterTargetKmh`) | mbCAN **253** `eVEHICLE_SPEEDLIMIT_VALUESET` | 0…150 (km/h) | **Pull/push по CAN нет**; запись при изменении в UI |
-| **Android 10** — Limiter target | **DataStore** (то же) | то же | VHAL id из `resolveWritePropertyId(253)` или **253** | 0…150 (identity) | то же |
+UI ограничителя (раздел автонастроек «Ограничитель скорости», тип плитки `speedLimiterWidget` в диалоге выбора, CAN 253/254 в пикерах автоматизаций) скрыт флагом `SPEED_LIMITER_UI_HIDDEN` (`SpeedLimitWidgets.kt`). Уже поставленные плитки и сохранённые правила не удаляются. Знак SLA (`slaSpeedLimitWidget`) и `tsr_switch` не скрываются. Чтобы вернуть UI, поставьте флаг в `false`.
 
 ---
 
@@ -82,12 +135,29 @@
 |-----------|--------|
 | **0 Off** | Выключен; RES+/SET− не активируют |
 | **1 Standby** | Предварительно включён; SET− = текущая скорость, RES+ = прежняя уставка |
-| **2 Active** | Ведёт; RES+/SET− ±; тормоз → Standby; газ → Standby пока нажат |
+| **2 Active** | Ведёт; RES+/SET− ±; тормоз → Standby; газ → Override пока нажат |
+| **Override** | Только ACC: `ACCMode == 7` — водитель держит газ, ACC не тормозит; после отпускания снова Active. Иконка виджета статуса зелёная; тап/свайпы как у Active |
 | **Fault** | Только ACC: `ACCMode == 9` (ошибка); иконки оранжевые (`WidgetActiveColors.Secondary`), тапы no-op |
 
-**Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6,7 → Standby`; `3,4,5 → Active`; `9 → Fault`.
+**Маппинг чтения ACC** (`ACCMode`): `0 → Off`; `1,2,6 → Standby`; `3,4,5 → Active`; `7 → Override`; `9 → Fault`.
+
+Полная таблица значений ACCMode (стоковый decode — A10 Launcher `CarSettingsManager.updateAccMode`: `enable = v ∈ 1..7`, `active = v ∈ {3,4,5}`, при `v == 7` предупреждение `info_acc_mode_override` на 3000 мс — «When you step on the gas, ACC can't slow down»):
+
+| ACCMode | Штатный смысл | Наше состояние / виджет статуса |
+|---------|---------------|----------------------------------|
+| 0 | off (карта ADAS скрыта) | Off |
+| 1 | enable, не active | Standby |
+| 2 | enable, не active | Standby |
+| 3 | active | Active |
+| 4 | active | Active |
+| 5 | active | Active |
+| 6 | enable, не active | Standby |
+| 7 | enable, не active + предупреждение «газ перебивает ACC» | Override (зелёная иконка `#4CAF50`) |
+| 9 и прочие вне 1–7 | штатка считает «выкл»/скрывает карту | Fault (только 9; наша интерпретация) |
 
 **Маппинг чтения CCS** (`CruiseControlStatus`, ICM-хинт): `0 → Off`; `1 → Active`; `2 → Standby`; иное/null → Off. Для MFS key-mode сток считает «on» оба `{1,2}` (`isCcsEngaged`).
+
+**Автоматизации:** отдельные state-сигналы `acc_cruise_state` (ACCMode → `off`/`standby`/`active`/`override`/`fault`) и `ccs_cruise_state` (CruiseControlStatus → `off`/`standby`/`active`; Override/Fault только у ACC). Метка `override` в UI — «Перебивка газом». Не путать с `acc_status` (ключ зажигания). Уставка по-прежнему `cruise_set_speed`.
 
 **MFS (дорожная семантика на Dashing):** **210** из Active → полное Off; **212** Cancel → пауза Active→Standby; **214** SET− активирует из Standby; **213** RES+.
 
@@ -95,7 +165,7 @@
 
 Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. После converge — пауза **1 с**, проверка уставки и догон при ±1; abort converge при уходе из Active (тормоз→Standby или Off). Мигает только нажатая плитка. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active → **212**; Fault → no-op. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active/Override → **212**; Fault → no-op. Иконка: Active — `activeContent`, Override — зелёная (`#4CAF50`), Fault — оранжевая, Standby — тусклая. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active/Override**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active/Override. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
 
 ### ACC (адаптивный)
 
@@ -107,20 +177,31 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6,7}**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (ставит `accFrmFeedbackAvailable`; ненулевой ACCMode — ещё `accModeEverNonZero`). **Pull:** нет (push-only) |
+| **Android 9** — ACCMode / VSetDis | FRM `getFRM_3_ACCMode` / `getFRM_3_VSetDis` | Mode: Active ∈ **{3,4,5}**, Standby ∈ **{1,2,6}**, Override **7**, Fault **9**. VSetDis: byte = **км/ч** (`decodeMbCanVSetDisKmh`) | — (только чтение) | — | **Push:** `registIMBVehicleFrmDectInfoListener` → `scheduleFrmAccPush` (ставит `accFrmFeedbackAvailable`; ненулевой ACCMode — ещё `accModeEverNonZero`). **Pull:** нет (push-only) |
 | **Android 10** — ACCMode / VSetDis | VHAL **289415689** `R_0B00_FRM_3_ACCMode`, **289415680** `R_0B00_FRM_3_VSetDis` | Mode: то же. VSetDis: `ceil(raw × 0.5)` км/ч (`decodeVhalVSetDisKmh`, как Launcher) | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)` |
 
 ### CCS (обычный круиз, без ACC)
 
-Цикл converge: замер delta → пачка до **5×±1** → паузы 1 с / verify; in-band wait **2 с**; overshoot → рестарт; макс. **30 с**; затем post-verify **1 с** и догон при уходе. Запуск: после enable+SET− из Off/Standby (ждём Active), или сразу converge из Active если скорость ≠ уставке. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
+Цикл converge шагает сессионную **запомненную уставку** (`CcsRememberedSetpoint`) к цели виджета — тот же смысл, что `VSetDis` у ACC. **Не** использует текущую скорость автомобиля как обратную связь: машина отстаёт от внутренней уставки CCS, и старый speed-based batch (пачки до 5×±1 по `carSpeed`) «выкручивал» stalk дальше цели. После SET− baseline = текущая скорость; каждый RES+/SET− nudges remembered ±1; стоп при `remembered == target` (таймаут **30 с**). Затем post-verify **1 с** и догон по remembered. Abort: статус не Active (Standby/Off / тормоз) или смена generation (double-tap). TBox `cruiseSetSpeed` **не** используется.
 
-**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами. Пишется при SET− с виджета / входе в Active с руля (если пусто или скорость дальше **2 км/ч** от прежней — новый SET; иначе RES и keep), при stalk ±1 после settle **500 мс**, при завершении CCS converge. **Active→Standby** сохраняет; **Off (0)** и unbind очищают. Окно «наш импульс» **2 с** после MFS с виджета подавляет stalk-эвристику. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
+**Запомненная уставка CCS** (`CcsRememberedSetpoint`, только сессия процесса): HU не отдаёт VSetDis, поэтому уставку ведём сами.
+
+Источники (только CCS; ACC не затрагивается):
+
+1. **Виджет** — MFS 213/214 + nudge remembered; окно «наш импульс» **2 с** глушит speed-эвристики / reconcile (не hardkey: write MFS на hardkey-канал не попадает).
+2. **A9 hardkey** — левый джойстик руля: вверх **29** = RES+, вниз **30** = SET− (`eMBCAN_HARDKEY`, production fan-out вместе с «Тест кнопок руля»). **Standby+RES+** → keep remembered (resume); **Standby+SET−** → capture текущей скорости; **Active ±** → remembered ±1. Debounce **120 мс**, только `keyStatus=0` (нажатие). На **A10** левый джойстик пока событий не даёт — hardkey-трекинг не включается.
+3. **Fallback без hardkey** (A10 / пропуск): вход в Active — если скорость дальше **2 км/ч** от remembered → capture (SET), иначе keep (RES); Active ±1 по скорости после settle **500 мс**.
+4. **Stable reconcile**: Active, скорость в полосе **±1 км/ч** от якоря **≥2 с**, и `|v − remembered| ≥ 2` → принять `round(v)` (рассинхрон / газ / пропущенный stalk). Не работает в окне нашего импульса (чтобы не ломать converge).
+
+**Active→Standby** сохраняет; **Off (0)** и unbind очищают. На статус-плитке в Standby/Active показывается запомненное значение (как VSetDis у ACC).
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
 | **Android 9** — CCS status | Gasped `getnCruiseControlStatus` | **0** Off, **1** Active, **2** Standby; key-mode on ∈ **{1,2}**; identity | — | — | **Push:** `registIMBCanVehicleGaspedStatusListener` → `scheduleGaspedCcsPush`. **Pull:** нет |
 | **Android 10** — CCS status | VHAL **289414945** `R_0900_EMS_1_CruiseControlStatus` (2 bit, receive.json) | то же | — | — | **Push:** onChange. **Pull:** `refreshSignal(AccCruise)`. (`R_0900_ACC_Cruise_Control` **289414946** в штате без UI-декода — не используем) |
-| Скорость для converge | `TripTelemetryRepository.carSpeed` (HU, не TBox cruiseSetSpeed) | float км/ч, допуск ±1; пачки до 5×±1; verify 2 с / post-batch 1 с | — | — | — |
+| Скорость для baseline SET− | `TripTelemetryRepository.carSpeed` (HU) | float км/ч; захват remembered при SET− / пустой памяти / stable reconcile | — | — | — |
+| Обратная связь converge | `CcsRememberedSetpoint` (сессия) | exact ±1 как ACC VSetDis; **не** live `carSpeed` | — | — | — |
+| **Android 9** — stalk RES+/SET− | `eMBCAN_HARDKEY` keyCode **29** / **30** | press=`keyStatus` **0**; production listener в `CcsRememberedSetpoint` | — | — | **Push:** `registHardKeyListener` (shared с диагностикой) |
 
 ### Команды MFS (импульсы)
 
@@ -143,13 +224,47 @@
 | **Android 9** — Подогрев руля | **188** | 1 Off / 2 On | **188** | toggle: 1↔2 | cfg push **188** + pull `SteeringWheelHeat` |
 | **Android 10** — Подогрев руля | VHAL **289412111** ← 188 | raw == 1 On | VHAL **289412679** ← 188 | **1** on / **2** off | onChange + pull |
 | **Android 9** — Обслуживание дворников | **185** | **1** Off (рабочий) / **2** On (сервис) | **185** | **2** on / **1** off (как доп. меню) | cfg push **185** + pull |
-| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull |
+| **Android 10** — Обслуживание дворников | VHAL **289412194** ← 185 | raw == 1 On | VHAL **289412682** ← 185 | **1** on / **2** off (как CarSettings) | onChange + pull. Виджет `wiperMaintenanceWidget`: chrome On/Off от этого сигнала; иконка — live `WiperSts` (см. телеметрию) |
 | **Android 9** — Парктроник (PAS) | **218** | 1 Off / 2 On | **218** | 1↔2 | cfg push + pull |
 | **Android 10** — Парктроник | VHAL **289412233** ← 218 | raw == 1 On | VHAL **289415942** ← 218 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AVH (Auto Hold) | **142** | On если raw == 1 \|\| 2 (`decodeAvhHdcStatusRaw`) | **142** | **2** on / **1** off | cfg push + pull `AvhSwitch` |
+| **Android 10** — AVH | VHAL **289412184** ← 142 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415945** ← 142 | **1** on / **2** off | onChange + pull |
+| **Android 9** — HDC | **143** | **2** On / **1** Off (`decodeHdcSwitchRaw`, как штатный `MBWTActivatedButton`; ≠ AVH-декод) | **143** | **2** on / **1** off | cfg push + pull `HdcSwitch` |
+| **Android 10** — HDC | VHAL **289412117** ← 143 | On если raw == 1 \|\| 2 (stock ConvertValue) | VHAL **289415944** ← 143 | **1** on / **2** off | onChange + pull |
+| **Android 9** — ESP off | **144** | On если raw == 2 (`decodeEspOffStatusRaw`, 1 = ESP/VDC active) | **144** | **2** on / **1** off | cfg push + pull `EspOffSwitch`; виджет `espOffWidget` (chrome по умолчанию — Heat/оранжевый) |
+| **Android 10** — ESP off | VHAL **289412118** ← 144 | On если raw == 1 (stock CarCommon1) | VHAL **289415943** ← 144 | **1** on / **2** off | onChange + pull; виджет `espOffWidget` (Heat/оранжевый) |
+| **Android 9** — LAS mode (LDW/LKA/OFF) | **17** `eVEHICLE_PROPERTY_LAS_MODE_SELECTION` | **1** LDW / **2** LKA / **3** OFF | **17** | **1** / **2** / **3** | cfg push + pull `LasModeSelection`; виджеты LDW/LKA |
+| **Android 10** — LAS mode | VHAL **289415706** ← 17 | то же 1/2/3 (stock LDWLKA_LaneAssitfeedback) | VHAL **289415946** ← 17 | **1** LDW / **2** LKA / **3** OFF | onChange + pull |
+| **Android 9** — NGP (TJA/ICA) | **23** `eVEHICLE_PROPERTY_TJA_ICA` | 1 Off / 2 On | **23** | 1↔2 | cfg push + pull `TjaIca` |
+| **Android 10** — NGP (TJA/ICA) | VHAL **289415716** ← 23 | raw == 1 On | VHAL **289415939** ← 23 | **2** on / **1** off | onChange + pull |
+| **Android 9** — ACC time-gap | **95** `eTIMEGAPSET1REQ` | **1…4** (`AccTimeGap` Level1…Level4; A9 log: **1** with TJA on, **4** with TJA off) | **95** | **1…4** | cfg push + pull `AccTimeGap`; UI widget — follow-up |
+| **Android 10** — ACC time-gap | VHAL **289415688** ← 95 (`R_0B00_FRM_3_TimeGapSet_DVD`) | то же 1…4 | VHAL **289415938** ← 95 (`T_0B01_IHU_8_TimeGapSet1Req`) | **1…4** | onChange + pull |
+| **Android 9** — LDW switch | **80** `eDVD_LDWSWITCH` | **1** Off / **2** On (A9 log co-moves with LAS **17**: LKA→80=1, LDW→80=2) | **80** | **2** on / **1** off | cfg push + pull `LdwSwitch`; UI widget — follow-up |
+| **Android 10** — LDW switch | VHAL **289415717** ← 80 (`R_0B00_FCM_2_LDWOnOffSts`) | raw == 1 On | VHAL **289415056** ← 80 (`T_0901_IHU_3_LDWSwitch`) | **1** on / **2** off | onChange + pull |
+| **Android 9** — HMA (smart high beam) | **19** `eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH` (штатный `switchIntelligentHighBeamsHMA`; id **130** `eVEHICLE_SMART_HIGHBEAM_SWITCH` не отражал и не управлял HMA) | 1 Off / 2 On | **19** | **2** on / **1** off | cfg push + pull `HmaSwitch`; виджеты `hmaWidget` / `highBeamWidget` (вариант иконки с «A») |
+| **Android 10** — HMA | VHAL **289415702** ← 19 | raw == 1 On (stock CarOutLight) | VHAL **289415948** ← 19 | **1** on / **0** off (≠ 1/2) | onChange + pull; виджеты `hmaWidget` / `highBeamWidget` |
+| **Android 9/10** — BSD | A9 **15**; A10 read **289415723** | A9 2 On / 1 Off; A10 raw 1 On | A9 **15**; A10 write **289415055** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Bsd` |
+| **Android 9/10** — DOW | A9 **13**; A10 read **289415729** | A9 2 On / 1 Off; A10 raw 1 On | A9 **13**; A10 write **289415065** | A9 2 on / 1 off; A10 1 on / 2 off | settings only, `Dow` |
+| **Android 9/10** — FCW master | A9 **96**, **20**, **22**; A10 **289415696**, **289415698**, **289415699** | A9 2 On / 1 Off; A10 raw 1 On | A10 **289415937**, **289415941**, **289415940** (`DistanceWarning_On_Off`, не **289415942** PAS) | 2 on / 1 off; writes all three together | settings only, `Fcw` |
+| **Android 9/10** — FCW sensitivity | A9 **97**; A10 **289415697** | **3** Far / **1** Standard / **2** Near (штатка A9 Close/Standard/Far = 2/1/3; A10 Far/Standard/Near = 3/1/2) | A10 **289415936** | **3** / **1** / **2** на обоих бэкендах | settings only |
+| **Android 9/10** — LDW sensitivity | A9 **16**; A10 **289415707** | **1** High / **0** Low на обоих бэкендах (stock A10 `ConvertValue` для 289415707: raw 1 → UI High, raw 0 → UI Low) | A10 **289415949** | A10 1 High / 0 Low | settings only |
+| **Android 9** — Режим фар (Lightcontrol) | **135** `eVEHICLE_LIGHTCONTROL` | **1** AUTO / **2** PARK / **3** LOW / **4** OFF (`decodeLightControlRaw`) | **135** | **1…4** | cfg push + pull `LightControl`; виджет цикла |
+| **Android 10** — Режим фар | VHAL **289412613** ← 135 (read = write-echo `T_0405_SET_Lightcontrol`; не LowBeamSts **289412250**, тот binary) | то же 1…4 | VHAL **289412613** ← 135 | **1** AUTO / **2** PARK / **3** LOW / **4** OFF | onChange + pull |
+| **Android 9** — Задний ПТФ | **136** `eVEHICLE_REARFOGLIGHT` | **1** Off / **2** On (`decodeRearFogMbCanRaw`) | **136** | 1↔2 | cfg push + pull `RearFogLight` |
+| **Android 10** — Задний ПТФ | VHAL **289412136** ← 136 | raw == 1 On (`decodeVhalBinaryOneIsOn`) | VHAL **289412612** ← 136 | **1** on / **2** off (stock CarOutLight) | onChange + pull |
+| **Android 9/10** — Auto lock / Auto unlock | **1** / **2** | A9: 1 Off / 2 On; A10: raw 1 On / 2 Off | **1** / **2**; VHAL **289412661** / **289412660** | A9: 1↔2; A10: **1** on / **2** off | cfg push/pull; VHAL onChange + pull |
+| **Android 9/10** — Follow-me-home | **7** | A9 30/60/3(off); A10 **289412130** = 1/2/3 | **7**; VHAL **289412656** | A9 30/60/3; A10 1/2/3 | `FollowMeHome`, normalized enum |
+| **Android 9/10** — Unlock mode / lock feedback | **131** / **3** | unlock 1/2; A9 feedback **1** light / **2** horn / **3** light+horn; A10 status **289412144** **0** light+horn / **1** light / **2** horn | **131** / **3**; VHAL **289412608** / **289412668** | unlock 1/2; A9 feedback 1/2/3; A10 write **2** light / **3** horn / **1** light+horn | cfg/onChange + pull |
+| **Android 9/10** — Wiper sensitivity / rear wiper | **191** / **186** | sensitivity 1..4 (A10 статус **289412140** штатным UI не потребляется — CarSet5 читает эхо write **289412688** `mWiperSpeed`: raw 1..4 → idx raw−1; семантика статуса не подтверждена); rear A9 1 Off / 2 On, A10 **289412193** raw 1 On / 2 Off (CarSet5 `num==1`) | **191** / **186**; VHAL **289412688** / **289412681** | sensitivity 1..4; rear A10 1 on / 2 off | settings only |
+| **Android 9/10** — Low beam height / turn flashes | **129** / **8** | A9 1..4 (stock EmbarkationLamp seekbar: pos 0..3 → value 1..4, без инверсии); A10 **289412261** raw = позиция 0..3 (0=«0档» … 3=«3档», CarOutLightFragment), **289412257** zero-based 0..2 → UI 1..3 (3/5/7 миганий) | **129** / **8**; VHAL **289412610** / **289412665** | low beam VHAL = позиция+1 («3档»→4 … «0档»→1), приложение UI→4/3/2/1; flashes write **1/2/3** (3/5/7 миганий) | normalized StateFlow |
 | **Android 9** — Подогрев лобового стекла | **316** | 1 Off / 2 On | **316** | 1↔2 | cfg push + pull |
 | **Android 10** — Подогрев лобового | VHAL **289412114** ← 316 | raw == 1 On | VHAL **289415309** ← 316 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Беспроводная зарядка | **264** | 1 Off / 2 On | **264** | 1↔2 | cfg push + pull `WirelessChargingSwitch` |
 | **Android 10** — Беспроводная зарядка | — (pull/push **не подключены**) | — | VHAL id из firmware для **264** (если есть) | 1↔2 | **Pull/push в A10 не реализованы** (`signalReadPropertyIds` = ∅) |
+
+Сверено по штатным исходникам A10 (CarSet1 / CarSet5 / CarOutLightFragment / CarCommon5 + MainServer): auto lock/unlock и rear wiper read raw **1 = On**; unlock mode **289412214** raw **1 = только водительская / 2 = все двери**; lock feedback **289412144** raw **0 = свет+звук / 1 = свет / 2 = звук**; follow-me-home **289412130** raw **1 = 30 с / 2 = 60 с / 3 = Off**; mirror autofold read **289412131** raw **0 = On** (CarCommon5), write **289412657** **1 = On / 2 = Off** — decode/encode приложения совпадают со штатом по всем этим строкам.
+
+Инверсия low beam (read `4 − raw` / write `5 − level`) взаимно обратима и согласована со штатной парой A10 (read = позиция 0..3, write = позиция+1), т.е. на A10 приложение не может разойтись само с собой. Принятое направление (UI 1 = «3档») совпадает с порядком обоих штатных UI (A10: «3档»…«0档»; A9: value 1 в крайней левой позиции seekbar), но прямого маппинга A9 mbCAN **129** на позиции в исходниках нет (он внутри нативного mbCAN-демона) — направление A9↔A10 подтверждается только тестом на авто.
 
 ---
 
@@ -157,8 +272,12 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — AC (компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
-| **Android 10** — AC | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 9** — Управление кондиционером (AC, компрессор) | **36** `HVAC_POWER` | 1 Off / 2 On | **36** | 1↔2 | cfg push + pull |
+| **Android 10** — Управление кондиционером (AC) | VHAL **289415180** ← 36 | raw == 1 On | VHAL **289415300** ← 36 | **2** on / **1** off | onChange + pull |
+| **Android 9** — AC MAX | **228** `eVEHICLE_SET_RRM_ACMAX_REQ` | 1 Off / 2 On | **228** | 1↔2 | cfg push + pull `HvacAcMax` |
+| **Android 10** — AC MAX | VHAL **289412209** ← 228 | On если raw == 2 (stock AcFragment) | VHAL **289412714** ← 228 | **2** on / **1** off | onChange + pull |
+| **Android 9** — HVAC custom (ECO/Comfort/Strong) | **140** `eHVAC_CUSTOM` | **1** ECO / **2** Comfort / **3** Strong | **140** | **1** / **2** / **3** | cfg push + pull `HvacCustomMode` |
+| **Android 10** — HVAC custom | VHAL **289415186** ← 140 | raw **0..2** → UI = raw+1 | VHAL **289415317** ← 140 | **1..3** | onChange + pull |
 | **Android 9** — AUTO | **110** | 1 Off / 2 On | **110** | 1↔2 | cfg push + pull |
 | **Android 10** — AUTO | VHAL **289415182** ← 110 | raw == 1 On | VHAL **289415311** ← 110 | **2** on / **1** off | onChange + pull |
 | **Android 9** — Рециркуляция | **39** | **1** → On (внутри), **2** → Off (снаружи) | **39** | 1↔2 | cfg push + pull |
@@ -171,10 +290,10 @@
 | **Android 10** — Front OFF | VHAL **289415175** ← 90 | raw == **0** On (`decodeHvacFrontOffVhalRaw`) | VHAL **289415301** ← 90 | **1** on (climate off) / **2** off | onChange + pull; **интерес регистрируется вместе с climate panel виджетами** (`HVAC_CLIMATE_WIDGET_DATA_KEYS` → `MbCanSignal.HvacFrontOff`) |
 | **Android 9** — SYNC dual-zone | **94** | **2** On / **1** Off (`decodeHvacSyncMbCanRaw`) | **94** | **2** on / **1** off | cfg push + pull |
 | **Android 10** — SYNC | VHAL **289415181** ← 94 | raw == 1 On (`decodeHvacSyncVhalRaw`) | VHAL **289415308** ← 94 | **2** on / **1** off | onChange + pull |
-| **Android 9** — Температура левая | **37** | raw 160…300 → °C = raw/10 (`mbCanTempRawToCelsius`) | **37** | 160…300, шаг 5 | cfg push + pull |
-| **Android 10** — Температура левая | VHAL **289415169** ← 37 | raw 32…60 → °C = raw/2 | VHAL **289415313** ← 37 | VHAL raw через `mbCanTempRawToVhalWrite` | onChange + pull |
+| **Android 9** — Температура левая | **37** | `decodeHvacSetpointRaw`: 32…60 → °C = raw/2, 160…300 → °C = raw/10, 16…30 (шаг 0,5) уже в °C | **37** | 160…300, шаг 5. Виджет ±: `hvacTempStepTenths` 5 (0,5 °C, по умолчанию) или 10 (1,0 °C: 22,5 + → 23,0, 22,5 − → 22,0, далее ±1,0). `HvacClimateDomain.adjustCelsius` | cfg push + pull |
+| **Android 10** — Температура левая | VHAL **289415169** ← 37; если статус не декодируется — эхо записи **289415313** | тот же `decodeHvacSetpointRaw` (int или float) | VHAL **289415313** ← 37 | VHAL raw через `mbCanTempRawToVhalWrite`. Тот же шаг виджета, запись всё равно на сетке 0,5 °C | onChange + pull. Чтение `/v1/signals` само держит интерес `HvacTempLeft`, виджет на экране не нужен |
 | **Android 9** — Температура правая | **111** | то же | **111** | то же | cfg push + pull |
-| **Android 10** — Температура правая | VHAL **289415168** ← 111 | raw/2 | VHAL **289415314** ← 111 | convert | onChange + pull |
+| **Android 10** — Температура правая | VHAL **289415168** ← 111; запасное эхо **289415314** | тот же decode | VHAL **289415314** ← 111 | convert | onChange + pull |
 | **Android 9** — Скорость вентилятора | **38** | **0…7** | **38** | 0…7 | cfg push + pull |
 | **Android 10** — Скорость вентилятора | VHAL **289415171** ← 38 | 0…7 | VHAL **289415296** ← 38 | 0…7 (identity) | onChange + pull |
 | **Android 9** — Обдув лобового (defrost blow) | **40** `HVAC_FAN_DIRECTION` | raw **4,5** → On; **1,2,3** → Off (`decodeHvacFrontDefrostMbCanRaw`) | **40** | toggle target 4↔face/foot (`resolveHvacFrontDefrostMbCanToggleTarget`) | cfg push + pull `HvacDefrosterFront` |
@@ -226,8 +345,32 @@
 
 Виджет `mirrorFoldWidget`: фактическое положение зеркал недоступно, поэтому приложение запоминает последнюю **успешно отправленную** команду **только в рамках текущего процесса** (`MirrorFoldLastCommandStore` в RAM). После перезапуска приложения снова считается, что зеркала разложены (как при старте автомобиля).
 
+### Автоскладывание зеркал при запирании
+
+Это отдельная настройка Car Settings, не pulse-команда `MIRROR_FOLD_SWITCH`.
+
+| Платформа | Чтение | Запись | Значения | Сигнал |
+|---|---|---|---|---|
+| **Android 9** | Vehicle **4** `MIRROR_AUTOFOLD_SW` | **4** | 1 Off / 2 On | `MirrorAutoFold` |
+| **Android 10** | VHAL **289412131** `R_0400_CEM_2_Mirror_Fold_Sts` | VHAL **289412657** `T_0401_IHU_1_DVD_SET_Mirror_Fold` | write: 1 On / 2 Off; read: **0 On**, иначе Off | `MirrorAutoFold` (A10: onChange **и** pull применяют StateFlow) |
+
 - **Одиночное нажатие** — отправляет противоположную команду относительно последней в этой сессии (toggle). По умолчанию последняя считается **unfold (2)**, значит первый одиночный тап шлёт **fold (1)**.
 - **Двойное нажатие** — всегда **fold (1)** и обновляет запомненную команду на fold до конца сессии.
+
+### Шторка, люк и стёкла (запись)
+
+Одинаковый UX на A9 и A10 для шторки и люка, но **свои** property id. Стёкла на A9 и A10 — разные протоколы.
+
+| Платформа + наименование | Параметр чтения | Параметр записи | Сырые значения записи | Push / Pull |
+|--------------------------|-----------------|-----------------|----------------------|-------------|
+| **Android 9** — Шторка | `canGet` / cfg **46** — в BCM поля шторки нет | **46** `SUNSHADE_POS` `canSetVehicleParam` | **1** закрыто (0%) … **11** открыто (100%); value = процент/10 + 1 | Команда + cfg push 46 + pull `BodyComfort` |
+| **Android 10** — Шторка | VHAL **289412302** `R_0402_CEM_Abat_VentCMDSts` | VHAL **289412652** `T_0403_SET_Abat_VentCMD` ← 46 | **1** … **11** | Команда + onChange / pull `BodyComfort` |
+| **Android 9** — Люк | `canGet` / cfg **45** (BCM `getSunRoof()` = −1, не используем) | **45** `SUNROOF_CONTROL` `canSetVehicleParam` | **1** закрыто (0%) … **11** открыто (100%), **12** откинуть; чтение 10% или 102 = откинут | Команда + cfg push 45 + pull |
+| **Android 10** — Люк | VHAL **289412303** `R_0402_CEM_PSRFCMDSts` | VHAL **289412653** `T_0403_SET_PSRFCMD` ← 45 | **1** … **11**, **12** tilt | Команда + onChange / pull |
+| **Android 9** — Стекло (все / FL / FR / RL / RR) | BCM `getVehicleWindow()` байты 0…100 | `canSetWindowStatus` (не `canSetVehicleParam` 47/55–58). Логические id **47 / 56 / 55 / 58 / 57**. Байты FR, FL, RR, RL; **−1** = не трогать | **0 / 20 / 80 / 100** (Car Settings и автоматизации; машина квантует остальные в эти четыре) | Команда + BCM push / pull |
+| **Android 10** — Стекло FL / FR / RL / RR | VHAL **289412305 / 308 / 307 / 306** `R_0402_CEM_4_*_WIN_Position` (процент) | VHAL **289415306 / 289415307 / 289415305 / 289415312** (`T_0201_IHU_5_*WindowCon_Req`). «Все стёкла» пишет все четыре | **1** закрыть / **2** открыть / **3** щель | Команда + onChange / pull |
+
+Автоматизации публикуют эти команды через `AutomationCanCatalog` / `MbCanCommandPolicy.SetWindowPosition` (стёкла) и `SetExact` (шторка, люк). **Car Settings → Окна** пишет те же property id. Live-статус для UI и триггеров — один `MbCanSignal.BodyComfort` (см. телеметрию). В разделе «Окна» заголовки строк показывают процент положения (`BodyComfortRawRead`: шторка / люк / FL / FR / RL / RR; люк — «откинут» на 10% / 102), кнопки зажигаются от живого чтения: write = процент/10 + 1 (0/20/80/100 для стёкол, A10 — команды 1/2/3), у люка «10%» и «Откинуть» зажигаются вместе.
 
 ---
 
@@ -252,10 +395,24 @@
 
 | Платформа + наименование | Параметр чтения | Сырые значения чтения и декод | Параметр записи | Сырые значения записи | Push / Pull |
 |--------------------------|-----------------|-------------------------------|-----------------|----------------------|-------------|
-| **Android 9** — Громкость | Audio **2** `eAUDIO_PROPERTY_VOLUME` | int ≥ 0 | Audio **2** | 0…max (`setAudioVolume`) | cfg_audio push + pull `AudioVolume` |
-| **Android 10** — Громкость | VHAL **557849090** | int ≥ 0 | VHAL **557849090** | int | onChange + pull |
-| **Android 9** — Volume vs speed | Audio **13** | **1** Off; **2–4** On (уровень в `_audioVolumeSpeedModeState`) | **13** | toggle 1↔2..4 | cfg_audio push + pull |
-| **Android 10** — Volume vs speed | VHAL **557849227** | то же | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Громкость медиа/телефон/навигатор/голос | Platform OpenOS usage **1/2/12/16** (fallback `AudioManager` streams) | 0…31 / 1…31 / 0…10 / 2…10 | same | Car Settings → Аудио; виджет медиа | **не** mbCAN; poll **500 ms** while UI observes |
+| **Android 10** — Громкость медиа/телефон/навигатор/голос | SettingsSvc streams **3/6/7/9** | same ranges | same | Car Settings → Аудио; виджет медиа | **не** VHAL; poll **500 ms** while UI observes |
+| **Android 9** — Динамик подголовника | Audio **37** `eAUDIO_AUDIO_HEADREST_SPEAKER` | **0** выкл / **1** только подголовник / **2** ассистент → UI 3/1/2 | **37** | UI 1/2/3 → 1/2/0 | pull 30 s / burst 1.5 s на `mbcan-state-apply` (не main; OEM JNI не thread-safe) |
+| **Android 10** — Динамик подголовника | SettingsSvc `get/setHeadrestSpeakerMode` | **1** только / **2** ассистент / **3** выкл | same | 1/2/3 | Car Settings → Аудио; poll 30 s / burst 1.5 s |
+| **Android 9** — Volume vs speed | Audio **13** | raw **0** Off / **1** Low / **2** Mid / **3** High → UI 1…4 | **13** | UI 1…4 → raw 0…3 | cfg_audio push + pull |
+| **Android 10** — Volume vs speed | VHAL **557849227** | raw **1** Off / **2** Low / **3** Mid / **4** High | VHAL **557849227** | 1…4 | onChange + pull |
+| **Android 9** — Звук клавиш | Audio **17** `eAUDIO_PROPERTY_VOLUME_KEY` | **0** mute / **1** low / **2** medium / **3** high | Audio **17** | **0…3** | cfg_audio push + pull `AudioKeyToneVolume`; Car Settings only |
+| **Android 10** — Звук клавиш | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — Громкость тревоги парктроника | Audio **11** `eAUDIO_PROPERTY_VOLUME_RADAS` | **1** low / **2** medium / **3** high | Audio **11** | **1…3** | cfg_audio push + pull `AudioRadarAlarmVolume`; Car Settings only |
+| **Android 10** — Громкость тревоги парктроника | — | Platform audio stream only; verified VHAL map отсутствует | — | — | control disabled |
+| **Android 9** — EQ mode | Audio **10** `eAUDIO_PROPERTY_EQMODE` | **1** Pop / **2** Rock / **3** Jazz / **4** Classic / **5** Voice / **255** Custom (stock `AudioViewModel`; UI position 0 = Custom) | Audio **10** | same | cfg_audio push + pull `AudioEqMode`; Car Settings only |
+| **Android 9** — EQ bands | Audio **5** bass, **6** mid, **7** treble | each **−7…+7** | same | **−7…+7** | cfg_audio push + pull; Car Settings only |
+| **Android 9** — Balance / fader | Audio **3** / **4** | raw **0…14** → UI **raw−7** (−7…+7) | same | UI **+7** → raw **0…14** | cfg_audio push + pull; Car Settings only |
+| **Android 10** — EQ / balance / fader | — | Platform `SettingsSvc` only; no verified VHAL map | — | — | controls disabled; no VHAL subscription or writes |
+| **Android 9** — ICM manual brightness | Vehicle **209** `eVEHICLE_ICM_BRIGHTNESS_MANUAL_ADJ` | **1…10** | **209** | 1…10 | cfg_vehicle push + pull `IcmManualBrightness` |
+| **Android 10** — ICM manual brightness | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` (T-эхо; как штатный `MeterLightFragment`) | **1…10** | VHAL **289415087** `T_0901_IHU_ICMBrightnessManualAdj` | 1…10 | onChange + pull |
+| **Android 9** — ICM brightness mode | Vehicle **208** `eVEHICLE_SET_ICM_BRIGHTNESS_MODE` | **0** auto / **1** manual | **208** | 0 auto / 1 manual | cfg_vehicle push + pull `IcmBrightnessMode` |
+| **Android 10** — ICM brightness mode | VHAL **289415088** `T_0901_IHU_SET_ICMBrightnessMode` | **0** auto / **1** manual | VHAL **289415088** | 0 auto / 1 manual | onChange + pull |
 
 ---
 
@@ -273,12 +430,44 @@
 | **Android 10** — Gear PRND | VHAL **289408000** `GEAR_SELECTION` (+ fallback **289408001** `CURRENT_GEAR`) | то же bitmask | — | onChange + pull |
 | **Android 9** — ReverseGearSwitch | `readReverseGearSwitch()` / `MBCanVehicleBcmStatus.getReverseGearSwitch()` (type **21**) | Dashing CEM inverted: **0** → engaged (`true`) / **1** → not reverse (`false`); иное → null (`decodeReverseGearSwitch`) | — | **Push:** `onVehicleBcmStatusChange` + pull. StateFlow `reverseGearSwitchState`. **DR/mock:** настройка `mock_consider_reverse` + `VehicleGearDomain.isReverseEngaged` — 1) HU PRND `R`, 2) известный не-`R` HU → не задняя (switch игнор), 3) нет HU PRND → switch, 4) иначе TBox PRND `R`. Не применяется в режиме «Прямой» |
 | **Android 10** — ReverseGearSwitch | VHAL **289412135** `R_0400_CEM_2_ReverseGearSwitch` | то же inverted 0/1 | — | onChange + pull; та же лестница при включённой опции |
+| **Android 9** — AccStatus | `readAccStatus()` / `MBCanVehicleAccStatus.getAccStatus()` (type **6** `eMBCAN_VEHICLE_ACCSTATUS`) | **4→acc** (ACC ON), **5→ign** (ON), **0…3→off**; иное → null (`AccStatusDomain.decodeMbCan`) | — | **Push:** `onVehicleAccStatusChange` (settings telemetry, только payload) + pull. StateFlow `accStatusState`. Автоматизации: HU-only сигнал `acc_status` |
+| **Android 10** — AccStatus | VHAL **557845540** `MCU_REPLY_ACC_STATUS` | шкала **не** 4/5: **1 и 2→acc**, **0 и 3→off**; иное → null (`AccStatusDomain.decodeMcuReply`). Штатный CarSettings: 1=доступен, 2=переход 4 с, 3=недоступен | — | onChange + pull; тот же `MbCanSignal.AccStatus` |
+| **Android 9** — GasPedal | `readGasPedalPercent()` / `MBCanVehicleGaspedStatus` (type **36** `eMBCAN_VEHICLE_GASPED_STATUS`) | `%` 0…100; invalid ≠ 0 или вне диапазона → null (`PedalDomain.decodeGasPedalPercent`) | — | **Push:** тот же OEM gasped listener, что CCS (`registIMBCanVehicleGaspedStatusListener`, один слот) + pull `getMbCanData(36)`. StateFlow `gasPedalPercentState`. Виджет `gasBrakeWidget`. Автоматизации: HU-only `gas_pedal` |
+| **Android 10** — GasPedal | VHAL **289414943** `R_0900_EMS_1_GasPedalPosition` + **289414944** `…InvalidData` | **raw 0…255** → `% = raw × 100 / 255`; invalid ≠ 0 → null (`PedalDomain.decodeVhalGasPedalPercent`) | — | continuous + onChange invalid + pull; `MbCanSignal.GasPedal` |
+| **Android 9** — BrakePedal | `readBrakePedalPressed()` / `MBCanVehicleBcmStatus.getBrakePedalSts()` (type **21**) | **2** нажата / **1** отпущена; 0 и иное → null (`PedalDomain.decodeBrakePressed`). Не CEM 1-bit и не inverted reverse-gear | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `brakePedalPressedState`. Виджет `gasBrakeWidget` (красный текст). Автоматизации: HU-only `brake_pedal` (`on`/`off`) |
+| **Android 10** — BrakePedal | VHAL **289412311** `R_0400_CEM_2_BrakePedalSts` | **0** отпущена / **1** нажата (`PedalDomain.decodeVhalBrakePressed`); иное → null | — | onChange + pull; `MbCanSignal.BrakePedal` |
+| **Android 9** — WiperSts | `readWiperOperatingMode()` / `MBCanVehicleBcmStatus.getWiperSts()` (type **21**) | TTG: **0** Off / **1** INT / **2** Low / **3** High; иное → null (`WiperStsDomain.decode`). TTG на части комплектаций рисует AUTO вместо INT для raw **1** — у нас raw **1** всегда Intermittent, overlay **1/2/3 черты**. Wash в TTG нет | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `wiperOperatingModeState`. Виджет `wiperMaintenanceWidget` (иконка). Автоматизации: HU-only `wiper_sts` (`off`/`int`/`low`/`high`) |
+| **Android 10** — WiperSts | VHAL **289412138** `R_0400_CEM_2_WiperSts` | та же шкала 0…3 | — | onChange + pull; `MbCanSignal.WiperSts` (piggyback к виджету обслуживания). Автоматизации: тот же HU-only `wiper_sts` |
+| **Android 9** — RainDetected | `readRainDetected()` / `MBCanVehicleBcmStatus.getRainDetectedSts()` (type **21**) | CEM 1-bit: **1** дождь / **0** сухо; иное → null (`RainDetectedDomain.decodeDetected`). Электросхема `S_RAIN=0x1:TRUE`. Штатный CarSettings бит не рисует | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `rainDetectedState`. Автоматизации: HU-only `rain_detected` (`on`/`off`) |
+| **Android 10** — RainDetected | VHAL **289412139** `R_0400_CEM_2_RainDetected` | то же CEM 1-bit | — | onChange + pull; `MbCanSignal.RainDetected`. Не `RainSensorFailSts` **289412141** |
+| **Android 9** — Шторка / люк / стёкла | Шторка: `canGet`/cfg **46** (в BCM нет). Люк: `canGet`/cfg **45** (не BCM `getSunRoof` −1). Стёкла: BCM `getVehicleWindow()` 0…100; **−1** в движении не пишем | `BodyComfortDomain`: **0/1** закрыто; люк **12** и **102** откинут; **2…11** и **13…100** открыто (статус люка — проценты, не команда 1…11). Стекло **0** закрыто, **1…30** щель, **31…100** открыто | запись — см. раздел выше | Один `MbCanSignal.BodyComfort` (`eMBCAN_VEHICLE_BCM_STATUS` + `eMBCAN_CFG_VEHICLE`). **Push:** BCM стёкла; cfg 45/46 люк/шторка; pull. StateFlows `sunshadePositionState` / `sunroofPositionState` / `window*State`. Автоматизации: HU-only `sunshade` / `sunroof` (`0%`…`100%` шаг 10, `tilt` = откинут), `window_*` (`0%` / `20%` / `80%` / `100%`) |
+| **Android 10** — Шторка / люк / стёкла | VHAL **289412302** `Abat_VentCMDSts`, **289412303** `PSRFCMDSts`, **289412305/308/307/306** `*_WIN_Position` | та же декодация; позиция стекла — процент, не команда 1/2/3 | запись — см. раздел выше | onChange + pull; тот же `MbCanSignal.BodyComfort`. Автоматизации: те же ключи |
 | **Android 9** — TurnSignals (L/R/hazard) | `MBCanVehicleTurnLight` (type **2** `eMBCAN_VEHICLE_TURNLIGHT`) | raw **2** = active (`TurnSignalsDomain.decodeMbCanTurnLightActive`); оба **2** ⇒ hazard (`fromMbCanTurnLightRaw` / stock `AutoMapTransfer`) | — | **Push:** общий `IMBVehicleListener` (`syncImbVehicleListener`) `onVehicleTurnLightChange` + pull. Один `MbCanSignal.TurnSignals` на все три. StateFlow `turnSignalsState` (сырой). **Защёлка:** `UniversalCanRepository.turnSignalsLatchedSide` / `latchedTurnSignalSide()` — L/R, hold 2,5 с после вспышки; L↔R и hazard сбрасывают другую сторону. **DR/mock:** interest вместе с gear в `mock-location-dr-gear`. Matcher и любые другие потребители читают latched, не сырой. geo-debug: `geo-debug-steering` также держит TurnSignals; `turn.side` сырой, `turn.latched` защёлка |
 | **Android 10** — TurnSignals (L/R/hazard) | VHAL **289412258** `DirectionIndLeft`, **289412259** `DirectionIndRight`, **289412154** `HazardLightSW` | CEM 1-bit: **1** on / **0** off (`decodeCemBinaryActive`). Для DR — DirectionInd (стабильный stalk), не мигающий `LH/RHTurnlightSts` | — | onChange + pull тем же `MbCanSignal.TurnSignals`; та же защёлка в `UniversalCanRepository` (хвост 2,5 с после снятия стебля) / geo-debug |
+| **Android 9** — HighBeam (дальний свет) | `MBCanVehicleBcmStatus.getLightStatus().getHighBeamSts()` (type **21**) / `readHighBeamOn()` | OEM enum (подтверждено на машине): **2** on / **1** off, **0** = off (`HighBeamDomain.decodeOn`; та же шкала CEM-switch, что HDC/ESP/TurnLight); не режим фар LIGHTCONTROL **135** | — | **Push:** `onVehicleBcmStatusChange` (payload only) + pull. StateFlow `highBeamOnState`. Автоматизации: HU-only `high_beam` (`on`/`off`); виджет `highBeamWidget` (подсветка при включённом дальнем; тап — toggle HMA) |
+| **Android 10** — HighBeam (дальний свет) | VHAL **289412252** `R_0404_CEM_2_HighBeamSts` | CEM 1-bit: **1** on / **0** off (`decodeCemBinaryActive`); шкала отличается от A9 BCM | — | onChange + pull; `MbCanSignal.HighBeam`; тот же StateFlow и триггер `high_beam`; виджет `highBeamWidget` |
+| **Android 9** — EPB park lamp | `MBCanVehicleBcmStatus.getEPBParkLampSts()` (type **21**) / `readEpbParkLampOn()` | Предположена шкала CEM-switch (TBD на машине): **2** on / **0,1** off (`EpbParkLampDomain.decodeOn`) | — | **Push:** `onVehicleBcmStatusChange` + pull. StateFlow `epbParkLampOnState`. Автоматизации: HU-only `epb_park_lamp`; виджет `epbParkLampWidget` (активный цвет Danger/красный; тап — no-op) |
+| **Android 10** — EPB park lamp (прокси) | VHAL **289414965** `R_0900_ICM_7_EPBWarningLampSts` | Best-effort прокси лампы EPB; декод как CEM 1-bit **1** on / **0** off (`decodeCemBinaryActive`). **Не подтверждено на машине**, что это тот же сигнал, что A9 park lamp | — | onChange + pull; `MbCanSignal.EpbParkLamp` |
+| **Android 9** — Engine oil pressure warning | `MBCanVehicleIcmDriverInfo.getICM_EngineOil()` (type **44** `eMBCAN_VEHICLE_ICM_DRIVE_INFO`) / `readIcmDriverWarningLamps()` | OEM текст «please turn off engine check oil level» → warning lamp. Предположена CEM 1-bit (TBD): **1** warning / **0** ok (`IcmWarningLampDomain.decodeWarningActive`). Не шкала HighBeam 2=on | — | **Только poll/pull** (OEM settings callback для type 44 пустой). JobManager `eMBCAN_VEHICLE_ICM_DRIVE_INFO`. StateFlow `engineOilPressureWarningState`. Автоматизации: HU-only `engine_oil_pressure` (`on`=warning); виджет `engineOilPressureWidget` (Danger/красный; тап — no-op) |
+| **Android 10** — Engine oil pressure warning | VHAL **289414935** `R_0900_ICM_4_Engine_Oil_Pressure` | CEM 1-bit **1** warning / **0** ok (`decodeCemBinaryActive`). **TBD на машине**, если шкала иная | — | onChange + pull; `MbCanSignal.EngineOilPressure` |
+| **Android 9** — Brake fluid warning | `MBCanVehicleIcmDriverInfo.getICM_Brakefluid()` (type **44**) / `readIcmDriverWarningLamps()` | OEM текст «please add brake fluid» → warning lamp. CEM 1-bit (TBD): **1** warning / **0** ok (`IcmWarningLampDomain`) | — | **Только poll/pull** (тот же type 44, один read на оба сигнала). StateFlow `brakeFluidWarningState`. Автоматизации: HU-only `brake_fluid`; виджет `brakeFluidWidget` (Danger/красный; тап — no-op) |
+| **Android 10** — Brake fluid warning | VHAL **289414936** `R_0900_ICM_4_Brake_Fuel_Level` (OEM typo Fuel=Fluid) | CEM 1-bit **1** warning / **0** ok (`decodeCemBinaryActive`). **TBD на машине** | — | onChange + pull; `MbCanSignal.BrakeFluid` |
+| **Android 9** — Gear numbers (текущая) | `MBCanVehicleBcmStatus.getGSM_GearShiftPos()` (type **21**) | Сырое неотрицательное int as-is (`GearNumberDomain.decode`); target на A9 недоступен → null | — | **Push:** BCM + pull. StateFlows `currentGearNumberState` / `targetGearNumberState`. Виджеты `gearBoxCurrentGear` / `gearBoxPreparedGear` с `useMbCanVhal`. Автоматизации: `current_gear` / `target_gear` (bothSources) |
+| **Android 10** — Gear numbers | VHAL **289414947** `GSM_GearShiftPos`, **289414953** `EMS_TargetGearPosition` | Сырые int as-is | — | onChange + pull; `MbCanSignal.GearNumbers` (оба свойства). Target gear доступен только на A10 |
+| **Android 9** — FRM DxTarObj | FRM `getFRM_3_DxTarObj` + `getFRM_3_ObjValid` | ObjValid **1 или 2** → dx raw; **0**/иное → null (`FrmDxTarObjDomain`). В журнале всегда `dx=` + `valid=` (единицы dx **не** подтверждены как метры). A9: интересные dx чаще при valid=**2** | — | **Push:** тот же FRM listener, что ACC (`syncFrmDectInfoListener`); interest `FrmTargetDistance` или `AccCruise`. StateFlow `frmDxTarObjState`. Виджет `frmDxTarObj` (только ГУ). Автоматизации: HU-only `frm_dx_tar_obj` |
+| **Android 10** — FRM DxTarObj | VHAL **289415681** `R_0B00_FRM_3_DxTarObj`, **289415683** `R_0B00_FRM_3_ObjValid` | то же | — | onChange + pull; `MbCanSignal.FrmTargetDistance` |
+| **Android 9** — FRM TimeGapSet_ICM | FRM `getFRM_3_TimeGapSet_ICM` | Сырое echo уставки time-gap на кластере (уровни; не метры). Журнал `frm_time_gap_icm` | — | **Push:** тот же FRM listener; без отдельного StateFlow/виджета |
+| **Android 9** — Двери open/closed (BCM) | `MBCanVehicleDoor` из BCM `getDoorStatus()` / deep `registCarDorListener` | FL/FR/RL/RR + hood + driverLock (+ trunk/srf). Шкала как багажник: **1** closed / **2** open (**подтверждено логами** FL/FR). **Не** cfg 1/2/13 (автозамки) | — | **Push:** BCM bridge → `telemetry/doors` + StateFlow `bcmDoorsState`; deep — typed door callback + `CANDIAG` object snapshot. **Pull:** `refreshTrunkDoor()` также сидирует `bcmDoorsState` из BCM snapshot. Без UI-виджетов на каждую дверь |
+| **Android 9** — Окна (журнал) | BCM `getVehicleWindow()` | Байты 0…100 (как BodyComfort) | — | Помимо StateFlow: `telemetry/windows` в journal (не только cfg 55–58 echo) |
+| **Android 9** — Ремень | `MBCanSeatBeltWarning` type **15** | `driverWarn` / `passengerWarn` raw. OEM push Runnable **пустой** → только poll | — | Deep: poll `getMbCanData` ~2 с → `telemetry/seat_belt` + `CANDIAG` object. Без виджета |
+| **Android 10** — Двери ajar / капот | VHAL CEM_2 **289412271/270/266/267/269** (+ CEM_1/lock в deep experimental) | **Код предполагает** CEM 1-bit via `decodeCemBinaryActive` / `decodeAjarOpenVhalCem`: **1** open / **0** closed (как TurnSignals/HighBeam CEM). Raw≠0/1 → null. **Live A10 ajar values в доступных журналах не подтверждены** (только subscribe) — при иной шкале (напр. 1/2 как BCM) автоматизации `door_*` на A10 будут неверны | — | Deep catalog + production: interest `TrunkDoor` подписывает CEM_2; onChange `publishVhalDoorAjar` → `vhalDoorAjarRaw` + DEBUG `telemetry/doors`; **pull** `refresh TrunkDoor` сидирует FL/FR/RL/RR (+hood) |
+| **Android 10** — Ремень | VHAL ICM_1 **289414928/927** (+ ICM_2/ABM в deep) | Raw as-is → `vhalSeatBeltRaw` | — | Deep catalog + production: interest `BrakeFluid` также подписывает ICM_1 belt; `applyPush` → DEBUG `telemetry/seat_belt` |
 | **Android 9** — Fuel level % | `readVehicleFuelLevelPercent()` / `getFuelLevel()` | **0…100**; иначе null | — | push `onCanVehicleFuelLevel` + pull |
 | **Android 10** — Fuel level % | VHAL **289414929** `R_0900_ICM_1_FuelLevel` | int **0…100** | — | onChange + pull |
 | **Android 9** — Total odometer | `readTotalOdometerKm()` / `getOdometer()` | float km → UInt | — | push `onVehicleTotalOdoMeterChange` + pull |
 | **Android 10** — Total odometer | VHAL **289414930** `R_0900_ICM_1_TotalOdometer_Km` | int km as-is | — | onChange + pull |
+| **Android 9** — Wheel pulse counters | `MBCanVehicleWheel` / `eMBCAN_VEHICLE_WHEEL` (4); LHF/RHF/LHR/RHR | int, **wrap 13 бит** (0…8191); `WheelPulseOdometer.COUNTER_BITS` | — | **Push:** `IMBVehicleListener.onPull` (`syncImbVehicleListener` + interest `WheelPulse`) + pull; `WheelPulseOdometer` |
+| **Android 10** — Wheel pulse counters | VHAL **289412182/179/175/177** `R_0400_ESP_5_*PulseCounter` LHF/RHF/LHR/RHR | int, **wrap 13 бит** (тот же ESP_5) | — | onChange + pull (`MbCanSignal.WheelPulse`); `WheelPulseOdometer` |
 | **Android 9** — Outside temp | `readOutsideTemperatureC()` / `getExternalTemperatureRaw()` | raw byte **°C**; **87** = invalid (`OutsideTemperatureDomain.decodeMbCanCelsiusRaw`) | — | **Push:** `onCanVehicleExternalTemp` (ветка в `MBCanEngine` ранее была пустой) + pull |
 | **Android 10** — Outside temp | VHAL **289412223** `R_0400_CEM_IPM_3_ExternalTemperatureRaw` | **°C = (raw & 0xFF) × 0.5 − 40** (`decodeVhalRaw`); вне [−40; 87) → null. То же кодирование, что TBox CAN `0x535` | — | onChange + pull |
 | **Android 9** — TPMS (P/T ×4) | `MBCanVehicleTires` / `eMBCAN_VEHICLE_TIRE` (34); `vstTire[0..3]` LF/RF/LR/RR | `fPressure` bar (**−1** = invalid); `nTemperature` °C (**−100** = invalid) → `TirePressureDomain` | — | **Push:** `onCanVehicleTires` + pull; виджеты с «Работа через CAN». **Давление:** null-debounce + disk persist в **отдельные** HU-ключи (`wheel*_pressure_last_hu`) |
@@ -286,6 +475,8 @@
 | **Android 10** — TPMS temperature | VHAL **289411853–856** `R_0300_CEM_5_*TyreTemperature` | **°C = raw − 60**; raw ≤0 или ≥150 → null | — | onChange + pull (без disk persist) |
 | **Android 9** — Instant fuel | `MBCanVehicleEngine.getFuelRollingCounter` (type 22) | **л/100км = raw / 10**; ≤0 → null (`MBOilWearView`) | — | push только из поля engine-callback (без re-read `getMbCanData`); иначе pull; виджеты с `useMbCanVhal` |
 | **Android 10** — Instant fuel | VHAL **289414918** `R_0900_ICM_6_FuelRollingCounter` | **л/100км = raw × 0.1** (`convertOilInteger`) | — | onChange + pull |
+| **Android 9** — Average fuel | `MBCanVehicleIcmInfo.getICM_4_AverageFuelConsume` (type **42** `eMBCAN_VEHICLE_ICM_INFO`) | float **л/100км as-is**; ≤0 → null (`AverageFuelConsumptionDomain`) | — | pull; виджет `averageFuelConsumption` при источнике mbCAN/VHAL |
+| **Android 10** — Average fuel | VHAL **289414933** `R_0900_ICM_4_AverageFuelConsume` | **л/100км = raw × 0.1** (как instant fuel); ≤0 → null | — | onChange + pull |
 | **Android 9** — Maintenance tips | `IcmTripInfo.getICM_6_Maintenance_tips` (type 48) | км as-is; &lt;0 → null (`MBMaintenanceView`) | — | pull |
 | **Android 10** — Maintenance tips | VHAL **289414920** `R_0900_ICM_6_Maintenance_tips` | км as-is; &lt;0 → null | — | onChange + pull |
 | **Android 9** — Distance to empty | `MBCanVehicleFuelLevel.getDistenceToEmpty` (type 12) | float км as-is; ≤0 → null (`MBVehicleFuelLevelView`) | — | push с fuel level + pull |
@@ -295,7 +486,7 @@
 | **Android 9** — Steering angle | `MBCanVehicleSteeringAngle` (type 3) | float ° / °/с as-is | — | **Push:** `IMBVehicleListener.onSteeringWheel` → `scheduleSteeringAnglePush` + pull `getMbCanData(3)`; interest держит `eMBCAN_VEHICLE_STEERING_ANGLE` через `MbCanJobManager` (после reapply — `ensureOemSubscriptions`, иначе subscribe мог «застрять» deferred и push молчал ≈30 с poll). geo-debug: `geo-debug-steering`; mock DR: `mock-location-dr-steering` |
 | **Android 10** — Steering angle | VHAL **557845548** `MCU_REPLY_STEERING_WHEEL_ANGLE` | **° = raw as-is** (`SteeringAngleDomain.decodeMcuReplyDeg`); °/с нет | — | onChange (continuous) + pull; `steerSpeed` на A10 всегда null; те же interest id, что на A9 |
 
-Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
+Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Виджет **средний расход** (`averageFuelConsumption`) читает HU ICM_4, когда в «Дополнительно» выбран источник mbCAN/VHAL (не флаг `useMbCanVhal`); иначе — средняя по текущей или суточной поездке (`fuel_used * 100 / distance`). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 
 ---
 
@@ -324,9 +515,38 @@
 
 ---
 
+## Пользовательские автоматизации
+
+`AutomationCanCatalog` публикует для автоматизаций проверенное подмножество
+`MbCanCommandRegistry` / `MbCanAudioCommandRegistry`. Новых property id, raw encode или
+отдельного backend path нет: executor всегда вызывает `UniversalCanRepository.execute`.
+
+Фильтр безопасности:
+
+- `SetAnyInt` не публикуется;
+- `SYSTEM_REBOOT`, сырые MFS cruise pulses (210/212/213/214) и raw speed-limiter 253/254 не
+  публикуются; управление круизом ACC/CCS — Builtin `cruise_*` → `AccCruiseController`
+  (как виджеты; режим только ACC или CCS);
+- `TRUNK_PLG_CONTROL` публикуется только как `MbCanCommand.TrunkPulse(1|2)`, без отдельной
+  программной проверки скорости или PRND (как у виджета багажника);
+- допустимые set-значения берутся непосредственно из `SetExact` / `SetRange` /
+  `ToggleBinary` / `SetWindowPosition`, поэтому вручную изменённый JSON не обходит
+  policy registry. Стёкла: A9 **0 / 20 / 80 / 100**, A10 **1/2/3**; шторка **1…11**; люк **1…11** и **12**.
+
+Триггеры автоматизаций регистрируют отдельный interest sourceId `user-automations` только
+для реально используемых `MbCanSignal`. Источник каждого условия/триггера выбирается явно:
+TBox либо текущий backend ГУ (mbCAN/VHAL); автоматического fallback между ними нет.
+
+Подробнее: [AUTOMATIONS_RU.md](AUTOMATIONS_RU.md).
+
+---
+
 ## Примечания
 
 1. **mbCAN id** в таблицах — это `MbCanKnownVehiclePropertyId.*` (legacy `MBVehicleProperty`).
 2. **Декодеры** намеренно различаются между A9 и A10 там, где stock-приложения используют разную семантику (SLA, SYNC, trunk, VHAL binary read).
-3. Параметры из `MbCanCatalog.controls`, не подключённые к `MbCanSignal` / UI (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в этом документе **не перечислены** — приложение их пока не опрашивает.
+3. Параметры из `MbCanCatalog.controls`, не подключённые к отдельному `MbCanSignal`
+   (PM2.5 toggle, UV lamp, sterilize, brake feel и т.д.), в основных таблицах не перечислены.
+   Они могут записываться из Car Settings/автоматизаций через registry, но не доступны как
+   signal-триггеры без отдельного read/decode flow.
 4. При изменении decode/write логики обновляйте этот файл вместе с доменными тестами (`*DomainTest`, `MbCanSignalStateEngine`).

@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -93,45 +94,23 @@ class AccCruiseDomainTest {
     }
 
     @Test
-    fun ccsStepDeltaAndBatchSteps() {
-        assertEquals(null, AccCruiseDomain.ccsStepDelta(null, 90))
-        assertEquals(10, AccCruiseDomain.ccsStepDelta(80f, 90))
-        assertEquals(-5, AccCruiseDomain.ccsStepDelta(95f, 90))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(0))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(1))
-        assertEquals(0, AccCruiseDomain.ccsBatchSteps(-1))
-        assertEquals(2, AccCruiseDomain.ccsBatchSteps(2))
-        assertEquals(5, AccCruiseDomain.ccsBatchSteps(12))
-        assertEquals(5, AccCruiseDomain.ccsBatchSteps(-9))
-        assertEquals(3, AccCruiseDomain.ccsBatchSteps(-3))
+    fun ccsRememberedStepDelta_isTargetMinusSetpoint() {
+        assertNull(AccCruiseDomain.ccsRememberedStepDelta(null, 90))
+        assertEquals(10, AccCruiseDomain.ccsRememberedStepDelta(80, 90))
+        assertEquals(-5, AccCruiseDomain.ccsRememberedStepDelta(95, 90))
+        assertEquals(0, AccCruiseDomain.ccsRememberedStepDelta(90, 90))
     }
 
     @Test
-    fun ccsOvershot_respectsDirectionAndBand() {
-        assertFalse(AccCruiseDomain.ccsOvershot(90f, 90, increasing = true))
-        assertFalse(AccCruiseDomain.ccsOvershot(91f, 90, increasing = true))
-        assertTrue(AccCruiseDomain.ccsOvershot(92f, 90, increasing = true))
-        assertFalse(AccCruiseDomain.ccsOvershot(89f, 90, increasing = false))
-        assertTrue(AccCruiseDomain.ccsOvershot(88f, 90, increasing = false))
-        assertFalse(AccCruiseDomain.ccsOvershot(null, 90, increasing = true))
-    }
-
-    @Test
-    fun ccsSpeedUnchanged_usesOneKmhWindow() {
-        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 90.4f))
-        assertTrue(AccCruiseDomain.ccsSpeedUnchanged(90f, 89.1f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, 91.5f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(null, 90f))
-        assertFalse(AccCruiseDomain.ccsSpeedUnchanged(90f, null))
-    }
-
-    @Test
-    fun isCcsActiveAtTarget_requiresActiveStatusAndSpeed() {
-        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(2, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80f, 90))
-        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90f, 90))
+    fun isCcsActiveAtTarget_prefersRememberedSetpoint() {
+        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, 90, 80f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, 80, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(2, 90, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(0, 90, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(null, 90, 90f, 90))
+        // Fallback to vehicle-speed band only when memory is empty.
+        assertTrue(AccCruiseDomain.isCcsActiveAtTarget(1, null, 90f, 90))
+        assertFalse(AccCruiseDomain.isCcsActiveAtTarget(1, null, 80f, 90))
     }
 
     @Test
@@ -154,6 +133,10 @@ class AccCruiseDomainTest {
         )
         assertEquals(
             CruiseLogicalState.Standby,
+            AccCruiseDomain.cruiseLogicalState(true, 6, null),
+        )
+        assertEquals(
+            CruiseLogicalState.Override,
             AccCruiseDomain.cruiseLogicalState(true, 7, null),
         )
         assertEquals(
@@ -320,5 +303,38 @@ class AccCruiseDomainTest {
         assertEquals(50, AccCruiseDomain.clampStepIntervalMs(10))
         assertEquals(1500, AccCruiseDomain.clampStepIntervalMs(5000))
         assertEquals(150, AccCruiseDomain.clampStepIntervalMs(150))
+    }
+
+    @Test
+    fun accAutomationState_mapsModesAndNull() {
+        assertNull(AccCruiseDomain.accAutomationState(null))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(0))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(1))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.accAutomationState(2))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OVERRIDE, AccCruiseDomain.accAutomationState(7))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_ACTIVE, AccCruiseDomain.accAutomationState(3))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_FAULT, AccCruiseDomain.accAutomationState(9))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.accAutomationState(99))
+    }
+
+    @Test
+    fun ccsAutomationState_mapsStatusesAndNull() {
+        assertNull(AccCruiseDomain.ccsAutomationState(null))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.ccsAutomationState(0))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_ACTIVE, AccCruiseDomain.ccsAutomationState(1))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_STANDBY, AccCruiseDomain.ccsAutomationState(2))
+        assertEquals(AccCruiseDomain.AUTOMATION_STATE_OFF, AccCruiseDomain.ccsAutomationState(9))
+    }
+
+    @Test
+    fun automationStateOptions_accIncludesFault_ccsDoesNot() {
+        assertEquals(
+            listOf("off", "standby", "active", "override", "fault"),
+            AccCruiseDomain.ACC_AUTOMATION_STATE_OPTIONS,
+        )
+        assertEquals(
+            listOf("off", "standby", "active"),
+            AccCruiseDomain.CCS_AUTOMATION_STATE_OPTIONS,
+        )
     }
 }

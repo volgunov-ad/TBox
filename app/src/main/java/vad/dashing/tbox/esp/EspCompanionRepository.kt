@@ -3,18 +3,79 @@ package vad.dashing.tbox.esp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.LocValues
 
 data class EspDeviceInfo(
     val firmwareVersion: String = "",
     val gpioInCount: Int = 0,
     val relayCount: Int = 0,
+    val gnss: Boolean = false,
+    val gnssChip: String = "",
+    val gnssModel: String = "",
     val um980: Boolean = false,
     val um980Baud: Int = 115200,
     val can: Boolean = false,
     val canBackend: String = "",
     val canBaud: Int = 500_000,
     val canLight: Boolean = false,
+    val mag: Boolean = false,
+    val magChip: String = "",
+    val magSeen: List<String> = emptyList(),
+    val magSupported: Boolean = false,
+    val ble: Boolean = false,
+    val bleOn: Boolean = false,
+    val bleMacs: List<String> = emptyList(),
+    val ap: Boolean = false,
+)
+
+data class EspApStatus(
+    val on: Boolean = false,
+    val sta: Boolean = false,
+    val ssid: String = "",
+    val password: String = "",
+    val ip: String = "",
+    val freqMhz: Int = 0,
+    val channel: Int = 0,
+    val huIp: String = "",
+    val panelPort: Int = 8765,
+)
+
+data class EspBleBtnEvent(
+    val mac: String,
+    val btn: Int,
+    val act: String,
+    val bat: Int = -1,
+    val rssi: Int = 0,
+    val ms: Long = 0L,
+    val atMs: Long = System.currentTimeMillis(),
+)
+
+/** Per-MAC runtime BLE state from companion `bleBtn` / `bleStatus`. */
+data class EspBleDeviceRuntime(
+    val mac: String,
+    val batteryPercent: Int? = null,
+    val lastBtn: Int? = null,
+    val lastAct: String? = null,
+    val lastRssi: Int? = null,
+    val lastAtMs: Long = 0L,
+) {
+    fun lastEventLabel(): String {
+        val btn = lastBtn ?: return "—"
+        val act = lastAct?.ifBlank { null } ?: "—"
+        val rssiPart = lastRssi?.let { " rssi=$it" }.orEmpty()
+        return "btn$btn $act$rssiPart"
+    }
+}
+
+data class EspMagSample(
+    val chip: String = "",
+    val hx: Float = 0f,
+    val hy: Float = 0f,
+    val hz: Float = 0f,
+    val headingDeg: Float = 0f,
+    val fs: Float = 0f,
+    val ok: Boolean = false,
 )
 
 data class Um980LastResponse(
@@ -54,6 +115,7 @@ data class CanLogEntry(
 object EspCompanionRepository {
     private const val UM980_LOG_MAX = 100
     private const val UM980_GEO_LOG_MIN_INTERVAL_MS = 5_000L
+    private const val MAG_LOG_MIN_INTERVAL_MS = 5_000L
     private const val CAN_LOG_MAX = 200
 
     private val _connected = MutableStateFlow(false)
@@ -68,6 +130,15 @@ object EspCompanionRepository {
     private val _gpioMask = MutableStateFlow(0)
     val gpioMask: StateFlow<Int> = _gpioMask.asStateFlow()
 
+    /**
+     * True only after a full `gpio` snapshot on the current link.
+     * USB connect and `gpioEvent` update the mask earlier; automations must not
+     * treat that as a level change.
+     */
+    private val gpioLevelLock = Any()
+    private val _gpioInputsReady = MutableStateFlow(false)
+    val gpioInputsReady: StateFlow<Boolean> = _gpioInputsReady.asStateFlow()
+
     private val _relayMask = MutableStateFlow(0)
     val relayMask: StateFlow<Int> = _relayMask.asStateFlow()
 
@@ -76,6 +147,36 @@ object EspCompanionRepository {
 
     private val _lastGpsAtMs = MutableStateFlow(0L)
     val lastGpsAtMs: StateFlow<Long> = _lastGpsAtMs.asStateFlow()
+
+    private val _lastMag = MutableStateFlow(EspMagSample())
+    val lastMag: StateFlow<EspMagSample> = _lastMag.asStateFlow()
+
+    private val _lastMagAtMs = MutableStateFlow(0L)
+    val lastMagAtMs: StateFlow<Long> = _lastMagAtMs.asStateFlow()
+
+    private val _bleOn = MutableStateFlow(false)
+    val bleOn: StateFlow<Boolean> = _bleOn.asStateFlow()
+
+    private val _apStatus = MutableStateFlow(EspApStatus())
+    val apStatus: StateFlow<EspApStatus> = _apStatus.asStateFlow()
+
+    private val _routerBusy = MutableStateFlow(false)
+    val routerBusy: StateFlow<Boolean> = _routerBusy.asStateFlow()
+
+    private val _routerError = MutableStateFlow<String?>(null)
+    val routerError: StateFlow<String?> = _routerError.asStateFlow()
+
+    private val _bleLearnActive = MutableStateFlow(false)
+    val bleLearnActive: StateFlow<Boolean> = _bleLearnActive.asStateFlow()
+
+    private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
+    val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
+
+    private val _bleDevices = MutableStateFlow<Map<String, EspBleDeviceRuntime>>(emptyMap())
+    val bleDevices: StateFlow<Map<String, EspBleDeviceRuntime>> = _bleDevices.asStateFlow()
+
+    private val _lastBleBtn = MutableStateFlow<EspBleBtnEvent?>(null)
+    val lastBleBtn: StateFlow<EspBleBtnEvent?> = _lastBleBtn.asStateFlow()
 
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()
@@ -101,6 +202,14 @@ object EspCompanionRepository {
     private val _otaError = MutableStateFlow<String?>(null)
     val otaError: StateFlow<String?> = _otaError.asStateFlow()
 
+    /**
+     * Increments on each successful OTA finish so UI can toast once and then
+     * [clearOtaUiState] after a brief 100% display.
+     */
+    private val _otaSuccessEpoch = MutableStateFlow(0L)
+    val otaSuccessEpoch: StateFlow<Long> = _otaSuccessEpoch.asStateFlow()
+    private var toastedOtaSuccessEpoch = 0L
+
     /** Profile/SAVECONFIG/refresh batch — UI should disable UM980 controls. */
     private val _um980ConfigBusy = MutableStateFlow(false)
     val um980ConfigBusy: StateFlow<Boolean> = _um980ConfigBusy.asStateFlow()
@@ -111,11 +220,17 @@ object EspCompanionRepository {
     private val _canLightActive = MutableStateFlow(false)
     val canLightActive: StateFlow<Boolean> = _canLightActive.asStateFlow()
 
+    private val canRecentLock = Any()
+    private val canRecentRing = ArrayDeque<CanLogEntry>(CAN_LOG_MAX)
     private val _canRecentFrames = MutableStateFlow<List<CanLogEntry>>(emptyList())
     val canRecentFrames: StateFlow<List<CanLogEntry>> = _canRecentFrames.asStateFlow()
+    @Volatile private var lastCanRecentPublishElapsedMs: Long = 0L
+    private const val CAN_RECENT_PUBLISH_MIN_INTERVAL_MS = 100L
 
     @Volatile
     private var lastUm980GeoLogAtMs = 0L
+    @Volatile
+    private var lastMagLogAtMs = 0L
 
     fun isUm980Online(nowMs: Long = System.currentTimeMillis()): Boolean {
         val last = _lastGpsAtMs.value
@@ -123,8 +238,15 @@ object EspCompanionRepository {
     }
 
     fun updateConnected(value: Boolean) {
-        val was = _connected.value
-        _connected.setIfChanged(value)
+        val was = synchronized(gpioLevelLock) {
+            val previous = _connected.value
+            // A new link has no snapshot yet. Repeated hello on the same link must not clear it.
+            if (!value || !previous) {
+                _gpioInputsReady.value = false
+            }
+            _connected.setIfChanged(value)
+            previous
+        }
         if (value && !was) {
             _connectedAtMs.value = System.currentTimeMillis()
         }
@@ -132,14 +254,115 @@ object EspCompanionRepository {
             _deviceInfo.value = EspDeviceInfo()
             _lastHeartbeatAtMs.value = 0L
             _lastGpsAtMs.value = 0L
+            _lastMag.value = EspMagSample()
+            _lastMagAtMs.value = 0L
+            lastMagLogAtMs = 0L
             _lastMessageAtMs.value = 0L
             _connectedAtMs.value = 0L
             _canLightActive.value = false
+            _bleOn.value = false
+            _apStatus.value = EspApStatus()
+            _routerBusy.value = false
+            _bleLearnActive.value = false
+            _bleMacs.value = emptyList()
+            _bleDevices.value = emptyMap()
+            _lastBleBtn.value = null
+            if (!_otaBusy.value) {
+                clearOtaUiState()
+            }
         }
     }
 
     fun updateDeviceInfo(info: EspDeviceInfo) {
         _deviceInfo.value = info
+        if (info.ble) {
+            _bleOn.value = info.bleOn
+            replaceBleMacs(info.bleMacs)
+        }
+    }
+
+    fun applyApStatus(status: EspApStatus) {
+        _apStatus.value = status
+        _routerError.value = null
+    }
+
+    fun setRouterBusy(busy: Boolean) {
+        _routerBusy.value = busy
+    }
+
+    fun setRouterError(code: String?) {
+        _routerError.value = code
+    }
+
+    fun applyBleStatus(
+        on: Boolean,
+        learn: Boolean,
+        macs: List<String>,
+        lastBat: Int = -1,
+        lastRssi: Int = 0,
+        lastMac: String? = null,
+    ) {
+        _bleOn.value = on
+        _bleLearnActive.value = learn
+        replaceBleMacs(macs)
+        val mac = normalizeEspBleMac(lastMac.orEmpty())
+        if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
+            _bleDevices.update { current ->
+                val prev = current[mac] ?: EspBleDeviceRuntime(mac = mac)
+                current + (
+                    mac to prev.copy(
+                        batteryPercent = if (lastBat in 0..100) lastBat else prev.batteryPercent,
+                        lastRssi = if (lastRssi != 0) lastRssi else prev.lastRssi,
+                    )
+                )
+            }
+        }
+        val info = _deviceInfo.value
+        if (info.ble) {
+            _deviceInfo.value = info.copy(bleOn = on, bleMacs = _bleMacs.value)
+        }
+        touchMessage()
+    }
+
+    fun applyBleBtn(event: EspBleBtnEvent) {
+        val mac = normalizeEspBleMac(event.mac)
+        val normalized = if (mac == event.mac) event else event.copy(mac = mac)
+        _lastBleBtn.value = normalized
+        if (mac.isNotEmpty()) {
+            _bleDevices.update { current ->
+                val prev = current[mac] ?: EspBleDeviceRuntime(mac = mac)
+                current + (
+                    mac to prev.copy(
+                        batteryPercent = if (normalized.bat in 0..100) {
+                            normalized.bat
+                        } else {
+                            prev.batteryPercent
+                        },
+                        lastBtn = normalized.btn,
+                        lastAct = normalized.act,
+                        lastRssi = normalized.rssi,
+                        lastAtMs = normalized.atMs,
+                    )
+                )
+            }
+        }
+        touchMessage()
+    }
+
+    private fun replaceBleMacs(macs: List<String>) {
+        val normalized = macs.map(::normalizeEspBleMac).filter { it.isNotEmpty() }.distinct()
+        _bleMacs.value = normalized
+        _bleDevices.update { current ->
+            buildMap {
+                for (mac in normalized) {
+                    put(mac, current[mac] ?: EspBleDeviceRuntime(mac = mac))
+                }
+            }
+        }
+    }
+
+    fun setBleLearnActive(active: Boolean) {
+        _bleLearnActive.value = active
     }
 
     fun updateLocValues(values: LocValues) {
@@ -148,9 +371,33 @@ object EspCompanionRepository {
         touchMessage()
     }
 
+    fun updateMag(sample: EspMagSample) {
+        _lastMag.value = sample
+        _lastMagAtMs.value = System.currentTimeMillis()
+        touchMessage()
+    }
+
+    /** Throttle high-rate `t:mag` lines in the protocol log (same 5 s as GPS). */
+    fun shouldLogMagSample(atMs: Long = System.currentTimeMillis()): Boolean {
+        if (atMs - lastMagLogAtMs < MAG_LOG_MIN_INTERVAL_MS) return false
+        lastMagLogAtMs = atMs
+        return true
+    }
+
     fun updateGpioMask(mask: Int) {
         _gpioMask.setIfChanged(mask and 0xFFFF)
         touchMessage()
+    }
+
+    /**
+     * Full input mask (`t:gpio`) for this link. The first one after connect is the
+     * current levels, not an edge. Ignored for automation publish when the link is down.
+     */
+    fun confirmGpioSnapshot(mask: Int) {
+        synchronized(gpioLevelLock) {
+            updateGpioMask(mask)
+            _gpioInputsReady.value = _connected.value
+        }
     }
 
     fun applyGpioEvent(channel: Int, level: Boolean) {
@@ -192,14 +439,16 @@ object EspCompanionRepository {
             cmd.equals("MASK", ignoreCase = true) ||
             cmd.equals("VERSION", ignoreCase = true) ||
             cmd.equals("VERSIONA", ignoreCase = true) ||
+            cmd.equals("UNILOGLIST", ignoreCase = true) ||
             lines.any {
                 it.contains("CONFIG", ignoreCase = true) ||
                     it.contains("MODE", ignoreCase = true) ||
                     it.contains("MASK", ignoreCase = true) ||
-                    it.contains("VERSION", ignoreCase = true)
+                    it.contains("VERSION", ignoreCase = true) ||
+                    it.contains("UNILOGLIST", ignoreCase = true)
             }
         ) {
-            val merged = (_um980ConfigSnapshot.value.rawLines + lines).distinct().takeLast(400)
+            val merged = (_um980ConfigSnapshot.value.rawLines + lines).takeLast(400)
             _um980ConfigSnapshot.value = Um980Commands.parseConfigSnapshot(merged)
         }
     }
@@ -226,7 +475,22 @@ object EspCompanionRepository {
         } else {
             _otaProgress.value = 100
             _otaError.value = null
+            _otaSuccessEpoch.value = _otaSuccessEpoch.value + 1L
         }
+    }
+
+    /** Hide OTA progress/error after toast or on disconnect after a finished transfer. */
+    /** True only the first time this success epoch is observed. Survives leaving the screen. */
+    fun consumeOtaSuccess(epoch: Long): Boolean {
+        if (epoch <= 0L || epoch == toastedOtaSuccessEpoch) return false
+        toastedOtaSuccessEpoch = epoch
+        return true
+    }
+
+    fun clearOtaUiState() {
+        _otaBusy.value = false
+        _otaProgress.value = 0
+        _otaError.value = null
     }
 
     fun beginUm980ConfigBusy() {
@@ -298,15 +562,32 @@ object EspCompanionRepository {
         atMs: Long = System.currentTimeMillis(),
     ) {
         val entry = CanLogEntry(atMs = atMs, direction = direction, frame = frame)
-        val cur = _canRecentFrames.value
-        _canRecentFrames.value = if (cur.size < CAN_LOG_MAX) {
-            cur + entry
-        } else {
-            cur.drop(cur.size + 1 - CAN_LOG_MAX) + entry
+        val snapshot: List<CanLogEntry>
+        val publish: Boolean
+        synchronized(canRecentLock) {
+            if (canRecentRing.size >= CAN_LOG_MAX) {
+                canRecentRing.removeFirst()
+            }
+            canRecentRing.addLast(entry)
+            val now = android.os.SystemClock.elapsedRealtime()
+            publish = now - lastCanRecentPublishElapsedMs >= CAN_RECENT_PUBLISH_MIN_INTERVAL_MS
+            if (publish) {
+                lastCanRecentPublishElapsedMs = now
+                snapshot = canRecentRing.toList()
+            } else {
+                snapshot = emptyList()
+            }
+        }
+        if (publish) {
+            _canRecentFrames.value = snapshot
         }
     }
 
     fun clearCanRecentFrames() {
+        synchronized(canRecentLock) {
+            canRecentRing.clear()
+            lastCanRecentPublishElapsedMs = 0L
+        }
         _canRecentFrames.value = emptyList()
     }
 

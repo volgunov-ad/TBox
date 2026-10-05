@@ -58,12 +58,25 @@ import vad.dashing.tbox.PanelCollapseStates
 import vad.dashing.tbox.PanelPxBounds
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MIRROR_ADJUST_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isActiveTripWidgetDataKey
@@ -74,13 +87,19 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.clampFloatingPanelOrigin
 import vad.dashing.tbox.collapsedPanelBounds
+import vad.dashing.tbox.collapsedPanelInteractionBounds
+import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.lerpPanelBounds
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 import vad.dashing.tbox.resolveDriveModeWidgetOption
 import vad.dashing.tbox.nextDriveModeCycleTarget
 import vad.dashing.tbox.resolveDriveModeCycleCurrentRaw
+import vad.dashing.tbox.DriveModeThemeWatcher
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.snapToGrid
 import vad.dashing.tbox.FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION
@@ -124,6 +143,7 @@ fun FloatingDashboardUI(
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
 
     FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId)
@@ -140,25 +160,27 @@ fun FloatingDashboardUI(
         }
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
-        CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Transparent
-            ) {
-                FloatingDashboard(
-                    tboxViewModel = tboxViewModel,
-                    canViewModel = canViewModel,
-                    settingsViewModel = settingsViewModel,
-                    appDataViewModel = appDataViewModel,
-                    panelId = panelId,
-                    onUpdateWindowSize = onUpdateWindowSize,
-                    onUpdateWindowPosition = onUpdateWindowPosition,
-                    onUpdateWindowFrame = onUpdateWindowFrame,
-                    onRebootTbox = onRebootTbox,
-                    onTripFinishAndStart = onTripFinishAndStart,
-                    windowParams = params
-                )
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
+            CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Transparent
+                ) {
+                    FloatingDashboard(
+                        tboxViewModel = tboxViewModel,
+                        canViewModel = canViewModel,
+                        settingsViewModel = settingsViewModel,
+                        appDataViewModel = appDataViewModel,
+                        panelId = panelId,
+                        onUpdateWindowSize = onUpdateWindowSize,
+                        onUpdateWindowPosition = onUpdateWindowPosition,
+                        onUpdateWindowFrame = onUpdateWindowFrame,
+                        onRebootTbox = onRebootTbox,
+                        onTripFinishAndStart = onTripFinishAndStart,
+                        windowParams = params
+                    )
+                }
             }
         }
     }
@@ -196,6 +218,8 @@ fun FloatingDashboard(
     val panelConfig by settingsViewModel.floatingDashboardConfig(panelId).collectAsStateWithLifecycle()
     val floatingPanelsLayoutSnapDp by
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val floatingPanelsAllowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
     val layoutSnapDp = normalizePanelLayoutSnapDp(floatingPanelsLayoutSnapDp)
     val layoutSnapStepPx = with(density) { layoutSnapDp.dp.toPx() }
     val widgetConfigs = panelConfig.widgetsConfig
@@ -249,31 +273,57 @@ fun FloatingDashboard(
     var hostExpandedForCollapseAnim by remember(panelId) {
         mutableStateOf(!effectiveCollapsed)
     }
-    val thicknessPx = with(density) {
+    val stripThicknessPx = with(density) {
         normalizePanelCollapseStripThicknessDp(panelConfig.collapseStripThicknessDp).dp.roundToPx()
+    }
+    val touchZoneThicknessPx = with(density) {
+        normalizePanelCollapseTouchZoneThicknessDp(
+            panelConfig.collapseTouchZoneThicknessDp,
+            panelConfig.collapseStripThicknessDp,
+        ).dp.roundToPx()
     }
     val expandedBounds = remember(
         panelConfig.startX,
         panelConfig.startY,
         panelConfig.width,
         panelConfig.height,
+        floatingPanelsAllowBeyondScreen,
     ) {
+        val origin = clampFloatingPanelOrigin(
+            x = panelConfig.startX,
+            y = panelConfig.startY,
+            allowBeyondScreen = floatingPanelsAllowBeyondScreen,
+        )
         PanelPxBounds(
-            x = panelConfig.startX.coerceAtLeast(0),
-            y = panelConfig.startY.coerceAtLeast(0),
+            x = origin.x,
+            y = origin.y,
             width = panelConfig.width.coerceAtLeast(1),
             height = panelConfig.height.coerceAtLeast(1),
         )
     }
-    val collapsedBounds = remember(expandedBounds, collapseEdge, thicknessPx) {
-        collapsedPanelBounds(expandedBounds, collapseEdge, thicknessPx)
+    val collapsedVisualBounds = remember(expandedBounds, collapseEdge, stripThicknessPx) {
+        collapsedPanelBounds(expandedBounds, collapseEdge, stripThicknessPx)
+    }
+    val collapsedInteractionBounds = remember(
+        expandedBounds,
+        collapseEdge,
+        stripThicknessPx,
+        touchZoneThicknessPx,
+    ) {
+        collapsedPanelInteractionBounds(
+            expanded = expandedBounds,
+            edge = collapseEdge,
+            stripThicknessPx = stripThicknessPx,
+            touchZoneThicknessPx = touchZoneThicknessPx,
+        )
     }
 
     LaunchedEffect(
         effectiveCollapsed,
         collapseEdge,
         expandedBounds,
-        collapsedBounds,
+        collapsedVisualBounds,
+        collapsedInteractionBounds,
     ) {
         if (collapseEdge == PanelCollapseEdge.NONE) {
             FloatingPanelCollapseAnimationGate.setAnimating(panelId, false)
@@ -292,7 +342,7 @@ fun FloatingDashboard(
         }
         val target = if (effectiveCollapsed) 1f else 0f
         if (abs(collapseProgress.value - target) < 0.001f) {
-            val rest = if (effectiveCollapsed) collapsedBounds else expandedBounds
+            val rest = if (effectiveCollapsed) collapsedInteractionBounds else expandedBounds
             hostExpandedForCollapseAnim = !effectiveCollapsed
             onUpdateWindowFrame(panelId, rest.x, rest.y, rest.width, rest.height)
             return@LaunchedEffect
@@ -315,10 +365,10 @@ fun FloatingDashboard(
             if (effectiveCollapsed) {
                 onUpdateWindowFrame(
                     panelId,
-                    collapsedBounds.x,
-                    collapsedBounds.y,
-                    collapsedBounds.width,
-                    collapsedBounds.height,
+                    collapsedInteractionBounds.x,
+                    collapsedInteractionBounds.y,
+                    collapsedInteractionBounds.width,
+                    collapsedInteractionBounds.height,
                 )
                 hostExpandedForCollapseAnim = false
             }
@@ -472,26 +522,31 @@ fun FloatingDashboard(
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         if (isDraggingMode) {
-                                            val newX = snapToGrid(
+                                            val snappedX = snapToGrid(
                                                 windowParams.x + dragAmount.x,
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(0)
-                                            val newY = snapToGrid(
+                                            ).toInt()
+                                            val snappedY = snapToGrid(
                                                 windowParams.y + dragAmount.y,
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(-100)
-                                            onUpdateWindowPosition(panelId, newX, newY)
+                                            ).toInt()
+                                            val origin = clampFloatingPanelOrigin(
+                                                x = snappedX,
+                                                y = snappedY,
+                                                allowBeyondScreen = floatingPanelsAllowBeyondScreen,
+                                            )
+                                            onUpdateWindowPosition(panelId, origin.x, origin.y)
                                         } else if (isResizingMode) {
                                             val newWidth = snapToGrid(
                                                 (windowParams.width + dragAmount.x)
-                                                    .coerceAtLeast(50f),
+                                                    .coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX.toFloat()),
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(50)
+                                            ).toInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX)
                                             val newHeight = snapToGrid(
                                                 (windowParams.height + dragAmount.y)
-                                                    .coerceAtLeast(50f),
+                                                    .coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX.toFloat()),
                                                 layoutSnapStepPx,
-                                            ).toInt().coerceAtLeast(50)
+                                            ).toInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX)
                                             onUpdateWindowSize(panelId, newWidth, newHeight)
                                         }
                                     },
@@ -536,7 +591,7 @@ fun FloatingDashboard(
                     val localCollapsed = collapsedPanelBounds(
                         expanded = localExpanded,
                         edge = collapseEdge,
-                        thicknessPx = thicknessPx,
+                        thicknessPx = stripThicknessPx,
                     )
                     val visual = lerpPanelBounds(localExpanded, localCollapsed, progress)
                     Modifier
@@ -558,20 +613,30 @@ fun FloatingDashboard(
                         .fillMaxSize()
                         .clip(RoundedCornerShape(panelShapeDp))
                 ) {
-                DashboardPanelBackgroundUnderlay(
-                    relPath = panelBgImagePath,
-                    backgroundColor = panelBgColor,
-                    shapeDp = panelShapeDp,
-                    settingsViewModel = settingsViewModel,
-                )
+                // Collapsed strip must not show panel/tile background through it (or beyond it
+                // when the touch zone is thicker than the strip).
+                if (!effectiveCollapsed) {
+                    DashboardPanelBackgroundUnderlay(
+                        relPath = panelBgImagePath,
+                        backgroundColor = panelBgColor,
+                        shapeDp = panelShapeDp,
+                        settingsViewModel = settingsViewModel,
+                    )
+                }
                 CollapsiblePanelFrame(
                     edge = collapseEdge,
                     collapsed = effectiveCollapsed,
                     stripThicknessDp = normalizePanelCollapseStripThicknessDp(
                         panelConfig.collapseStripThicknessDp,
                     ),
+                    touchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                        panelConfig.collapseTouchZoneThicknessDp,
+                        panelConfig.collapseStripThicknessDp,
+                    ),
                     stripColor = Color(panelConfig.resolveStripColor(currentTheme)),
                     stripExpandedColor = Color(panelConfig.resolveStripExpandedColor(currentTheme)),
+                    collapseOnStripTap = panelConfig.collapseOnStripTap,
+                    collapseOnStripDoubleTap = panelConfig.collapseOnStripDoubleTap,
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
                     modifier = Modifier.fillMaxSize(),
@@ -603,12 +668,10 @@ fun FloatingDashboard(
                         if (isEditMode && !isDraggingMode && !isResizingMode) {
                             if (!WindowModeUiGuard.blockEditingIfActive(context)) {
                                 try {
-                                    context.startActivity(
-                                        MainActivityIntentHelper.createFloatingDashboardTileEditIntent(
-                                            context,
-                                            panelId,
-                                            index
-                                        )
+                                    MainActivityIntentHelper.openForFloatingDashboardTileEdit(
+                                        context,
+                                        panelId,
+                                        index
                                     )
                                 } catch (_: Exception) {
                                 }
@@ -621,6 +684,26 @@ fun FloatingDashboard(
                             sendToggleWiperMaintenance(context)
                         } else if (cfg?.dataKey == PARKING_RADAR_WIDGET_DATA_KEY) {
                             sendToggleParkingRadar(context)
+                        } else if (cfg?.dataKey == REAR_FOG_WIDGET_DATA_KEY) {
+                            sendToggleRearFog(context)
+                        } else if (cfg?.dataKey == AVH_WIDGET_DATA_KEY) {
+                            sendToggleAvh(context)
+                        } else if (cfg?.dataKey == HDC_WIDGET_DATA_KEY) {
+                            sendToggleHdc(context)
+                        } else if (cfg?.dataKey == ESP_OFF_WIDGET_DATA_KEY) {
+                            sendToggleEspOff(context)
+                        } else if (cfg?.dataKey == LDW_WIDGET_DATA_KEY) {
+                            sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LDW)
+                        } else if (cfg?.dataKey == LKA_WIDGET_DATA_KEY) {
+                            sendToggleLaneMode(context, MbCanKnownVehiclePropertyId.LAS_MODE_LKA)
+                        } else if (cfg?.dataKey == TJA_ICA_WIDGET_DATA_KEY) {
+                            sendToggleTjaIca(context)
+                        } else if (cfg?.dataKey == HMA_WIDGET_DATA_KEY) {
+                            sendToggleHma(context)
+                        } else if (cfg?.dataKey == HIGH_BEAM_WIDGET_DATA_KEY) {
+                            sendToggleHma(context)
+                        } else if (cfg?.dataKey == HVAC_AC_MAX_WIDGET_DATA_KEY) {
+                            sendToggleHvacAcMax(context)
                         } else if (cfg?.dataKey == "frontWindscreenHeatWidget") {
                             sendToggleFrontWindscreenHeat(context)
                         } else if (cfg?.dataKey == "rearWindowMirrorsDefrostWidget") {
@@ -659,11 +742,20 @@ fun FloatingDashboard(
                                 propertyId = nextMode.propertyId,
                                 value = nextMode.propertyValue
                             )
+                        } else if (cfg?.dataKey == HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY) {
+                            val next = HeadlightMode.nextInCycle(UniversalCanRepository.headlightModeRaw.value)
+                            sendSetMbCanProperty(
+                                context = context,
+                                propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+                                value = next.rawValue,
+                            )
                         } else if (
                             cfg?.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
                             cfg.launcherAppPackage.isNotBlank()
                         ) {
                             launchAppFromWidget(context, cfg, settingsViewModel)
+                        } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                            openAppListDialog(context)
                         } else if (isFloatingDashboardClickAction) {
                             if (cfg != null && isActiveTripWidgetDataKey(cfg.dataKey)) {
                                 settingsViewModel.saveSelectedTab(SettingsManager.TRIPS_TAB_KEY)

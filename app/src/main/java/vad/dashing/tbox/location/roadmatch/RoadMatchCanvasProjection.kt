@@ -71,6 +71,10 @@ object RoadMatchCanvasProjection {
     const val HEADING_UP_AHEAD_FRACTION = 0.22f
     const val FOLLOW_ZOOM_TAU_SEC = 0.40
     const val FOLLOW_HEADING_TAU_SEC = 0.28
+    /** Chase-camera lag for geographic follow center (same feel as heading). */
+    const val FOLLOW_POS_TAU_SEC = 0.28
+    /** Snap follow center instead of gliding across the map (hard resync / teleport). */
+    const val FOLLOW_POS_SNAP_M = 40.0
 
     /**
      * Follow-mode span from vehicle speed. GNSS and nearby edges do not drive zoom.
@@ -112,6 +116,48 @@ object RoadMatchCanvasProjection {
         return wrapHeadingDeg(from + shortestHeadingDeltaDeg(from, to) * tt)
     }
 
+    /**
+     * Linear blend in local east/north metres (avoids longitude stretch near poles).
+     */
+    fun lerpLatLon(
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        t: Double,
+    ): OverlayLatLon {
+        val tt = t.coerceIn(0.0, 1.0)
+        if (!fromLat.isFinite() || !fromLon.isFinite()) {
+            return OverlayLatLon(toLat, toLon)
+        }
+        if (!toLat.isFinite() || !toLon.isFinite() || tt <= 0.0) {
+            return OverlayLatLon(fromLat, fromLon)
+        }
+        if (tt >= 1.0) return OverlayLatLon(toLat, toLon)
+        val midLat = (fromLat + toLat) * 0.5
+        val cosLat = cos(Math.toRadians(midLat)).coerceAtLeast(0.1)
+        val metres = RoadMatchCanvasViewport.METRES_PER_DEG
+        val eastM = (toLon - fromLon) * metres * cosLat
+        val northM = (toLat - fromLat) * metres
+        return RoadMatchSeedMath.shiftCenter(
+            lat = fromLat,
+            lon = fromLon,
+            eastM = eastM * tt,
+            northM = northM * tt,
+        )
+    }
+
+    fun approxDistanceM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        if (!lat1.isFinite() || !lon1.isFinite() || !lat2.isFinite() || !lon2.isFinite()) {
+            return Double.POSITIVE_INFINITY
+        }
+        val midLat = (lat1 + lat2) * 0.5
+        val eastM = (lon2 - lon1) * RoadMatchCanvasViewport.METRES_PER_DEG *
+            cos(Math.toRadians(midLat))
+        val northM = (lat2 - lat1) * RoadMatchCanvasViewport.METRES_PER_DEG
+        return kotlin.math.hypot(eastM, northM)
+    }
+
     fun followBlendT(dtSec: Double, tauSec: Double): Float {
         val dt = dtSec.takeIf { it.isFinite() && it > 0.0 } ?: return 0f
         val tau = tauSec.takeIf { it.isFinite() && it > 1e-4 } ?: return 1f
@@ -121,6 +167,9 @@ object RoadMatchCanvasProjection {
     /**
      * Follow camera: shadow-centered (or slightly ahead when [aheadFraction] > 0),
      * span from [halfHeightM], optional heading-up rotation.
+     *
+     * [followLat]/[followLon] override the geographic base (smoothed chase center);
+     * when NaN, uses [RoadMatchOverlayState.shadow].
      */
     fun viewport(
         state: RoadMatchOverlayState,
@@ -128,23 +177,27 @@ object RoadMatchCanvasProjection {
         halfHeightM: Double,
         headingDeg: Float = 0f,
         aheadFraction: Float = 0f,
+        followLat: Double = Double.NaN,
+        followLon: Double = Double.NaN,
     ): RoadMatchCanvasViewport? {
         if (!state.shadow.visible) return null
         val heading = headingDeg.takeIf { it.isFinite() } ?: 0f
         val ahead = aheadFraction.takeIf { it.isFinite() }?.coerceIn(0f, 0.6f) ?: 0f
         val safeAspect = aspectRatio.takeIf { it.isFinite() && it > 0.1f } ?: 1f
         val halfHeight = halfHeightM.takeIf { it.isFinite() && it > 0.0 } ?: MIN_HALF_SPAN_M
+        val baseLat = if (followLat.isFinite()) followLat else state.shadow.lat
+        val baseLon = if (followLon.isFinite()) followLon else state.shadow.lon
         val center = if (ahead > 0f) {
             val aheadM = halfHeight * ahead.toDouble()
             val rad = Math.toRadians(heading.toDouble())
             RoadMatchSeedMath.shiftCenter(
-                lat = state.shadow.lat,
-                lon = state.shadow.lon,
+                lat = baseLat,
+                lon = baseLon,
                 eastM = aheadM * sin(rad),
                 northM = aheadM * cos(rad),
             )
         } else {
-            OverlayLatLon(state.shadow.lat, state.shadow.lon)
+            OverlayLatLon(baseLat, baseLon)
         }
         return RoadMatchCanvasViewport(
             centerLat = center.lat,

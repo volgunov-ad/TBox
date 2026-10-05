@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX
 import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -71,7 +73,10 @@ import vad.dashing.tbox.CanFrame
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
+import vad.dashing.tbox.ui.theme.TextSizeRole
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -358,6 +363,7 @@ fun ModeButton(
 @Composable
 fun TabMenuItem(
     title: String,
+    iconKey: String,
     icon: ImageVector,
     selected: Boolean,
     showText: Boolean,
@@ -392,8 +398,9 @@ fun TabMenuItem(
             horizontalArrangement = if (showText) Arrangement.Start else Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
+            CustomizableUiIcon(
+                iconKey = iconKey,
+                fallback = icon,
                 contentDescription = title,
                 tint = textColor,
                 modifier = Modifier.size(iconSize)
@@ -403,10 +410,14 @@ fun TabMenuItem(
                     text = title,
                     color = textColor,
                     textAlign = TextAlign.Left,
-                    modifier = Modifier.padding(start = 12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
                     style = MaterialTheme.typography.tboxTabLabel.copy(
                         lineHeight = MaterialTheme.typography.tboxTabLabel.fontSize * 1.1f,
                     ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -438,7 +449,7 @@ fun AppAlertDialogTitle(text: String) {
     )
 }
 
-/** Основной текст диалога: как поля поездок/заправок (24 sp). */
+/** Основной текст диалога: роль Title (~26 sp), как у соседних AlertDialog. */
 @Composable
 fun AppAlertDialogText(text: String) {
     Text(
@@ -580,7 +591,7 @@ fun SettingSwitchWithAction(
         ) {
             Text(
                 text = actionText,
-                style = MaterialTheme.typography.tboxBody,
+                style = MaterialTheme.typography.tboxButton,
             )
         }
     }
@@ -773,6 +784,103 @@ fun SettingAppFontFamily(
 }
 
 @Composable
+fun SettingTextSizeScales(
+    scales: TboxTextSizeScales,
+    onScalesChange: (TboxTextSizeScales) -> Unit,
+    enabled: Boolean = true,
+) {
+    val roles = TextSizeRole.entries
+    val steps = ((TboxTextSizeScales.MAX - TboxTextSizeScales.MIN) / TboxTextSizeScales.STEP).roundToInt() - 1
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_text_size_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_text_size_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        roles.forEach { role ->
+            val value = scales.scaleFor(role)
+            val previewStyle = when (role) {
+                TextSizeRole.Caption -> MaterialTheme.typography.tboxCaption
+                TextSizeRole.Body -> MaterialTheme.typography.tboxBody
+                TextSizeRole.Button -> MaterialTheme.typography.tboxButton
+                TextSizeRole.Title -> MaterialTheme.typography.tboxTitle
+                TextSizeRole.Headline -> MaterialTheme.typography.tboxHeadline
+                TextSizeRole.TabLabel -> MaterialTheme.typography.tboxTabLabel
+                TextSizeRole.WidgetTitle -> LocalTboxTextStyles.current.WidgetTitle
+                TextSizeRole.WidgetValue -> LocalTboxTextStyles.current.WidgetValue
+                TextSizeRole.WidgetUnit -> LocalTboxTextStyles.current.WidgetUnit
+            }
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = textSizeRoleLabel(role),
+                        style = previewStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_text_size_value,
+                            value,
+                        ),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Slider(
+                    value = value,
+                    onValueChange = { onScalesChange(scales.withRole(role, it)) },
+                    valueRange = TboxTextSizeScales.MIN..TboxTextSizeScales.MAX,
+                    steps = steps.coerceAtLeast(0),
+                    enabled = enabled,
+                )
+            }
+        }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { onScalesChange(TboxTextSizeScales.Default) },
+            enabled = enabled && scales != TboxTextSizeScales.Default,
+            modifier = Modifier.padding(top = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_text_size_reset),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+    }
+}
+
+@Composable
+private fun textSizeRoleLabel(role: TextSizeRole): String = stringResource(
+    when (role) {
+        TextSizeRole.Caption -> R.string.settings_text_size_caption
+        TextSizeRole.Body -> R.string.settings_text_size_body
+        TextSizeRole.Button -> R.string.settings_text_size_button
+        TextSizeRole.Title -> R.string.settings_text_size_title_role
+        TextSizeRole.Headline -> R.string.settings_text_size_headline
+        TextSizeRole.TabLabel -> R.string.settings_text_size_tab_label
+        TextSizeRole.WidgetTitle -> R.string.settings_text_size_widget_title
+        TextSizeRole.WidgetValue -> R.string.settings_text_size_widget_value
+        TextSizeRole.WidgetUnit -> R.string.settings_text_size_widget_unit
+    },
+)
+
+@Composable
 fun <T> GenericDropdownSelector(
     selectedValue: T,
     options: List<T>,
@@ -893,7 +1001,9 @@ fun SettingInt(
 }
 
 /**
- * Integer setting controlled by a Material3 [Slider] (1-unit steps), same title/hint layout as scale.
+ * Integer setting controlled by a Material3 [Slider].
+ *
+ * [step] is the value increment (default 1). Title/hint layout matches other setting rows.
  */
 @Composable
 fun SettingSliderInt(
@@ -904,10 +1014,17 @@ fun SettingSliderInt(
     minValue: Int,
     maxValue: Int,
     enabled: Boolean = true,
+    step: Int = 1,
 ) {
+    val safeStep = step.coerceAtLeast(1)
     val safeMin = minOf(minValue, maxValue)
     val safeMax = maxOf(minValue, maxValue)
-    val steps = (safeMax - safeMin - 1).coerceAtLeast(0)
+    val rangeSpan = safeMax - safeMin
+    val steps = if (safeStep <= 1) {
+        (rangeSpan - 1).coerceAtLeast(0)
+    } else {
+        ((rangeSpan / safeStep) - 1).coerceAtLeast(0)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -927,7 +1044,14 @@ fun SettingSliderInt(
         }
         Slider(
             value = value.coerceIn(safeMin, safeMax).toFloat(),
-            onValueChange = { onValueChange(it.roundToInt().coerceIn(safeMin, safeMax)) },
+            onValueChange = { raw ->
+                val snapped = if (safeStep <= 1) {
+                    raw.roundToInt()
+                } else {
+                    ((raw / safeStep).roundToInt() * safeStep)
+                }.coerceIn(safeMin, safeMax)
+                onValueChange(snapped)
+            },
             valueRange = safeMin.toFloat()..safeMax.toFloat(),
             steps = steps,
             enabled = enabled,
@@ -1015,9 +1139,9 @@ fun LogsCard(
         }
     }
 
-    LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty()) {
-            listState.animateScrollToItem(logs.size - 1)
+    LaunchedEffect(filteredLogs.size) {
+        if (filteredLogs.isNotEmpty()) {
+            listState.animateScrollToItem(filteredLogs.lastIndex)
         }
     }
 
@@ -1373,13 +1497,13 @@ fun FloatingDashboardPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
     }
@@ -1452,13 +1576,13 @@ fun MainScreenPanelEditor(
                 )
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
-                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
             }
             Button(
                 onClick = rememberWrappedOnClick { onDeletePanel(effectiveId) },
                 enabled = enabled && deleteInProgressPanelId != effectiveId
             ) {
-                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxBody)
+                Text(stringResource(R.string.action_delete), style = MaterialTheme.typography.tboxButton)
             }
         }
     }
@@ -1515,6 +1639,9 @@ fun FloatingDashboardPositionSizeSettings(
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
     val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
     val floatingDashboardStartY by settingsViewModel.floatingDashboardStartY.collectAsStateWithLifecycle()
+    val allowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val originMin = if (allowBeyondScreen) FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX else 0
 
     GeometryWhxyCommitBlock(
         widthLabel = stringResource(R.string.floating_panel_width_px),
@@ -1525,10 +1652,10 @@ fun FloatingDashboardPositionSizeSettings(
         savedHeight = floatingDashboardHeight,
         savedX = floatingDashboardStartX,
         savedY = floatingDashboardStartY,
-        minWidth = 50,
-        minHeight = 50,
-        minX = 0,
-        minY = 0,
+        minWidth = MIN_FLOATING_PANEL_SIZE_PX,
+        minHeight = MIN_FLOATING_PANEL_SIZE_PX,
+        minX = originMin,
+        minY = originMin,
         enabled = enabled,
         modifier = modifier,
         onCommit = { w, h, x, y ->

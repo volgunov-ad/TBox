@@ -41,12 +41,15 @@ import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.DashboardManager
+import vad.dashing.tbox.ui.theme.LocalTboxTextSizeScales
 import vad.dashing.tbox.ui.theme.LocalTboxTextStyles
 import vad.dashing.tbox.ui.theme.TboxWidgetTextRole
 import vad.dashing.tbox.ui.theme.TboxWidgetTypography
 import kotlin.math.abs
 
+val LocalWidgetTitleScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 val LocalWidgetTextScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
+val LocalWidgetIconScale = staticCompositionLocalOf { DEFAULT_WIDGET_SCALE }
 val LocalWidgetTextAlign = staticCompositionLocalOf { TextAlign.Center }
 val LocalWidgetFontWeight = staticCompositionLocalOf { FontWeight.Medium }
 val LocalWidgetTitlePosition = staticCompositionLocalOf { 0 }
@@ -134,6 +137,7 @@ fun DashboardWidgetItem(
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = displayTitle,
@@ -176,6 +180,7 @@ fun DashboardWidgetItem(
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
                     textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = displayTitle,
@@ -226,6 +231,7 @@ fun ColumnScope.DashboardWidgetTitleRowIfVisible(
     val titleStyle = calculateResponsiveTextStyle(
         containerHeight = availableHeight,
         textType = TextType.TITLE,
+        forWidgetTitle = true,
     )
     Text(
         text = titleText,
@@ -286,10 +292,22 @@ fun DashboardWidgetContentWithOptionalTitle(
 fun calculateResponsiveTextStyle(
     containerHeight: Dp,
     textType: TextType = TextType.VALUE,
+    /**
+     * When true, apply [LocalWidgetTitleScale] (tile title row only).
+     * All other text — including [TextType.TITLE] for values/labels — uses [LocalWidgetTextScale].
+     */
+    forWidgetTitle: Boolean = false,
 ): TextStyle {
-    val textScale = normalizeWidgetScale(LocalWidgetTextScale.current)
+    val scale = normalizeWidgetScale(
+        if (forWidgetTitle) {
+            LocalWidgetTitleScale.current
+        } else {
+            LocalWidgetTextScale.current
+        }
+    )
     val role = textType.toWidgetRole()
     val styles = LocalTboxTextStyles.current
+    val globalRoleScale = LocalTboxTextSizeScales.current.forWidgetRole(role)
     val baseStyle = when (role) {
         TboxWidgetTextRole.TITLE -> styles.WidgetTitle
         TboxWidgetTextRole.VALUE -> styles.WidgetValue
@@ -299,7 +317,8 @@ fun calculateResponsiveTextStyle(
         containerHeightDp = containerHeight.value,
         role = role,
         baseStyle = baseStyle,
-        textScale = textScale,
+        textScale = scale,
+        globalRoleScale = globalRoleScale,
     ).copy(fontWeight = LocalWidgetFontWeight.current)
 }
 

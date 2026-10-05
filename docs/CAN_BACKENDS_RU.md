@@ -6,7 +6,9 @@
 - **Android 10**: через `android.car` / VHAL (`CarPropertyManager`).
 
 Таблицы всех **используемых** property (чтение/запись, raw-декод, push/pull): [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md).  
-Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).
+Сводная таблица **scale/offset** формул (TBox + mbCAN + VHAL): [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md).  
+Каталог штатных APK / package name прошивки **Android 9 mbCAN** (X50 V000000279): [STOCK_APPS_ANDROID9_MBCAN_RU.md](STOCK_APPS_ANDROID9_MBCAN_RU.md).  
+Каталог штатных APK / package name прошивки **Android 10 VHAL** (Adayo): [STOCK_APPS_ANDROID10_VHAL_RU.md](STOCK_APPS_ANDROID10_VHAL_RU.md).
 
 ### Пометка про «Android 10» (Adayo)
 
@@ -51,6 +53,7 @@
 - `TboxApplication` и UI настроек подписываются на `headUnitCanModeFlow` и вызывают `UniversalCanRepository.setMode(...)`;
 - **`bind()` и автоfallback `autoResolveModeOnStartup()` выполняются в `BackgroundService.onCreate`** — только там поднимается реальное подключение к mbCAN/VHAL;
 - в UI переключатель находится в настройках (две кнопки: Android 9 / Android 10);
+- при выбранном **Android 10** дополнительно показывается **«Запускать TBox Monitor в окне приложений»** (`launch_main_in_stock_app_window`, по умолчанию **вкл.**): программные открытия `MainActivity` (автозапуск главного экрана, плавающие панели, возврат из плеера, выход из freeform □, виджеты через router, broadcast `show` и т.п.) идут через `com.adayo.launcher.LAUNCH_APP` → ActivityView; выкл. — прямой fullscreen. Системный ярлык / недавние не перехватываются. Код: `MainActivityIntentHelper.bringToFront`, `LaunchMainInStockAppWindowSetting`, `AdayoStockAppWindow`;
 - `can_auto_bind_enabled` по умолчанию **включён** (отдельного переключателя в UI нет);
 - если режим в DataStore не задан, используется **Android 9 (mbCAN)**.
 
@@ -96,10 +99,13 @@
   `sourceId` — идентификатор экрана/панели; `widgetKeys` — набор `dataKey` активных виджетов.
 - `setSourceSignals(sourceId: String, signals: Set<MbCanSignal>)`  
   Явная подписка на сигналы (например, `AudioVolume`, `EngineRpm`), когда нужно не через `dataKey`.
+- `refreshSignalsNow(signals: Collection<MbCanSignal>)` *(suspend)*  
+  Немедленный последовательный pull (видимая секция «Настройки авто»). Native/VHAL get остаётся на apply-потоке.
 - `execute(command: MbCanCommand): MbCanCommandResult`  
-  `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.
+  `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.  
+  На A9 (`MbCanRepository`) native get/set идут на `mbcan-state-apply` (не main): Car Settings может звать `execute` с Main. VHAL не переключается.
 - `setAudioVolume(value: Int): MbCanCommandResult`  
-  `value` — целевая громкость.
+  `value` — целевая громкость. На A9 тоже native get/set на `mbcan-state-apply`.
 - `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
   выполняет автоfallback `3+3` на старте.
 - `enqueueClearSource(sourceId: String)`  
@@ -112,6 +118,8 @@
 ---
 
 ## 3) Как работает Android 9 backend (`MbCanRepository`)
+
+**Жёсткие ограничения JNI (нагрузка / SIGABRT):** см. [MBCAN_JNI_THREADING_RU.md](MBCAN_JNI_THREADING_RU.md). Кратко: OEM get/set **не** с main и **не** чаще poll `MbCanJobManager`; mixer ≠ mbCAN.
 
 Доступ к vendor API идёт через **reflection** (`MbCanEngineFacade`), а не через прямой compile-time import классов mbCAN.
 
@@ -162,7 +170,8 @@
   Включает callback `onVehicleEngineStatusChange(MBCanVehicleEngine)` (и др. telemetry push).  
   **Важно (A9):** в callback только разбор payload; повторный `getMbCanData` / `read*` запрещён — при «нет данных» (IFC=0, DTE≤0, sentinel температуры) re-entrant binder ломал push/CFG. Актуальные значения без поля в push — через poll `MbCanJobManager`.
 - `MbCanEngineFacade.canGetVehicleParam(propertyId: Int): Int?` / `canSetVehicleParam(propertyId: Int, value: Int): Int?`
-- `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`
+- `MbCanEngineFacade.canGetAudioParam(propertyId: Int): Int?` / `canSetAudioParam(propertyId: Int, value: Int): Int?`  
+  OEM JNI **не thread-safe**: get/set сериализуются lock’ом в фасаде и должны вызываться с `mbcan-state-apply` (как `refreshSignal` и `MbCanRepository.execute` / `setAudioVolume`), **не с main**. Подголовник A9 (`PlatformAudioRepository`) уходит туда же; mixer OpenOS — отдельный poll **500 ms**, не mbCAN.
 - `MbCanEngineFacade.readVehicleEngineRpm(): Float?`  
   Читает RPM через `getMbCanData(22, MBCanVehicleEngine.class)` и `MBCanVehicleEngine.getfSpeed()` (только poll / не из push-callback).
 
@@ -238,7 +247,10 @@
 
 Детали регистрации:
 
-- `rateHz` выбирается по типу property (`on-change`/`continuous`) и пробуется с fallback-наборами (`0.0/1.0/5.0`);
+- `rateHz` выбирается по типу property через `VhalPushRatePolicy`:
+  - телеметрия (RPM/скорость/руль/темп. двигателя) — continuous `1 Hz`, fallback `5 Hz`;
+  - дискретные переключатели (ADAS LDW/TJA/HMA, HVAC, багажник, …) — **только on-change `0.0f`**,
+    без эскалации до 1/5 Hz (иначе панели с этими виджетами держат binder-трафик даже на стоянке);
 - перед подпиской логируется конфиг property (`changeMode/access/minRate/maxRate/areaIds`);
 - proxy-listener явно обрабатывает `hashCode/equals/toString`, чтобы исключить NPE при `registerListener` на некоторых HU-сборках.
 
@@ -270,6 +282,19 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - `TripTelemetryRepository` раз в **15 с** всегда пишет DEBUG с тегом `TripFuel` (источник HU/TBox по сигналам учёта поездок/заправок + текущие значения trip-репо) — **не** зависит от флага диагностики CAN;
 - жизненный цикл поездок (`start` / `resume` / `end` / …) пишет DEBUG с тегом `Trip` через `TboxRepository`, тоже без флага диагностики;
 - флаг диагностики сессионный (не сохраняется между перезапусками `BackgroundService`).
+
+#### 4.6.1 Расширенная диагностика (`ACTION_SET_MBCAN_DEEP_DIAGNOSTICS`)
+
+Отдельный сессионный режим «Расширенная диагностика mbCAN/VHAL» (тумблер в настройках рядом с обычной диагностикой, только в экспертном режиме). Включение автоматически включает и обычную диагностику; выключение обычной диагностики выключает и расширенную.
+
+Что делает (только чтение, ничего не пишет в автомобиль):
+
+- единый источник списков — `DeepDiagnosticsCatalog`;
+- **A10 (VHAL)**: подписывает все property id из каталога (константы `FirmwareVehicleJsonMapper` + `explicitReadIdMap` + экспериментальные id) через отдельный deep-listener (не рабочий `syncPushSubscriptions`), порциями по 10 id с паузой 500 мс, rate = on-change (`0.0f`);
+- **A9 (mbCAN)**: подписывает все `MBCanDataType` из каталога через refcount `MbCanJobManager.setDeepTypes`; неизвестные OEM-сборке имена отбрасываются с WARN; raw `onCmdChanged` для не-CFG типов приходит через отдельные `IMBCmdListener`-прокси (`startDeepCmdListeners`) — **но OEM `registCMDListener` реально хранит listeners только для CFG_***; для `eMBCAN_VEHICLE_DOOR` / `eMBCAN_SEAT_BELT_STATUS` deep включает typed path (`registCarDorListener` + poll `getMbCanData`); для `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` — fan-out из production-листенеров (`setCfgCmdDeepDiagnosticListener`), потому что OEM `unRegistCMDListener(type)` чистит тип целиком; object-снимки пишутся как `mbcan dt=… object=…`;
+- события пишутся в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` через `DeepCanDiagnostics` (машиночитаемый формат `propertyId=… areaId=… value=… type=… status=… name=…` / `dt=… modular=… rev=… item=… value=… name=…` / `dt=… object=…`), с delta-фильтром, окнами коалессинга 1 с (дискретные) / 5 с (быстрая телеметрия), кольцевым буфером 3000 строк и счётчиком `suppressed=`;
+- write-only `T_*` id (импульсы MFS, SLA req) в каталоге намеренно отсутствуют.
+- **A10 deep experimental** также включает CEM door ajar / hood / lock и ICM/ABM seat-belt property id (см. `DeepDiagnosticsCatalog.vhalExperimentalIdNames`).
 
 Логи `VHAL_A10` содержат:
 
@@ -349,8 +374,6 @@ Polling остаётся fallback-механизмом: даже при push-с�
 `FloatingDashboardWidgetConfig.useMbCanVhal` доступен только для типов, перечисленных в
 `WidgetsRepository.supportsUseMbCanVhal(...)`:
 
-- `mediaVolumeWidgetHorizontal`
-- `mediaVolumeWidgetVertical`
 - `engineRPM`
 - `engineTemperature`
 - `carSpeed`
@@ -374,10 +397,6 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Какие именно сигналы и функции используются:
 
-- `mediaVolumeWidgetHorizontal` / `mediaVolumeWidgetVertical`
-  - interest: `MbCanSignal.AudioVolume`
-  - чтение: `UniversalCanRepository.audioVolumeState`
-  - запись: `UniversalCanRepository.setAudioVolume(value: Int)`
 - `engineRPM`
   - interest: `MbCanSignal.EngineRpm`
   - чтение: `UniversalCanRepository.engineRpmState`
@@ -421,6 +440,11 @@ Polling остаётся fallback-механизмом: даже при push-с�
   - interest: `MbCanSignal.SteeringAngle`
   - чтение: `UniversalCanRepository.steerAngleState` / `steerSpeedState`
     (A9: угол+скорость; A10: угол из `MCU_REPLY_STEERING_WHEEL_ANGLE`, `steerSpeed` null)
+
+Отдельно от `useMbCanVhal`: виджет `averageFuelConsumption` выбирает источник в «Дополнительно»
+(`avgFuelConsumptionSource`): mbCAN/VHAL (кластерный ICM_4, interest `MbCanSignal.AverageFuelConsumption`),
+текущая поездка или суточная поездка. Флаг `useMbCanVhal` для этого типа не показывается.
+
 Полный список штатных VHAL push-подписок (ID/имена), извлечённый из `CarSettings`/`AirConditioning`/`Launcher`,
 сохранён отдельно: `docs/STOCK_PUSH_SUBSCRIPTIONS_RU.md`.
 

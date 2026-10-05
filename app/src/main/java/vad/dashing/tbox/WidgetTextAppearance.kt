@@ -44,16 +44,39 @@ const val MIN_PANEL_LAYOUT_SNAP_DP = 1
 const val MAX_PANEL_LAYOUT_SNAP_DP = 50
 
 /** Minimum relative size for main-screen panels (width/height as fraction of container). */
-const val MIN_MAIN_SCREEN_PANEL_REL_FRACTION = 0.03f
+const val MIN_MAIN_SCREEN_PANEL_REL_FRACTION = 0.02f
 
 /** Same floor as [MIN_MAIN_SCREEN_PANEL_REL_FRACTION], in percent for settings UI. */
-const val MIN_MAIN_SCREEN_PANEL_REL_PERCENT = 3
+const val MIN_MAIN_SCREEN_PANEL_REL_PERCENT = 2
+
+/** Minimum floating-panel width/height in px (settings input and edit-mode resize). */
+const val MIN_FLOATING_PANEL_SIZE_PX = 25
+
+/**
+ * Soft floor for manual X/Y when “allow beyond screen” is on (gesture drag has no floor).
+ * Keeps GeometryWhxyCommitBlock range checks finite.
+ */
+const val FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX = -100_000
 
 /**
  * Layout guide grid on the main screen is drawn only when snap step is strictly greater than this
  * (dp) and the “show grid” setting is on.
  */
 const val MAIN_SCREEN_LAYOUT_GRID_MIN_SNAP_DP_EXCLUSIVE = 5
+
+/** Pixel origin for a floating overlay after optional screen-edge floor. */
+data class FloatingPanelOriginPx(val x: Int, val y: Int)
+
+/**
+ * When [allowBeyondScreen] is false, floors X/Y at 0 (left/top screen edge).
+ * When true, returns [x]/[y] unchanged so panels can sit past screen edges.
+ */
+fun clampFloatingPanelOrigin(x: Int, y: Int, allowBeyondScreen: Boolean): FloatingPanelOriginPx =
+    if (allowBeyondScreen) {
+        FloatingPanelOriginPx(x = x, y = y)
+    } else {
+        FloatingPanelOriginPx(x = x.coerceAtLeast(0), y = y.coerceAtLeast(0))
+    }
 
 fun normalizeWidgetTextAlign(raw: Int): Int =
     raw.coerceIn(WIDGET_TEXT_ALIGN_CENTER, WIDGET_TEXT_ALIGN_END)
@@ -87,10 +110,11 @@ fun maybeSnapToGrid(value: Float, stepPx: Float): Float {
 
 /** Default title position when the field is absent from persisted JSON. */
 fun resolveDefaultTitlePositionForDataKey(dataKey: String): Int =
-    if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
-        WIDGET_TITLE_POSITION_BOTTOM
-    } else {
-        DEFAULT_WIDGET_TITLE_POSITION
+    when (dataKey) {
+        APP_LAUNCHER_WIDGET_DATA_KEY,
+        APP_LIST_WIDGET_DATA_KEY,
+        -> WIDGET_TITLE_POSITION_BOTTOM
+        else -> DEFAULT_WIDGET_TITLE_POSITION
     }
 
 fun FloatingDashboardWidgetConfig.effectiveTitlePosition(): Int =

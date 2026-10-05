@@ -39,6 +39,8 @@ object CompanionProtocolLogRecorder {
 
     data class UiState(
         val recording: Boolean = false,
+        /** Session toggle: write mbCAN/VHAL UI + push markers into the protocol log. Default off. */
+        val huMarksEnabled: Boolean = false,
         val filePath: String? = null,
         val events: Int = 0,
         val lastError: String? = null,
@@ -51,11 +53,15 @@ object CompanionProtocolLogRecorder {
     private var appContext: Context? = null
     private var scope: CoroutineScope? = null
     private var flushJob: Job? = null
+    /** Single in-flight flush coroutine; append must not spawn IO per line. */
+    @Volatile private var flushInFlight: Boolean = false
     private val writeMutex = Mutex()
     private val pending = StringBuilder(FLUSH_BYTES + 4_096)
+    private val pendingLock = Any()
     private var outFile: File? = null
     private var flushedBytes: Long = 0L
     private var partIndex: Int = 1
+    private var eventsPendingUi: Int = 0
 
     fun attach(context: Context, scope: CoroutineScope) {
         this.appContext = context.applicationContext
@@ -64,24 +70,40 @@ object CompanionProtocolLogRecorder {
 
     fun isRecording(): Boolean = _ui.value.recording
 
+    fun isHuMarksEnabled(): Boolean = _ui.value.huMarksEnabled
+
+    /** Session-only; default off. Survives start/stop of a recording within the process. */
+    fun setHuMarksEnabled(enabled: Boolean) {
+        _ui.value = _ui.value.copy(huMarksEnabled = enabled)
+    }
+
     fun start(): Boolean {
         if (_ui.value.recording) return false
         val ctx = appContext ?: return false
         val sc = scope ?: return false
         val file = createLogFile(ctx) ?: run {
-            _ui.value = UiState(lastError = "cannot create file")
+            _ui.value = _ui.value.copy(
+                recording = false,
+                filePath = null,
+                events = 0,
+                lastError = "cannot create file",
+                autoStopped = false,
+            )
             return false
         }
         outFile = file
         pending.clear()
         flushedBytes = 0L
         partIndex = 1
-        _ui.value = UiState(
+        val marks = _ui.value.huMarksEnabled
+        _ui.value = _ui.value.copy(
             recording = true,
             filePath = file.absolutePath,
             events = 0,
+            lastError = null,
+            autoStopped = false,
         )
-        pending.append(fileHeader(continuedFrom = null))
+        pending.append(fileHeader(continuedFrom = null, huMarks = marks))
         sc.launch(Dispatchers.IO) { flushPending() }
         flushJob?.cancel()
         flushJob = sc.launch(Dispatchers.IO) {
@@ -138,40 +160,60 @@ object CompanionProtocolLogRecorder {
 
     /**
      * Append one protocol line. Caller filters (skip heartbeat; throttle gps).
+     * Buffers on the caller thread; disk flush is coalesced (size threshold or 1s job).
      */
     fun append(direction: CompanionLogDirection, text: String) {
         if (!_ui.value.recording) return
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
-        val ctx = appContext ?: return
-        val sc = scope ?: return
         val dir = if (direction == CompanionLogDirection.TX) "TX" else "RX"
-        val line = "${formatWall(System.currentTimeMillis())} $dir $trimmed\n"
+        appendLine("${formatWall(System.currentTimeMillis())} $dir $trimmed\n")
+    }
+
+    /**
+     * HU mbCAN/VHAL marker line (`MARK UI …` / `MARK PUSH …`).
+     * Written only while recording and [isHuMarksEnabled].
+     */
+    fun appendMark(kind: String, detail: String) {
+        if (!_ui.value.recording || !_ui.value.huMarksEnabled) return
+        val k = kind.trim()
+        val d = detail.trim()
+        if (k.isEmpty() || d.isEmpty()) return
+        appendLine("${formatWall(System.currentTimeMillis())} MARK $k $d\n")
+    }
+
+    private fun appendLine(line: String) {
+        val needFlush: Boolean
+        val bump: Int
+        synchronized(pendingLock) {
+            pending.append(line)
+            eventsPendingUi++
+            needFlush = pending.length >= FLUSH_BYTES
+            bump = eventsPendingUi
+            eventsPendingUi = 0
+        }
+        if (bump > 0) {
+            _ui.value = _ui.value.copy(events = _ui.value.events + bump)
+        }
+        if (needFlush) {
+            requestFlush()
+        }
+    }
+
+    private fun requestFlush() {
+        if (!_ui.value.recording) return
+        val sc = scope ?: return
+        if (flushInFlight) return
+        flushInFlight = true
         sc.launch(Dispatchers.IO) {
-            var rotateFailed = false
-            writeMutex.withLock {
-                val nextBytes = GeoDebugLogRotate.utf8Bytes(line)
-                val pendingBytes = GeoDebugLogRotate.utf8Bytes(pending)
-                if (GeoDebugLogRotate.shouldRotate(
-                        flushedBytes,
-                        pendingBytes,
-                        nextBytes,
-                        MAX_FILE_BYTES,
-                    )
-                ) {
-                    rotateFailed = !rotateFileLocked(ctx)
+            try {
+                flushPending()
+            } finally {
+                flushInFlight = false
+                val stillFull = synchronized(pendingLock) { pending.length >= FLUSH_BYTES }
+                if (stillFull && _ui.value.recording) {
+                    requestFlush()
                 }
-                if (!rotateFailed) {
-                    pending.append(line)
-                    if (pending.length >= FLUSH_BYTES) {
-                        flushPendingLocked()
-                    }
-                }
-            }
-            if (rotateFailed) {
-                withContext(Dispatchers.Main) { stop(auto = true) }
-            } else {
-                _ui.value = _ui.value.copy(events = _ui.value.events + 1)
             }
         }
     }
@@ -200,10 +242,14 @@ object CompanionProtocolLogRecorder {
     }
 
     private fun flushPendingLocked() {
-        if (pending.isEmpty()) return
+        val chunk: String
+        synchronized(pendingLock) {
+            if (pending.isEmpty()) return
+            chunk = pending.toString()
+            pending.clear()
+        }
         val file = outFile ?: return
-        val bytes = pending.toString().toByteArray(StandardCharsets.UTF_8)
-        pending.clear()
+        val bytes = chunk.toByteArray(StandardCharsets.UTF_8)
         try {
             FileOutputStream(file, true).use { fos ->
                 fos.write(bytes)
@@ -215,7 +261,7 @@ object CompanionProtocolLogRecorder {
         }
     }
 
-    private fun fileHeader(continuedFrom: String?): String {
+    private fun fileHeader(continuedFrom: String?, huMarks: Boolean): String {
         val cont = if (continuedFrom.isNullOrBlank()) {
             ""
         } else {
@@ -225,6 +271,7 @@ object CompanionProtocolLogRecorder {
             "# started=${formatWall(System.currentTimeMillis())}\n" +
             "# appVer=${BuildConfig.VERSION_NAME}\n" +
             "# maxFileBytes=$MAX_FILE_BYTES part=$partIndex\n" +
+            "# huMarks=${if (huMarks) "on" else "off"}\n" +
             cont +
             "\n"
     }
@@ -240,7 +287,7 @@ object CompanionProtocolLogRecorder {
         outFile = next
         flushedBytes = 0L
         partIndex += 1
-        pending.append(fileHeader(continuedFrom = prev.name))
+        pending.append(fileHeader(continuedFrom = prev.name, huMarks = _ui.value.huMarksEnabled))
         flushPendingLocked()
         _ui.value = _ui.value.copy(filePath = next.absolutePath)
         TboxRepository.addLog(

@@ -53,6 +53,47 @@ object UsbUartBridgeInit {
         }
     }
 
+    /**
+     * DTR/RTS without reopening the device. CP210x/CH340/FTDI use vendor requests;
+     * a following CDC SET_CONTROL_LINE_STATE is still useful when a COMM interface exists.
+     */
+    fun setDtrRts(
+        device: UsbDevice,
+        connection: UsbDeviceConnection,
+        interfaceId: Int,
+        dtr: Boolean,
+        rts: Boolean,
+    ): Boolean {
+        return when (device.vendorId and 0xFFFF) {
+            VID_SILABS -> {
+                val value = (if (dtr) 0x0101 else 0x0100) or (if (rts) 0x0202 else 0x0200)
+                controlOutCp(connection, request = 0x07, value = value, index = interfaceId, data = null)
+                true
+            }
+            VID_QINHENG -> {
+                var bits = 0
+                if (dtr) bits = bits or 0x20
+                if (rts) bits = bits or 0x40
+                // CH340 modem register is active-low (same encoding as init).
+                controlOutCh(connection, request = 0xa4, value = bits.inv() and 0xFFFF, index = 0)
+                true
+            }
+            VID_FTDI -> {
+                val portIndex = interfaceId + 1
+                val value = (if (dtr) 0x0101 else 0x0100) or (if (rts) 0x0202 else 0x0200)
+                val reqOut = UsbConstants.USB_TYPE_VENDOR or UsbConstants.USB_DIR_OUT
+                controlVendor(connection, reqOut, request = 1, value = value, index = portIndex, data = null)
+                true
+            }
+            VID_PROLIFIC -> {
+                val value = (if (dtr) 0x01 else 0) or (if (rts) 0x02 else 0)
+                controlVendor(connection, 0x21, request = 0x22, value = value, index = 0, data = null)
+                true
+            }
+            else -> false
+        }
+    }
+
     fun needsFtdiStatusFilter(vendorId: Int): Boolean =
         (vendorId and 0xFFFF) == VID_FTDI
 

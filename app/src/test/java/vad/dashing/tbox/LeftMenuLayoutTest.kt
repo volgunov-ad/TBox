@@ -23,6 +23,9 @@ class LeftMenuLayoutTest {
             ),
             enabled,
         )
+        assertFalse(
+            layout.rows.first { it.field == LeftMenuTabField.AUTOMATIONS }.enabled,
+        )
         assertEquals(LeftMenuTabField.defaultOrder().size, layout.rows.size)
     }
 
@@ -34,6 +37,16 @@ class LeftMenuLayoutTest {
     @Test
     fun parse_corrupt_returnsDefault() {
         assertEquals(LeftMenuLayout.default(), LeftMenuLayout.parse("{not json"))
+    }
+
+    @Test
+    fun parse_legacyLayout_appendsAutomationsDisabled() {
+        val parsed = LeftMenuLayout.parse(
+            """{"rows":[{"id":"settings","enabled":true}]}""",
+        )
+
+        val row = parsed.rows.first { it.field == LeftMenuTabField.AUTOMATIONS }
+        assertFalse(row.enabled)
     }
 
     @Test
@@ -90,6 +103,7 @@ class LeftMenuLayoutTest {
     @Test
     fun parseSelectedTabKey_acceptsValidKeys() {
         assertEquals(LeftMenuTabField.TRIPS.id, LeftMenuLayout.parseSelectedTabKey("trips"))
+        assertEquals(LeftMenuTabField.AUTOMATIONS.id, LeftMenuLayout.parseSelectedTabKey("automations"))
         assertEquals(SettingsManager.MAIN_SCREEN_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.MAIN_SCREEN_TAB_KEY))
         assertEquals(SettingsManager.UPDATE_TAB_KEY, LeftMenuLayout.parseSelectedTabKey(SettingsManager.UPDATE_TAB_KEY))
     }
@@ -104,15 +118,18 @@ class LeftMenuLayoutTest {
     }
 
     @Test
-    fun applyNoTboxConnectDisable_disablesModemAtCanCarData() {
-        val withModem = LeftMenuLayout(
+    fun applyNoTboxConnectDisable_disablesAtCanCarDataAndEnablesModem() {
+        val withModemOff = LeftMenuLayout(
             LeftMenuTabField.defaultOrder().map { field ->
-                LeftMenuLayout.Row(field, enabled = true)
+                LeftMenuLayout.Row(
+                    field,
+                    enabled = field != LeftMenuTabField.MODEM,
+                )
             },
         )
-        val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModem)
+        assertFalse(withModemOff.rows.first { it.field == LeftMenuTabField.MODEM }.enabled)
+        val disabled = LeftMenuLayout.applyNoTboxConnectDisable(withModemOff)
         for (field in listOf(
-            LeftMenuTabField.MODEM,
             LeftMenuTabField.AT_COMMANDS,
             LeftMenuTabField.CAN,
             LeftMenuTabField.CAR_DATA,
@@ -120,6 +137,8 @@ class LeftMenuLayoutTest {
             assertFalse(disabled.rows.first { it.field == field }.enabled)
             assertTrue(LeftMenuLayout.isDisabledByNoTboxConnect(field))
         }
+        assertTrue(disabled.rows.first { it.field == LeftMenuTabField.MODEM }.enabled)
+        assertFalse(LeftMenuLayout.isDisabledByNoTboxConnect(LeftMenuTabField.MODEM))
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.SETTINGS }.enabled)
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.TRIPS }.enabled)
     }

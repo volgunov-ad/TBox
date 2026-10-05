@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct {
     bool valid;
@@ -22,12 +23,16 @@ typedef struct {
     char utc[40];
 } um980_fix_t;
 
-#define UM980_RSP_MAX_LINES 16
+/* UNILOGLIST is one line per log (manual max 30) plus header, count and ack. */
+#define UM980_RSP_MAX_LINES 40
 /** VERSIONA with auth/PN can exceed 192; keep in sync with line assembler buffer. */
 #define UM980_RSP_LINE_LEN 512
 
 void um980_uart_init(void);
 bool um980_uart_poll(um980_fix_t *out);
+
+/** Send ASCII command with CRLF (UART lock). */
+void um980_uart_write_cmd(const char *cmd);
 
 /** Current ESP↔UM980 UART baud (from NVS or default). */
 int um980_uart_get_baud(void);

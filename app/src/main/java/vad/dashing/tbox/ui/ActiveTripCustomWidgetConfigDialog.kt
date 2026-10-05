@@ -118,15 +118,16 @@ fun ActiveTripCustomWidgetConfigDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(max = 800.dp),
+            modifier = Modifier.tboxDialogSurfaceCompact(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = tboxDialogMaxHeight())
+                    .padding(24.dp),
             ) {
                 AppAlertDialogTitle(stringResource(titleRes))
                 Spacer(Modifier.height(12.dp))
@@ -138,8 +139,8 @@ fun ActiveTripCustomWidgetConfigDialog(
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp),
+                        .weight(1f, fill = false)
+                        .fillMaxWidth(),
                     userScrollEnabled = activeReorderFieldId == null,
                 ) {
                     items(

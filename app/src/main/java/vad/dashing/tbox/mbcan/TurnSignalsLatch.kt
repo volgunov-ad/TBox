@@ -19,13 +19,29 @@ import kotlinx.coroutines.flow.asStateFlow
  * (≥4 flashes / held stalk) for road-match ramp boost.
  */
 class TurnSignalsLatch(
-    private val holdMs: Long = HOLD_MS,
+    holdMs: Long = HOLD_MS,
 ) {
+    @Volatile
+    var holdMs: Long = holdMs
+        set(value) {
+            field = value.coerceIn(100L, 10_000L)
+        }
+
     private var lastLeftElapsedMs: Long = NEVER
     private var lastRightElapsedMs: Long = NEVER
     private val intentTracker = TurnSignalIntentTracker()
     private var lastIntent: TurnSignalIntentTracker.Snapshot =
         TurnSignalIntentTracker.Snapshot()
+
+    fun configure(
+        holdMs: Long = this.holdMs,
+        minFlashesForIntent: Int = intentTracker.minFlashesForIntent,
+        continuousStalkMs: Long = intentTracker.continuousStalkMs,
+    ) {
+        this.holdMs = holdMs
+        intentTracker.minFlashesForIntent = minFlashesForIntent
+        intentTracker.continuousStalkMs = continuousStalkMs
+    }
 
     /**
      * Ingest the latest CAN sample and return the latched fork hint at [nowElapsedMs].
@@ -114,17 +130,34 @@ class TurnSignalsLatchRuntime(
     val intent: StateFlow<TurnSignalIntentTracker.Snapshot> = _intent.asStateFlow()
     private var lastState = TurnSignalsState()
 
+    fun configure(
+        holdMs: Long,
+        minFlashesForIntent: Int,
+        continuousStalkMs: Long,
+    ) {
+        latch.configure(
+            holdMs = holdMs,
+            minFlashesForIntent = minFlashesForIntent,
+            continuousStalkMs = continuousStalkMs,
+        )
+    }
+
     fun ingest(state: TurnSignalsState) {
         lastState = state
         publish()
     }
 
     fun poll() {
+        if (!needsExpiryPoll()) return
+        publish()
+    }
+
+    /** Fast tick only while a stalk is on or a latch has not expired. */
+    fun needsExpiryPoll(): Boolean {
         val rawOn = lastState.leftActive == true ||
             lastState.rightActive == true ||
             lastState.hazardActive == true
-        if (!rawOn && _side.value == null) return
-        publish()
+        return rawOn || _side.value != null
     }
 
     fun peek(): TurnSignalSide? = latch.latchedForkHint(elapsedRealtimeMs())
@@ -146,5 +179,6 @@ class TurnSignalsLatchRuntime(
 
     companion object {
         const val POLL_MS = 100L
+        const val IDLE_POLL_MS = 1_000L
     }
 }

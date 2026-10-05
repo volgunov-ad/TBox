@@ -57,6 +57,7 @@ import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.trip.formatTripDurationHuman
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.trip.TripDistanceFormat
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.valueToString
@@ -478,7 +479,7 @@ fun TripsTab(
                 item {
                     StatusRow(
                         stringResource(R.string.trips_distance),
-                        formatWithUnit(valueToString(trip.distanceKm, 0), stringResource(R.string.unit_km))
+                        formatWithUnit(valueToString(trip.distanceKm, TripDistanceFormat.DECIMALS), stringResource(R.string.unit_km))
                     )
                 }
                 item {
@@ -688,7 +689,7 @@ internal fun buildTripExportLines(
             )
             appendStatusLine(
                 context.getString(R.string.trips_distance),
-                formatWithUnit(valueToString(trip.distanceKm, 0), km)
+                formatWithUnit(valueToString(trip.distanceKm, TripDistanceFormat.DECIMALS), km)
             )
             appendStatusLine(
                 context.getString(R.string.trips_moving_time),

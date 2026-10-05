@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -39,10 +38,10 @@ private val CRUISE_STATUS_SWIPE_THRESHOLD_DP = 40.dp
 
 /**
  * Cruise status tile: live ACC VSetDis or remembered CCS setpoint.
- * Single tap: Off → enable+SET−; Standby → RES+ if setpoint else SET−; Active → pause (212); Fault → no-op.
- * Double tap: full off (210) when Standby/Active.
+ * Single tap: Off → enable+SET−; Standby → RES+ if setpoint else SET−; Active/Override → pause (212); Fault → no-op.
+ * Double tap: full off (210) when Standby/Active/Override.
  * Standby: swipe down → SET−, swipe up → RES+.
- * Active: swipe up → RES+ (+1), swipe down → SET− (−1).
+ * Active/Override: swipe up → RES+ (+1), swipe down → SET− (−1).
  */
 @Composable
 fun DashboardCruiseStatusWidgetItem(
@@ -57,7 +56,7 @@ fun DashboardCruiseStatusWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val accMode by UniversalCanRepository.accCruiseMode.collectAsStateWithLifecycle()
     val vSetDis by UniversalCanRepository.accCruiseVSetDisKmh.collectAsStateWithLifecycle()
@@ -101,6 +100,7 @@ fun DashboardCruiseStatusWidgetItem(
         !known -> controls.inactiveContent.copy(alpha = 0.25f)
         logical == CruiseLogicalState.Fault -> WidgetActiveColors.Secondary
         logical == CruiseLogicalState.Active -> controls.activeContent
+        logical == CruiseLogicalState.Override -> Color(0xFF4CAF50)
         logical == CruiseLogicalState.Standby -> controls.inactiveContent
         else -> controls.inactiveContent.copy(alpha = 0.45f)
     }
@@ -122,6 +122,7 @@ fun DashboardCruiseStatusWidgetItem(
                             when (logicalState.value) {
                                 CruiseLogicalState.Standby,
                                 CruiseLogicalState.Active,
+                                CruiseLogicalState.Override,
                                 -> AccCruiseController.launchStatusSwipeUp(typeState.value)
                                 else -> Unit
                             }
@@ -131,6 +132,7 @@ fun DashboardCruiseStatusWidgetItem(
                             when (logicalState.value) {
                                 CruiseLogicalState.Standby,
                                 CruiseLogicalState.Active,
+                                CruiseLogicalState.Override,
                                 -> AccCruiseController.launchStatusSwipeDown(typeState.value)
                                 else -> Unit
                             }
@@ -172,7 +174,7 @@ fun DashboardCruiseStatusWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -189,11 +191,11 @@ fun DashboardCruiseStatusWidgetItem(
                     contentAlignment = Alignment.Center,
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.ic_widget_acc_cruise),
+                        painter = customizableUiPainter(id = R.drawable.ic_widget_acc_cruise),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().scale(scale),
-                        colorFilter = ColorFilter.tint(iconColor),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_acc_cruise, iconColor),
                     )
                     if (setpointText.isNotEmpty()) {
                         Text(

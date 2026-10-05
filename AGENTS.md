@@ -2,7 +2,7 @@
 
 ## Cursor Cloud specific instructions
 
-This is an Android application (**TBox Monitor** for Jetour Dashing, v0.18.1). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
+This is an Android application (**TBox Monitor** for Jetour Dashing, v1.0.0). There is no server backend, web frontend, or external database — it is a single-module Gradle project (`:app`) producing an APK. Vehicle data comes from the TBox module (UDP via **tbox-proxy**) and from the head unit CAN stack (**mbCAN** on Android 9 or **VHAL** on Android 10).
 
 > **Naming:** «Android 10» in this project means the Adayo/VHAL HU product line. Stock factory UI may show `Build.VERSION.RELEASE` as 10 while the platform API level remains 28 — see [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md).
 
@@ -14,9 +14,13 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v0.18.1). T
 | **Refuels & fuel calibration** | `fuel/`, `fuellevelcalibration/`, `utils/CanFramesProcess.kt` | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) |
 | **Themes** (`.tboxtheme`) | `Theme*.kt`, `DriveModeThemeWatcher`, `ui/ThemesTabContent.kt` | [docs/Themes.md](docs/Themes.md) |
 | **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md), [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md) |
+| **Stock A9 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID9_MBCAN_RU.md](docs/STOCK_APPS_ANDROID9_MBCAN_RU.md) |
+| **Stock A10 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID10_VHAL_RU.md](docs/STOCK_APPS_ANDROID10_VHAL_RU.md) |
 | **Raw decode formulas** | `CanFramesProcess`, `BackgroundService.ans*`, `Android10VhalRepository`, `HvacClimateDomain` | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) |
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
+| **Boot / autostart** | `BootCompleteReceiver`, `MainScreenBootOpen.kt`, `BackgroundService` | [docs/BOOT_AUTOSTART_DEVICE_RU.md](docs/BOOT_AUTOSTART_DEVICE_RU.md) |
+| **Wi-Fi SoftAP → ESP32 router** | (firmware research, `app_process` helper) | [docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md](docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md) (A9), [docs/WIFI_SOFTAP_A10_RU.md](docs/WIFI_SOFTAP_A10_RU.md) (A10) |
 
 Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are computed **only during an active trip** (`CanFramesProcess` gate); refuel records are created inside `BackgroundService.applyActiveTripFuelStep`.
 
@@ -38,6 +42,8 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ./gradlew assembleEnRelease  # English release APK
 ```
 
+Debug and release APKs are signed with the repo keystore `keystore/debug.keystore` (the machine `~/.android/debug.keystore` from 2025-03-22). Cloud and local builds share this signature, so a cloud APK installs over an existing HU install. Do not replace this file.
+
 ### Testing
 
 - **Unit tests**: `./gradlew testRuDebugUnitTest` (or `testEnDebugUnitTest`) — **~180 tests** in 44 suites covering trips, refuels, fuel calibration, themes, widgets, and related logic. All run in the cloud VM without a device.
@@ -51,10 +57,25 @@ Build commands use the Gradle wrapper. Two product flavors exist: `ru` (Russian)
 ### Tools
 
 - `tools/can_log_to_xlsx.py` — converts app CAN export (`.txt`) to Excel using the same decode rules as `CanFramesProcess.kt`. Requires Python deps from `requirements.txt`.
+- `tools/app_log_mbcan_to_xlsx.py` — converts app / deep-diagnostic journals (`tbox_app_log_*.txt`) to Excel timeline of `MBCAN_TMP` / `CANDIAG_MBCAN` / `CANDIAG_VHAL` / optional `TripFuel` events, with known/unknown cfg ids vs `MbCanKnownVehiclePropertyId`. Same deps as `can_log_to_xlsx.py`.
 - `tools/geo_debug_analyze.py` — summarizes geo-debug logs (`tbox_geo_debug_*.txt`): truth-loss windows, shadow/hardResync, reverse PRND, online yaw calib, session `integ.*` (CAN path / gyro / steer), rough `k_speed`, left/right turn scale. Stdlib only.
 - `tools/osm_to_tboxroads.py` — GeoJSON / Overpass JSON / exact `--fetch-overpass-area` / synthetic → `.tboxroads` v1. Stdlib only; see `docs/TBOXROADS_FORMAT_RU.md`.
 - `tools/build_road_map_packs.py` — build whole RU/BY regions into the synced `release/maps` Yandex Disk folder and refresh remote/bundled catalogs. See `docs/ROAD_MAPS_HOSTING_RU.md`.
+- `tools/tbox_external_api_pair.py` — pair with External HTTP API and smoke-check (`/v1/health`, catalog+`voiceAliasesRu`, signals, automations, safe `actions/invoke`, automations/run probe). Stdlib only. Default host `192.168.1.128:8765`. Optional `--run-automation <id|name>` for real RunNow. Manual token: Settings → API → «Создать токен», then put `accessToken` into `~/.tbox_external_api_token.json` and use `--check-only`. See [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md).
 
+### Voice APK (`:voice`)
+
+Separate app **VAD Voice** (`vad.dashing.voice`). Plan: [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md).
+
+Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via Gradle (no Python):
+
+```
+./gradlew :voice:fetchTtsModel :voice:fetchSttModel   # optional manual
+./gradlew :voice:assembleDebug
+./gradlew :voice:testDebugUnitTest
+```
+
+APK ships Irina RU int8 + vosk-model-small-ru (~45 MB); only `armeabi-v7a` / `arm64-v8a`.
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).
@@ -65,4 +86,5 @@ Use **`preRelease`** for pre-release integration; merge to **`master`** when rea
 - Full end-to-end testing requires a physical Jetour Dashing head unit or hardware-mocking setup: TBox UDP, mbCAN/VHAL bind, and drive-mode CAN signals cannot be emulated here.
 - There is no emulator or device available in the cloud VM; builds and unit tests can be verified, but APKs cannot be installed/run here.
 - **CAN backend** (`mbCAN` vs `VHAL`) is a runtime head-unit choice, not a build flavor — see `docs/CAN_BACKENDS_RU.md` before changing `UniversalCanRepository` or bind logic.
+- **A9 mbCAN JNI is not thread-safe.** Never call `canGet*` / `canSet*` / `getMbCanData` from the main thread; hop to `mbcan-state-apply` (same as `MbCanRepository.execute`). Do not poll mbCAN/VHAL faster than 30 s / 1.5 s burst. Mixer volume is OpenOS/SettingsSvc, not mbCAN — 500 ms max while UI observes. Fast main-thread audio get raced OEM `parseCanData` and SIGABRT’d the process. See [docs/MBCAN_JNI_THREADING_RU.md](docs/MBCAN_JNI_THREADING_RU.md).
 - **mbCAN/VHAL parameters**: read/write ids, raw decode, and push/pull behavior for widgets and settings are documented in [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md). Use it when investigating or implementing CAN-backed UI. When adding or changing widgets, toggles, or settings that read or write vehicle properties, **update that doc in the same change** and keep it aligned with `MbCanCommandRegistry`, `FirmwareVehicleJsonMapper`, and domain decoders (`*Domain.kt`, `MbCanSignalStateEngine`).

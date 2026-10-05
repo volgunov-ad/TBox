@@ -1,5 +1,6 @@
 package vad.dashing.tbox.mbcan
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,11 +15,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.esp.HuCanMarkLog
 
 /**
  * One entry point for car-control/CAN behavior across HU platforms.
@@ -35,6 +39,8 @@ object UniversalCanRepository {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
     private val modeSwitchMutex = Mutex()
+    private val sourceWidgetKeys = ConcurrentHashMap<String, Set<String>>()
+    private val sourceSignals = ConcurrentHashMap<String, Set<MbCanSignal>>()
 
     private val _mode = MutableStateFlow(HeadUnitCanMode.Android9MbCan)
     val mode: StateFlow<HeadUnitCanMode> = _mode.asStateFlow()
@@ -100,6 +106,150 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
+    val rearFogState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.rearFogState
+            } else {
+                Android10VhalRepository.rearFogState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val autoLockState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoLockState else Android10VhalRepository.autoLockState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val autoUnlockState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoUnlockState else Android10VhalRepository.autoUnlockState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val rearWiperState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.rearWiperState else Android10VhalRepository.rearWiperState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val mirrorAutoFoldState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.mirrorAutoFoldState else Android10VhalRepository.mirrorAutoFoldState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val followMeHomeMode: StateFlow<FollowMeHomeMode?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.followMeHomeMode else Android10VhalRepository.followMeHomeMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val driverUnlockMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.driverUnlockMode else Android10VhalRepository.driverUnlockMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val remoteLockFeedback: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.remoteLockFeedback else Android10VhalRepository.remoteLockFeedback
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val wiperSensitivity: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.wiperSensitivity else Android10VhalRepository.wiperSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val lowBeamHeight: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.lowBeamHeight else Android10VhalRepository.lowBeamHeight
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val turnFlashCount: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.turnFlashCount else Android10VhalRepository.turnFlashCount
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    val avhState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.avhState
+            } else {
+                Android10VhalRepository.avhState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val hdcState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.hdcState
+            } else {
+                Android10VhalRepository.hdcState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val espOffState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.espOffState
+            } else {
+                Android10VhalRepository.espOffState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val lasModeRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.lasModeRaw
+            } else {
+                Android10VhalRepository.lasModeRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val headlightModeRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.headlightModeRaw
+            } else {
+                Android10VhalRepository.headlightModeRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val tjaIcaState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.tjaIcaState
+            } else {
+                Android10VhalRepository.tjaIcaState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val ldwSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.ldwSwitchState else Android10VhalRepository.ldwSwitchState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val accTimeGap: StateFlow<AccTimeGap?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.accTimeGap else Android10VhalRepository.accTimeGap
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    val hmaState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.hmaState
+            } else {
+                Android10VhalRepository.hmaState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val bsdState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.bsdState else Android10VhalRepository.bsdState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val dowState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.dowState else Android10VhalRepository.dowState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fcwState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fcwState else Android10VhalRepository.fcwState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fcwSensitivity: StateFlow<FcwSensitivity?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fcwSensitivity else Android10VhalRepository.fcwSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val ldwSensitivity: StateFlow<LdwSensitivity?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.ldwSensitivity else Android10VhalRepository.ldwSensitivity
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    val hvacAcMaxState: StateFlow<MbCanBinaryState> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.hvacAcMaxState
+            } else {
+                Android10VhalRepository.hvacAcMaxState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
     val frontWindscreenHeatState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -159,6 +309,28 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val hvacAnionPurifyState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hvacAnionPurifyState else Android10VhalRepository.hvacAnionPurifyState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fragranceSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceSwitchState
+        else flowOf(MbCanBinaryState.Unavailable("Fragrance is available on Android 9 mbCAN only"))
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val fragranceSmell: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceSmell else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val fragranceConcentration: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.fragranceConcentration else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val firstBlowingState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.firstBlowingState else Android10VhalRepository.firstBlowingState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val btReduceFanState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.btReduceFanState else Android10VhalRepository.btReduceFanState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val autoVentilationState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.autoVentilationState else Android10VhalRepository.autoVentilationState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
 
     val hvacDefrosterFrontState: StateFlow<MbCanBinaryState> = mode
         .flatMapLatest { activeMode ->
@@ -240,6 +412,32 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /** Key tone, radar alarm, EQ, and sound-field controls are verified for Android 9 mbCAN only. */
+    val audioKeyToneVolume: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioKeyToneVolume else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioRadarAlarmVolume: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioRadarAlarmVolume else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqMode else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqBass: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqBass else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqMiddle: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqMiddle else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioEqTreble: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioEqTreble else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioBalance: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioBalance else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val audioFader: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.audioFader else flowOf(null)
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+
     val carSettingsEpsMode: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -269,6 +467,30 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
+    val hudSwitchState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudSwitchState else Android10VhalRepository.hudSwitchState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val hudHeight: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudHeight else Android10VhalRepository.hudHeight
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudBrightness: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudBrightness else Android10VhalRepository.hudBrightness
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudDisplayMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudDisplayMode else Android10VhalRepository.hudDisplayMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val hudAutoBrightnessState: StateFlow<MbCanBinaryState> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.hudAutoBrightnessState else Android10VhalRepository.hudAutoBrightnessState
+    }.stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+    val icmBrightnessMode: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.icmBrightnessMode else Android10VhalRepository.icmBrightnessMode
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val icmManualBrightness: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.icmManualBrightness else Android10VhalRepository.icmManualBrightness
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    val overspeedAlarmKmh: StateFlow<Int?> = mode.flatMapLatest {
+        if (it == HeadUnitCanMode.Android9MbCan) MbCanRepository.overspeedAlarmKmh else Android10VhalRepository.overspeedAlarmKmh
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
     val slaRecognizedSpeedLimitKmh: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
@@ -309,6 +531,26 @@ object UniversalCanRepository {
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, MbCanBinaryState.Unknown)
+
+    val speedLimiterSwitchRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.speedLimiterSwitchRaw
+            } else {
+                Android10VhalRepository.speedLimiterSwitchRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val speedLimiterValueSetRaw: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.speedLimiterValueSetRaw
+            } else {
+                Android10VhalRepository.speedLimiterValueSetRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
     val accCruiseMode: StateFlow<Int?> = mode
         .flatMapLatest { activeMode ->
@@ -403,6 +645,196 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val accStatusState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.accStatusState
+            } else {
+                Android10VhalRepository.accStatusState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val gasPedalPercentState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.gasPedalPercentState
+            } else {
+                Android10VhalRepository.gasPedalPercentState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val brakePedalPressedState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.brakePedalPressedState
+            } else {
+                Android10VhalRepository.brakePedalPressedState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val wiperOperatingModeState: StateFlow<WiperOperatingMode?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wiperOperatingModeState
+            } else {
+                Android10VhalRepository.wiperOperatingModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val rainDetectedState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.rainDetectedState
+            } else {
+                Android10VhalRepository.rainDetectedState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val highBeamOnState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.highBeamOnState
+            } else {
+                Android10VhalRepository.highBeamOnState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val epbParkLampOnState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.epbParkLampOnState
+            } else {
+                Android10VhalRepository.epbParkLampOnState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val engineOilPressureWarningState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.engineOilPressureWarningState
+            } else {
+                Android10VhalRepository.engineOilPressureWarningState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val brakeFluidWarningState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.brakeFluidWarningState
+            } else {
+                Android10VhalRepository.brakeFluidWarningState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val currentGearNumberState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.currentGearNumberState
+            } else {
+                Android10VhalRepository.currentGearNumberState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val targetGearNumberState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.targetGearNumberState
+            } else {
+                Android10VhalRepository.targetGearNumberState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val frmDxTarObjState: StateFlow<Int?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.frmDxTarObjState
+            } else {
+                Android10VhalRepository.frmDxTarObjState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val bodyComfortRaw: StateFlow<BodyComfortRawRead> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.bodyComfortRaw
+            } else {
+                Android10VhalRepository.bodyComfortRaw
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, BodyComfortRawRead())
+
+    val sunshadePositionState: StateFlow<ShadeRoofPosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.sunshadePositionState
+            } else {
+                Android10VhalRepository.sunshadePositionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val sunroofPositionState: StateFlow<ShadeRoofPosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.sunroofPositionState
+            } else {
+                Android10VhalRepository.sunroofPositionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowFrontLeftState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowFrontLeftState
+            } else {
+                Android10VhalRepository.windowFrontLeftState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowFrontRightState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowFrontRightState
+            } else {
+                Android10VhalRepository.windowFrontRightState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowRearLeftState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowRearLeftState
+            } else {
+                Android10VhalRepository.windowRearLeftState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val windowRearRightState: StateFlow<WindowPanePosition?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.windowRearRightState
+            } else {
+                Android10VhalRepository.windowRearRightState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /** CEM reverse gear switch; for mock-location / DR consumers. */
     val reverseGearSwitchState: StateFlow<Boolean?> = mode
         .flatMapLatest { activeMode ->
@@ -430,6 +862,16 @@ object UniversalCanRepository {
                 MbCanRepository.odometerKmState
             } else {
                 Android10VhalRepository.odometerKmState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val wheelPulseState: StateFlow<vad.dashing.tbox.vehicle.WheelCounters?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.wheelPulseState
+            } else {
+                Android10VhalRepository.wheelPulseState
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
@@ -470,6 +912,16 @@ object UniversalCanRepository {
                 MbCanRepository.currentFuelConsumptionState
             } else {
                 Android10VhalRepository.currentFuelConsumptionState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val averageFuelConsumptionState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.averageFuelConsumptionState
+            } else {
+                Android10VhalRepository.averageFuelConsumptionState
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
@@ -534,6 +986,44 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /**
+     * Cabin door ajar open/closed (FL/FR/RL/RR). Not trunk (see [TrunkDoorRepository]).
+     * A9: BCM 1/2 via [MbCanRepository.bcmDoorsState]; A10: CEM2 0/1 via [Android10VhalRepository.vhalDoorAjarRaw].
+     */
+    val doorFrontLeftOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.driver },
+        vhalKey = "FL",
+    )
+    val doorFrontRightOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.passenger },
+        vhalKey = "FR",
+    )
+    val doorRearLeftOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.rearLeft },
+        vhalKey = "RL",
+    )
+    val doorRearRightOpen: StateFlow<Boolean?> = cabinDoorAjarOpenFlow(
+        bcm = { it.rearRight },
+        vhalKey = "RR",
+    )
+
+    private fun cabinDoorAjarOpenFlow(
+        bcm: (BcmDoorSnapshot) -> Int?,
+        vhalKey: String,
+    ): StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.bcmDoorsState.map { snap ->
+                    snap?.let { BcmDoorDomain.decodeAjarOpenMbCan(bcm(it)) }
+                }
+            } else {
+                Android10VhalRepository.vhalDoorAjarRaw.map { rawMap ->
+                    BcmDoorDomain.decodeAjarOpenVhalCem(rawMap[vhalKey])
+                }
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /** Left/right turn + hazard; raw HU sample (A9 blinks, A10 stalk). */
     val turnSignalsState: StateFlow<TurnSignalsState> = mode
         .flatMapLatest { activeMode ->
@@ -574,6 +1064,19 @@ object UniversalCanRepository {
         return turnSignalsLatchRuntime.intent.value
     }
 
+    /** Live thresholds from road-match tuning (latch hold / intentional stalk). */
+    fun configureTurnSignalLatch(
+        holdMs: Long,
+        minFlashesForIntent: Int,
+        continuousStalkMs: Long,
+    ) {
+        turnSignalsLatchRuntime.configure(
+            holdMs = holdMs,
+            minFlashesForIntent = minFlashesForIntent,
+            continuousStalkMs = continuousStalkMs,
+        )
+    }
+
     init {
         scope.launch {
             var lastMode: HeadUnitCanMode? = null
@@ -588,8 +1091,13 @@ object UniversalCanRepository {
         }
         scope.launch {
             while (isActive) {
-                delay(TurnSignalsLatchRuntime.POLL_MS)
                 turnSignalsLatchRuntime.poll()
+                val delayMs = if (turnSignalsLatchRuntime.needsExpiryPoll()) {
+                    TurnSignalsLatchRuntime.POLL_MS
+                } else {
+                    TurnSignalsLatchRuntime.IDLE_POLL_MS
+                }
+                delay(delayMs)
             }
         }
     }
@@ -619,51 +1127,101 @@ object UniversalCanRepository {
     }
 
     suspend fun setSourceWidgetKeys(sourceId: String, widgetKeys: Set<String>) {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.setSourceWidgetKeys(sourceId, widgetKeys)
-        } else {
-            Android10VhalRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+        modeSwitchMutex.withLock {
+            if (widgetKeys.isEmpty()) sourceWidgetKeys.remove(sourceId)
+            else sourceWidgetKeys[sourceId] = widgetKeys.toSet()
+            if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+            } else {
+                Android10VhalRepository.setSourceWidgetKeys(sourceId, widgetKeys)
+            }
         }
     }
 
     suspend fun setSourceSignals(sourceId: String, signals: Set<MbCanSignal>) {
+        modeSwitchMutex.withLock {
+            if (signals.isEmpty()) sourceSignals.remove(sourceId)
+            else sourceSignals[sourceId] = signals.toSet()
+            if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceSignals(sourceId, signals)
+            } else {
+                Android10VhalRepository.setSourceSignals(sourceId, signals)
+            }
+        }
+    }
+
+    /**
+     * Immediate sequential pull for [signals] (visible Car Settings section first).
+     * Stays on the backend apply thread — not a per-signal IO job.
+     */
+    suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
+        val unique = signals.distinct()
+        if (unique.isEmpty()) return
         if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.setSourceSignals(sourceId, signals)
+            MbCanJobManager.prioritize(unique)
+            unique.forEach { MbCanRepository.refreshSignal(it) }
         } else {
-            Android10VhalRepository.setSourceSignals(sourceId, signals)
+            Android10VhalRepository.prioritize(unique)
+            unique.forEach { Android10VhalRepository.refreshSignal(it) }
         }
     }
 
     fun enqueueClearSource(sourceId: String) {
-        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        sourceWidgetKeys.remove(sourceId)
+        sourceSignals.remove(sourceId)
+        // Clear both: the source may have been registered before a runtime backend switch.
+        run {
             MbCanRepository.enqueueClearSource(sourceId)
-        } else {
             Android10VhalRepository.enqueueClearSource(sourceId)
         }
     }
 
-    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
-            MbCanRepository.widgetConfigsNeedMbCan(dataKeys)
-        } else {
-            Android10VhalRepository.widgetConfigsNeedMbCan(dataKeys)
-        }
+    fun clearSourceNow(sourceId: String) {
+        sourceWidgetKeys.remove(sourceId)
+        sourceSignals.remove(sourceId)
+        MbCanRepository.clearSourceNow(sourceId)
+        Android10VhalRepository.clearSourceNow(sourceId)
     }
 
+    fun widgetConfigsNeedMbCan(dataKeys: Iterable<String>): Boolean =
+        MbCanWidgetSignalMap.panelNeedsCan(dataKeys)
+
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        val result = if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.execute(command)
         } else {
             Android10VhalRepository.execute(command)
         }
+        HuCanMarkLog.markUiCommand(command, result)
+        return result
+    }
+
+    /** Expert raw Get via the active HU backend (mbCAN or VHAL). */
+    suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.getRawProperty(bus, propertyId)
+        } else {
+            Android10VhalRepository.getRawProperty(bus, propertyId)
+        }
+    }
+
+    /** Expert raw Set via the active HU backend (mbCAN or VHAL); value sent as-is. */
+    suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.setRawProperty(bus, propertyId, value)
+        } else {
+            Android10VhalRepository.setRawProperty(bus, propertyId, value)
+        }
     }
 
     suspend fun setAudioVolume(value: Int): MbCanCommandResult {
-        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+        val result = if (_mode.value == HeadUnitCanMode.Android9MbCan) {
             MbCanRepository.setAudioVolume(value)
         } else {
             Android10VhalRepository.setAudioVolume(value)
         }
+        HuCanMarkLog.markUiAudioVolume(value, result)
+        return result
     }
 
     fun rememberAudioVolumeLastNonZeroInSession(value: Int) {
@@ -692,7 +1250,8 @@ object UniversalCanRepository {
     }
 
     /**
-     * Writes limiter target km/h. Unsupported on Jetour Dashing — command may no-op or fail on HU.
+     * Writes limiter target km/h (clamped). Prefer live CAN VALUESET for display;
+     * DataStore mirror may still be updated by the widget for a future fallback.
      * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET
      */
     suspend fun setSpeedLimiterTargetKmh(kmh: Int): MbCanCommandResult {
@@ -706,7 +1265,7 @@ object UniversalCanRepository {
     }
 
     /**
-     * Enables/disables vehicle speed limiter. Unsupported on Jetour Dashing.
+     * Enables/disables vehicle speed limiter.
      * @see MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH
      */
     suspend fun setSpeedLimiterEnabled(on: Boolean): MbCanCommandResult {
@@ -718,9 +1277,10 @@ object UniversalCanRepository {
         )
     }
 
-    /** @see setSpeedLimiterTargetKmh — unsupported on Jetour Dashing. */
-    suspend fun enableSpeedLimiter(targetKmh: Int): MbCanCommandResult {
-        setSpeedLimiterTargetKmh(targetKmh)
+    /** Writes [targetKmh] (or bootstrap when null) then enables the limiter switch. */
+    suspend fun enableSpeedLimiter(targetKmh: Int?): MbCanCommandResult {
+        val resolved = SlaSpeedLimitDomain.resolveLimiterTargetOrBootstrap(targetKmh)
+        setSpeedLimiterTargetKmh(resolved)
         return setSpeedLimiterEnabled(true)
     }
 
@@ -765,7 +1325,8 @@ object UniversalCanRepository {
                 "AUTO_CAN primary failed mode=${primaryMode.storageValue} reason=${primaryResult.reason}"
             )
 
-            setMode(alternativeMode)
+            // Must use setModeLocked: we already hold modeSwitchMutex (non-reentrant).
+            setModeLocked(alternativeMode, rebindIfBound = false)
             settingsManager.saveHeadUnitCanMode(alternativeMode)
             val alternativeResult = bindModeWithRetries(
                 mode = alternativeMode,
@@ -911,10 +1472,12 @@ object UniversalCanRepository {
             HeadUnitCanMode.Android9MbCan -> {
                 Android10VhalRepository.unbind()
                 MbCanRepository.bind(scopeToRebind)
+                applyAllInterestsLocked(HeadUnitCanMode.Android9MbCan)
             }
             HeadUnitCanMode.Android10Vhal -> {
                 MbCanRepository.unbind()
                 Android10VhalRepository.bind(scopeToRebind)
+                applyAllInterestsLocked(HeadUnitCanMode.Android10Vhal)
             }
         }
     }
@@ -926,12 +1489,30 @@ object UniversalCanRepository {
         } else {
             Android10VhalRepository.bind(scope)
         }
+        applyAllInterestsLocked(_mode.value)
     }
 
     private suspend fun unbindLocked() {
         boundScope = null
         MbCanRepository.unbind()
         Android10VhalRepository.unbind()
+    }
+
+    private suspend fun applyAllInterestsLocked(mode: HeadUnitCanMode) {
+        sourceWidgetKeys.forEach { (sourceId, keys) ->
+            if (mode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceWidgetKeys(sourceId, keys)
+            } else {
+                Android10VhalRepository.setSourceWidgetKeys(sourceId, keys)
+            }
+        }
+        sourceSignals.forEach { (sourceId, signals) ->
+            if (mode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.setSourceSignals(sourceId, signals)
+            } else {
+                Android10VhalRepository.setSourceSignals(sourceId, signals)
+            }
+        }
     }
 
     private suspend fun warmUpAvailabilityForUiLocked() {

@@ -4,12 +4,36 @@ const val HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY = "hvacTempLeftWidgetHorizon
 const val HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY = "hvacTempLeftWidgetVertical"
 const val HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY = "hvacTempRightWidgetHorizontal"
 const val HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY = "hvacTempRightWidgetVertical"
+
+/** Widget ± step in tenths of a degree (matches mbCAN raw units). Default 0.5 °C. */
+const val HVAC_TEMP_WIDGET_STEP_HALF_TENTHS = 5
+/** Whole-degree widget ± step (1.0 °C). Half-degree values snap toward the next whole °C. */
+const val HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS = 10
+const val HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT = HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
+
+val HVAC_TEMP_WIDGET_DATA_KEYS: Set<String> = setOf(
+    HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY,
+    HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY,
+    HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY,
+    HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY,
+)
+
+fun isHvacTempWidgetDataKey(dataKey: String): Boolean = dataKey in HVAC_TEMP_WIDGET_DATA_KEYS
+
+fun normalizeHvacTempWidgetStepTenths(raw: Int): Int =
+    if (raw == HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS) {
+        HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS
+    } else {
+        HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
+    }
+
 const val HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY = "hvacFanWidgetHorizontal"
 const val HVAC_FAN_WIDGET_VERTICAL_DATA_KEY = "hvacFanWidgetVertical"
 const val HVAC_SYNC_WIDGET_DATA_KEY = "hvacSyncWidget"
 const val HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY = "hvacBlowModeCycleWidget"
 const val HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY = "hvacBlowModePanelWidgetHorizontal"
 const val HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY = "hvacBlowModePanelWidgetVertical"
+const val HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY = "hvacCustomModeCycleWidget"
 
 val HVAC_CLIMATE_WIDGET_DATA_KEYS: Set<String> = setOf(
     HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY,
@@ -22,4 +46,5 @@ val HVAC_CLIMATE_WIDGET_DATA_KEYS: Set<String> = setOf(
     HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY,
     HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY,
     HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY,
+    HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY,
 )

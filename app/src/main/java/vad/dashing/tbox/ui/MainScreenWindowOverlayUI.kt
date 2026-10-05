@@ -3,8 +3,6 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -43,6 +41,9 @@ import vad.dashing.tbox.ui.theme.TboxAppTheme
  * display size in **pixel** constraints and placed so the activity-space viewport origin
  * maps to overlay (0,0) — no Dp round-trip and no RTL-mirrored [Modifier.offset].
  * Exit buttons stay in overlay-local coordinates so they remain visible.
+ *
+ * Does not host [AppListDialog]: overlay windows use FLAG_NOT_FOCUSABLE, so Compose Dialog
+ * crashes here. [openAppListDialog] exits to fullscreen and shows the dialog in MainActivity.
  */
 @Composable
 fun MainScreenWindowOverlayUI(
@@ -62,6 +63,7 @@ fun MainScreenWindowOverlayUI(
     )
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val overlayLayout by MainScreenWindowOverlayLayout.state.collectAsStateWithLifecycle()
@@ -84,7 +86,7 @@ fun MainScreenWindowOverlayUI(
     val layoutSnapEnabled by settingsViewModel.mainScreenPanelsLayoutSnapEnabled
         .collectAsStateWithLifecycle()
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
         // Main-screen panel coords are absolute LTR pixels; keep crop placement LTR too.
         CompositionLocalProvider(
             LocalClickSoundEnabled provides uiClickSoundsEnabled,
@@ -181,7 +183,8 @@ fun MainScreenWindowOverlayUI(
 
                 if (cropEnabled) {
                     MainScreenDraggableCornerButton(
-                        icon = Icons.Filled.Close,
+                        iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_EXIT,
+                        drawableRes = R.drawable.ic_main_screen_close,
                         contentDescription = stringResource(R.string.main_screen_window_mode_exit_cd),
                         iconSize = cornerIconSize,
                         backgroundColor = cornerBackgroundColor,
@@ -201,7 +204,8 @@ fun MainScreenWindowOverlayUI(
                         layoutSnapStepPx = effectiveLayoutSnapStepPx,
                     )
                     MainScreenDraggableCornerButton(
-                        icon = WindowModeRestoreSquareIcon,
+                        iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_RESTORE,
+                        drawableRes = R.drawable.ic_main_screen_window_restore,
                         contentDescription = stringResource(
                             R.string.main_screen_window_mode_restore_cd,
                         ),

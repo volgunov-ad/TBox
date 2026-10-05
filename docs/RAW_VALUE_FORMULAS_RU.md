@@ -28,7 +28,7 @@
 | Давление шин | CAN `0x51B` / Cycle: **raw/36** (`0xFF` → null) | mbCAN: `fPressure` bar as-is (−1 invalid) | VHAL: **raw × 0.0275** (≤0 или >3.5 → null) | бар |
 | t° шин | CAN `0x51B`: **raw − 60**; Cycle: as-is при флаге валидности | mbCAN: `nTemperature` °C as-is (−100 invalid) | VHAL: **raw − 60** (raw ≤0 или ≥150 → null) | °C |
 | t° снаружи | CAN `0x535`: **raw×0.5 − 40** | signed byte °C; **87** = invalid | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | °C |
-| HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: **raw/10** (160…300) | VHAL: **raw/2** (32…60) | °C |
+| HVAC setpoint | CAN `0x52F`: **raw/4** | mbCAN **37/111**: `decodeHvacSetpointRaw` | VHAL: тот же decode (×2 / ×10 / уже °C) | °C |
 | SLA знак | — | LKA Spdlimit: **(raw−1)×5** | то же | км/ч |
 
 ---
@@ -87,11 +87,11 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Угол руля | `0xC4` | uint16; `65535`→null | `(raw − 32767) / 16` | ° |
 | Скорость руля | `0xC4` | int8 (b2) | as-is | °/с (отображение) |
 | RPM | `0xFA` | uint16 | `raw / 4` | об/мин |
-| param1 | `0xFA` | uint8 b3 | `raw / 100` | безразмерный |
-| param2 | `0xFA` | uint16 @+4 | as-is | — |
-| param3 | `0x200` | uint16 @+4 | as-is | — |
+| param1 (педаль газа, гипотеза) | `0xFA` | uint8 b3 | `raw / 2.55` | % |
+| param2 (крутящий момент, гипотеза) | `0xFA` | uint16 @+4 | `(raw − 2000) / 2` | Н·м |
+| param3 (скорость по колёсам, гипотеза) | `0x200` | uint16 @+4 | `raw / 100` | км/ч (кратна 1; ≈ средняя 0x310) |
 | t° ОЖ (вычисляется, не публикуется с этого ID) | `0x278` | uint8 b0 | `raw × 0.75 − 48` | °C (в UI temp с `0x501`) |
-| param4 | `0x278` | uint8 b5 | as-is | — |
+| param4 (дроссель, гипотеза) | `0x278` | uint8 b5 | `raw / 2.55` | % (255 = WOT) |
 | До ТО | `0x287` | uint16 @+4 | as-is | км |
 | Тормозная сила | `0x2E9` | uint8 b2 | as-is | — |
 | t° масла КПП | `0x300` | uint8 b2 | `raw − 40` | °C |
@@ -103,7 +103,7 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Одометр | `0x430` | UINT20 nibble-BE @+5 | as-is | км |
 | Мгновенный расход | `0x4E0` | uint16 @+2; `0xFFFF`→null | `raw / 160` | л/100 км |
 | t° ОЖ | `0x501` | uint8 b2 | `raw × 0.75 − 48` | °C |
-| param5 | `0x501` | uint8 b4 | `raw / 19` | — (`can_log_to_xlsx.py` historically `/18`) |
+| param5 (обороты, гипотеза) | `0x501` | uint8 b4 | `raw × 32` | об/мин (грубая копия RPM с `0xFA`) |
 | Скорость точная | `0x502` | UINT12 nibble @+1; b2==0 → 0 | `raw / 16` | км/ч |
 | t° шины | `0x51B` | uint8 b3; `0xFF`→null | `raw − 60` | °C |
 | Давление шин ×4 | `0x51B` | uint8 b4…b7; `0xFF`→null | `raw / 36` | бар |
@@ -113,6 +113,25 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Качество воздуха | `0x53A` | 2× uint16; 0 или 65535→null | as-is | AQI-like |
 
 Режимы КПП, сидений, блокировка стёкол — битовые/enum-маппинги (без scale), см. код `CanFramesProcess`.
+
+### Неизвестные CAN ID (журналы `09`, гипотезы)
+
+В логах 62 ID; `CanFramesProcess` декодирует 20. По timestamp-join с проверенными сигналами:
+
+| CAN ID | Наблюдение | Гипотеза |
+|--------|------------|----------|
+| `0x313` | u16@0 и u16@2: r≈1.00 со скоростями колёс 0x310 w0/w1 | скорости **передних** колёс, `km/h ≈ raw / 117.65` |
+| `0x316` | u16@0 и u16@2: r≈1.00 с w2/w3 | скорости **задних** колёс, тот же scale |
+| `0x394` | u16@2: `(raw − 32767) / 16` ≈ угол руля 0xC4 (ср. ошибка ~0.6°) | копия / шлюз угла руля |
+| `0x127` | u16@2 ≈ 1684…2318, центр ~2000–2048; слабая связь с рулём | вероятно yaw / поперечное ускорение (offset ~2048) |
+| `0x1B2`, `0x31C` | байты шагают комплементарно (`xx yy F0…` / `00 yy xx…`) | alive / rolling counter |
+| `0x260` | два одинаковых u16; на ХХ ~25776, в движении ~9600–10100 | неизвестно (не RPM; возможно давление/нагрузка — нужна проверка) |
+| `0x1AE`, `0x220` | мало уникальных значений + «шум» в младших байтах | статусы / флаги + счётчик |
+| `0x3A6`…`0x3C1`, `0x517` | байты с 2 значениями, коррелируют с t° масла/салона | скорее **режимные флаги** (корреляция через время прогрева), не сами температуры |
+| `0x560`, `0x565`, `0x58D`, `0x5D4`, `0x5E3`, `0x5F6` | константы весь лог | конфиг / заглушки |
+| `0x323`, `0x480`, `0x5EE` | 1–2 значения | битовые флаги |
+
+Не внедрять в UI без дорожной проверки (кроме уже внесённых param1–5).
 
 ---
 
@@ -127,7 +146,10 @@ Payload 8 байт, multi-byte — big-endian, если не указано ин
 | Fuel % | `getFuelLevel` | **289414929** | 0…100 identity | — | % |
 | Odometer | `getOdometer` | **289414930** | km as-is → UInt | — | км |
 | Outside temp | unsigned byte (may arrive signed) | **289412223** | **(raw & 0xFF)×0.5 − 40**; вне [−40; 87) → null | — | °C |
-| HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** | A9: **°C = raw/10** (160…300, шаг 5); A10: **°C = raw/2** (32…60) | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
+| Gas pedal % | `getfGasPedalPosition` (уже %) | **289414943** | A9: as-is 0…100; A10: **% = raw × 100 / 255** (raw 0…255); invalid ≠ 0 → null | — | % |
+| Instant fuel | `getFuelRollingCounter` | **289414918** | A9: **raw / 10**; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
+| Average fuel | `getICM_4_AverageFuelConsume` | **289414933** | A9: float as-is; A10: **raw × 0.1**; ≤0 → null | — | л/100 км |
+| HVAC temp L/R | **37** / **111** | read **289415169** / **289415168** (если статус пустой — эхо записи **289415313** / **289415314**) | `decodeHvacSetpointRaw`: **32…60 → raw/2**, **160…300 → raw/10**, **16…30 шаг 0,5 → уже °C** | A9: `°C×10`; A10: `°C×2`; мост `mbCanTempRawToVhalWrite` | °C |
 | Fan speed | **38** | **289415171** | 0…7 identity | identity | уровень |
 | SLA recognized limit | LKA `FCM_2_SLASpdlimit` | **289415711** | **(raw − 1) × 5**; raw≤1 → null; raw>27 → **130** | — | км/ч |
 | Limiter target | DataStore | write resolve(**253**) | clamp 0…150, шаг 5 | identity km/h | км/ч |
@@ -156,10 +178,10 @@ TBox Cycle:   V=raw/1000; P=raw/36; v=raw/16; a=raw/1000−2; rpm=raw/4; yaw=raw
 TBox CAN:     steer=(raw−32767)/16; rpm=raw/4; oilT=raw−40; speed=raw/16; V=raw/10
               L/100km=raw/160; engT=raw×0.75−48; tyreT=raw−60; P=raw/36
               setT=raw/4; cabin/out=raw×0.5−40
-mbCAN HVAC:   °C = raw/10
-VHAL HVAC:    °C = raw/2
+mbCAN/VHAL HVAC setpoint: 32…60 → raw/2; 160…300 → raw/10; 16…30 шаг 0,5 → уже °C
 VHAL RPM:     rpm = raw×4
 VHAL coolant: °C = raw×0.75−48
+VHAL gas pedal: % = raw×100/255
 SLA limit:    km/h = (raw−1)×5
 ```
 

@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -36,6 +37,7 @@ import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 
 @Composable
@@ -49,6 +51,7 @@ internal fun DashboardAppLauncherWidgetItem(
     titleOverride: String = "",
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onDoubleClick: (() -> Unit)? = null,
     elevation: Dp,
     shape: Dp,
     textColor: Color,
@@ -82,10 +85,12 @@ internal fun DashboardAppLauncherWidgetItem(
             }.getOrElse { packageName }
         }
     }
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     DashboardWidgetScaffold(
         modifier = Modifier.fillMaxSize(),
         onClick = onClick,
         onLongClick = onLongClick,
+        onDoubleClick = onDoubleClick,
         elevation = elevation,
         shape = shape,
         textColor = textColor,
@@ -103,7 +108,8 @@ internal fun DashboardAppLauncherWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && !titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,
@@ -127,7 +133,7 @@ internal fun DashboardAppLauncherWidgetItem(
                     Image(
                         bitmap = imageBitmap,
                         contentDescription = widget.title,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
                         contentScale = ContentScale.Fit
                     )
                 } else {
@@ -141,7 +147,8 @@ internal fun DashboardAppLauncherWidgetItem(
             if (showTitle && titleLine.isNotEmpty() && titleAtBottom) {
                 val titleStyle = calculateResponsiveTextStyle(
                     containerHeight = availableHeight,
-                    textType = TextType.TITLE
+                    textType = TextType.TITLE,
+                    forWidgetTitle = true,
                 )
                 Text(
                     text = titleLine,

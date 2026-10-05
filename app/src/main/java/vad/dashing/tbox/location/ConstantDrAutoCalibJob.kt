@@ -50,6 +50,11 @@ class ConstantDrAutoCalibJob(
         /** When needs-calib + road auto: retry idle yaw-zero this often. */
         const val IDLE_YAW_RETRY_MS = 15_000L
         /**
+         * Disk persist for idle yaw bias — RAM updates stay on [IDLE_YAW_RETRY_MS];
+         * DataStore writes are sparse so a stuck needs-calib flag cannot thrash flash.
+         */
+        const val IDLE_YAW_DISK_MIN_INTERVAL_MS = 60_000L
+        /**
          * Maintenance idle yaw-zero (idle-bias toggle on, no urgent need-calib).
          * Tracks gyro bias vs temperature while parked.
          */
@@ -65,6 +70,7 @@ class ConstantDrAutoCalibJob(
     private var session: DriveCalibrationSession? = null
     private var steerSession: SteerCalibrationSession? = null
     private var lastIdleYawAttemptElapsedMs: Long = 0L
+    private var lastIdleYawDiskPersistElapsedMs: Long = 0L
     private var lastDriveAbortElapsedMs: Long = 0L
     private var lastSteerAbortElapsedMs: Long = 0L
 
@@ -334,7 +340,12 @@ class ConstantDrAutoCalibJob(
             yawCalibTempC = temp?.takeIf { it.isFinite() },
         )
         GyroBiasStore.update(next)
-        saveGyroBias(next)
-        noteYawActivity(System.currentTimeMillis())
+        // Always refresh RAM; DataStore at most every IDLE_YAW_DISK_MIN_INTERVAL_MS.
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastIdleYawDiskPersistElapsedMs >= IDLE_YAW_DISK_MIN_INTERVAL_MS) {
+            lastIdleYawDiskPersistElapsedMs = now
+            saveGyroBias(next)
+            noteYawActivity(System.currentTimeMillis())
+        }
     }
 }

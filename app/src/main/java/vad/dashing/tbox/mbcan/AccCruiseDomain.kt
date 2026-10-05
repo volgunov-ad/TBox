@@ -14,23 +14,29 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
  * - [Off]: main switch off; RES+/SET− do not activate
  * - [Standby]: armed; SET− captures current speed, RES+ resumes prior setpoint
  * - [Active]: holding / driving; RES+/SET− change speed; brake → Standby
+ * - [Override]: ACCMode 7 only (ACC path); gas held — ACC cannot brake, back to Active on release
  * - [Fault]: ACCMode 9 only (ACC path); UI orange, taps no-op
  */
 enum class CruiseLogicalState {
     Off,
     Standby,
     Active,
+    Override,
     Fault,
 }
 
 /**
  * ACC FRM / conventional CCS / MFS helpers shared by mbCAN and Android 10 VHAL.
  *
- * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6}.
+ * Engaged ACC modes follow A10 Launcher ({3,4,5}); standby SET path uses modes {2,6};
+ * gas override (ACC cannot brake while pedal held) is mode 7.
  * Conventional CCS: Gasped / EMS [CruiseControlStatus] — 0=Off, 1=Active, 2=Standby (ICM lamp hint).
  * mbCAN [VSetDis] is already km/h; VHAL raw uses [decodeVhalVSetDisKmh].
- * CCS converge: vehicle speed (+/- [CCS_SPEED_TOLERANCE_KMH]) in batches of up to
- * [CCS_BATCH_MAX_STEPS] with post-batch waits — not TBox cruiseSetSpeed.
+ *
+ * CCS converge steps the session [CcsRememberedSetpoint] toward the widget target
+ * (same role as ACC VSetDis). Vehicle speed is *not* used as control feedback —
+ * the car lags behind the CCS setpoint, so speed-based batches wind the stalk past the target.
+ * TBox cruiseSetSpeed is not used.
  */
 object AccCruiseDomain {
     const val MFS_PULSE_VALUE = 1
@@ -39,6 +45,9 @@ object AccCruiseDomain {
     val STANDBY_SET_ACC_MODES: Set<Int> = setOf(2, 6)
     /** Stock AIService ADAS card: setpoint visible, dark (standby/override) UI. */
     val STANDBY_DISPLAY_ACC_MODES: Set<Int> = setOf(1, 2, 6, 7)
+
+    /** ACCMode override: gas held while ACC enabled; stock warns «ACC can't slow down» (3000 ms). */
+    const val ACC_MODE_OVERRIDE = 7
 
     /** ACCMode fault (A9 yellow / TTG ERR). */
     const val ACC_MODE_FAULT = 9
@@ -49,6 +58,29 @@ object AccCruiseDomain {
     /** CCS Standby (ICM: status 2 → other lamp level). */
     const val CCS_STATUS_STANDBY = 2
 
+
+    /** Automation state strings for ACC / CCS cruise logical state signals. */
+    const val AUTOMATION_STATE_OFF = "off"
+    const val AUTOMATION_STATE_STANDBY = "standby"
+    const val AUTOMATION_STATE_ACTIVE = "active"
+    const val AUTOMATION_STATE_OVERRIDE = "override"
+    const val AUTOMATION_STATE_FAULT = "fault"
+
+    val ACC_AUTOMATION_STATE_OPTIONS: List<String> = listOf(
+        AUTOMATION_STATE_OFF,
+        AUTOMATION_STATE_STANDBY,
+        AUTOMATION_STATE_ACTIVE,
+        AUTOMATION_STATE_OVERRIDE,
+        AUTOMATION_STATE_FAULT,
+    )
+
+    /** CCS has no Fault; ACCMode 9 does not apply on the CCS path. */
+    val CCS_AUTOMATION_STATE_OPTIONS: List<String> = listOf(
+        AUTOMATION_STATE_OFF,
+        AUTOMATION_STATE_STANDBY,
+        AUTOMATION_STATE_ACTIVE,
+    )
+
     /** Stock AIService: Gasped cruise status 1/2 → enter CCS key mode (system on). */
     val CCS_ENGAGED_STATUSES: Set<Int> = setOf(CCS_STATUS_ACTIVE, CCS_STATUS_STANDBY)
 
@@ -58,20 +90,14 @@ object AccCruiseDomain {
     /** Wait for ACC to become engaged after enable / SET pulse. */
     const val ENGAGE_TIMEOUT_MS = 4_000L
 
-    /** CCS: max time to converge vehicle speed to widget target after SET-. */
+    /** CCS: safety deadline for remembered-setpoint stepping after SET-. */
     const val CCS_CONVERGE_TIMEOUT_MS = 30_000L
 
-    /** CCS: treat vehicle speed as matching widget target within this band (km/h). */
+    /**
+     * Fallback only: when remembered CCS setpoint is unknown, treat vehicle speed as
+     * matching the widget target within this band (km/h).
+     */
     const val CCS_SPEED_TOLERANCE_KMH = 1
-
-    /** CCS: max ±1 km/h pulses per batch (actual steps = min of this and |delta|). */
-    const val CCS_BATCH_MAX_STEPS = 5
-
-    /** CCS: when already in-band at measure, wait this long then recheck. */
-    const val CCS_AT_TARGET_VERIFY_MS = 2_000L
-
-    /** CCS: wait after a pulse batch (and for follow-up patience / verify). */
-    const val CCS_POST_BATCH_WAIT_MS = 1_000L
 
     /**
      * After ACC/CCS converge ends, wait this long then re-check setpoint
@@ -190,6 +216,7 @@ object AccCruiseDomain {
                 accMode == null -> CruiseLogicalState.Off
                 accMode == ACC_MODE_FAULT -> CruiseLogicalState.Fault
                 accMode == 0 -> CruiseLogicalState.Off
+                accMode == ACC_MODE_OVERRIDE -> CruiseLogicalState.Override
                 accMode in ENGAGED_ACC_MODES -> CruiseLogicalState.Active
                 accMode in STANDBY_DISPLAY_ACC_MODES -> CruiseLogicalState.Standby
                 else -> CruiseLogicalState.Off
@@ -203,16 +230,52 @@ object AccCruiseDomain {
         }
     }
 
+
+    fun toAutomationState(state: CruiseLogicalState): String = when (state) {
+        CruiseLogicalState.Off -> AUTOMATION_STATE_OFF
+        CruiseLogicalState.Standby -> AUTOMATION_STATE_STANDBY
+        CruiseLogicalState.Active -> AUTOMATION_STATE_ACTIVE
+        CruiseLogicalState.Override -> AUTOMATION_STATE_OVERRIDE
+        CruiseLogicalState.Fault -> AUTOMATION_STATE_FAULT
+    }
+
+    /**
+     * ACC cruise logical state for automations.
+     * `null` [accMode] → no value (signal unavailable); otherwise mapped via [cruiseLogicalState].
+     */
+    fun accAutomationState(accMode: Int?): String? =
+        if (accMode == null) null
+        else toAutomationState(cruiseLogicalState(useAccPath = true, accMode = accMode, ccsStatus = null))
+
+    /**
+     * CCS cruise logical state for automations.
+     * `null` [ccsStatus] → no value; otherwise mapped via [cruiseLogicalState] (no Fault).
+     */
+    fun ccsAutomationState(ccsStatus: Int?): String? =
+        if (ccsStatus == null) null
+        else toAutomationState(cruiseLogicalState(useAccPath = false, accMode = null, ccsStatus = ccsStatus))
+
     fun isActiveAtTarget(accMode: Int?, vSetDisKmh: Int?, targetKmh: Int): Boolean =
         isEngaged(accMode) && vSetDisKmh != null && vSetDisKmh == normalizeAccCruiseTargetKmh(targetKmh)
 
+    /**
+     * CCS Active and already at the widget target.
+     *
+     * Prefers the session [rememberedSetpointKmh] (exact match, like ACC VSetDis).
+     * Falls back to vehicle-speed band only when memory is empty.
+     */
     fun isCcsActiveAtTarget(
         cruiseControlStatus: Int?,
+        rememberedSetpointKmh: Int?,
         vehicleSpeedKmh: Float?,
         targetKmh: Int,
     ): Boolean {
         if (!isCcsActive(cruiseControlStatus)) return false
-        return isVehicleSpeedAtTarget(vehicleSpeedKmh, targetKmh)
+        val target = normalizeAccCruiseTargetKmh(targetKmh)
+        if (rememberedSetpointKmh != null) {
+            return rememberedSetpointKmh == target
+        }
+        return isVehicleSpeedAtTarget(vehicleSpeedKmh, target)
     }
 
     fun isAtWidgetTarget(
@@ -220,12 +283,13 @@ object AccCruiseDomain {
         accMode: Int?,
         vSetDisKmh: Int?,
         ccsStatus: Int?,
+        rememberedSetpointKmh: Int?,
         vehicleSpeedKmh: Float?,
         targetKmh: Int,
     ): Boolean = if (useAccPath) {
         isActiveAtTarget(accMode, vSetDisKmh, targetKmh)
     } else {
-        isCcsActiveAtTarget(ccsStatus, vehicleSpeedKmh, targetKmh)
+        isCcsActiveAtTarget(ccsStatus, rememberedSetpointKmh, vehicleSpeedKmh, targetKmh)
     }
 
     fun isVehicleSpeedAtTarget(vehicleSpeedKmh: Float?, targetKmh: Int): Boolean {
@@ -236,45 +300,13 @@ object AccCruiseDomain {
     }
 
     /**
-     * Signed km/h delta from rounded vehicle speed to widget target.
-     * Positive = need to increase cruise setpoint; null if speed unknown.
+     * Signed km/h delta from remembered CCS setpoint to widget target.
+     * Positive = need RES+; null if setpoint unknown.
      */
-    fun ccsStepDelta(vehicleSpeedKmh: Float?, targetKmh: Int): Int? {
-        val speed = vehicleSpeedKmh ?: return null
-        if (!speed.isFinite()) return null
+    fun ccsRememberedStepDelta(rememberedSetpointKmh: Int?, targetKmh: Int): Int? {
+        val setpoint = rememberedSetpointKmh ?: return null
         val target = normalizeAccCruiseTargetKmh(targetKmh)
-        return target - speed.roundToInt()
-    }
-
-    /** Number of ±1 pulses in the next batch: min([CCS_BATCH_MAX_STEPS], |delta|), 0 if in band. */
-    fun ccsBatchSteps(delta: Int): Int {
-        val absDelta = abs(delta)
-        if (absDelta <= CCS_SPEED_TOLERANCE_KMH) return 0
-        return minOf(CCS_BATCH_MAX_STEPS, absDelta)
-    }
-
-    /**
-     * True when speed has crossed past the target band in the step direction.
-     * [increasing] true = RES+ direction; false = SET− direction.
-     */
-    fun ccsOvershot(vehicleSpeedKmh: Float?, targetKmh: Int, increasing: Boolean): Boolean {
-        val speed = vehicleSpeedKmh ?: return false
-        if (!speed.isFinite()) return false
-        val target = normalizeAccCruiseTargetKmh(targetKmh)
-        val rounded = speed.roundToInt()
-        return if (increasing) {
-            rounded > target + CCS_SPEED_TOLERANCE_KMH
-        } else {
-            rounded < target - CCS_SPEED_TOLERANCE_KMH
-        }
-    }
-
-    /** True when speed did not meaningfully move over a wait window (|end-start| < 1 km/h). */
-    fun ccsSpeedUnchanged(startKmh: Float?, endKmh: Float?): Boolean {
-        val start = startKmh ?: return false
-        val end = endKmh ?: return false
-        if (!start.isFinite() || !end.isFinite()) return false
-        return abs(end - start) < 1f
+        return target - setpoint
     }
 
     /** mbCAN FRM byte is displayed km/h (unsigned). */

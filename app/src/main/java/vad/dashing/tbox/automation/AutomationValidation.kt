@@ -1,0 +1,959 @@
+package vad.dashing.tbox.automation
+
+import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.parseHttpRequestWidgetYaml
+
+data class AutomationValidationIssue(
+    val path: String,
+    val message: String,
+)
+
+object AutomationValidator {
+    private const val MAX_PARALLEL_RUNS = 10
+
+    fun validate(document: AutomationDocument): List<AutomationValidationIssue> {
+        val issues = integrityIssues(document).toMutableList()
+        document.automations.forEachIndexed { index, definition ->
+            validateDefinition(definition, "automations[$index]", issues)
+        }
+        return issues
+    }
+
+    /** JSON / format problems that block the whole document. Per-rule issues are not here. */
+    fun integrityIssues(document: AutomationDocument): List<AutomationValidationIssue> {
+        val issues = mutableListOf<AutomationValidationIssue>()
+        if (document.formatVersion != AUTOMATION_FORMAT_VERSION) {
+            issues += AutomationValidationIssue(
+                "formatVersion",
+                "Неподдерживаемая версия формата",
+            )
+        }
+        val duplicateIds = document.automations.groupingBy { it.id }.eachCount()
+            .filterValues { it > 1 }
+            .keys
+        duplicateIds.forEach {
+            issues += AutomationValidationIssue("automations", "Повторяется id автоматизации: $it")
+        }
+        return issues
+    }
+
+    fun validate(definition: AutomationDefinition): List<AutomationValidationIssue> {
+        val issues = mutableListOf<AutomationValidationIssue>()
+        validateDefinition(definition, "automation", issues)
+        return issues
+    }
+
+    fun isRunnable(definition: AutomationDefinition): Boolean =
+        definition.enabled && validate(definition).isEmpty()
+
+    /**
+     * Turns off rules that cannot run, so one stale command (e.g. window 5 %)
+     * does not block the rest of the document.
+     */
+    fun withInvalidDisabled(
+        document: AutomationDocument,
+    ): Pair<AutomationDocument, List<String>> {
+        val disabledIds = mutableListOf<String>()
+        val automations = document.automations.map { definition ->
+            if (definition.enabled && validate(definition).isNotEmpty()) {
+                disabledIds += definition.id
+                definition.copy(enabled = false)
+            } else {
+                definition
+            }
+        }
+        return document.copy(automations = automations) to disabledIds
+    }
+
+    private fun validateDefinition(
+        definition: AutomationDefinition,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (definition.id.isBlank()) {
+            issues += AutomationValidationIssue("$path.id", "Отсутствует id")
+        }
+        if (definition.name.isBlank()) {
+            issues += AutomationValidationIssue("$path.name", "Укажите название")
+        }
+        if (definition.triggers.isEmpty()) {
+            issues += AutomationValidationIssue("$path.triggers", "Добавьте хотя бы один триггер")
+        }
+        if (definition.actions.isEmpty()) {
+            issues += AutomationValidationIssue("$path.actions", "Добавьте хотя бы одно действие")
+        }
+        val triggerIds = definition.triggers.map { it.id }
+        if (triggerIds.any { it.isBlank() }) {
+            issues += AutomationValidationIssue("$path.triggers", "У каждого триггера должен быть id")
+        }
+        if (triggerIds.toSet().size != triggerIds.size) {
+            issues += AutomationValidationIssue("$path.triggers", "ID триггеров должны быть уникальны")
+        }
+        definition.triggers.forEachIndexed { index, trigger ->
+            validateTrigger(trigger, "$path.triggers[$index]", issues)
+        }
+        definition.conditions.forEachIndexed { index, condition ->
+            validateCondition(
+                condition = condition,
+                triggerIds = triggerIds.toSet(),
+                path = "$path.conditions[$index]",
+                depth = 0,
+                issues = issues,
+            )
+        }
+        if (definition.conditionWaitMillis !in 0..AUTOMATION_MAX_CONDITION_WAIT_MS) {
+            issues += AutomationValidationIssue(
+                "$path.conditionWaitMillis",
+                "Недопустимое время ожидания условия",
+            )
+        }
+        val actionCounter = intArrayOf(0)
+        definition.actions.forEachIndexed { index, action ->
+            validateAction(
+                action = action,
+                triggerIds = triggerIds.toSet(),
+                path = "$path.actions[$index]",
+                depth = 0,
+                actionCounter = actionCounter,
+                issues = issues,
+            )
+        }
+        if (actionCounter[0] > AUTOMATION_MAX_ACTION_COUNT) {
+            issues += AutomationValidationIssue(
+                "$path.actions",
+                "Слишком много действий: максимум $AUTOMATION_MAX_ACTION_COUNT",
+            )
+        }
+        val maxRunsAllowed = if (definition.runMode == AutomationRunMode.SINGLE) 1 else MAX_PARALLEL_RUNS
+        if (definition.maxRuns !in 1..maxRunsAllowed) {
+            issues += AutomationValidationIssue(
+                "$path.maxRuns",
+                "Недопустимое число одновременных запусков",
+            )
+        }
+    }
+
+    private fun validateTrigger(
+        trigger: AutomationTrigger,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        when (trigger) {
+            is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.WidgetPressed -> {
+                val widgetTriggerId = trigger.triggerId.trim()
+                if (widgetTriggerId.isEmpty()) {
+                    issues += AutomationValidationIssue("$path.triggerId", "Введите ID триггера")
+                } else if (widgetTriggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                    )
+                }
+            }
+            is AutomationTrigger.HardKey -> {
+                if (trigger.keyCode !in AUTOMATION_HARD_KEY_MIN_CODE..AUTOMATION_HARD_KEY_MAX_CODE) {
+                    issues += AutomationValidationIssue(
+                        "$path.keyCode",
+                        "Код кнопки должен быть от $AUTOMATION_HARD_KEY_MIN_CODE " +
+                            "до $AUTOMATION_HARD_KEY_MAX_CODE",
+                    )
+                }
+                if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Триггер «Кнопка на руле/двери» работает только на ГУ Android 9 (mbCAN). " +
+                            "На Android 10 замените на плитку «Триггер автоматизации»",
+                    )
+                }
+            }
+            is AutomationTrigger.EspBleBtn -> {
+                if (trigger.btn !in AUTOMATION_ESP_BLE_BTN_MIN..AUTOMATION_ESP_BLE_BTN_MAX) {
+                    issues += AutomationValidationIssue(
+                        "$path.btn",
+                        "Номер кнопки должен быть от $AUTOMATION_ESP_BLE_BTN_MIN " +
+                            "до $AUTOMATION_ESP_BLE_BTN_MAX",
+                    )
+                }
+                if (trigger.mac.isBlank()) {
+                    issues += AutomationValidationIssue(
+                        "$path.mac",
+                        "Выберите устройство Shelly Blu (MAC)",
+                    )
+                }
+            }
+            is AutomationTrigger.Interval -> {
+                if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
+                    issues += AutomationValidationIssue(
+                        "$path.intervalMillis",
+                        "Период должен быть от ${AUTOMATION_MIN_INTERVAL_MS / 1_000L} с " +
+                            "до ${AUTOMATION_MAX_INTERVAL_MS / 3_600_000L} ч",
+                    )
+                } else if (trigger.intervalMillis % 1_000L != 0L) {
+                    issues += AutomationValidationIssue(
+                        "$path.intervalMillis",
+                        "Период должен быть целым числом секунд",
+                    )
+                }
+            }
+
+            is AutomationTrigger.NumericThreshold -> {
+                validateSignal(
+                    trigger.signal,
+                    trigger.source,
+                    AutomationSignalValueType.NUMBER,
+                    path,
+                    issues,
+                )
+                validateEspBleBatteryMac(trigger.signal, trigger.mac, "$path.mac", issues)
+                if (!trigger.threshold.isFinite()) {
+                    issues += AutomationValidationIssue("$path.threshold", "Порог должен быть числом")
+                }
+                if (trigger.rearmEnabled) {
+                    trigger.resetThreshold?.let { reset ->
+                        if (!reset.isFinite()) {
+                            issues += AutomationValidationIssue(
+                                "$path.resetThreshold",
+                                "Порог возврата должен быть числом",
+                            )
+                        } else {
+                            val valid = when (trigger.direction) {
+                                AutomationThresholdDirection.ABOVE -> reset <= trigger.threshold
+                                AutomationThresholdDirection.BELOW -> reset >= trigger.threshold
+                            }
+                            if (!valid) {
+                                issues += AutomationValidationIssue(
+                                    "$path.resetThreshold",
+                                    "Порог возврата расположен с неверной стороны основного порога",
+                                )
+                            }
+                        }
+                    }
+                }
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+            }
+
+            is AutomationTrigger.StateEquals -> {
+                validateSignal(
+                    trigger.signal,
+                    trigger.source,
+                    AutomationSignalValueType.STATE,
+                    path,
+                    issues,
+                )
+                if (trigger.expectedState.isBlank()) {
+                    issues += AutomationValidationIssue(
+                        "$path.expectedState",
+                        "Укажите ожидаемое состояние",
+                    )
+                } else {
+                    validateStateValue(
+                        trigger.signal,
+                        trigger.expectedState,
+                        "$path.expectedState",
+                        issues,
+                    )
+                }
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+            }
+
+            is AutomationTrigger.Geofence -> {
+                if (!trigger.latitude.isFinite() || trigger.latitude !in -90.0..90.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.latitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                if (!trigger.longitude.isFinite() || trigger.longitude !in -180.0..180.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.longitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                val zone = trigger.zoneRadiusMeters
+                val rearm = trigger.rearmRadiusMeters
+                if (!zone.isFinite() || zone < 0.0 || zone > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Радиус зоны должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                }
+                if (!rearm.isFinite() || rearm < 0.0 || rearm > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.rearmRadiusMeters",
+                        "Радиус взведения должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                } else if (zone.isFinite() && zone >= 0.0) {
+                    val valid = when (trigger.direction) {
+                        AutomationGeofenceDirection.ENTER -> rearm > zone
+                        AutomationGeofenceDirection.EXIT -> rearm < zone
+                    }
+                    if (!valid) {
+                        issues += AutomationValidationIssue(
+                            "$path.rearmRadiusMeters",
+                            when (trigger.direction) {
+                                AutomationGeofenceDirection.ENTER ->
+                                    "Радиус взведения должен быть больше радиуса зоны"
+                                AutomationGeofenceDirection.EXIT ->
+                                    "Радиус взведения должен быть меньше радиуса зоны"
+                            },
+                        )
+                    }
+                }
+                if (trigger.direction == AutomationGeofenceDirection.EXIT &&
+                    zone.isFinite() &&
+                    zone <= 0.0
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Для «выехал» радиус зоны должен быть больше 0",
+                    )
+                }
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
+            }
+
+            is AutomationTrigger.Time -> {
+                if (!trigger.at.isValid()) {
+                    issues += AutomationValidationIssue("$path.at", "Укажите время ЧЧ:ММ")
+                }
+            }
+
+            is AutomationTrigger.Solar -> {
+                if (trigger.offsetMinutes !in 0..AUTOMATION_SOLAR_MAX_OFFSET_MINUTES) {
+                    issues += AutomationValidationIssue(
+                        "$path.offsetMinutes",
+                        "Смещение должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun validateHold(
+        holdMillis: Long,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (holdMillis !in 0..AUTOMATION_MAX_HOLD_MS) {
+            issues += AutomationValidationIssue(path, "Недопустимая выдержка")
+        }
+    }
+
+    private fun validateSignal(
+        signal: AutomationSignalId,
+        source: AutomationSignalSource,
+        expectedType: AutomationSignalValueType,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (signal.valueType != expectedType) {
+            issues += AutomationValidationIssue(path, "Тип сигнала не подходит")
+        }
+        if (!AutomationSignalCatalog.supports(signal, source)) {
+            issues += AutomationValidationIssue(path, "Выбранный источник не поддерживает сигнал")
+        }
+    }
+
+    private fun validateEspBleBatteryMac(
+        signal: AutomationSignalId,
+        mac: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (signal != AutomationSignalId.ESP_BLE_BATTERY) return
+        if (mac.isBlank()) {
+            issues += AutomationValidationIssue(
+                path,
+                "Выберите устройство Shelly Blu (MAC) для сигнала батареи",
+            )
+        }
+    }
+
+    private fun validateCondition(
+        condition: AutomationCondition,
+        triggerIds: Set<String>,
+        path: String,
+        depth: Int,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        if (depth > AUTOMATION_MAX_CONDITION_DEPTH) {
+            issues += AutomationValidationIssue(path, "Слишком глубокая вложенность условий")
+            return
+        }
+        when (condition) {
+            AutomationCondition.Always -> Unit
+            is AutomationCondition.Numeric -> {
+                validateSignal(
+                    condition.signal,
+                    condition.source,
+                    AutomationSignalValueType.NUMBER,
+                    path,
+                    issues,
+                )
+                validateEspBleBatteryMac(condition.signal, condition.mac, "$path.mac", issues)
+                if (!condition.expectedValue.isFinite()) {
+                    issues += AutomationValidationIssue("$path.expectedValue", "Ожидается число")
+                }
+            }
+
+            is AutomationCondition.State -> {
+                validateSignal(
+                    condition.signal,
+                    condition.source,
+                    AutomationSignalValueType.STATE,
+                    path,
+                    issues,
+                )
+                if (condition.expectedState.isBlank()) {
+                    issues += AutomationValidationIssue(
+                        "$path.expectedState",
+                        "Укажите ожидаемое состояние",
+                    )
+                } else {
+                    validateStateValue(
+                        condition.signal,
+                        condition.expectedState,
+                        "$path.expectedState",
+                        issues,
+                    )
+                }
+            }
+
+            is AutomationCondition.TriggeredBy -> {
+                if (condition.triggerIds.isEmpty() || !triggerIds.containsAll(condition.triggerIds)) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerIds",
+                        "Условие ссылается на неизвестный триггер",
+                    )
+                }
+            }
+
+            is AutomationCondition.All -> condition.conditions.forEachIndexed { index, nested ->
+                validateCondition(nested, triggerIds, "$path.conditions[$index]", depth + 1, issues)
+            }
+
+            is AutomationCondition.Any -> condition.conditions.forEachIndexed { index, nested ->
+                validateCondition(nested, triggerIds, "$path.conditions[$index]", depth + 1, issues)
+            }
+
+            is AutomationCondition.Not ->
+                validateCondition(condition.condition, triggerIds, "$path.condition", depth + 1, issues)
+
+            is AutomationCondition.Time -> {
+                val afterValid = condition.after == null || condition.after.isValid()
+                val beforeValid = condition.before == null || condition.before.isValid()
+                if (!afterValid) {
+                    issues += AutomationValidationIssue("$path.after", "Укажите время «после» как ЧЧ:ММ")
+                }
+                if (!beforeValid) {
+                    issues += AutomationValidationIssue("$path.before", "Укажите время «до» как ЧЧ:ММ")
+                }
+                if (
+                    afterValid &&
+                    beforeValid &&
+                    condition.after == null &&
+                    condition.before == null &&
+                    condition.weekdays.isEmpty()
+                ) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Задайте окно времени или дни недели",
+                    )
+                }
+            }
+
+            is AutomationCondition.Solar -> {
+                val afterValid = condition.after == null || condition.after.isValid()
+                val beforeValid = condition.before == null || condition.before.isValid()
+                if (!afterValid) {
+                    issues += AutomationValidationIssue(
+                        "$path.after",
+                        "Смещение «после» должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+                if (!beforeValid) {
+                    issues += AutomationValidationIssue(
+                        "$path.before",
+                        "Смещение «до» должно быть 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES мин",
+                    )
+                }
+                if (
+                    afterValid &&
+                    beforeValid &&
+                    condition.after == null &&
+                    condition.before == null &&
+                    condition.weekdays.isEmpty()
+                ) {
+                    issues += AutomationValidationIssue(
+                        path,
+                        "Задайте окно восход/закат или дни недели",
+                    )
+                }
+            }
+
+            is AutomationCondition.Geofence -> {
+                if (!condition.latitude.isFinite() || condition.latitude !in -90.0..90.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.latitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                if (!condition.longitude.isFinite() || condition.longitude !in -180.0..180.0) {
+                    issues += AutomationValidationIssue(
+                        "$path.longitude",
+                        "Вставьте распознаваемую точку (координаты или ссылку)",
+                    )
+                }
+                val zone = condition.zoneRadiusMeters
+                if (!zone.isFinite() || zone < 0.0 || zone > AUTOMATION_GEOFENCE_MAX_RADIUS_M) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Радиус зоны должен быть от 0 до ${AUTOMATION_GEOFENCE_MAX_RADIUS_M.toInt()} м",
+                    )
+                }
+                if (condition.presence == AutomationGeofencePresence.OUTSIDE &&
+                    zone.isFinite() &&
+                    zone <= 0.0
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.zoneRadiusMeters",
+                        "Для «снаружи» радиус зоны должен быть больше 0",
+                    )
+                }
+            }
+
+            is AutomationCondition.UiState -> Unit
+
+            is AutomationCondition.TriggerWidget -> {
+                val triggerId = condition.triggerId.trim()
+                if (triggerId.isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "Укажите ID триггера виджета",
+                    )
+                } else if (triggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.triggerId",
+                        "ID триггера — не более $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                    )
+                }
+            }
+
+            is AutomationCondition.AutomationEnabled -> {
+                if (condition.automationId.trim().isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.automationId",
+                        "Укажите ID автоматизации",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun validateAction(
+        action: AutomationAction,
+        triggerIds: Set<String>,
+        path: String,
+        depth: Int,
+        actionCounter: IntArray,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        actionCounter[0] += 1
+        if (depth > AUTOMATION_MAX_ACTION_DEPTH) {
+            issues += AutomationValidationIssue(path, "Слишком глубокая вложенность действий")
+            return
+        }
+        when (action) {
+            is AutomationAction.Delay -> {
+                if (action.durationMillis !in 0..AUTOMATION_MAX_DELAY_MS) {
+                    issues += AutomationValidationIssue(path, "Недопустимая задержка")
+                }
+            }
+
+            is AutomationAction.IfThenElse -> {
+                validateCondition(action.condition, triggerIds, "$path.condition", 0, issues)
+                if (action.thenActions.isEmpty()) {
+                    issues += AutomationValidationIssue("$path.thenActions", "Ветка «То» пуста")
+                }
+                action.thenActions.forEachIndexed { index, nested ->
+                    validateAction(
+                        nested,
+                        triggerIds,
+                        "$path.thenActions[$index]",
+                        depth + 1,
+                        actionCounter,
+                        issues,
+                    )
+                }
+                action.elseActions.forEachIndexed { index, nested ->
+                    validateAction(
+                        nested,
+                        triggerIds,
+                        "$path.elseActions[$index]",
+                        depth + 1,
+                        actionCounter,
+                        issues,
+                    )
+                }
+            }
+
+            is AutomationAction.CanCommand -> {
+                if (!AutomationCanCatalog.isAllowed(action)) {
+                    issues += AutomationValidationIssue(path, "CAN-команда отсутствует в безопасном каталоге")
+                } else {
+                    val canMode = UniversalCanRepository.mode.value
+                    val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
+                    if (entry != null && !entry.supports(canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "CAN-действие не подтверждено для текущего backend ГУ",
+                        )
+                    } else if (!AutomationCanValueCodec.isResolvable(action, canMode)) {
+                        issues += AutomationValidationIssue(
+                            path,
+                            "Значение CAN недоступно на текущем backend ГУ",
+                        )
+                    }
+                }
+            }
+
+            is AutomationAction.LaunchApplication -> {
+                if (action.packageName.isBlank()) {
+                    issues += AutomationValidationIssue("$path.packageName", "Выберите приложение")
+                }
+                if (action.launchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+                    val displayId = action.virtualDisplayId
+                    if (displayId == null || displayId <= 0) {
+                        issues += AutomationValidationIssue(
+                            "$path.virtualDisplayId",
+                            "Выберите виртуальный дисплей",
+                        )
+                    }
+                }
+            }
+
+            is AutomationAction.OpenMainScreen -> {
+                if (action.page !in
+                    SettingsManager.MIN_MAIN_SCREEN_PAGE_COUNT..SettingsManager.MAX_MAIN_SCREEN_PAGE_COUNT
+                ) {
+                    issues += AutomationValidationIssue("$path.page", "Недопустимый номер страницы")
+                }
+            }
+
+            is AutomationAction.HttpRequest -> {
+                if (action.yaml.isBlank()) {
+                    issues += AutomationValidationIssue("$path.yaml", "Настройка HTTP пуста")
+                } else {
+                    val parsed = if (action.openBrowser) {
+                        browserUrlFromHttpRequestYaml(action.yaml)
+                    } else {
+                        parseHttpRequestWidgetYaml(action.yaml)
+                    }
+                    parsed.exceptionOrNull()?.let {
+                        issues += AutomationValidationIssue(
+                            "$path.yaml",
+                            it.message ?: "Некорректная настройка HTTP",
+                        )
+                    }
+                }
+            }
+
+            is AutomationAction.Builtin -> validateBuiltin(action, path, issues)
+        }
+    }
+
+    private fun validateStateValue(
+        signal: AutomationSignalId,
+        value: String,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        val options = AutomationSignalCatalog.get(signal).stateOptions
+        if (
+            options.isNotEmpty() &&
+            options.none { it.equals(value.trim(), ignoreCase = true) }
+        ) {
+            issues += AutomationValidationIssue(path, "Состояние отсутствует в каталоге")
+        }
+    }
+
+    private fun validateBuiltin(
+        action: AutomationAction.Builtin,
+        path: String,
+        issues: MutableList<AutomationValidationIssue>,
+    ) {
+        when (action.type) {
+            AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
+            AutomationBuiltinActionType.ESP_RELAY_PULSE,
+            -> if (action.intValue !in 0..7) {
+                issues += AutomationValidationIssue("$path.intValue", "Недопустимый канал реле")
+            }
+
+            AutomationBuiltinActionType.ESP_RELAY_SET ->
+                issues += AutomationValidationIssue(
+                    path,
+                    "Действие «установить маску ESP-реле» больше не поддерживается",
+                )
+
+            AutomationBuiltinActionType.SET_MEDIA_VOLUME -> if (action.intValue !in 0..31) {
+                issues += AutomationValidationIssue("$path.intValue", "Громкость должна быть 0–31")
+            }
+
+            AutomationBuiltinActionType.SET_PHONE_VOLUME -> if (action.intValue !in 1..31) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость телефона должна быть 1–31",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_NAVI_VOLUME -> if (action.intValue !in 0..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость навигатора должна быть 0–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_VOICE_VOLUME -> if (action.intValue !in 2..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Громкость голоса должна быть 2–10",
+                )
+            }
+
+            AutomationBuiltinActionType.SET_HU_DAY_NIGHT_THEME -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("light", "dark", "auto")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Тема: light / dark / auto",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> {
+                val key = action.stringValue.trim().lowercase()
+                if (key !in setOf("only", "assist", "off")) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Подголовник: only / assist / off",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> if (action.intValue !in 1..10) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Яркость экрана ГУ должна быть 1–10",
+                )
+            }
+
+            AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
+                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs)",
+                    )
+                }
+                val target = action.intValue
+                if (
+                    target != 0 &&
+                    target !in vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN..
+                        vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Уставка круиза должна быть " +
+                            "${vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN}–" +
+                            "${vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX} км/ч",
+                    )
+                }
+                val parts = action.stringValue.trim().lowercase().split(':', ',')
+                parts.getOrNull(1)?.toIntOrNull()?.let { increase ->
+                    if (
+                        increase !in vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN..
+                            vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+                    ) {
+                        issues += AutomationValidationIssue(
+                            "$path.stringValue",
+                            "Интервал +1 должен быть " +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN}–" +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX} мс",
+                        )
+                    }
+                }
+                parts.getOrNull(2)?.toIntOrNull()?.let { decrease ->
+                    if (
+                        decrease !in vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN..
+                            vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
+                    ) {
+                        issues += AutomationValidationIssue(
+                            "$path.stringValue",
+                            "Интервал −1 должен быть " +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN}–" +
+                                "${vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX} мс",
+                        )
+                    }
+                }
+            }
+
+            AutomationBuiltinActionType.CRUISE_PAUSE,
+            AutomationBuiltinActionType.CRUISE_FULL_OFF,
+            AutomationBuiltinActionType.CRUISE_RESUME,
+            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
+            -> if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Круиз: режим ACC или CCS (acc / ccs)",
+                )
+            }
+
+            AutomationBuiltinActionType.CRUISE_NUDGE -> {
+                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs)",
+                    )
+                }
+                if (action.intValue != 1 && action.intValue != -1) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Шаг уставки круиза: +1 или −1",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.WIFI_CONNECT -> {
+                if (WifiStaSsid.normalize(action.stringValue) == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите сохранённую сеть Wi-Fi",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.ADB_SHELL -> {
+                val command = action.stringValue.trim()
+                if (command.isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Введите shell-команду",
+                    )
+                } else if (command.length > vad.dashing.tbox.adb.AdbAutomationActions.MAX_SHELL_COMMAND_CHARS) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Команда длиннее ${vad.dashing.tbox.adb.AdbAutomationActions.MAX_SHELL_COMMAND_CHARS} символов",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.ADB_FORCE_STOP -> {
+                if (action.stringValue.trim().isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите приложение",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
+            AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
+            -> {
+                if (action.intValue !in 0..2) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Недопустимая операция для плавающих панелей",
+                    )
+                }
+                if (
+                    action.floatingPanelScope() == AutomationFloatingPanelScope.SELECTED &&
+                    action.stringValue.isBlank()
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Выберите плавающую панель",
+                    )
+                }
+            }
+
+            else -> Unit
+        }
+        if (action.type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET) {
+            val triggerId = action.stringValue.trim()
+            if (triggerId.isEmpty()) {
+                issues += AutomationValidationIssue("$path.stringValue", "Введите ID триггера")
+            } else if (triggerId.length > AUTOMATION_TRIGGER_ID_MAX_CHARS) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "ID триггера длиннее $AUTOMATION_TRIGGER_ID_MAX_CHARS символов",
+                )
+            }
+        }
+        if (action.type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED) {
+            if (action.stringValue.trim().isEmpty()) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Укажите ID автоматизации",
+                )
+            }
+        }
+        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {
+            val duration = action.stringValue.trim()
+            val parsedDuration = duration.toLongOrNull()
+            if (
+                duration.isNotEmpty() &&
+                (parsedDuration == null || parsedDuration !in 1L..60_000L)
+            ) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Длительность импульса должна быть 1–60000 мс",
+                )
+            }
+        }
+        if (
+            action.type in MEDIA_PACKAGE_ACTIONS &&
+            action.stringValue.isBlank()
+        ) {
+            issues += AutomationValidationIssue(
+                "$path.stringValue",
+                "Выберите медиаплеер",
+            )
+        }
+        if (action.type in USER_MESSAGE_ACTIONS) {
+            val text = action.stringValue.trim()
+            if (text.isEmpty()) {
+                issues += AutomationValidationIssue("$path.stringValue", "Введите текст сообщения")
+            } else if (text.length > AUTOMATION_MAX_USER_MESSAGE_CHARS) {
+                issues += AutomationValidationIssue(
+                    "$path.stringValue",
+                    "Текст длиннее $AUTOMATION_MAX_USER_MESSAGE_CHARS символов",
+                )
+            }
+        }
+        if (action.type == AutomationBuiltinActionType.SHOW_ALERT) {
+            if (action.intValue.toLong() !in 0L..AUTOMATION_MAX_DELAY_MS) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Автозакрытие должно быть 0–${AUTOMATION_MAX_DELAY_MS / 1_000L} с",
+                )
+            }
+        }
+    }
+
+    private val MEDIA_PACKAGE_ACTIONS = setOf(
+        AutomationBuiltinActionType.MEDIA_PREVIOUS,
+        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
+        AutomationBuiltinActionType.MEDIA_PLAY,
+        AutomationBuiltinActionType.MEDIA_NEXT,
+        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
+    )
+
+    private val USER_MESSAGE_ACTIONS = setOf(
+        AutomationBuiltinActionType.SHOW_TOAST,
+        AutomationBuiltinActionType.SHOW_ALERT,
+    )
+}

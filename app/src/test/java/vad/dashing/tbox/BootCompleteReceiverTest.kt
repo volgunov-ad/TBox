@@ -34,4 +34,23 @@ class BootCompleteReceiverTest {
             started.getStringExtra(BackgroundService.EXTRA_START_SOURCE_ACTION),
         )
     }
+
+    @Test
+    fun quickbootPowerOnAction_startsBootPipeline() {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+
+        BootCompleteReceiver().onReceive(
+            context,
+            Intent("android.intent.action.QUICKBOOT_POWERON"),
+        )
+
+        val started = shadowOf(context).nextStartedService
+        assertEquals(ComponentName(context, BackgroundService::class.java), started.component)
+        assertEquals(BackgroundService.ACTION_START, started.action)
+        assertTrue(started.getBooleanExtra(BackgroundService.EXTRA_START_FROM_BOOT, false))
+        assertEquals(
+            "android.intent.action.QUICKBOOT_POWERON",
+            started.getStringExtra(BackgroundService.EXTRA_START_SOURCE_ACTION),
+        )
+    }
 }

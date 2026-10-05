@@ -50,6 +50,9 @@ object ThemeLayoutExport {
         if (ThemeSection.APP_ICONS in sections) {
             root.put(ThemeSection.APP_ICONS.jsonKey, buildAppIconsSection(context, settingsManager, sections))
         }
+        if (ThemeSection.UI_ICONS in sections) {
+            root.put(ThemeSection.UI_ICONS.jsonKey, buildUiIconsSection(context, settingsManager))
+        }
         return root.toString(2)
     }
 
@@ -197,6 +200,26 @@ object ThemeLayoutExport {
         return JSONObject()
             .put("packages", arr)
             .put("httpRequestIconKeys", httpArr)
+    }
+
+    private suspend fun buildUiIconsSection(
+        context: Context,
+        settingsManager: SettingsManager,
+    ): JSONObject {
+        val keys = UiIconPaths.listResolvableKeys(
+            filesDir = context.filesDir,
+            lookup = settingsManager.launcherAppIconLookup(),
+        )
+        val arr = JSONArray()
+        keys.sorted().forEach { arr.put(it) }
+        val preserve = settingsManager.uiIconPreserveColorsFlow.first()
+            .filter { it in keys }
+            .sorted()
+        val preserveArr = JSONArray()
+        preserve.forEach { preserveArr.put(it) }
+        return JSONObject()
+            .put("keys", arr)
+            .put("preserveColors", preserveArr)
     }
 
     private suspend fun collectHttpRequestIconKeysForSections(
@@ -573,6 +596,9 @@ object ThemeLayoutExport {
                 if (maxAbsY <= 0f) 0f else (absY / maxAbsY).coerceIn(0f, 1f)
             }
             val style = parsePanelBackgroundStyleFieldsTheme(o)
+            val stripThickness = normalizePanelCollapseStripThicknessDp(
+                o.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP),
+            )
             configs.add(
                 MainScreenPanelConfig(
                     id = id,
@@ -602,11 +628,10 @@ object ThemeLayoutExport {
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
                     collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
-                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                        o.optInt(
-                            "collapseStripThicknessDp",
-                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
-                        ),
+                    collapseStripThicknessDp = stripThickness,
+                    collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                        o.optInt("collapseTouchZoneThicknessDp", stripThickness),
+                        stripThickness,
                     ),
                     collapseStripColorLight = colorHexToIntOrNull(
                         o.optString("collapseStripColorLight"),
@@ -620,6 +645,14 @@ object ThemeLayoutExport {
                     collapseStripExpandedColorDark = colorHexToIntOrNull(
                         o.optString("collapseStripExpandedColorDark"),
                     ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+                    collapseOnStripTap = o.optBoolean(
+                        "collapseOnStripTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+                    ),
+                    collapseOnStripDoubleTap = o.optBoolean(
+                        "collapseOnStripDoubleTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+                    ),
                     collapseOnTileTap = o.optBoolean(
                         "collapseOnTileTap",
                         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -657,6 +690,9 @@ object ThemeLayoutExport {
             if (id.isEmpty()) continue
             val grid = o.optJSONObject("grid")
             val style = parsePanelBackgroundStyleFieldsTheme(o)
+            val stripThickness = normalizePanelCollapseStripThicknessDp(
+                o.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP),
+            )
             configs.add(
                 FloatingDashboardConfig(
                     id = id,
@@ -682,11 +718,10 @@ object ThemeLayoutExport {
                             ?: DEFAULT_PANEL_GRID_SPACING_DP
                     ),
                     collapseEdge = PanelCollapseEdge.fromStorage(o.optString("collapseEdge")).storageValue,
-                    collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                        o.optInt(
-                            "collapseStripThicknessDp",
-                            DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
-                        ),
+                    collapseStripThicknessDp = stripThickness,
+                    collapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
+                        o.optInt("collapseTouchZoneThicknessDp", stripThickness),
+                        stripThickness,
                     ),
                     collapseStripColorLight = colorHexToIntOrNull(
                         o.optString("collapseStripColorLight"),
@@ -700,6 +735,14 @@ object ThemeLayoutExport {
                     collapseStripExpandedColorDark = colorHexToIntOrNull(
                         o.optString("collapseStripExpandedColorDark"),
                     ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+                    collapseOnStripTap = o.optBoolean(
+                        "collapseOnStripTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+                    ),
+                    collapseOnStripDoubleTap = o.optBoolean(
+                        "collapseOnStripDoubleTap",
+                        DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
+                    ),
                     collapseOnTileTap = o.optBoolean(
                         "collapseOnTileTap",
                         DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
@@ -728,10 +771,13 @@ object ThemeLayoutExport {
             o = o,
             collapseEdge = panel.collapseEdge,
             collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = panel.collapseTouchZoneThicknessDp,
             collapseStripColorLight = panel.collapseStripColorLight,
             collapseStripColorDark = panel.collapseStripColorDark,
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
+            collapseOnStripTap = panel.collapseOnStripTap,
+            collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
             collapseOnTileTap = panel.collapseOnTileTap,
             collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
         )
@@ -742,10 +788,13 @@ object ThemeLayoutExport {
             o = o,
             collapseEdge = panel.collapseEdge,
             collapseStripThicknessDp = panel.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = panel.collapseTouchZoneThicknessDp,
             collapseStripColorLight = panel.collapseStripColorLight,
             collapseStripColorDark = panel.collapseStripColorDark,
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = panel.collapseStripExpandedColorDark,
+            collapseOnStripTap = panel.collapseOnStripTap,
+            collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
             collapseOnTileTap = panel.collapseOnTileTap,
             collapseOnTileTapDelaySec = panel.collapseOnTileTapDelaySec,
         )
@@ -755,10 +804,13 @@ object ThemeLayoutExport {
         o: JSONObject,
         collapseEdge: String,
         collapseStripThicknessDp: Int,
+        collapseTouchZoneThicknessDp: Int,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
         collapseStripExpandedColorDark: Int,
+        collapseOnStripTap: Boolean,
+        collapseOnStripDoubleTap: Boolean,
         collapseOnTileTap: Boolean,
         collapseOnTileTapDelaySec: Int,
     ) {
@@ -768,6 +820,9 @@ object ThemeLayoutExport {
         }
         if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
             o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
+            o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", colorIntToHex(collapseStripColorLight))
@@ -780,6 +835,12 @@ object ThemeLayoutExport {
         }
         if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
             o.put("collapseStripExpandedColorDark", colorIntToHex(collapseStripExpandedColorDark))
+        }
+        if (collapseOnStripTap) {
+            o.put("collapseOnStripTap", true)
+        }
+        if (collapseOnStripDoubleTap) {
+            o.put("collapseOnStripDoubleTap", true)
         }
         if (collapseOnTileTap) {
             o.put("collapseOnTileTap", true)

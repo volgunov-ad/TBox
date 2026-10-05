@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.ui.LaunchableAppsCatalog
 
 class TboxApplication : Application() {
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -14,12 +15,20 @@ class TboxApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContextHolder.init(this)
+        // Keep launchable-app pickers in sync when packages are installed/removed while
+        // TBox Monitor stays alive (otherwise the in-process icon list stays stale until restart).
+        LaunchableAppsCatalog.ensurePackageChangeWatcher(this)
         MainActivityForegroundTracker.register(this)
         val appDataManager = AppDataManager(this)
         val settingsManager = SettingsManager(this)
         applicationScope.launch {
             settingsManager.headUnitCanModeFlow.collectLatest { mode ->
                 UniversalCanRepository.setMode(mode)
+            }
+        }
+        applicationScope.launch {
+            settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
+                LaunchMainInStockAppWindowSetting.update(enabled)
             }
         }
         applicationScope.launch {

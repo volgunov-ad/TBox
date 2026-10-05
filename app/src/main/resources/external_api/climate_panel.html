@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="__APP_LANG__">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache">
+  <title>TBox</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e1116;
+      --card: #1a1f27;
+      --text: #e8edf5;
+      --muted: #9aa6b8;
+      --line: #2c3442;
+      --btn: #2a3140;
+      --accent: #4c8dff;
+      --heat: #e85d4c;
+      --vent: #3dbeff;
+      --eco: #00a400;
+      --comfort: #00c8ff;
+      --strong: #f3a721;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.35 system-ui, sans-serif;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 16px 16px 32px;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+    #status { min-height: 1.2em; margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    .temps {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .temp-label { display: block; color: var(--muted); font-size: 13px; }
+    .temp-value { font-size: 36px; font-weight: 650; letter-spacing: -0.03em; }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .row + .row { border-top: 1px solid var(--line); }
+    .row-label { min-width: 7.5em; }
+    .stepper { display: flex; align-items: center; gap: 8px; }
+    .readout { min-width: 4.2em; text-align: center; font-size: 22px; font-variant-numeric: tabular-nums; }
+    .volume-row .row-label { min-width: 0; }
+    .volume-controls {
+      display: flex;
+      flex: 1 1 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .volume-controls .readout { min-width: 2.4em; }
+    .np-title { font-size: 18px; font-weight: 650; }
+    .np-artist { color: var(--muted); font-size: 14px; min-height: 1.2em; }
+    .progress { height: 6px; background: var(--line); border-radius: 99px; margin: 12px 0 6px; overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); }
+    .np-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+    .transport { display: flex; gap: 8px; }
+    .transport button { flex: 1; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      background: var(--btn);
+      color: var(--text);
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0 12px;
+      font: inherit;
+    }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.4; }
+    button.on-heat { background: var(--heat); color: #fff; }
+    button.on-vent { background: var(--vent); color: #082028; }
+    button.on-off { background: var(--accent); color: #fff; }
+    button.on-eco { background: var(--eco); color: #fff; }
+    button.on-comfort { background: var(--comfort); color: #082028; }
+    button.on-strong { background: var(--strong); color: #1a1200; }
+    .levels { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .hint, #pair-status { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+    #pair-status { min-height: 1.2em; margin: 8px 0 0; }
+    button.primary { background: var(--accent); color: #fff; width: 100%; }
+    details summary { color: var(--muted); cursor: pointer; margin: 12px 0 8px; }
+    #connect > summary {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+      padding: 10px 0;
+    }
+    .token { display: flex; gap: 8px; }
+    .token input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      border-radius: 12px;
+      background: var(--btn);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+    }
+  </style>
+</head>
+<body>
+  <main id="tbox-climate-panel">
+    <h1 id="title">Автомобиль</h1>
+    <p id="status"></p>
+    <section class="temps">
+      <div class="card">
+        <span class="temp-label" id="lbl-out">Улица</span>
+        <div class="temp-value" id="out">—</div>
+      </div>
+      <div class="card">
+        <span class="temp-label" id="lbl-in">Салон</span>
+        <div class="temp-value" id="in">—</div>
+      </div>
+    </section>
+    <section class="card" id="audio"></section>
+    <section class="card" id="climate"></section>
+    <section class="card" id="seats"></section>
+    <section class="card">
+      <details id="connect" open>
+        <summary id="lbl-connect">Подключение</summary>
+        <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
+        <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
+        <p id="pair-status"></p>
+        <details>
+          <summary id="lbl-token">Токен вручную</summary>
+          <div class="token">
+            <input id="token" type="password" autocomplete="off" spellcheck="false">
+            <button id="save-token" type="button">OK</button>
+          </div>
+        </details>
+      </details>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var TOKEN_KEY = "tbox.climate.token";
+      var CLIENT_ID_KEY = "tbox.climate.clientId";
+      var POLL_MS = 2000;
+      var LEFT_TEMP = 37;
+      var RIGHT_TEMP = 111;
+      var FAN = 38;
+      var AUTO = 110;
+      var SYNC = 94;
+      var BLOW = 40;
+      var HVAC_MODE = 140;
+      var HVAC_MODES = [
+        { state: "eco", value: 1, label: "modeEco" },
+        { state: "comfort", value: 2, label: "modeComfort" },
+        { state: "strong", value: 3, label: "modeStrong" }
+      ];
+      var BLOWS = [
+        { state: "face", value: 1, label: "blowFace" },
+        { state: "foot", value: 2, label: "blowFoot" },
+        { state: "face_foot", value: 3, label: "blowFaceFoot" },
+        { state: "defrost", value: 4, label: "blowDefrost" },
+        { state: "defrost_foot", value: 5, label: "blowDefrostFoot" }
+      ];
+      var VOLUME_MIN = 0;
+      var VOLUME_MAX = 31;
+      var lastMediaVolume = 10;
+      var mediaAnchorAt = 0;
+      var TEMP_MIN = 160;
+      var TEMP_MAX = 300;
+      var TEMP_STEP = 5;
+      var STR = {
+        ru: {
+          title: "Автомобиль",
+          outside: "Улица",
+          inside: "Салон",
+          audio: "Звук",
+          music: "Музыка",
+          media: "Медиа",
+          sound: "Звук",
+          previous: "Назад",
+          play: "Играть",
+          pause: "Пауза",
+          next: "Дальше",
+          climate: "Климат-контроль",
+          driver: "Водитель",
+          passenger: "Пассажир",
+          fan: "Обдув",
+          auto: "Авто",
+          sync: "Синхронизация",
+          mode: "Режим климата",
+          modeEco: "Эко",
+          modeComfort: "Комфорт",
+          modeStrong: "Сильный",
+          direction: "Направление",
+          blowFace: "Лицо",
+          blowFoot: "Ноги",
+          blowFaceFoot: "Лицо и ноги",
+          blowDefrost: "Стекло",
+          blowDefrostFoot: "Стекло и ноги",
+          seats: "Сиденья",
+          rearLeft: "Сзади слева",
+          rearRight: "Сзади справа",
+          off: "Выкл",
+          connect: "Подключение",
+          pairHint: "На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.",
+          pair: "Отправить запрос",
+          token: "Токен вручную",
+          save: "Сохранить",
+          clientName: "Веб-панель",
+          needToken: "На ГУ включите «Подключить приложение», затем нажмите «Отправить запрос».",
+          unauthorized: "Токен не принят. Отправьте запрос сопряжения ещё раз.",
+          offline: "Нет ответа от головного устройства.",
+          updated: "Обновлено",
+          pairSending: "Отправляю запрос…",
+          pairInactive: "На ГУ сначала нажмите «Подключить приложение».",
+          pairWaiting: "Подтвердите запрос на головном устройстве.",
+          pairDenied: "Запрос отклонён.",
+          pairTimeout: "Время сопряжения вышло. Включите его на ГУ ещё раз.",
+          pairLost: "Запрос пропал. Включите сопряжение на ГУ и отправьте снова.",
+          pairOk: "Подключено. Токен сохранён в этом браузере."
+        },
+        en: {
+          title: "Vehicle",
+          outside: "Outside",
+          inside: "Cabin",
+          audio: "Audio",
+          music: "Music",
+          media: "Media",
+          sound: "Sound",
+          previous: "Previous",
+          play: "Play",
+          pause: "Pause",
+          next: "Next",
+          climate: "Climate control",
+          driver: "Driver",
+          passenger: "Passenger",
+          fan: "Fan",
+          auto: "Auto",
+          sync: "Sync",
+          mode: "Climate mode",
+          modeEco: "ECO",
+          modeComfort: "Comfort",
+          modeStrong: "Strong",
+          direction: "Direction",
+          blowFace: "Face",
+          blowFoot: "Feet",
+          blowFaceFoot: "Face and feet",
+          blowDefrost: "Windshield",
+          blowDefrostFoot: "Windshield and feet",
+          seats: "Seats",
+          rearLeft: "Rear left",
+          rearRight: "Rear right",
+          off: "Off",
+          connect: "Connection",
+          pairHint: "On the head unit: Settings → API → Connect app. Then tap the button and approve the request.",
+          pair: "Send request",
+          token: "Manual token",
+          save: "Save",
+          clientName: "Web panel",
+          needToken: "On the head unit turn on Connect app, then tap Send request.",
+          unauthorized: "Token rejected. Send the pairing request again.",
+          offline: "No response from the head unit.",
+          updated: "Updated",
+          pairSending: "Sending request…",
+          pairInactive: "On the head unit, tap Connect app first.",
+          pairWaiting: "Approve the request on the head unit.",
+          pairDenied: "Request denied.",
+          pairTimeout: "Pairing timed out. Turn it on again on the head unit.",
+          pairLost: "The request disappeared. Turn pairing on and send it again.",
+          pairOk: "Connected. The token is saved in this browser."
+        }
+      };
+      var lang = "__APP_LANG__" === "en" ? STR.en : STR.ru;
+      var FRONT = [
+        { state: "off", value: 1, label: lang.off, kind: "off" },
+        { state: "heat_1", value: 2, label: "H1", kind: "heat" },
+        { state: "heat_2", value: 3, label: "H2", kind: "heat" },
+        { state: "heat_3", value: 4, label: "H3", kind: "heat" },
+        { state: "vent_1", value: 5, label: "V1", kind: "vent" },
+        { state: "vent_2", value: 6, label: "V2", kind: "vent" },
+        { state: "vent_3", value: 7, label: "V3", kind: "vent" }
+      ];
+      var REAR = FRONT.slice(0, 4);
+      var seats = [
+        { propertyId: 138, label: lang.driver, levels: FRONT },
+        { propertyId: 139, label: lang.passenger, levels: FRONT },
+        { propertyId: 318, label: lang.rearLeft, levels: REAR },
+        { propertyId: 319, label: lang.rearRight, levels: REAR }
+      ];
+      var state = {
+        outside: null,
+        inside: null,
+        left: null,
+        right: null,
+        fan: null,
+        volume: null,
+        mediaTitle: null,
+        mediaArtist: null,
+        mediaPosition: null,
+        mediaDuration: null,
+        mediaPlaying: null,
+        auto: null,
+        sync: null,
+        blow: null,
+        mode: null,
+        seat: {}
+      };
+      var chain = Promise.resolve();
+      var pendingWrites = 0;
+      var timer = null;
+      var polling = false;
+
+      document.getElementById("title").textContent = lang.title;
+      document.title = "TBox " + lang.title;
+      document.getElementById("lbl-out").textContent = lang.outside;
+      document.getElementById("lbl-in").textContent = lang.inside;
+      document.getElementById("lbl-connect").textContent = lang.connect;
+      document.getElementById("pair-hint").textContent = lang.pairHint;
+      document.getElementById("pair-btn").textContent = lang.pair;
+      document.getElementById("lbl-token").textContent = lang.token;
+      document.getElementById("save-token").textContent = lang.save;
+      document.getElementById("pair-btn").addEventListener("click", sendPairRequest);
+
+      var params = new URLSearchParams(location.search);
+      if (params.get("token")) {
+        localStorage.setItem(TOKEN_KEY, params.get("token"));
+        params.delete("token");
+        var next = location.pathname + (params.toString() ? "?" + params.toString() : "");
+        history.replaceState(null, "", next);
+      }
+      document.getElementById("token").value = localStorage.getItem(TOKEN_KEY) || "";
+      document.getElementById("connect").open = !token();
+      document.getElementById("save-token").addEventListener("click", function () {
+        localStorage.setItem(TOKEN_KEY, document.getElementById("token").value.trim());
+        document.getElementById("connect").open = !token();
+        tick();
+      });
+
+      renderAudio();
+      renderClimate();
+      renderSeats();
+      renderTemps();
+
+      var pairing = false;
+
+      function token() {
+        return (localStorage.getItem(TOKEN_KEY) || "").trim();
+      }
+
+      function clientId() {
+        var id = localStorage.getItem(CLIENT_ID_KEY);
+        if (id) return id;
+        id = "web-" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+        localStorage.setItem(CLIENT_ID_KEY, id);
+        return id;
+      }
+
+      function setPairStatus(text) {
+        document.getElementById("pair-status").textContent = text;
+      }
+
+      function delay(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
+      }
+
+      function readJson(response) {
+        return response.json().then(function (body) {
+          return { status: response.status, body: body };
+        });
+      }
+
+      function sendPairRequest() {
+        if (pairing) return;
+        pairing = true;
+        document.getElementById("pair-btn").disabled = true;
+        setPairStatus(lang.pairSending);
+        fetch("/v1/pair/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: clientId(),
+            clientName: lang.clientName,
+            clientKind: "web"
+          })
+        }).then(readJson).then(function (res) {
+          if (res.status === 403) {
+            setPairStatus(lang.pairInactive);
+            return null;
+          }
+          if (res.status !== 202 || !res.body || !res.body.requestId) {
+            var message = res.body && res.body.error && res.body.error.message;
+            setPairStatus(message || lang.offline);
+            return null;
+          }
+          setPairStatus(lang.pairWaiting);
+          return pollPair(res.body.requestId, Date.now() + 120000);
+        }).catch(function () {
+          setPairStatus(lang.offline);
+        }).then(function () {
+          pairing = false;
+          document.getElementById("pair-btn").disabled = false;
+        });
+      }
+
+      function pollPair(requestId, deadline) {
+        if (Date.now() > deadline) {
+          setPairStatus(lang.pairTimeout);
+          return;
+        }
+        return fetch("/v1/pair/status?requestId=" + encodeURIComponent(requestId))
+          .then(readJson)
+          .then(function (res) {
+            if (res.status === 404) {
+              setPairStatus(lang.pairLost);
+              return;
+            }
+            var st = res.body && res.body.status;
+            if (st === "pending") return delay(1000).then(function () { return pollPair(requestId, deadline); });
+            if (st === "denied") {
+              setPairStatus(lang.pairDenied);
+              return;
+            }
+            if (st === "approved" && res.body.accessToken) {
+              localStorage.setItem(TOKEN_KEY, res.body.accessToken);
+              document.getElementById("token").value = res.body.accessToken;
+              setPairStatus(lang.pairOk);
+              document.getElementById("connect").open = false;
+              tick();
+              return;
+            }
+            setPairStatus(lang.offline);
+          });
+      }
+
+      function setStatus(text) {
+        document.getElementById("status").textContent = text;
+      }
+
+      function fmtTemp(value) {
+        if (value == null || !isFinite(value)) return "—";
+        var rounded = Math.round(value * 10) / 10;
+        var text = (Math.abs(rounded - Math.round(rounded)) < 0.05)
+          ? String(Math.round(rounded))
+          : rounded.toFixed(1);
+        return text + "°";
+      }
+
+      function renderTemps() {
+        document.getElementById("out").textContent = fmtTemp(state.outside);
+        document.getElementById("in").textContent = fmtTemp(state.inside);
+        var left = document.getElementById("left-readout");
+        var right = document.getElementById("right-readout");
+        var fan = document.getElementById("fan-readout");
+        if (left) left.textContent = fmtTemp(state.left);
+        if (right) right.textContent = fmtTemp(state.right);
+        if (fan) fan.textContent = state.fan == null ? "—" : String(state.fan);
+        var volume = document.getElementById("volume-readout");
+        if (volume) volume.textContent = state.volume == null ? "—" : String(state.volume);
+        var mute = document.getElementById("media-mute");
+        if (mute) mute.className = state.volume > 0 ? "on-off" : "";
+        paintNowPlaying();
+        paintSeats();
+        paintClimate();
+      }
+
+      function paintClimate() {
+        var autoButtons = document.querySelectorAll("[data-auto]");
+        for (var i = 0; i < autoButtons.length; i++) {
+          autoButtons[i].className = state.auto === "on" ? "on-off" : "";
+        }
+        var syncButtons = document.querySelectorAll("[data-sync]");
+        for (var s = 0; s < syncButtons.length; s++) {
+          syncButtons[s].className = state.sync === "on" ? "on-off" : "";
+        }
+        var blowButtons = document.querySelectorAll("[data-blow]");
+        for (var j = 0; j < blowButtons.length; j++) {
+          var el = blowButtons[j];
+          el.className = state.blow === el.getAttribute("data-blow") ? "on-off" : "";
+        }
+        var modeButtons = document.querySelectorAll("[data-hvac-mode]");
+        for (var k = 0; k < modeButtons.length; k++) {
+          var modeEl = modeButtons[k];
+          var selected = state.mode === modeEl.getAttribute("data-hvac-mode");
+          modeEl.className = selected ? "on-" + modeEl.getAttribute("data-hvac-mode") : "";
+        }
+      }
+
+      function button(label, onClick) {
+        var el = document.createElement("button");
+        el.type = "button";
+        el.textContent = label;
+        el.addEventListener("click", onClick);
+        return el;
+      }
+
+      function stepperRow(label, readoutId, onMinus, onPlus) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var name = document.createElement("div");
+        name.className = "row-label";
+        name.textContent = label;
+        var stepper = document.createElement("div");
+        stepper.className = "stepper";
+        var readout = document.createElement("div");
+        readout.className = "readout";
+        readout.id = readoutId;
+        readout.textContent = "—";
+        stepper.appendChild(button("−", onMinus));
+        stepper.appendChild(readout);
+        stepper.appendChild(button("+", onPlus));
+        row.appendChild(name);
+        row.appendChild(stepper);
+        return row;
+      }
+
+      function renderAudio() {
+        var root = document.getElementById("audio");
+        var title = document.createElement("h2");
+        title.textContent = lang.music;
+        root.appendChild(title);
+        var track = document.createElement("div");
+        track.id = "np-title";
+        track.className = "np-title";
+        track.textContent = "—";
+        var artist = document.createElement("div");
+        artist.id = "np-artist";
+        artist.className = "np-artist";
+        var bar = document.createElement("div");
+        bar.className = "progress";
+        var fill = document.createElement("div");
+        fill.id = "np-bar";
+        bar.appendChild(fill);
+        var time = document.createElement("div");
+        time.id = "np-time";
+        time.className = "np-time";
+        var transport = document.createElement("div");
+        transport.className = "transport";
+        transport.appendChild(button(lang.previous, function () { invokeMedia("media_previous"); }));
+        var play = button(lang.play, togglePlayback);
+        play.id = "np-play";
+        transport.appendChild(play);
+        transport.appendChild(button(lang.next, function () { invokeMedia("media_next"); }));
+        root.appendChild(track);
+        root.appendChild(artist);
+        root.appendChild(bar);
+        root.appendChild(time);
+        root.appendChild(transport);
+        var row = stepperRow(lang.media, "volume-readout", function () { bumpVolume(false); }, function () { bumpVolume(true); });
+        row.className += " volume-row";
+        var stepper = row.querySelector(".stepper");
+        var controls = document.createElement("div");
+        controls.className = "volume-controls";
+        stepper.parentNode.insertBefore(controls, stepper);
+        controls.appendChild(stepper);
+        var mute = button(lang.sound, toggleMediaMute);
+        mute.id = "media-mute";
+        controls.appendChild(mute);
+        root.appendChild(row);
+      }
+
+      function renderClimate() {
+        var root = document.getElementById("climate");
+        var title = document.createElement("h2");
+        title.textContent = lang.climate;
+        root.appendChild(title);
+        root.appendChild(stepperRow(lang.driver, "left-readout", function () { bumpTemp("left", false); }, function () { bumpTemp("left", true); }));
+        root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
+        root.appendChild(stepperRow(lang.fan, "fan-readout", function () { bumpFan(false); }, function () { bumpFan(true); }));
+        root.appendChild(choiceRow(lang.auto, [
+          button(lang.auto, toggleAuto)
+        ], function (el) {
+          el.setAttribute("data-auto", "1");
+        }));
+        root.appendChild(choiceRow(lang.sync, [
+          button("SYNC", toggleSync)
+        ], function (el) {
+          el.setAttribute("data-sync", "1");
+        }));
+        root.appendChild(choiceRow(lang.mode, HVAC_MODES.map(function (mode) {
+          var el = button(lang[mode.label], function () { setHvacMode(mode); });
+          el.setAttribute("data-hvac-mode", mode.state);
+          return el;
+        })));
+        root.appendChild(choiceRow(lang.direction, BLOWS.map(function (mode) {
+          var el = button(lang[mode.label], function () { setBlow(mode); });
+          el.setAttribute("data-blow", mode.state);
+          return el;
+        })));
+      }
+
+      function choiceRow(label, buttons, decorate) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var name = document.createElement("div");
+        name.className = "row-label";
+        name.textContent = label;
+        var levels = document.createElement("div");
+        levels.className = "levels";
+        buttons.forEach(function (el) {
+          if (decorate) decorate(el);
+          levels.appendChild(el);
+        });
+        row.appendChild(name);
+        row.appendChild(levels);
+        return row;
+      }
+
+      function renderSeats() {
+        var root = document.getElementById("seats");
+        var title = document.createElement("h2");
+        title.textContent = lang.seats;
+        root.appendChild(title);
+        seats.forEach(function (seat) {
+          var row = document.createElement("div");
+          row.className = "row";
+          var name = document.createElement("div");
+          name.className = "row-label";
+          name.textContent = seat.label;
+          var levels = document.createElement("div");
+          levels.className = "levels";
+          seat.levels.forEach(function (level) {
+            var el = button(level.label, function () { setSeat(seat, level); });
+            el.setAttribute("data-seat", String(seat.propertyId));
+            el.setAttribute("data-state", level.state);
+            el.setAttribute("data-kind", level.kind);
+            levels.appendChild(el);
+          });
+          row.appendChild(name);
+          row.appendChild(levels);
+          root.appendChild(row);
+        });
+      }
+
+      function paintSeats() {
+        var buttons = document.querySelectorAll("[data-seat]");
+        for (var i = 0; i < buttons.length; i++) {
+          var el = buttons[i];
+          var active = state.seat[el.getAttribute("data-seat")] === el.getAttribute("data-state");
+          el.className = active ? "on-" + el.getAttribute("data-kind") : "";
+        }
+      }
+
+      function adjustRaw(celsius, increase) {
+        var base = Math.round(celsius * 10);
+        var rem = ((base - TEMP_MIN) % TEMP_STEP + TEMP_STEP) % TEMP_STEP;
+        var next = increase
+          ? (rem === 0 ? base + TEMP_STEP : base + (TEMP_STEP - rem))
+          : (rem === 0 ? base - TEMP_STEP : base - rem);
+        if (next < TEMP_MIN) next = TEMP_MIN;
+        if (next > TEMP_MAX) next = TEMP_MAX;
+        return next;
+      }
+
+      function enqueue(task) {
+        pendingWrites += 1;
+        chain = chain.then(function () {
+          return task();
+        }).then(function () {
+          pendingWrites -= 1;
+        }, function () {
+          pendingWrites -= 1;
+        });
+      }
+
+      function invoke(propertyId, value) {
+        return postActions([{
+          type: "can_command",
+          bus: "vehicle",
+          propertyId: propertyId,
+          operation: "set",
+          value: value
+        }]);
+      }
+
+      function invokeMedia(actionType) {
+        return postActions([{
+          type: "builtin",
+          actionType: actionType,
+          intValue: 0,
+          stringValue: "",
+          boolValue: false
+        }]);
+      }
+
+      function invokeBuiltin(actionType, intValue) {
+        return postActions([{
+          type: "builtin",
+          actionType: actionType,
+          intValue: intValue,
+          stringValue: "",
+          boolValue: false
+        }]);
+      }
+
+      function postActions(actions) {
+        var current = token();
+        if (!current) {
+          setStatus(lang.needToken);
+          return Promise.resolve();
+        }
+        return fetch("/v1/actions/invoke", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + current,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ actions: actions })
+        }).then(function (response) {
+          return response.json().then(function (body) {
+            if (response.status === 401) {
+              setStatus(lang.unauthorized);
+              document.getElementById("connect").open = true;
+              return;
+            }
+            if (!response.ok) {
+              var message = body && body.error && body.error.message;
+              setStatus(message || lang.offline);
+              return;
+            }
+            var results = body.results || [];
+            if (results.length && results[0].success === false) {
+              setStatus(results[0].message || lang.offline);
+            }
+          });
+        }).catch(function () {
+          setStatus(lang.offline);
+        });
+      }
+
+      function bumpTemp(side, increase) {
+        var current = state[side];
+        if (current == null) return;
+        var raw = adjustRaw(current, increase);
+        state[side] = raw / 10;
+        renderTemps();
+        var propertyId = side === "left" ? LEFT_TEMP : RIGHT_TEMP;
+        enqueue(function () { return invoke(propertyId, raw); });
+      }
+
+      function bumpVolume(increase) {
+        if (state.volume == null) return;
+        var next = state.volume + (increase ? 1 : -1);
+        if (next < VOLUME_MIN) next = VOLUME_MIN;
+        if (next > VOLUME_MAX) next = VOLUME_MAX;
+        state.volume = next;
+        if (next > 0) lastMediaVolume = next;
+        renderTemps();
+        enqueue(function () { return invokeBuiltin("set_media_volume", next); });
+      }
+
+      function shownMediaPosition() {
+        if (state.mediaPosition == null) return null;
+        var pos = state.mediaPosition;
+        if (state.mediaPlaying === "on") pos += Date.now() - mediaAnchorAt;
+        if (pos < 0) pos = 0;
+        if (state.mediaDuration > 0 && pos > state.mediaDuration) pos = state.mediaDuration;
+        return pos;
+      }
+
+      function fmtClock(ms) {
+        if (ms == null || !isFinite(ms) || ms < 0) return "—";
+        var total = Math.floor(ms / 1000);
+        var minutes = Math.floor(total / 60);
+        var seconds = total % 60;
+        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+      }
+
+      function paintNowPlaying() {
+        var title = document.getElementById("np-title");
+        var artist = document.getElementById("np-artist");
+        var bar = document.getElementById("np-bar");
+        var time = document.getElementById("np-time");
+        var play = document.getElementById("np-play");
+        if (!title) return;
+        title.textContent = state.mediaTitle || "—";
+        artist.textContent = state.mediaArtist || "";
+        var pos = shownMediaPosition();
+        var dur = state.mediaDuration;
+        var fraction = dur > 0 && pos != null ? Math.max(0, Math.min(1, pos / dur)) : 0;
+        bar.style.width = (fraction * 100) + "%";
+        time.textContent = dur > 0 ? fmtClock(pos) + " / " + fmtClock(dur) : "";
+        var playing = state.mediaPlaying === "on";
+        play.textContent = playing ? lang.pause : lang.play;
+        play.className = playing ? "on-off" : "";
+      }
+
+      function togglePlayback() {
+        if (state.mediaPlaying === "on") {
+          state.mediaPosition = shownMediaPosition();
+          state.mediaPlaying = "off";
+        } else {
+          state.mediaPlaying = "on";
+          mediaAnchorAt = Date.now();
+        }
+        paintNowPlaying();
+        enqueue(function () { return invokeMedia("media_play_pause"); });
+      }
+
+      function toggleMediaMute() {
+        if (state.volume == null) return;
+        var next;
+        if (state.volume > 0) {
+          lastMediaVolume = state.volume;
+          next = 0;
+        } else {
+          next = lastMediaVolume > 0 ? lastMediaVolume : 1;
+        }
+        state.volume = next;
+        renderTemps();
+        enqueue(function () { return invokeBuiltin("set_media_volume", next); });
+      }
+
+      function bumpFan(increase) {
+        if (state.fan == null) return;
+        var next = state.fan + (increase ? 1 : -1);
+        if (next < 0) next = 0;
+        if (next > 7) next = 7;
+        state.fan = next;
+        renderTemps();
+        enqueue(function () { return invoke(FAN, next); });
+      }
+
+      function toggleAuto() {
+        var next = state.auto === "on" ? "off" : "on";
+        state.auto = next;
+        paintClimate();
+        enqueue(function () { return invoke(AUTO, next); });
+      }
+
+      function toggleSync() {
+        var next = state.sync === "on" ? "off" : "on";
+        state.sync = next;
+        paintClimate();
+        enqueue(function () { return invoke(SYNC, next); });
+      }
+
+      function setBlow(mode) {
+        state.blow = mode.state;
+        paintClimate();
+        enqueue(function () { return invoke(BLOW, mode.value); });
+      }
+
+      function setHvacMode(mode) {
+        state.mode = mode.state;
+        paintClimate();
+        enqueue(function () { return invoke(HVAC_MODE, mode.value); });
+      }
+
+      function setSeat(seat, level) {
+        state.seat[String(seat.propertyId)] = level.state;
+        paintSeats();
+        enqueue(function () { return invoke(seat.propertyId, level.value); });
+      }
+
+      function indexSignals(payload) {
+        var map = {};
+        var list = (payload && payload.signals) || [];
+        for (var i = 0; i < list.length; i++) map[list[i].id] = list[i];
+        return map;
+      }
+
+      function pick(primary, fallback) {
+        if (primary && primary.available) return primary;
+        if (fallback && fallback.available) return fallback;
+        return null;
+      }
+
+      function numberOrNull(signal) {
+        if (!signal || !signal.available || typeof signal.value !== "number") return null;
+        return signal.value;
+      }
+
+      function stateOrNull(signal) {
+        if (!signal || !signal.available || typeof signal.value !== "string") return null;
+        return signal.value;
+      }
+
+      function loadSignals(source, ids) {
+        return fetch("/v1/signals?ids=" + encodeURIComponent(ids) + "&source=" + source, {
+          headers: { "Authorization": "Bearer " + token() }
+        }).then(function (response) {
+          return response.json().then(function (body) {
+            return { status: response.status, body: body };
+          });
+        });
+      }
+
+      function applySnapshot(hu, tbox, app) {
+        var outside = pick(hu.outside_temperature, tbox.outside_temperature);
+        var inside = pick(tbox.inside_temperature, null);
+        state.outside = numberOrNull(outside);
+        state.inside = numberOrNull(inside);
+        state.left = numberOrNull(hu.hvac_temperature_left);
+        state.right = numberOrNull(hu.hvac_temperature_right);
+        state.fan = numberOrNull(hu.hvac_fan_speed);
+        if (state.fan != null) state.fan = Math.round(state.fan);
+        if (app) {
+          state.volume = numberOrNull(app.hu_media_volume);
+          if (state.volume != null) {
+            state.volume = Math.round(state.volume);
+            if (state.volume > 0) lastMediaVolume = state.volume;
+          }
+          state.mediaTitle = stateOrNull(app.media_title);
+          state.mediaArtist = stateOrNull(app.media_artist);
+          state.mediaPosition = numberOrNull(app.media_position_ms);
+          state.mediaDuration = numberOrNull(app.media_duration_ms);
+          state.mediaPlaying = stateOrNull(app.media_playing);
+          mediaAnchorAt = Date.now();
+        }
+        var auto = stateOrNull(hu.hvac_auto);
+        if (auto != null) state.auto = auto;
+        var sync = stateOrNull(hu.hvac_sync);
+        if (sync != null) state.sync = sync;
+        var blow = stateOrNull(hu.hvac_fan_direction);
+        if (blow != null) state.blow = blow;
+        var custom = stateOrNull(hu.hvac_custom_mode);
+        if (custom != null) state.mode = custom;
+        seats.forEach(function (seat) {
+          var id = seat.propertyId === 138 ? "front_left_seat_mode"
+            : seat.propertyId === 139 ? "front_right_seat_mode"
+            : seat.propertyId === 318 ? "rear_left_seat_mode"
+            : "rear_right_seat_mode";
+          var mode = stateOrNull(hu[id]);
+          if (mode != null) state.seat[String(seat.propertyId)] = mode;
+        });
+        renderTemps();
+      }
+
+      function tick() {
+        clearTimeout(timer);
+        timer = null;
+        if (document.hidden) return;
+        if (!token()) {
+          setStatus(lang.needToken);
+          return;
+        }
+        if (polling) {
+          timer = setTimeout(tick, POLL_MS);
+          return;
+        }
+        polling = true;
+        Promise.all([
+          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
+          loadSignals("tbox", "inside_temperature,outside_temperature"),
+          loadSignals("app", "hu_media_volume,media_title,media_artist,media_playing,media_position_ms,media_duration_ms")
+        ]).then(function (parts) {
+          var denied = parts[0].status === 401 || parts[1].status === 401 || parts[2].status === 401;
+          if (denied) {
+            setStatus(lang.unauthorized);
+            document.getElementById("connect").open = true;
+            return;
+          }
+          if (parts[0].status !== 200) {
+            setStatus(lang.offline);
+            return;
+          }
+          if (pendingWrites > 0) return;
+          var app = parts[2].status === 200 ? indexSignals(parts[2].body) : null;
+          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body), app);
+          var now = new Date();
+          var hh = String(now.getHours()).padStart(2, "0");
+          var mm = String(now.getMinutes()).padStart(2, "0");
+          var ss = String(now.getSeconds()).padStart(2, "0");
+          setStatus(lang.updated + " " + hh + ":" + mm + ":" + ss);
+        }).catch(function () {
+          setStatus(lang.offline);
+        }).then(function () {
+          polling = false;
+          if (!document.hidden && token()) timer = setTimeout(tick, POLL_MS);
+        });
+      }
+
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) {
+          clearTimeout(timer);
+          timer = null;
+        } else {
+          tick();
+        }
+      });
+
+      tick();
+      setInterval(function () {
+        if (!document.hidden && state.mediaPlaying === "on") paintNowPlaying();
+      }, 500);
+    })();
+  </script>
+</body>
+</html>

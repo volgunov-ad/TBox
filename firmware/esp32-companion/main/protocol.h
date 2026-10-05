@@ -4,11 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.5.0"
+#define ESP_COMPANION_FW_VERSION "0.9.5"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1
 #define ESP_COMPANION_DEFAULT_UM980_BAUD 115200
+#define ESP_COMPANION_BLE_MAX_MACS 4
 
 /** OTA / light-bridge binary frame: 0xA5 0x5A | u16be len | payload | u32be crc32(payload) */
 #define OTA_FRAME_MAGIC0 0xA5
@@ -57,6 +58,29 @@ void protocol_can_light_poll_flush(void);
 bool protocol_can_light_active(void);
 void protocol_set_can_for_hello(bool present, uint32_t baud);
 
+/** Magnetometer (RM3100 / MMC5983 on I2C). */
+void protocol_send_mag(const char *chip, float hx, float hy, float hz,
+                       float heading, float fs, bool ok);
+void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
+                            const char *const *seen, int seen_count);
+void protocol_set_mag_for_hello(bool mag, const char *chip,
+                                const char *const *seen, int seen_count);
+
+/** GNSS autodetect caps for hello. */
+void protocol_set_gnss_for_hello(bool present, const char *chip, const char *model, int baud);
+
+/** Shelly Blu / BTHome BLE button observer (fw 0.8+). */
+void protocol_send_ble_btn(const char *mac, int btn, const char *act,
+                           int bat, int rssi, uint32_t ms);
+void protocol_send_ble_status(void);
+void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms);
+void protocol_send_ble_ack(const char *phase, bool ok, const char *err);
+
+/** SoftAP router status (fw 0.9+). */
+void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *psk,
+                             const char *ip, int freq_mhz, int channel,
+                             const char *hu_ip, int panel_port);
+
 /** True while OTA / UM980 bridge is active (suppress gps; keep rare hb). CAN light is separate. */
 bool protocol_ota_active(void);
 
@@ -75,6 +99,7 @@ typedef void (*protocol_can_baud_cb_t)(uint32_t baud);
 typedef void (*protocol_can_filter_cb_t)(bool accept_all, const uint32_t *ids, const uint32_t *masks,
                                          const bool *ext, int count);
 typedef void (*protocol_can_light_cb_t)(bool enable);
+typedef void (*protocol_mag_chip_cb_t)(const char *chip);
 
 void protocol_set_relay_callback(protocol_relay_set_cb_t cb);
 void protocol_set_um980_cmd_callback(protocol_um980_cmd_cb_t cb);
@@ -84,3 +109,4 @@ void protocol_set_can_tx_callback(protocol_can_tx_cb_t cb);
 void protocol_set_can_baud_callback(protocol_can_baud_cb_t cb);
 void protocol_set_can_filter_callback(protocol_can_filter_cb_t cb);
 void protocol_set_can_light_callback(protocol_can_light_cb_t cb);
+void protocol_set_mag_chip_callback(protocol_mag_chip_cb_t cb);

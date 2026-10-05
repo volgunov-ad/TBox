@@ -14,6 +14,10 @@ class RoadMatchController(
     internal val runtime = RoadMatchRuntime(mapsDir = mapsDir)
     internal val lookahead = SpeedLimitLookahead.Tracker()
 
+    /** Horizon for [SpeedLimitLookahead]; updated from widget aggregate. */
+    @Volatile
+    var maxLookaheadDistanceM: Double = SpeedLimitLookahead.MAX_DISTANCE_M
+
     /**
      * @return corrected pose when a match ran, even if the caller should not apply it.
      * Null means skip / low confidence / no coverage (caller keeps previous pose).
@@ -27,6 +31,9 @@ class RoadMatchController(
         turnHint: RoadMapMatcher.TurnHint? = null,
         turnIntent: Boolean = false,
         turnFlashCount: Int = 0,
+        gnssPositionTrust: Float = 0f,
+        tuning: RoadMatchTuning = RoadMatchTuning.DEFAULT,
+        instrumentStepM: Double? = null,
     ): RoadMatchPose? {
         if (!demand.matchNeeded) {
             reset()
@@ -47,6 +54,9 @@ class RoadMatchController(
                 turnIntent = turnIntent,
                 turnFlashCount = turnFlashCount,
                 mode = demand.mode,
+                gnssPositionTrust = gnssPositionTrust,
+                tuning = tuning,
+                instrumentStepM = instrumentStepM,
             )
         } catch (oom: OutOfMemoryError) {
             Log.e(TAG, "road match OOM", oom)
@@ -72,6 +82,11 @@ class RoadMatchController(
         RoadMatchAnchorRepository.clear()
     }
 
+    /** Load road tiles around [lat]/[lon] into [RoadGraphStore] for map overlay neighbors. */
+    fun warmGraphsAt(lat: Double, lon: Double) {
+        runtime.warmGraphsAt(lat, lon)
+    }
+
     private fun publish(
         demand: RoadMatchDemand,
         allowAgainstOneway: Boolean,
@@ -89,6 +104,7 @@ class RoadMatchController(
             allowAgainstOneway = allowAgainstOneway,
             nowElapsedMs = nowElapsedMs,
             pose = pose,
+            maxDistanceM = maxLookaheadDistanceM,
         )
         RoadMatchAnchorRepository.publish(
             RoadMatchAnchorState.from(

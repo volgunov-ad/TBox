@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VadVoice" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.VadVoice.Transparent" parent="Theme.VadVoice">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

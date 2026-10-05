@@ -189,6 +189,98 @@ class RoadMapDownloadManager(
         }
     }
 
+    /** Installed pack entry if present (for USB import status). */
+    fun installedEntry(regionId: String): RoadMapInstallEntry? {
+        _snapshot.value.regions.firstOrNull { it.region.id == regionId }?.installed?.let { return it }
+        val dir = bundleDirFor(regionId)
+        if (!dir.isDirectory) return null
+        return runCatching {
+            val index = RoadMapBundle.loadIndex(dir)
+            RoadMapInstallEntry(
+                id = regionId,
+                graphVersion = index.graphVersion,
+                fileName = dir.name,
+                bytesOnDisk = RoadMapBundle.directorySize(dir),
+                installedAtEpochMs = 0L,
+            )
+        }.getOrNull()
+    }
+
+    /** Usable bytes on the filesystem that holds [mapsDir]. */
+    fun usableSpaceBytes(): Long = mapsDir().usableSpace.coerceAtLeast(0L)
+
+    /**
+     * Atomically install a local ZIP bundle (USB offline import or tests).
+     * Leaves any previous install untouched until the swap succeeds.
+     * When [expectedGraphVersion] is non-null, the bundle index must match it.
+     */
+    suspend fun installBundleFromLocalZip(
+        zipFile: File,
+        regionId: String,
+        expectedGraphVersion: Int? = null,
+        checkCancelled: () -> Unit = {},
+    ): RoadMapInstallEntry {
+        require(regionId.isNotBlank()) { "empty region id" }
+        require(zipFile.isFile) { "missing pack file" }
+        val entry = withContext(Dispatchers.IO) {
+            checkCancelled()
+            if (!RoadMapBundle.isBundle(zipFile)) {
+                error("tiled bundle required (legacy packs unsupported)")
+            }
+            val stage = RoadMapBundle.stagingDir(mapsDir(), regionId)
+            val finalDir = bundleDirFor(regionId)
+            val backup = File(finalDir.absolutePath + ".old")
+            val index = RoadMapBundle.extractAndValidate(
+                zipFile = zipFile,
+                stagingDir = stage,
+                expectedRegionId = regionId,
+                checkCancelled = checkCancelled,
+            )
+            if (expectedGraphVersion != null && index.graphVersion != expectedGraphVersion) {
+                stage.deleteRecursively()
+                error("version mismatch")
+            }
+            checkCancelled()
+            backup.deleteRecursively()
+            if (finalDir.exists() && !finalDir.renameTo(backup)) {
+                throw IllegalStateException("cannot back up installed bundle")
+            }
+            try {
+                if (!stage.renameTo(finalDir)) {
+                    require(stage.copyRecursively(finalDir, overwrite = true)) {
+                        "cannot install bundle"
+                    }
+                    stage.deleteRecursively()
+                }
+                legacyMonolithFileFor(regionId).delete()
+                File(legacyMonolithFileFor(regionId).absolutePath + ".part").delete()
+                backup.deleteRecursively()
+            } catch (t: Throwable) {
+                finalDir.deleteRecursively()
+                if (backup.exists()) backup.renameTo(finalDir)
+                throw t
+            } finally {
+                stage.deleteRecursively()
+            }
+            RoadMapInstallEntry(
+                id = regionId,
+                graphVersion = index.graphVersion,
+                fileName = finalDir.name,
+                bytesOnDisk = RoadMapBundle.directorySize(finalDir),
+                installedAtEpochMs = System.currentTimeMillis(),
+            )
+        }
+        mutex.withLock {
+            installed[regionId] = entry
+            errors.remove(regionId)
+            progress.remove(regionId)
+            RoadGraphStore.remove(regionId)
+            persistManifestLocked()
+            publishLocked()
+        }
+        return entry
+    }
+
     private fun ensureWorkerLocked() {
         if (worker?.isActive == true) return
         worker = scope.launch {

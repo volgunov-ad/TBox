@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -79,7 +78,7 @@ fun DashboardTrunkDoorWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val scope = rememberCoroutineScope()
     val trunkState by TrunkDoorRepository.displayState.collectAsStateWithLifecycle()
@@ -131,7 +130,7 @@ fun DashboardTrunkDoorWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             Box(
@@ -150,11 +149,11 @@ fun DashboardTrunkDoorWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_widget_trunk),
+                        painter = customizableUiPainter(R.drawable.ic_widget_trunk),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().scale(scale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        modifier = Modifier.fillMaxSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(R.drawable.ic_widget_trunk, iconColor)
                     )
                 }
             }

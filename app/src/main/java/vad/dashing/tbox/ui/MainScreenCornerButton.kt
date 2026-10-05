@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -8,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -33,7 +32,8 @@ import kotlin.math.roundToInt
 
 @Composable
 internal fun MainScreenDraggableCornerButton(
-    icon: ImageVector,
+    iconKey: String,
+    @DrawableRes drawableRes: Int,
     contentDescription: String,
     iconSize: Dp,
     backgroundColor: Color,
@@ -136,11 +136,12 @@ internal fun MainScreenDraggableCornerButton(
                 },
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = icon,
+            CustomizableUiIcon(
+                iconKey = iconKey,
+                drawableRes = drawableRes,
                 contentDescription = contentDescription,
                 tint = iconTint,
-                modifier = Modifier.fillMaxSize(0.62f)
+                modifier = Modifier.fillMaxSize(0.62f),
             )
         }
     }

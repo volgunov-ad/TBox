@@ -86,7 +86,7 @@ class Um980CommandsTest {
     @Test
     fun refreshSnapshotCommands() {
         assertEquals(
-            listOf("CONFIG", "MODE", "MASK", "VERSIONA"),
+            listOf("CONFIG", "MODE", "MASK", "VERSIONA", "UNILOGLIST"),
             Um980Commands.refreshSnapshotCommands(),
         )
     }
@@ -275,5 +275,102 @@ class Um980CommandsTest {
         )
         assertEquals(0, snap.smoothHeading)
         assertEquals(0, snap.smoothRtkHeight)
+    }
+
+    @Test
+    fun nmeaComOutputCommands_offIsUnlog() {
+        assertEquals(
+            listOf("UNLOG COM2"),
+            Um980Commands.nmeaComOutputCommands(
+                port = "com2",
+                enabled = false,
+                ggaRmcPeriodSec = 0.5,
+                gsaPeriodSec = 1.0,
+                gsvPeriodSec = 1.0,
+                zdaPeriodSec = 2.0,
+                vtgPeriodSec = 2.0,
+            ),
+        )
+    }
+
+    @Test
+    fun nmeaComOutputCommands_onUsesPeriodsAndSkipsZero() {
+        assertEquals(
+            listOf("GPGGA COM1 0.5", "GPRMC COM1 0.5", "GPVTG COM1 1"),
+            Um980Commands.nmeaComOutputCommands(
+                port = "COM1",
+                enabled = true,
+                ggaRmcPeriodSec = 0.5,
+                gsaPeriodSec = 0.0,
+                gsvPeriodSec = 0.0,
+                zdaPeriodSec = 0.0,
+                vtgPeriodSec = 1.0,
+            ),
+        )
+    }
+
+    @Test
+    fun nmeaComOutputCommands_allOffFallsBackToGgaRmc() {
+        assertEquals(
+            listOf("GPGGA COM3 1", "GPRMC COM3 1"),
+            Um980Commands.nmeaComOutputCommands(
+                port = "COM3",
+                enabled = true,
+                ggaRmcPeriodSec = 0.0,
+                gsaPeriodSec = 0.0,
+                gsvPeriodSec = 0.0,
+                zdaPeriodSec = 0.0,
+                vtgPeriodSec = 0.0,
+            ),
+        )
+    }
+
+    @Test
+    fun parseNmeaOutputByCom_latestListOnly() {
+        val snap = Um980Commands.parseConfigSnapshot(
+            listOf(
+                "#UNILOGLIST,1,GPS,FINE,1,1,0,0,18,1;",
+                "< GPGGA COM1 1",
+                "\$command,UNILOGLIST,response: OK*00",
+                "#UNILOGLIST,66,GPS,FINE,2203,447089000,0,0,18,33;",
+                "< 3",
+                "< PSRPOSA COM1 1",
+                "< GPGGA COM1 0",
+                "< GPRMC COM3 0.5",
+                "< GPGSV COM2 1",
+                "\$command,UNILOGLIST,response: OK*00",
+            ),
+        )
+        assertEquals(false, snap.nmeaOutputByCom?.get("COM1"))
+        assertEquals(true, snap.nmeaOutputByCom?.get("COM2"))
+        assertEquals(true, snap.nmeaOutputByCom?.get("COM3"))
+    }
+
+    @Test
+    fun parseNmeaOutputByCom_absentUntilUniloglist() {
+        val snap = Um980Commands.parseConfigSnapshot(listOf("CONFIG COM1 115200"))
+        assertEquals(null, snap.nmeaOutputByCom)
+    }
+
+    @Test
+    fun parseNmeaOutputByCom_ackWithoutPayloadIsUnknown() {
+        val snap = Um980Commands.parseConfigSnapshot(
+            listOf("\$command,UNILOGLIST,response: OK*4A"),
+        )
+        assertEquals(null, snap.nmeaOutputByCom)
+    }
+
+    @Test
+    fun parseNmeaOutputByCom_severalTokensOnOneLine() {
+        val map = Um980Commands.parseNmeaOutputByCom(
+            listOf(
+                "#UNILOGLIST,92,GPS,FINE,2353,142915000,0,0,18,296;",
+                "GNGGA COM1 1 GNGGA COM2 0 GNRMC COM3 0.5",
+                "PSRPOSA COM2 1",
+            ),
+        )
+        assertEquals(true, map?.get("COM1"))
+        assertEquals(false, map?.get("COM2"))
+        assertEquals(true, map?.get("COM3"))
     }
 }

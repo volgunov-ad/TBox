@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -66,11 +67,14 @@ import vad.dashing.tbox.SettingsViewModel
 fun LeftMenuTabField.menuIcon(): ImageVector = when (this) {
     LeftMenuTabField.MODEM -> ImageVector.vectorResource(R.drawable.menu_icon_modem)
     LeftMenuTabField.AT_COMMANDS -> ImageVector.vectorResource(R.drawable.menu_icon_at)
+    LeftMenuTabField.ADB -> ImageVector.vectorResource(R.drawable.ic_menu_adb)
     LeftMenuTabField.GEOPOSITION -> Icons.Filled.Place
     LeftMenuTabField.ESP_COMPANION -> Icons.Filled.Phone
+    LeftMenuTabField.ELM327 -> ImageVector.vectorResource(R.drawable.ic_menu_elm327)
     LeftMenuTabField.CAR_DATA -> Icons.Filled.Build
     LeftMenuTabField.TRIPS -> Icons.AutoMirrored.Filled.List
     LeftMenuTabField.REFUELS -> ImageVector.vectorResource(R.drawable.ic_menu_refuels)
+    LeftMenuTabField.AUTOMATIONS -> ImageVector.vectorResource(R.drawable.ic_menu_automations)
     LeftMenuTabField.SETTINGS -> Icons.Filled.Settings
     LeftMenuTabField.FLOATING_PANELS_SETTINGS ->
         ImageVector.vectorResource(R.drawable.ic_tab_floating_panels_settings)
@@ -124,15 +128,16 @@ fun LeftMenuConfigDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(max = 800.dp),
+            modifier = Modifier.tboxDialogSurfaceCompact(),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = tboxDialogMaxHeight())
+                    .padding(24.dp),
             ) {
                 AppAlertDialogTitle(stringResource(R.string.left_menu_config_dialog_title))
                 Spacer(Modifier.height(12.dp))
@@ -144,8 +149,8 @@ fun LeftMenuConfigDialog(
                 )
                 LazyColumn(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp),
+                        .weight(1f, fill = false)
+                        .fillMaxWidth(),
                     userScrollEnabled = activeReorderFieldId == null,
                 ) {
                     items(
@@ -179,6 +184,13 @@ fun LeftMenuConfigDialog(
                                         draftRows[idx] = draftRows[idx].copy(enabled = checked)
                                     }
                                 },
+                            )
+                            CustomizableUiIcon(
+                                iconKey = row.field.iconKey,
+                                fallback = row.field.menuIcon(),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 text = stringResource(row.field.labelRes),

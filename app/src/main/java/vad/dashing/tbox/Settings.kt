@@ -29,11 +29,13 @@ import org.json.JSONObject
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.hotspot.EspSoftApIdentity
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
+import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
@@ -61,7 +63,9 @@ data class FloatingDashboardWidgetConfig(
     val showUnit: Boolean = true,
     /** When true, composite two-metric widgets show both values on one line (em-space separated). */
     val singleLineDualMetrics: Boolean = false,
-    val scale: Float = 1.0f,
+    val titleScale: Float = 1.0f,
+    val iconScale: Float = 1.0f,
+    val textScale: Float = 1.0f,
     val shape: Int = 0,
     val textColorLight: Int = DEFAULT_WIDGET_TEXT_COLOR_LIGHT,
     val textColorDark: Int = DEFAULT_WIDGET_TEXT_COLOR_DARK,
@@ -151,10 +155,23 @@ data class FloatingDashboardWidgetConfig(
      * overlay window (viewport crop) instead of shrinking to the overlay size.
      */
     val launcherFreeformOverlayCrop: Boolean = false,
+    /**
+     * Target [android.view.Display.getDisplayId] when [launcherLaunchMode] is
+     * [AppLauncherLaunchMode.VIRTUAL_DISPLAY]. `null` — not chosen yet.
+     */
+    val launcherVirtualDisplayId: Int? = null,
+    /**
+     * Stored resolution of [launcherVirtualDisplayId] for remap after launcher recreates VDs.
+     * Both null, or both positive.
+     */
+    val launcherVirtualDisplayWidthPx: Int? = null,
+    val launcherVirtualDisplayHeightPx: Int? = null,
     /** YAML request config for `httpRequestWidget`. */
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
+    val automationTriggerId: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**
@@ -178,13 +195,19 @@ data class FloatingDashboardWidgetConfig(
      * Empty means default [DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES] after normalize.
      */
     val selectedDriveModes: List<Int> = emptyList(),
-    /** If true, media volume widget controls CAN backend (mbCAN/VHAL) instead of Android AudioManager. */
+    /** If true, this widget reads/writes the HU via mbCAN/VHAL instead of its default source. */
     val useMbCanVhal: Boolean = false,
     /**
      * Stepper +/- control icon style for [isStepperWidgetDataKey] tiles:
      * [STEPPER_ADJUST_ICON_PLUS_MINUS] or [STEPPER_ADJUST_ICON_ARROWS].
      */
     val stepperAdjustIconStyle: Int = STEPPER_ADJUST_ICON_PLUS_MINUS,
+    /**
+     * HVAC temperature widget ± step in tenths of a degree for [isHvacTempWidgetDataKey] tiles:
+     * [HVAC_TEMP_WIDGET_STEP_HALF_TENTHS] (0.5 °C, default) or
+     * [HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS] (1.0 °C, snap half-degrees first).
+     */
+    val hvacTempStepTenths: Int = HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT,
     /**
      * Optional background image on top of the tile color (light theme).
      * Path relative to [Context.filesDir]; must stay under [TileBackgroundImageStorage.DIR_NAME].
@@ -198,9 +221,27 @@ data class FloatingDashboardWidgetConfig(
     val tripWidgetLabelColumnWidthPercent: Int = TripWidgetTileDisplay.DEFAULT_LABEL_COLUMN_WIDTH_PERCENT,
     /**
      * Trip tile data source: [TRIP_WIDGET_SOURCE_CURRENT] (default) or [TRIP_WIDGET_SOURCE_PERSISTENT].
-     * Only used when [isActiveTripWidgetDataKey] is true.
+     * Used when [usesTripWidgetSource] is true (full trip tiles and [TRIP_METRIC_WIDGET_DATA_KEY]).
      */
     val tripWidgetSource: Int = TRIP_WIDGET_SOURCE_CURRENT,
+    /**
+     * Field id for [TRIP_METRIC_WIDGET_DATA_KEY] ([vad.dashing.tbox.trip.ActiveTripCustomWidgetField.id]).
+     * Ignored for other data keys.
+     */
+    val tripMetricFieldId: String = "distance",
+    /**
+     * PID id for [OBD_METRIC_WIDGET_DATA_KEY] ([vad.dashing.tbox.obd.ObdPid.id]).
+     * Ignored for other data keys.
+     */
+    val obdPidId: String = "rpm",
+    /**
+     * Average fuel-consumption tile source:
+     * [AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL] (default),
+     * [AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP], or
+     * [AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP].
+     * Only used when [isAverageFuelConsumptionWidgetDataKey] is true.
+     */
+    val avgFuelConsumptionSource: Int = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
     /**
      * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
@@ -259,10 +300,55 @@ data class FloatingDashboardWidgetConfig(
      */
     val controlShape: Int? = null,
     /**
+     * Outer inset in dp for control elements (button vs cell).
+     * `null` — class default (music buttons → 0, steppers/blow panel → 6, others → 4).
+     */
+    val controlPadding: Int? = null,
+    /**
      * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: follow-mode heading-up camera.
      * Default off (north-up). Persisted per tile instance.
      */
     val roadMatchHeadingUp: Boolean = false,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: Yandex MapKit basemap under Canvas overlays.
+     * Default off (offline Canvas only).
+     */
+    val roadMatchMapKitBasemap: Boolean = false,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: basemap transparency percent (0 = opaque … 75).
+     * Only used when [roadMatchMapKitBasemap] is true.
+     */
+    val roadMatchBasemapTransparencyPercent: Int = 0,
+    /**
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: allowed overspeed (km/h) before camera alert color.
+     * Default [vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH].
+     */
+    val speedCamOverageKmh: Int = vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH,
+    /**
+     * Legacy JSON field; prefer [mapsCamLookaheadDistanceM]. Still decoded for old backups.
+     */
+    val speedCamRadiusM: Int = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
+    /**
+     * [ROAD_MATCH_MAP_WIDGET_DATA_KEY]: draw nearby SpeedCamOnline cameras/radars on this map tile.
+     * Default off.
+     */
+    val speedCamShowOnMap: Boolean = false,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show camera/radar column (blocks 1–2). Default on. */
+    val mapsCamShowCameras: Boolean = true,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show current speed-limit sign (block 3). Default on. */
+    val mapsCamShowCurrentLimit: Boolean = true,
+    /** [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: show ahead limit column (blocks 4–5). Default on. */
+    val mapsCamShowAheadLimit: Boolean = true,
+    /**
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: how far ahead to look for limits / cameras (m).
+     * Default [DEFAULT_MAPS_CAM_LOOKAHEAD_M].
+     */
+    val mapsCamLookaheadDistanceM: Int = DEFAULT_MAPS_CAM_LOOKAHEAD_M,
+    /**
+     * [OSM_SPEED_LIMIT_WIDGET_DATA_KEY]: keep last radar/camera limit as current fallback (m).
+     * Default [DEFAULT_MAPS_CAM_RADAR_HOLD_M].
+     */
+    val mapsCamRadarHoldDistanceM: Int = DEFAULT_MAPS_CAM_RADAR_HOLD_M,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -381,10 +467,14 @@ data class MainScreenPanelConfig(
      */
     val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
+    val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+    val collapseOnStripDoubleTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -418,10 +508,14 @@ data class FloatingDashboardConfig(
     val gridSpacingDp: Int = DEFAULT_PANEL_GRID_SPACING_DP,
     val collapseEdge: String = PanelCollapseEdge.NONE.storageValue,
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
+    val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
     val collapseStripExpandedColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+    val collapseOnStripTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+    val collapseOnStripDoubleTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
     val collapseOnTileTap: Boolean = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP,
     val collapseOnTileTapDelaySec: Int = DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
     /** Whole-panel background fill (ARGB); null = fully transparent. */
@@ -456,8 +550,34 @@ data class BackgroundServiceSettingsSnapshot(
     /** True when [locationSource] is [vad.dashing.tbox.esp.LocationSource.TBOX] (legacy name kept for callers). */
     val getLocData: Boolean,
     val locationSource: vad.dashing.tbox.esp.LocationSource,
+    /** Net/modem UI source: TBox MDC or Wi‑Fi modem HTTP. */
+    val modemSource: vad.dashing.tbox.wifimodem.ModemSource,
+    val wifiModemModel: vad.dashing.tbox.wifimodem.WifiModemModel,
+    val wifiModemHost: String,
+    val wifiModemPassword: String,
+    /** Poll period for Wi‑Fi modem HTTP status (seconds). */
+    val wifiModemPollIntervalSec: Int,
+    /** HU internet probe URL (default Yandex). */
+    val huInternetProbeUrl: String,
+    /** HU internet probe period (seconds). */
+    val huInternetProbeIntervalSec: Int,
+    /** When false, HU internet probe is stopped and status stays unknown. */
+    val huInternetProbeEnabled: Boolean,
     /** USB ESP32 companion session; off by default (not all users have the hardware). */
     val espCompanionEnabled: Boolean,
+    /** Classic Bluetooth ELM327 OBD-II adapter session; off by default. */
+    val elm327Enabled: Boolean,
+    /** Bonded adapter MAC address (empty = none selected). */
+    val elm327DeviceAddress: String,
+    /** User-provided legacy pairing PIN for the ELM327 adapter (empty = auto candidates). */
+    val elm327PairingPin: String,
+    /**
+     * Last Mode 01 PID-support discovery result: comma-separated hex PID bytes (`04,0C,0D`).
+     * Empty when never discovered or reset.
+     */
+    val elm327SupportedPids: String,
+    /** Epoch ms of last successful PID discovery; 0 = none / reset. */
+    val elm327DiscoveryAtMs: Long,
     /**
      * When true, do not connect to TBox / tbox-proxy (HU-only mode).
      * Default false preserves legacy connect behavior.
@@ -486,6 +606,8 @@ data class BackgroundServiceSettingsSnapshot(
     val mockPowerState: vad.dashing.tbox.location.MockPowerState,
     /** Period for pushing mock location into Android LocationManager (ms). */
     val mockLocationPeriodMs: Long,
+    /** Cap for mock horizontal accuracy while retaining / DR (m). */
+    val mockRetentionAccuracyCeilingM: Float,
     /** How mock mixes CAN vehicle speed into pushed locations. */
     val mockCanSpeedMode: vad.dashing.tbox.location.MockCanSpeedMode,
     /** Heading source for enhancement DR: gyro or steering angle. */
@@ -589,7 +711,7 @@ class SettingsManager(private val context: Context) {
         const val UPDATE_TAB_KEY = "update"
 
         /** Max tile rows/columns for main-screen embedded panels and floating overlay dashboards. */
-        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 10
+        const val DASHBOARD_PANEL_MAX_GRID_DIMENSION = 15
 
         /** Dropdown options 1…[DASHBOARD_PANEL_MAX_GRID_DIMENSION] for panel grid settings. */
         val DASHBOARD_PANEL_GRID_OPTIONS: List<Int> =
@@ -619,7 +741,36 @@ class SettingsManager(private val context: Context) {
         private val GET_CYCLE_SIGNAL_KEY = booleanPreferencesKey("${KEY_PREFIX}get_cycle_signal")
         private val GET_LOC_DATA_KEY = booleanPreferencesKey("${KEY_PREFIX}get_loc_data")
         private val LOCATION_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}location_source")
+        private val MODEM_SOURCE_KEY = stringPreferencesKey("${KEY_PREFIX}modem_source")
+        private val WIFI_MODEM_MODEL_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_model")
+        private val WIFI_MODEM_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_host")
+        private val WIFI_MODEM_PASSWORD_KEY = stringPreferencesKey("${KEY_PREFIX}wifi_modem_password")
+        private val WIFI_MODEM_POLL_INTERVAL_SEC_KEY =
+            intPreferencesKey("${KEY_PREFIX}wifi_modem_poll_interval_sec")
+        private val HU_INTERNET_PROBE_URL_KEY =
+            stringPreferencesKey("${KEY_PREFIX}hu_internet_probe_url")
+        private val HU_INTERNET_PROBE_INTERVAL_SEC_KEY =
+            intPreferencesKey("${KEY_PREFIX}hu_internet_probe_interval_sec")
+        private val HU_INTERNET_PROBE_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_internet_probe_enabled")
         private val ESP_COMPANION_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}esp_companion_enabled")
+        private val ESP_SOFTAP_ROUTER_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}esp_softap_router_enabled")
+        private val ESP_SOFTAP_SSID_KEY = stringPreferencesKey("${KEY_PREFIX}esp_softap_ssid")
+        private val ESP_SOFTAP_PSK_KEY = stringPreferencesKey("${KEY_PREFIX}esp_softap_psk")
+        private val ADB_LAST_HOST_KEY = stringPreferencesKey("${KEY_PREFIX}adb_last_host")
+        private val ADB_LAST_PORT_KEY = intPreferencesKey("${KEY_PREFIX}adb_last_port")
+        private val ADB_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}adb_mode")
+        /** Cached HU display list for app-launcher virtual-display mode (JSON array). */
+        private val HU_VIRTUAL_DISPLAYS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}hu_virtual_displays_json")
+        private val ELM327_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}elm327_enabled")
+        private val ELM327_DEVICE_ADDRESS_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_device_address")
+        private val ELM327_PAIRING_PIN_KEY = stringPreferencesKey("${KEY_PREFIX}elm327_pairing_pin")
+        private val ELM327_SUPPORTED_PIDS_KEY =
+            stringPreferencesKey("${KEY_PREFIX}elm327_supported_pids")
+        private val ELM327_DISCOVERY_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}elm327_discovery_at_ms")
         private val USB_GNSS_DEVICE_ID_KEY = stringPreferencesKey("${KEY_PREFIX}usb_gnss_device_id")
         private val USB_GNSS_BAUD_KEY = intPreferencesKey("${KEY_PREFIX}usb_gnss_baud")
         private val USB_GNSS_REQUEST_VTG_KEY =
@@ -642,6 +793,8 @@ class SettingsManager(private val context: Context) {
         private val MOCK_LOCATION_POWER_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_location_power")
         private val MOCK_LOCATION_PERIOD_MS = longPreferencesKey("${KEY_PREFIX}mock_location_period_ms")
+        private val MOCK_RETENTION_ACCURACY_CEILING_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}mock_retention_accuracy_ceiling_m")
         private val MOCK_CAN_SPEED_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}mock_can_speed_mode")
         private val MOCK_HEADING_SOURCE_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_heading_source")
@@ -670,14 +823,23 @@ class SettingsManager(private val context: Context) {
         private val MOCK_ROAD_MATCH_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}mock_road_match_enabled")
         /**
-         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default)
-         * or [RoadMatchMode.RAILS]. Stored as enum name.
+         * Road-match pose mode when the toggle is on: [RoadMatchMode.ORDINARY] (default),
+         * [RoadMatchMode.RAILS], or experimental [RoadMatchMode.FREE_TURNS]. Stored as enum name.
          */
         private val MOCK_ROAD_MATCH_MODE_KEY =
             stringPreferencesKey("${KEY_PREFIX}mock_road_match_mode")
+        /** JSON containing only user overrides from production road-match defaults. */
+        private val MOCK_ROAD_MATCH_TUNING_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mock_road_match_tuning")
         /** JSON manifest of installed `.tboxroads` packs. */
         private val ROAD_MAPS_INSTALLED_JSON_KEY =
             stringPreferencesKey("${KEY_PREFIX}road_maps_installed_json")
+        /** JSON manifest of installed SpeedCamOnline iGO pack. */
+        private val SPEED_CAM_INSTALLED_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}speed_cam_installed_json")
+        /** Optional override for Yandex MapKit API key; blank → [BuildConfig.MAPKIT_API_KEY]. */
+        private val MAPKIT_API_KEY_KEY =
+            stringPreferencesKey("${KEY_PREFIX}mapkit_api_key")
         private val GEO_CALIB_NEEDS_KEY =
             booleanPreferencesKey("${KEY_PREFIX}geo_calib_needs")
         private val GEO_CALIB_LAST_AT_MS_KEY =
@@ -709,6 +871,16 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_speed_est")
         private val DRIVE_CALIB_YAW_EST_KEY =
             booleanPreferencesKey("${KEY_PREFIX}drive_calib_yaw_est")
+        private val WHEEL_PULSE_M_PER_PULSE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_pulse_m_per_pulse")
+        private val WHEEL_PULSE_CALIB_CONFIDENCE_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_pulse_calib_confidence")
+        private val WHEEL_PULSE_FEATURE_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_feature_enabled")
+        private val WHEEL_PULSE_TRIPS_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
+        private val WHEEL_PULSE_MOCK_DR_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_mock_dr_enabled")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
@@ -737,6 +909,14 @@ class SettingsManager(private val context: Context) {
         private val STEER_CALIB_WHEELBASE_M_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_wheelbase_m")
         private val EXPERT_MODE = booleanPreferencesKey("${KEY_PREFIX}expert_mode")
+        private val EXTERNAL_API_ENABLED = booleanPreferencesKey("${KEY_PREFIX}external_api_enabled")
+        private val EXTERNAL_API_PORT = intPreferencesKey("${KEY_PREFIX}external_api_port")
+        private val EXTERNAL_API_DANGEROUS_ENABLED =
+            booleanPreferencesKey("${KEY_PREFIX}external_api_dangerous_enabled")
+        private val EXTERNAL_API_WEB_PANEL_ENABLED =
+            booleanPreferencesKey("${KEY_PREFIX}external_api_web_panel_enabled")
+        private val EXTERNAL_API_CLIENTS_JSON =
+            stringPreferencesKey("${KEY_PREFIX}external_api_clients_json")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
         private val PERMISSIONS_INTRO_SEEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}permissions_intro_seen")
@@ -766,6 +946,17 @@ class SettingsManager(private val context: Context) {
         /** Bumped when HTTP request widget custom icons change. */
         private val HTTP_REQUEST_ICON_REVISION_KEY =
             intPreferencesKey("${KEY_PREFIX}http_request_icon_revision")
+
+        /** Bumped when built-in widget or navigation icon overrides change. */
+        private val UI_ICON_REVISION_KEY =
+            intPreferencesKey("${KEY_PREFIX}ui_icon_revision")
+
+        /**
+         * JSON object of iconKey → true for UI icons that must keep original colors
+         * (no day/night or active/inactive tint).
+         */
+        private val UI_ICON_PRESERVE_COLORS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}ui_icon_preserve_colors_json")
 
         /** Bumped when per-tile background image files change (save / clear / backup import). */
         private val TILE_BACKGROUND_IMAGE_REVISION_KEY =
@@ -806,6 +997,10 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}dashboard_grid_spacing_dp")
         private val FLOATING_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
+        private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
+        private val FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY =
+            intPreferencesKey("${KEY_PREFIX}floating_panels_show_on_service_start_delay_seconds")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
             intPreferencesKey("${KEY_PREFIX}main_screen_panels_layout_snap_dp")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_ENABLED_KEY =
@@ -832,9 +1027,19 @@ class SettingsManager(private val context: Context) {
         /** App-local day/night (`1` light / `2` dark) used when [FOLLOW_SYSTEM_DAY_NIGHT_KEY] is false. */
         private val APP_DAY_NIGHT_THEME_KEY = intPreferencesKey("${KEY_PREFIX}app_day_night_theme")
         private val APP_FONT_FAMILY_ID_KEY = intPreferencesKey("${KEY_PREFIX}app_font_family_id")
+
+        /** JSON of per-role text size scales (see [vad.dashing.tbox.ui.theme.TboxTextSizeScales]). */
+        private val APP_TEXT_SIZE_SCALES_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}app_text_size_scales_json")
         private val UPDATE_CHANNEL_KEY = stringPreferencesKey("${KEY_PREFIX}update_channel")
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
+        /**
+         * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
+         * Default true when key absent.
+         */
+        private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -869,6 +1074,7 @@ class SettingsManager(private val context: Context) {
         private const val DEFAULT_MAIN_SCREEN_PANEL_SHOW_TBOX_DISCONNECT = false
         private const val FLOATING_DASHBOARDS_LIST_KEY = "floating_dashboards"
         private const val USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY = "usage_stats_hide_floating_watch_packages"
+        private const val APP_LIST_HIDDEN_PACKAGES_KEY = "app_list_hidden_packages"
         private const val USAGE_STATS_HIDE_FLOATING_PANEL_IDS_KEY = "usage_stats_hide_floating_panel_ids"
         private const val USAGE_STATS_FORCE_SHOW_WATCH_PACKAGES_KEY = "usage_stats_force_show_floating_watch_packages"
         private const val USAGE_STATS_FORCE_SHOW_PANEL_IDS_KEY = "usage_stats_force_show_floating_panel_ids"
@@ -923,7 +1129,8 @@ class SettingsManager(private val context: Context) {
         const val HTTP_REQUEST_ICONS_DIR = "http_request_icons"
         private const val MAX_LAUNCHER_APP_ICON_EDGE_PX = 512
         private const val MAX_LAUNCHER_APP_ICON_BYTES = 512 * 1024L
-        private const val MAX_TILE_BACKGROUND_EDGE_PX = 4096
+        /** Reject picks that would OOM low-RAM HUs; theme ZIP assets are also shrunk on materialize. */
+        private const val MAX_TILE_BACKGROUND_EDGE_PX = UI_IMAGE_DECODE_MAX_EDGE_PX
         private const val MAX_TILE_BACKGROUND_BYTES = 8 * 1024 * 1024L
         private const val DEFAULT_CAN_DATA_SAVE_COUNT = 5
         private const val DEFAULT_FUEL_TANK_LITERS = 57
@@ -941,6 +1148,12 @@ class SettingsManager(private val context: Context) {
         const val MIN_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 0
         const val MAX_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 60
         const val DEFAULT_MAIN_SCREEN_OPEN_ON_BOOT_DELAY_SECONDS = 2
+        const val MIN_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.MIN_SECONDS
+        const val MAX_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.MAX_SECONDS
+        const val DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS =
+            FloatingPanelsShowOnServiceStartDelay.DEFAULT_SECONDS
         private const val MIN_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 10
         private const val DEFAULT_MAIN_SCREEN_CORNER_BUTTON_SIZE_DP = 50
         /** Fully transparent — only the icon is visible over the main-screen canvas. */
@@ -1002,6 +1215,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             stringSetFromJsonArray(
                 preferences[getStringKey(USAGE_STATS_HIDE_FLOATING_WATCH_PACKAGES_KEY)] ?: "[]"
+            )
+        }
+        .distinctUntilChanged()
+
+    val appListHiddenPackagesFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            stringSetFromJsonArray(
+                preferences[getStringKey(APP_LIST_HIDDEN_PACKAGES_KEY)] ?: "[]"
             )
         }
         .distinctUntilChanged()
@@ -1077,6 +1298,15 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val mockRetentionAccuracyCeilingMFlow: Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(
+                preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY]
+                    ?: vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+            )
+        }
+        .distinctUntilChanged()
+
     val mockCanSpeedModeFlow: Flow<vad.dashing.tbox.location.MockCanSpeedMode> =
         context.settingsDataStore.data
             .map { preferences ->
@@ -1128,8 +1358,22 @@ class SettingsManager(private val context: Context) {
             }
             .distinctUntilChanged()
 
+    val mockRoadMatchTuningFlow:
+        Flow<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                vad.dashing.tbox.location.roadmatch.RoadMatchTuning.fromJson(
+                    preferences[MOCK_ROAD_MATCH_TUNING_KEY],
+                )
+            }
+            .distinctUntilChanged()
+
     val roadMapsInstalledJsonFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val mapkitApiKeyFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[MAPKIT_API_KEY_KEY].orEmpty() }
         .distinctUntilChanged()
 
     val geoCalibNeedsFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1193,6 +1437,52 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> resolveLocationSource(preferences) }
         .distinctUntilChanged()
 
+    val modemSourceFlow: Flow<vad.dashing.tbox.wifimodem.ModemSource> = context.settingsDataStore.data
+        .map { preferences -> resolveModemSource(preferences) }
+        .distinctUntilChanged()
+
+    val wifiModemModelFlow: Flow<vad.dashing.tbox.wifimodem.WifiModemModel> =
+        context.settingsDataStore.data
+            .map { preferences -> resolveWifiModemModel(preferences) }
+            .distinctUntilChanged()
+
+    val wifiModemHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[WIFI_MODEM_HOST_KEY]
+                ?: resolveWifiModemModel(preferences).defaultHost
+        }
+        .distinctUntilChanged()
+
+    val wifiModemPasswordFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[WIFI_MODEM_PASSWORD_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val wifiModemPollIntervalSecFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            (preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] ?: 5).coerceIn(2, 60)
+        }
+        .distinctUntilChanged()
+
+    val huInternetProbeUrlFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(
+                preferences[HU_INTERNET_PROBE_URL_KEY],
+            )
+        }
+        .distinctUntilChanged()
+
+    val huInternetProbeIntervalSecFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(
+                preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY]
+                    ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+            )
+        }
+
+    val huInternetProbeEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true }
+        .distinctUntilChanged()
+
     /** Legacy: true when location source is TBox (subscribe to LOC). */
     val getLocDataFlow: Flow<Boolean> = locationSourceFlow
         .map { it == vad.dashing.tbox.esp.LocationSource.TBOX }
@@ -1200,6 +1490,58 @@ class SettingsManager(private val context: Context) {
 
     val espCompanionEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[ESP_COMPANION_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val espSoftApRouterEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val espSoftApSsidFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_SSID_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val espSoftApPskFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ESP_SOFTAP_PSK_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val espBleDeviceNamesFlow: Flow<Map<String, String>> =
+        vad.dashing.tbox.esp.EspBleDeviceNamesCodec.flow(context)
+
+    val adbLastHostFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_LAST_HOST_KEY]?.takeIf { it.isNotBlank() } ?: "127.0.0.1" }
+        .distinctUntilChanged()
+
+    val adbLastPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> (preferences[ADB_LAST_PORT_KEY] ?: 5555).coerceIn(1, 65535) }
+        .distinctUntilChanged()
+
+    val adbModeFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ADB_MODE_KEY]?.takeIf { it == "usb" } ?: "tcp" }
+        .distinctUntilChanged()
+
+    /** Cached list from last «Refresh displays» (may be empty until the user refreshes). */
+    val huVirtualDisplaysJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_VIRTUAL_DISPLAYS_JSON_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327EnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_ENABLED_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val elm327DeviceAddressFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327PairingPinFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_PAIRING_PIN_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327SupportedPidsFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_SUPPORTED_PIDS_KEY].orEmpty() }
+        .distinctUntilChanged()
+
+    val elm327DiscoveryAtMsFlow: Flow<Long> = context.settingsDataStore.data
+        .map { preferences -> preferences[ELM327_DISCOVERY_AT_MS_KEY] ?: 0L }
         .distinctUntilChanged()
 
     val usbGnssDeviceIdFlow: Flow<String> = context.settingsDataStore.data
@@ -1260,6 +1602,28 @@ class SettingsManager(private val context: Context) {
 
     val expertModeFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXPERT_MODE] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiPortFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[EXTERNAL_API_PORT] ?: vad.dashing.tbox.externalapi.ExternalApiConstants.DEFAULT_PORT
+        }
+        .distinctUntilChanged()
+
+    val externalApiDangerousEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_DANGEROUS_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiWebPanelEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_WEB_PANEL_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val externalApiClientsJsonFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[EXTERNAL_API_CLIENTS_JSON] ?: "[]" }
         .distinctUntilChanged()
 
     val permissionsIntroSeenFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1485,6 +1849,16 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
 
+    val uiIconRevisionFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[UI_ICON_REVISION_KEY] ?: 0 }
+        .distinctUntilChanged()
+
+    val uiIconPreserveColorsFlow: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parseUiIconPreserveColorsJson(preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty())
+        }
+        .distinctUntilChanged()
+
     val tileBackgroundImageRevisionFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0 }
         .distinctUntilChanged()
@@ -1583,6 +1957,20 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
+        .distinctUntilChanged()
+
+    /** Seconds to wait after periodic-job start before the first floating-panel ensure. */
+    val floatingPanelsShowOnServiceStartDelaySecondsFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            FloatingPanelsShowOnServiceStartDelay.coerceSeconds(
+                preferences[FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY]
+                    ?: DEFAULT_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            )
+        }
+        .distinctUntilChanged()
+
     val mainScreenPanelsLayoutSnapDpFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             normalizePanelLayoutSnapDp(
@@ -1669,6 +2057,12 @@ class SettingsManager(private val context: Context) {
         }
         .distinctUntilChanged()
 
+    val appTextSizeScalesFlow: Flow<TboxTextSizeScales> = context.settingsDataStore.data
+        .map { preferences ->
+            TboxTextSizeScales.fromJson(preferences[APP_TEXT_SIZE_SCALES_JSON_KEY])
+        }
+        .distinctUntilChanged()
+
     val updateChannelFlow: Flow<vad.dashing.tbox.update.UpdateChannel> = context.settingsDataStore.data
         .map { preferences ->
             vad.dashing.tbox.update.UpdateChannel.fromStorageValue(preferences[UPDATE_CHANNEL_KEY])
@@ -1683,6 +2077,14 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             HeadUnitCanMode.fromStorageValue(preferences[HEAD_UNIT_CAN_MODE_KEY])
         }
+        .distinctUntilChanged()
+
+    /**
+     * When true (default) and HU mode is Android 10, programmatic [MainActivity] opens use
+     * Adayo stock app window instead of fullscreen.
+     */
+    val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -1764,7 +2166,27 @@ class SettingsManager(private val context: Context) {
             getCycleSignal = preferences[GET_CYCLE_SIGNAL_KEY] ?: false,
             locationSource = resolveLocationSource(preferences),
             getLocData = resolveLocationSource(preferences) == vad.dashing.tbox.esp.LocationSource.TBOX,
+            modemSource = resolveModemSource(preferences),
+            wifiModemModel = resolveWifiModemModel(preferences),
+            wifiModemHost = preferences[WIFI_MODEM_HOST_KEY]
+                ?: resolveWifiModemModel(preferences).defaultHost,
+            wifiModemPassword = preferences[WIFI_MODEM_PASSWORD_KEY].orEmpty(),
+            wifiModemPollIntervalSec = (preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] ?: 5)
+                .coerceIn(2, 60),
+            huInternetProbeUrl = vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(
+                preferences[HU_INTERNET_PROBE_URL_KEY],
+            ),
+            huInternetProbeIntervalSec = vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(
+                preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY]
+                    ?: vad.dashing.tbox.internet.HuInternetProbe.DEFAULT_INTERVAL_SEC,
+            ),
+            huInternetProbeEnabled = preferences[HU_INTERNET_PROBE_ENABLED_KEY] ?: true,
             espCompanionEnabled = preferences[ESP_COMPANION_ENABLED_KEY] ?: false,
+            elm327Enabled = preferences[ELM327_ENABLED_KEY] ?: false,
+            elm327DeviceAddress = preferences[ELM327_DEVICE_ADDRESS_KEY].orEmpty(),
+            elm327PairingPin = preferences[ELM327_PAIRING_PIN_KEY].orEmpty(),
+            elm327SupportedPids = preferences[ELM327_SUPPORTED_PIDS_KEY].orEmpty(),
+            elm327DiscoveryAtMs = preferences[ELM327_DISCOVERY_AT_MS_KEY] ?: 0L,
             noTboxConnect = preferences[NO_TBOX_CONNECT_KEY] ?: false,
             usbGnssDeviceId = preferences[USB_GNSS_DEVICE_ID_KEY].orEmpty(),
             usbGnssBaud = run {
@@ -1787,6 +2209,10 @@ class SettingsManager(private val context: Context) {
             mockLocation = mockPowerStateFromPreferences(preferences).isMockEnabled,
             mockPowerState = mockPowerStateFromPreferences(preferences),
             mockLocationPeriodMs = (preferences[MOCK_LOCATION_PERIOD_MS] ?: 1000L).coerceIn(200L, 60_000L),
+            mockRetentionAccuracyCeilingM = vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(
+                preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY]
+                    ?: vad.dashing.tbox.location.MockRetentionAccuracy.DEFAULT_CEILING_M,
+            ),
             mockCanSpeedMode = vad.dashing.tbox.location.MockCanSpeedMode.fromStorage(
                 preferences[MOCK_CAN_SPEED_MODE_KEY],
             ),
@@ -1905,6 +2331,13 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMockRetentionAccuracyCeilingM(ceilingM: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MOCK_RETENTION_ACCURACY_CEILING_M_KEY] =
+                vad.dashing.tbox.location.MockRetentionAccuracy.normalizeCeilingM(ceilingM)
+        }
+    }
+
     suspend fun saveMockCanSpeedModeSetting(mode: vad.dashing.tbox.location.MockCanSpeedMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[MOCK_CAN_SPEED_MODE_KEY] = mode.name
@@ -1961,6 +2394,34 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveMockRoadMatchTuning(
+        tuning: vad.dashing.tbox.location.roadmatch.RoadMatchTuning,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            if (tuning.isDefault()) {
+                preferences.remove(MOCK_ROAD_MATCH_TUNING_KEY)
+            } else {
+                preferences[MOCK_ROAD_MATCH_TUNING_KEY] = tuning.toJson()
+            }
+        }
+    }
+
+    suspend fun exportRoadMatchTuningJson(): String {
+        val tuning = mockRoadMatchTuningFlow.first()
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.exportJson(
+            packageName = context.packageName,
+            tuning = tuning,
+        )
+    }
+
+    suspend fun importRoadMatchTuningJson(json: String): Result<vad.dashing.tbox.location.roadmatch.RoadMatchTuning> {
+        return vad.dashing.tbox.location.roadmatch.RoadMatchTuningExport.importJson(json)
+            .mapCatching { tuning ->
+                saveMockRoadMatchTuning(tuning)
+                tuning
+            }
+    }
+
     suspend fun loadRoadMapsInstalledJson(): String {
         return context.settingsDataStore.data.first()[ROAD_MAPS_INSTALLED_JSON_KEY].orEmpty()
     }
@@ -1968,6 +2429,22 @@ class SettingsManager(private val context: Context) {
     suspend fun saveRoadMapsInstalledJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ROAD_MAPS_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadSpeedCamInstalledJson(): String {
+        return context.settingsDataStore.data.first()[SPEED_CAM_INSTALLED_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveSpeedCamInstalledJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SPEED_CAM_INSTALLED_JSON_KEY] = json
+        }
+    }
+
+    suspend fun saveMapkitApiKey(key: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAPKIT_API_KEY_KEY] = key.trim()
         }
     }
 
@@ -2128,6 +2605,67 @@ class SettingsManager(private val context: Context) {
             vad.dashing.tbox.location.DriveCalibrationOffsets.DEFAULT,
             noteGeoCalibration = false,
         )
+    }
+
+    suspend fun loadWheelPulseCalibration(): vad.dashing.tbox.vehicle.WheelPulseCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            metersPerPulse = prefs[WHEEL_PULSE_M_PER_PULSE_KEY] ?: 0f,
+            confidence = prefs[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] ?: 0f,
+            // Default off: no CAN subscribe until the user opts in (crash A/B).
+            featureEnabled = prefs[WHEEL_PULSE_FEATURE_ENABLED_KEY] ?: false,
+            tripsEnabled = prefs[WHEEL_PULSE_TRIPS_ENABLED_KEY] ?: false,
+            mockDrEnabled = prefs[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] ?: false,
+        )
+    }
+
+    suspend fun saveWheelPulseCalibration(calibration: vad.dashing.tbox.vehicle.WheelPulseCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHEEL_PULSE_M_PER_PULSE_KEY] = calibration.metersPerPulse.coerceAtLeast(0f)
+            preferences[WHEEL_PULSE_CALIB_CONFIDENCE_KEY] = calibration.confidence.coerceIn(0f, 1f)
+            preferences[WHEEL_PULSE_FEATURE_ENABLED_KEY] = calibration.featureEnabled
+            preferences[WHEEL_PULSE_TRIPS_ENABLED_KEY] = calibration.tripsEnabled
+            preferences[WHEEL_PULSE_MOCK_DR_ENABLED_KEY] = calibration.mockDrEnabled
+        }
+        vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetWheelPulseCalibration() {
+        val cur = loadWheelPulseCalibration()
+        val cleared = vad.dashing.tbox.vehicle.WheelPulseCalibration(
+            featureEnabled = cur.featureEnabled,
+            tripsEnabled = cur.tripsEnabled,
+            mockDrEnabled = cur.mockDrEnabled,
+        )
+        saveWheelPulseCalibration(cleared)
+        vad.dashing.tbox.vehicle.WheelPulseOdometer.configure(0f, 0f)
+        vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
+    }
+
+    suspend fun saveWheelPulseFeatureEnabled(enabled: Boolean) {
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
+        saveWheelPulseCalibration(cur.copy(featureEnabled = enabled))
+        if (!enabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.resetSession()
+            vad.dashing.tbox.location.SpeedIntegrator.discard()
+        } else if (cur.mockDrEnabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+        }
+    }
+
+    suspend fun saveWheelPulseTripsEnabled(enabled: Boolean) {
+        // Prefer in-RAM calib (may be newer than disk while persist is throttled).
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
+        saveWheelPulseCalibration(cur.copy(tripsEnabled = enabled))
+    }
+
+    suspend fun saveWheelPulseMockDrEnabled(enabled: Boolean) {
+        val cur = vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.value
+        saveWheelPulseCalibration(cur.copy(mockDrEnabled = enabled))
+        if (enabled) {
+            vad.dashing.tbox.vehicle.WheelPulseOdometer.syncDrCursor()
+        }
+        vad.dashing.tbox.location.SpeedIntegrator.discard()
     }
 
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
@@ -2298,6 +2836,61 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    suspend fun saveModemSourceSetting(source: vad.dashing.tbox.wifimodem.ModemSource) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MODEM_SOURCE_KEY] = source.storageValue
+        }
+    }
+
+    suspend fun saveWifiModemModelSetting(model: vad.dashing.tbox.wifimodem.WifiModemModel) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_MODEL_KEY] = model.storageValue
+            val currentHost = preferences[WIFI_MODEM_HOST_KEY]
+            if (currentHost.isNullOrBlank()) {
+                preferences[WIFI_MODEM_HOST_KEY] = model.defaultHost
+            }
+        }
+    }
+
+    suspend fun saveWifiModemHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveWifiModemPasswordSetting(password: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_PASSWORD_KEY] = password
+        }
+    }
+
+    suspend fun saveWifiModemPollIntervalSecSetting(seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WIFI_MODEM_POLL_INTERVAL_SEC_KEY] = seconds.coerceIn(2, 60)
+        }
+    }
+
+    suspend fun saveHuInternetProbeUrlSetting(url: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_URL_KEY] =
+                vad.dashing.tbox.internet.HuInternetProbe.normalizeUrl(url)
+        }
+    }
+
+    suspend fun saveHuInternetProbeIntervalSecSetting(seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_INTERVAL_SEC_KEY] =
+                vad.dashing.tbox.internet.HuInternetProbe.coerceIntervalSec(seconds)
+        }
+    }
+
+
+    suspend fun saveHuInternetProbeEnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_INTERNET_PROBE_ENABLED_KEY] = enabled
+        }
+    }
+
     suspend fun saveLocationSourceSetting(source: vad.dashing.tbox.esp.LocationSource) {
         var sendResumeLoc = false
         context.settingsDataStore.edit { preferences ->
@@ -2457,6 +3050,45 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveEspSoftApRouterEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_SOFTAP_ROUTER_ENABLED_KEY] = enabled
+        }
+    }
+
+    /**
+     * Creates the companion SoftAP name and password once. Later boots keep the stored pair.
+     */
+    suspend fun ensureEspSoftApIdentity(): Pair<String, String> {
+        var ssid = ""
+        var psk = ""
+        context.settingsDataStore.edit { preferences ->
+            var storedSsid = preferences[ESP_SOFTAP_SSID_KEY].orEmpty()
+            var storedPsk = preferences[ESP_SOFTAP_PSK_KEY].orEmpty()
+            if (!EspSoftApIdentity.isValidSsid(storedSsid)) {
+                storedSsid = EspSoftApIdentity.randomSsid()
+                preferences[ESP_SOFTAP_SSID_KEY] = storedSsid
+            }
+            if (!EspSoftApIdentity.isValidPsk(storedPsk)) {
+                storedPsk = EspSoftApIdentity.randomPsk()
+                preferences[ESP_SOFTAP_PSK_KEY] = storedPsk
+            }
+            ssid = storedSsid
+            psk = storedPsk
+        }
+        return ssid to psk
+    }
+
+    suspend fun saveEspSoftApIdentity(ssid: String, psk: String): Boolean {
+        val cleanSsid = ssid.trim()
+        if (!EspSoftApIdentity.isValidSsid(cleanSsid) || !EspSoftApIdentity.isValidPsk(psk)) return false
+        context.settingsDataStore.edit { preferences ->
+            preferences[ESP_SOFTAP_SSID_KEY] = cleanSsid
+            preferences[ESP_SOFTAP_PSK_KEY] = psk
+        }
+        return true
+    }
+
     suspend fun saveEspCompanionEnabledSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[ESP_COMPANION_ENABLED_KEY] = enabled
@@ -2469,6 +3101,51 @@ class SettingsManager(private val context: Context) {
                 }
             }
         }
+    }
+
+    suspend fun saveEspBleDeviceNames(names: Map<String, String>) {
+        context.settingsDataStore.edit { preferences ->
+            val encoded = vad.dashing.tbox.esp.EspBleDeviceNamesCodec.encode(names)
+            if (encoded.isEmpty()) {
+                preferences.remove(vad.dashing.tbox.esp.EspBleDeviceNamesCodec.PREF_KEY)
+            } else {
+                preferences[vad.dashing.tbox.esp.EspBleDeviceNamesCodec.PREF_KEY] = encoded
+            }
+        }
+    }
+
+    suspend fun saveEspBleDeviceName(mac: String, name: String) {
+        val normalized = vad.dashing.tbox.esp.normalizeEspBleMac(mac)
+        if (normalized.isEmpty()) return
+        val current = espBleDeviceNamesFlow.first().toMutableMap()
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) {
+            current.remove(normalized)
+        } else {
+            current[normalized] = trimmed
+        }
+        saveEspBleDeviceNames(current)
+    }
+
+    suspend fun removeEspBleDeviceName(mac: String) {
+        saveEspBleDeviceName(mac, "")
+    }
+
+    suspend fun clearEspBleDeviceNames(macs: Collection<String>? = null) {
+        if (macs == null) {
+            saveEspBleDeviceNames(emptyMap())
+            return
+        }
+        val remove = macs.map { vad.dashing.tbox.esp.normalizeEspBleMac(it) }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (remove.isEmpty()) return
+        val current = espBleDeviceNamesFlow.first().toMutableMap()
+        var changed = false
+        for (mac in remove) {
+            if (current.remove(mac) != null) changed = true
+        }
+        if (changed) saveEspBleDeviceNames(current)
     }
 
     private fun resolveLocationSource(preferences: Preferences): vad.dashing.tbox.esp.LocationSource {
@@ -2488,9 +3165,120 @@ class SettingsManager(private val context: Context) {
         return source
     }
 
+    private fun resolveModemSource(
+        preferences: Preferences,
+    ): vad.dashing.tbox.wifimodem.ModemSource {
+        return vad.dashing.tbox.wifimodem.ModemSource.fromStorage(
+            preferences[MODEM_SOURCE_KEY]
+        )
+    }
+
+    private fun resolveWifiModemModel(
+        preferences: Preferences,
+    ): vad.dashing.tbox.wifimodem.WifiModemModel {
+        return vad.dashing.tbox.wifimodem.WifiModemModel.fromStorage(
+            preferences[WIFI_MODEM_MODEL_KEY]
+        )
+    }
+
+    suspend fun saveAdbLastHostSetting(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_HOST_KEY] = host.trim()
+        }
+    }
+
+    suspend fun saveAdbLastPortSetting(port: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_LAST_PORT_KEY] = port.coerceIn(1, 65535)
+        }
+    }
+
+    suspend fun saveAdbModeSetting(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ADB_MODE_KEY] = if (mode == "usb") "usb" else "tcp"
+        }
+    }
+
+    suspend fun saveHuVirtualDisplaysJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_VIRTUAL_DISPLAYS_JSON_KEY] = json
+        }
+    }
+
+    suspend fun loadHuVirtualDisplaysJson(): String {
+        return context.settingsDataStore.data.first()[HU_VIRTUAL_DISPLAYS_JSON_KEY].orEmpty()
+    }
+
+    suspend fun saveElm327EnabledSetting(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_ENABLED_KEY] = enabled
+        }
+    }
+
+    suspend fun saveElm327DeviceAddressSetting(address: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_DEVICE_ADDRESS_KEY] = address.trim().uppercase()
+        }
+    }
+
+    suspend fun saveElm327PairingPinSetting(pin: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_PAIRING_PIN_KEY] = pin.trim()
+        }
+    }
+
+    suspend fun saveElm327PidDiscoveryResult(pids: Set<Int>, atMs: Long) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_SUPPORTED_PIDS_KEY] =
+                vad.dashing.tbox.obd.Elm327Protocol.encodeSupportedPids(pids)
+            preferences[ELM327_DISCOVERY_AT_MS_KEY] = atMs.coerceAtLeast(0L)
+        }
+    }
+
+    suspend fun clearElm327PidDiscoveryResult() {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ELM327_SUPPORTED_PIDS_KEY] = ""
+            preferences[ELM327_DISCOVERY_AT_MS_KEY] = 0L
+        }
+    }
+
     suspend fun saveExpertModeSetting(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXPERT_MODE] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiPort(port: Int) {
+        val normalized = port.coerceIn(
+            vad.dashing.tbox.externalapi.ExternalApiConstants.MIN_PORT,
+            vad.dashing.tbox.externalapi.ExternalApiConstants.MAX_PORT,
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_PORT] = normalized
+        }
+    }
+
+    suspend fun saveExternalApiDangerousEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_DANGEROUS_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_WEB_PANEL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun saveExternalApiClientsJson(json: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EXTERNAL_API_CLIENTS_JSON] = json
         }
     }
 
@@ -2536,6 +3324,14 @@ class SettingsManager(private val context: Context) {
                 stringSetToJsonArray(showPanelIds)
         }
     }
+
+    suspend fun saveAppListHiddenPackages(packages: Set<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[getStringKey(APP_LIST_HIDDEN_PACKAGES_KEY)] =
+                stringSetToJsonArray(packages)
+        }
+    }
+
 
     suspend fun saveSelectedTab(tabKey: String) {
         context.settingsDataStore.edit { preferences ->
@@ -3049,6 +3845,18 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    /**
+     * Persists live DataStore layout covered by the theme's apply targets into [cacheKey]
+     * `theme.json` (and refreshes the manifest fingerprint).
+     */
+    suspend fun snapshotLiveLayoutToThemeCache(cacheKey: String): Boolean {
+        return ThemeMaterialization.snapshotLiveLayoutToThemeCache(
+            context = context,
+            settingsManager = this,
+            cacheKey = cacheKey,
+        )
+    }
+
     /** @deprecated Use [snapshotMainScreenRuntimeToThemeCache] with explicit outgoing cache key. */
     suspend fun snapshotMainScreenRuntimeToActiveThemeCache() {
         snapshotMainScreenRuntimeToThemeCache(activeThemeUriFlow.first())
@@ -3127,6 +3935,103 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun hasCustomUiIcon(iconKey: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            val preserve = uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+            UiIconPaths.hasResolvableIcon(
+                filesDir = context.filesDir,
+                iconKey = iconKey,
+                lookup = lookup,
+                preserveColors = preserve,
+            )
+        }
+
+    suspend fun clearCustomUiIcon(iconKey: String) {
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            val deleted = UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup)
+            val clearedFlag = setUiIconPreserveColors(iconKey, enabled = false, bumpRevision = false)
+            if (deleted || clearedFlag) {
+                bumpUiIconRevision()
+            }
+        }
+    }
+
+    suspend fun clearCustomUiIconVariant(iconKey: String, variant: UiIconPaths.Variant) {
+        withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            if (UiIconPaths.deleteCurrentOverride(context.filesDir, iconKey, lookup, variant)) {
+                bumpUiIconRevision()
+            }
+        }
+    }
+
+    suspend fun isUiIconPreserveColors(iconKey: String): Boolean =
+        uiIconPreserveColorsFlow.first().contains(iconKey.trim())
+
+    /**
+     * @return true when the stored flag changed
+     */
+    suspend fun setUiIconPreserveColors(
+        iconKey: String,
+        enabled: Boolean,
+        bumpRevision: Boolean = true,
+    ): Boolean {
+        val key = iconKey.trim()
+        if (!UiIconPaths.isValidKey(key)) return false
+        var changed = false
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            changed = if (enabled) current.add(key) else current.remove(key)
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (changed && bumpRevision) bumpUiIconRevision()
+        return changed
+    }
+
+    /**
+     * When a theme with UI icons activates, merge preserve-color flags for [themeKeys]:
+     * keys listed in [preserveColorsKeys] become true; other [themeKeys] become false.
+     * Keys not present in [themeKeys] are left unchanged.
+     */
+    suspend fun mergeUiIconPreserveColorsFromTheme(
+        themeKeys: Collection<String>,
+        preserveColorsKeys: Collection<String>,
+        bumpRevision: Boolean = true,
+    ) {
+        val themeKeySet = themeKeys.map { it.trim() }.filter { UiIconPaths.isValidKey(it) }.toSet()
+        if (themeKeySet.isEmpty()) return
+        val preserveSet = preserveColorsKeys.map { it.trim() }.filter { it in themeKeySet }.toSet()
+        context.settingsDataStore.edit { preferences ->
+            val current = parseUiIconPreserveColorsJson(
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY].orEmpty(),
+            ).toMutableSet()
+            themeKeySet.forEach { key ->
+                if (key in preserveSet) current.add(key) else current.remove(key)
+            }
+            preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = serializeUiIconPreserveColors(current)
+        }
+        if (bumpRevision) bumpUiIconRevision()
+    }
+
+    suspend fun clearSharedUiIconsFolder() {
+        withContext(Dispatchers.IO) {
+            val dir = UiIconPaths.sharedIconsDir(context.filesDir)
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) file.delete()
+                }
+            }
+            context.settingsDataStore.edit { preferences ->
+                preferences[UI_ICON_PRESERVE_COLORS_JSON_KEY] = "{}"
+            }
+            bumpUiIconRevision()
+        }
+    }
+
     suspend fun launcherAppIconLookup(): LauncherAppIconPaths.Lookup =
         LauncherAppIconPaths.Lookup(
             activeThemeCacheKey = activeThemeUriFlow.first().trim(),
@@ -3194,6 +4099,8 @@ class SettingsManager(private val context: Context) {
                 preferences[LAUNCHER_APP_ICON_REVISION_KEY] = cur + 1
                 val curHttp = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
                 preferences[HTTP_REQUEST_ICON_REVISION_KEY] = curHttp + 1
+                val curUiIcon = preferences[UI_ICON_REVISION_KEY] ?: 0
+                preferences[UI_ICON_REVISION_KEY] = curUiIcon + 1
                 val curTile = preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
                 preferences[TILE_BACKGROUND_IMAGE_REVISION_KEY] = curTile + 1
                 val curPanel = preferences[PANEL_BACKGROUND_IMAGE_REVISION_KEY] ?: 0
@@ -3213,6 +4120,13 @@ class SettingsManager(private val context: Context) {
         context.settingsDataStore.edit { preferences ->
             val cur = preferences[HTTP_REQUEST_ICON_REVISION_KEY] ?: 0
             preferences[HTTP_REQUEST_ICON_REVISION_KEY] = cur + 1
+        }
+    }
+
+    suspend fun bumpUiIconRevision() {
+        context.settingsDataStore.edit { preferences ->
+            val cur = preferences[UI_ICON_REVISION_KEY] ?: 0
+            preferences[UI_ICON_REVISION_KEY] = cur + 1
         }
     }
 
@@ -3242,10 +4156,11 @@ class SettingsManager(private val context: Context) {
     ): Pair<SetTileBackgroundImageResult, String?> {
         return withContext(Dispatchers.IO) {
             val rel = PanelBackgroundImageStorage.relativePathFor(panelStorageId, darkTheme)
-            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            val lookup = launcherAppIconLookup()
+            val dest = PanelBackgroundImageStorage.destinationFile(context.filesDir, rel, lookup)
+                ?: return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                val lookup = launcherAppIconLookup()
                 if (PanelBackgroundImageStorage.themeTargetsIncludePanelBackgrounds(lookup) &&
                     PanelBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
@@ -3309,8 +4224,9 @@ class SettingsManager(private val context: Context) {
     }
 
     /**
-     * Copies an image into [TileBackgroundImageStorage.DIR_NAME] for the given panel slot and theme.
-     * [sourceUri] `null` removes the file for that slot/theme. Returned path is suitable for
+     * Copies an image into the active theme cache (when tile backgrounds are in apply targets)
+     * or the shared [TileBackgroundImageStorage.DIR_NAME] folder. [sourceUri] `null` removes the
+     * file for that slot/theme. Returned path is suitable for
      * [FloatingDashboardWidgetConfig.tileBackgroundImageRelPathLight] / Dark.
      */
     suspend fun setTileBackgroundImageFromUri(
@@ -3321,10 +4237,11 @@ class SettingsManager(private val context: Context) {
     ): Pair<SetTileBackgroundImageResult, String?> {
         return withContext(Dispatchers.IO) {
             val rel = TileBackgroundImageStorage.relativePathFor(panelStorageId, widgetIndex, darkTheme)
-            val dest = File(context.filesDir, rel.replace('/', File.separatorChar))
+            val lookup = launcherAppIconLookup()
+            val dest = TileBackgroundImageStorage.destinationFile(context.filesDir, rel, lookup)
+                ?: return@withContext Pair(SetTileBackgroundImageResult.CopyFailed, null)
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                val lookup = launcherAppIconLookup()
                 if (TileBackgroundImageStorage.themeTargetsIncludeTileBackgrounds(lookup) &&
                     TileBackgroundImageStorage.deleteThemeCacheFile(
                         context.filesDir,
@@ -3393,10 +4310,12 @@ class SettingsManager(private val context: Context) {
     ): SetLauncherAppCustomIconResult {
         if (packageName.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
         return withContext(Dispatchers.IO) {
-            val dest = launcherAppIconFile(packageName)
+            val lookup = launcherAppIconLookup()
+            val dest = LauncherAppIconPaths.destinationIconFile(context.filesDir, packageName, lookup)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                if (dest.exists()) dest.delete()
+                clearCustomLauncherAppIcon(packageName)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {
@@ -3444,11 +4363,12 @@ class SettingsManager(private val context: Context) {
     ): SetLauncherAppCustomIconResult {
         if (iconKey.isBlank()) return SetLauncherAppCustomIconResult.InvalidPackage
         return withContext(Dispatchers.IO) {
-            val dest = httpRequestIconFile(iconKey)
+            val lookup = launcherAppIconLookup()
+            val dest = HttpRequestIconPaths.destinationIconFile(context.filesDir, iconKey, lookup)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
             dest.parentFile?.mkdirs()
             if (sourceUri == null) {
-                if (dest.exists()) dest.delete()
-                bumpHttpRequestIconRevision()
+                clearCustomHttpRequestIcon(iconKey)
                 return@withContext SetLauncherAppCustomIconResult.Success
             }
             val bounds = runCatching {
@@ -3486,6 +4406,62 @@ class SettingsManager(private val context: Context) {
             }
             decoded.recycle()
             bumpHttpRequestIconRevision()
+            SetLauncherAppCustomIconResult.Success
+        }
+    }
+
+    suspend fun setCustomUiIconFromUri(
+        iconKey: String,
+        sourceUri: Uri?,
+        variant: UiIconPaths.Variant = UiIconPaths.Variant.Day,
+    ): SetLauncherAppCustomIconResult {
+        if (!UiIconPaths.isValidKey(iconKey)) {
+            return SetLauncherAppCustomIconResult.InvalidPackage
+        }
+        return withContext(Dispatchers.IO) {
+            val lookup = launcherAppIconLookup()
+            val dest = UiIconPaths.destinationIconFile(context.filesDir, iconKey, lookup, variant)
+                ?: return@withContext SetLauncherAppCustomIconResult.InvalidPackage
+            dest.parentFile?.mkdirs()
+            if (sourceUri == null) {
+                clearCustomUiIconVariant(iconKey, variant)
+                return@withContext SetLauncherAppCustomIconResult.Success
+            }
+            val bounds = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, opts)
+                }
+                opts
+            }.getOrNull() ?: return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            if (bounds.outWidth > UiIconPaths.MAX_EDGE_PX ||
+                bounds.outHeight > UiIconPaths.MAX_EDGE_PX
+            ) {
+                return@withContext SetLauncherAppCustomIconResult.DimensionsTooLarge
+            }
+            val copiedOk = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+                dest.exists() && dest.length() > 0L && dest.length() <= UiIconPaths.MAX_BYTES
+            }.getOrElse {
+                if (dest.exists()) dest.delete()
+                false
+            }
+            if (!copiedOk) {
+                if (dest.exists()) dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.CopyFailed
+            }
+            val decoded = BitmapFactory.decodeFile(dest.absolutePath)
+            if (decoded == null) {
+                dest.delete()
+                return@withContext SetLauncherAppCustomIconResult.NotImageOrUnreadable
+            }
+            decoded.recycle()
+            bumpUiIconRevision()
             SetLauncherAppCustomIconResult.Success
         }
     }
@@ -3559,6 +4535,19 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsLayoutSnapDp(config: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_LAYOUT_SNAP_DP_KEY] = normalizePanelLayoutSnapDp(config)
+        }
+    }
+
+    suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY] =
+                FloatingPanelsShowOnServiceStartDelay.coerceSeconds(delaySeconds)
         }
     }
 
@@ -3702,6 +4691,23 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveAppTextSizeScales(scales: TboxTextSizeScales) {
+        val normalized = TboxTextSizeScales(
+            caption = TboxTextSizeScales.normalize(scales.caption),
+            body = TboxTextSizeScales.normalize(scales.body),
+            button = TboxTextSizeScales.normalize(scales.button),
+            title = TboxTextSizeScales.normalize(scales.title),
+            headline = TboxTextSizeScales.normalize(scales.headline),
+            tabLabel = TboxTextSizeScales.normalize(scales.tabLabel),
+            widgetTitle = TboxTextSizeScales.normalize(scales.widgetTitle),
+            widgetValue = TboxTextSizeScales.normalize(scales.widgetValue),
+            widgetUnit = TboxTextSizeScales.normalize(scales.widgetUnit),
+        )
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_TEXT_SIZE_SCALES_JSON_KEY] = normalized.toJsonString()
+        }
+    }
+
     suspend fun saveUpdateChannel(channel: vad.dashing.tbox.update.UpdateChannel) {
         context.settingsDataStore.edit { preferences ->
             preferences[UPDATE_CHANNEL_KEY] = channel.storageValue
@@ -3726,6 +4732,13 @@ class SettingsManager(private val context: Context) {
             preferences[CAN_AUTO_BIND_LOCKED_KEY] = false
             preferences.remove(CAN_AUTO_BIND_LAST_RESULT_KEY)
         }
+    }
+
+    suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
+        }
+        LaunchMainInStockAppWindowSetting.update(enabled)
     }
 
     suspend fun saveCanAutoBindEnabled(enabled: Boolean) {
@@ -3775,6 +4788,30 @@ class SettingsManager(private val context: Context) {
         } catch (_: Exception) {
             MainScreenSettingsButtonPosition.Default
         }
+    }
+
+    private fun parseUiIconPreserveColorsJson(raw: String): Set<String> {
+        if (raw.isBlank()) return emptySet()
+        return try {
+            val obj = JSONObject(raw)
+            val out = linkedSetOf<String>()
+            obj.keys().forEach { key ->
+                if (obj.optBoolean(key, false) && UiIconPaths.isValidKey(key)) {
+                    out.add(key.trim())
+                }
+            }
+            out
+        } catch (_: Exception) {
+            emptySet()
+        }
+    }
+
+    private fun serializeUiIconPreserveColors(keys: Set<String>): String {
+        val obj = JSONObject()
+        keys.sorted().forEach { key ->
+            if (UiIconPaths.isValidKey(key)) obj.put(key, true)
+        }
+        return obj.toString()
     }
 
     private fun parseMainScreenAddButtonJson(raw: String): MainScreenAddButtonPosition {
@@ -3950,9 +4987,8 @@ class SettingsManager(private val context: Context) {
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
-            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
-            ),
+            collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
+            collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -3968,6 +5004,14 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorDark = obj.optInt(
                 "collapseStripExpandedColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnStripTap = obj.optBoolean(
+                "collapseOnStripTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+            ),
+            collapseOnStripDoubleTap = obj.optBoolean(
+                "collapseOnStripDoubleTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
             ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
@@ -4066,9 +5110,8 @@ class SettingsManager(private val context: Context) {
                 obj.optInt("gridSpacingDp", DEFAULT_PANEL_GRID_SPACING_DP)
             ),
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
-            collapseStripThicknessDp = normalizePanelCollapseStripThicknessDp(
-                obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
-            ),
+            collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
+            collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -4084,6 +5127,14 @@ class SettingsManager(private val context: Context) {
             collapseStripExpandedColorDark = obj.optInt(
                 "collapseStripExpandedColorDark",
                 DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+            ),
+            collapseOnStripTap = obj.optBoolean(
+                "collapseOnStripTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP,
+            ),
+            collapseOnStripDoubleTap = obj.optBoolean(
+                "collapseOnStripDoubleTap",
+                DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP,
             ),
             collapseOnTileTap = obj.optBoolean(
                 "collapseOnTileTap",
@@ -4137,15 +5188,31 @@ class SettingsManager(private val context: Context) {
         return array.toString()
     }
 
+    private fun parsePanelCollapseStripThicknessDp(obj: JSONObject): Int =
+        normalizePanelCollapseStripThicknessDp(
+            obj.optInt("collapseStripThicknessDp", DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP),
+        )
+
+    private fun parsePanelCollapseTouchZoneThicknessDp(obj: JSONObject): Int {
+        val strip = parsePanelCollapseStripThicknessDp(obj)
+        return normalizePanelCollapseTouchZoneThicknessDp(
+            obj.optInt("collapseTouchZoneThicknessDp", strip),
+            strip,
+        )
+    }
+
     private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
         putPanelCollapseFields(
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnStripTap = config.collapseOnStripTap,
+            collapseOnStripDoubleTap = config.collapseOnStripDoubleTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4156,10 +5223,13 @@ class SettingsManager(private val context: Context) {
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
+            collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
             collapseStripExpandedColorDark = config.collapseStripExpandedColorDark,
+            collapseOnStripTap = config.collapseOnStripTap,
+            collapseOnStripDoubleTap = config.collapseOnStripDoubleTap,
             collapseOnTileTap = config.collapseOnTileTap,
             collapseOnTileTapDelaySec = config.collapseOnTileTapDelaySec,
         )
@@ -4169,10 +5239,13 @@ class SettingsManager(private val context: Context) {
         o: JSONObject,
         collapseEdge: String,
         collapseStripThicknessDp: Int,
+        collapseTouchZoneThicknessDp: Int,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
         collapseStripExpandedColorDark: Int,
+        collapseOnStripTap: Boolean,
+        collapseOnStripDoubleTap: Boolean,
         collapseOnTileTap: Boolean,
         collapseOnTileTapDelaySec: Int,
     ) {
@@ -4182,6 +5255,9 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseStripThicknessDp != DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP) {
             o.put("collapseStripThicknessDp", collapseStripThicknessDp)
+        }
+        if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
+            o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", collapseStripColorLight)
@@ -4194,6 +5270,12 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseStripExpandedColorDark != DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK) {
             o.put("collapseStripExpandedColorDark", collapseStripExpandedColorDark)
+        }
+        if (collapseOnStripTap != DEFAULT_PANEL_COLLAPSE_ON_STRIP_TAP) {
+            o.put("collapseOnStripTap", collapseOnStripTap)
+        }
+        if (collapseOnStripDoubleTap != DEFAULT_PANEL_COLLAPSE_ON_STRIP_DOUBLE_TAP) {
+            o.put("collapseOnStripDoubleTap", collapseOnStripDoubleTap)
         }
         if (collapseOnTileTap != DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP) {
             o.put("collapseOnTileTap", collapseOnTileTap)

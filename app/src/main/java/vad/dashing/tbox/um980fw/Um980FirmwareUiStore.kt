@@ -11,19 +11,15 @@ object Um980FirmwareUiStore {
         val progressPct: Int = 0,
         val phase: String = "",
         val error: String? = null,
+        /** Last RX snippet when [error] is set (baud / banner mismatch). */
+        val detail: String? = null,
         val doneOk: Boolean = false,
-        /** Hard reset: waiting for user to power-cycle before continue. */
-        val awaitingHardReset: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
-    @Volatile
-    var hardResetContinue: (() -> Unit)? = null
-
     fun begin() {
-        hardResetContinue = null
         _state.value = State(active = true, phase = "start")
     }
 
@@ -31,7 +27,6 @@ object Um980FirmwareUiStore {
         _state.value = _state.value.copy(
             phase = phase,
             progressPct = progressPct.coerceIn(0, 100),
-            awaitingHardReset = false,
         )
     }
 
@@ -39,32 +34,27 @@ object Um980FirmwareUiStore {
         _state.value = _state.value.copy(progressPct = pct.coerceIn(0, 100))
     }
 
-    fun awaitHardReset(onContinue: () -> Unit) {
-        hardResetContinue = onContinue
-        _state.value = _state.value.copy(awaitingHardReset = true, phase = "hard_reset")
+    /** Keep the error on screen while [Um980FirmwareUpdater] restores the link. */
+    fun beginRecover() {
+        _state.value = _state.value.copy(active = true, phase = "recover")
     }
 
-    fun userContinuedHardReset() {
-        val cb = hardResetContinue
-        hardResetContinue = null
-        _state.value = _state.value.copy(awaitingHardReset = false)
-        cb?.invoke()
+    fun endRecover() {
+        _state.value = _state.value.copy(active = false)
     }
 
-    fun finish(error: String?) {
-        hardResetContinue = null
+    fun finish(error: String?, detail: String? = null) {
         _state.value = State(
             active = false,
             progressPct = if (error == null) 100 else _state.value.progressPct,
             phase = if (error == null) "done" else "error",
             error = error,
+            detail = detail?.take(160),
             doneOk = error == null,
-            awaitingHardReset = false,
         )
     }
 
     fun clearTerminal() {
-        hardResetContinue = null
         _state.value = State()
     }
 }

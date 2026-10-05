@@ -4,10 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ble_btn.h"
+#include "wifi_router.h"
 #include "esp_crc.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "gnss_detect.h"
 #include "ota_update.h"
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
@@ -23,9 +26,16 @@ static protocol_can_tx_cb_t s_can_tx_cb;
 static protocol_can_baud_cb_t s_can_baud_cb;
 static protocol_can_filter_cb_t s_can_filter_cb;
 static protocol_can_light_cb_t s_can_light_cb;
+static protocol_mag_chip_cb_t s_mag_chip_cb;
 static int s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
 static bool s_hello_can;
 static uint32_t s_hello_can_baud;
+static bool s_hello_mag;
+static char s_hello_mag_chip[16] = "none";
+static char s_hello_mag_seen[128];
+static bool s_hello_gnss;
+static char s_hello_gnss_chip[16] = "none";
+static char s_hello_gnss_model[64];
 
 /** After otaBegin ACK: parse binary frames until expected size written. */
 static bool s_ota_bin_mode;
@@ -97,9 +107,18 @@ void protocol_init(void)
     s_can_baud_cb = NULL;
     s_can_filter_cb = NULL;
     s_can_light_cb = NULL;
+    s_mag_chip_cb = NULL;
     s_hello_baud = ESP_COMPANION_DEFAULT_UM980_BAUD;
     s_hello_can = false;
     s_hello_can_baud = 0;
+    s_hello_mag = false;
+    strncpy(s_hello_mag_chip, "none", sizeof(s_hello_mag_chip) - 1);
+    s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
+    s_hello_mag_seen[0] = '\0';
+    s_hello_gnss = false;
+    strncpy(s_hello_gnss_chip, "none", sizeof(s_hello_gnss_chip) - 1);
+    s_hello_gnss_chip[sizeof(s_hello_gnss_chip) - 1] = '\0';
+    s_hello_gnss_model[0] = '\0';
     s_ota_bin_mode = false;
     s_ota_frame_len = 0;
     s_ota_chunks_since_ack = 0;
@@ -175,34 +194,269 @@ void protocol_set_can_light_callback(protocol_can_light_cb_t cb)
     s_can_light_cb = cb;
 }
 
+void protocol_set_mag_chip_callback(protocol_mag_chip_cb_t cb)
+{
+    s_mag_chip_cb = cb;
+}
+
 void protocol_set_can_for_hello(bool present, uint32_t baud)
 {
     s_hello_can = present;
     s_hello_can_baud = baud;
 }
 
+void protocol_set_gnss_for_hello(bool present, const char *chip, const char *model, int baud)
+{
+    s_hello_gnss = present;
+    if (chip && chip[0]) {
+        strncpy(s_hello_gnss_chip, chip, sizeof(s_hello_gnss_chip) - 1);
+        s_hello_gnss_chip[sizeof(s_hello_gnss_chip) - 1] = '\0';
+    }
+    if (model) {
+        strncpy(s_hello_gnss_model, model, sizeof(s_hello_gnss_model) - 1);
+        s_hello_gnss_model[sizeof(s_hello_gnss_model) - 1] = '\0';
+    }
+    s_hello_baud = baud > 0 ? baud : ESP_COMPANION_DEFAULT_UM980_BAUD;
+}
+
+void protocol_set_mag_for_hello(bool mag, const char *chip,
+                                const char *const *seen, int seen_count)
+{
+    s_hello_mag = mag;
+    if (chip && chip[0]) {
+        strncpy(s_hello_mag_chip, chip, sizeof(s_hello_mag_chip) - 1);
+        s_hello_mag_chip[sizeof(s_hello_mag_chip) - 1] = '\0';
+    }
+    size_t pos = 0;
+    s_hello_mag_seen[pos++] = '[';
+    for (int i = 0; i < seen_count && pos + 24 < sizeof(s_hello_mag_seen); i++) {
+        if (!seen[i] || !seen[i][0]) continue;
+        if (pos > 1) {
+            s_hello_mag_seen[pos++] = ',';
+        }
+        s_hello_mag_seen[pos++] = '"';
+        json_escape_append(s_hello_mag_seen, sizeof(s_hello_mag_seen), &pos, seen[i]);
+        s_hello_mag_seen[pos++] = '"';
+    }
+    s_hello_mag_seen[pos++] = ']';
+    s_hello_mag_seen[pos] = '\0';
+}
+
+static void mag_seen_json(char *dst, size_t n)
+{
+    if (n == 0) return;
+    strncpy(dst, s_hello_mag_seen, n - 1);
+    dst[n - 1] = '\0';
+    if (dst[0] == '\0') {
+        snprintf(dst, n, "[]");
+    }
+}
+
 void protocol_send_hello(void)
 {
-    char buf[320];
+    char seen[128];
+    mag_seen_json(seen, sizeof(seen));
+    char model_esc[96];
+    size_t mpos = 0;
+    model_esc[0] = '\0';
+    if (s_hello_gnss_model[0]) {
+        json_escape_append(model_esc, sizeof(model_esc), &mpos, s_hello_gnss_model);
+        model_esc[mpos] = '\0';
+    }
+    char macs_json[128];
+    char macs[ESP_COMPANION_BLE_MAX_MACS][18];
+    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
+    size_t mp = 0;
+    macs_json[mp++] = '[';
+    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
+        if (i > 0) macs_json[mp++] = ',';
+        macs_json[mp++] = '"';
+        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
+        macs_json[mp++] = '"';
+    }
+    macs_json[mp++] = ']';
+    macs_json[mp] = '\0';
+
+    const bool um980_flag = gnss_is_um980();
+    char buf[1024];
     if (s_hello_can) {
         snprintf(buf, sizeof(buf),
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
-                 "\"um980\":true,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
-                 "\"canBaud\":%lu,\"canLight\":%s}\n",
+                 "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
+                 "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
+                 "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
+                 s_hello_gnss ? "true" : "false",
+                 s_hello_gnss_chip,
+                 model_esc,
+                 um980_flag ? "true" : "false",
                  s_hello_baud,
                  (unsigned long)s_hello_can_baud,
-                 s_can_light_mode ? "true" : "false");
+                 s_can_light_mode ? "true" : "false",
+                 s_hello_mag ? "true" : "false",
+                 s_hello_mag_chip,
+                 seen,
+                 ble_btn_is_on() ? "true" : "false",
+                 macs_json);
     } else {
         snprintf(buf, sizeof(buf),
-                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,\"um980\":true,\"baud\":%d}\n",
+                 "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
+                 "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
+                 "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
-                 s_hello_baud);
+                 s_hello_gnss ? "true" : "false",
+                 s_hello_gnss_chip,
+                 model_esc,
+                 um980_flag ? "true" : "false",
+                 s_hello_baud,
+                 s_hello_mag ? "true" : "false",
+                 s_hello_mag_chip,
+                 seen,
+                 ble_btn_is_on() ? "true" : "false",
+                 macs_json);
     }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_btn(const char *mac, int btn, const char *act,
+                           int bat, int rssi, uint32_t ms)
+{
+    if (protocol_ota_active()) return;
+    char buf[192];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"bleBtn\",\"mac\":\"%s\",\"btn\":%d,\"act\":\"%s\","
+             "\"bat\":%d,\"rssi\":%d,\"ms\":%lu}\n",
+             mac && mac[0] ? mac : "",
+             btn,
+             act && act[0] ? act : "press",
+             bat,
+             rssi,
+             (unsigned long)ms);
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_status(void)
+{
+    char macs[ESP_COMPANION_BLE_MAX_MACS][18];
+    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
+    char macs_json[128];
+    size_t mp = 0;
+    macs_json[mp++] = '[';
+    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
+        if (i > 0) macs_json[mp++] = ',';
+        macs_json[mp++] = '"';
+        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
+        macs_json[mp++] = '"';
+    }
+    macs_json[mp++] = ']';
+    macs_json[mp] = '\0';
+    char last_mac[18];
+    ble_btn_last_mac(last_mac);
+    char buf[320];
+    if (last_mac[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"macs\":%s,"
+                 "\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
+                 ble_btn_is_on() ? "true" : "false",
+                 ble_btn_is_learn() ? "true" : "false",
+                 macs_json,
+                 ble_btn_last_bat(),
+                 ble_btn_last_rssi(),
+                 last_mac);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"macs\":%s,"
+                 "\"lastBat\":%d,\"lastRssi\":%d}\n",
+                 ble_btn_is_on() ? "true" : "false",
+                 ble_btn_is_learn() ? "true" : "false",
+                 macs_json,
+                 ble_btn_last_bat(),
+                 ble_btn_last_rssi());
+    }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms)
+{
+    char buf[128];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"bleSeen\",\"mac\":\"%s\",\"rssi\":%d,\"ms\":%lu}\n",
+             mac && mac[0] ? mac : "",
+             rssi,
+             (unsigned long)ms);
+    cdc_write_str(buf);
+}
+
+void protocol_send_ble_ack(const char *phase, bool ok, const char *err)
+{
+    char buf[160];
+    if (err && err[0]) {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s,\"err\":\"%s\"}\n",
+                 phase ? phase : "",
+                 ok ? "true" : "false",
+                 err);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "{\"v\":1,\"t\":\"bleAck\",\"phase\":\"%s\",\"ok\":%s}\n",
+                 phase ? phase : "",
+                 ok ? "true" : "false");
+    }
+    cdc_write_str(buf);
+}
+
+void protocol_send_ap_status(bool on, bool sta, const char *ssid, const char *psk,
+                             const char *ip, int freq_mhz, int channel,
+                             const char *hu_ip, int panel_port)
+{
+    char buf[384];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"apStatus\",\"on\":%s,\"sta\":%s,\"ssid\":\"%s\",\"psk\":\"%s\","
+             "\"ip\":\"%s\",\"freq\":%d,\"ch\":%d,\"huIp\":\"%s\",\"panel\":%d}\n",
+             on ? "true" : "false",
+             sta ? "true" : "false",
+             ssid ? ssid : "",
+             psk ? psk : "",
+             ip ? ip : "",
+             freq_mhz,
+             channel,
+             hu_ip ? hu_ip : "",
+             panel_port);
+    cdc_write_str(buf);
+}
+
+void protocol_send_mag(const char *chip, float hx, float hy, float hz,
+                       float heading, float fs, bool ok)
+{
+    if (protocol_ota_active()) return;
+    char buf[288];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"mag\",\"chip\":\"%s\",\"hx\":%.2f,\"hy\":%.2f,\"hz\":%.2f,"
+             "\"heading\":%.2f,\"fs\":%.2f,\"ok\":%s}\n",
+             chip && chip[0] ? chip : "rm3100",
+             hx, hy, hz, heading, fs, ok ? "true" : "false");
+    cdc_write_str(buf);
+}
+
+void protocol_send_mag_chip(const char *chip, bool ok, bool mag,
+                            const char *const *seen, int seen_count)
+{
+    protocol_set_mag_for_hello(mag, chip, seen, seen_count);
+    char seen_json[128];
+    mag_seen_json(seen_json, sizeof(seen_json));
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"magChip\",\"chip\":\"%s\",\"ok\":%s,\"mag\":%s,\"seen\":%s}\n",
+             chip && chip[0] ? chip : s_hello_mag_chip,
+             ok ? "true" : "false",
+             mag ? "true" : "false",
+             seen_json);
     cdc_write_str(buf);
 }
 
@@ -558,9 +812,12 @@ static void handle_ota_begin(const char *line)
         protocol_send_ota_ack("begin", 0, false, "missing fields");
         return;
     }
+    /* Stop heartbeats before the blocking erase. On 0.8 they filled the
+     * CDC TX FIFO and the begin ack was dropped. */
+    s_ota_bin_mode = true;
     if (!ota_begin(size, crc, err, sizeof(err))) {
-        protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         s_ota_bin_mode = false;
+        protocol_send_ota_ack("begin", 0, false, err[0] ? err : "begin failed");
         return;
     }
     s_ota_bin_mode = true;
@@ -790,6 +1047,94 @@ static void handle_line(const char *line)
         handle_can_filter_json(line);
         return;
     }
+    if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
+        char chip[16];
+        const char *seen_ptrs[8] = {0};
+        int seen_count = 0;
+        if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
+            return;
+        }
+        if (s_mag_chip_cb) {
+            s_mag_chip_cb(chip);
+        } else {
+            protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
+        }
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleSet\"") || strstr(line, "\"t\": \"bleSet\"")) {
+        bool on = extract_json_bool(line, "on", false);
+        bool ok = ble_btn_set_on(on);
+        protocol_send_ble_ack("set", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleLearnBegin\"") || strstr(line, "\"t\": \"bleLearnBegin\"")) {
+        bool found = false;
+        uint32_t timeout = extract_json_u32(line, "timeoutMs", &found);
+        if (!found) timeout = BLE_BTN_LEARN_DEFAULT_MS;
+        bool ok = ble_btn_learn_begin(timeout);
+        protocol_send_ble_ack("learnBegin", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleLearnEnd\"") || strstr(line, "\"t\": \"bleLearnEnd\"")) {
+        ble_btn_learn_end();
+        protocol_send_ble_ack("learnEnd", true, NULL);
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleAllow\"") || strstr(line, "\"t\": \"bleAllow\"")) {
+        char mac[24];
+        if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
+            protocol_send_ble_ack("allow", false, "missing mac");
+            return;
+        }
+        bool ok = ble_btn_allow(mac);
+        protocol_send_ble_ack("allow", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleForget\"") || strstr(line, "\"t\": \"bleForget\"")) {
+        if (extract_json_bool(line, "all", false)) {
+            bool ok = ble_btn_forget_all();
+            protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
+            protocol_send_ble_status();
+            return;
+        }
+        char mac[24];
+        if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
+            protocol_send_ble_ack("forget", false, "missing mac");
+            return;
+        }
+        bool ok = ble_btn_forget(mac);
+        protocol_send_ble_ack("forget", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"apCfg\"") || strstr(line, "\"t\": \"apCfg\"")) {
+        bool on = extract_json_bool(line, "on", false);
+        char ssid[33];
+        char psk[64];
+        ssid[0] = '\0';
+        psk[0] = '\0';
+        extract_json_string(line, "huSsid", ssid, sizeof(ssid));
+        extract_json_string(line, "huPsk", psk, sizeof(psk));
+        char ap_ssid[33];
+        char ap_psk[64];
+        ap_ssid[0] = '\0';
+        ap_psk[0] = '\0';
+        extract_json_string(line, "apSsid", ap_ssid, sizeof(ap_ssid));
+        extract_json_string(line, "apPsk", ap_psk, sizeof(ap_psk));
+        int port = 8765;
+        const char *port_field = strstr(line, "\"port\"");
+        if (port_field) {
+            port_field = strchr(port_field, ':');
+            if (port_field) port = atoi(port_field + 1);
+        }
+        wifi_router_request(on, ssid, psk, port, ap_ssid, ap_psk);
+        return;
+    }
     if (strstr(line, "\"t\":\"reboot\"") || strstr(line, "\"t\": \"reboot\"")) {
         if (s_reboot_cb) {
             s_reboot_cb();
@@ -797,6 +1142,10 @@ static void handle_line(const char *line)
         return;
     }
     if (strstr(line, "\"t\":\"um980Cmd\"") || strstr(line, "\"t\": \"um980Cmd\"")) {
+        if (!gnss_is_um980()) {
+            protocol_send_um980_rsp("", NULL, 0, false);
+            return;
+        }
         char cmd[256];
         if (extract_json_string(line, "cmd", cmd, sizeof(cmd)) && s_um980_cb) {
             s_um980_cb(cmd);

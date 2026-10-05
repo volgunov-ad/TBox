@@ -325,7 +325,7 @@ private fun DriveManualEditFields(
     )
     CalibrationFloatCommitField(
         title = stringResource(R.string.location_calib_bias_pitch),
-        description = "",
+        description = stringResource(R.string.location_calib_edit_bias_rate_hint),
         draft = pitchDraft,
         onDraftChange = { pitchDraft = it },
         savedValue = bias.pitchDegPerSec,
@@ -340,7 +340,7 @@ private fun DriveManualEditFields(
     )
     CalibrationFloatCommitField(
         title = stringResource(R.string.location_calib_bias_roll),
-        description = "",
+        description = stringResource(R.string.location_calib_edit_bias_rate_hint),
         draft = rollDraft,
         onDraftChange = { rollDraft = it },
         savedValue = bias.rollDegPerSec,
@@ -370,7 +370,7 @@ private fun DriveManualEditFields(
     )
     CalibrationFloatCommitField(
         title = stringResource(R.string.location_calib_bias_accel_y),
-        description = "",
+        description = stringResource(R.string.location_calib_edit_accel_hint),
         draft = ayDraft,
         onDraftChange = { ayDraft = it },
         savedValue = bias.accelY,
@@ -385,7 +385,7 @@ private fun DriveManualEditFields(
     )
     CalibrationFloatCommitField(
         title = stringResource(R.string.location_calib_bias_accel_z),
-        description = "",
+        description = stringResource(R.string.location_calib_edit_accel_hint),
         draft = azDraft,
         onDraftChange = { azDraft = it },
         savedValue = bias.accelZ,
@@ -436,7 +436,7 @@ private fun DriveManualEditFields(
     )
     CalibrationFloatCommitField(
         title = stringResource(R.string.location_calib_k_yaw_right),
-        description = "",
+        description = stringResource(R.string.location_calib_edit_yaw_scale_hint),
         draft = yawRDraft,
         onDraftChange = { yawRDraft = it },
         savedValue = drive.yawScaleRight,

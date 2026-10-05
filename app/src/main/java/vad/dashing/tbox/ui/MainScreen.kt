@@ -7,11 +7,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,16 +21,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathFillType
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -59,33 +49,6 @@ import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
-
-/** Outline square (icons-core has no CropSquare); restore-fullscreen in window mode. */
-internal val WindowModeRestoreSquareIcon: ImageVector by lazy {
-    ImageVector.Builder(
-        name = "WindowModeRestoreSquare",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(
-            fill = SolidColor(Color.Black),
-            pathFillType = PathFillType.EvenOdd,
-        ) {
-            moveTo(5f, 5f)
-            lineTo(19f, 5f)
-            lineTo(19f, 19f)
-            lineTo(5f, 19f)
-            close()
-            moveTo(7f, 7f)
-            lineTo(7f, 17f)
-            lineTo(17f, 17f)
-            lineTo(17f, 7f)
-            close()
-        }
-    }.build()
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -298,7 +261,8 @@ fun MainScreen(
         }
 
         MainScreenDraggableCornerButton(
-            icon = ImageVector.vectorResource(R.drawable.ic_main_open_console),
+            iconKey = UiIconCatalog.MAIN_SCREEN_SETTINGS,
+            drawableRes = R.drawable.ic_main_open_console,
             contentDescription = stringResource(R.string.main_open_console_cd),
             iconSize = cornerIconSize,
             backgroundColor = cornerBackgroundColor,
@@ -316,7 +280,8 @@ fun MainScreen(
 
         if (!windowMode) {
             MainScreenDraggableCornerButton(
-                icon = Icons.Filled.Add,
+                iconKey = UiIconCatalog.MAIN_SCREEN_ADD,
+                drawableRes = R.drawable.ic_main_screen_add,
                 contentDescription = stringResource(R.string.main_screen_add_panel_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
@@ -337,7 +302,8 @@ fun MainScreen(
 
         if (showWallpaperNavButtons) {
             MainScreenDraggableCornerButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                iconKey = UiIconCatalog.MAIN_SCREEN_WALLPAPER_PREV,
+                drawableRes = R.drawable.ic_main_screen_arrow_left,
                 contentDescription = stringResource(R.string.main_screen_wallpaper_prev_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
@@ -354,7 +320,8 @@ fun MainScreen(
                 layoutSnapStepPx = effectiveLayoutSnapStepPx,
             )
             MainScreenDraggableCornerButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                iconKey = UiIconCatalog.MAIN_SCREEN_WALLPAPER_NEXT,
+                drawableRes = R.drawable.ic_main_screen_arrow_right,
                 contentDescription = stringResource(R.string.main_screen_wallpaper_next_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
@@ -374,7 +341,8 @@ fun MainScreen(
 
         if (windowMode && onExitWindowMode != null) {
             MainScreenDraggableCornerButton(
-                icon = Icons.Filled.Close,
+                iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_EXIT,
+                drawableRes = R.drawable.ic_main_screen_close,
                 contentDescription = stringResource(R.string.main_screen_window_mode_exit_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,
@@ -395,7 +363,8 @@ fun MainScreen(
 
         if (windowMode && onExitWindowModeToFullscreen != null) {
             MainScreenDraggableCornerButton(
-                icon = WindowModeRestoreSquareIcon,
+                iconKey = UiIconCatalog.MAIN_SCREEN_WINDOW_RESTORE,
+                drawableRes = R.drawable.ic_main_screen_window_restore,
                 contentDescription = stringResource(R.string.main_screen_window_mode_restore_cd),
                 iconSize = cornerIconSize,
                 backgroundColor = cornerBackgroundColor,

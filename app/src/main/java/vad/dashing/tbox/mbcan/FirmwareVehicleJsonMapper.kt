@@ -30,6 +30,11 @@ object FirmwareVehicleJsonMapper {
     /** @deprecated Alias of [VHAL_CAR_SPEED_PROPERTY_ID]. */
     const val VHAL_MCU_REPLY_SPEED_PROPERTY_ID = VHAL_CAR_SPEED_PROPERTY_ID
     /**
+     * A10 AccStatus: Dual MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
+     * Scale is 0…3, not A9 AccStatus 4/5 — see [AccStatusDomain.decodeMcuReply].
+     */
+    const val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID = 557_845_540 // MCU_REPLY_ACC_STATUS
+    /**
      * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
      * INT32 degrees as-is; rate (°/s) not provided by this property.
      */
@@ -52,8 +57,14 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID = 289_412_259 // R_0404_CEM_2_DirectionIndRight
     const val VHAL_FUEL_LEVEL_PROPERTY_ID = 289_414_929 // R_0900_ICM_1_FuelLevel
     const val VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID = 289_414_930 // R_0900_ICM_1_TotalOdometer_Km
+    const val VHAL_LHF_PULSE_COUNTER_PROPERTY_ID = 289_412_182 // R_0400_ESP_5_LHFPulseCounter
+    const val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = 289_412_179 // R_0400_ESP_5_RHFPulseCounter
+    const val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = 289_412_175 // R_0400_ESP_5_LHRPulseCounter
+    const val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = 289_412_177 // R_0400_ESP_5_RHRPulseCounter
     /** Instant fuel L/100km counter; UI = raw / 10. */
     const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
+    /** Cluster average fuel L/100km; UI = raw / 10. */
+    const val VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID = 289_414_933 // R_0900_ICM_4_AverageFuelConsume
     /** Distance to next maintenance, km as-is. */
     const val VHAL_MAINTENANCE_TIPS_PROPERTY_ID = 289_414_920 // R_0900_ICM_6_Maintenance_tips
     /** Distance to empty, km as-is. */
@@ -77,8 +88,59 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_SLA_ON_OFF_REQ = 289_415_947 // T_0B01_IHU_8_SLAOnOffReq
     const val VHAL_FRM_ACC_MODE = 289_415_689 // R_0B00_FRM_3_ACCMode
     const val VHAL_FRM_V_SET_DIS = 289_415_680 // R_0B00_FRM_3_VSetDis
+    const val VHAL_FRM_DX_TAR_OBJ = 289_415_681 // R_0B00_FRM_3_DxTarObj
+    const val VHAL_FRM_OBJ_VALID = 289_415_683 // R_0B00_FRM_3_ObjValid
     /** Conventional CCS status (2-bit); A9 Gasped [nCruiseControlStatus] analog. */
     const val VHAL_EMS_CRUISE_CONTROL_STATUS = 289_414_945 // R_0900_EMS_1_CruiseControlStatus
+    /**
+     * EMS accelerator pedal position — **raw 0…255** (not percent).
+     * Decode: `% = raw × 100 / 255` via [PedalDomain.decodeVhalGasPedalPercent].
+     */
+    const val VHAL_EMS_GAS_PEDAL_POSITION = 289_414_943 // R_0900_EMS_1_GasPedalPosition
+    /** EMS accelerator invalid flag; 0 = valid. */
+    const val VHAL_EMS_GAS_PEDAL_POSITION_INVALID = 289_414_944 // R_0900_EMS_1_GasPedalPositionInvalidData
+    /** CEM brake pedal 1-bit status. */
+    const val VHAL_CEM_BRAKE_PEDAL_STS = 289_412_311 // R_0400_CEM_2_BrakePedalSts
+    /** CEM front wiper operating mode (TTG 0 Off / 1 INT / 2 Low / 3 High). */
+    const val VHAL_CEM_WIPER_STS = 289_412_138 // R_0400_CEM_2_WiperSts
+    /** CEM rain detected (electrical S_RAIN 0x1 = TRUE). */
+    const val VHAL_CEM_RAIN_DETECTED = 289_412_139 // R_0400_CEM_2_RainDetected
+    /** CEM high beam status 1-bit (1 on / 0 off). */
+    const val VHAL_CEM_HIGH_BEAM_STS = 289_412_252 // R_0404_CEM_2_HighBeamSts
+    /**
+     * ICM EPB warning lamp status — best-effort A10 proxy for A9 BCM EPB park lamp.
+     * Scale assumed CEM 1-bit (1 on / 0 off); confirm on car.
+     */
+    const val VHAL_ICM_EPB_WARNING_LAMP_STS = 289_414_965 // R_0900_ICM_7_EPBWarningLampSts
+    /**
+     * ICM engine oil pressure warning lamp.
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_ENGINE_OIL_PRESSURE = 289_414_935 // R_0900_ICM_4_Engine_Oil_Pressure
+    /**
+     * ICM brake fluid level warning lamp (OEM typo Fuel=Fluid).
+     * Scale assumed CEM 1-bit (1 warning / 0 ok); confirm on car.
+     */
+    const val VHAL_ICM_BRAKE_FLUID_LEVEL = 289_414_936 // R_0900_ICM_4_Brake_Fuel_Level
+    /** GSM current gear shift position (numeric gear). */
+    const val VHAL_GSM_GEAR_SHIFT_POS = 289_414_947 // R_0900_GSM_GearShiftPos (verify name on HU)
+    /** EMS target / prepared gear position. */
+    const val VHAL_EMS_TARGET_GEAR_POSITION = 289_414_953 // R_0900_EMS_TargetGearPosition
+    const val VHAL_SUNSHADE_CMD_STS = 289_412_302 // R_0402_CEM_Abat_VentCMDSts
+    const val VHAL_SUNROOF_CMD_STS = 289_412_303 // R_0402_CEM_PSRFCMDSts
+    const val VHAL_FL_WIN_POSITION = 289_412_305 // R_0402_CEM_4_FL_WIN_Position
+    const val VHAL_FR_WIN_POSITION = 289_412_308 // R_0402_CEM_4_FR_WIN_Position
+    const val VHAL_RL_WIN_POSITION = 289_412_307 // R_0402_CEM_4_RL_WIN_Position
+    const val VHAL_RR_WIN_POSITION = 289_412_306 // R_0402_CEM_4_RR_WIN_Position
+    /** CEM_2 door ajar (preferred production family near PLG trunk). */
+    const val VHAL_CEM2_DRIVER_DOOR_STS = 289_412_271 // R_0402_CEM_2_DriverDoorSts
+    const val VHAL_CEM2_PSNGR_DOOR_STS = 289_412_270 // R_0402_CEM_2_PsngrDoorSts
+    const val VHAL_CEM2_LHR_DOOR_STS = 289_412_266 // R_0402_CEM_2_LHRdoorSts
+    const val VHAL_CEM2_RHR_DOOR_STS = 289_412_267 // R_0402_CEM_2_RHRDoorSts
+    const val VHAL_CEM2_HOOD_STS = 289_412_269 // R_0402_CEM_2_HoodSts
+    /** ICM_1 seat-belt warning (driver / passenger). Scale TBD on car. */
+    const val VHAL_ICM1_DRIVER_SEAT_BELT_WARNING = 289_414_928 // R_0900_ICM_1_DriverSeatBeltWarningSts
+    const val VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING = 289_414_927 // R_0900_ICM_1_PassengerSeatBeltWarningSt
     const val VHAL_MFS_CRUISE_CONTROL = 289_415_956 // T_0B01_MFS_Cruise_Control
     const val VHAL_MFS_CANCEL = 289_415_954 // T_0B01_MFS_Cancel
     const val VHAL_MFS_RES_PLUS = 289_415_953 // T_0B01_MFS_RESPlus
@@ -107,6 +169,46 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412682, // T_0401_SET_Wiper_Maintenance
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289415942, // T_0B01_SET_PAS_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289415945, // T_0B01_AVH_ON_OFF
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289415944, // T_0B01_HDC_ON_OFF
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289415943, // T_0B01_ESCOFF_ON_OFF
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock mode StateFlow uses write-echo lightSts
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412612, // T_0405_SET_Rearfoglight
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK to 289412661,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK to 289412660,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY to 289412656,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE to 289412608,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT to 289412668,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY to 289412688,
+        MbCanKnownVehiclePropertyId.REAR_WIPER to 289412681,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST to 289412610,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT to 289412665,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415946, // T_0B01_IHU_8_LDWLKA_LaneAssit_TypeReq
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415939, // T_0B01_IHU_8_TJA_ICA_ON_OFF
+        // MBVehicleProperty.eDVD_LDWSWITCH
+        MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415056, // T_0901_IHU_3_LDWSwitch
+        // MBVehicleProperty.eTIMEGAPSET1REQ
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415938, // T_0B01_IHU_8_TimeGapSet1Req
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415055, // T_0901_IHU_3_BSDSwitch
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415065,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415937,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH to 289415941,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415940,
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415936,
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415949,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH (HMA, 19)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415948, // T_0B01_IHU_8_HMAOnOffReq
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415317, // T_0201_SET_IPMCustom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412714, // T_0401_SET_IHU_ACMAXReq
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289415309, // T_0201_SET_FrontWindscreenHeatiReq
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
@@ -121,6 +223,19 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289412666, // T_0401_IHU_1_DVD_SET_IPM_Blower_Delay
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415311, // T_0201_IHU_5_AutoState
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415310, // T_0201_IHU_5_AnionPurify_Req
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289412677,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289412667,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289412704,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH to 289412716,
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT to 289412717,
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412719,
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412718,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412723,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289415087, // T_0901_IHU_ICMBrightnessManualAdj
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // T_0901_IHU_21_OverspeedAlarm_Set
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415313, // T_0201_IHU_5_L_Set_Temperature
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415314, // T_0201_IHU_5_R_Set_Temperature
         MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415296, // T_0201_IHU_5_BlowSpeedLevel_Req
@@ -128,6 +243,13 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415308, // T_0201_IHU_5_SyncSwtich_Req
         MbCanKnownVehiclePropertyId.TRUNK_PLG_CONTROL to 289412638, // T_0403_SET_PLG_Control
         MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH to 289412705, // T_0401_SET_Mirror_Fold_Switch
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412657, // T_0401_IHU_1_DVD_SET_Mirror_Fold
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS to 289412652, // T_0403_SET_Abat_VentCMD
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL to 289412653, // T_0403_SET_PSRFCMD
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS to 289415306, // T_0201_IHU_5_FLWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS to 289415307, // T_0201_IHU_5_FRWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS to 289415305, // T_0201_IHU_5_LRWindowCon_Req
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS to 289415312, // T_0201_IHU_5_RRWindowCon_Req
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415316, // T_0201_SET_FLSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415315, // T_0201_SET_FRSeatHeatVentSwReq
         MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH to 289415345, // T_0203_SET_LRSeatHeatVentSwReq
@@ -153,6 +275,47 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.WIPER_MAINTENANCE_SWITCH to 289412194, // R_0400_CEM_Wiper_MaintenanceSts
         // MBVehicleProperty.eVEHICLE_SET_PAS_SWITCH
         MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH to 289412233, // R_0400_CEM_RAD1_Pas_Switch
+        // MBVehicleProperty.eVEHICLE_AVH_SWITCH
+        MbCanKnownVehiclePropertyId.AVH_SWITCH to 289412184, // R_0400_ESP_3_AVHSts
+        // MBVehicleProperty.eVEHICLE_HDC_SWITCH
+        MbCanKnownVehiclePropertyId.HDC_SWITCH to 289412117, // R_0400_ESP_1_HDCCtrlSts
+        // MBVehicleProperty.eVEHICLE_ESCOFF_SWITCH
+        MbCanKnownVehiclePropertyId.ESP_OFF_SWITCH to 289412118, // R_0400_ESP_1_VDCControlSts
+        // MBVehicleProperty.eVEHICLE_LIGHTCONTROL — stock CarSettings lightSts listens to SET echo
+        // (R_0404_CEM_2_LowBeamSts 289412250 is binary low-beam status, not the 1..4 mode).
+        MbCanKnownVehiclePropertyId.LIGHTCONTROL to 289412613, // T_0405_SET_Lightcontrol
+        // MBVehicleProperty.eVEHICLE_REARFOGLIGHT
+        MbCanKnownVehiclePropertyId.REAR_FOG_LIGHT to 289412136, // R_0400_CEM_2_RearFogLightSts
+        MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK to 289412149,
+        MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK to 289412143,
+        MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY to 289412130,
+        MbCanKnownVehiclePropertyId.DRIVER_UNLOCK_MODE to 289412214,
+        MbCanKnownVehiclePropertyId.DEFENCES_PROMPT to 289412144,
+        MbCanKnownVehiclePropertyId.WIPER_SENSITIVITY to 289412140,
+        MbCanKnownVehiclePropertyId.REAR_WIPER to 289412193,
+        MbCanKnownVehiclePropertyId.HIGHBEAM_ADJUST to 289412261,
+        MbCanKnownVehiclePropertyId.TURN_FLASH_COUNT to 289412257,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_LAS_MODE_SELECTION
+        MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION to 289415706, // R_0B00_FCM_2_LDWLKA_LaneAssitfeedback
+        // MBVehicleProperty.eVEHICLE_PROPERTY_TJA_ICA
+        MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
+        // MBVehicleProperty.eDVD_LDWSWITCH
+        MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415717, // R_0B00_FCM_2_LDWOnOffSts
+        // MBVehicleProperty.eTIMEGAPSET1REQ
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415688, // R_0B00_FRM_3_TimeGapSet_DVD
+        MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415723, // R_0B00_SRR_1_BSDState
+        MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415729,
+        MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415696,
+        MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH to 289415698,
+        MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING to 289415699,
+        MbCanKnownVehiclePropertyId.FCW_SENSITIVITY to 289415697,
+        MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL to 289415707,
+        // MBVehicleProperty.eVEHICLE_PROPERTY_ID_HEADLIGHTS_SWITCH (HMA, 19)
+        MbCanKnownVehiclePropertyId.HMA_SWITCH to 289415702, // R_0B00_FCM_2_HMAOnOffsts
+        // MBVehicleProperty.eHVAC_CUSTOM
+        MbCanKnownVehiclePropertyId.HVAC_CUSTOM to 289415186, // R_0200_CEM_IPM_Custom_Air_Conditioning
+        // MBVehicleProperty.eVEHICLE_SET_RRM_ACMAX_REQ
+        MbCanKnownVehiclePropertyId.HVAC_AC_MAX to 289412209, // R_0400_CEM_IPM_3_ACMAXReq_Sts
         // MBVehicleProperty.eVHEICEL_FRONTWINDSCREEN_HEAT
         MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH to 289412114, // R_0400_RBCM_FGHeat_Request_CommandFeedb
         // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_FAN_DIRECTION
@@ -167,6 +330,20 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_BLOWER_DELAY to 289415189, // R_0200_CEM_IPM_Blower_DelaySts
         // MBVehicleProperty.eHVAC_AUTO_STATE
         MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE to 289415182, // R_0200_CEM_IPM_FrontAutoACSts
+        // MBVehicleProperty.eVEHICLE_PROPERTY_HVAC_AQS
+        MbCanKnownVehiclePropertyId.HVAC_AQS to 289415191, // R_0200_CEM_IPM_AnionPurify
+        MbCanKnownVehiclePropertyId.POWER_FIRST_BREATH to 289415188,
+        MbCanKnownVehiclePropertyId.BT_REDUCED_WIND_SPEED to 289415190,
+        MbCanKnownVehiclePropertyId.HVAC_VENTILATION_AUTO_SWITCH to 289415187,
+        MbCanKnownVehiclePropertyId.HUD_SWITCH to 289412235,
+        MbCanKnownVehiclePropertyId.HUD_HEIGHT to 289412236,
+        MbCanKnownVehiclePropertyId.HUD_BRIGHTNESS to 289412238,
+        MbCanKnownVehiclePropertyId.HUD_DISPLAY_MODE to 289412239,
+        MbCanKnownVehiclePropertyId.HUD_AUTO_BRIGHTNESS to 289412243,
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE to 289415088, // T_0901_IHU_SET_ICMBrightnessMode
+        // Stock SystemSettings MeterLightFragment reads/writes the T_0901 echo itself.
+        MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL to 289415087, // T_0901_IHU_ICMBrightnessManualAdj
+        MbCanKnownVehiclePropertyId.OVERSPEED_ALARM_SET to 289415091, // write echo / stock read
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT to 289415169, // R_0200_CEM_IPM_FLTempsts
         MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT to 289415168, // R_0200_CEM_IPM_FRTempsts
         MbCanKnownVehiclePropertyId.HVAC_FAN_SPEED to 289415171, // R_0200_CEM_IPM_FrontBlowSpdCtrlsts
@@ -174,6 +351,13 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH to 289415181, // R_0200_CEM_IPM_SyncSts
         MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR to 289412272, // R_0402_PLG_1_RearDoorMoveDir
         MbCanKnownVehiclePropertyId.TRUNK_STATUS to 289412273, // R_0402_PLG_1_RearDoorStatus
+        MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW to 289412131, // R_0400_CEM_2_Mirror_Fold_Sts
+        MbCanKnownVehiclePropertyId.SUNSHADE_POS to 289412302, // R_0402_CEM_Abat_VentCMDSts
+        MbCanKnownVehiclePropertyId.SUNROOF_CONTROL to 289412303, // R_0402_CEM_PSRFCMDSts
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS to 289412305, // R_0402_CEM_4_FL_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS to 289412308, // R_0402_CEM_4_FR_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS to 289412307, // R_0402_CEM_4_RL_WIN_Position
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS to 289412306, // R_0402_CEM_4_RR_WIN_Position
         // Seat states
         MbCanKnownVehiclePropertyId.FRONT_LEFT_SEAT_HEAT_VENT_SWITCH to 289415193, // R_0200_CEM_IPM_FLSeatHeatVentSwSts
         MbCanKnownVehiclePropertyId.FRONT_RIGHT_SEAT_HEAT_VENT_SWITCH to 289415192, // R_0200_CEM_IPM_FRSeatHeatVentSwSts
@@ -194,6 +378,44 @@ object FirmwareVehicleJsonMapper {
         val tables = loadTables() ?: return null
         return requestedPropertyId.takeIf { tables.sendIds.contains(it) }
     }
+
+    /** True only for write mappings verified from stock HU apps, without firmware identity fallback. */
+    fun hasExplicitWritePropertyId(requestedPropertyId: Int): Boolean =
+        explicitWriteIdMap.containsKey(requestedPropertyId) ||
+            resolveWindowWritePropertyIds(requestedPropertyId) != null
+
+    /**
+     * A10 window writes: one VHAL id per pane, or all four for [MbCanKnownVehiclePropertyId.WINDOW_POS].
+     * A9 does not use these ids — it calls [MbCanEngineFacade.canSetWindowStatus].
+     */
+    fun resolveWindowWritePropertyIds(logicalId: Int): List<Int>? {
+        if (logicalId == MbCanKnownVehiclePropertyId.WINDOW_POS) {
+            return listOf(
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_FL_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_FR_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_RL_POS),
+                explicitWriteIdMap.getValue(MbCanKnownVehiclePropertyId.WINDOW_RR_POS),
+            )
+        }
+        if (logicalId in BodyComfortWrite.WINDOW_PANE_IDS) {
+            return listOf(explicitWriteIdMap.getValue(logicalId))
+        }
+        return null
+    }
+
+    /** Deep diagnostics: logical mbCAN id → verified A10 VHAL read id pairs from [explicitReadIdMap]. */
+    fun explicitReadEntries(): List<Pair<Int, Int>> = explicitReadIdMap.map { it.key to it.value }
+
+    /** Logical mbCAN id → verified A10 VHAL write id pairs from [explicitWriteIdMap]. */
+    fun explicitWriteEntries(): List<Pair<Int, Int>> = explicitWriteIdMap.map { it.key to it.value }
+
+    /** Explicit-map-only peek (no firmware send/receive.json probe). */
+    fun peekExplicitReadPropertyId(requestedPropertyId: Int): Int? =
+        explicitReadIdMap[requestedPropertyId]
+
+    /** Explicit-map-only peek (no firmware send/receive.json probe). */
+    fun peekExplicitWritePropertyId(requestedPropertyId: Int): Int? =
+        explicitWriteIdMap[requestedPropertyId]
 
     fun resolveReadPropertyId(requestedPropertyId: Int): Int? {
         explicitReadIdMap[requestedPropertyId]?.let { return it }

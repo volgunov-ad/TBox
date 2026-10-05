@@ -1,7 +1,7 @@
 package vad.dashing.tbox.ui
 
 import vad.dashing.tbox.ui.theme.tboxTitle
-import vad.dashing.tbox.ui.theme.tboxTabLabel
+import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
@@ -24,9 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -36,6 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,7 +59,18 @@ import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.MAX_PANEL_LAYOUT_SNAP_DP
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.wifimodem.WifiModemModel
+import vad.dashing.tbox.wifimodem.ModemSource
+import vad.dashing.tbox.wifimodem.ModemThroughputFormat
+import vad.dashing.tbox.wifimodem.WifiModemLinkStatus
+import vad.dashing.tbox.internet.HuInternetProbe
+import vad.dashing.tbox.internet.HuInternetStatus
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.adb.HuAdbControl
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -94,10 +103,12 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.SystemClock
 import kotlinx.coroutines.isActive
+import kotlin.math.roundToInt
 
 @Composable
 fun ModemTabContent(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
@@ -106,6 +117,26 @@ fun ModemTabContent(
     val apn2State by viewModel.apn2State.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
     val modemStatus by viewModel.modemStatus.collectAsStateWithLifecycle()
+    val modemSource by settingsViewModel.modemSource.collectAsStateWithLifecycle()
+    val wifiModemModel by settingsViewModel.wifiModemModel.collectAsStateWithLifecycle()
+    val wifiModemHost by settingsViewModel.wifiModemHost.collectAsStateWithLifecycle()
+    val wifiModemPassword by settingsViewModel.wifiModemPassword.collectAsStateWithLifecycle()
+    val wifiModemPollIntervalSec by settingsViewModel.wifiModemPollIntervalSec.collectAsStateWithLifecycle()
+    val wifiModemLinkStatus by viewModel.wifiModemLinkStatus.collectAsStateWithLifecycle()
+    val huInternetProbeUrl by settingsViewModel.huInternetProbeUrl.collectAsStateWithLifecycle()
+    val huInternetProbeIntervalSec by settingsViewModel.huInternetProbeIntervalSec.collectAsStateWithLifecycle()
+    val huInternetProbeEnabled by settingsViewModel.huInternetProbeEnabled.collectAsStateWithLifecycle()
+    val huInternetStatus by viewModel.huInternetStatus.collectAsStateWithLifecycle()
+    val isAutoRestartEnabled by settingsViewModel.isAutoModemRestartEnabled.collectAsStateWithLifecycle()
+    val isAutoTboxRebootEnabled by settingsViewModel.isAutoTboxRebootEnabled.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+
+    var hostDraft by remember(wifiModemHost) { mutableStateOf(wifiModemHost) }
+    var passwordDraft by remember(wifiModemPassword) { mutableStateOf(wifiModemPassword) }
+    var huInternetUrlDraft by remember(huInternetProbeUrl) { mutableStateOf(huInternetProbeUrl) }
+    LaunchedEffect(wifiModemHost) { hostDraft = wifiModemHost }
+    LaunchedEffect(wifiModemPassword) { passwordDraft = wifiModemPassword }
+    LaunchedEffect(huInternetProbeUrl) { huInternetUrlDraft = huInternetProbeUrl }
 
     val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
@@ -122,70 +153,518 @@ fun ModemTabContent(
         apn2State.changeTime?.let { timeFormat.format(it) } ?: noDataLabel
     }
 
+    val sourceLabel = when (modemSource) {
+        ModemSource.TBOX -> stringResource(R.string.settings_modem_source_tbox)
+        ModemSource.WIFI_HTTP -> stringResource(R.string.settings_modem_source_wifi_http)
+    }
+
+    val sections = ModemSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp)
     ) {
+        Text(
+            text = stringResource(R.string.tab_modem),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        ModemSection.Data -> R.string.modem_tab_data
+                        ModemSection.Settings -> R.string.modem_tab_settings
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
         LazyColumn(modifier = Modifier.weight(1f)) {
-            item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
-            item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
-            item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
-            item { StatusRow(stringResource(R.string.status_imsi), netValues.imsi) }
-            item { StatusRow(stringResource(R.string.status_operator), netValues.operator) }
+            when (selectedSection) {
+                ModemSection.Data -> {
+                    item {
+                        StatusRow(
+                            stringResource(R.string.settings_modem_source_title),
+                            sourceLabel,
+                        )
+                    }
+                    item { StatusHeader(stringResource(R.string.hu_internet_header)) }
+                    item {
+                        val statusLabel = when (huInternetStatus) {
+                            HuInternetStatus.UNKNOWN -> stringResource(R.string.hu_internet_status_unknown)
+                            HuInternetStatus.CHECKING -> stringResource(R.string.hu_internet_status_checking)
+                            HuInternetStatus.ONLINE -> stringResource(R.string.hu_internet_status_online)
+                            HuInternetStatus.OFFLINE -> stringResource(R.string.hu_internet_status_offline)
+                        }
+                        StatusRow(stringResource(R.string.status_hu_internet), statusLabel)
+                    }
+                    item { StatusHeader(stringResource(R.string.modem_sim_data_header)) }
+                    item { StatusRow(stringResource(R.string.status_imei), netValues.imei) }
+                    item { StatusRow(stringResource(R.string.status_iccid), netValues.iccid) }
+                    item { StatusRow(stringResource(R.string.status_imsi), netValues.imsi) }
+                    item { StatusRow(stringResource(R.string.status_operator), netValues.operator) }
 
-            item { StatusHeader(stringResource(R.string.connection_data_header)) }
-            item { StatusRow(stringResource(R.string.status_csq), if (netState.csq != 99) netState.csq.toString() else "-") }
-            item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
-            item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
-            item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
-            item { StatusRow(stringResource(R.string.status_apn), if (apnStatus) connectedLabel else disconnectedLabel) }
-            item { StatusRow(stringResource(R.string.status_connection_time), formattedConnectionChangeTime) }
+                    item { StatusHeader(stringResource(R.string.connection_data_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_csq),
+                            if (netState.csq != 99) netState.csq.toString() else "-",
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_signal_level),
+                            if (netState.signalLevel > 0) netState.signalLevel.toString() else "-",
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_signal_dbm),
+                            netState.signalDbm?.let { "$it" } ?: "-",
+                        )
+                    }
+                    if (modemSource == ModemSource.WIFI_HTTP) {
+                        item {
+                            StatusRow(
+                                stringResource(R.string.status_download_speed),
+                                ModemThroughputFormat.formatBps(netState.downloadSpeedBps),
+                            )
+                        }
+                        item {
+                            StatusRow(
+                                stringResource(R.string.status_upload_speed),
+                                ModemThroughputFormat.formatBps(netState.uploadSpeedBps),
+                            )
+                        }
+                    }
+                    item { StatusRow(stringResource(R.string.status_registration), netState.regStatus) }
+                    item { StatusRow(stringResource(R.string.status_sim), netState.simStatus) }
+                    item { StatusRow(stringResource(R.string.status_network), netState.netStatus) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn),
+                            if (apnStatus) connectedLabel else disconnectedLabel,
+                        )
+                    }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_connection_time),
+                            formattedConnectionChangeTime,
+                        )
+                    }
 
-            item { StatusHeader(stringResource(R.string.status_apn_1_header)) }
-            item {
-                StatusRow(
-                    stringResource(R.string.status_apn_value),
-                    valueToString(
-                        apn1State.apnStatus,
-                        booleanTrue = connectedLabel,
-                        booleanFalse = disconnectedLabel
-                    )
-                )
+                    item { StatusHeader(stringResource(R.string.status_apn_1_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn_value),
+                            valueToString(
+                                apn1State.apnStatus,
+                                booleanTrue = connectedLabel,
+                                booleanFalse = disconnectedLabel,
+                            ),
+                        )
+                    }
+                    item { StatusRow(stringResource(R.string.status_apn_type), apn1State.apnType) }
+                    item { StatusRow(stringResource(R.string.status_ip_apn), apn1State.apnIP) }
+                    item { StatusRow(stringResource(R.string.status_apn_gateway), apn1State.apnGate) }
+                    item { StatusRow(stringResource(R.string.status_dns1_apn), apn1State.apnDNS1) }
+                    item { StatusRow(stringResource(R.string.status_dns2_apn), apn1State.apnDNS2) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_change_time),
+                            formattedAPN1ChangeTime,
+                        )
+                    }
+
+                    item { StatusHeader(stringResource(R.string.status_apn_2_header)) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_apn2_value),
+                            valueToString(
+                                apn2State.apnStatus,
+                                booleanTrue = connectedLabel,
+                                booleanFalse = disconnectedLabel,
+                            ),
+                        )
+                    }
+                    item { StatusRow(stringResource(R.string.status_apn2_type), apn2State.apnType) }
+                    item { StatusRow(stringResource(R.string.status_ip_apn2), apn2State.apnIP) }
+                    item { StatusRow(stringResource(R.string.status_apn2_gateway), apn2State.apnGate) }
+                    item { StatusRow(stringResource(R.string.status_dns1_apn2), apn2State.apnDNS1) }
+                    item { StatusRow(stringResource(R.string.status_dns2_apn2), apn2State.apnDNS2) }
+                    item {
+                        StatusRow(
+                            stringResource(R.string.status_change_time),
+                            formattedAPN2ChangeTime,
+                        )
+                    }
+                }
+
+                ModemSection.Settings -> {
+                    item {
+                        val sourceOptions = buildList {
+                            if (!noTboxConnect) {
+                                add(
+                                    ModemSourceOption(
+                                        ModemSource.TBOX,
+                                        stringResource(R.string.settings_modem_source_tbox),
+                                    ),
+                                )
+                            }
+                            add(
+                                ModemSourceOption(
+                                    ModemSource.WIFI_HTTP,
+                                    stringResource(R.string.settings_modem_source_wifi_http),
+                                ),
+                            )
+                        }
+                        val selectedSource = sourceOptions.firstOrNull { it.source == modemSource }
+                            ?: sourceOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedSource,
+                            onValueChange = { option ->
+                                settingsViewModel.saveModemSourceSetting(option.source)
+                            },
+                            text = stringResource(R.string.settings_modem_source_title),
+                            description = stringResource(R.string.settings_modem_source_desc),
+                            enabled = true,
+                            options = sourceOptions,
+                            selectorWidth = 220.dp,
+                        )
+                    }
+                    if (modemSource == ModemSource.WIFI_HTTP) {
+                        item {
+                            val modelOptions = WifiModemModel.entries.map { model ->
+                                WifiModemModelOption(model, model.displayName)
+                            }
+                            val selectedModel = modelOptions.firstOrNull { it.model == wifiModemModel }
+                                ?: modelOptions.first()
+                            SettingDropdownGeneric(
+                                selectedValue = selectedModel,
+                                onValueChange = { option ->
+                                    settingsViewModel.saveWifiModemModelSetting(option.model)
+                                    if (hostDraft.isBlank() ||
+                                        hostDraft == wifiModemModel.defaultHost
+                                    ) {
+                                        hostDraft = option.model.defaultHost
+                                        settingsViewModel.saveWifiModemHostSetting(
+                                            option.model.defaultHost,
+                                        )
+                                    }
+                                },
+                                text = stringResource(R.string.settings_wifi_modem_model_title),
+                                description = stringResource(R.string.settings_wifi_modem_model_desc),
+                                enabled = true,
+                                options = modelOptions,
+                                selectorWidth = 220.dp,
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = hostDraft,
+                                onValueChange = { hostDraft = it },
+                                label = {
+                                    Text(stringResource(R.string.settings_wifi_modem_host_title))
+                                },
+                                supportingText = {
+                                    Text(stringResource(R.string.settings_wifi_modem_host_desc))
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+                        item {
+                            OutlinedTextField(
+                                value = passwordDraft,
+                                onValueChange = { passwordDraft = it },
+                                label = {
+                                    Text(stringResource(R.string.settings_wifi_modem_password_title))
+                                },
+                                supportingText = {
+                                    Text(stringResource(R.string.settings_wifi_modem_password_desc))
+                                },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                            )
+                        }
+                        if (wifiModemLinkStatus != WifiModemLinkStatus.IDLE &&
+                            wifiModemLinkStatus != WifiModemLinkStatus.OK
+                        ) {
+                            item {
+                                val linkMsg = when (wifiModemLinkStatus) {
+                                    WifiModemLinkStatus.AUTH_FAILED ->
+                                        stringResource(R.string.wifi_modem_link_auth_failed)
+                                    WifiModemLinkStatus.UNREACHABLE ->
+                                        stringResource(R.string.wifi_modem_link_unreachable)
+                                    WifiModemLinkStatus.ERROR ->
+                                        stringResource(R.string.wifi_modem_link_error)
+                                    else -> ""
+                                }
+                                if (linkMsg.isNotEmpty()) {
+                                    Text(
+                                        text = linkMsg,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(vertical = 6.dp),
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            Button(
+                                onClick = {
+                                    settingsViewModel.saveWifiModemHostSetting(hostDraft)
+                                    settingsViewModel.saveWifiModemPasswordSetting(passwordDraft)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Text(stringResource(R.string.action_save))
+                            }
+                        }
+                    }
+                    item {
+                        val intervalOptions = listOf(2, 3, 5, 10, 15, 30, 60).map { sec ->
+                            WifiModemPollIntervalOption(sec, sec.toString())
+                        }
+                        val selectedInterval = intervalOptions.firstOrNull {
+                            it.seconds == wifiModemPollIntervalSec
+                        } ?: intervalOptions.first { it.seconds == 5 }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedInterval,
+                            onValueChange = { option ->
+                                settingsViewModel.saveWifiModemPollIntervalSecSetting(option.seconds)
+                            },
+                            text = stringResource(R.string.settings_modem_poll_interval_title),
+                            description = stringResource(R.string.settings_modem_poll_interval_desc),
+                            enabled = true,
+                            options = intervalOptions,
+                            selectorWidth = 160.dp,
+                        )
+                    }
+
+                    item { StatusHeader(stringResource(R.string.hu_internet_header)) }
+                    item {
+                        SettingSwitch(
+                            huInternetProbeEnabled,
+                            { enabled ->
+                                settingsViewModel.saveHuInternetProbeEnabledSetting(enabled)
+                            },
+                            stringResource(R.string.settings_hu_internet_control_title),
+                            stringResource(R.string.settings_hu_internet_control_desc),
+                            true,
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = huInternetUrlDraft,
+                            onValueChange = { huInternetUrlDraft = it },
+                            label = { Text(stringResource(R.string.settings_hu_internet_url_title)) },
+                            supportingText = {
+                                Text(stringResource(R.string.settings_hu_internet_url_desc))
+                            },
+                            singleLine = true,
+                            enabled = huInternetProbeEnabled,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                        )
+                    }
+                    item {
+                        val huIntervalOptions = listOf(5, 10, 15, 30, 60).map { sec ->
+                            HuInternetProbeIntervalOption(sec, sec.toString())
+                        }
+                        val selectedHuInterval = huIntervalOptions.firstOrNull {
+                            it.seconds == huInternetProbeIntervalSec
+                        } ?: huIntervalOptions.first {
+                            it.seconds == HuInternetProbe.DEFAULT_INTERVAL_SEC
+                        }
+                        SettingDropdownGeneric(
+                            selectedValue = selectedHuInterval,
+                            onValueChange = { option ->
+                                settingsViewModel.saveHuInternetProbeIntervalSecSetting(
+                                    option.seconds,
+                                )
+                            },
+                            text = stringResource(R.string.settings_hu_internet_interval_title),
+                            description = stringResource(
+                                R.string.settings_hu_internet_interval_desc,
+                            ),
+                            enabled = huInternetProbeEnabled,
+                            options = huIntervalOptions,
+                            selectorWidth = 160.dp,
+                        )
+                    }
+                    item {
+                        Button(
+                            onClick = {
+                                settingsViewModel.saveHuInternetProbeUrlSetting(huInternetUrlDraft)
+                            },
+                            enabled = huInternetProbeEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                        ) {
+                            Text(stringResource(R.string.action_save))
+                        }
+                    }
+
+                    item {
+                        SettingsTitle(stringResource(R.string.settings_network_control_title))
+                    }
+                    item {
+                        val networkControlEnabled =
+                            modemSource == ModemSource.WIFI_HTTP || !noTboxConnect
+                        SettingSwitch(
+                            isAutoRestartEnabled,
+                            { enabled ->
+                                settingsViewModel.saveAutoRestartSetting(enabled)
+                            },
+                            stringResource(R.string.settings_auto_modem_restart_title),
+                            stringResource(R.string.settings_auto_modem_restart_desc),
+                            networkControlEnabled,
+                        )
+                    }
+                    item {
+                        val networkControlEnabled =
+                            modemSource == ModemSource.WIFI_HTTP || !noTboxConnect
+                        val rebootTitle = when (modemSource) {
+                            ModemSource.TBOX ->
+                                stringResource(R.string.settings_auto_tbox_reboot_title)
+                            ModemSource.WIFI_HTTP ->
+                                stringResource(R.string.settings_auto_wifi_modem_reboot_title)
+                        }
+                        val rebootDesc = when (modemSource) {
+                            ModemSource.TBOX ->
+                                stringResource(R.string.settings_auto_tbox_reboot_desc)
+                            ModemSource.WIFI_HTTP ->
+                                stringResource(R.string.settings_auto_wifi_modem_reboot_desc)
+                        }
+                        SettingSwitch(
+                            isAutoTboxRebootEnabled,
+                            { enabled ->
+                                settingsViewModel.saveAutoTboxRebootSetting(enabled)
+                            },
+                            rebootTitle,
+                            rebootDesc,
+                            networkControlEnabled && isAutoRestartEnabled,
+                        )
+                    }
+                }
             }
-            item { StatusRow(stringResource(R.string.status_apn_type), apn1State.apnType) }
-            item { StatusRow(stringResource(R.string.status_ip_apn), apn1State.apnIP) }
-            item { StatusRow(stringResource(R.string.status_apn_gateway), apn1State.apnGate) }
-            item { StatusRow(stringResource(R.string.status_dns1_apn), apn1State.apnDNS1) }
-            item { StatusRow(stringResource(R.string.status_dns2_apn), apn1State.apnDNS2) }
-            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN1ChangeTime) }
-
-            item { StatusHeader(stringResource(R.string.status_apn_2_header)) }
-            item {
-                StatusRow(
-                    stringResource(R.string.status_apn2_value),
-                    valueToString(
-                        apn2State.apnStatus,
-                        booleanTrue = connectedLabel,
-                        booleanFalse = disconnectedLabel
-                    )
-                )
-            }
-            item { StatusRow(stringResource(R.string.status_apn2_type), apn2State.apnType) }
-            item { StatusRow(stringResource(R.string.status_ip_apn2), apn2State.apnIP) }
-            item { StatusRow(stringResource(R.string.status_apn2_gateway), apn2State.apnGate) }
-            item { StatusRow(stringResource(R.string.status_dns1_apn2), apn2State.apnDNS1) }
-            item { StatusRow(stringResource(R.string.status_dns2_apn2), apn2State.apnDNS2) }
-            item { StatusRow(stringResource(R.string.status_change_time), formattedAPN2ChangeTime) }
         }
 
-        ModemModeSelectorContent(
-            selectedMode = modemStatus,
-            onServiceCommand = onServiceCommand,
-            modifier = Modifier.fillMaxWidth()
-        )
+        when {
+            selectedSection == ModemSection.Settings && modemSource == ModemSource.TBOX -> {
+                ModemModeSelectorContent(
+                    selectedMode = modemStatus,
+                    onServiceCommand = onServiceCommand,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            selectedSection == ModemSection.Settings && modemSource == ModemSource.WIFI_HTTP -> {
+                WifiModemControlButtonsContent(
+                    dataConnected = apnStatus,
+                    onServiceCommand = onServiceCommand,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
 }
+
+private enum class ModemSection {
+    Data,
+    Settings,
+}
+
+@Composable
+fun WifiModemControlButtonsContent(
+    dataConnected: Boolean,
+    onServiceCommand: (String, String, String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var buttonsEnabled by remember { mutableStateOf(true) }
+    LaunchedEffect(buttonsEnabled) {
+        if (!buttonsEnabled) {
+            delay(3000)
+            buttonsEnabled = true
+        }
+    }
+    Column(modifier = modifier.padding(top = 8.dp, bottom = 8.dp)) {
+        Text(
+            text = stringResource(R.string.wifi_modem_control_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_data_on),
+                isSelected = dataConnected,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_DATA_ON, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_data_off),
+                isSelected = !dataConnected,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_DATA_OFF, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            ModeButton(
+                text = stringResource(R.string.wifi_modem_reboot),
+                isSelected = false,
+                onClick = {
+                    if (buttonsEnabled) {
+                        buttonsEnabled = false
+                        onServiceCommand(BackgroundService.ACTION_WIFI_MODEM_REBOOT, "", "")
+                    }
+                },
+                enabled = buttonsEnabled,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+
 
 @Composable
 fun ModemModeSelectorContent(
@@ -299,8 +778,13 @@ fun SettingsTabContent(
     val isWidgetShowIndicatorEnabled by settingsViewModel.isWidgetShowIndicatorEnabled.collectAsStateWithLifecycle()
     val isWidgetShowLocIndicatorEnabled by settingsViewModel.isWidgetShowLocIndicatorEnabled.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
+    val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
+    val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val launchMainInStockAppWindow by
+        settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
+    val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
     val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
     val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
@@ -327,6 +811,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
 
@@ -344,6 +829,18 @@ fun SettingsTabContent(
         UniversalCanRepository.warmUpAvailabilityForUi()
     }
 
+    LaunchedEffect(Unit) {
+        settingsViewModel.refreshHuAdbState()
+    }
+
+    val huAdbErrorTitle = stringResource(R.string.settings_adb_apply_error_title)
+    LaunchedEffect(huAdbError) {
+        if (huAdbError != null) {
+            showAlertDialog(huAdbErrorTitle, huAdbError!!, context)
+            settingsViewModel.consumeHuAdbError()
+        }
+    }
+
     var restartButtonEnabled by remember { mutableStateOf(true) }
 
     var backgroundServiceRestartButtonEnabled by remember { mutableStateOf(true) }
@@ -356,7 +853,10 @@ fun SettingsTabContent(
     var showExportBackupNoTripsDialog by remember { mutableStateOf(false) }
     var showImportBackupDialog by remember { mutableStateOf(false) }
     var showLeftMenuConfigDialog by remember { mutableStateOf(false) }
+    var showUiIconSettingsDialog by remember { mutableStateOf(false) }
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
+    var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
+    var showExpertRawGetSetDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -379,31 +879,44 @@ fun SettingsTabContent(
         }
     }
 
+    val sections = SettingsSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp)
     ) {
-        Button(
-            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_permissions_button),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
         Text(
-            text = stringResource(R.string.settings_permissions_button_desc),
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = stringResource(R.string.tab_settings),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp),
         )
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        SettingsSection.CAR -> R.string.settings_tab_car
+                        SettingsSection.TRIPS -> R.string.settings_tab_trips
+                        SettingsSection.INTERFACE -> R.string.settings_tab_interface
+                        SettingsSection.SYSTEM -> R.string.settings_tab_system
+                        SettingsSection.API -> R.string.settings_tab_api
+                        SettingsSection.HOTSPOT -> R.string.settings_tab_hotspot
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+        ) {
+            when (selectedSection) {
+                SettingsSection.CAR -> {
         SettingsTitle(stringResource(R.string.settings_hu_type_title))
         Text(
             text = stringResource(R.string.settings_hu_type_desc),
@@ -432,28 +945,15 @@ fun SettingsTabContent(
                 modifier = Modifier.weight(1f)
             )
         }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        SettingsTitle(stringResource(R.string.settings_network_control_title))
-        SettingSwitch(
-            isAutoRestartEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoRestartSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_modem_restart_title),
-            stringResource(R.string.settings_auto_modem_restart_desc),
-            !noTboxConnect
-        )
-        SettingSwitch(
-            isAutoTboxRebootEnabled,
-            { enabled ->
-                settingsViewModel.saveAutoTboxRebootSetting(enabled)
-            },
-            stringResource(R.string.settings_auto_tbox_reboot_title),
-            stringResource(R.string.settings_auto_tbox_reboot_desc),
-            !noTboxConnect && isAutoRestartEnabled
-        )
-
+        if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+            SettingSwitch(
+                launchMainInStockAppWindow,
+                { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
+                stringResource(R.string.settings_launch_main_in_stock_app_window_title),
+                stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
+                true,
+            )
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(
@@ -547,6 +1047,32 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
+        SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
+            },
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
+            isGetCanFrameEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCanFrameSetting(enabled)
+            },
+            stringResource(R.string.settings_get_can_data_title),
+            "",
+            !noTboxConnect
+        )
+                }
+
+                SettingsSection.INTERFACE -> {
         SettingsTitle(stringResource(R.string.settings_overlay_widgets_title))
         SettingSwitch(
             isWidgetShowIndicatorEnabled,
@@ -611,37 +1137,21 @@ fun SettingsTabContent(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
-        SettingSwitch(
-            noTboxConnect,
-            { enabled ->
-                if (enabled) {
-                    showNoTboxConnectCanDialog = true
-                } else {
-                    settingsViewModel.saveNoTboxConnectSetting(false)
-                }
-            },
-            stringResource(R.string.settings_no_tbox_connect_title),
-            stringResource(R.string.settings_no_tbox_connect_desc),
-            true
-        )
-        SettingSwitch(
-            isGetCanFrameEnabled,
-            { enabled ->
-                settingsViewModel.saveGetCanFrameSetting(enabled)
-            },
-            stringResource(R.string.settings_get_can_data_title),
-            "",
-            !noTboxConnect
-        )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_left_menu_title))
         Button(
             onClick = rememberWrappedOnClick { showLeftMenuConfigDialog = true },
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
             Text(stringResource(R.string.settings_left_menu_edit), style = MaterialTheme.typography.tboxButton)
+        }
+        Button(
+            onClick = rememberWrappedOnClick { showUiIconSettingsDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.settings_ui_icons_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
@@ -651,9 +1161,29 @@ fun SettingsTabContent(
             enabled = true,
             selectorWidth = 250.dp
         )
+        SettingTextSizeScales(
+            scales = appTextSizeScales,
+            onScalesChange = { settingsViewModel.saveAppTextSizeScales(it) },
+        )
+        SettingSwitch(
+            uiClickSoundsEnabled,
+            { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
+            stringResource(R.string.settings_ui_click_sounds_title),
+            stringResource(R.string.settings_ui_click_sounds_desc),
+            true
+        )
+        SettingSwitch(
+            followSystemDayNight,
+            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
+            stringResource(R.string.settings_follow_system_day_night_title),
+            stringResource(R.string.settings_follow_system_day_night_desc),
+            true
+        )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_misc_title))
+                }
+
+                SettingsSection.TRIPS -> {
+        SettingsTitle(stringResource(R.string.settings_trips_fuel_title))
         CalibrationIntCommitField(
             title = stringResource(R.string.settings_fuel_tank_liters_title),
             description = stringResource(R.string.refuels_calibration_tank_hint),
@@ -690,20 +1220,49 @@ fun SettingsTabContent(
             stringResource(R.string.settings_wheel_pressure_persist_desc),
             true
         )
-        SettingSwitch(
-            uiClickSoundsEnabled,
-            { enabled -> settingsViewModel.saveUiClickSoundsEnabled(enabled) },
-            stringResource(R.string.settings_ui_click_sounds_title),
-            stringResource(R.string.settings_ui_click_sounds_desc),
-            true
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        WheelPulseCalibrationSection(settingsViewModel = settingsViewModel)
+                }
+
+                SettingsSection.SYSTEM -> {
+        Button(
+            onClick = rememberWrappedOnClick { settingsViewModel.openPermissionsDialog() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_permissions_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Text(
+            text = stringResource(R.string.settings_permissions_button_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
         )
-        SettingSwitch(
-            followSystemDayNight,
-            { enabled -> settingsViewModel.saveFollowSystemDayNight(enabled) },
-            stringResource(R.string.settings_follow_system_day_night_title),
-            stringResource(R.string.settings_follow_system_day_night_desc),
-            true
-        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_expert_section_title))
+        Button(
+            onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.key_press_diagnostics_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        Button(
+            onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
+            modifier = Modifier.padding(bottom = 8.dp),
+        ) {
+            Text(
+                stringResource(R.string.expert_raw_get_set_open),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -720,6 +1279,15 @@ fun SettingsTabContent(
             "",
             true
         )
+        SettingSwitch(
+            huAdbState.tcpEnabled,
+            { enabled ->
+                settingsViewModel.setHuAdbTcpEnabled(enabled)
+            },
+            stringResource(R.string.settings_adb_tcp_title),
+            stringResource(R.string.settings_adb_tcp_desc),
+            !huAdbState.readFailed
+        )
 
         if (isExpertModeEnabled) {
             SettingSwitch(
@@ -730,6 +1298,22 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_diagnostics_title),
                 stringResource(R.string.settings_mbcan_diagnostics_desc),
                 true
+            )
+            SettingSwitch(
+                isMbCanDeepDiagnosticsEnabled,
+                { enabled -> setMbCanDeepDiagnostics(context, enabled) },
+                stringResource(R.string.settings_mbcan_deep_diagnostics_title),
+                stringResource(R.string.settings_mbcan_deep_diagnostics_desc),
+                true
+            )
+            SettingSwitch(
+                huAdbState.usbEnabled,
+                { enabled ->
+                    settingsViewModel.setHuAdbUsbEnabled(enabled)
+                },
+                stringResource(R.string.settings_adb_usb_title),
+                stringResource(R.string.settings_adb_usb_desc),
+                !huAdbState.readFailed
             )
             CalibrationIntCommitField(
                 title = stringResource(R.string.settings_can_frames_count_title),
@@ -837,6 +1421,93 @@ fun SettingsTabContent(
                 textAlign = TextAlign.Center
             )
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        Button(
+            onClick = rememberWrappedOnClick {
+                if (backgroundServiceRestartButtonEnabled) {
+                    backgroundServiceRestartButtonEnabled = false
+                    onServiceCommand(
+                        BackgroundService.ACTION_RESTART,
+                        "",
+                        "",
+                    )
+                }
+            },
+            enabled = backgroundServiceRestartButtonEnabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.button_restart_background_service),
+                style = MaterialTheme.typography.tboxButton,
+                maxLines = 2,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (restartButtonEnabled) {
+                        restartButtonEnabled = false
+                        onTboxRestartClick()
+                    }
+                },
+                enabled = restartButtonEnabled && tboxConnected,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_tbox),
+                    style = MaterialTheme.typography.tboxButton,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+            Button(
+                onClick = rememberWrappedOnClick {
+                    if (huRebootButtonEnabled) {
+                        huRebootButtonEnabled = false
+                        sendSetMbCanProperty(
+                            context,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                        )
+                    }
+                },
+                enabled = huRebootButtonEnabled &&
+                    mbCanAvailable &&
+                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = stringResource(R.string.button_reboot_hu),
+                    style = MaterialTheme.typography.tboxButton,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+                }
+
+                SettingsSection.API -> {
+                    ExternalApiSettingsSection(settingsViewModel = settingsViewModel)
+                }
+
+                SettingsSection.HOTSPOT -> {
+                    HuSoftApSettingsCard()
+                }
+            }
+        }
+    }
 
         if (showNoTboxConnectCanDialog) {
             AlertDialog(
@@ -954,82 +1625,21 @@ fun SettingsTabContent(
             visible = showLeftMenuConfigDialog,
             onDismiss = { showLeftMenuConfigDialog = false },
         )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        Button(
-            onClick = rememberWrappedOnClick {
-                if (backgroundServiceRestartButtonEnabled) {
-                    backgroundServiceRestartButtonEnabled = false
-                    onServiceCommand(
-                        BackgroundService.ACTION_RESTART,
-                        "",
-                        "",
-                    )
-                }
-            },
-            enabled = backgroundServiceRestartButtonEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.button_restart_background_service),
-                style = MaterialTheme.typography.tboxButton,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (restartButtonEnabled) {
-                        restartButtonEnabled = false
-                        onTboxRestartClick()
-                    }
-                },
-                enabled = restartButtonEnabled && tboxConnected,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.button_reboot_tbox),
-                    style = MaterialTheme.typography.tboxButton,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-            Button(
-                onClick = rememberWrappedOnClick {
-                    if (huRebootButtonEnabled) {
-                        huRebootButtonEnabled = false
-                        sendSetMbCanProperty(
-                            context,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
-                        )
-                    }
-                },
-                enabled = huRebootButtonEnabled &&
-                    mbCanAvailable &&
-                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.button_reboot_hu),
-                    style = MaterialTheme.typography.tboxButton,
-                    maxLines = 2,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
+        UiIconSettingsDialog(
+            settingsViewModel = settingsViewModel,
+            visible = showUiIconSettingsDialog,
+            onDismiss = { showUiIconSettingsDialog = false },
+        )
+        KeyPressDiagnosticsDialog(
+            visible = showKeyPressDiagnosticsDialog,
+            mode = headUnitCanMode,
+            onDismiss = { showKeyPressDiagnosticsDialog = false },
+        )
+        ExpertRawGetSetDialog(
+            visible = showExpertRawGetSetDialog,
+            mode = headUnitCanMode,
+            onDismiss = { showExpertRawGetSetDialog = false },
+        )
 }
 
 @Composable
@@ -1048,6 +1658,10 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingDashboardGridSpacingDp.collectAsStateWithLifecycle()
     val floatingPanelsLayoutSnapDp by
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
+    val floatingPanelsAllowBeyondScreen by
+        settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val floatingPanelsShowOnServiceStartDelaySeconds by
+        settingsViewModel.floatingPanelsShowOnServiceStartDelaySeconds.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingPanelDeleteInProgressId by settingsViewModel.floatingPanelDeleteInProgressId.collectAsStateWithLifecycle()
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
@@ -1059,13 +1673,40 @@ fun FloatingPanelsSettingsTabContent(
     var showUsageStatsHideFloatingDialog by remember { mutableStateOf(false) }
     var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
 
+    val sections = FloatingPanelsSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
             .padding(18.dp),
     ) {
-        SettingsTitle(stringResource(R.string.settings_floating_panels_title))
+        Text(
+            text = stringResource(R.string.tab_floating_panels_settings),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        FloatingPanelsSection.PANELS -> R.string.settings_tab_panels
+                        FloatingPanelsSection.COMMON -> R.string.settings_tab_common
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState),
+        ) {
+            when (selectedSection) {
+                FloatingPanelsSection.PANELS -> {
         if (hasFloatingPanels) {
             FloatingDashboardPanelEditor(
                 panels = floatingDashboardsList,
@@ -1248,8 +1889,9 @@ fun FloatingPanelsSettingsTabContent(
             Modifier,
             enabled = hasFloatingPanels,
         )
+                }
 
-
+                FloatingPanelsSection.COMMON -> {
         SettingSliderInt(
             value = floatingPanelsLayoutSnapDp,
             onValueChange = { settingsViewModel.saveFloatingPanelsLayoutSnapDp(it) },
@@ -1260,6 +1902,31 @@ fun FloatingPanelsSettingsTabContent(
             description = stringResource(R.string.settings_panel_layout_snap_desc),
             minValue = MIN_PANEL_LAYOUT_SNAP_DP,
             maxValue = MAX_PANEL_LAYOUT_SNAP_DP,
+        )
+        SettingSwitch(
+            floatingPanelsAllowBeyondScreen,
+            { enabled -> settingsViewModel.saveFloatingPanelsAllowBeyondScreen(enabled) },
+            stringResource(R.string.settings_floating_allow_beyond_screen_title),
+            stringResource(R.string.settings_floating_allow_beyond_screen_desc),
+            true,
+        )
+        var floatingShowDelayDraft by remember {
+            mutableStateOf(floatingPanelsShowOnServiceStartDelaySeconds.toString())
+        }
+        LaunchedEffect(floatingPanelsShowOnServiceStartDelaySeconds) {
+            floatingShowDelayDraft = floatingPanelsShowOnServiceStartDelaySeconds.toString()
+        }
+        CalibrationIntCommitField(
+            title = stringResource(R.string.settings_floating_show_on_service_start_delay_title),
+            description = stringResource(R.string.settings_floating_show_on_service_start_delay_desc),
+            draft = floatingShowDelayDraft,
+            onDraftChange = { floatingShowDelayDraft = it },
+            savedValue = floatingPanelsShowOnServiceStartDelaySeconds,
+            minValue = SettingsManager.MIN_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            maxValue = SettingsManager.MAX_FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS,
+            onCommit = { value ->
+                settingsViewModel.saveFloatingPanelsShowOnServiceStartDelaySeconds(value)
+            },
         )
 
         Text(
@@ -1286,6 +1953,9 @@ fun FloatingPanelsSettingsTabContent(
                 text = stringResource(R.string.settings_floating_usage_stats_hide_configure),
                 style = MaterialTheme.typography.tboxButton,
             )
+        }
+                }
+            }
         }
     }
 
@@ -1328,6 +1998,14 @@ private fun setMbCanDiagnostics(context: Context, enabled: Boolean) {
     val intent = Intent(context, BackgroundService::class.java).apply {
         action = BackgroundService.ACTION_SET_MBCAN_DIAGNOSTICS
         putExtra(BackgroundService.EXTRA_MBCAN_DIAGNOSTICS_ENABLED, enabled)
+    }
+    context.startService(intent)
+}
+
+private fun setMbCanDeepDiagnostics(context: Context, enabled: Boolean) {
+    val intent = Intent(context, BackgroundService::class.java).apply {
+        action = BackgroundService.ACTION_SET_MBCAN_DEEP_DIAGNOSTICS
+        putExtra(BackgroundService.EXTRA_MBCAN_DEEP_DIAGNOSTICS_ENABLED, enabled)
     }
     context.startService(intent)
 }
@@ -1400,6 +2078,34 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
     )
 }
 
+
+private enum class SettingsSection {
+    CAR,
+    TRIPS,
+    INTERFACE,
+    SYSTEM,
+    API,
+    HOTSPOT,
+}
+
+private enum class FloatingPanelsSection {
+    PANELS,
+    COMMON,
+}
+
+enum class MainScreenSettingsSection {
+    COMMON,
+    PANELS,
+    BUTTONS,
+}
+
+private enum class LocationSection {
+    General,
+    Mock,
+    Cameras,
+    DataDebug,
+}
+
 @Composable
 fun LocationTabContent(
     viewModel: TboxViewModel,
@@ -1433,6 +2139,7 @@ fun LocationTabContent(
     val isMockLocationEnabled by settingsViewModel.isMockLocationEnabled.collectAsStateWithLifecycle()
     val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
     val mockPeriodMs by settingsViewModel.mockLocationPeriodMs.collectAsStateWithLifecycle()
+    val mockRetentionAccuracyCeilingM by settingsViewModel.mockRetentionAccuracyCeilingM.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val mockRoadMatchEnabled by settingsViewModel.mockRoadMatchEnabled.collectAsStateWithLifecycle()
     val mockRoadMatchMode by settingsViewModel.mockRoadMatchMode.collectAsStateWithLifecycle()
@@ -1552,19 +2259,46 @@ fun LocationTabContent(
             title = { AppAlertDialogTitle(title) },
             text = { AppAlertDialogText(message) },
             confirmButton = {
-                Button(onClick = { locationSourceBlockedDialog = null }) {
+                Button(onClick = rememberWrappedOnClick { locationSourceBlockedDialog = null }) {
                     AppAlertDialogButtonLabel(stringResource(R.string.widget_external_bind_failed_ok))
                 }
             },
         )
     }
 
+    val sections = LocationSection.entries
+    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(18.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 18.dp)
     ) {
+        Text(
+            text = stringResource(R.string.tab_geoposition),
+            style = MaterialTheme.typography.tboxHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalSectionTabRow(
+            tabs = sections.map { section ->
+                stringResource(
+                    when (section) {
+                        LocationSection.General -> R.string.location_tab_general
+                        LocationSection.Mock -> R.string.location_tab_mock
+                        LocationSection.Cameras -> R.string.location_tab_cameras
+                        LocationSection.DataDebug -> R.string.location_tab_data_debug
+                    },
+                )
+            },
+            selectedIndex = selectedSectionIndex,
+            onTabSelected = { selectedSectionIndex = it },
+        )
+
         LazyColumn(modifier = Modifier.weight(1f)) {
+            when (selectedSection) {
+                LocationSection.General -> {
             item {
                 val locationSourceOptions = buildList {
                     if (!noTboxConnect) {
@@ -1649,6 +2383,10 @@ fun LocationTabContent(
             // switching the location source to USB (otherwise the gate blocks USB
             // while the picker stays hidden).
             item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.location_section_usb_gnss))
+            }
+            item {
                 val noneLabel = stringResource(R.string.settings_usb_gnss_device_none)
                 val notSelectedLabel = stringResource(R.string.settings_usb_gnss_device_not_selected)
                 val placeholder = UsbGnssDeviceOption(
@@ -1731,6 +2469,26 @@ fun LocationTabContent(
                     }
                     Text(
                         text = stringResource(R.string.settings_usb_gnss_auto_baud_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            settingsViewModel.requestUsbGnssReconnect()
+                        },
+                        enabled = usbGnssDeviceId.isNotBlank() && !autoBaudRunning,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_usb_gnss_reconnect_title),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.settings_usb_gnss_reconnect_desc),
                         style = MaterialTheme.typography.tboxBody,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
@@ -1952,7 +2710,7 @@ fun LocationTabContent(
                         settingsViewModel.saveAutoSuspendTboxLocSetting(enabled)
                     },
                     text = stringResource(R.string.settings_auto_suspend_loc_title),
-                    description = "",
+                    description = stringResource(R.string.settings_auto_suspend_loc_desc),
                     enabled = !noTboxConnect,
                 )
             }
@@ -2006,6 +2764,8 @@ fun LocationTabContent(
                     }
                 }
             }
+                } // General
+                LocationSection.Mock -> {
             item {
                 val powerEditable = mockEnabledForSource
                 val powers = listOf(
@@ -2020,41 +2780,19 @@ fun LocationTabContent(
                 )
                 Text(
                     text = stringResource(R.string.settings_mock_location_title),
-                    style = MaterialTheme.typography.tboxBody,
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                 )
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    powers.forEachIndexed { index, power ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = powers.size,
-                            ),
-                            onClick = {
-                                if (powerEditable) {
-                                    onMockLocationSettingChanged(power)
-                                }
-                            },
-                            selected = if (mockEnabledForSource) {
-                                mockPowerState == power
-                            } else {
-                                power == vad.dashing.tbox.location.MockPowerState.OFF
-                            },
-                            enabled = powerEditable,
-                            label = {
-                                Text(
-                                    text = powerLabels[index],
-                                    style = MaterialTheme.typography.tboxButton,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 2,
-                                )
-                            },
-                        )
-                    }
-                }
+                LocationModeButtonRow(
+                    labels = powerLabels,
+                    selectedIndex = powers.indexOf(
+                        if (mockEnabledForSource) mockPowerState
+                        else vad.dashing.tbox.location.MockPowerState.OFF,
+                    ).coerceAtLeast(0),
+                    enabled = powerEditable,
+                    onSelect = { index -> onMockLocationSettingChanged(powers[index]) },
+                )
                 val powerDesc = when {
                     !mockEnabledForSource ->
                         stringResource(R.string.settings_mock_location_android_disabled)
@@ -2123,6 +2861,27 @@ fun LocationTabContent(
                 )
             }
             item {
+                val mockRetentionSettingsVisible =
+                    mockEnabledForSource &&
+                        mockPowerState != vad.dashing.tbox.location.MockPowerState.OFF
+                if (mockRetentionSettingsVisible) {
+                    SettingSliderInt(
+                        value = mockRetentionAccuracyCeilingM.roundToInt(),
+                        onValueChange = { settingsViewModel.saveMockRetentionAccuracyCeilingM(it) },
+                        text = stringResource(
+                            R.string.settings_mock_retention_accuracy_ceiling_title,
+                            mockRetentionAccuracyCeilingM.roundToInt(),
+                        ),
+                        description = stringResource(
+                            R.string.settings_mock_retention_accuracy_ceiling_desc,
+                        ),
+                        minValue = vad.dashing.tbox.location.MockRetentionAccuracy.MIN_CEILING_M.toInt(),
+                        maxValue = vad.dashing.tbox.location.MockRetentionAccuracy.MAX_CEILING_M.toInt(),
+                        enabled = mockEnabledForSource,
+                    )
+                }
+            }
+            item {
                 val mockModeVisible =
                     mockEnabledForSource &&
                         mockPowerState == vad.dashing.tbox.location.MockPowerState.ALWAYS_ON
@@ -2152,35 +2911,18 @@ fun LocationTabContent(
                     )
                     Text(
                         text = stringResource(R.string.settings_mock_can_speed_mode_title),
-                        style = MaterialTheme.typography.tboxBody,
+                        style = MaterialTheme.typography.tboxTitle,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                     )
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        modes.forEachIndexed { index, mode ->
-                            SegmentedButton(
-                                shape = SegmentedButtonDefaults.itemShape(
-                                    index = index,
-                                    count = modes.size,
-                                ),
-                                onClick = {
-                                    settingsViewModel.saveMockCanSpeedModeSetting(mode)
-                                },
-                                selected = mockCanSpeedMode == mode,
-                                enabled = true,
-                                label = {
-                                    Text(
-                                        text = modeLabels[index],
-                                        style = MaterialTheme.typography.tboxButton,
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                    )
-                                },
-                            )
-                        }
-                    }
+                    LocationModeButtonRow(
+                        labels = modeLabels,
+                        selectedIndex = modes.indexOf(mockCanSpeedMode).coerceAtLeast(0),
+                        enabled = true,
+                        onSelect = { index ->
+                            settingsViewModel.saveMockCanSpeedModeSetting(modes[index])
+                        },
+                    )
                     val modeDesc = when (mockCanSpeedMode) {
                         vad.dashing.tbox.location.MockCanSpeedMode.NONE ->
                             stringResource(R.string.settings_mock_can_speed_direct_desc)
@@ -2305,70 +3047,64 @@ fun LocationTabContent(
                     if (mockRoadMatchEnabled && roadMatchToggleEnabled) {
                         Text(
                             text = stringResource(R.string.settings_mock_road_match_mode_title),
-                            style = MaterialTheme.typography.tboxBody,
+                            style = MaterialTheme.typography.tboxTitle,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                         )
                         val roadMatchModes = listOf(
                             vad.dashing.tbox.location.roadmatch.RoadMatchMode.ORDINARY,
                             vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS,
+                            vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS,
                         )
                         val roadMatchModeLabels = listOf(
                             stringResource(R.string.settings_mock_road_match_mode_ordinary),
                             stringResource(R.string.settings_mock_road_match_mode_rails),
+                            stringResource(R.string.settings_mock_road_match_mode_free_turns),
                         )
-                        SingleChoiceSegmentedButtonRow(
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            roadMatchModes.forEachIndexed { index, mode ->
-                                SegmentedButton(
-                                    shape = SegmentedButtonDefaults.itemShape(
-                                        index = index,
-                                        count = roadMatchModes.size,
-                                    ),
-                                    onClick = {
-                                        settingsViewModel.saveMockRoadMatchModeSetting(mode)
-                                    },
-                                    selected = mockRoadMatchMode == mode,
-                                    label = {
-                                        Text(
-                                            text = roadMatchModeLabels[index],
-                                            style = MaterialTheme.typography.tboxButton,
-                                            textAlign = TextAlign.Center,
-                                            maxLines = 1,
-                                        )
-                                    },
-                                )
-                            }
-                        }
+                        LocationModeButtonRow(
+                            labels = roadMatchModeLabels,
+                            selectedIndex = roadMatchModes.indexOf(mockRoadMatchMode).coerceAtLeast(0),
+                            enabled = true,
+                            onSelect = { index ->
+                                settingsViewModel.saveMockRoadMatchModeSetting(roadMatchModes[index])
+                            },
+                        )
                         Text(
-                            text = if (mockRoadMatchMode ==
-                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS
-                            ) {
-                                stringResource(R.string.settings_mock_road_match_mode_rails_desc)
-                            } else {
-                                stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
+                            text = when (mockRoadMatchMode) {
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.RAILS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_rails_desc)
+                                vad.dashing.tbox.location.roadmatch.RoadMatchMode.FREE_TURNS ->
+                                    stringResource(R.string.settings_mock_road_match_mode_free_turns_desc)
+                                else ->
+                                    stringResource(R.string.settings_mock_road_match_mode_ordinary_desc)
                             },
                             style = MaterialTheme.typography.tboxBody,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
                         )
+                        RoadMatchTuningEntryButton(
+                            settingsViewModel = settingsViewModel,
+                            enabled = true,
+                        )
                     }
-                    RoadMapsEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = true,
-                    )
-                } else {
-                    // Maps can be downloaded even when mock power is off.
-                    RoadMapsEntryButton(
-                        settingsViewModel = settingsViewModel,
-                        enabled = mockEnabledForSource,
-                    )
                 }
             }
             item {
                 LocationCalibrationEntryButtons(settingsViewModel = settingsViewModel)
             }
+                } // Mock
+                LocationSection.Cameras -> {
+            item {
+                RoadMapsEntryButton(
+                    settingsViewModel = settingsViewModel,
+                    enabled = true,
+                )
+            }
+            item {
+                SpeedCamCamerasSection(settingsViewModel = settingsViewModel)
+            }
+                } // Cameras
+                LocationSection.DataDebug -> {
             item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
@@ -2424,8 +3160,8 @@ fun LocationTabContent(
             item {
                 // Debug: HU ReverseGearSwitch, HU PRND, TBox PRND (comma-separated).
                 val switchText = when (reverseGearSwitch) {
-                    true -> "true"
-                    false -> "false"
+                    true -> yesLabel
+                    false -> noLabel
                     null -> "—"
                 }
                 val huPrnd = huGearBoxMode?.trim()?.takeIf { it.isNotEmpty() } ?: "—"
@@ -2603,14 +3339,12 @@ fun LocationTabContent(
                 )
             }
             item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.location_geo_debug_log_title))
+            }
+            item {
                 val geoDebug by vad.dashing.tbox.location.GeoDebugLogRecorder.uiState
                     .collectAsStateWithLifecycle()
-                Text(
-                    text = stringResource(R.string.location_geo_debug_log_title),
-                    style = MaterialTheme.typography.tboxTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-                )
                 Text(
                     text = stringResource(R.string.location_geo_debug_log_desc),
                     style = MaterialTheme.typography.tboxBody,
@@ -2671,6 +3405,8 @@ fun LocationTabContent(
                     }
                 }
             }
+                } // DataDebug
+            }
         }
     }
 
@@ -2681,6 +3417,32 @@ fun LocationTabContent(
             settingsViewModel = settingsViewModel,
             onDismiss = { showUm980UsbSettings = false },
         )
+    }
+}
+
+
+@Composable
+private fun LocationModeButtonRow(
+    labels: List<String>,
+    selectedIndex: Int,
+    enabled: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        labels.forEachIndexed { index, label ->
+            ModeButton(
+                text = label,
+                isSelected = selectedIndex == index,
+                onClick = { onSelect(index) },
+                enabled = enabled,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -2703,11 +3465,13 @@ fun InfoTabContent(
     val appVersion by settingsViewModel.appVersion.collectAsStateWithLifecycle()
     val mdcVersion by settingsViewModel.mdcVersion.collectAsStateWithLifecycle()
     val swdVersion by settingsViewModel.swdVersion.collectAsStateWithLifecycle()
+    val udaVersion by settingsViewModel.udaVersion.collectAsStateWithLifecycle()
     val crtVersion by settingsViewModel.crtVersion.collectAsStateWithLifecycle()
     val locVersion by settingsViewModel.locVersion.collectAsStateWithLifecycle()
     val swVersion by settingsViewModel.swVersion.collectAsStateWithLifecycle()
     val hwVersion by settingsViewModel.hwVersion.collectAsStateWithLifecycle()
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
+    val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
 
     LaunchedEffect(updateVersionButtonEnabled) {
@@ -2723,6 +3487,11 @@ fun InfoTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item { HuSystemNetworksSection() }
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SettingsTitle(stringResource(R.string.info_tbox_section))
+            }
             item {
                 StatusRow(
                     stringResource(R.string.info_confirm_suspend_app),
@@ -2770,6 +3539,7 @@ fun InfoTabContent(
             item { StatusRow(stringResource(R.string.info_app_version_loc), locVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_mdc), mdcVersion) }
             item { StatusRow(stringResource(R.string.info_app_version_swd), swdVersion) }
+            item { StatusRow(stringResource(R.string.info_app_version_uda), udaVersion) }
             item { StatusRow(stringResource(R.string.info_sw_version), swVersion) }
             item { StatusRow(stringResource(R.string.info_hw_version), hwVersion) }
             item { StatusRow(stringResource(R.string.info_vin), vinCode) }
@@ -2804,6 +3574,31 @@ fun InfoTabContent(
                     }
                 }
             }
+
+            if (isExpertModeEnabled) {
+                item {
+                    Button(
+                        onClick = rememberWrappedOnClick {
+                            onServiceCommand(
+                                BackgroundService.ACTION_UDA_READ_DTC,
+                                "",
+                                "",
+                            )
+                        },
+                        enabled = tboxConnected,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.button_uda_read_dtc),
+                            style = MaterialTheme.typography.tboxButton,
+                            maxLines = 2,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -2817,6 +3612,35 @@ private data class UpdateChannelDropdownOption(
 
 private data class MockPeriodOption(
     val periodMs: Long,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+
+private data class ModemSourceOption(
+    val source: ModemSource,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class WifiModemModelOption(
+    val model: WifiModemModel,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class WifiModemPollIntervalOption(
+    val seconds: Int,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+private data class HuInternetProbeIntervalOption(
+    val seconds: Int,
     val label: String,
 ) {
     override fun toString(): String = label

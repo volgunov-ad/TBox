@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -15,17 +16,34 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
+import vad.dashing.tbox.AVH_WIDGET_DATA_KEY
 import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.ESP_OFF_WIDGET_DATA_KEY
+import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
+import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
+import vad.dashing.tbox.HIGH_BEAM_WIDGET_DATA_KEY
+import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
+import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
+import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
+import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_RIGHT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.GNSS_DEBUG_WIDGET_DATA_KEY
+import vad.dashing.tbox.HDC_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -43,18 +61,31 @@ import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
-import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
+import vad.dashing.tbox.REAR_FOG_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY
 import vad.dashing.tbox.REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY
+import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.SPEED_LIMITER_WIDGET_DATA_KEY
+import vad.dashing.tbox.OSM_SPEED_LIMIT_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
 import vad.dashing.tbox.isStepperWidgetDataKey
+import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.normalizeWidgetControlPadding
 import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
 /** Default corner radius (dp) for music and stepper control buttons. */
 const val DEFAULT_MUSIC_STEPPER_CONTROL_SHAPE_DP = 10
+
+/** Outer control padding (dp) for icon-style tiles (climate, heat, ACC, …). */
+const val DEFAULT_CONTROL_PADDING_ICON_DP = 4
+
+/** Outer control padding (dp) for steppers and the HVAC blow-mode panel. */
+const val DEFAULT_CONTROL_PADDING_STEPPER_DP = 6
+
+/** Outer per-button padding (dp) for music transport chrome; layout 6.dp stays. */
+const val DEFAULT_CONTROL_PADDING_MUSIC_DP = 0
 
 /** Alpha for default music/stepper control background (`surfaceVariant`). */
 const val DEFAULT_MUSIC_STEPPER_CONTROL_BG_ALPHA = 0.35f
@@ -65,6 +96,7 @@ data class ResolvedControlColors(
     val inactiveBackground: Color,
     val activeBackground: Color,
     val shapeDp: Dp,
+    val paddingDp: Dp,
 )
 
 /**
@@ -75,6 +107,8 @@ enum class ControlAppearanceKind {
     Heat,
     /** Climate toggles / vent / blow: active = Primary blue. */
     Climate,
+    /** Alert status icons: active = Danger red; shape/padding like Climate. */
+    Alert,
     /** Music transport and steppers: surfaceVariant bg, shape 10. */
     MusicStepper,
     /** Day = Secondary (active), night = Primary (inactive). */
@@ -94,6 +128,7 @@ val LocalWidgetControlAppearance = compositionLocalOf {
         inactiveBackground = Color.Transparent,
         activeBackground = Color.Transparent,
         shapeDp = 0.dp,
+        paddingDp = 0.dp,
     )
 }
 
@@ -105,6 +140,7 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         "frontWindscreenHeatWidget",
         "rearWindowMirrorsDefrostWidget",
         "hvacDefrosterFrontWidget",
+        ESP_OFF_WIDGET_DATA_KEY,
         REAR_LEFT_SEAT_HEAT_WIDGET_DATA_KEY,
         REAR_RIGHT_SEAT_HEAT_WIDGET_DATA_KEY,
         "frontLeftSeatHeatVentWidget",
@@ -121,8 +157,17 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         HVAC_BLOW_MODE_CYCLE_WIDGET_DATA_KEY,
         HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY,
         HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY,
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
+        MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
         WIPER_MAINTENANCE_WIDGET_DATA_KEY,
         PARKING_RADAR_WIDGET_DATA_KEY,
+        REAR_FOG_WIDGET_DATA_KEY,
+        AVH_WIDGET_DATA_KEY,
+        HDC_WIDGET_DATA_KEY,
+        TJA_ICA_WIDGET_DATA_KEY,
+        HMA_WIDGET_DATA_KEY,
+        HIGH_BEAM_WIDGET_DATA_KEY,
+        HVAC_AC_MAX_WIDGET_DATA_KEY,
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
         // Fold has no on-state; only inactive colors are painted (transparent bg by default).
         MIRROR_FOLD_WIDGET_DATA_KEY,
@@ -130,7 +175,14 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         CRUISE_STATUS_WIDGET_DATA_KEY,
         ROAD_MATCH_MAP_WIDGET_DATA_KEY,
         GNSS_DEBUG_WIDGET_DATA_KEY,
+        AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
         -> ControlAppearanceKind.Climate
+
+        EPB_PARK_LAMP_WIDGET_DATA_KEY,
+        ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY,
+        BRAKE_FLUID_WIDGET_DATA_KEY,
+        OSM_SPEED_LIMIT_WIDGET_DATA_KEY,
+        -> ControlAppearanceKind.Alert
 
         MUSIC_WIDGET_DATA_KEY,
         MUSIC_COVER_WIDGET_DATA_KEY,
@@ -152,6 +204,10 @@ fun controlAppearanceKindForDataKey(dataKey: String): ControlAppearanceKind {
         TRUNK_DOOR_WIDGET_DATA_KEY -> ControlAppearanceKind.Trunk
         DRIVE_MODE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         DRIVE_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        LDW_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        LKA_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
+        HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY -> ControlAppearanceKind.DriveMode
         else -> if (isStepperWidgetDataKey(dataKey)) {
             ControlAppearanceKind.MusicStepper
         } else {
@@ -174,6 +230,7 @@ fun defaultActiveContentForKind(
     return when (kind) {
         ControlAppearanceKind.Heat -> WidgetActiveColors.Secondary
         ControlAppearanceKind.Climate -> WidgetActiveColors.Primary
+        ControlAppearanceKind.Alert -> WidgetActiveColors.Danger
         ControlAppearanceKind.MusicStepper -> when (dataKey) {
             // Fan center «climate on» historically uses Primary; +/− stay inactive (tile text).
             HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY,
@@ -200,6 +257,30 @@ fun defaultControlShapeDpForKind(kind: ControlAppearanceKind): Int {
         ControlAppearanceKind.MusicStepper -> DEFAULT_MUSIC_STEPPER_CONTROL_SHAPE_DP
         else -> 0
     }
+}
+
+/**
+ * Default outer control padding in dp so existing layouts stay unchanged until the user
+ * moves the slider. Music transport buttons stay flush in their slot (widget 6.dp layout
+ * is not this setting). Steppers and the blow-mode panel keep 6; icon tiles keep 4.
+ */
+fun defaultControlPaddingDpForDataKey(dataKey: String): Int {
+    if (isMusicWidgetDataKey(dataKey)) return DEFAULT_CONTROL_PADDING_MUSIC_DP
+    if (dataKey == HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY ||
+        dataKey == HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY ||
+        dataKey == MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY ||
+        dataKey == MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY
+    ) {
+        return DEFAULT_CONTROL_PADDING_STEPPER_DP
+    }
+    return when (controlAppearanceKindForDataKey(dataKey)) {
+        ControlAppearanceKind.MusicStepper -> DEFAULT_CONTROL_PADDING_STEPPER_DP
+        else -> DEFAULT_CONTROL_PADDING_ICON_DP
+    }
+}
+
+fun Modifier.widgetControlOuterPadding(controls: ResolvedControlColors): Modifier {
+    return padding(controls.paddingDp)
 }
 
 /**
@@ -238,12 +319,17 @@ fun resolveControlAppearance(
         config.controlShape?.let { normalizeWidgetControlShape(it) }
             ?: defaultControlShapeDpForKind(kind)
         ).dp
+    val paddingDp = (
+        config.controlPadding?.let { normalizeWidgetControlPadding(it) }
+            ?: defaultControlPaddingDpForDataKey(config.dataKey)
+        ).dp
     return ResolvedControlColors(
         inactiveContent = inactiveContent,
         activeContent = activeContent,
         inactiveBackground = inactiveBackground,
         activeBackground = activeBackground,
         shapeDp = shapeDp,
+        paddingDp = paddingDp,
     )
 }
 

@@ -8,6 +8,7 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.AppLogFileRecorder
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
@@ -283,6 +286,8 @@ fun LogsTabContent(
     val logs by viewModel.logs.collectAsStateWithLifecycle()
     val logLevel by settingsViewModel.logLevel.collectAsStateWithLifecycle()
     val searchText by LogsSessionState.messageFilter.collectAsStateWithLifecycle()
+    val continuousLog by AppLogFileRecorder.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val logLevels = listOf("DEBUG", "INFO", "WARN", "ERROR")
 
@@ -403,6 +408,70 @@ fun LogsTabContent(
                             AppAlertDialogButtonLabel(stringResource(R.string.action_cancel))
                         }
                     }
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.logs_continuous_record_title))
+        Text(
+            text = stringResource(R.string.logs_continuous_record_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text(
+            text = if (continuousLog.recording) {
+                stringResource(R.string.logs_continuous_record_recording, continuousLog.lines)
+            } else {
+                stringResource(R.string.logs_continuous_record_idle)
+            },
+            style = MaterialTheme.typography.tboxBody,
+            color = if (continuousLog.recording) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                onClick = rememberWrappedOnClick {
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_APP_LOG_START
+                        },
+                    )
+                },
+                enabled = !continuousLog.recording,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.logs_continuous_record_start),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            OutlinedButton(
+                onClick = rememberWrappedOnClick {
+                    context.startService(
+                        Intent(context, BackgroundService::class.java).apply {
+                            action = BackgroundService.ACTION_APP_LOG_STOP
+                        },
+                    )
+                },
+                enabled = continuousLog.recording,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    stringResource(R.string.logs_continuous_record_stop),
+                    style = MaterialTheme.typography.tboxButton,
+                    textAlign = TextAlign.Center,
                 )
             }
         }

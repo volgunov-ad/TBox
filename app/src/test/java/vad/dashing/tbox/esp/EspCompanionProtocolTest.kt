@@ -28,6 +28,10 @@ class EspCompanionProtocolTest {
         assertEquals(9600, hello.baud)
         assertFalse(hello.can)
         assertNull(hello.canBackend)
+        assertFalse(hello.magSupported)
+        assertFalse(hello.mag)
+        assertNull(hello.magChip)
+        assertTrue(hello.magSeen.isEmpty())
     }
 
     @Test
@@ -42,6 +46,79 @@ class EspCompanionProtocolTest {
         assertEquals("mcp2515", hello.canBackend)
         assertEquals(500000, hello.canBaud)
         assertFalse(hello.canLight)
+        assertFalse(hello.magSupported)
+    }
+
+    @Test
+    fun parseHelloMagCaps() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.6.0","gpioIn":4,"relays":2,"um980":true,"baud":115200,""" +
+                """"mag":false,"magChip":"rm3100","magSeen":["mmc5983"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.magSupported)
+        assertFalse(hello.mag)
+        assertEquals("rm3100", hello.magChip)
+        assertEquals(listOf("mmc5983"), hello.magSeen)
+    }
+
+    @Test
+    fun parseMagAndMagChip() {
+        val mag = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"mag","chip":"rm3100","hx":12.4,"hy":-3.1,"hz":41.2,""" +
+                """"heading":217.3,"fs":48.2,"ok":true}""",
+        ) as EspMessage.Mag
+        assertEquals("rm3100", mag.chip)
+        assertEquals(12.4f, mag.hx, 0.01f)
+        assertEquals(-3.1f, mag.hy, 0.01f)
+        assertEquals(41.2f, mag.hz, 0.01f)
+        assertEquals(217.3f, mag.headingDeg, 0.01f)
+        assertEquals(48.2f, mag.fs, 0.01f)
+        assertTrue(mag.ok)
+
+        val ack = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"magChip","chip":"mmc5983","ok":true,"mag":true,"seen":["rm3100","mmc5983"]}""",
+        ) as EspMessage.MagChip
+        assertEquals("mmc5983", ack.chip)
+        assertTrue(ack.ok)
+        assertTrue(ack.mag)
+        assertEquals(listOf("rm3100", "mmc5983"), ack.seen)
+    }
+
+    @Test
+    fun parseHelloGnssAutodetect() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.7.0","gpioIn":4,"relays":2,"gnss":true,""" +
+                """"gnssChip":"neo-m8n","gnssModel":"NEO-M8N-0-10","um980":false,"baud":9600,""" +
+                """"mag":true,"magChip":"ist8310","magSeen":["ist8310"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.gnss)
+        assertEquals("neo-m8n", hello.gnssChip)
+        assertEquals("NEO-M8N-0-10", hello.gnssModel)
+        assertFalse(hello.um980)
+        assertEquals(9600, hello.baud)
+        assertTrue(hello.mag)
+        assertEquals("ist8310", hello.magChip)
+        assertEquals(listOf("ist8310"), hello.magSeen)
+    }
+
+    @Test
+    fun isKnownMagChipIncludesIst8310() {
+        assertTrue(EspCompanionProtocol.isKnownMagChip("ist8310"))
+        assertTrue(EspCompanionProtocol.isKnownMagChip("qmc5883l"))
+        assertFalse(EspCompanionProtocol.isKnownMagChip("unknown"))
+    }
+
+    @Test
+    fun encodeMagChipSet() {
+        val line = EspCompanionProtocol.encodeMagChipSet(EspCompanionProtocol.MAG_CHIP_RM3100)
+        assertTrue(line.contains("\"t\":\"magChipSet\""))
+        assertTrue(line.contains("\"chip\":\"rm3100\""))
+        assertTrue(EspCompanionProtocol.isKnownMagChip("RM3100"))
+        assertFalse(EspCompanionProtocol.isKnownMagChip("qmc5883"))
     }
 
     @Test
@@ -340,5 +417,71 @@ class EspCompanionProtocolTest {
         assertEquals(0x44.toByte(), data[3])
         assertTrue(EspCompanionProtocol.parseHexData("")!!.isEmpty())
         assertNull(EspCompanionProtocol.parseHexData("1"))
+    }
+
+    @Test
+    fun parseHelloBleCaps() {
+        val msg = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.8.0","gpioIn":4,"relays":2,"um980":false,"baud":115200,""" +
+                """"ble":true,"bleOn":true,"bleMacs":["aa:bb:cc:dd:ee:ff"]}""",
+        )
+        assertTrue(msg is EspMessage.Hello)
+        val hello = msg as EspMessage.Hello
+        assertTrue(hello.ble)
+        assertTrue(hello.bleOn)
+        assertEquals(listOf("aa:bb:cc:dd:ee:ff"), hello.bleMacs)
+    }
+
+    @Test
+    fun parseAndEncodeBleMessages() {
+        val btn = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleBtn","mac":"AA:BB:CC:DD:EE:FF","btn":2,"act":"double",""" +
+                """"bat":87,"rssi":-62,"ms":1001}""",
+        ) as EspMessage.BleBtn
+        assertEquals("aa:bb:cc:dd:ee:ff", btn.mac)
+        assertEquals(2, btn.btn)
+        assertEquals("double", btn.act)
+        assertEquals(87, btn.bat)
+        assertEquals(-62, btn.rssi)
+
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"macs":["11:22:33:44:55:66"],""" +
+                """"lastBat":50,"lastRssi":-70,"lastMac":"11:22:33:44:55:66"}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.on)
+        assertFalse(status.learn)
+        assertEquals(listOf("11:22:33:44:55:66"), status.macs)
+        assertEquals(50, status.lastBat)
+        assertEquals("11:22:33:44:55:66", status.lastMac)
+
+        val set = EspCompanionProtocol.encodeBleSet(true)
+        assertTrue(set.contains("\"t\":\"bleSet\""))
+        assertTrue(set.contains("\"on\":true"))
+        val learn = EspCompanionProtocol.encodeBleLearnBegin(15_000L)
+        assertTrue(learn.contains("bleLearnBegin"))
+        assertTrue(learn.contains("15000"))
+        val forget = EspCompanionProtocol.encodeBleForgetAll()
+        assertTrue(forget.contains("\"all\":true"))
+    }
+
+    @Test
+    fun parseApStatusAndEncodeApCfg() {
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"apStatus","on":true,"sta":true,"ssid":"TBox","psk":"tbox8765",""" +
+                """"ip":"192.168.4.1","freq":2462,"ch":11,"huIp":"192.168.42.1","panel":8765}""",
+        ) as EspMessage.ApStatus
+        assertTrue(status.on)
+        assertTrue(status.sta)
+        assertEquals("TBox", status.ssid)
+        assertEquals("tbox8765", status.password)
+        assertEquals(2462, status.freqMhz)
+        assertEquals("192.168.42.1", status.huIp)
+        val cfg = EspCompanionProtocol.encodeApCfg(true, "hu", "abcd1234", 9000, "TBox-ab12", "cabin8765")
+        assertTrue(cfg.contains("\"t\":\"apCfg\""))
+        assertTrue(cfg.contains("\"huSsid\":\"hu\""))
+        assertTrue(cfg.contains("\"huPsk\":\"abcd1234\""))
+        assertTrue(cfg.contains("\"port\":9000"))
+        assertTrue(cfg.contains("\"apSsid\":\"TBox-ab12\""))
+        assertTrue(cfg.contains("\"apPsk\":\"cabin8765\""))
     }
 }

@@ -56,11 +56,15 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
+import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.TboxViewModel
+import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.collectMediaPlayersFromWidgetConfigs
 import vad.dashing.tbox.loadWidgetsFromConfig
 import vad.dashing.tbox.normalizeWidgetScale
@@ -69,13 +73,13 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
-import vad.dashing.tbox.isMbCanVhalMediaVolumeEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalWheelsPressureEnabled
 import vad.dashing.tbox.isMbCanVhalCurrentFuelConsumptionEnabled
+import vad.dashing.tbox.isMbCanVhalAverageFuelConsumptionEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToNextMaintenanceEnabled
 import vad.dashing.tbox.isMbCanVhalDistanceToFuelEmptyEnabled
 import vad.dashing.tbox.isMbCanVhalAirQualityEnabled
@@ -91,6 +95,7 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 @Composable
@@ -134,9 +139,6 @@ fun MainDashboardTab(
     val panelNeedsMbCan = remember(widgetConfigs) {
         UniversalCanRepository.widgetConfigsNeedMbCan(widgetConfigs.map { it.dataKey })
     }
-    val panelNeedsMbCanVhalMediaVolume = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanVhalMediaVolumeEnabled() }
-    }
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
     }
@@ -160,6 +162,9 @@ fun MainDashboardTab(
     }
     val panelNeedsMbCanVhalCurrentFuel = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCurrentFuelConsumptionEnabled() }
+    }
+    val panelNeedsMbCanVhalAverageFuel = remember(widgetConfigs) {
+        widgetConfigs.any { it.isMbCanVhalAverageFuelConsumptionEnabled() }
     }
     val panelNeedsMbCanVhalMaintenance = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalDistanceToNextMaintenanceEnabled() }
@@ -208,17 +213,12 @@ fun MainDashboardTab(
             }
         }
     }
-    if (panelNeedsMbCanVhalMediaVolume) {
-        LaunchedEffect(widgetConfigs) {
-            UniversalCanRepository.setSourceSignals(
-                "dashboard-tab-main-media-volume",
-                setOf(MbCanSignal.AudioVolume)
-            )
-        }
-        DisposableEffect(Unit) {
-            onDispose {
-                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-media-volume")
-            }
+    LaunchedEffect(widgetConfigs) {
+        vad.dashing.tbox.obd.publishObdInterest("dashboard-tab-main", widgetConfigs)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            vad.dashing.tbox.obd.clearObdInterest("dashboard-tab-main")
         }
     }
     if (panelNeedsMbCanVhalEngineRpm) {
@@ -322,6 +322,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-current-fuel")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalAverageFuel) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-average-fuel",
+                setOf(MbCanSignal.AverageFuelConsumption)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-average-fuel")
             }
         }
     }
@@ -458,7 +471,9 @@ fun MainDashboardTab(
                             val widget = dashboardState.widgets.getOrNull(index) ?: continue
                             val widgetConfig = widgetConfigs.getOrNull(index)
                                 ?: FloatingDashboardWidgetConfig(dataKey = "")
-                            val widgetTextScale = normalizeWidgetScale(widgetConfig.scale)
+                            val widgetTitleScale = normalizeWidgetScale(widgetConfig.titleScale)
+                            val widgetTextScale = normalizeWidgetScale(widgetConfig.textScale)
+                            val widgetIconScale = normalizeWidgetScale(widgetConfig.iconScale)
                             val widgetTextColor = widget.resolveTextColorForTheme(currentTheme)
                             val widgetBackgroundColor = widget.resolveBackgroundColorForTheme(currentTheme)
                             val tileBgRelPath = (
@@ -483,7 +498,9 @@ fun MainDashboardTab(
                                     )
                                 }
                                 CompositionLocalProvider(
+                                    LocalWidgetTitleScale provides widgetTitleScale,
                                     LocalWidgetTextScale provides widgetTextScale,
+                                    LocalWidgetIconScale provides widgetIconScale,
                                     LocalWidgetTextAlign provides widgetTextAlignToCompose(
                                         normalizeWidgetTextAlign(widgetConfig.textAlign)
                                     ),
@@ -524,6 +541,8 @@ fun MainDashboardTab(
                                                     cfg,
                                                     settingsViewModel,
                                                 )
+                                            } else if (cfg?.dataKey == APP_LIST_WIDGET_DATA_KEY) {
+                                                openAppListDialog(context)
                                             } else if (cfg?.dataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
                                                 val selectedMode = resolveDriveModeWidgetOption(
                                                     cfg.selectedDriveMode
@@ -547,6 +566,15 @@ fun MainDashboardTab(
                                                     context = context,
                                                     propertyId = nextMode.propertyId,
                                                     value = nextMode.propertyValue
+                                                )
+                                            } else if (cfg?.dataKey == HEADLIGHT_MODE_CYCLE_WIDGET_DATA_KEY) {
+                                                val next = HeadlightMode.nextInCycle(
+                                                    UniversalCanRepository.headlightModeRaw.value
+                                                )
+                                                sendSetMbCanProperty(
+                                                    context = context,
+                                                    propertyId = MbCanKnownVehiclePropertyId.LIGHTCONTROL,
+                                                    value = next.rawValue,
                                                 )
                                             } else if (cfg?.dataKey == "hvacAcCleanWhenLockedWidget") {
                                                 sendToggleHvacAcCleanWhenLocked(context)
@@ -647,7 +675,7 @@ fun WidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {  },
-        modifier = Modifier.fillMaxWidth(0.8f), // Модификатор для всего диалога
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(
             usePlatformDefaultWidth = false // Отключает стандартную ширину платформы
         ),
@@ -663,6 +691,7 @@ fun WidgetSelectionDialog(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
+                dataKeyFilter = WidgetsRepository::isOfferedOnMainDashboardTab,
                 widgetIndex = widgetIndex,
                 currentWidgetConfigs = currentWidgetConfigs,
                 tileBackgroundPanelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
@@ -757,7 +786,7 @@ fun MainScreenPanelWidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { },
-        modifier = Modifier.fillMaxWidth(0.8f),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
@@ -905,7 +934,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { },
-        modifier = Modifier.fillMaxWidth(0.8f),
+        modifier = Modifier.tboxDialogSurfaceFill(),
         properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(

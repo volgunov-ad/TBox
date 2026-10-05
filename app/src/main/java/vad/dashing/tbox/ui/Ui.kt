@@ -47,6 +47,8 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.AppDataViewModelFactory
+import vad.dashing.tbox.automation.AutomationUiEventReporter
+import vad.dashing.tbox.automation.AutomationVisibleScreen
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
@@ -58,6 +60,7 @@ import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
 import java.text.SimpleDateFormat
 import java.util.Locale
+import vad.dashing.tbox.AppListDialogRequestBus
 import vad.dashing.tbox.ThemeOpenRequestBus
 import vad.dashing.tbox.ui.theme.TboxAppTheme
 
@@ -98,11 +101,13 @@ fun TboxApp(
 
     val currentTheme by viewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
     val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
+    val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
@@ -112,7 +117,18 @@ fun TboxApp(
         updateViewModel.checkForUpdateOnStartupIfEnabled()
     }
 
-    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId) {
+    LaunchedEffect(selectedTab) {
+        AutomationUiEventReporter.reportScreen(
+            if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
+                AutomationVisibleScreen.MAIN
+            } else {
+                AutomationVisibleScreen.MENU
+            },
+        )
+    }
+
+    TboxAppTheme(theme = currentTheme, fontFamilyId = appFontFamilyId, textSizeScales = appTextSizeScales) {
+        UiIconRuntimeProvider(settingsViewModel, currentTheme = currentTheme) {
         CompositionLocalProvider(LocalClickSoundEnabled provides uiClickSoundsEnabled) {
         if (selectedTab == SettingsManager.MAIN_SCREEN_TAB_KEY) {
             MainScreen(
@@ -158,6 +174,14 @@ fun TboxApp(
             PermissionsDialog(
                 onDismiss = { settingsViewModel.dismissPermissionsDialog() },
             )
+        }
+        if (showAppListDialog) {
+            AppListDialog(
+                visible = true,
+                settingsViewModel = settingsViewModel,
+                onDismiss = { AppListDialogRequestBus.dismiss() },
+            )
+        }
         }
         }
     }
@@ -240,7 +264,7 @@ fun TboxScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(if (isMenuVisible) 300.dp else menuButtonSize)
+                    .width(if (isMenuVisible) 330.dp else menuButtonSize)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.background)
             ) {
@@ -257,8 +281,9 @@ fun TboxScreen(
                             ),
                         contentAlignment = Alignment.CenterEnd
                     ) {
-                        Icon(
-                            imageVector = if (isMenuVisible) ImageVector.vectorResource(R.drawable.menu_icon_close) else ImageVector.vectorResource(R.drawable.menu_icon_open),
+                        CustomizableUiIcon(
+                            iconKey = if (isMenuVisible) UiIconCatalog.MENU_CLOSE else UiIconCatalog.MENU_OPEN,
+                            drawableRes = if (isMenuVisible) R.drawable.menu_icon_close else R.drawable.menu_icon_open,
                             contentDescription = if (isMenuVisible) stringResource(R.string.menu_hide) else stringResource(R.string.menu_show),
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier
@@ -275,6 +300,7 @@ fun TboxScreen(
 
                     TabMenuItem(
                         title = stringResource(R.string.menu_navigate_home),
+                        iconKey = UiIconCatalog.MENU_HOME,
                         icon = ImageVector.vectorResource(R.drawable.ic_menu_home),
                         selected = false,
                         showText = isMenuVisible,
@@ -294,6 +320,7 @@ fun TboxScreen(
                             val field = row.field
                             TabMenuItem(
                                 title = stringResource(field.labelRes),
+                                iconKey = field.iconKey,
                                 icon = field.menuIcon(),
                                 selected = selectedTab == field.id,
                                 showText = isMenuVisible,
@@ -307,6 +334,7 @@ fun TboxScreen(
                     if (showUpdateMenuEntry) {
                         TabMenuItem(
                             title = stringResource(R.string.update_menu_available),
+                            iconKey = UiIconCatalog.MENU_UPDATE,
                             icon = ImageVector.vectorResource(R.drawable.ic_menu_update),
                             selected = selectedTab == SettingsManager.UPDATE_TAB_KEY,
                             showText = isMenuVisible,
@@ -390,8 +418,9 @@ fun TboxScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 when (selectedTab) {
-                    LeftMenuTabField.MODEM.id -> ModemTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.MODEM.id -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                     LeftMenuTabField.AT_COMMANDS.id -> ATcmdTab(viewModel, onServiceCommand)
+                    LeftMenuTabField.ADB.id -> AdbTab(settingsViewModel)
                     LeftMenuTabField.GEOPOSITION.id -> LocationTab(
                         viewModel,
                         settingsViewModel,
@@ -399,6 +428,7 @@ fun TboxScreen(
                         onMockLocationSettingChanged,
                     )
                     LeftMenuTabField.ESP_COMPANION.id -> EspCompanionTab(settingsViewModel)
+                    LeftMenuTabField.ELM327.id -> Elm327Tab(settingsViewModel)
                     LeftMenuTabField.CAR_DATA.id -> CarDataTab(
                         canViewModel,
                         cycleViewModel,
@@ -415,6 +445,10 @@ fun TboxScreen(
                         appDataViewModel = appDataViewModel,
                         settingsViewModel = settingsViewModel,
                         onSaveToFile = onSaveToFile,
+                        onServiceCommand = onServiceCommand,
+                    )
+                    LeftMenuTabField.AUTOMATIONS.id -> AutomationsTab(
+                        settingsViewModel = settingsViewModel,
                         onServiceCommand = onServiceCommand,
                     )
                     LeftMenuTabField.SETTINGS.id -> SettingsTab(
@@ -456,7 +490,7 @@ fun TboxScreen(
                         updateViewModel = updateViewModel,
                         onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,
                     )
-                    else -> ModemTab(viewModel, onServiceCommand)
+                    else -> ModemTab(viewModel, settingsViewModel, onServiceCommand)
                 }
             }
         }
@@ -466,10 +500,12 @@ fun TboxScreen(
 @Composable
 fun ModemTab(
     viewModel: TboxViewModel,
+    settingsViewModel: SettingsViewModel,
     onServiceCommand: (String, String, String) -> Unit,
 ) {
     ModemTabContent(
         viewModel = viewModel,
+        settingsViewModel = settingsViewModel,
         onServiceCommand = onServiceCommand
     )
 }
@@ -605,6 +641,13 @@ fun CanTab(
         canViewModel = canViewModel,
         onSaveToFile = onSaveToFile
     )
+}
+
+@Composable
+fun AdbTab(
+    settingsViewModel: SettingsViewModel,
+) {
+    AdbTabContent(settingsViewModel = settingsViewModel)
 }
 
 @Composable

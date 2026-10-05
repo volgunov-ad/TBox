@@ -1,9 +1,13 @@
 package vad.dashing.tbox.mbcan
 
+import java.lang.reflect.Constructor
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
+import android.os.Looper
 import vad.dashing.tbox.Wheels
 
 sealed class MbCanAvailability {
@@ -17,13 +21,33 @@ sealed class MbCanAvailability {
  * Keeps app build/runtime safe when vendor library is absent.
  */
 object MbCanEngineFacade {
+    private const val TAG = "MbCanEngineFacade"
+
+    /** OEM/JNI callbacks must never throw back into native. */
+    private inline fun oemSafe(label: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            android.util.Log.e(TAG, "OEM callback $label failed", t)
+        }
+    }
+
     private const val ENGINE_CLASS = "com.mengbo.mbCan.MBCanEngine"
     private const val DATA_TYPE_CLASS = "com.mengbo.mbCan.defines.MBCanDataType"
+    private const val WINDOW_CLASS = "com.mengbo.mbCan.entity.MBCanVehicleWindow"
+
+    /**
+     * OEM JNI is not thread-safe: concurrent [canGetAudioParam] (UI) and vehicle parse
+     * ([mbcan-state-apply]) aborted the process with stack-protector SIGABRT.
+     */
+    private val nativeCallLock = ReentrantLock()
 
     private val availabilityRef = AtomicReference<MbCanAvailability>(MbCanAvailability.Unknown)
     private var engineInstance: Any? = null
     private var canGetVehicleParamMethod: Method? = null
     private var canSetVehicleParamMethod: Method? = null
+    private var canSetWindowStatusMethod: Method? = null
+    private var windowStatusConstructor: Constructor<*>? = null
     private var canGetAudioParamMethod: Method? = null
     private var canSetAudioParamMethod: Method? = null
     private var subscribeMethod: Method? = null
@@ -33,6 +57,7 @@ object MbCanEngineFacade {
     private var settingsTelemetryProxy: Any? = null
     private var registCmdListenerMethod: Method? = null
     private var unRegistCmdListenerMethod: Method? = null
+    private var unRegistCmdListenerListenerMethod: Method? = null
     private var registerLkaSlaListenerMethod: Method? = null
     private var unregisterLkaSlaListenerMethod: Method? = null
     private var registerFrmDectInfoListenerMethod: Method? = null
@@ -43,12 +68,23 @@ object MbCanEngineFacade {
     private var cfgAudioDataType: Any? = null
     private var vehicleCfgCmdListenerProxy: Any? = null
     private var audioCfgCmdListenerProxy: Any? = null
+    /** Deep diagnostics: raw [IMBCmdListener] proxies per non-CFG data type. */
+    private val deepCmdListenerProxies = mutableMapOf<String, Any>()
+    /** Deep diagnostics fan-out from the production CFG listeners (OEM unRegister clears a whole type). */
+    @Volatile
+    private var onCfgCmdDeepDiagnosticEvent: ((source: String, modular: Int, rev: Int, item: Int, value: Int) -> Unit)? = null
     private var lkaSlaStatusListenerProxy: Any? = null
     private var frmDectInfoListenerProxy: Any? = null
     private var gaspedStatusListenerProxy: Any? = null
+    /** Shared OEM hardkey proxy; fans out to production + diagnostic listeners. */
+    private var hardKeyListenerProxy: Any? = null
+    private val hardKeyListenersLock = Any()
+    private val hardKeyListeners = mutableListOf<(keyCode: Int, keyStatus: Int, keyType: Int) -> Unit>()
+    @Volatile private var onHardKeyDiagnosticEvent: ((keyCode: Int, keyStatus: Int, keyType: Int) -> Unit)? = null
     /** [IMBVehicleListener] for steer + turn-light push; field set without OEM unSubscribe side-effects. */
     @Volatile private var vehicleListenerWantSteer = false
     @Volatile private var vehicleListenerWantTurnLights = false
+    @Volatile private var vehicleListenerWantWheelPulse = false
     private var imbVehicleListenerProxy: Any? = null
     private var initialized = false
 
@@ -85,6 +121,20 @@ object MbCanEngineFacade {
             canGetVehicleParamMethod = engineClass.getMethod("canGetVehicleParam", Int::class.javaPrimitiveType)
             canSetVehicleParamMethod =
                 engineClass.getMethod("canSetVehicleParam", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            val windowClass = runCatching { Class.forName(WINDOW_CLASS) }.getOrNull()
+            if (windowClass != null) {
+                windowStatusConstructor = runCatching {
+                    windowClass.getConstructor(
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                        Byte::class.javaPrimitiveType,
+                    )
+                }.getOrNull()
+                canSetWindowStatusMethod = runCatching {
+                    engineClass.getMethod("canSetWindowStatus", windowClass)
+                }.getOrNull()
+            }
             canGetAudioParamMethod =
                 engineClass.getMethod("canGetAudioParam", Int::class.javaPrimitiveType)
             canSetAudioParamMethod =
@@ -100,6 +150,13 @@ object MbCanEngineFacade {
                 Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
             )
             unRegistCmdListenerMethod = engineClass.getMethod("unRegistCMDListener", Class.forName(DATA_TYPE_CLASS))
+            unRegistCmdListenerListenerMethod = runCatching {
+                engineClass.getMethod(
+                    "unRegistCMDListener",
+                    Class.forName(DATA_TYPE_CLASS),
+                    Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+                )
+            }.getOrNull()
             registerLkaSlaListenerMethod = runCatching {
                 engineClass.getMethod(
                     "registIMBCanVehicleLkaSlaStatusListener",
@@ -141,79 +198,119 @@ object MbCanEngineFacade {
 
     fun canGetVehicleParam(propertyId: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canGetVehicleParamMethod?.invoke(engineInstance, propertyId) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeGet(canGetVehicleParamMethod, propertyId)
     }
 
     /** [com.mengbo.mbCan.MBCanEngine.canGetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] ordinal ids. */
     fun canGetAudioParam(propertyId: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canGetAudioParamMethod?.invoke(engineInstance, propertyId) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeGet(canGetAudioParamMethod, propertyId)
     }
 
     /** [com.mengbo.mbCan.MBCanEngine.canSetAudioParam] — [com.mengbo.mbCan.defines.MBAudioProperty] value ids. */
     fun canSetAudioParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canSetAudioParamMethod?.invoke(engineInstance, propertyId, value) as? Int)
-        } catch (_: Throwable) {
-            null
-        }
+        return invokeNativeSet(canSetAudioParamMethod, propertyId, value)
     }
 
     fun canSetVehicleParam(propertyId: Int, value: Int): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
-        return try {
-            (canSetVehicleParamMethod?.invoke(engineInstance, propertyId, value) as? Int)
-        } catch (_: Throwable) {
-            null
+        return invokeNativeSet(canSetVehicleParamMethod, propertyId, value)
+    }
+
+    /**
+     * [com.mengbo.mbCan.MBCanEngine.canSetWindowStatus] — constructor order FR, FL, RR, RL.
+     * Stock voice uses **−1** for a pane that should not move.
+     */
+    fun canSetWindowStatus(fr: Int, fl: Int, rr: Int, rl: Int): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val engine = engineInstance ?: return null
+        val ctor = windowStatusConstructor ?: return null
+        val method = canSetWindowStatusMethod ?: return null
+        warnIfNativeCallOnMain("setWindow", MbCanKnownVehiclePropertyId.WINDOW_POS)
+        return nativeCallLock.withLock {
+            try {
+                val window = ctor.newInstance(fr.toByte(), fl.toByte(), rr.toByte(), rl.toByte())
+                method.invoke(engine, window) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun invokeNativeGet(method: Method?, propertyId: Int): Int? {
+        val engine = engineInstance ?: return null
+        warnIfNativeCallOnMain("get", propertyId)
+        return nativeCallLock.withLock {
+            try {
+                method?.invoke(engine, propertyId) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun invokeNativeSet(method: Method?, propertyId: Int, value: Int): Int? {
+        val engine = engineInstance ?: return null
+        warnIfNativeCallOnMain("set", propertyId)
+        return nativeCallLock.withLock {
+            try {
+                method?.invoke(engine, propertyId, value) as? Int
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun warnIfNativeCallOnMain(op: String, propertyId: Int) {
+        if (Looper.getMainLooper().isCurrentThread) {
+            android.util.Log.w(TAG, "OEM $op on main thread propertyId=$propertyId")
         }
     }
 
     fun subscribe(dataTypeNames: Set<String>): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         if (dataTypeNames.isEmpty()) return 0
-        return try {
-            val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
-            val enumClass = dataTypeClass as Class<out Enum<*>>
-            val list = ArrayList<Any>(dataTypeNames.size)
-            dataTypeNames.forEach { name ->
-                val enumValue = java.lang.Enum.valueOf(enumClass, name)
-                list.add(enumValue)
+        warnIfNativeCallOnMain("subscribe", -1)
+        return nativeCallLock.withLock {
+            try {
+                val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
+                val enumClass = dataTypeClass as Class<out Enum<*>>
+                val list = ArrayList<Any>(dataTypeNames.size)
+                dataTypeNames.forEach { name ->
+                    val enumValue = java.lang.Enum.valueOf(enumClass, name)
+                    list.add(enumValue)
+                }
+                subscribeMethod?.invoke(engineInstance, list) as? Int
+            } catch (_: Throwable) {
+                null
             }
-            subscribeMethod?.invoke(engineInstance, list) as? Int
-        } catch (_: Throwable) {
-            null
         }
     }
 
     fun unSubscribe(dataTypeNames: Set<String>): Int? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
         if (dataTypeNames.isEmpty()) return 0
-        return try {
-            val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
-            val enumClass = dataTypeClass as Class<out Enum<*>>
-            val list = ArrayList<Any>(dataTypeNames.size)
-            dataTypeNames.forEach { name ->
-                val enumValue = java.lang.Enum.valueOf(enumClass, name)
-                list.add(enumValue)
+        warnIfNativeCallOnMain("unSubscribe", -1)
+        return nativeCallLock.withLock {
+            try {
+                val dataTypeClass = Class.forName(DATA_TYPE_CLASS)
+                val enumClass = dataTypeClass as Class<out Enum<*>>
+                val list = ArrayList<Any>(dataTypeNames.size)
+                dataTypeNames.forEach { name ->
+                    val enumValue = java.lang.Enum.valueOf(enumClass, name)
+                    list.add(enumValue)
+                }
+                unSubscribeMethod?.invoke(engineInstance, list) as? Int
+            } catch (_: Throwable) {
+                null
             }
-            unSubscribeMethod?.invoke(engineInstance, list) as? Int
-        } catch (_: Throwable) {
-            null
         }
     }
 
     /**
      * Single [com.mengbo.mbCan.interfaces.IMBCanSettingsCallback] on [MBCanEngine] — forwards speed/engine/
-     * fuel/odometer/outside-temp/tires/BCM pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
+     * fuel/odometer/outside-temp/tires/BCM/AccStatus pushes into [MbCanRepository]. Safe to call once after [ensureInitialized];
      * no-op if already registered.
      *
      * Callbacks must only parse the push payload. Never call `getMbCanData` / `read*` here: on A9 a re-entrant
@@ -232,126 +329,189 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            when (method.name) {
-                "onCanVehicleSpeed" -> {
-                    val fromArgs = runCatching {
-                        val raw = args?.getOrNull(0)
-                        when (raw) {
-                            is Number -> raw.toFloat()
-                            else -> {
-                                val getter = raw?.javaClass?.methods?.firstOrNull { it.name == "getSpeed" && it.parameterCount == 0 }
-                                (getter?.invoke(raw) as? Number)?.toFloat()
-                            }
-                        }
-                    }.getOrNull()
-                    if (fromArgs != null) {
-                        MbCanRepository.scheduleCarSpeedPush(fromArgs)
-                    }
-                    val gearRaw = runCatching {
-                        val raw = args?.getOrNull(0) ?: return@runCatching null
-                        val getter = raw.javaClass.methods.firstOrNull { it.name == "getGear" && it.parameterCount == 0 }
-                        (getter?.invoke(raw) as? Number)?.toInt()
-                    }.getOrNull()
-                    if (gearRaw != null) {
-                        MbCanRepository.scheduleVehicleGearPush(gearRaw)
-                    }
-                }
-                "onVehicleEngineStatusChange" -> {
-                    val engine = args?.getOrNull(0)
-                    val rpm = runCatching {
-                        val getter = engine?.javaClass?.getMethod("getfSpeed")
-                        (getter?.invoke(engine) as? Number)?.toFloat()
-                    }.getOrNull()
-                    val temperature = runCatching {
-                        val getter = engine?.javaClass?.getMethod("getfTemperture")
-                        (getter?.invoke(engine) as? Number)?.toFloat()
-                    }.getOrNull()
-                    val fuelRollingRaw = runCatching {
-                        engine?.javaClass?.getMethod("getFuelRollingCounter")?.invoke(engine)
-                    }.getOrNull()
-                    MbCanRepository.scheduleEngineRpmPush(rpm)
-                    MbCanRepository.scheduleEngineTemperaturePush(temperature)
-                    // Idle/parked counter is often 0 → decode null; do not re-enter getMbCanData.
-                    val litersPer100Km = when (fuelRollingRaw) {
-                        is Short -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw)
-                        is Number -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw.toInt())
-                        else -> null
-                    }
-                    if (fuelRollingRaw is Number) {
-                        MbCanRepository.scheduleCurrentFuelConsumptionPush(litersPer100Km)
-                    }
-                }
-                "onCanVehicleFuelLevel" -> {
-                    val fuel = args?.getOrNull(0)
-                    val pct = runCatching {
-                        val getter = fuel?.javaClass?.getMethod("getFuelLevel")
-                        (getter?.invoke(fuel) as? Number)?.toInt()
-                    }.getOrNull()
-                    val validated = pct?.takeIf { it in 0..100 }?.toUInt()
-                    val dteKm = runCatching {
-                        val getter = fuel?.javaClass?.getMethod("getDistenceToEmpty")
-                        val km = (getter?.invoke(fuel) as? Number)?.toFloat() ?: return@runCatching null
-                        DistanceToEmptyDomain.decodeKm(km)?.toInt()?.toUInt()
-                    }.getOrNull()
-                    if (validated != null || dteKm != null) {
-                        MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
-                    }
-                }
-                "onCanVehicleExternalTemp" -> {
-                    val tempObj = args?.getOrNull(0)
-                    val celsius = runCatching {
-                        val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
-                        val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
-                        OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
-                    }.getOrNull()
-                    if (celsius != null) {
-                        MbCanRepository.scheduleOutsideTemperaturePush(celsius)
-                    }
-                }
-                "onCanVehicleTires" -> {
-                    val tiresObj = args?.getOrNull(0) ?: return@InvocationHandler null
-                    val snapshot = decodeVehicleTiresObject(tiresObj) ?: return@InvocationHandler null
-                    MbCanRepository.scheduleVehicleTiresPush(snapshot.pressure, snapshot.temperature)
-                }
-                "onVehicleTotalOdoMeterChange" -> {
-                    val odo = args?.getOrNull(0)
-                    val km = runCatching {
-                        when (odo) {
-                            is Number -> odo.toFloat()
-                            else -> {
-                                val getter = odo?.javaClass?.methods?.firstOrNull {
-                                    it.name == "getOdometer" && it.parameterCount == 0
+            oemSafe(method.name) {
+
+                when (method.name) {
+                    "onCanVehicleSpeed" -> {
+                        val fromArgs = runCatching {
+                            val raw = args?.getOrNull(0)
+                            when (raw) {
+                                is Number -> raw.toFloat()
+                                else -> {
+                                    val getter = raw?.javaClass?.methods?.firstOrNull { it.name == "getSpeed" && it.parameterCount == 0 }
+                                    (getter?.invoke(raw) as? Number)?.toFloat()
                                 }
-                                (getter?.invoke(odo) as? Number)?.toFloat()
                             }
+                        }.getOrNull()
+                        if (fromArgs != null) {
+                            MbCanRepository.scheduleCarSpeedPush(fromArgs)
                         }
-                    }.getOrNull()
-                    val asUInt = km?.takeIf { it.isFinite() && it >= 0f }?.toInt()?.toUInt()
-                    if (asUInt != null) {
-                        MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                        val gearRaw = runCatching {
+                            val raw = args?.getOrNull(0) ?: return@runCatching null
+                            val getter = raw.javaClass.methods.firstOrNull { it.name == "getGear" && it.parameterCount == 0 }
+                            (getter?.invoke(raw) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (gearRaw != null) {
+                            MbCanRepository.scheduleVehicleGearPush(gearRaw)
+                        }
                     }
-                }
-                "onVehicleBcmStatusChange" -> {
-                    val bcm = args?.getOrNull(0) ?: return@InvocationHandler null
-                    val moveDir = runCatching {
-                        val getter = bcm.javaClass.getMethod("getRearDoorMoveDir")
-                        (getter.invoke(bcm) as? Number)?.toInt()
-                    }.getOrNull()
-                    val trunkSts = runCatching {
-                        val doorGetter = bcm.javaClass.getMethod("getDoorStatus")
-                        val door = doorGetter.invoke(bcm) ?: return@runCatching null
-                        val trunkGetter = door.javaClass.getMethod("getTrunkSts")
-                        (trunkGetter.invoke(door) as? Number)?.toInt()
-                    }.getOrNull()
-                    if (moveDir != null || trunkSts != null) {
-                        MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
+                    "onVehicleEngineStatusChange" -> {
+                        val engine = args?.getOrNull(0)
+                        val rpm = runCatching {
+                            val getter = engine?.javaClass?.getMethod("getfSpeed")
+                            (getter?.invoke(engine) as? Number)?.toFloat()
+                        }.getOrNull()
+                        val temperature = runCatching {
+                            val getter = engine?.javaClass?.getMethod("getfTemperture")
+                            (getter?.invoke(engine) as? Number)?.toFloat()
+                        }.getOrNull()
+                        val fuelRollingRaw = runCatching {
+                            engine?.javaClass?.getMethod("getFuelRollingCounter")?.invoke(engine)
+                        }.getOrNull()
+                        MbCanRepository.scheduleEngineRpmPush(rpm)
+                        MbCanRepository.scheduleEngineTemperaturePush(temperature)
+                        // Idle/parked counter is often 0 → decode null; do not re-enter getMbCanData.
+                        val litersPer100Km = when (fuelRollingRaw) {
+                            is Short -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw)
+                            is Number -> InstantFuelConsumptionDomain.decodeRawCounter(fuelRollingRaw.toInt())
+                            else -> null
+                        }
+                        if (fuelRollingRaw is Number) {
+                            MbCanRepository.scheduleCurrentFuelConsumptionPush(litersPer100Km)
+                        }
                     }
-                    val reverseRaw = runCatching {
-                        val getter = bcm.javaClass.getMethod("getReverseGearSwitch")
-                        (getter.invoke(bcm) as? Number)?.toInt()
-                    }.getOrNull()
-                    if (reverseRaw != null) {
-                        MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
+                    "onCanVehicleFuelLevel" -> {
+                        val fuel = args?.getOrNull(0)
+                        val pct = runCatching {
+                            val getter = fuel?.javaClass?.getMethod("getFuelLevel")
+                            (getter?.invoke(fuel) as? Number)?.toInt()
+                        }.getOrNull()
+                        val validated = pct?.takeIf { it in 0..100 }?.toUInt()
+                        val dteKm = runCatching {
+                            val getter = fuel?.javaClass?.getMethod("getDistenceToEmpty")
+                            val km = (getter?.invoke(fuel) as? Number)?.toFloat() ?: return@runCatching null
+                            DistanceToEmptyDomain.decodeKm(km)?.toInt()?.toUInt()
+                        }.getOrNull()
+                        if (validated != null || dteKm != null) {
+                            MbCanRepository.scheduleFuelLevelPush(validated, dteKm)
+                        }
+                    }
+                    "onCanVehicleExternalTemp" -> {
+                        val tempObj = args?.getOrNull(0)
+                        val celsius = runCatching {
+                            val getter = tempObj?.javaClass?.getMethod("getExternalTemperatureRaw")
+                            val raw = (getter?.invoke(tempObj) as? Number)?.toInt() ?: return@runCatching null
+                            OutsideTemperatureDomain.decodeMbCanCelsiusRaw(raw)
+                        }.getOrNull()
+                        if (celsius != null) {
+                            MbCanRepository.scheduleOutsideTemperaturePush(celsius)
+                        }
+                    }
+                    "onCanVehicleTires" -> {
+                        val tiresObj = args?.getOrNull(0) ?: return@InvocationHandler null
+                        val snapshot = decodeVehicleTiresObject(tiresObj) ?: return@InvocationHandler null
+                        MbCanRepository.scheduleVehicleTiresPush(snapshot.pressure, snapshot.temperature)
+                    }
+                    "onVehicleTotalOdoMeterChange" -> {
+                        val odo = args?.getOrNull(0)
+                        val km = runCatching {
+                            when (odo) {
+                                is Number -> odo.toFloat()
+                                else -> {
+                                    val getter = odo?.javaClass?.methods?.firstOrNull {
+                                        it.name == "getOdometer" && it.parameterCount == 0
+                                    }
+                                    (getter?.invoke(odo) as? Number)?.toFloat()
+                                }
+                            }
+                        }.getOrNull()
+                        val asUInt = km?.takeIf { it.isFinite() && it >= 0f }?.toInt()?.toUInt()
+                        if (asUInt != null) {
+                            MbCanRepository.scheduleTotalOdometerPush(asUInt)
+                        }
+                    }
+                    "onVehicleBcmStatusChange" -> {
+                        val bcm = args?.getOrNull(0) ?: return@InvocationHandler null
+                        val moveDir = runCatching {
+                            val getter = bcm.javaClass.getMethod("getRearDoorMoveDir")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        val doorSnapshot = runCatching {
+                            val doorGetter = bcm.javaClass.getMethod("getDoorStatus")
+                            val door = doorGetter.invoke(bcm) ?: return@runCatching null
+                            BcmDoorDomain.fromDoorObject(door)
+                        }.getOrNull()
+                        val trunkSts = doorSnapshot?.trunk
+                        if (moveDir != null || trunkSts != null) {
+                            MbCanRepository.scheduleTrunkBcmPush(moveDir, trunkSts)
+                        }
+                        if (doorSnapshot != null) {
+                            MbCanRepository.scheduleDoorsBcmPush(doorSnapshot)
+                        }
+                        val reverseRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getReverseGearSwitch")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (reverseRaw != null) {
+                            MbCanRepository.scheduleReverseGearSwitchPush(reverseRaw)
+                        }
+                        val brakeRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getBrakePedalSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (brakeRaw != null) {
+                            MbCanRepository.scheduleBrakePedalPush(brakeRaw)
+                        }
+                        val wiperStsRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getWiperSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (wiperStsRaw != null) {
+                            MbCanRepository.scheduleWiperStsPush(wiperStsRaw)
+                        }
+                        val rainRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getRainDetectedSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (rainRaw != null) {
+                            MbCanRepository.scheduleRainDetectedPush(rainRaw)
+                        }
+                        val highBeamRaw = runCatching {
+                            val light = bcm.javaClass.getMethod("getLightStatus").invoke(bcm)
+                                ?: return@runCatching null
+                            val highBeamGetter = light.javaClass.getMethod("getHighBeamSts")
+                            (highBeamGetter.invoke(light) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (highBeamRaw != null) {
+                            MbCanRepository.scheduleHighBeamPush(highBeamRaw)
+                        }
+                        val epbParkLampRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getEPBParkLampSts")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (epbParkLampRaw != null) {
+                            MbCanRepository.scheduleEpbParkLampPush(epbParkLampRaw)
+                        }
+                        val gearShiftPosRaw = runCatching {
+                            val getter = bcm.javaClass.getMethod("getGSM_GearShiftPos")
+                            (getter.invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (gearShiftPosRaw != null) {
+                            MbCanRepository.scheduleCurrentGearNumberPush(gearShiftPosRaw)
+                        }
+                        val bodyComfort = runCatching { parseBcmBodyComfort(bcm) }.getOrNull()
+                        if (bodyComfort != null) {
+                            MbCanRepository.scheduleBodyComfortBcmPush(bodyComfort)
+                        }
+                    }
+                    "onVehicleAccStatusChange" -> {
+                        val accObj = args?.getOrNull(0) ?: return@InvocationHandler null
+                        val raw = runCatching {
+                            (accObj.javaClass.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (raw != null) {
+                            MbCanRepository.scheduleAccStatusPush(raw)
+                        }
                     }
                 }
             }
@@ -399,16 +559,20 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
-                val modular = (args[0] as Number).toInt() and 0xFF
-                val rev = (args[1] as Number).toInt() and 0xFF
-                val item = (args[2] as Number).toInt() and 0xFFFF
-                val value = (args[3] as Number).toInt()
-                MbCanDiagnostics.log(
-                    "DEBUG",
-                    "cfgVehiclePush modular=$modular rev=$rev item=$item value=$value"
-                )
-                MbCanRepository.scheduleVehicleCfgPush(modular, item, value)
+            oemSafe(method.name) {
+
+                if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                    val modular = (args[0] as Number).toInt() and 0xFF
+                    val rev = (args[1] as Number).toInt() and 0xFF
+                    val item = (args[2] as Number).toInt() and 0xFFFF
+                    val value = (args[3] as Number).toInt()
+                    MbCanDiagnostics.log(
+                        "DEBUG",
+                        "cfgVehiclePush modular=$modular rev=$rev item=$item value=$value"
+                    )
+                    onCfgCmdDeepDiagnosticEvent?.invoke("eMBCAN_CFG_VEHICLE", modular, rev, item, value)
+                    MbCanRepository.scheduleVehicleCfgPush(modular, item, value)
+                }
             }
             null
         }
@@ -455,16 +619,20 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
-                val modular = (args[0] as Number).toInt() and 0xFF
-                val rev = (args[1] as Number).toInt() and 0xFF
-                val item = (args[2] as Number).toInt() and 0xFFFF
-                val value = (args[3] as Number).toInt()
-                MbCanDiagnostics.log(
-                    "DEBUG",
-                    "cfgAudioPush modular=$modular rev=$rev item=$item value=$value"
-                )
-                MbCanRepository.scheduleAudioCfgPush(modular, item, value)
+            oemSafe(method.name) {
+
+                if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                    val modular = (args[0] as Number).toInt() and 0xFF
+                    val rev = (args[1] as Number).toInt() and 0xFF
+                    val item = (args[2] as Number).toInt() and 0xFFFF
+                    val value = (args[3] as Number).toInt()
+                    MbCanDiagnostics.log(
+                        "DEBUG",
+                        "cfgAudioPush modular=$modular rev=$rev item=$item value=$value"
+                    )
+                    onCfgCmdDeepDiagnosticEvent?.invoke("eMBCAN_CFG_AUDIO", modular, rev, item, value)
+                    MbCanRepository.scheduleAudioCfgPush(modular, item, value)
+                }
             }
             null
         }
@@ -478,10 +646,213 @@ object MbCanEngineFacade {
     }
 
     /**
-     * Reads trunk movement and door status from cached BCM snapshot
-     * ([com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_BCM_STATUS]).
+     * Deep diagnostics: resolves candidate [MBCanDataType] enum names against the OEM
+     * build. [subscribe] resolves the whole list at once and fails wholesale on an
+     * unknown name, so unknown candidates must be filtered out first.
      */
-    data class BcmTrunkSnapshot(val moveDir: Int?, val trunkSts: Int?)
+    fun resolveDataTypeNames(candidateNames: Collection<String>): List<String> {
+        if (candidateNames.isEmpty()) return emptyList()
+        return runCatching {
+            val enumClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
+            candidateNames.filter { name ->
+                try {
+                    java.lang.Enum.valueOf(enumClass, name)
+                    true
+                } catch (_: IllegalArgumentException) {
+                    false
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    /** Deep diagnostics: raw CFG push sink (vehicle + audio), independent of UI interests. */
+    fun setCfgCmdDeepDiagnosticListener(
+        listener: ((source: String, modular: Int, rev: Int, item: Int, value: Int) -> Unit)?
+    ) {
+        onCfgCmdDeepDiagnosticEvent = listener
+    }
+
+    /**
+     * Deep diagnostics: registers one [com.mengbo.mbCan.interfaces.IMBCmdListener] per
+     * non-CFG data type and forwards raw `onCmdChanged` into [DeepCanDiagnostics].
+     *
+     * `eMBCAN_CFG_VEHICLE` / `eMBCAN_CFG_AUDIO` are skipped: OEM `unRegistCMDListener(type)`
+     * clears **all** listeners of a type, so production CFG listeners must stay sole owners;
+     * their raw events are mirrored via [setCfgCmdDeepDiagnosticListener] instead.
+     *
+     * `eMBCAN_VEHICLE_DOOR` / `eMBCAN_SEAT_BELT_STATUS` are **not** CMD-shaped on this OEM:
+     * [startDeepTypedObjectListeners] wires door callback + seat-belt poll instead.
+     * OEM `registCMDListener` only stores listeners for CFG_* types anyway.
+     */
+    @Synchronized
+    fun startDeepCmdListeners(dataTypeNames: Set<String>): List<Pair<String, Boolean>> {
+        if (ensureInitialized() !is MbCanAvailability.Available || engineInstance == null) {
+            return dataTypeNames.map { it to false }
+        }
+        val inst = engineInstance!!
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMBCmdListener")
+        } catch (_: Throwable) {
+            return dataTypeNames.map { it to false }
+        }
+        val loader = iface.classLoader
+        val skipCmdListener = setOf(
+            "eMBCAN_CFG_VEHICLE",
+            "eMBCAN_CFG_AUDIO",
+            "eMBCAN_VEHICLE_DOOR",
+            "eMBCAN_SEAT_BELT_STATUS",
+        )
+        return dataTypeNames.map { name ->
+            when {
+                name in skipCmdListener -> name to false
+                deepCmdListenerProxies.containsKey(name) -> name to true
+                else -> {
+                    val dtEnum = resolveDataTypeEnum(name)
+                        ?: return@map name to false
+                    val handler = InvocationHandler { _, method, args ->
+                        oemSafe(method.name) {
+                            if (method.name == "onCmdChanged" && args != null && args.size >= 4) {
+                                val modular = (args[0] as Number).toInt() and 0xFF
+                                val rev = (args[1] as Number).toInt() and 0xFF
+                                val item = (args[2] as Number).toInt() and 0xFFFF
+                                val value = (args[3] as Number).toInt()
+                                DeepCanDiagnostics.recordMbCanCmdChanged(name, modular, rev, item, value)
+                            }
+                        }
+                        null
+                    }
+                    val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+                    val registered = runCatching {
+                        registCmdListenerMethod?.invoke(inst, dtEnum, proxy)
+                        true
+                    }.getOrDefault(false)
+                    if (registered) deepCmdListenerProxies[name] = proxy
+                    name to registered
+                }
+            }
+        }
+    }
+
+    /**
+     * Deep-mode typed listeners for OEM object types that never reach [IMBCmdListener].
+     * Door: [registCarDorListener]. Seat belt: OEM push Runnable is empty — poll via
+     * [readSeatBeltWarningRaw] from [MbCanRepository] while deep is on.
+     */
+    @Synchronized
+    fun startDeepTypedObjectListeners(): List<Pair<String, Boolean>> {
+        val doorOk = registerDeepDoorListener()
+        return listOf(
+            "eMBCAN_VEHICLE_DOOR" to doorOk,
+            "eMBCAN_SEAT_BELT_STATUS" to true, // poll-owned by MbCanRepository while deep
+        )
+    }
+
+    @Synchronized
+    fun stopDeepTypedObjectListeners() {
+        unregisterDeepDoorListener()
+    }
+
+    private var deepDoorListenerProxy: Any? = null
+
+    @Synchronized
+    private fun registerDeepDoorListener(): Boolean {
+        if (deepDoorListenerProxy != null) return true
+        if (ensureInitialized() !is MbCanAvailability.Available) return false
+        val inst = engineInstance ?: return false
+        val iface = try {
+            Class.forName("com.mengbo.mbCan.interfaces.IMbCanVehicleDoorCallback")
+        } catch (_: Throwable) {
+            return false
+        }
+        val loader = iface.classLoader ?: return false
+        val handler = InvocationHandler { _, method, args ->
+            oemSafe(method.name) {
+                if (method.name == "onVehicleDoorChange") {
+                    val door = args?.getOrNull(0) ?: return@oemSafe
+                    val snapshot = BcmDoorDomain.fromDoorObject(door) ?: return@oemSafe
+                    DeepCanDiagnostics.recordMbCanObjectSnapshot(
+                        "eMBCAN_VEHICLE_DOOR",
+                        snapshot.journalSample(),
+                    )
+                    MbCanRepository.scheduleDoorsBcmPush(snapshot)
+                    MbCanRepository.scheduleTrunkBcmPush(moveDir = null, trunkSts = snapshot.trunk)
+                }
+            }
+            null
+        }
+        val proxy = Proxy.newProxyInstance(loader, arrayOf(iface), handler)
+        val ok = runCatching {
+            inst.javaClass.getMethod(
+                "registCarDorListener",
+                Class.forName("com.mengbo.mbCan.interfaces.IMbCanVehicleDoorCallback"),
+            ).invoke(inst, proxy)
+            true
+        }.getOrDefault(false)
+        if (ok) deepDoorListenerProxy = proxy
+        return ok
+    }
+
+    @Synchronized
+    private fun unregisterDeepDoorListener() {
+        val inst = engineInstance
+        if (inst != null && deepDoorListenerProxy != null) {
+            runCatching {
+                inst.javaClass.getMethod("unregistCarDorListener").invoke(inst)
+            }
+        }
+        deepDoorListenerProxy = null
+    }
+
+    /**
+     * Seat-belt warning raw via [getMbCanData] type **15** (`eMBCAN_SEAT_BELT_STATUS`).
+     * OEM push callback for this type is empty — poll only.
+     */
+    fun readSeatBeltWarningRaw(): Pair<Int?, Int?>? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val cls = Class.forName("com.mengbo.mbCan.entity.MBCanSeatBeltWarning")
+            val obj = getMbCanData.invoke(inst, 15, cls) ?: return null
+            val driver = (cls.getMethod("getDriverWarning").invoke(obj) as? Number)?.toInt()
+            val passenger = (cls.getMethod("getPassengerWarning").invoke(obj) as? Number)?.toInt()
+            driver to passenger
+        }.getOrNull()
+    }
+
+    @Synchronized
+    fun stopDeepCmdListeners() {
+        val inst = engineInstance
+        deepCmdListenerProxies.forEach { (name, proxy) ->
+            val dtEnum = resolveDataTypeEnum(name) ?: return@forEach
+            runCatching {
+                val cleared = unRegistCmdListenerListenerMethod?.invoke(inst, dtEnum, proxy)
+                    ?: unRegistCmdListenerMethod?.invoke(inst, dtEnum)
+                cleared
+            }
+        }
+        deepCmdListenerProxies.clear()
+        stopDeepTypedObjectListeners()
+    }
+
+    private fun resolveDataTypeEnum(name: String): Any? = runCatching {
+        val enumClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
+        java.lang.Enum.valueOf(enumClass, name)
+    }.getOrNull()
+
+    /**
+     * Reads trunk movement and full cabin door ajar from cached BCM snapshot
+     * ([com.mengbo.mbCan.defines.MBCanDataType.eMBCAN_VEHICLE_BCM_STATUS]).
+     *
+     * [BcmTrunkSnapshot.doors] seeds [MbCanRepository.bcmDoorsState] on pull so
+     * automations are not stuck Unavailable until the next BCM push.
+     */
+    data class BcmTrunkSnapshot(
+        val moveDir: Int?,
+        val trunkSts: Int?,
+        val doors: BcmDoorSnapshot? = null,
+    )
 
     fun readVehicleBcmTrunkSnapshot(): BcmTrunkSnapshot? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -492,12 +863,11 @@ object MbCanEngineFacade {
             val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
             val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
             val moveDir = bcmCls.getMethod("getRearDoorMoveDir").invoke(bcmObj)?.let { (it as Number).toInt() }
-            val trunkSts = runCatching {
+            val doors = runCatching {
                 val door = bcmCls.getMethod("getDoorStatus").invoke(bcmObj) ?: return@runCatching null
-                val trunkGetter = door.javaClass.getMethod("getTrunkSts")
-                trunkGetter.invoke(door)?.let { (it as Number).toInt() }
+                BcmDoorDomain.fromDoorObject(door)
             }.getOrNull()
-            BcmTrunkSnapshot(moveDir = moveDir, trunkSts = trunkSts)
+            BcmTrunkSnapshot(moveDir = moveDir, trunkSts = doors?.trunk, doors = doors)
         }.getOrNull()
     }
 
@@ -591,6 +961,221 @@ object MbCanEngineFacade {
         }.getOrNull()
     }
 
+    /**
+     * AccStatus from [MBCanVehicleAccStatus.getAccStatus].
+     * Data type **6** (`eMBCAN_VEHICLE_ACCSTATUS`).
+     */
+    fun readAccStatus(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val accCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleAccStatus")
+            val accObj = getMbCanData.invoke(inst, 6, accCls) ?: return null
+            val raw = (accCls.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt() ?: return null
+            AccStatusDomain.decodeMbCan(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Accelerator pedal percent from [MBCanVehicleGaspedStatus].
+     * Data type **36** (`eMBCAN_VEHICLE_GASPED_STATUS`).
+     */
+    fun readGasPedalPercent(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val gaspedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleGaspedStatus")
+            val gaspedObj = getMbCanData.invoke(inst, 36, gaspedCls) ?: return null
+            val position = (gaspedCls.getMethod("getfGasPedalPosition").invoke(gaspedObj) as? Number)?.toFloat()
+            val invalid = (gaspedCls.getMethod("getnGasPedalPositionInvalidData").invoke(gaspedObj) as? Number)?.toInt()
+            PedalDomain.decodeGasPedalPercent(position, invalid)
+        }.getOrNull()
+    }
+
+    /**
+     * Brake pedal from [MBCanVehicleBcmStatus.getBrakePedalSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readBrakePedalPressed(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getBrakePedalSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            PedalDomain.decodeBrakePressed(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Front wiper mode from [MBCanVehicleBcmStatus.getWiperSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readWiperOperatingMode(): WiperOperatingMode? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getWiperSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            WiperStsDomain.decode(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Rain detected from [MBCanVehicleBcmStatus.getRainDetectedSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readRainDetected(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getRainDetectedSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            RainDetectedDomain.decodeDetected(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * High beam on from [com.mengbo.mbCan.entity.MBCanLightStatus.getHighBeamSts]
+     * of BCM status. Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readHighBeamOn(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val light = bcmCls.getMethod("getLightStatus").invoke(bcmObj) ?: return null
+            val raw = (light.javaClass.getMethod("getHighBeamSts").invoke(light) as? Number)?.toInt() ?: return null
+            HighBeamDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * EPB park lamp from [MBCanVehicleBcmStatus.getEPBParkLampSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readEpbParkLampOn(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getEPBParkLampSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            EpbParkLampDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    data class IcmDriverWarningLamps(
+        val engineOilWarning: Boolean?,
+        val brakeFluidWarning: Boolean?,
+    )
+
+    /**
+     * ICM engine-oil / brake-fluid warning lamps from [MBCanVehicleIcmDriverInfo].
+     * Data type **44** (`eMBCAN_VEHICLE_ICM_DRIVE_INFO`). OEM settings dispatch is empty —
+     * pull / JobManager poll only.
+     */
+    fun readIcmDriverWarningLamps(): IcmDriverWarningLamps? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmDriverInfo")
+            val icmObj = getMbCanData.invoke(inst, 44, icmCls) ?: return null
+            val oilRaw = (icmCls.getMethod("getICM_EngineOil").invoke(icmObj) as? Number)?.toInt()
+            val brakeRaw = (icmCls.getMethod("getICM_Brakefluid").invoke(icmObj) as? Number)?.toInt()
+            IcmDriverWarningLamps(
+                engineOilWarning = oilRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+                brakeFluidWarning = brakeRaw?.let(IcmWarningLampDomain::decodeWarningActive),
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Current gear number from [MBCanVehicleBcmStatus.getGSM_GearShiftPos].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readCurrentGearNumber(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = getMbCanData.invoke(inst, 21, bcmCls) ?: return null
+            val raw = (bcmCls.getMethod("getGSM_GearShiftPos").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            GearNumberDomain.decode(raw)
+        }.getOrNull()
+    }
+
+    fun readSunshadeRaw(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        return BodyComfortDomain.sanitizeStatusRaw(
+            canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNSHADE_POS),
+        )
+    }
+
+    fun readSunroofRaw(): Int? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        return BodyComfortDomain.sanitizeStatusRaw(
+            canGetVehicleParam(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL),
+        )
+    }
+
+    fun readBcmBodyComfort(): BodyComfortBcmRaw? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        warnIfNativeCallOnMain("get", 21)
+        return nativeCallLock.withLock {
+            try {
+                val engine = engineInstance ?: return@withLock null
+                val engineClass = engine.javaClass
+                val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+                val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+                val bcmObj = getMbCanData.invoke(engine, 21, bcmCls) ?: return@withLock null
+                parseBcmBodyComfort(bcmObj)
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    private fun parseBcmBodyComfort(bcm: Any): BodyComfortBcmRaw {
+        val sunRoof = runCatching {
+            (bcm.javaClass.getMethod("getSunRoof").invoke(bcm) as? Number)?.toInt()
+        }.getOrNull()
+        val window = runCatching {
+            bcm.javaClass.getMethod("getVehicleWindow").invoke(bcm)
+        }.getOrNull()
+        fun windowByte(name: String): Int? = runCatching {
+            (window?.javaClass?.getMethod(name)?.invoke(window) as? Number)?.toInt()
+        }.getOrNull()
+        return BodyComfortBcmRaw(
+            sunRoof = sunRoof,
+            windowFl = windowByte("getFLWindow"),
+            windowFr = windowByte("getFRWindow"),
+            windowRl = windowByte("getRLWindow"),
+            windowRr = windowByte("getRRWindow"),
+        )
+    }
+
     /** Fuel % from [MBCanVehicleFuelLevel.getFuelLevel]; valid range 0…100. Data type 12. */
     fun readVehicleFuelLevelPercent(): UInt? {
         if (ensureInitialized() !is MbCanAvailability.Available) return null
@@ -632,6 +1217,21 @@ object MbCanEngineFacade {
             val engObj = getMbCanData.invoke(inst, 22, engCls) ?: return null
             val raw = (engCls.getMethod("getFuelRollingCounter").invoke(engObj) as? Number)?.toInt() ?: return null
             InstantFuelConsumptionDomain.decodeRawCounter(raw)
+        }.getOrNull()
+    }
+
+    /** Average fuel L/100km from [MBCanVehicleIcmInfo.getICM_4_AverageFuelConsume]. Data type 42. */
+    fun readAverageFuelConsumptionLPer100Km(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val icmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleIcmInfo")
+            val icmObj = getMbCanData.invoke(inst, 42, icmCls) ?: return null
+            val raw = (icmCls.getMethod("getICM_4_AverageFuelConsume").invoke(icmObj) as? Number)
+                ?.toFloat() ?: return null
+            AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(raw)
         }.getOrNull()
     }
 
@@ -718,6 +1318,29 @@ object MbCanEngineFacade {
             val odoObj = getMbCanData.invoke(inst, 16, odoCls) ?: return null
             val km = (odoCls.getMethod("getOdometer").invoke(odoObj) as? Number)?.toFloat() ?: return null
             if (!km.isFinite() || km < 0f) null else km.toInt().coerceAtLeast(0).toUInt()
+        }.getOrNull()
+    }
+
+    /** Wheel pulse counters from [MBCanVehicleWheel]. Data type 4 (`eMBCAN_VEHICLE_WHEEL`). */
+    fun readVehicleWheelPulseCounters(): vad.dashing.tbox.vehicle.WheelCounters? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val wheelCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleWheel")
+            val wheelObj = getMbCanData.invoke(inst, 4, wheelCls) ?: return null
+            val mask = (1 shl vad.dashing.tbox.vehicle.WheelPulseOdometer.COUNTER_BITS) - 1
+            fun counter(name: String): Int =
+                ((wheelCls.getMethod(name).invoke(wheelObj) as? Number)?.toInt() ?: 0)
+                    .coerceAtLeast(0) and mask
+            vad.dashing.tbox.vehicle.WheelCounters(
+                lhf = counter("getLHFPulseCounter"),
+                rhf = counter("getRHFPulseCounter"),
+                lhr = counter("getLHRPulseCounter"),
+                rhr = counter("getRHRPulseCounter"),
+                updatedElapsedMs = android.os.SystemClock.elapsedRealtime(),
+            )
         }.getOrNull()
     }
 
@@ -846,22 +1469,28 @@ object MbCanEngineFacade {
     }
 
     /**
-     * Forwards [IMBVehicleListener.onSteeringWheel] / [IMBVehicleListener.onVehicleTurnLightChange]
-     * into [MbCanRepository] push schedulers.
+     * Forwards [IMBVehicleListener.onSteeringWheel] / [IMBVehicleListener.onVehicleTurnLightChange] /
+     * [IMBVehicleListener.onPull] (wheel pulse) into [MbCanRepository] push schedulers.
      *
      * Sets OEM `mVehicletener` directly instead of [MBCanEngine.registVehicleListener] /
      * [MBCanEngine.unRegistVehicleListener]: those also subscribe/unsubscribe SPEED/TURNLIGHT/WHEEL
      * and would race with [MbCanJobManager] / settings telemetry refcounts.
-     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` / `eMBCAN_VEHICLE_TURNLIGHT` stays owned by
-     * [MbCanJobManager] ([MbCanJobManager.ensureOemSubscriptions] after interest reapply).
+     * Subscription for `eMBCAN_VEHICLE_STEERING_ANGLE` / `eMBCAN_VEHICLE_TURNLIGHT` /
+     * `eMBCAN_VEHICLE_WHEEL` stays owned by [MbCanJobManager]
+     * ([MbCanJobManager.ensureOemSubscriptions] after interest reapply).
      *
-     * One shared listener field: steer and turn lights share `mVehicletener`.
+     * One shared listener field: steer, turn lights, and wheel pulse share `mVehicletener`.
      */
     @Synchronized
-    fun syncImbVehicleListener(needSteer: Boolean, needTurnLights: Boolean) {
+    fun syncImbVehicleListener(
+        needSteer: Boolean,
+        needTurnLights: Boolean,
+        needWheelPulse: Boolean = false,
+    ) {
         vehicleListenerWantSteer = needSteer
         vehicleListenerWantTurnLights = needTurnLights
-        if (!needSteer && !needTurnLights) {
+        vehicleListenerWantWheelPulse = needWheelPulse
+        if (!needSteer && !needTurnLights && !needWheelPulse) {
             clearImbVehicleListener()
             return
         }
@@ -875,20 +1504,34 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            when (method.name) {
-                "onSteeringWheel" -> {
-                    if (vehicleListenerWantSteer) {
-                        val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
-                        val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
-                        MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+            oemSafe(method.name) {
+
+                when (method.name) {
+                    "onSteeringWheel" -> {
+                        if (vehicleListenerWantSteer) {
+                            val angle = (args?.getOrNull(0) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                            val speed = (args?.getOrNull(1) as? Number)?.toFloat()?.takeIf { it.isFinite() }
+                            MbCanRepository.scheduleSteeringAnglePush(angleDeg = angle, angleSpeed = speed)
+                        }
                     }
-                }
-                "onVehicleTurnLightChange" -> {
-                    if (vehicleListenerWantTurnLights) {
-                        val left = (args?.getOrNull(0) as? Number)?.toInt()
-                        val right = (args?.getOrNull(1) as? Number)?.toInt()
-                        if (left != null && right != null) {
-                            MbCanRepository.scheduleTurnSignalsPush(left, right)
+                    "onVehicleTurnLightChange" -> {
+                        if (vehicleListenerWantTurnLights) {
+                            val left = (args?.getOrNull(0) as? Number)?.toInt()
+                            val right = (args?.getOrNull(1) as? Number)?.toInt()
+                            if (left != null && right != null) {
+                                MbCanRepository.scheduleTurnSignalsPush(left, right)
+                            }
+                        }
+                    }
+                    "onPull" -> {
+                        if (vehicleListenerWantWheelPulse) {
+                            val lhf = (args?.getOrNull(0) as? Number)?.toInt()
+                            val rhf = (args?.getOrNull(1) as? Number)?.toInt()
+                            val lhr = (args?.getOrNull(2) as? Number)?.toInt()
+                            val rhr = (args?.getOrNull(3) as? Number)?.toInt()
+                            if (lhf != null && rhf != null && lhr != null && rhr != null) {
+                                MbCanRepository.scheduleWheelPulsePush(lhf, rhf, lhr, rhr)
+                            }
                         }
                     }
                 }
@@ -909,6 +1552,7 @@ object MbCanEngineFacade {
         imbVehicleListenerProxy = null
         vehicleListenerWantSteer = false
         vehicleListenerWantTurnLights = false
+        vehicleListenerWantWheelPulse = false
         if (inst == null || proxy == null) return
         runCatching {
             val field = Class.forName(ENGINE_CLASS).getDeclaredField("mVehicletener")
@@ -928,6 +1572,125 @@ object MbCanEngineFacade {
         }.getOrDefault(false)
     }
 
+    /**
+     * Register a production hardkey listener (A9 `IMBHardKeyListener`).
+     * Shares one OEM subscription with diagnostics; safe to call repeatedly.
+     */
+    @Synchronized
+    fun addHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            if (hardKeyListeners.none { it === listener }) {
+                hardKeyListeners.add(listener)
+            }
+        }
+        return ensureHardKeyOemRegistered()
+    }
+
+    /** Remove a production hardkey listener; OEM unregisters only when nobody remains. */
+    @Synchronized
+    fun removeHardKeyListener(
+        listener: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        synchronized(hardKeyListenersLock) {
+            hardKeyListeners.removeAll { it === listener }
+        }
+        return maybeUnregisterHardKeyOem()
+    }
+
+    @Synchronized
+    fun startHardKeyDiagnostics(
+        onEvent: (keyCode: Int, keyStatus: Int, keyType: Int) -> Unit,
+    ): Result<Unit> {
+        onHardKeyDiagnosticEvent = onEvent
+        return ensureHardKeyOemRegistered()
+    }
+
+    @Synchronized
+    fun stopHardKeyDiagnostics(): Result<Unit> {
+        onHardKeyDiagnosticEvent = null
+        return maybeUnregisterHardKeyOem()
+    }
+
+    private fun hardKeyHasConsumers(): Boolean {
+        if (onHardKeyDiagnosticEvent != null) return true
+        synchronized(hardKeyListenersLock) {
+            return hardKeyListeners.isNotEmpty()
+        }
+    }
+
+    private fun dispatchHardKey(keyCode: Int, keyStatus: Int, keyType: Int) {
+        val snapshot: List<(Int, Int, Int) -> Unit>
+        synchronized(hardKeyListenersLock) {
+            snapshot = hardKeyListeners.toList()
+        }
+        for (listener in snapshot) {
+            oemSafe("hardKeyListener") { listener(keyCode, keyStatus, keyType) }
+        }
+        oemSafe("hardKeyDiagnostic") {
+            onHardKeyDiagnosticEvent?.invoke(keyCode, keyStatus, keyType)
+        }
+    }
+
+    private fun ensureHardKeyOemRegistered(): Result<Unit> {
+        if (hardKeyListenerProxy != null) return Result.success(Unit)
+        val availability = ensureInitialized()
+        if (availability !is MbCanAvailability.Available) {
+            return Result.failure(
+                IllegalStateException(
+                    (availability as? MbCanAvailability.Unavailable)?.reason ?: "mbCAN unavailable",
+                ),
+            )
+        }
+        val inst = engineInstance
+            ?: return Result.failure(IllegalStateException("MBCanEngine instance is null"))
+        return runCatching {
+            val iface = Class.forName("com.mengbo.mbCan.interfaces.IMBHardKeyListener")
+            val proxy = Proxy.newProxyInstance(
+                iface.classLoader,
+                arrayOf(iface),
+            ) { proxyObj, method, args ->
+                when {
+                    method.declaringClass == Any::class.java && method.name == "hashCode" ->
+                        System.identityHashCode(proxyObj)
+                    method.declaringClass == Any::class.java && method.name == "equals" ->
+                        proxyObj === args?.getOrNull(0)
+                    method.declaringClass == Any::class.java && method.name == "toString" ->
+                        "IMBHardKeyListenerProxy@" + Integer.toHexString(System.identityHashCode(proxyObj))
+                    method.name == "onHardKey" -> {
+                        oemSafe(method.name) {
+                            val keyCode = (args?.getOrNull(0) as? Number)?.toInt() ?: return@oemSafe
+                            val keyStatus = (args.getOrNull(1) as? Number)?.toInt() ?: return@oemSafe
+                            val keyType = (args.getOrNull(2) as? Number)?.toInt() ?: return@oemSafe
+                            dispatchHardKey(keyCode, keyStatus, keyType)
+                        }
+                        null
+                    }
+                    else -> null
+                }
+            }
+            val register = inst.javaClass.getMethod("registHardKeyListener", iface)
+            nativeCallLock.withLock { register.invoke(inst, proxy) }
+            hardKeyListenerProxy = proxy
+        }.onFailure {
+            hardKeyListenerProxy = null
+        }
+    }
+
+    private fun maybeUnregisterHardKeyOem(): Result<Unit> {
+        if (hardKeyHasConsumers()) return Result.success(Unit)
+        val inst = engineInstance
+        val proxy = hardKeyListenerProxy
+        hardKeyListenerProxy = null
+        if (inst == null || proxy == null) return Result.success(Unit)
+        return runCatching {
+            nativeCallLock.withLock {
+                inst.javaClass.getMethod("unRegistHardKeyListener").invoke(inst)
+            }
+        }
+    }
+
     @Synchronized
     fun syncLkaSlaStatusListener(active: Boolean) {
         if (!active) {
@@ -945,22 +1708,25 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onVehicleLkaSlaStatus") {
-                val status = args?.getOrNull(0) ?: return@InvocationHandler null
-                val slaOnOff = runCatching {
-                    status.javaClass.getMethod("getFCM_2_SLAOnOffsts").invoke(status) as? Number
-                }.getOrNull()?.toInt()
-                val slaState = runCatching {
-                    status.javaClass.getMethod("getFCM_2_SLAState").invoke(status) as? Number
-                }.getOrNull()?.toInt()
-                val slaLimit = runCatching {
-                    status.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(status) as? Number
-                }.getOrNull()?.toInt()
-                MbCanRepository.scheduleLkaSlaPush(
-                    slaOnOffRaw = slaOnOff,
-                    slaStateRaw = slaState,
-                    slaLimitRaw = slaLimit,
-                )
+            oemSafe(method.name) {
+
+                if (method.name == "onVehicleLkaSlaStatus") {
+                    val status = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val slaOnOff = runCatching {
+                        status.javaClass.getMethod("getFCM_2_SLAOnOffsts").invoke(status) as? Number
+                    }.getOrNull()?.toInt()
+                    val slaState = runCatching {
+                        status.javaClass.getMethod("getFCM_2_SLAState").invoke(status) as? Number
+                    }.getOrNull()?.toInt()
+                    val slaLimit = runCatching {
+                        status.javaClass.getMethod("getFCM_2_SLASpdlimit").invoke(status) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleLkaSlaPush(
+                        slaOnOffRaw = slaOnOff,
+                        slaStateRaw = slaState,
+                        slaLimitRaw = slaLimit,
+                    )
+                }
             }
             null
         }
@@ -1003,15 +1769,31 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onCanVehicleFrmInfo") {
-                val info = args?.getOrNull(0) ?: return@InvocationHandler null
-                val accMode = runCatching {
-                    info.javaClass.getMethod("getFRM_3_ACCMode").invoke(info) as? Number
-                }.getOrNull()?.toInt()
-                val vSetDis = runCatching {
-                    info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
-                }.getOrNull()?.toInt()
-                MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+            oemSafe(method.name) {
+
+                if (method.name == "onCanVehicleFrmInfo") {
+                    val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val accMode = runCatching {
+                        info.javaClass.getMethod("getFRM_3_ACCMode").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    val vSetDis = runCatching {
+                        info.javaClass.getMethod("getFRM_3_VSetDis").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleFrmAccPush(accModeRaw = accMode, vSetDisRaw = vSetDis)
+                    val dxTarObj = runCatching {
+                        info.javaClass.getMethod("getFRM_3_DxTarObj").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    val objValid = runCatching {
+                        info.javaClass.getMethod("getFRM_3_ObjValid").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleFrmDxTarObjPush(dxRaw = dxTarObj, objValidRaw = objValid)
+                    val timeGapIcm = runCatching {
+                        info.javaClass.getMethod("getFRM_3_TimeGapSet_ICM").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    if (timeGapIcm != null) {
+                        MbCanRepository.scheduleFrmTimeGapIcmPush(timeGapIcm)
+                    }
+                }
             }
             null
         }
@@ -1054,12 +1836,22 @@ object MbCanEngineFacade {
         }
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
-            if (method.name == "onVehicleGaspedStatus") {
-                val info = args?.getOrNull(0) ?: return@InvocationHandler null
-                val cruiseStatus = runCatching {
-                    info.javaClass.getMethod("getnCruiseControlStatus").invoke(info) as? Number
-                }.getOrNull()?.toInt()
-                MbCanRepository.scheduleGaspedCcsPush(cruiseControlStatusRaw = cruiseStatus)
+            oemSafe(method.name) {
+
+                if (method.name == "onVehicleGaspedStatus") {
+                    val info = args?.getOrNull(0) ?: return@InvocationHandler null
+                    val cruiseStatus = runCatching {
+                        info.javaClass.getMethod("getnCruiseControlStatus").invoke(info) as? Number
+                    }.getOrNull()?.toInt()
+                    MbCanRepository.scheduleGaspedCcsPush(cruiseControlStatusRaw = cruiseStatus)
+                    val position = runCatching {
+                        (info.javaClass.getMethod("getfGasPedalPosition").invoke(info) as? Number)?.toFloat()
+                    }.getOrNull()
+                    val invalid = runCatching {
+                        (info.javaClass.getMethod("getnGasPedalPositionInvalidData").invoke(info) as? Number)?.toInt()
+                    }.getOrNull()
+                    MbCanRepository.scheduleGasPedalPush(position, invalid)
+                }
             }
             null
         }

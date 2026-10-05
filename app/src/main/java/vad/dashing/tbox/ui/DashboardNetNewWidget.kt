@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -40,7 +39,7 @@ fun DashboardNetNewWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     @StringRes defaultTitleRes: Int = R.string.data_title_net_widget_new,
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val netState by viewModel.netState.collectAsStateWithLifecycle()
     val apnStatus by viewModel.apnStatus.collectAsStateWithLifecycle()
@@ -139,21 +138,21 @@ fun DashboardNetNewWidgetItem(
                 modifier = contentModifier.fillMaxWidth()
             ) {
                 Image(
-                    painter = painterResource(id = imageSignalRes),
+                    painter = customizableUiPainter(id = imageSignalRes),
                     contentDescription = netState.signalLevel.toString(),
                     contentScale = ContentScale.Fit,
-                    colorFilter = imageColorSignal.let { ColorFilter.tint(it) },
-                    modifier = Modifier.matchParentSize().scale(scale)
+                    colorFilter = uiIconColorFilter(imageSignalRes, imageColorSignal),
+                    modifier = Modifier.matchParentSize().scale(iconScale)
                 )
                 if (imageNetRes != null) {
                     Image(
-                        painter = painterResource(id = imageNetRes),
+                        painter = customizableUiPainter(id = imageNetRes),
                         contentDescription = netState.signalLevel.toString(),
                         contentScale = ContentScale.Fit,
-                        colorFilter = imageColorNet.let { ColorFilter.tint(it) },
+                        colorFilter = uiIconColorFilter(imageNetRes, imageColorNet),
                         modifier = Modifier
                             .matchParentSize()
-                            .scale(scale)
+                            .scale(iconScale)
                     )
                 }
             }

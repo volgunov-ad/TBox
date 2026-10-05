@@ -93,7 +93,7 @@ data class TripRecord(
         put(JSON_START, startTimeEpochMs)
         if (endTimeEpochMs != null) put(JSON_END, endTimeEpochMs)
         if (odometerStartKm != null) put(JSON_ODOMETER_START_KM, odometerStartKm.toLong())
-        put(JSON_DISTANCE_KM, distanceKm.toDouble())
+        put(JSON_DISTANCE_KM, TripDistanceFormat.roundKm(distanceKm).toDouble())
         put(JSON_MOVING_MS, movingTimeMs)
         put(JSON_IDLE_MS, idleTimeMs)
         put(JSON_PARKING_MS, parkingTimeMs)
@@ -123,7 +123,7 @@ data class TripRecord(
             odometerStartKm = if (o.has(JSON_ODOMETER_START_KM) && !o.isNull(JSON_ODOMETER_START_KM)) {
                 o.optLong(JSON_ODOMETER_START_KM).takeIf { it >= 0 }?.toUInt()
             } else null,
-            distanceKm = o.optDouble(JSON_DISTANCE_KM, 0.0).toFloat(),
+            distanceKm = TripDistanceFormat.roundKm(o.optDouble(JSON_DISTANCE_KM, 0.0).toFloat()),
             movingTimeMs = o.optLong(JSON_MOVING_MS),
             idleTimeMs = o.optLong(JSON_IDLE_MS),
             parkingTimeMs = o.optLong(JSON_PARKING_MS),

@@ -22,6 +22,21 @@ class HuTelemetryDecodeTest {
     }
 
     @Test
+    fun averageFuel_mbCanFloatAsIs() {
+        assertEquals(8.5f, AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(8.5f)!!, 0.001f)
+        assertNull(AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(0f))
+        assertNull(AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(-1f))
+        assertNull(AverageFuelConsumptionDomain.decodeMbCanLitersPer100Km(Float.NaN))
+    }
+
+    @Test
+    fun averageFuel_vhalRawDividedByTen() {
+        assertEquals(8.5f, AverageFuelConsumptionDomain.decodeVhalRaw(85)!!, 0.001f)
+        assertNull(AverageFuelConsumptionDomain.decodeVhalRaw(0))
+        assertNull(AverageFuelConsumptionDomain.decodeVhalRaw(-1))
+    }
+
+    @Test
     fun accCruise_jobManagerDoesNotOwnFrmOrGaspedSubscribe() {
         assertTrue(MbCanSignal.AccCruise.subscribeDataTypes.isEmpty())
     }

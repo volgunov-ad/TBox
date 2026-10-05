@@ -1,8 +1,30 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+/** Built-in MapKit key; override with MAPKIT_API_KEY in local.properties or in-app setting. */
+val mapkitApiKeyDefault = "ea04053c-558f-419e-8ccc-1a2bc3d3fcf0"
+val mapkitApiKeyRaw = localProperties.getProperty("MAPKIT_API_KEY", "").ifBlank {
+    mapkitApiKeyDefault
+}
+val mapkitApiKeyFromLocal =
+    mapkitApiKeyRaw.replace("\\", "\\\\").replace("\"", "\\\"")
+/**
+ * Flip to `true` to ship Yandex MapKit (~26 MB native lib per ABI) and the
+ * online basemap toggle. Off = Canvas-only road-match map; SDK code stays in
+ * `src/mapkitEnabled/` for a later re-enable.
+ */
+val mapkitEnabled = false
 
 android {
     namespace = "vad.dashing.tbox"
@@ -12,8 +34,8 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1814
-        versionName = "0.18.1"
+        versionCode = 10014
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
@@ -36,6 +58,17 @@ android {
             "UPDATE_SIGNING_CERT_SHA256",
             "\"\""
         )
+        buildConfigField(
+            "String",
+            "MAPKIT_API_KEY",
+            "\"$mapkitApiKeyFromLocal\"",
+        )
+        multiDexKeepProguard = file("multidex-keep.pro")
+        buildConfigField(
+            "boolean",
+            "MAPKIT_ENABLED",
+            mapkitEnabled.toString(),
+        )
     }
     flavorDimensions += "language"
     productFlavors {
@@ -46,6 +79,15 @@ android {
         create("en") {
             dimension = "language"
             versionNameSuffix = "-en"
+        }
+    }
+    signingConfigs {
+        // Same debug key on PC and Cursor Cloud so APKs install over each other.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
     buildTypes {
@@ -77,6 +119,18 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    lint {
+        // ComponentActivity / Compose Activity Result API; this app does not use Fragment.
+        // The detector still requires androidx.fragment >= 1.3.0 on the classpath.
+        disable += "InvalidFragmentVersionForActivityResult"
+    }
+    sourceSets {
+        getByName("main") {
+            java.srcDir(
+                if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
+            )
+        }
+    }
 }
 
 dependencies {
@@ -105,15 +159,37 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.profileinstaller.profileinstaller)
     implementation(libs.okhttp)
+    implementation(libs.zxing)
     implementation(libs.snakeyaml.engine)
+    if (mapkitEnabled) {
+        implementation(libs.yandex.mapkit.lite)
+    }
     implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.androidx.ui.test.manifest)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+// AGP 8.11 runs R8 and lintVital inside the Gradle daemon. Release builds of both
+// flavors schedule them together and the daemon OOMs. Keep these tasks in one chain.
+val memoryHeavyReleaseTasks = listOf(
+    "minifyRuReleaseWithR8",
+    "lintVitalAnalyzeRuRelease",
+    "minifyEnReleaseWithR8",
+    "lintVitalAnalyzeEnRelease",
+)
+
+tasks.configureEach {
+    val index = memoryHeavyReleaseTasks.indexOf(name)
+    if (index > 0) {
+        mustRunAfter(memoryHeavyReleaseTasks[index - 1])
+    }
 }

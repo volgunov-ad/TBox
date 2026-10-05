@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SpeedCam direction: oncoming (chevron down). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,20.0 L4.0,9.5 H8.8 V4.0 H15.2 V9.5 H20.0 Z"/>
+</vector>

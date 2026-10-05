@@ -8,6 +8,7 @@ import androidx.compose.ui.text.TextStyle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
+import vad.dashing.tbox.trip.TripDistanceFormat
 import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
@@ -74,7 +75,7 @@ fun ActiveTripCustomWidgetRows(
             ActiveTripCustomWidgetField.DISTANCE -> {
                 StatusRow(
                     label = stringResource(R.string.trips_distance),
-                    value = valueToString(trip.distanceKm, 0),
+                    value = valueToString(trip.distanceKm, TripDistanceFormat.DECIMALS),
                     unit = stringResource(R.string.unit_km),
                     style = rowStyle,
                     color = resolvedTextColor,

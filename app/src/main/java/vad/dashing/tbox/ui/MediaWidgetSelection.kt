@@ -72,6 +72,10 @@ fun MediaPlayersInlineSelection(
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     var pendingIconPackage by rememberSaveable { mutableStateOf<String?>(null) }
+    val iconSavedToast = stringResource(R.string.widget_app_launcher_icon_saved)
+    val iconTooLargeToast = stringResource(R.string.widget_app_launcher_icon_too_large)
+    val iconInvalidToast = stringResource(R.string.widget_app_launcher_icon_invalid)
+    val iconCopyFailedToast = stringResource(R.string.widget_app_launcher_icon_copy_failed)
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -80,14 +84,10 @@ fun MediaPlayersInlineSelection(
         if (uri == null) return@rememberLauncherForActivityResult
         settingsViewModel.setCustomLauncherAppIconFromUri(pkg, uri) { result ->
             val msg = when (result) {
-                SetLauncherAppCustomIconResult.Success ->
-                    context.getString(R.string.widget_app_launcher_icon_saved)
-                SetLauncherAppCustomIconResult.DimensionsTooLarge ->
-                    context.getString(R.string.widget_app_launcher_icon_too_large)
-                SetLauncherAppCustomIconResult.NotImageOrUnreadable ->
-                    context.getString(R.string.widget_app_launcher_icon_invalid)
-                SetLauncherAppCustomIconResult.CopyFailed ->
-                    context.getString(R.string.widget_app_launcher_icon_copy_failed)
+                SetLauncherAppCustomIconResult.Success -> iconSavedToast
+                SetLauncherAppCustomIconResult.DimensionsTooLarge -> iconTooLargeToast
+                SetLauncherAppCustomIconResult.NotImageOrUnreadable -> iconInvalidToast
+                SetLauncherAppCustomIconResult.CopyFailed -> iconCopyFailedToast
                 SetLauncherAppCustomIconResult.InvalidPackage -> null
             }
             if (msg != null) Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -97,6 +97,7 @@ fun MediaPlayersInlineSelection(
     val extraSupportedPlayers = remember(appPackageSet) {
         SupportedMediaPlayer.entries.filter { it.packageName !in appPackageSet }
     }
+    val extraPlayerTitles = extraSupportedPlayers.associateWith { stringResource(it.titleRes) }
     var filterText by rememberSaveable { mutableStateOf("") }
     val needle = filterText.trim().lowercase()
     val filtered = remember(apps, needle) {
@@ -109,12 +110,12 @@ fun MediaPlayersInlineSelection(
             }
         }
     }
-    val filteredExtraPlayers = remember(needle, extraSupportedPlayers, context) {
+    val filteredExtraPlayers = remember(needle, extraSupportedPlayers, extraPlayerTitles) {
         if (needle.isEmpty()) {
             extraSupportedPlayers
         } else {
             extraSupportedPlayers.filter { player ->
-                context.getString(player.titleRes).lowercase().contains(needle) ||
+                extraPlayerTitles[player].orEmpty().lowercase().contains(needle) ||
                     player.packageName.lowercase().contains(needle)
             }
         }

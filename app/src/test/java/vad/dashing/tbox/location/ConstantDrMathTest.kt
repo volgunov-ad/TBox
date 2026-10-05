@@ -172,6 +172,34 @@ class ConstantDrMathTest {
         assertEquals(0.15f, ConstantDrMath.mismatchScale(40.0, 40.0), 1e-3f)
     }
 
+    /**
+     * Field trap from `tbox_geo_debug_20260831_120555` (Moscow, CONSTANT):
+     * `mock.lat/lon=NaN` → `shadowDistM=Infinity`. Soft blend cannot scrub NaN;
+     * non-finite distance must zero soft weight and allow hard resync.
+     */
+    @Test
+    fun nonFiniteShadowDistance_allowsHardResyncAndZerosSoftBlend() {
+        assertEquals(
+            Double.POSITIVE_INFINITY,
+            ConstantDrMath.distanceMeters(Double.NaN, Double.NaN, 55.83, 37.40),
+            0.0,
+        )
+        assertEquals(
+            0f,
+            ConstantDrMath.mismatchScale(Double.POSITIVE_INFINITY, 25.0),
+            1e-3f,
+        )
+        assertTrue(ConstantDrMath.shouldHardResync(Double.POSITIVE_INFINITY, 25.0))
+        assertTrue(ConstantDrMath.shouldHardResync(Double.NaN, 25.0))
+        val blended = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 0.8f)
+        assertTrue(blended.first.isNaN())
+        assertTrue(blended.second.isNaN())
+        // Full-weight snap path recovers (hard resync / α=1).
+        val snapped = ConstantDrMath.blendLatLon(Double.NaN, Double.NaN, 55.83, 37.40, 1f)
+        assertEquals(55.83, snapped.first, 1e-9)
+        assertEquals(37.40, snapped.second, 1e-9)
+    }
+
     @Test
     fun speedScaleForGnssCourseGatesStationary() {
         assertEquals(0f, ConstantDrMath.speedScaleForGnssCourse(0.2f), 1e-3f)
@@ -220,5 +248,18 @@ class ConstantDrMathTest {
         val (lat, lon) = ConstantDrMath.extrapolateLatLon(55.0, 37.0, 0f, 111.32)
         assertTrue(lat > 55.0)
         assertEquals(37.0, lon, 1e-5)
+    }
+
+    @Test
+    fun extrapolateNonFiniteBearingOrPoseKeepsPoint() {
+        val (lat1, lon1) = ConstantDrMath.extrapolateLatLon(55.75, 37.62, Float.NaN, 50.0)
+        assertEquals(55.75, lat1, 0.0)
+        assertEquals(37.62, lon1, 0.0)
+        val (lat2, lon2) = ConstantDrMath.extrapolateLatLon(Double.NaN, 37.62, 90f, 50.0)
+        assertTrue(lat2.isNaN())
+        assertEquals(37.62, lon2, 0.0)
+        val (lat3, lon3) = ConstantDrMath.extrapolateLatLon(55.75, 37.62, Float.POSITIVE_INFINITY, 50.0)
+        assertEquals(55.75, lat3, 0.0)
+        assertEquals(37.62, lon3, 0.0)
     }
 }

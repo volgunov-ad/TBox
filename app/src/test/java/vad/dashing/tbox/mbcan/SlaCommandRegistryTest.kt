@@ -20,29 +20,19 @@ class SlaCommandRegistryTest {
     }
 
     @Test
-    fun speedLimiterSwitch_allowsOffOnAndRefreshesLimiterSignal() {
+    fun speedLimiterSwitch_allowsAnyIntAndRefreshesLimiterSignal() {
         val spec = MbCanCommandRegistry.get(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
         assertNotNull(spec)
-        val policy = spec!!.policy as MbCanCommandPolicy.SetExact
-        assertEquals(
-            setOf(
-                SlaSpeedLimitDomain.SPEED_LIMITER_SWITCH_OFF,
-                SlaSpeedLimitDomain.SPEED_LIMITER_SWITCH_ON,
-            ),
-            policy.allowedValues,
-        )
+        assertTrue(spec!!.policy is MbCanCommandPolicy.SetAnyInt)
         assertEquals(MbCanSignal.SpeedLimiter, spec.refreshSignal)
         assertEquals(254, MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_SWITCH)
     }
 
     @Test
-    fun speedLimiterTarget_allowsZeroTo150AndRefreshesLimiterSignal() {
+    fun speedLimiterTarget_allowsAnyIntAndRefreshesLimiterSignal() {
         val spec = MbCanCommandRegistry.get(MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
         assertNotNull(spec)
-        val policy = spec!!.policy as MbCanCommandPolicy.SetExact
-        assertTrue(policy.allowedValues.contains(0))
-        assertTrue(policy.allowedValues.contains(150))
-        assertEquals(151, policy.allowedValues.size)
+        assertTrue(spec!!.policy is MbCanCommandPolicy.SetAnyInt)
         assertEquals(MbCanSignal.SpeedLimiter, spec.refreshSignal)
         assertEquals(253, MbCanKnownVehiclePropertyId.VEHICLE_SPEEDLIMIT_VALUESET)
     }

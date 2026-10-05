@@ -16,7 +16,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -24,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.mbcan.WiperOperatingMode
 
 @Composable
 fun DashboardWiperMaintenanceWidgetItem(
@@ -35,14 +35,21 @@ fun DashboardWiperMaintenanceWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f
+    iconScale: Float = 1f
 ) {
     val state by UniversalCanRepository.wiperMaintenanceState.collectAsStateWithLifecycle()
+    val operatingMode by UniversalCanRepository.wiperOperatingModeState.collectAsStateWithLifecycle()
     val controls = LocalWidgetControlAppearance.current
     val iconColor = when (state) {
         is MbCanBinaryState.On -> controls.activeContent
         is MbCanBinaryState.Off -> controls.inactiveContent
         else -> controls.inactiveContent.copy(alpha = 0.25f)
+    }
+    val iconRes = when (operatingMode) {
+        WiperOperatingMode.Intermittent -> R.drawable.ic_widget_wiper_windshield_int
+        WiperOperatingMode.Low -> R.drawable.ic_widget_wiper_windshield_low
+        WiperOperatingMode.High -> R.drawable.ic_widget_wiper_windshield_high
+        WiperOperatingMode.Off, null -> R.drawable.ic_widget_wiper_windshield
     }
     val defaultTitle = stringResource(R.string.data_title_wiper_maintenance_widget)
     val titleText = titleOverride.trim().ifBlank { defaultTitle }
@@ -61,7 +68,7 @@ fun DashboardWiperMaintenanceWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             WidgetControlChrome(
@@ -70,11 +77,11 @@ fun DashboardWiperMaintenanceWidgetItem(
                 modifier = contentModifier.fillMaxWidth(),
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_widget_wiper_windshield),
+                    painter = customizableUiPainter(id = iconRes),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().scale(scale),
-                    colorFilter = ColorFilter.tint(iconColor)
+                    modifier = Modifier.fillMaxSize().scale(iconScale),
+                    colorFilter = uiIconColorFilter(iconRes, iconColor)
                 )
             }
         }

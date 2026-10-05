@@ -61,6 +61,10 @@ fun ThemesTabContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val toastSavedTo = stringResource(R.string.toast_saved_to)
+    val toastThemeCreateError = stringResource(R.string.toast_theme_create_error)
+    val toastThemeApplyError = stringResource(R.string.toast_theme_apply_error)
+    val toastThemeDriveModeError = stringResource(R.string.toast_theme_drive_mode_error)
 
     val activeThemeUri by settingsViewModel.activeThemeUri.collectAsStateWithLifecycle()
     val driveModeThemePaths by settingsViewModel.driveModeThemePaths.collectAsStateWithLifecycle()
@@ -92,6 +96,7 @@ fun ThemesTabContent(
     var includeTileBackgrounds by remember { mutableStateOf(true) }
     var includeFloatingPanels by remember { mutableStateOf(true) }
     var includeAppIcons by remember { mutableStateOf(true) }
+    var includeUiIcons by remember { mutableStateOf(true) }
     var themeExportBaseName by remember { mutableStateOf("") }
 
     var pendingThemeApply by remember { mutableStateOf<PendingThemeApply?>(null) }
@@ -113,14 +118,14 @@ fun ThemesTabContent(
         if (result.isSuccess) {
             Toast.makeText(
                 context,
-                context.getString(R.string.toast_saved_to, result.getOrNull()?.savedPath.orEmpty()),
+                toastSavedTo.format(result.getOrNull()?.savedPath.orEmpty()),
                 Toast.LENGTH_LONG,
             ).show()
         } else {
             val msg = result.exceptionOrNull()?.message.orEmpty()
             Toast.makeText(
                 context,
-                context.getString(R.string.toast_theme_create_error, msg),
+                toastThemeCreateError.format(msg),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -160,6 +165,7 @@ fun ThemesTabContent(
             tileBackgrounds = includeTileBackgrounds,
             floatingPanels = includeFloatingPanels,
             appIcons = includeAppIcons,
+            uiIcons = includeUiIcons,
         )
         if (applyTargets.isEmpty()) {
             Toast.makeText(context, R.string.themes_apply_targets_select_one, Toast.LENGTH_SHORT).show()
@@ -182,7 +188,7 @@ fun ThemesTabContent(
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_theme_apply_error, "theme_file_not_readable"),
+                        toastThemeApplyError.format("theme_file_not_readable"),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -193,7 +199,7 @@ fun ThemesTabContent(
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_theme_apply_error, "theme_apply_targets_empty"),
+                    toastThemeApplyError.format("theme_apply_targets_empty"),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -219,7 +225,7 @@ fun ThemesTabContent(
                 val msg = result.exceptionOrNull()?.message.orEmpty()
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_theme_apply_error, msg),
+                    toastThemeApplyError.format(msg),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -234,7 +240,7 @@ fun ThemesTabContent(
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
                         context,
-                        context.getString(R.string.toast_theme_drive_mode_error, "theme_file_not_readable"),
+                        toastThemeDriveModeError.format("theme_file_not_readable"),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -246,7 +252,7 @@ fun ThemesTabContent(
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_theme_drive_mode_error, "theme_apply_targets_empty"),
+                    toastThemeDriveModeError.format("theme_apply_targets_empty"),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -272,7 +278,7 @@ fun ThemesTabContent(
                 val msg = result.exceptionOrNull()?.message.orEmpty()
                 Toast.makeText(
                     context,
-                    context.getString(R.string.toast_theme_drive_mode_error, msg),
+                    toastThemeDriveModeError.format(msg),
                     Toast.LENGTH_LONG,
                 ).show()
             }
@@ -590,6 +596,7 @@ fun ThemesTabContent(
                             tileBackgrounds = includeTileBackgrounds,
                             floatingPanels = includeFloatingPanels,
                             appIcons = includeAppIcons,
+                            uiIcons = includeUiIcons,
                         ),
                         onTargetCheckedChange = { target, checked ->
                             when (target) {
@@ -598,6 +605,7 @@ fun ThemesTabContent(
                                 ThemeApplyTarget.TILE_BACKGROUNDS -> includeTileBackgrounds = checked
                                 ThemeApplyTarget.FLOATING_PANELS -> includeFloatingPanels = checked
                                 ThemeApplyTarget.APP_ICONS -> includeAppIcons = checked
+                                ThemeApplyTarget.UI_ICONS -> includeUiIcons = checked
                             }
                         },
                     )
@@ -843,7 +851,7 @@ fun ThemesTabContent(
                                     val msg = result.exceptionOrNull()?.message.orEmpty()
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.toast_theme_apply_error, msg),
+                                        toastThemeApplyError.format(msg),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 }
@@ -913,7 +921,7 @@ fun ThemesTabContent(
                                     val msg = result.exceptionOrNull()?.message.orEmpty()
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.toast_theme_drive_mode_error, msg),
+                                        toastThemeDriveModeError.format(msg),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                 }
@@ -944,12 +952,14 @@ private fun buildApplyTargets(
     tileBackgrounds: Boolean,
     floatingPanels: Boolean,
     appIcons: Boolean,
+    uiIcons: Boolean,
 ): Set<ThemeApplyTarget> = buildSet {
     if (mainScreenPanels) add(ThemeApplyTarget.MAIN_SCREEN_PANELS)
     if (mainScreenWallpapers) add(ThemeApplyTarget.MAIN_SCREEN_WALLPAPERS)
     if (tileBackgrounds) add(ThemeApplyTarget.TILE_BACKGROUNDS)
     if (floatingPanels) add(ThemeApplyTarget.FLOATING_PANELS)
     if (appIcons) add(ThemeApplyTarget.APP_ICONS)
+    if (uiIcons) add(ThemeApplyTarget.UI_ICONS)
 }
 
 private data class PendingThemeExport(

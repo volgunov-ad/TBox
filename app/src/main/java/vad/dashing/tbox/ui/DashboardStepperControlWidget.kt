@@ -17,18 +17,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 import vad.dashing.tbox.R
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.resolveStepperAdjustIconDrawableRes
 
 private const val STEPPER_SWIPE_STEP_PX = 58f
@@ -64,6 +66,8 @@ fun DashboardStepperControlWidget(
     titleText: String,
 ) {
     var swipeAccumulator by remember(isVertical) { mutableFloatStateOf(0f) }
+    val onIncreaseLatest by rememberUpdatedState(onIncrease)
+    val onDecreaseLatest by rememberUpdatedState(onDecrease)
     val controls = LocalWidgetControlAppearance.current
     val contentColor = if (controlsActive) controls.activeContent else controls.inactiveContent
     val chromeBackground =
@@ -77,7 +81,7 @@ fun DashboardStepperControlWidget(
                     swipeAccumulator += primaryDelta
                     while (abs(swipeAccumulator) >= STEPPER_SWIPE_STEP_PX) {
                         val shouldIncrease = swipeAccumulator > 0f
-                        if (shouldIncrease) onIncrease() else onDecrease()
+                        if (shouldIncrease) onIncreaseLatest() else onDecreaseLatest()
                         swipeAccumulator += if (shouldIncrease) -STEPPER_SWIPE_STEP_PX else STEPPER_SWIPE_STEP_PX
                     }
                 },
@@ -106,7 +110,7 @@ fun DashboardStepperControlWidget(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp),
+                .widgetControlOuterPadding(controls),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) { contentModifier ->
             if (isVertical) {
@@ -230,19 +234,20 @@ private fun StepperAdjustIcon(
     tint: Color,
     @StringRes contentDescriptionRes: Int,
 ) {
-    Icon(
-        painter = painterResource(
-            resolveStepperAdjustIconDrawableRes(
-                increase = increase,
-                isVertical = isVertical,
-                style = adjustIconStyle,
-            )
-        ),
+    val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
+    val drawableRes = resolveStepperAdjustIconDrawableRes(
+        increase = increase,
+        isVertical = isVertical,
+        style = adjustIconStyle,
+    )
+    CustomizableUiIcon(
+        drawableRes = drawableRes,
         contentDescription = stringResource(contentDescriptionRes),
         tint = tint,
         modifier = Modifier
             .fillMaxHeight(0.58f)
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .scale(iconScale),
     )
 }
 

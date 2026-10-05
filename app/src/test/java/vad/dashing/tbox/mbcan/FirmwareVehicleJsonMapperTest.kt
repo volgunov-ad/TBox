@@ -40,6 +40,18 @@ class FirmwareVehicleJsonMapperTest {
     }
 
     @Test
+    fun anionPurify_resolvesSeparateStockReadAndWriteIds() {
+        assertEquals(
+            289_415_191,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.HVAC_AQS),
+        )
+        assertEquals(
+            289_415_310,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.HVAC_AQS),
+        )
+    }
+
+    @Test
     fun driveMode6dctWet_usesSameTPropertyForReadAndWrite_asStockCarSettings() {
         // Stock A10 CarSettings registers/reads T_0401_IHU_9_DriveMode_6DCT_Wet for both directions.
         assertEquals(
@@ -104,6 +116,58 @@ class FirmwareVehicleJsonMapperTest {
         assertEquals(
             289_412_705,
             FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.MIRROR_FOLD_SWITCH),
+        )
+    }
+
+    @Test
+    fun icmBrightness_resolvesCertifiedReadAndWriteIds() {
+        assertEquals(
+            289_415_087,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL),
+        )
+        assertEquals(
+            289_415_087,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MANUAL),
+        )
+        assertEquals(
+            289_415_088,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE),
+        )
+        assertEquals(
+            289_415_088,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ICM_BRIGHTNESS_MODE),
+        )
+    }
+
+    @Test
+    fun parkingRadarAndDistanceWarning_useDistinctStockWriteIds() {
+        assertEquals(
+            289_415_942,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.PARKING_RADAR_SWITCH),
+        )
+        assertEquals(
+            289_415_940,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING),
+        )
+    }
+
+    @Test
+    fun accTimeGapAndLdwSwitch_resolveStockVhalIds() {
+        assertEquals(
+            289_415_688,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET),
+        )
+        assertEquals(
+            289_415_938,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET),
+        )
+        assertEquals(
+            289_415_717,
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.LDW_SWITCH),
+        )
+        assertEquals(
+            289_415_056,
+            FirmwareVehicleJsonMapper.resolveWritePropertyId(MbCanKnownVehiclePropertyId.LDW_SWITCH),
         )
     }
 }

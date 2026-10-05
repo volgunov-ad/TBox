@@ -23,6 +23,23 @@ object HttpRequestIconPaths {
     fun liveIconFile(iconsDir: File, iconKey: String): File =
         File(iconsDir, iconKey.trim())
 
+    /** Destination for a new HTTP-request icon write (theme cache when APP_ICONS is active). */
+    fun destinationIconFile(
+        filesDir: File,
+        iconKey: String,
+        lookup: LauncherAppIconPaths.Lookup,
+    ): File? {
+        val key = iconKey.trim()
+        if (key.isEmpty()) return null
+        if (ThemeApplyTarget.APP_ICONS in lookup.activeThemeApplyTargets) {
+            val cacheKey = lookup.activeThemeCacheKey.trim()
+            if (ThemeCacheKeys.isLikelyCacheKey(cacheKey)) {
+                return liveIconFile(themeIconsDir(filesDir, cacheKey), key)
+            }
+        }
+        return liveIconFile(sharedIconsDir(filesDir), key)
+    }
+
     fun resolveStoredIconFile(iconsDir: File, iconKey: String): File? {
         val key = iconKey.trim()
         if (key.isEmpty()) return null

@@ -8,7 +8,6 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Intent
-import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +25,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,32 +35,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
-import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.HeadUnitCanMode
-import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SetLauncherAppCustomIconResult
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-
-internal data class LaunchableAppEntry(
-    val packageName: String,
-    val label: String,
-    val icon: ImageBitmap?
-)
 
 private data class FreeformOverlayPageDropdownOption(
     val page: Int?,
@@ -69,79 +61,9 @@ private data class FreeformOverlayPageDropdownOption(
     override fun toString(): String = label
 }
 
-/**
- * In-process list of launcher apps with decoded icons. Survives closing the widget dialog so
- * reopening the picker on the same screen does not re-query and re-decode. Cleared when the host
- * [androidx.lifecycle.LifecycleOwner] receives [Lifecycle.Event.ON_DESTROY].
- */
-private object LaunchableAppsWithIconsCache {
-    private var cachedIconSizePx: Int? = null
-    private var cachedIconRevision: Int? = null
-    private var cachedLookup: LauncherAppIconPaths.Lookup? = null
-    private var entries: List<LaunchableAppEntry>? = null
-
-    fun getOrLoad(
-        iconSizePx: Int,
-        iconRevision: Int,
-        lookup: LauncherAppIconPaths.Lookup,
-        load: () -> List<LaunchableAppEntry>,
-    ): List<LaunchableAppEntry> {
-        synchronized(this) {
-            if (cachedIconSizePx == iconSizePx &&
-                cachedIconRevision == iconRevision &&
-                cachedLookup == lookup &&
-                entries != null
-            ) {
-                return entries!!
-            }
-            val list = load()
-            cachedIconSizePx = iconSizePx
-            cachedIconRevision = iconRevision
-            cachedLookup = lookup
-            entries = list
-            return list
-        }
-    }
-
-    fun clear() {
-        synchronized(this) {
-            cachedIconSizePx = null
-            cachedIconRevision = null
-            cachedLookup = null
-            entries = null
-        }
-    }
-}
-
 /** Drop decoded picker icons when the host Compose tree is torn down (Activity or overlay). */
 internal fun disposeAppLauncherPickerIconCache() {
-    LaunchableAppsWithIconsCache.clear()
-}
-
-private fun loadLaunchableAppEntries(
-    appContext: Context,
-    iconSizePx: Int,
-    lookup: LauncherAppIconPaths.Lookup,
-    @Suppress("UNUSED_PARAMETER") iconRevision: Int,
-): List<LaunchableAppEntry> {
-    val pm = appContext.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).apply {
-        addCategory(Intent.CATEGORY_LAUNCHER)
-    }
-    @Suppress("QueryPermissionsNeeded", "DEPRECATION")
-    val resolves: List<ResolveInfo> = pm.queryIntentActivities(intent, 0)
-    return resolves
-        .map { ri ->
-            val pkg = ri.activityInfo.packageName
-            val label = ri.loadLabel(pm).toString()
-            val bitmap = decodeLauncherAppCustomIconIfPresent(appContext, pkg, iconSizePx, lookup)
-                ?: runCatching {
-                    ri.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-                }.getOrNull()
-            LaunchableAppEntry(packageName = pkg, label = label, icon = bitmap)
-        }
-        .distinctBy { it.packageName }
-        .sortedBy { it.label.lowercase() }
+    LaunchableAppsCatalog.clearIcons()
 }
 
 @Composable
@@ -151,12 +73,31 @@ internal fun rememberLaunchableAppEntries(
 ): List<LaunchableAppEntry> {
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val lifecycleOwner = LocalLifecycleOwner.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconSizePx = remember(appContext) {
         (48f * appContext.resources.displayMetrics.density).toInt().coerceIn(32, 96)
     }
-    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup) {
-        LaunchableAppsWithIconsCache.getOrLoad(iconSizePx, launcherIconRevision, iconLookup) {
+    val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
+    DisposableEffect(appContext, lifecycleOwner) {
+        LaunchableAppsCatalog.ensurePackageChangeWatcher(appContext)
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                LaunchableAppsCatalog.refreshIfLaunchablePackagesChanged(appContext)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+    return remember(appContext, iconSizePx, launcherIconRevision, iconLookup, packagesRevision) {
+        LaunchableAppsCatalog.getOrLoad(
+            iconSizePx,
+            launcherIconRevision,
+            packagesRevision,
+            iconLookup,
+        ) {
             loadLaunchableAppEntries(appContext, iconSizePx, iconLookup, launcherIconRevision)
         }
     }
@@ -211,6 +152,11 @@ internal fun AppLauncherWidgetSettingsSection(
             .resolveActivity(context.packageManager) != null
     }
     var pendingIconPackage by rememberSaveable { mutableStateOf<String?>(null) }
+    val iconSavedToast = stringResource(R.string.widget_app_launcher_icon_saved)
+    val iconTooLargeToast = stringResource(R.string.widget_app_launcher_icon_too_large)
+    val iconInvalidToast = stringResource(R.string.widget_app_launcher_icon_invalid)
+    val iconCopyFailedToast = stringResource(R.string.widget_app_launcher_icon_copy_failed)
+    val wallpaperNoPickerToast = stringResource(R.string.settings_main_screen_wallpaper_no_picker)
     val pickCustomIcon = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -221,14 +167,10 @@ internal fun AppLauncherWidgetSettingsSection(
         if (uri == null) return@rememberLauncherForActivityResult
         settingsViewModel.setCustomLauncherAppIconFromUri(pkg, uri) { result ->
             val msg = when (result) {
-                SetLauncherAppCustomIconResult.Success ->
-                    context.getString(R.string.widget_app_launcher_icon_saved)
-                SetLauncherAppCustomIconResult.DimensionsTooLarge ->
-                    context.getString(R.string.widget_app_launcher_icon_too_large)
-                SetLauncherAppCustomIconResult.NotImageOrUnreadable ->
-                    context.getString(R.string.widget_app_launcher_icon_invalid)
-                SetLauncherAppCustomIconResult.CopyFailed ->
-                    context.getString(R.string.widget_app_launcher_icon_copy_failed)
+                SetLauncherAppCustomIconResult.Success -> iconSavedToast
+                SetLauncherAppCustomIconResult.DimensionsTooLarge -> iconTooLargeToast
+                SetLauncherAppCustomIconResult.NotImageOrUnreadable -> iconInvalidToast
+                SetLauncherAppCustomIconResult.CopyFailed -> iconCopyFailedToast
                 SetLauncherAppCustomIconResult.InvalidPackage -> null
             }
             if (msg != null) {
@@ -250,6 +192,7 @@ internal fun AppLauncherWidgetSettingsSection(
                     add(AppLauncherLaunchMode.STOCK_WINDOW)
                 }
                 add(AppLauncherLaunchMode.FREEFORM)
+                add(AppLauncherLaunchMode.VIRTUAL_DISPLAY)
             }
         }
         LaunchedEffect(showStockWindowMode, state.launcherLaunchMode) {
@@ -279,6 +222,14 @@ internal fun AppLauncherWidgetSettingsSection(
             enabled = state.togglesEnabled,
             options = localizedLaunchModes,
             selectorWidth = WidgetDialogDropdownSelectorWidth,
+        )
+        Text(
+            text = stringResource(R.string.widget_app_launcher_double_tap_force_stop_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
         )
         if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
             LaunchedEffect(mainScreenPageCount) {
@@ -357,6 +308,11 @@ internal fun AppLauncherWidgetSettingsSection(
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
+            )
+        } else if (state.launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+            VirtualDisplayLaunchSettings(
+                state = state,
+                settingsViewModel = settingsViewModel,
             )
         }
         Text(
@@ -453,7 +409,7 @@ internal fun AppLauncherWidgetSettingsSection(
                                     } else {
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.settings_main_screen_wallpaper_no_picker),
+                                            wallpaperNoPickerToast,
                                             Toast.LENGTH_LONG
                                         ).show()
                                     }
@@ -508,4 +464,146 @@ private data class FreeformSideDropdownOption(
     val label: String,
 ) {
     override fun toString(): String = label
+}
+
+private data class VirtualDisplayDropdownOption(
+    val displayId: Int?,
+    val widthPx: Int?,
+    val heightPx: Int?,
+    val label: String,
+) {
+    override fun toString(): String = label
+}
+
+@Composable
+private fun VirtualDisplayLaunchSettings(
+    state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
+) {
+    val context = LocalContext.current
+    val displaysJson by settingsViewModel.huVirtualDisplaysJson.collectAsStateWithLifecycle()
+    val refreshing by settingsViewModel.huVirtualDisplaysRefreshing.collectAsStateWithLifecycle()
+    val cachedDisplays = remember(displaysJson) {
+        vad.dashing.tbox.adb.HuDisplayInfo.listFromJson(displaysJson)
+    }
+    val pickerDisplays = remember(cachedDisplays) {
+        vad.dashing.tbox.adb.VirtualDisplayTargetResolver.forPicker(cachedDisplays)
+    }
+    val noneLabel = stringResource(R.string.widget_app_launcher_virtual_display_none)
+    val unknownDisplayTemplate =
+        stringResource(R.string.widget_app_launcher_virtual_display_unknown)
+    val refreshOkTemplate =
+        stringResource(R.string.widget_app_launcher_virtual_display_refresh_ok)
+    val refreshFailTemplate =
+        stringResource(R.string.widget_app_launcher_virtual_display_refresh_fail)
+    val options = remember(
+        pickerDisplays,
+        state.launcherVirtualDisplayId,
+        noneLabel,
+        unknownDisplayTemplate,
+    ) {
+        buildList {
+            add(VirtualDisplayDropdownOption(null, null, null, noneLabel))
+            val ids = pickerDisplays.map { it.displayId }.toSet()
+            pickerDisplays.forEach { info ->
+                add(
+                    VirtualDisplayDropdownOption(
+                        info.displayId,
+                        info.widthPx,
+                        info.heightPx,
+                        info.label(),
+                    ),
+                )
+            }
+            val selected = state.launcherVirtualDisplayId
+            if (selected != null && selected > 0 && selected !in ids) {
+                val w = state.launcherVirtualDisplayWidthPx
+                val h = state.launcherVirtualDisplayHeightPx
+                val sizeSuffix = if (w != null && h != null && w > 0 && h > 0) {
+                    " · ${w}×${h}"
+                } else {
+                    ""
+                }
+                add(
+                    VirtualDisplayDropdownOption(
+                        selected,
+                        w,
+                        h,
+                        unknownDisplayTemplate.format(selected) + sizeSuffix,
+                    ),
+                )
+            }
+        }
+    }
+    // Remap selected id when cache refreshes and size is known.
+    LaunchedEffect(pickerDisplays, state.launcherVirtualDisplayId, state.launcherVirtualDisplayWidthPx) {
+        val preferredId = state.launcherVirtualDisplayId ?: return@LaunchedEffect
+        val resolved = vad.dashing.tbox.adb.VirtualDisplayTargetResolver.resolve(
+            preferredId = preferredId,
+            preferredWidth = state.launcherVirtualDisplayWidthPx,
+            preferredHeight = state.launcherVirtualDisplayHeightPx,
+            catalog = cachedDisplays,
+        )
+        if (resolved is vad.dashing.tbox.adb.VirtualDisplayTargetResolver.ResolveResult.Matched &&
+            resolved.remapped
+        ) {
+            state.launcherVirtualDisplayId = resolved.display.displayId
+            state.launcherVirtualDisplayWidthPx = resolved.display.widthPx
+            state.launcherVirtualDisplayHeightPx = resolved.display.heightPx
+        }
+    }
+    val selectedOption = options.firstOrNull { it.displayId == state.launcherVirtualDisplayId }
+        ?: options.first()
+    SettingDropdownGeneric(
+        selectedValue = selectedOption,
+        onValueChange = {
+            state.launcherVirtualDisplayId = it.displayId
+            state.launcherVirtualDisplayWidthPx = it.widthPx
+            state.launcherVirtualDisplayHeightPx = it.heightPx
+        },
+        text = stringResource(R.string.widget_app_launcher_virtual_display),
+        description = stringResource(R.string.widget_app_launcher_virtual_display_desc),
+        enabled = state.togglesEnabled && !refreshing,
+        options = options,
+        selectorWidth = WidgetDialogDropdownSelectorWidth,
+    )
+    OutlinedButton(
+        onClick = rememberWrappedOnClick {
+            settingsViewModel.refreshHuVirtualDisplays(context) { outcome ->
+                val msg = when (outcome) {
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Success -> {
+                        val pickerCount =
+                            vad.dashing.tbox.adb.VirtualDisplayTargetResolver
+                                .forPicker(outcome.displays)
+                                .size
+                        refreshOkTemplate.format(pickerCount)
+                    }
+                    is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
+                        refreshFailTemplate.format(outcome.reason.name)
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        },
+        enabled = state.togglesEnabled && !refreshing,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(
+                if (refreshing) {
+                    R.string.widget_app_launcher_virtual_display_refreshing
+                } else {
+                    R.string.widget_app_launcher_virtual_display_refresh
+                },
+            ),
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    Text(
+        text = stringResource(R.string.widget_app_launcher_virtual_display_hint),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 8.dp),
+    )
 }

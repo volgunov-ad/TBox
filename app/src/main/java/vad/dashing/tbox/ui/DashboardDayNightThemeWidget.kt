@@ -16,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,7 +35,7 @@ fun DashboardDayNightThemeWidgetItem(
     backgroundColor: Color,
     showTitle: Boolean = false,
     titleOverride: String = "",
-    scale: Float = 1f,
+    iconScale: Float = 1f,
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -101,7 +100,7 @@ fun DashboardDayNightThemeWidgetItem(
             resolvedTextColor = resolvedTextColor,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(4.dp)
+                .widgetControlOuterPadding(controls)
                 .wrapContentHeight(Alignment.CenterVertically),
         ) { contentModifier ->
             Box(
@@ -124,11 +123,11 @@ fun DashboardDayNightThemeWidgetItem(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     Image(
-                        painter = painterResource(iconRes),
+                        painter = customizableUiPainter(iconRes),
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.matchParentSize().scale(scale),
-                        colorFilter = ColorFilter.tint(iconColor)
+                        modifier = Modifier.matchParentSize().scale(iconScale),
+                        colorFilter = uiIconColorFilter(iconRes, iconColor)
                     )
                 }
             }

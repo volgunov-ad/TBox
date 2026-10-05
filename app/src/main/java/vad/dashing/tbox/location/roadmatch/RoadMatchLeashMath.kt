@@ -129,14 +129,17 @@ object RoadMatchLeashMath {
         xtGrowing: Boolean,
         turning: Boolean = false,
         courtyardLike: Boolean = false,
+        breakXtM: Double = BREAK_XT_M,
+        breakYardXtM: Double = BREAK_XT_YARD_M,
+        breakPathM: Double = BREAK_PATH_M,
     ): Boolean {
         // Mid-circle xt is to the old chord, not a courtyard leave (`151302`).
         if (turning) return false
         if (!crossTrackM.isFinite() || !leavingPathM.isFinite()) return false
-        val xtLimit = if (courtyardLike) BREAK_XT_YARD_M else BREAK_XT_M
+        val xtLimit = if (courtyardLike) breakYardXtM else breakXtM
         if (crossTrackM < xtLimit) return false
-        if (leavingPathM >= BREAK_PATH_M) return true
-        return xtGrowing && leavingPathM >= BREAK_PATH_M * 0.5
+        if (leavingPathM >= breakPathM) return true
+        return xtGrowing && leavingPathM >= breakPathM * 0.5
     }
 
     /** How many distinct travel headings are in [azimuths] (wrap-aware). */
@@ -171,11 +174,17 @@ object RoadMatchLeashMath {
         return true
     }
 
-    fun shouldPromoteFree(posDistM: Double, headingDeltaDeg: Float): Boolean {
+    fun shouldPromoteFree(
+        posDistM: Double,
+        headingDeltaDeg: Float,
+        promotePosM: Double = PROMOTE_POS_M,
+        promotePosWithHeadingM: Double = PROMOTE_POS_WITH_HEADING_M,
+        promoteHeadingDeg: Float = PROMOTE_HEADING_DEG,
+    ): Boolean {
         if (!posDistM.isFinite() || !headingDeltaDeg.isFinite()) return false
-        if (posDistM >= PROMOTE_POS_M) return true
-        return posDistM >= PROMOTE_POS_WITH_HEADING_M &&
-            headingDeltaDeg >= PROMOTE_HEADING_DEG
+        if (posDistM >= promotePosM) return true
+        return posDistM >= promotePosWithHeadingM &&
+            headingDeltaDeg >= promoteHeadingDeg
     }
 
     /**

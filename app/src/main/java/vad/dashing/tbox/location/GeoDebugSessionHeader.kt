@@ -28,6 +28,7 @@ object GeoDebugSessionHeader {
         maxFileBytes: Long,
         part: Int = 1,
         continuedFrom: String? = null,
+        roadMatchTuningOverrides: String = "-",
     ): String {
         val cont = if (continuedFrom.isNullOrBlank()) {
             ""
@@ -40,6 +41,7 @@ object GeoDebugSessionHeader {
             "# logPeriodMs=$logPeriodMs\n" +
             "# maxFileBytes=$maxFileBytes\n" +
             "# part=$part\n" +
+            "# roadMatchTuning.overrides=$roadMatchTuningOverrides\n" +
             cont
     }
 }
