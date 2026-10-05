@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -36,9 +37,12 @@ object UniversalCanRepository {
     private const val AUTO_BIND_ATTEMPTS_PER_MODE = 3
     private const val AUTO_BIND_ATTEMPT_TIMEOUT_MS = 3_500L
     private const val AUTO_BIND_ATTEMPT_PAUSE_MS = 1_200L
+    /** After the fast startup attempts fail, keep retrying the same mode until it connects. */
+    private const val AUTO_BIND_LATE_RETRY_MS = 10_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
+    private var lateRetryJob: Job? = null
     private val modeSwitchMutex = Mutex()
     private val sourceWidgetKeys = ConcurrentHashMap<String, Set<String>>()
     private val sourceSignals = ConcurrentHashMap<String, Set<MbCanSignal>>()
@@ -1104,6 +1108,9 @@ object UniversalCanRepository {
     }
 
     suspend fun setMode(mode: HeadUnitCanMode) {
+        if (_mode.value != mode) {
+            cancelLateRetries()
+        }
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
         }
@@ -1116,6 +1123,7 @@ object UniversalCanRepository {
     }
 
     suspend fun unbind() {
+        cancelLateRetries()
         modeSwitchMutex.withLock {
             unbindLocked()
         }
@@ -1290,6 +1298,7 @@ object UniversalCanRepository {
         scope: CoroutineScope,
     ) {
         modeSwitchMutex.withLock {
+            cancelLateRetries()
             val enabled = settingsManager.canAutoBindEnabledFlow.first()
             val locked = settingsManager.canAutoBindLockedFlow.first()
             val lastResult = settingsManager.canAutoBindLastResultFlow.first()
@@ -1389,6 +1398,7 @@ object UniversalCanRepository {
                 "WARN",
                 "AUTO_CAN locked after failed retries; reverted to ${primaryMode.storageValue}"
             )
+            scheduleLateRetries(settingsManager, scope, primaryMode)
         }
     }
 
@@ -1431,6 +1441,7 @@ object UniversalCanRepository {
             "WARN",
             "AUTO_CAN pinned unavailable mode=${mode.storageValue} reason=$reason"
         )
+        scheduleLateRetries(settingsManager, scope, mode)
     }
 
     private suspend fun pinMode(settingsManager: SettingsManager, result: String) {
@@ -1440,6 +1451,73 @@ object UniversalCanRepository {
 
     private fun compactAutoBindReason(reason: String?): String =
         reason.orEmpty().replace('\n', ' ').take(240)
+
+    /**
+     * Startup attempts are done and this [mode] is the one to keep.
+     * Retry it every [AUTO_BIND_LATE_RETRY_MS] until it connects, the mode changes, or the service stops.
+     */
+    private fun scheduleLateRetries(
+        settingsManager: SettingsManager,
+        scope: CoroutineScope,
+        mode: HeadUnitCanMode,
+    ) {
+        lateRetryJob?.cancel()
+        MbCanDiagnostics.log(
+            "INFO",
+            "AUTO_CAN late retry scheduled mode=${mode.storageValue} intervalMs=$AUTO_BIND_LATE_RETRY_MS"
+        )
+        lateRetryJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                delay(AUTO_BIND_LATE_RETRY_MS)
+                attempt += 1
+                val connected = modeSwitchMutex.withLock {
+                    if (_mode.value != mode) {
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN late retry stopped: mode changed to ${_mode.value.storageValue}"
+                        )
+                        return@withLock null
+                    }
+                    if (availability.value is MbCanAvailability.Available) {
+                        return@withLock true
+                    }
+                    unbindLocked()
+                    bindLocked(scope)
+                    val result = waitForAvailability(
+                        timeoutMs = AUTO_BIND_ATTEMPT_TIMEOUT_MS,
+                        onTimeoutProbe = { warmUpAvailabilityForUiLocked() }
+                    )
+                    MbCanDiagnostics.log(
+                        "INFO",
+                        "AUTO_CAN late retry attempt=$attempt mode=${mode.storageValue} " +
+                            "result=${result.summary}"
+                    )
+                    result.success
+                }
+                when (connected) {
+                    null -> return@launch
+                    true -> {
+                        settingsManager.saveCanAutoBindLocked(true)
+                        settingsManager.saveCanAutoBindLastResult(
+                            "${CanAutoBindPolicy.PINNED_OK_PREFIX}${mode.storageValue}:late=$attempt"
+                        )
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN late retry success mode=${mode.storageValue} attempt=$attempt"
+                        )
+                        return@launch
+                    }
+                    false -> Unit
+                }
+            }
+        }
+    }
+
+    private fun cancelLateRetries() {
+        lateRetryJob?.cancel()
+        lateRetryJob = null
+    }
 
     private suspend fun bindModeWithRetries(
         mode: HeadUnitCanMode,
@@ -1544,6 +1622,7 @@ object UniversalCanRepository {
 
     private suspend fun setModeLocked(mode: HeadUnitCanMode, rebindIfBound: Boolean) {
         if (_mode.value == mode) return
+        cancelLateRetries()
         _mode.value = mode
         if (!rebindIfBound) return
         val scopeToRebind = boundScope ?: return
