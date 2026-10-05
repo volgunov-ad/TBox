@@ -124,6 +124,8 @@ internal class FloatingOverlayController(
 ) {
     private var windowManager: WindowManager? = null
     private val overlayViews = linkedMapOf<String, ComposeView>()
+    /** Main-thread only: panels whose fade-out is running; window is still attached. */
+    private val closingOverlayFinishers = mutableMapOf<String, () -> Unit>()
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
@@ -272,6 +274,7 @@ internal class FloatingOverlayController(
                     Log.e(TAG, "closeAllOverlays failed for $id", e)
                 }
             }
+            finishClosingOverlays()
             try {
                 removeMainScreenWindowImmediate()
             } catch (e: Exception) {
@@ -941,6 +944,7 @@ internal class FloatingOverlayController(
             TboxRepository.addLog("DEBUG", TAG, "Already shown: ${config.id}")
             return
         }
+        finishClosingOverlays(config.id)
 
         if (!Settings.canDrawOverlays(service)) {
             TboxRepository.addLog("ERROR", TAG, "Cannot draw overlay")
@@ -1070,16 +1074,41 @@ internal class FloatingOverlayController(
         }
     }
 
+    /** Ends fade-outs still in flight so their windows are removed before re-open / teardown. */
+    private fun finishClosingOverlays(panelId: String? = null) {
+        val finishers = if (panelId == null) {
+            closingOverlayFinishers.values.toList()
+        } else {
+            listOfNotNull(closingOverlayFinishers[panelId])
+        }
+        finishers.forEach { finish ->
+            try {
+                finish()
+            } catch (e: Exception) {
+                Log.e(TAG, "finishClosingOverlays failed", e)
+            }
+        }
+    }
+
     private fun closeOverlay(panelId: String, immediate: Boolean = false) {
         val view = overlayViews.remove(panelId) ?: return
         overlayParams.remove(panelId)
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
+        val wm = windowManager
+        var finished = false
 
         fun finishClose() {
+            if (finished) return
+            finished = true
+            closingOverlayFinishers.remove(panelId)
+            try {
+                view.animate().cancel()
+            } catch (_: Exception) {
+            }
             try {
                 if (view.isAttachedToWindow) {
-                    windowManager?.removeView(view)
+                    wm?.removeView(view)
                 }
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", TAG, "Error removing view")
@@ -1098,6 +1127,8 @@ internal class FloatingOverlayController(
         }
 
         if (!immediate && view.isAttachedToWindow && view.alpha > 0f) {
+            finishClosingOverlays(panelId)
+            closingOverlayFinishers[panelId] = { finishClose() }
             try {
                 view.animate()
                     .alpha(0f)
