@@ -1,7 +1,10 @@
 package vad.dashing.tbox.esp
 
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.LocValues
@@ -27,7 +30,13 @@ data class EspDeviceInfo(
     val bleOn: Boolean = false,
     val bleMacs: List<String> = emptyList(),
     val ap: Boolean = false,
+    val phone: Boolean = false,
 )
+
+sealed interface PhoneUsbEvent {
+    data class Command(val op: Int, val seat: Int, val arg: Int) : PhoneUsbEvent
+    data object SnapReq : PhoneUsbEvent
+}
 
 data class EspApStatus(
     val on: Boolean = false,
@@ -172,6 +181,18 @@ object EspCompanionRepository {
     private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
     val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
 
+    private val _phones = MutableStateFlow<List<EspPhoneDevice>>(emptyList())
+    val phones: StateFlow<List<EspPhoneDevice>> = _phones.asStateFlow()
+
+    private val _phoneLearnActive = MutableStateFlow(false)
+    val phoneLearnActive: StateFlow<Boolean> = _phoneLearnActive.asStateFlow()
+
+    private val _pendingPhone = MutableStateFlow<EspPhoneDevice?>(null)
+    val pendingPhone: StateFlow<EspPhoneDevice?> = _pendingPhone.asStateFlow()
+
+    private val _phoneUsbEvents = MutableSharedFlow<PhoneUsbEvent>(extraBufferCapacity = 16)
+    val phoneUsbEvents: SharedFlow<PhoneUsbEvent> = _phoneUsbEvents.asSharedFlow()
+
     private val _bleDevices = MutableStateFlow<Map<String, EspBleDeviceRuntime>>(emptyMap())
     val bleDevices: StateFlow<Map<String, EspBleDeviceRuntime>> = _bleDevices.asStateFlow()
 
@@ -265,6 +286,9 @@ object EspCompanionRepository {
             _routerBusy.value = false
             _bleLearnActive.value = false
             _bleMacs.value = emptyList()
+            _phones.value = emptyList()
+            _phoneLearnActive.value = false
+            _pendingPhone.value = null
             _bleDevices.value = emptyMap()
             _lastBleBtn.value = null
             if (!_otaBusy.value) {
@@ -301,9 +325,16 @@ object EspCompanionRepository {
         lastBat: Int = -1,
         lastRssi: Int = 0,
         lastMac: String? = null,
+        phoneLearn: Boolean = false,
+        phones: List<EspPhoneDevice> = emptyList(),
     ) {
         _bleOn.value = on
         _bleLearnActive.value = learn
+        _phoneLearnActive.value = phoneLearn
+        _phones.value = phones
+        if (!phoneLearn) {
+            _pendingPhone.value = null
+        }
         replaceBleMacs(macs)
         val mac = normalizeEspBleMac(lastMac.orEmpty())
         if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
@@ -321,6 +352,26 @@ object EspCompanionRepository {
         if (info.ble) {
             _deviceInfo.value = info.copy(bleOn = on, bleMacs = _bleMacs.value)
         }
+        touchMessage()
+    }
+
+    fun setPendingPhone(phone: EspPhoneDevice) {
+        if (phone.id.isBlank()) return
+        _pendingPhone.value = phone
+        touchMessage()
+    }
+
+    fun clearPendingPhone() {
+        _pendingPhone.value = null
+    }
+
+    fun emitPhoneCommand(op: Int, seat: Int, arg: Int) {
+        _phoneUsbEvents.tryEmit(PhoneUsbEvent.Command(op = op, seat = seat, arg = arg))
+        touchMessage()
+    }
+
+    fun emitPhoneSnapReq() {
+        _phoneUsbEvents.tryEmit(PhoneUsbEvent.SnapReq)
         touchMessage()
     }
 

@@ -1027,6 +1027,17 @@
     <string name="esp_ble_last_event">Last event</string>
     <string name="esp_ble_battery">Remote battery</string>
     <string name="esp_ble_need_fw">Companion firmware 0.8+ required</string>
+    <string name="esp_phone_need_fw">Phone: companion firmware 0.10+ required</string>
+    <string name="esp_phone_slots">Devices: %1$d of 20</string>
+    <string name="esp_phone_pair">Connect phone</string>
+    <string name="esp_phone_pair_cancel">Close window</string>
+    <string name="esp_phone_pairing">Pairing window is open</string>
+    <string name="esp_phone_pair_hint">On the phone app, tap Connect within a minute and a half. The key stays on the companion.</string>
+    <string name="esp_phone_allow_title">Allow “%1$s”?</string>
+    <string name="esp_phone_allow_yes">Yes</string>
+    <string name="esp_phone_allow_no">No</string>
+    <string name="esp_phone_devices">Phones</string>
+    <string name="esp_phone_empty">No paired phones</string>
     <string name="esp_um980_resets_title">UM980 — resets</string>
     <string name="esp_um980_resets_desc">Hot — soft restart. Warm — clear ephemeris. Cold — ephemeris, almanac and position. FRESET — factory defaults</string>
     <string name="esp_um980_reset_hot">Hot RESET</string>

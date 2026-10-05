@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TBox Phone</string>
+    <string name="pair">Connect</string>
+    <string name="driver">Driver</string>
+    <string name="passenger">Passenger</string>
+    <string name="fan">Fan</string>
+    <string name="auto">Auto</string>
+    <string name="sync">Sync</string>
+    <string name="sound">Sound</string>
+    <string name="seats">Seats</string>
+    <string name="rear_left">Rear left</string>
+    <string name="rear_right">Rear right</string>
+    <string name="prev">Previous</string>
+    <string name="play">Play</string>
+    <string name="next">Next</string>
+    <string name="waiting">Waiting for the head unit</string>
+    <string name="need_radio">This phone cannot advertise BLE</string>
+    <string name="phone_name">Phone</string>
+    <string name="eco">ECO</string>
+    <string name="comfort">Comfort</string>
+    <string name="strong">Strong</string>
+</resources>

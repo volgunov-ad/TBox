@@ -3,8 +3,15 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BLE_BTN_MAX_MACS 4
+#include "ble_phone.h"
+
+#define BLE_BTN_MAX_MACS BLE_DEVICE_MAX
 #define BLE_BTN_LEARN_DEFAULT_MS 30000u
+
+struct ble_gap_event;
+int ble_btn_gap_event(struct ble_gap_event *event, void *arg);
+/** Pause scanning so a queued phone advertisement can go out. */
+void ble_btn_request_phone_airtime(void);
 
 /** Init NVS state and optionally start NimBLE scan if previously enabled. */
 void ble_btn_init(void);

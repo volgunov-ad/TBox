@@ -1035,6 +1035,17 @@
     <string name="esp_ble_last_event">Последнее событие</string>
     <string name="esp_ble_battery">Батарея пульта</string>
     <string name="esp_ble_need_fw">Нужна прошивка компаньона 0.8+</string>
+    <string name="esp_phone_need_fw">Телефон: нужна прошивка компаньона 0.10+</string>
+    <string name="esp_phone_slots">Устройства: %1$d из 20</string>
+    <string name="esp_phone_pair">Подключить телефон</string>
+    <string name="esp_phone_pair_cancel">Закрыть окно</string>
+    <string name="esp_phone_pairing">Окно сопряжения открыто</string>
+    <string name="esp_phone_pair_hint">В приложении на телефоне нажмите «Подключить» в течение полутора минут. Ключ остаётся на компаньоне.</string>
+    <string name="esp_phone_allow_title">Разрешить «%1$s»?</string>
+    <string name="esp_phone_allow_yes">Да</string>
+    <string name="esp_phone_allow_no">Нет</string>
+    <string name="esp_phone_devices">Телефоны</string>
+    <string name="esp_phone_empty">Нет сопряжённых телефонов</string>
     <string name="esp_um980_resets_title">UM980 — сбросы</string>
     <string name="esp_um980_resets_desc">Hot — мягкий перезапуск. Warm — сброс эфемерид. Cold — эфемериды, альманах и позиция. FRESET — заводские настройки</string>
     <string name="esp_um980_reset_hot">Hot RESET</string>

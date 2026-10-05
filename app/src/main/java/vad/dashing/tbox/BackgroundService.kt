@@ -48,6 +48,7 @@ import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.PhoneUsbEvent
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.wifimodem.ModemConnectionCheck
@@ -209,6 +210,7 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    private var phoneSnapGen: Int = 1
     private var espPanelPort = ExternalApiConstants.DEFAULT_PORT
     private var espApSsid = ""
     private var espApPsk = ""
@@ -588,6 +590,12 @@ class BackgroundService : Service() {
         const val ACTION_ESP_BLE_FORGET = "vad.dashing.tbox.ESP_BLE_FORGET"
         const val EXTRA_ESP_BLE_MAC = "esp_ble_mac"
         const val EXTRA_ESP_BLE_FORGET_ALL = "esp_ble_forget_all"
+        const val ACTION_ESP_PHONE_LEARN_BEGIN = "vad.dashing.tbox.ESP_PHONE_LEARN_BEGIN"
+        const val ACTION_ESP_PHONE_LEARN_END = "vad.dashing.tbox.ESP_PHONE_LEARN_END"
+        const val ACTION_ESP_PHONE_ALLOW = "vad.dashing.tbox.ESP_PHONE_ALLOW"
+        const val ACTION_ESP_PHONE_DENY = "vad.dashing.tbox.ESP_PHONE_DENY"
+        const val ACTION_ESP_PHONE_FORGET = "vad.dashing.tbox.ESP_PHONE_FORGET"
+        const val EXTRA_ESP_PHONE_ID = "esp_phone_id"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
@@ -1062,6 +1070,7 @@ class BackgroundService : Service() {
             controller.start()
             ExternalApiControllerHolder.register(controller)
         }
+        startPhoneCompanionBridge()
         SharedMediaControlService.startActiveSessionMonitor(this)
         DriveModeThemeWatcher(this, settingsManager, scope).start()
         scope.launch {
@@ -1249,6 +1258,25 @@ class BackgroundService : Service() {
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Error handling theme change")
             Log.e("Theme Service", "Error handling theme change", e)
+        }
+    }
+
+    private fun startPhoneCompanionBridge() {
+        scope.launch {
+            EspCompanionRepository.phoneUsbEvents.collect { event ->
+                val controller = externalApiController ?: return@collect
+                when (event) {
+                    PhoneUsbEvent.SnapReq -> {
+                        val snap = controller.readPhoneSnapshot()
+                        val gen = phoneSnapGen
+                        phoneSnapGen = if (phoneSnapGen >= 255) 1 else phoneSnapGen + 1
+                        espCompanionManager?.sendPhoneSnap(gen, snap)
+                    }
+                    is PhoneUsbEvent.Command -> {
+                        controller.executePhoneCommand(event.op, event.seat, event.arg)
+                    }
+                }
+            }
         }
     }
 
@@ -1708,6 +1736,24 @@ class BackgroundService : Service() {
                         espCompanionManager?.forgetBleMac(mac)
                     }
                 }
+            }
+            ACTION_ESP_PHONE_LEARN_BEGIN -> {
+                espCompanionManager?.beginPhoneLearn(90_000L)
+            }
+            ACTION_ESP_PHONE_LEARN_END -> {
+                espCompanionManager?.endPhoneLearn()
+            }
+            ACTION_ESP_PHONE_ALLOW -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.allowPhone(id)
+            }
+            ACTION_ESP_PHONE_DENY -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.denyPhone(id)
+            }
+            ACTION_ESP_PHONE_FORGET -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.forgetPhone(id)
             }
             ACTION_GNSS_MODULE_REBOOT -> {
                 scope.launch { runGnssModuleSoftReboot() }

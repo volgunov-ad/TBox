@@ -45,6 +45,8 @@ typedef struct {
 static bool s_inited;
 static bool s_nimble_ready;
 static bool s_scanning;
+static bool s_disc_cancel_pending;
+static bool s_phone_airtime;
 static bool s_on;
 static bool s_learn;
 static uint32_t s_learn_deadline_ms;
@@ -259,7 +261,7 @@ static bool parse_bthome(const uint8_t *data, uint8_t len, bthome_parse_t *out)
 static bool add_mac_locked(const uint8_t *addr)
 {
     if (find_mac(addr) >= 0) return true;
-    if (s_mac_count >= BLE_BTN_MAX_MACS) return false;
+    if (s_mac_count + ble_phone_count() >= BLE_DEVICE_MAX) return false;
     memcpy(s_macs[s_mac_count], addr, 6);
     s_mac_count++;
     return save_nvs();
@@ -312,7 +314,7 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
     }
 }
 
-static int gap_event(struct ble_gap_event *event, void *arg)
+int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
     switch (event->type) {
@@ -333,6 +335,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
                 uint16_t uuid = (uint16_t)ad_data[0] | ((uint16_t)ad_data[1] << 8);
                 if (uuid == BTHOME_UUID16) {
                     handle_bthome_adv(addr, disc->rssi, ad_data + 2, ad_dlen - 2);
+                } else if (uuid == 0x7B0E) {
+                    ble_phone_on_adv(ad_data + 2, (uint8_t)(ad_dlen - 2));
                 }
             }
             i += 1 + ad_len;
@@ -342,6 +346,17 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISC_COMPLETE:
         ESP_LOGI(TAG, "scan complete reason=%d", event->disc_complete.reason);
         s_scanning = false;
+        s_disc_cancel_pending = false;
+        if (s_on && s_nimble_ready && (s_phone_airtime || ble_phone_adv_pending())) {
+            s_phone_airtime = false;
+            if (ble_phone_kick_adv()) return 0;
+        }
+        if (s_on && s_nimble_ready) {
+            start_scan();
+        }
+        return 0;
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        if (s_on && s_nimble_ready && ble_phone_kick_adv()) return 0;
         if (s_on && s_nimble_ready) {
             start_scan();
         }
@@ -362,7 +377,7 @@ static int start_scan(void)
         .passive = 1,
         .filter_duplicates = 0,
     };
-    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, gap_event, NULL);
+    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, ble_btn_gap_event, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "ble_gap_disc rc=%d", rc);
         return rc;
@@ -377,6 +392,21 @@ static void stop_scan(void)
     if (s_scanning) {
         ble_gap_disc_cancel();
         s_scanning = false;
+        s_disc_cancel_pending = true;
+    }
+}
+
+void ble_btn_request_phone_airtime(void)
+{
+    if (!s_nimble_ready || !s_on) return;
+    if (s_scanning || s_disc_cancel_pending) {
+        s_phone_airtime = true;
+        if (s_scanning) stop_scan();
+        return;
+    }
+    if (ble_gap_adv_active()) return;
+    if (!ble_phone_kick_adv() && !s_scanning) {
+        start_scan();
     }
 }
 
@@ -414,6 +444,7 @@ void ble_btn_init(void)
 {
     if (s_inited) return;
     load_nvs();
+    ble_phone_init();
     s_inited = true;
     ESP_LOGI(TAG, "init on=%d macs=%d", (int)s_on, s_mac_count);
 
@@ -459,6 +490,8 @@ bool ble_btn_set_on(bool on)
     } else {
         stop_scan();
         s_learn = false;
+        s_phone_airtime = false;
+        ble_phone_learn_end();
     }
     return true;
 }
@@ -533,4 +566,5 @@ void ble_btn_poll(uint32_t now_ms)
         protocol_send_ble_ack("learnEnd", false, "timeout");
         protocol_send_ble_status();
     }
+    ble_phone_poll(now_ms);
 }

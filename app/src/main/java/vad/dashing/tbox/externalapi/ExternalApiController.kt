@@ -25,7 +25,10 @@ import vad.dashing.tbox.automation.AutomationDefinition
 import vad.dashing.tbox.automation.AutomationRunNow
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
+import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationTriggerContext
+import vad.dashing.tbox.phoneble.PhoneBleCodec
+import vad.dashing.tbox.phoneble.PhoneCompanionHost
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -272,6 +275,31 @@ class ExternalApiController(
         } catch (_: Exception) {
         }
         return addresses.toList()
+    }
+
+    suspend fun readPhoneSnapshot(): PhoneBleCodec.Snapshot {
+        val headUnit = signalReader.readSnapshot(
+            PhoneCompanionHost.headUnitSignalIds,
+            AutomationSignalSource.HEAD_UNIT,
+        )
+        val volume = signalReader.readSnapshot(
+            listOf("hu_media_volume"),
+            AutomationSignalSource.APP,
+        )
+        return PhoneCompanionHost.snapshotFromSignals(headUnit, volume)
+    }
+
+    suspend fun executePhoneCommand(op: Int, seat: Int, arg: Int) {
+        val action = PhoneCompanionHost.toAction(op, seat, arg) ?: return
+        val results = executeActions(listOf(action))
+        val failed = results.firstOrNull { !it.success }
+        if (failed != null) {
+            TboxRepository.addLog(
+                "INFO",
+                "Phone companion",
+                failed.message.ifBlank { "phone command failed" },
+            )
+        }
     }
 
     private suspend fun executeActions(actions: List<AutomationAction>): List<AutomationActionResult> {

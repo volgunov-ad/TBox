@@ -25,6 +25,7 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.automation.AutomationEspBleBtnEvent
 import vad.dashing.tbox.automation.AutomationTriggerEspBleBtnEventBus
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import java.io.File
 import java.io.InputStream
@@ -669,6 +670,39 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeBleForgetAll())
     }
 
+    fun beginPhoneLearn(timeoutMs: Long = 90_000L) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodePhoneLearnBegin(timeoutMs))
+    }
+
+    fun endPhoneLearn() {
+        if (EspCompanionRepository.otaBusy.value) return
+        EspCompanionRepository.clearPendingPhone()
+        writeLine(EspCompanionProtocol.encodePhoneLearnEnd())
+    }
+
+    fun allowPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        EspCompanionRepository.clearPendingPhone()
+        writeLine(EspCompanionProtocol.encodePhoneAllow(id))
+    }
+
+    fun denyPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        EspCompanionRepository.clearPendingPhone()
+        writeLine(EspCompanionProtocol.encodePhoneDeny(id))
+    }
+
+    fun forgetPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodePhoneForget(id))
+    }
+
+    fun sendPhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodePhoneSnap(gen, snap))
+    }
+
     fun setCanFilterAcceptAll() {
         if (EspCompanionRepository.otaBusy.value) return
         writeLine(EspCompanionProtocol.encodeCanFilter(acceptAll = true))
@@ -1054,6 +1088,7 @@ class EspCompanionManager(
                         bleOn = msg.bleOn,
                         bleMacs = msg.bleMacs,
                         ap = msg.ap,
+                        phone = msg.phone,
                     )
                 )
                 sendRememberedApCfg()
@@ -1226,7 +1261,22 @@ class EspCompanionManager(
                     lastBat = msg.lastBat,
                     lastRssi = msg.lastRssi,
                     lastMac = msg.lastMac,
+                    phoneLearn = msg.phoneLearn,
+                    phones = msg.phones,
                 )
+            }
+            is EspMessage.PhonePair -> {
+                Log.i(TAG, "phonePair id=${msg.id} name=${msg.name}")
+                EspCompanionRepository.setPendingPhone(
+                    EspPhoneDevice(id = msg.id, name = msg.name.ifBlank { msg.id }),
+                )
+            }
+            is EspMessage.PhoneCmd -> {
+                Log.i(TAG, "phoneCmd id=${msg.id} op=${msg.op} seat=${msg.seat} arg=${msg.arg}")
+                EspCompanionRepository.emitPhoneCommand(msg.op, msg.seat, msg.arg)
+            }
+            is EspMessage.PhoneSnapReq -> {
+                EspCompanionRepository.emitPhoneSnapReq()
             }
             is EspMessage.BleSeen -> {
                 Log.i(TAG, "bleSeen mac=${msg.mac} rssi=${msg.rssi}")

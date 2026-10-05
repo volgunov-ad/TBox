@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TBox Телефон</string>
+    <string name="pair">Подключить</string>
+    <string name="driver">Водитель</string>
+    <string name="passenger">Пассажир</string>
+    <string name="fan">Обдув</string>
+    <string name="auto">Авто</string>
+    <string name="sync">Синхр.</string>
+    <string name="sound">Звук</string>
+    <string name="seats">Сиденья</string>
+    <string name="rear_left">Зад лев.</string>
+    <string name="rear_right">Зад прав.</string>
+    <string name="prev">Назад</string>
+    <string name="play">Играть</string>
+    <string name="next">Дальше</string>
+    <string name="waiting">Ждём головное устройство</string>
+    <string name="need_radio">Этот телефон не объявляет BLE</string>
+    <string name="phone_name">Телефон</string>
+    <string name="eco">Эко</string>
+    <string name="comfort">Комфорт</string>
+    <string name="strong">Сильный</string>
+</resources>
