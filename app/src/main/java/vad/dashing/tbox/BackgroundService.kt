@@ -1265,16 +1265,24 @@ class BackgroundService : Service() {
         scope.launch {
             EspCompanionRepository.phoneUsbEvents.collect { event ->
                 val controller = externalApiController ?: return@collect
-                when (event) {
-                    PhoneUsbEvent.SnapReq -> {
-                        val snap = controller.readPhoneSnapshot()
-                        val gen = phoneSnapGen
-                        phoneSnapGen = if (phoneSnapGen >= 255) 1 else phoneSnapGen + 1
-                        espCompanionManager?.sendPhoneSnap(gen, snap)
+                try {
+                    when (event) {
+                        PhoneUsbEvent.SnapReq -> {
+                            val snap = controller.readPhoneSnapshot()
+                            val gen = phoneSnapGen
+                            phoneSnapGen = if (phoneSnapGen >= 255) 1 else phoneSnapGen + 1
+                            espCompanionManager?.sendPhoneSnap(gen, snap)
+                        }
+                        is PhoneUsbEvent.Command -> {
+                            controller.executePhoneCommand(event.op, event.seat, event.arg)
+                        }
                     }
-                    is PhoneUsbEvent.Command -> {
-                        controller.executePhoneCommand(event.op, event.seat, event.arg)
-                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // One failed command must not stop the collector for the rest of the session.
+                    TboxRepository.addLog("ERROR", "Phone BLE", "Phone event failed: ${e.message}")
+                    Log.e("Phone BLE", "Phone event failed", e)
                 }
             }
         }

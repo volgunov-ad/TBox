@@ -857,6 +857,7 @@ fun EspCompanionTabContent(
     pendingPhone?.let { pending ->
         AlertDialog(
             onDismissRequest = {
+                EspCompanionRepository.clearPendingPhone()
                 context.startService(
                     Intent(context, BackgroundService::class.java).apply {
                         action = BackgroundService.ACTION_ESP_PHONE_DENY
@@ -868,6 +869,7 @@ fun EspCompanionTabContent(
             confirmButton = {
                 TextButton(
                     onClick = rememberWrappedOnClick {
+                        EspCompanionRepository.clearPendingPhone()
                         context.startService(
                             Intent(context, BackgroundService::class.java).apply {
                                 action = BackgroundService.ACTION_ESP_PHONE_ALLOW
@@ -882,6 +884,7 @@ fun EspCompanionTabContent(
             dismissButton = {
                 TextButton(
                     onClick = rememberWrappedOnClick {
+                        EspCompanionRepository.clearPendingPhone()
                         context.startService(
                             Intent(context, BackgroundService::class.java).apply {
                                 action = BackgroundService.ACTION_ESP_PHONE_DENY

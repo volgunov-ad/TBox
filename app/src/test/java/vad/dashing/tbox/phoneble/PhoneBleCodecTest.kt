@@ -131,4 +131,21 @@ class PhoneBleCodecTest {
         assertEquals(AutomationBuiltinActionType.SET_MEDIA_VOLUME, builtin.type)
         assertEquals(0, builtin.intValue)
     }
+
+    @Test
+    fun hostRejectsOutOfRangeArguments() {
+        assertNotNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_TEMP_LEFT, 0, 225))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_TEMP_LEFT, 0, 227))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_TEMP_RIGHT, 0, 310))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_FAN, 0, 8))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_BLOW, 0, 0))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_MODE, 0, 4))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_AUTO, 0, 2))
+        assertNotNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 0, 7))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 2, 5))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 4, 1))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_VOLUME, 0, 32))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_VOLUME, 0, -1))
+        assertNull(PhoneCompanionHost.toAction(99, 0, 0))
+    }
 }

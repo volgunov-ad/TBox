@@ -39,33 +39,40 @@ object PhoneCompanionHost {
         "rear_right_seat_mode",
     )
 
+    /** Returns null for unknown ops and out-of-range arguments. */
     fun toAction(op: Int, seat: Int, arg: Int): AutomationAction? = when (op) {
-        PhoneBleCodec.OP_TEMP_LEFT -> canSet(LEFT_TEMP, arg)
-        PhoneBleCodec.OP_TEMP_RIGHT -> canSet(RIGHT_TEMP, arg)
-        PhoneBleCodec.OP_FAN -> canSet(FAN, arg)
-        PhoneBleCodec.OP_AUTO -> binarySet(AUTO, arg)
-        PhoneBleCodec.OP_BLOW -> canSet(BLOW, arg)
-        PhoneBleCodec.OP_MODE -> canSet(HVAC_MODE, arg)
-        PhoneBleCodec.OP_SYNC -> binarySet(SYNC, arg)
+        PhoneBleCodec.OP_TEMP_LEFT -> arg.takeIf(::validTemp)?.let { canSet(LEFT_TEMP, it) }
+        PhoneBleCodec.OP_TEMP_RIGHT -> arg.takeIf(::validTemp)?.let { canSet(RIGHT_TEMP, it) }
+        PhoneBleCodec.OP_FAN -> arg.takeIf { it in 0..7 }?.let { canSet(FAN, it) }
+        PhoneBleCodec.OP_AUTO -> arg.takeIf { it in 0..1 }?.let { binarySet(AUTO, it) }
+        PhoneBleCodec.OP_BLOW -> arg.takeIf { it in 1..5 }?.let { canSet(BLOW, it) }
+        PhoneBleCodec.OP_MODE -> arg.takeIf { it in 1..3 }?.let { canSet(HVAC_MODE, it) }
+        PhoneBleCodec.OP_SYNC -> arg.takeIf { it in 0..1 }?.let { binarySet(SYNC, it) }
         PhoneBleCodec.OP_SEAT -> {
-            val propertyId = when (seat) {
-                0 -> SEAT_DRIVER
-                1 -> SEAT_PASSENGER
-                2 -> SEAT_REAR_LEFT
-                3 -> SEAT_REAR_RIGHT
+            val (propertyId, maxMode) = when (seat) {
+                0 -> SEAT_DRIVER to 7
+                1 -> SEAT_PASSENGER to 7
+                2 -> SEAT_REAR_LEFT to 4
+                3 -> SEAT_REAR_RIGHT to 4
                 else -> return null
             }
-            canSet(propertyId, arg)
+            arg.takeIf { it in 1..maxMode }?.let { canSet(propertyId, it) }
         }
-        PhoneBleCodec.OP_VOLUME -> AutomationAction.Builtin(
-            type = AutomationBuiltinActionType.SET_MEDIA_VOLUME,
-            intValue = arg,
-        )
+        PhoneBleCodec.OP_VOLUME -> arg.takeIf { it in 0..31 }?.let {
+            AutomationAction.Builtin(
+                type = AutomationBuiltinActionType.SET_MEDIA_VOLUME,
+                intValue = it,
+            )
+        }
         PhoneBleCodec.OP_MEDIA_PREV -> builtin(AutomationBuiltinActionType.MEDIA_PREVIOUS)
         PhoneBleCodec.OP_MEDIA_PLAY_PAUSE -> builtin(AutomationBuiltinActionType.MEDIA_PLAY_PAUSE)
         PhoneBleCodec.OP_MEDIA_NEXT -> builtin(AutomationBuiltinActionType.MEDIA_NEXT)
         else -> null
     }
+
+    private fun validTemp(tenths: Int): Boolean =
+        tenths in PhoneBleCodec.TEMP_MIN..PhoneBleCodec.TEMP_MAX &&
+            (tenths - PhoneBleCodec.TEMP_MIN) % PhoneBleCodec.TEMP_STEP == 0
 
     fun snapshotFromSignals(headUnit: JSONObject, app: JSONObject): PhoneBleCodec.Snapshot {
         val hu = indexSignals(headUnit)
