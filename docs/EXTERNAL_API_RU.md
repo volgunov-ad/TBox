@@ -442,6 +442,10 @@ Intent из Monitor).
 Именованные сценарии пользователя → `run` автоматизации по имени.  
 Свободные команды машины → `invoke` по каталогу.
 
+MQTT-клиент для Home Assistant — отдельное приложение на том же API:
+[MQTT_APK_RU.md](MQTT_APK_RU.md) (**TBox MQTT**, `vad.dashing.mqtt`, модуль `:mqtt`).
+Для команд ему нужна схема записи в каталоге (`catalogVersion` 4); пока каталог v3.
+
 ---
 
 ## 11. Порядок реализации
@@ -461,6 +465,7 @@ Intent из Monitor).
 | 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
 | 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 3) |
 | 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | план: [VOICE_APK_RU.md](VOICE_APK_RU.md) |
+| 12 | MQTT-клиент Home Assistant | Состояния и команды каталога в брокер, discovery | план: [MQTT_APK_RU.md](MQTT_APK_RU.md) |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
 
 На каждом шаге с кодом автоматизаций — только аддитивные изменения; прогон

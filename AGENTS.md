@@ -67,6 +67,10 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 
 Separate app **VAD Voice** (`vad.dashing.voice`). Plan: [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md).
 
+### MQTT APK (`:mqtt`)
+
+Planned separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT broker and optional Home Assistant discovery. Plan: [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md). Module is not in the Gradle build until that plan is implemented.
+
 Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via Gradle (no Python):
 
 ```

@@ -1,0 +1,360 @@
+# TBox MQTT — план клиента для Home Assistant
+
+Статус: **план согласован**, код не начат.
+
+Отдельное Android-приложение **TBox MQTT** (`vad.dashing.mqtt`) на головном устройстве.
+Оно читает сигналы и выполняет действия через External HTTP API TBox Monitor и публикует
+их в MQTT-брокер, который выбирает пользователь. Home Assistant подхватывает сущности
+через MQTT Discovery, если пользователь включил эту опцию.
+
+Дальше автомобиль попадает в Яндекс Умный дом уже средствами Home Assistant
+(интеграция Yandex Smart Home). Этот APK с облаком Яндекса не разговаривает.
+
+Связанные документы:
+
+| Документ | Роль |
+|----------|------|
+| [EXTERNAL_API_RU.md](EXTERNAL_API_RU.md) | Контракт HTTP `/v1` |
+| [EXTERNAL_API_USER_GUIDE_RU.md](EXTERNAL_API_USER_GUIDE_RU.md) | Как включить API и выдать токен |
+| [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md) | JSON действий |
+| [VOICE_APK_RU.md](VOICE_APK_RU.md) | Соседний клиент того же API |
+
+---
+
+## 0. Зафиксированные решения
+
+| Тема | Решение |
+|------|---------|
+| Платформа | Только ГУ. Телефон не клиент |
+| Имя / package | **TBox MQTT** / `vad.dashing.mqtt` |
+| Репозиторий | Модуль `:mqtt` в этом же git, отдельный APK |
+| Дистрибуция | Сайдлоад рядом с Monitor |
+| Доступ к машине | Только External API, `http://127.0.0.1:<порт>/v1`. Своего mbCAN/VHAL нет |
+| Зачем не CAN | JNI mbCAN не потокобезопасен между процессами. Ключи `on`/`off`, `close`/`open` уже приводит Monitor |
+| Авторизация API | Pairing (`clientKind: mqtt`) **и** вставка ручного токена из Настройки → API |
+| Брокер | Один: адрес, порт, пользователь, пароль. Префикс топиков и префикс discovery редактируются |
+| TLS | В первой версии. По умолчанию выключен, порт 1883. Включённый TLS не подменяет уже введённый порт; подсказка порта — 8883 |
+| Discovery | Выключатель. Префикс по умолчанию `homeassistant` |
+| Сущности v1 | `sensor`, `binary_sensor`, `switch`, `number`, `select`, `button`. Сводный `climate` и `cover` не делаем |
+| Команды | В списке есть, по умолчанию все выключены. Окна, люк, шторка, багажник тоже выключены, пока пользователь их не отметит |
+| Не показывать | `dangerous` (ADB), круиз, перезапуск TBox, Wi‑Fi и модем, перезагрузка GNSS, `launch_application`, `http_request`, `delay` |
+| Автоматизации | Кнопки «выполнить сейчас» по id из `GET /v1/automations` |
+| Опрос | 3 с по умолчанию, в брокер только при изменении значения |
+| Автозапуск | `BOOT_COMPLETED`, по умолчанию включён, foreground-сервис с тихим уведомлением |
+| Секреты | Токен API и пароль брокера в EncryptedSharedPreferences |
+
+Monitor в этой задаче меняется только аддитивно: каталог начинает отдавать схему записи
+(`catalogVersion` 4). Исполнитель команд, CAN и виджеты не трогаем.
+
+---
+
+## 1. Почему схема записи нужна в каталоге
+
+Сейчас `GET /v1/catalog` для `can_command` отдаёт `bus`, `propertyId`, `label`, `safety`.
+Операций (`set` / `toggle` / `trunk_pulse`) и допустимых значений там нет. Голосовой клиент
+по той же причине `can_command` не вызывает.
+
+Клиент MQTT не должен копировать `AutomationCanValueCodec`. Иначе Android 9 и Android 10
+разъедутся. Поэтому перед экраном выбора Monitor дополняет каждый `can_command`
+полями, которые старые клиенты игнорируют:
+
+```json
+{
+  "type": "can_command",
+  "bus": "vehicle",
+  "propertyId": 188,
+  "label": "Питание климата",
+  "safety": "confirm",
+  "operations": ["set", "toggle"],
+  "valueKeys": ["off", "on"],
+  "allowedValues": [],
+  "numericRange": null,
+  "signalId": "hvac_power",
+  "voiceAliasesRu": []
+}
+```
+
+| Поле | Смысл |
+|------|--------|
+| `operations` | Что реально разрешает `AutomationCanCatalog` |
+| `valueKeys` | Строки, которые `POST /v1/actions/invoke` уже принимает в `value` (`on`, `off`, `close`, `vent`, `comfort_open`, `open`, …) |
+| `allowedValues` | Целые, если переносного ключа нет (режимы с сырым int) |
+| `numericRange` | `{ "min", "max", "step" }` для диапазона, иначе `null` |
+| `signalId` | `storageKey` сигнала-подтверждения, если он один. Иначе `null` |
+
+`signalId` задаётся явной таблицей в Monitor, не угадыванием по подписи. Багажник как
+импульс (`trunk_pulse`) и датчик двери багажника остаются разными строками, если это
+разные id.
+
+`catalogVersion` становится **4**. Обновить [EXTERNAL_API_RU.md](EXTERNAL_API_RU.md) §7.3
+и `ExternalApiRouterTest` в том же изменении. `voiceAliasesRu` и старые поля не меняются.
+
+Builtin без параметров (`media_next`, `media_play_pause`, …) уже описываются
+`actionType`. Отдельная схема для `set_media_volume` и яркости экрана в v1 не добавляется:
+у них нет диапазона в каталоге, в список они не попадают.
+
+---
+
+## 2. Архитектура
+
+```text
+BOOT_COMPLETED или кнопка в UI
+    → foreground-сервис
+        → HTTP Bearer 127.0.0.1  →  TBox Monitor /v1
+        → MQTT 3.1.1             →  брокер пользователя
+                                      → Home Assistant MQTT Discovery
+```
+
+| Слой | Выбор |
+|------|--------|
+| HTTP | Тот же контракт, что у Voice: health, pair, catalog, signals, invoke, automations, run |
+| MQTT | HiveMQ MQTT Client, API MQTT 3.1.1 (`Mqtt3AsyncClient`). Paho Android service не используем |
+| UI | Один экран на Compose: связь, брокер, список каталога |
+| SDK | `minSdk` 28, `targetSdk` как у `:voice` |
+
+Пока Monitor не отвечает на `/v1/health`, сервис повторяет попытки. Соединение с брокером
+при этом может жить: в топик доступности уходит `offline`. Команды из брокера в этом
+состоянии не выполняются.
+
+Опрос не обходит политику CAN внутри Monitor. `GET /v1/signals` только регистрирует
+интерес и читает уже известное значение. Быстрее 1 с не опрашиваем. Интервал — настройка,
+по умолчанию 3 с, диапазон 1…60.
+
+Один запрос сигналов принимает один `source` и не больше 50 id
+(`ExternalApiConstants.MAX_SIGNAL_IDS_PER_REQUEST`). Цикл опроса группирует выбранные
+сигналы по источнику и режет пачки по 50.
+
+---
+
+## 3. Топики
+
+Префикс по умолчанию `tbox/<deviceId>`. `deviceId` редактируется, по умолчанию `dashing`,
+после нормализации — только `[a-z0-9_]`. Так две машины на одном брокере не смешиваются.
+
+Полезная нагрузка состояния — простой текст, не JSON.
+
+| Назначение | Топик | Retain | QoS |
+|------------|-------|--------|-----|
+| Доступность | `tbox/dashing/status` = `online` \| `offline` | да | 1 |
+| Состояние | `tbox/dashing/<component>/<object_id>/state` | да | 1 |
+| Команда | `tbox/dashing/<component>/<object_id>/set` | нет | 1 |
+
+`object_id`:
+
+| Строка | object_id |
+|--------|-----------|
+| Сигнал, в том числе связанный с командой | `storageKey` сигнала (`outside_temperature`, `hvac_power`) |
+| Команда без сигнала | `can_<bus>_<propertyId>` или `builtin_<actionType>` |
+| Автоматизация | `automation_<id>` |
+
+Примеры:
+
+```text
+tbox/dashing/status
+tbox/dashing/sensor/outside_temperature/state      → 12.5
+tbox/dashing/switch/hvac_power/state               → ON
+tbox/dashing/switch/hvac_power/set                 → OFF
+tbox/dashing/select/window_front_left/state        → vent
+tbox/dashing/button/builtin_media_next/set         → PRESS
+tbox/dashing/button/automation_<uuid>/set          → PRESS
+```
+
+Двоичные значения API `on`/`off` на границе переводятся в `ON`/`OFF`. Остальные
+состояния (`D`, `heat_1`, `close`, `vent`) публикуются как в каталоге. Число — десятичная
+строка без единицы измерения; единица остаётся в discovery.
+
+LWT брокера совпадает с `offline` и retained. После каждого подключения клиент заново
+публикует `online`, конфиги discovery и последние известные состояния.
+
+Командные топики клиент не помечает retain. Входящее сообщение с флагом retain
+игнорируется, чтобы залипшая команда не открывала окно при каждом реконнекте.
+Если текст команды совпадает с последним опубликованным состоянием, `invoke` не вызывается.
+Кнопки этому правилу не подчиняются: каждое `PRESS` выполняется.
+
+На время `invoke` повтор той же сущности отбрасывается. Ошибка invoke возвращает
+в state прежнее значение, чтобы переключатель в Home Assistant отскочил назад.
+
+---
+
+## 4. Как каталог становится сущностью
+
+Пользователь видит строки каталога. У строки сигнала два независимых флажка:
+**публиковать состояние** и **принимать команды**. Второй флажок активен только если
+у `can_command` заполнен `signalId` этой строки и есть чем писать (`valueKeys`,
+`allowedValues` или `numericRange`). Источник (`head_unit` / `tbox` / `app`) виден
+в строке; по умолчанию первый из каталога.
+
+Команды без сигнала и автоматизации — отдельные строки только с флажком команды.
+
+По умолчанию не отмечено ничего. Снятие флажка удаляет retained-конфиг discovery
+пустой публикацией в тот же config-топик.
+
+| Условие | Компонент HA | Команда MQTT → API |
+|---------|----------------|--------------------|
+| Число, только состояние | `sensor` | — |
+| Число и `numericRange` у связанной команды | `number` | `value` = целое из текста |
+| Состояние из `on`/`off` без команды | `binary_sensor` | — |
+| То же и команда с `valueKeys` `on`/`off` | `switch` | `ON`→`on`, `OFF`→`off`, `operation: set` |
+| Несколько значений и есть запись | `select` | текст опции как `value` |
+| `trunk_pulse` или builtin без состояния | `button` | `PRESS` → один заранее известный invoke |
+| Автоматизация | `button` | `POST /v1/automations/{id}/run` |
+
+Окна в сигналах — дискретные положения, не процент 0…100. Это `select`
+(`close` / `vent` / `comfort_open` / `open`), не `cover`.
+
+Климат — набор отдельных сущностей (питание, левая и правая температуры, вентилятор,
+auto, рециркуляция). Карточку `climate` Home Assistant из этого не собираем: в каталоге
+режимы кондиционера — отдельные тумблеры.
+
+Имя сущности в discovery — `label` каталога. У автоматизации — `name` из списка.
+Привязка автоматизации хранится по `id`: переименование в Monitor меняет только имя.
+
+Класс `confirm` у всех `can_command` API сопряжённому клиенту и так разрешает.
+Повторно резать его на стороне Monitor не будем. Список MQTT уже, чем API: брокер
+доступен не только приложению на ГУ. Скрытые типы из §0 в список не попадают даже
+при включённом в Monitor тумблере опасных команд.
+
+---
+
+## 5. MQTT Discovery
+
+Выключатель в настройках. Пока он включён, на каждую отмеченную строку уходит retained JSON:
+
+```text
+homeassistant/<component>/tbox_<deviceId>/<object_id>/config
+```
+
+Общий блок `device` у всех сущностей одной машины:
+
+```json
+{
+  "identifiers": ["tbox_dashing"],
+  "name": "Jetour Dashing",
+  "manufacturer": "TBox",
+  "model": "Dashing"
+}
+```
+
+У каждой сущности: `name`, `unique_id` (`tbox_<deviceId>_<object_id>`), `state_topic`,
+при команде ещё `command_topic`, `availability_topic` = `tbox/<deviceId>/status`,
+`payload_available` = `online`, `payload_not_available` = `offline`.
+У `sensor` температуры — `device_class` и `unit_of_measurement` из `unit` каталога,
+где соответствие однозначное (°C, %, км/ч). Сомневаемся — только `unit_of_measurement`,
+без выдуманного `device_class`.
+
+Пароль, токен и адрес API в discovery не попадают.
+
+Префикс discovery редактируется и по умолчанию равен `homeassistant`. Он должен совпасть
+с MQTT discovery prefix в Home Assistant.
+
+---
+
+## 6. Настройки и первый запуск
+
+1. В Monitor: Настройки → API → сервер включён.
+2. В TBox MQTT: порт API (по умолчанию 8765), хост зафиксирован `127.0.0.1`.
+3. Токен: «Подключить» (pairing, имя клиента «TBox MQTT», `clientKind: mqtt`) или вставка токена из Monitor.
+4. Брокер: адрес, порт, пользователь, пароль, TLS.
+5. Кнопка «Проверить брокер» — коннект и сразу дисконнект, без публикации каталога.
+6. Идентификатор машины, префикс топиков, префикс discovery, интервал опроса, автозапуск.
+7. Список каталога после успешного `GET /v1/catalog`.
+
+`clientKind` Monitor уже принимает как произвольную строку. Отдельный экран в Monitor не нужен.
+
+TLS:
+
+- системное хранилище CA и проверка имени хоста;
+- необязательный PEM CA для своего Mosquitto;
+- режима «верить любому сертификату» нет.
+
+Автозапуск включён по умолчанию. Сервис ничего не публикует, пока нет токена и адреса брокера.
+Уведомление низкого приоритета показывает три состояния: связан с Monitor и брокером,
+нет Monitor, нет брокера.
+
+Каталог перечитывается при старте сервиса и раз в 10 минут. Пропавший id снимается
+с публикации вместе с config-топиком. Смена `catalogVersion` не сбрасывает флажки
+у тех id, которые на месте.
+
+---
+
+## 7. Структура модуля
+
+```text
+mqtt/
+  build.gradle.kts
+  src/main/java/vad/dashing/mqtt/
+    MqttApp.kt
+    MainActivity.kt
+    boot/BootCompleteReceiver.kt
+    service/MqttBridgeService.kt
+    api/                 # health, pair, catalog, signals, invoke, run
+    settings/
+    bridge/              # опрос, публикация по изменению, подписка
+    ha/                  # выбор компонента, JSON discovery, топики
+    ui/
+  src/test/java/vad/dashing/mqtt/
+    ha/TopicLayoutTest.kt
+    ha/DiscoveryPayloadTest.kt
+    ha/EntityKindTest.kt
+    bridge/SignalPollBatchTest.kt
+    bridge/CommandPayloadTest.kt
+```
+
+Юнит-тесты без брокера и без Android-эмулятора: раскладка топиков, JSON discovery,
+выбор компонента, нарезка опроса по source и 50 id, перевод `ON`/`OFF` в тело invoke.
+
+Сборка:
+
+```text
+./gradlew :mqtt:testDebugUnitTest
+./gradlew :mqtt:assembleDebug
+```
+
+В `settings.gradle.kts` добавить `include(":mqtt")`.
+
+---
+
+## 8. Этапы
+
+| # | Этап | Где | Критерий |
+|---|------|-----|----------|
+| 0 | Этот план | docs | Согласован |
+| 1 | Каталог v4: operations, valueKeys, allowedValues, numericRange, signalId | app | Старые поля на месте; тест каталога знает version 4; Voice по-прежнему игнорирует новые поля |
+| 2 | Каркас `:mqtt`, настройки, шифрование секретов, health и pairing/токен | mqtt | На ГУ виден статус API |
+| 3 | Топики, выбор сущности, discovery JSON, юнит-тесты | mqtt | Тесты без брокера |
+| 4 | Публикация состояний по изменению, LWT, пачки signals | mqtt | Отмеченный датчик появляется в брокере |
+| 5 | Подписка и invoke, откат state при ошибке, игнор retained-команд | mqtt | Switch климата меняет машину и возвращается при отказе |
+| 6 | Кнопки builtin и автоматизаций | mqtt | «Выполнить сейчас» и `media_next` |
+| 7 | TLS, проверка брокера, свой CA | mqtt | 1883 без TLS и 8883 с CA |
+| 8 | Boot + foreground-сервис | mqtt | После перезагрузки ГУ мост поднимается сам, если автозапуск включён |
+| 9 | Список каталога в UI, снятие сущности удаляет discovery | mqtt | Снятый флажок убирает сущность из Home Assistant |
+
+Этапы 1 и 3 можно делать параллельно. На ГУ проверяются 4–9; в облаке собирается APK
+и гоняются юнит-тесты.
+
+---
+
+## 9. Вне первой версии
+
+- Сводная сущность `climate` и `cover` с положением окна в процентах.
+- `set_media_volume`, яркость экрана и другие builtin с параметрами — когда в каталоге появится их схема.
+- Поток сигналов (WebSocket / SSE) в Monitor. Пока хватает опроса.
+- Второй брокер, MQTT over WebSocket, MQTT 5.
+- Прямой доступ к mbCAN или VHAL из этого процесса.
+- Замок дверей и дистанционный пуск: в каталоге команд нет.
+- Навык Яндекса внутри APK. Путь в Умный дом: Home Assistant и уже существующая интеграция Yandex Smart Home поверх этих сущностей.
+
+---
+
+## 10. Критерий «первая версия готова»
+
+На ГУ с включённым API Monitor и брокером в LAN:
+
+1. Pairing или вставленный токен, проверка брокера без TLS и с TLS.
+2. Отмеченные датчики меняют топики только когда меняется значение; общий `status` = `online`.
+3. Выключенный Monitor или оборванный опрос переводит `status` в `offline`, команды не уходят в API.
+4. Включённый пользователем switch / number / select вызывает `invoke` и публикует новое состояние.
+5. Окно, люк, шторка и багажник не отмечены, пока пользователь сам их не включил. Круиз, ADB, Wi‑Fi и перезапуски в списке отсутствуют.
+6. Выбранная автоматизация запускается кнопкой.
+7. При включённом discovery Home Assistant создаёт одно устройство с этими сущностями; снятый флажок сущность удаляет.
+8. После перезагрузки ГУ сервис поднимается сам.
