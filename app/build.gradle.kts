@@ -129,6 +129,7 @@ android {
             java.srcDir(
                 if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
             )
+            java.srcDir("../shared/src/main/java")
         }
     }
 }

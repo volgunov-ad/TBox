@@ -5,6 +5,8 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 
@@ -45,6 +47,7 @@ typedef struct {
 static bool s_inited;
 static bool s_nimble_ready;
 static bool s_scanning;
+static SemaphoreHandle_t s_radio_lock;
 static bool s_on;
 static bool s_learn;
 static uint32_t s_learn_deadline_ms;
@@ -259,7 +262,7 @@ static bool parse_bthome(const uint8_t *data, uint8_t len, bthome_parse_t *out)
 static bool add_mac_locked(const uint8_t *addr)
 {
     if (find_mac(addr) >= 0) return true;
-    if (s_mac_count >= BLE_BTN_MAX_MACS) return false;
+    if (s_mac_count + ble_phone_count() >= BLE_DEVICE_MAX) return false;
     memcpy(s_macs[s_mac_count], addr, 6);
     s_mac_count++;
     return save_nvs();
@@ -267,6 +270,16 @@ static bool add_mac_locked(const uint8_t *addr)
 
 static int start_scan(void);
 static void stop_scan(void);
+
+void ble_radio_lock(void)
+{
+    if (s_radio_lock) xSemaphoreTakeRecursive(s_radio_lock, portMAX_DELAY);
+}
+
+void ble_radio_unlock(void)
+{
+    if (s_radio_lock) xSemaphoreGiveRecursive(s_radio_lock);
+}
 
 static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
                               const uint8_t *svc, uint8_t svc_len)
@@ -312,7 +325,7 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
     }
 }
 
-static int gap_event(struct ble_gap_event *event, void *arg)
+int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
     switch (event->type) {
@@ -339,12 +352,22 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         }
         return 0;
     }
+    /* A connection preempts the scan. ble_gap_disc_cancel() itself sends nothing. */
     case BLE_GAP_EVENT_DISC_COMPLETE:
+        ble_radio_lock();
         ESP_LOGI(TAG, "scan complete reason=%d", event->disc_complete.reason);
         s_scanning = false;
         if (s_on && s_nimble_ready) {
             start_scan();
         }
+        ble_radio_unlock();
+        return 0;
+    case BLE_GAP_EVENT_CONNECT:
+    case BLE_GAP_EVENT_DISCONNECT:
+    case BLE_GAP_EVENT_SUBSCRIBE:
+    case BLE_GAP_EVENT_MTU:
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        ble_phone_on_gap(event);
         return 0;
     default:
         return 0;
@@ -354,15 +377,16 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 static int start_scan(void)
 {
     if (!s_nimble_ready || s_scanning) return 0;
+    /* 40 ms window every 80 ms: the connectable phone advert and a phone link share the radio. */
     struct ble_gap_disc_params params = {
-        .itvl = 0,
-        .window = 0,
+        .itvl = 0x80,
+        .window = 0x40,
         .filter_policy = 0,
         .limited = 0,
         .passive = 1,
         .filter_duplicates = 0,
     };
-    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, gap_event, NULL);
+    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, ble_btn_gap_event, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "ble_gap_disc rc=%d", rc);
         return rc;
@@ -380,20 +404,42 @@ static void stop_scan(void)
     }
 }
 
+void ble_btn_suspend_scan(void)
+{
+    ble_radio_lock();
+    stop_scan();
+    ble_radio_unlock();
+}
+
+void ble_btn_kick_scan(void)
+{
+    ble_radio_lock();
+    if (s_on && s_nimble_ready) start_scan();
+    ble_radio_unlock();
+}
+
 static void on_sync(void)
 {
+    ble_radio_lock();
     s_nimble_ready = true;
+    bool on = s_on;
+    ble_radio_unlock();
     ESP_LOGI(TAG, "NimBLE sync");
-    if (s_on) {
+    if (on) {
+        ble_phone_start_adv();
+        ble_radio_lock();
         start_scan();
+        ble_radio_unlock();
     }
 }
 
 static void on_reset(int reason)
 {
     ESP_LOGW(TAG, "NimBLE reset reason=%d", reason);
+    ble_radio_lock();
     s_nimble_ready = false;
     s_scanning = false;
+    ble_radio_unlock();
 }
 
 static void nimble_host_task(void *param)
@@ -413,7 +459,9 @@ static void start_nimble(void)
 void ble_btn_init(void)
 {
     if (s_inited) return;
+    s_radio_lock = xSemaphoreCreateRecursiveMutex();
     load_nvs();
+    ble_phone_init();
     s_inited = true;
     ESP_LOGI(TAG, "init on=%d macs=%d", (int)s_on, s_mac_count);
 
@@ -422,6 +470,7 @@ void ble_btn_init(void)
         ESP_LOGE(TAG, "nimble_port_init: %s", esp_err_to_name(err));
         return;
     }
+    ble_phone_gatts_register();
     start_nimble();
 }
 
@@ -452,13 +501,24 @@ int ble_btn_get_macs(char out[][18], int max_out)
 
 bool ble_btn_set_on(bool on)
 {
+    ble_radio_lock();
     s_on = on;
     save_nvs();
-    if (on) {
-        if (s_nimble_ready) start_scan();
-    } else {
+    bool ready = s_nimble_ready;
+    if (!on) {
         stop_scan();
         s_learn = false;
+        ble_phone_learn_end();
+    }
+    ble_radio_unlock();
+    if (!ready) return true;
+    if (on) {
+        ble_phone_start_adv();
+        ble_radio_lock();
+        start_scan();
+        ble_radio_unlock();
+    } else {
+        ble_phone_stop_link();
     }
     return true;
 }
@@ -533,4 +593,5 @@ void ble_btn_poll(uint32_t now_ms)
         protocol_send_ble_ack("learnEnd", false, "timeout");
         protocol_send_ble_status();
     }
+    ble_phone_poll(now_ms);
 }

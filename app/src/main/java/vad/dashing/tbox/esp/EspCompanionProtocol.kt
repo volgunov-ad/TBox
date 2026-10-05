@@ -3,6 +3,7 @@ package vad.dashing.tbox.esp
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.UtcTime
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -80,6 +81,15 @@ object EspCompanionProtocol {
     const val TYPE_BLE_LEARN_END = "bleLearnEnd"
     const val TYPE_BLE_ALLOW = "bleAllow"
     const val TYPE_BLE_FORGET = "bleForget"
+    const val TYPE_PHONE_LEARN_BEGIN = "phoneLearnBegin"
+    const val TYPE_PHONE_LEARN_END = "phoneLearnEnd"
+    const val TYPE_PHONE_ALLOW = "phoneAllow"
+    const val TYPE_PHONE_DENY = "phoneDeny"
+    const val TYPE_PHONE_FORGET = "phoneForget"
+    const val TYPE_PHONE_PAIR = "phonePair"
+    const val TYPE_PHONE_CMD = "phoneCmd"
+    const val TYPE_PHONE_SNAP_REQ = "phoneSnapReq"
+    const val TYPE_PHONE_SNAP = "phoneSnap"
     const val TYPE_AP_CFG = "apCfg"
     const val TYPE_AP_STATUS = "apStatus"
 
@@ -215,6 +225,36 @@ object EspCompanionProtocol {
 
     fun encodeBleForget(mac: String): String =
         line(TYPE_BLE_FORGET, mapOf("mac" to mac.trim().lowercase(Locale.US)))
+
+    fun encodePhoneLearnBegin(timeoutMs: Long = 90_000L): String =
+        line(TYPE_PHONE_LEARN_BEGIN, mapOf("timeoutMs" to timeoutMs))
+
+    fun encodePhoneLearnEnd(): String = line(TYPE_PHONE_LEARN_END)
+
+    fun encodePhoneAllow(id: String): String =
+        line(TYPE_PHONE_ALLOW, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneDeny(id: String): String =
+        line(TYPE_PHONE_DENY, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneForget(id: String): String =
+        line(TYPE_PHONE_FORGET, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot): String {
+        val extras = linkedMapOf<String, Any>("gen" to gen)
+        snap.leftTenths?.let { extras["left"] = it }
+        snap.rightTenths?.let { extras["right"] = it }
+        snap.fan?.let { extras["fan"] = it }
+        snap.mode?.let { extras["mode"] = it }
+        snap.auto?.let { extras["auto"] = it }
+        snap.blow?.let { extras["blow"] = it }
+        snap.sync?.let { extras["sync"] = it }
+        snap.seats.forEachIndexed { index, value ->
+            if (value != null) extras["s$index"] = value
+        }
+        snap.volume?.let { extras["vol"] = it }
+        return line(TYPE_PHONE_SNAP, extras)
+    }
 
     fun encodeBleForgetAll(): String =
         line(TYPE_BLE_FORGET, mapOf("all" to true))
@@ -449,6 +489,7 @@ object EspCompanionProtocol {
                         bleOn = o.optBoolean("bleOn", false),
                         bleMacs = parseStringList(o, "bleMacs"),
                         ap = o.optBoolean("ap", false),
+                        phone = o.optBoolean("phone", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -570,7 +611,20 @@ object EspCompanionProtocol {
                     lastRssi = if (o.has("lastRssi")) o.optInt("lastRssi", 0) else 0,
                     lastMac = o.optString("lastMac", "").trim().lowercase(Locale.US)
                         .ifBlank { null },
+                    phoneLearn = o.optBoolean("phoneLearn", false),
+                    phones = parsePhones(o),
                 )
+                TYPE_PHONE_PAIR -> EspMessage.PhonePair(
+                    id = o.optString("id", "").trim().lowercase(Locale.US),
+                    name = o.optString("name", "").trim(),
+                )
+                TYPE_PHONE_CMD -> EspMessage.PhoneCmd(
+                    id = o.optString("id", "").trim().lowercase(Locale.US),
+                    op = o.optInt("op", 0),
+                    seat = o.optInt("seat", 0),
+                    arg = o.optInt("arg", 0),
+                )
+                TYPE_PHONE_SNAP_REQ -> EspMessage.PhoneSnapReq
                 TYPE_BLE_SEEN -> EspMessage.BleSeen(
                     mac = o.optString("mac", "").trim().lowercase(Locale.US),
                     rssi = o.optInt("rssi", 0),
@@ -634,6 +688,18 @@ object EspCompanionProtocol {
         }.distinct()
     }
 
+    private fun parsePhones(o: JSONObject): List<EspPhoneDevice> {
+        val arr = o.optJSONArray("phones") ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.optJSONObject(i) ?: continue
+                val id = item.optString("id", "").trim().lowercase(Locale.US)
+                if (id.isEmpty()) continue
+                add(EspPhoneDevice(id = id, name = item.optString("name", "").trim()))
+            }
+        }
+    }
+
     private fun parseStringList(o: JSONObject, key: String): List<String> {
         val arr = o.optJSONArray(key) ?: return emptyList()
         return buildList {
@@ -678,6 +744,11 @@ object EspCompanionProtocol {
     }
 }
 
+data class EspPhoneDevice(
+    val id: String,
+    val name: String,
+)
+
 sealed class EspMessage {
     data class Hello(
         val fw: String,
@@ -703,6 +774,8 @@ sealed class EspMessage {
         val bleMacs: List<String> = emptyList(),
         /** Firmware 0.9+ SoftAP router. */
         val ap: Boolean = false,
+        /** Firmware 0.10+ phone companion channel. */
+        val phone: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -812,7 +885,23 @@ sealed class EspMessage {
         val lastBat: Int = -1,
         val lastRssi: Int = 0,
         val lastMac: String? = null,
+        val phoneLearn: Boolean = false,
+        val phones: List<EspPhoneDevice> = emptyList(),
     ) : EspMessage()
+
+    data class PhonePair(
+        val id: String,
+        val name: String,
+    ) : EspMessage()
+
+    data class PhoneCmd(
+        val id: String,
+        val op: Int,
+        val seat: Int,
+        val arg: Int,
+    ) : EspMessage()
+
+    data object PhoneSnapReq : EspMessage()
 
     data class BleSeen(
         val mac: String,

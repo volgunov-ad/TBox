@@ -484,4 +484,28 @@ class EspCompanionProtocolTest {
         assertTrue(cfg.contains("\"apSsid\":\"TBox-ab12\""))
         assertTrue(cfg.contains("\"apPsk\":\"cabin8765\""))
     }
+
+    @Test
+    fun parsePhoneCompanionUsb() {
+        val pair = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"phonePair","id":"0a1b2c3d","name":"Телефон"}""",
+        ) as EspMessage.PhonePair
+        assertEquals("0a1b2c3d", pair.id)
+        assertEquals("Телефон", pair.name)
+        val cmd = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"phoneCmd","id":"0a1b2c3d","op":1,"seat":0,"arg":230}""",
+        ) as EspMessage.PhoneCmd
+        assertEquals(1, cmd.op)
+        assertEquals(230, cmd.arg)
+        assertTrue(EspCompanionProtocol.parseLine("""{"v":1,"t":"phoneSnapReq"}""") is EspMessage.PhoneSnapReq)
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":true,"macs":[],""" +
+                """"phones":[{"id":"0a1b2c3d","name":"Телефон"}]}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.phoneLearn)
+        assertEquals("Телефон", status.phones.single().name)
+        val allow = EspCompanionProtocol.encodePhoneAllow("0A1B2C3D")
+        assertTrue(allow.contains("\"id\":\"0a1b2c3d\""))
+        assertFalse(allow.contains("key"))
+    }
 }

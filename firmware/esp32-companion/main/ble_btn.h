@@ -3,8 +3,21 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define BLE_BTN_MAX_MACS 4
+#include "ble_phone.h"
+
+#define BLE_BTN_MAX_MACS BLE_DEVICE_MAX
 #define BLE_BTN_LEARN_DEFAULT_MS 30000u
+
+struct ble_gap_event;
+int ble_btn_gap_event(struct ble_gap_event *event, void *arg);
+
+/**
+ * Recursive lock for radio and phone state. NimBLE host, TinyUSB RX and the
+ * main loop all touch it. NimBLE calls GAP callbacks without its own host lock,
+ * so taking this inside a callback cannot deadlock against ble_gap_* calls.
+ */
+void ble_radio_lock(void);
+void ble_radio_unlock(void);
 
 /** Init NVS state and optionally start NimBLE scan if previously enabled. */
 void ble_btn_init(void);
@@ -33,3 +46,8 @@ void ble_btn_last_mac(char out[18]);
 
 /** Main-loop tick: expire learn window. */
 void ble_btn_poll(uint32_t now_ms);
+
+/** Stop the Shelly scan without waiting for DISC_COMPLETE. */
+void ble_btn_suspend_scan(void);
+/** Start the scan again when BLE is on. */
+void ble_btn_kick_scan(void);

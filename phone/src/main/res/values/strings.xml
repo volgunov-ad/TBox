@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TBox Phone</string>
+    <string name="pair">Connect</string>
+    <string name="driver">Driver</string>
+    <string name="passenger">Passenger</string>
+    <string name="fan">Fan</string>
+    <string name="auto">Auto</string>
+    <string name="sync">Sync</string>
+    <string name="sound">Sound</string>
+    <string name="seats">Seats</string>
+    <string name="rear_left">Rear left</string>
+    <string name="rear_right">Rear right</string>
+    <string name="prev">Previous</string>
+    <string name="play">Play</string>
+    <string name="next">Next</string>
+    <string name="waiting">Waiting for the head unit</string>
+    <string name="looking">Looking for the companion</string>
+    <string name="phone_name">Phone</string>
+    <string name="eco">ECO</string>
+    <string name="comfort">Comfort</string>
+    <string name="strong">Strong</string>
+    <string name="need_permission">Allow Bluetooth access</string>
+    <string name="bluetooth_off">Turn on Bluetooth</string>
+    <string name="blow_face">Face</string>
+    <string name="blow_feet">Feet</string>
+    <string name="blow_face_feet">Face + feet</string>
+    <string name="blow_glass">Windshield</string>
+    <string name="blow_glass_feet">Windshield + feet</string>
+    <string name="seat_off">Off</string>
+    <string name="seat_heat_1">H1</string>
+    <string name="seat_heat_2">H2</string>
+    <string name="seat_heat_3">H3</string>
+    <string name="seat_vent_1">V1</string>
+    <string name="seat_vent_2">V2</string>
+    <string name="seat_vent_3">V3</string>
+</resources>
