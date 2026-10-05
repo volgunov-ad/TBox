@@ -48,6 +48,16 @@ object AutomationValidator {
         return issues
     }
 
+    /** Ad-hoc action lists (External API invoke) have no triggers to reference. */
+    fun validateActions(actions: List<AutomationAction>): List<AutomationValidationIssue> {
+        val issues = mutableListOf<AutomationValidationIssue>()
+        val actionCounter = IntArray(1)
+        actions.forEachIndexed { index, action ->
+            validateAction(action, emptySet(), "actions[$index]", 0, actionCounter, issues)
+        }
+        return issues
+    }
+
     fun isRunnable(definition: AutomationDefinition): Boolean =
         definition.enabled && validate(definition).isEmpty()
 

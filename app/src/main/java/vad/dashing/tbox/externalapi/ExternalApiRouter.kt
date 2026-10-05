@@ -14,6 +14,7 @@ import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AutomationTriggerContext
+import vad.dashing.tbox.automation.AutomationValidator
 
 class ExternalApiRouter(
     private val appVersion: String,
@@ -134,7 +135,7 @@ class ExternalApiRouter(
         if (requestId.isEmpty()) {
             return errorResponse(400, "invalid_request", "requestId is required")
         }
-        val request = pairingSession.getRequest(requestId)
+        val request = pairingSession.takeRequestForPoll(requestId)
             ?: return errorResponse(404, "not_found", "Pair request not found")
         val json = JSONObject().put("status", request.status.name.lowercase())
         when (request.status) {
@@ -271,6 +272,14 @@ class ExternalApiRouter(
         }
         if (decoded.size > ExternalApiConstants.MAX_ACTIONS_PER_REQUEST) {
             return errorResponse(400, "invalid_request", "Too many actions")
+        }
+        val issues = AutomationValidator.validateActions(decoded)
+        if (issues.isNotEmpty()) {
+            return errorResponse(
+                400,
+                "invalid_request",
+                issues.joinToString("; ") { "${it.path}: ${it.message}" },
+            )
         }
         if (!dangerousEnabled() && decoded.any(ExternalApiActionSafetyRules::isDangerous)) {
             return errorResponse(403, "dangerous_disabled", "Dangerous commands are disabled")

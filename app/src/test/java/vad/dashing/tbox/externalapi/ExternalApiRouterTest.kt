@@ -200,6 +200,40 @@ class ExternalApiRouterTest {
     }
 
     @Test
+    fun actionsInvoke_outOfRangeDelay_isRejectedBeforeExecution() {
+        val token = "delay-token"
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "voice",
+                clientName = "Voice",
+                tokenHash = ExternalApiAuth.sha256Hex(token),
+                createdAtEpochMs = 1L,
+            ),
+        )
+        var executed = false
+        val router = ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { clients },
+            dangerousEnabled = { true },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { executed = true; emptyList() },
+            runAutomationNow = { null },
+        )
+        val response = router.handle(
+            "POST",
+            ExternalApiConstants.PATH_ACTIONS_INVOKE,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            """{"actions":[{"type":"delay","durationMillis":${Long.MAX_VALUE}}]}""",
+        )
+        assertEquals(400, response.status)
+        assertFalse(executed)
+    }
+
+    @Test
     fun webPanel_whenDisabled_isHidden() {
         val router = router(webPanelEnabled = false)
         val response = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL, emptyMap(), emptyMap(), "")

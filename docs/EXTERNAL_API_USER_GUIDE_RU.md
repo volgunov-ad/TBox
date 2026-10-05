@@ -110,7 +110,9 @@ Authorization: Bearer <accessToken>
 1. На ГУ: **«Подключить приложение»** (режим pairing на ~2 минуты).
 2. Клиент шлёт `POST /v1/pair/request`.
 3. На ГУ: **Разрешить**.
-4. Клиент забирает `accessToken` через `GET /v1/pair/status`.
+4. Клиент забирает `accessToken` через `GET /v1/pair/status`. Ответ `approved` / `denied`
+   выдаётся **один раз**, следующий запрос с тем же `requestId` вернёт `404`. Неполученный
+   результат хранится ~10 минут после окончания pairing.
 
 PC:
 

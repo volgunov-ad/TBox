@@ -48,6 +48,35 @@ class ExternalApiPairingSessionTest {
     }
 
     @Test
+    fun pollForApproved_handsOutTokenOnce() {
+        val session = ExternalApiPairingSession()
+        session.startPairing()
+        val pending = session.submitPairRequest("client-4", "Name", null)
+        assertEquals(
+            ExternalApiPairRequestStatus.PENDING,
+            session.takeRequestForPoll(pending.requestId)?.status,
+        )
+        session.approveRequest(pending.requestId, "once")
+        assertEquals("once", session.takeRequestForPoll(pending.requestId)?.accessToken)
+        assertNull(session.takeRequestForPoll(pending.requestId))
+    }
+
+    @Test
+    fun submitPairRequest_capsPendingAndReplacesSameClient() {
+        val session = ExternalApiPairingSession()
+        session.startPairing()
+        val first = session.submitPairRequest("same", "Name", null)
+        val second = session.submitPairRequest("same", "Name", null)
+        assertNull(session.getRequest(first.requestId))
+        assertNotNull(session.getRequest(second.requestId))
+        repeat(ExternalApiConstants.MAX_PENDING_PAIR_REQUESTS - 1) { index ->
+            session.submitPairRequest("client-$index", "Name", null)
+        }
+        val overflow = runCatching { session.submitPairRequest("overflow", "Name", null) }
+        assertTrue(overflow.isFailure)
+    }
+
+    @Test
     fun startPairing_clearsPreviousApproved() {
         val session = ExternalApiPairingSession()
         session.startPairing()

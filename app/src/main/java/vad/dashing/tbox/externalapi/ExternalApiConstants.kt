@@ -10,6 +10,10 @@ object ExternalApiConstants {
 
     const val PAIRING_TIMEOUT_MS = 120_000L
 
+    /** Approved/denied pair results stay pollable this long after the pairing window. */
+    const val PAIR_RESULT_TTL_MS = 10L * 60L * 1000L
+    const val MAX_PENDING_PAIR_REQUESTS = 10
+
     /** Idle tokens older than this many calendar months are removed after the API starts. */
     const val TOKEN_IDLE_MONTHS = 6
 
@@ -32,4 +36,10 @@ object ExternalApiConstants {
 
     const val MAX_ACTIONS_PER_REQUEST = 20
     const val MAX_SIGNAL_IDS_PER_REQUEST = 50
+
+    const val MAX_REQUEST_LINE_BYTES = 8 * 1024
+    const val MAX_HEADER_BYTES = 32 * 1024
+    const val MAX_HEADER_COUNT = 100
+    const val MAX_BODY_BYTES = 256 * 1024
+    const val MAX_CONCURRENT_CLIENTS = 8
 }

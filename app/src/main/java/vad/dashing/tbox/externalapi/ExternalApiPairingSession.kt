@@ -64,6 +64,14 @@ class ExternalApiPairingSession {
         clientKind: String?,
     ): ExternalApiPairRequest {
         require(isPairingActive()) { "Pairing is not active" }
+        val normalizedClientId = clientId.trim()
+        pendingRequests.entries.removeIf { (_, req) ->
+            req.status == ExternalApiPairRequestStatus.PENDING && req.clientId == normalizedClientId
+        }
+        val pendingCount = pendingRequests.values.count { it.status == ExternalApiPairRequestStatus.PENDING }
+        require(pendingCount < ExternalApiConstants.MAX_PENDING_PAIR_REQUESTS) {
+            "Too many pending pair requests"
+        }
         val request = ExternalApiPairRequest(
             requestId = UUID.randomUUID().toString(),
             clientId = clientId.trim(),
@@ -80,8 +88,31 @@ class ExternalApiPairingSession {
             .filter { it.status == ExternalApiPairRequestStatus.PENDING }
             .sortedBy { it.createdAtElapsed }
 
-    fun getRequest(requestId: String): ExternalApiPairRequest? =
-        pendingRequests[requestId.trim()]
+    fun getRequest(requestId: String): ExternalApiPairRequest? {
+        dropExpiredResolved()
+        return pendingRequests[requestId.trim()]
+    }
+
+    /**
+     * Status for a client poll. A resolved request is handed out once and then forgotten,
+     * so the plaintext access token cannot be fetched again by anyone who learns the request id.
+     */
+    fun takeRequestForPoll(requestId: String): ExternalApiPairRequest? {
+        val request = getRequest(requestId) ?: return null
+        if (request.status != ExternalApiPairRequestStatus.PENDING) {
+            pendingRequests.remove(request.requestId, request)
+        }
+        return request
+    }
+
+    private fun dropExpiredResolved() {
+        val cutoff = SystemClock.elapsedRealtime() -
+            ExternalApiConstants.PAIRING_TIMEOUT_MS -
+            ExternalApiConstants.PAIR_RESULT_TTL_MS
+        pendingRequests.entries.removeIf { (_, req) ->
+            req.status != ExternalApiPairRequestStatus.PENDING && req.createdAtElapsed < cutoff
+        }
+    }
 
     fun approveRequest(requestId: String, accessToken: String): ExternalApiPairRequest? {
         val current = pendingRequests[requestId.trim()] ?: return null

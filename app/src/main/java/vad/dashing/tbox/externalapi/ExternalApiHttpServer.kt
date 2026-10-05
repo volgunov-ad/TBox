@@ -9,9 +9,13 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import java.net.URLDecoder
 import java.nio.charset.Charset
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -63,7 +67,13 @@ class ExternalApiHttpServer(
         acceptExecutor = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "external-api-accept").apply { isDaemon = true }
         }
-        workerExecutor = Executors.newCachedThreadPool { runnable ->
+        workerExecutor = ThreadPoolExecutor(
+            0,
+            ExternalApiConstants.MAX_CONCURRENT_CLIENTS,
+            60L,
+            TimeUnit.SECONDS,
+            SynchronousQueue(),
+        ) { runnable ->
             Thread(runnable, "external-api-worker").apply { isDaemon = true }
         }
         acceptExecutor?.execute {
@@ -89,8 +99,11 @@ class ExternalApiHttpServer(
         while (running.get() && !socket.isClosed) {
             try {
                 val client = socket.accept()
-                workerExecutor?.execute {
-                    handleClient(client)
+                try {
+                    val executor = workerExecutor ?: throw RejectedExecutionException()
+                    executor.execute { handleClient(client) }
+                } catch (_: RejectedExecutionException) {
+                    closeQuietly(client)
                 }
             } catch (error: SocketException) {
                 if (running.get()) {
@@ -111,7 +124,12 @@ class ExternalApiHttpServer(
             client.use { socket ->
                 val input = BufferedInputStream(socket.getInputStream())
                 val output = BufferedOutputStream(socket.getOutputStream())
-                val request = readRequest(input) ?: return
+                val request = try {
+                    readRequest(input) ?: return
+                } catch (error: RequestRejectedException) {
+                    writeResponse(output, errorResponse(error.status, error.code, error.message.orEmpty()))
+                    return
+                }
                 val response = try {
                     handler(
                         request.method,
@@ -138,12 +156,30 @@ class ExternalApiHttpServer(
             }
         } catch (_: IOException) {
         } finally {
-            try {
-                client.close()
-            } catch (_: IOException) {
-            }
+            closeQuietly(client)
         }
     }
+
+    private fun closeQuietly(client: Socket) {
+        try {
+            client.close()
+        } catch (_: IOException) {
+        }
+    }
+
+    private class RequestRejectedException(
+        val status: Int,
+        val code: String,
+        message: String,
+    ) : IOException(message)
+
+    private fun errorResponse(status: Int, code: String, message: String) =
+        ExternalApiHttpResponse(
+            status = status,
+            body = JSONObject()
+                .put("error", JSONObject().put("code", code).put("message", message))
+                .toString(),
+        )
 
     private data class ParsedRequest(
         val method: String,
@@ -154,7 +190,7 @@ class ExternalApiHttpServer(
     )
 
     private fun readRequest(input: BufferedInputStream): ParsedRequest? {
-        val requestLine = readLine(input) ?: return null
+        val requestLine = readLine(input, ExternalApiConstants.MAX_REQUEST_LINE_BYTES) ?: return null
         if (requestLine.isBlank()) return null
         val parts = requestLine.split(' ')
         if (parts.size < 2) return null
@@ -164,18 +200,33 @@ class ExternalApiHttpServer(
         val path = pathAndQuery[0]
         val query = parseQuery(pathAndQuery.getOrNull(1).orEmpty())
         val headers = linkedMapOf<String, String>()
+        var headerBytes = 0
+        var headerCount = 0
         while (true) {
-            val line = readLine(input) ?: break
+            val line = readLine(input, ExternalApiConstants.MAX_HEADER_BYTES) ?: break
             if (line.isEmpty()) break
+            headerBytes += line.length
+            headerCount += 1
+            if (headerBytes > ExternalApiConstants.MAX_HEADER_BYTES ||
+                headerCount > ExternalApiConstants.MAX_HEADER_COUNT
+            ) {
+                throw RequestRejectedException(431, "headers_too_large", "Request headers too large")
+            }
             val separator = line.indexOf(':')
             if (separator <= 0) continue
             val name = line.substring(0, separator).trim().lowercase()
             val value = line.substring(separator + 1).trim()
             headers[name] = value
         }
-        val contentLength = headers["content-length"]?.toIntOrNull() ?: 0
+        val contentLength = headers["content-length"]?.let { raw ->
+            raw.toLongOrNull()?.takeIf { it >= 0 }
+                ?: throw RequestRejectedException(400, "invalid_request", "Invalid Content-Length")
+        } ?: 0L
+        if (contentLength > ExternalApiConstants.MAX_BODY_BYTES) {
+            throw RequestRejectedException(413, "payload_too_large", "Request body too large")
+        }
         val bodyBytes = if (contentLength > 0) {
-            readExact(input, contentLength)
+            readExact(input, contentLength.toInt())
         } else {
             ByteArray(0)
         }
@@ -197,9 +248,13 @@ class ExternalApiHttpServer(
     }
 
     private fun urlDecode(value: String): String =
-        java.net.URLDecoder.decode(value, charset.name())
+        try {
+            URLDecoder.decode(value, charset.name())
+        } catch (_: IllegalArgumentException) {
+            value
+        }
 
-    private fun readLine(input: BufferedInputStream): String? {
+    private fun readLine(input: BufferedInputStream, maxBytes: Int): String? {
         val buffer = ByteArrayOutputStream()
         while (true) {
             val byte = input.read()
@@ -210,6 +265,9 @@ class ExternalApiHttpServer(
                 break
             }
             if (byte != '\r'.code) {
+                if (buffer.size() >= maxBytes) {
+                    throw RequestRejectedException(431, "line_too_long", "Request line too long")
+                }
                 buffer.write(byte)
             }
         }
@@ -256,6 +314,8 @@ class ExternalApiHttpServer(
         403 -> "Forbidden"
         404 -> "Not Found"
         405 -> "Method Not Allowed"
+        413 -> "Payload Too Large"
+        431 -> "Request Header Fields Too Large"
         500 -> "Internal Server Error"
         else -> "OK"
     }
