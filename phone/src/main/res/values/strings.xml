@@ -20,4 +20,18 @@
     <string name="eco">ECO</string>
     <string name="comfort">Comfort</string>
     <string name="strong">Strong</string>
+    <string name="need_permission">Allow Bluetooth access</string>
+    <string name="bluetooth_off">Turn on Bluetooth</string>
+    <string name="blow_face">Face</string>
+    <string name="blow_feet">Feet</string>
+    <string name="blow_face_feet">Face + feet</string>
+    <string name="blow_glass">Windshield</string>
+    <string name="blow_glass_feet">Windshield + feet</string>
+    <string name="seat_off">Off</string>
+    <string name="seat_heat_1">H1</string>
+    <string name="seat_heat_2">H2</string>
+    <string name="seat_heat_3">H3</string>
+    <string name="seat_vent_1">V1</string>
+    <string name="seat_vent_2">V2</string>
+    <string name="seat_vent_3">V3</string>
 </resources>

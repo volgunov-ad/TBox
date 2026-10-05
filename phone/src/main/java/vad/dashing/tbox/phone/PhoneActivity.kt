@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +59,7 @@ private fun PhoneScreen() {
     var lastSnapAt by remember { mutableLongStateOf(0L) }
     var lastVolume by remember { mutableIntStateOf(10) }
     var ready by remember { mutableStateOf(false) }
+    var bluetoothOn by remember { mutableStateOf(true) }
     val air = remember { Air() }
     val phoneName = stringResource(R.string.phone_name)
     val radio = remember {
@@ -96,6 +99,8 @@ private fun PhoneScreen() {
     androidx.compose.runtime.LaunchedEffect(ready) {
         if (!ready) return@LaunchedEffect
         while (isActive) {
+            bluetoothOn = radio.bluetoothOn
+            radio.ensureScan()
             val fresh = lastSnapAt != 0L && SystemClock.elapsedRealtime() - lastSnapAt < 2_000L
             if (!fresh && air.job?.isActive != true) {
                 val counter = store.nextCounter()
@@ -120,6 +125,10 @@ private fun PhoneScreen() {
     }
 
     fun send(op: Int, seat: Int, arg: Int) {
+        if (!ready) {
+            launcher.launch(permissions)
+            return
+        }
         val counter = store.nextCounter()
         val payload = PhoneBleCodec.seal(
             store.key,
@@ -128,9 +137,11 @@ private fun PhoneScreen() {
             counter,
             PhoneBleCodec.commandBody(op, seat, arg),
         )
+        snap = applyLocally(snap, op, seat, arg)
+        // The ESP listens in short windows between its own replies; ~1 s on air covers several.
         air.job?.cancel()
         air.job = scope.launch {
-            repeat(3) {
+            repeat(5) {
                 radio.advertise(payload)
                 delay(200)
             }
@@ -145,11 +156,21 @@ private fun PhoneScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (!radio.canAdvertise) {
+        if (!ready) {
+            Button(onClick = { launcher.launch(permissions) }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.need_permission))
+            }
+        } else if (!bluetoothOn) {
+            Text(stringResource(R.string.bluetooth_off))
+        } else if (!radio.canAdvertise) {
             Text(stringResource(R.string.need_radio))
         }
         Button(
             onClick = {
+                if (!ready) {
+                    launcher.launch(permissions)
+                    return@Button
+                }
                 air.job?.cancel()
                 air.job = scope.launch {
                     val pages = PhoneBleCodec.pairPages(store.id, store.key, phoneName)
@@ -190,16 +211,22 @@ private fun PhoneScreen() {
                 Text(stringResource(R.string.sync))
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { send(PhoneBleCodec.OP_MODE, 0, 1) }) { Text(stringResource(R.string.eco)) }
-            Button(onClick = { send(PhoneBleCodec.OP_MODE, 0, 2) }) { Text(stringResource(R.string.comfort)) }
-            Button(onClick = { send(PhoneBleCodec.OP_MODE, 0, 3) }) { Text(stringResource(R.string.strong)) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(1, 2, 3, 4, 5).forEach { blow ->
-                Button(onClick = { send(PhoneBleCodec.OP_BLOW, 0, blow) }) { Text(blow.toString()) }
-            }
-        }
+        Choices(
+            listOf(
+                stringResource(R.string.eco),
+                stringResource(R.string.comfort),
+                stringResource(R.string.strong),
+            ),
+            snap.mode,
+        ) { send(PhoneBleCodec.OP_MODE, 0, it) }
+        val blowLabels = listOf(
+            stringResource(R.string.blow_face),
+            stringResource(R.string.blow_feet),
+            stringResource(R.string.blow_face_feet),
+            stringResource(R.string.blow_glass),
+            stringResource(R.string.blow_glass_feet),
+        )
+        Choices(blowLabels, snap.blow) { send(PhoneBleCodec.OP_BLOW, 0, it) }
         Text(stringResource(R.string.seats))
         SeatRow(stringResource(R.string.driver), snap.seats.getOrNull(0), 7) { send(PhoneBleCodec.OP_SEAT, 0, it) }
         SeatRow(stringResource(R.string.passenger), snap.seats.getOrNull(1), 7) { send(PhoneBleCodec.OP_SEAT, 1, it) }
@@ -247,17 +274,56 @@ private fun Stepper(label: String, value: String, onStep: (Boolean) -> Unit) {
 
 @Composable
 private fun SeatRow(label: String, current: Int?, levels: Int, onPick: (Int) -> Unit) {
+    val all = listOf(
+        stringResource(R.string.seat_off),
+        stringResource(R.string.seat_heat_1),
+        stringResource(R.string.seat_heat_2),
+        stringResource(R.string.seat_heat_3),
+        stringResource(R.string.seat_vent_1),
+        stringResource(R.string.seat_vent_2),
+        stringResource(R.string.seat_vent_3),
+    )
     Column {
         Text(label)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (level in 1..levels) {
-                Button(onClick = { onPick(level) }) {
-                    Text(if (current == level) "[$level]" else level.toString())
-                }
+        Choices(all.take(levels), current, onPick)
+    }
+}
+
+/** Values are 1-based: the first label sends 1. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Choices(labels: List<String>, current: Int?, onPick: (Int) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        labels.forEachIndexed { index, label ->
+            val value = index + 1
+            Button(onClick = { onPick(value) }) {
+                Text(if (current == value) "[$label]" else label)
             }
         }
     }
 }
+
+/** Shows the change at once, so a second tap steps from the new value. */
+private fun applyLocally(snap: PhoneBleCodec.Snapshot, op: Int, seat: Int, arg: Int): PhoneBleCodec.Snapshot =
+    when (op) {
+        PhoneBleCodec.OP_TEMP_LEFT -> snap.copy(leftTenths = arg)
+        PhoneBleCodec.OP_TEMP_RIGHT -> snap.copy(rightTenths = arg)
+        PhoneBleCodec.OP_FAN -> snap.copy(fan = arg)
+        PhoneBleCodec.OP_AUTO -> snap.copy(auto = arg)
+        PhoneBleCodec.OP_BLOW -> snap.copy(blow = arg)
+        PhoneBleCodec.OP_MODE -> snap.copy(mode = arg)
+        PhoneBleCodec.OP_SYNC -> snap.copy(sync = arg)
+        PhoneBleCodec.OP_SEAT -> if (seat in snap.seats.indices) {
+            snap.copy(seats = snap.seats.toMutableList().also { it[seat] = arg })
+        } else {
+            snap
+        }
+        PhoneBleCodec.OP_VOLUME -> snap.copy(volume = arg)
+        else -> snap
+    }
 
 private fun formatTenths(value: Int?): String {
     if (value == null) return "—"

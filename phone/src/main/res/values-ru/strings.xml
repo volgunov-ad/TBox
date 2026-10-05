@@ -20,4 +20,18 @@
     <string name="eco">Эко</string>
     <string name="comfort">Комфорт</string>
     <string name="strong">Сильный</string>
+    <string name="need_permission">Разрешить доступ к Bluetooth</string>
+    <string name="bluetooth_off">Включите Bluetooth</string>
+    <string name="blow_face">Лицо</string>
+    <string name="blow_feet">Ноги</string>
+    <string name="blow_face_feet">Лицо + ноги</string>
+    <string name="blow_glass">Стекло</string>
+    <string name="blow_glass_feet">Стекло + ноги</string>
+    <string name="seat_off">Выкл</string>
+    <string name="seat_heat_1">О1</string>
+    <string name="seat_heat_2">О2</string>
+    <string name="seat_heat_3">О3</string>
+    <string name="seat_vent_1">В1</string>
+    <string name="seat_vent_2">В2</string>
+    <string name="seat_vent_3">В3</string>
 </resources>

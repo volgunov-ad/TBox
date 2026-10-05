@@ -28,14 +28,20 @@ class PhoneStore(context: Context) {
         }
     }
 
-    var counter: Long
-        get() = prefs.getLong(KEY_COUNTER, 0L)
-        set(value) {
-            prefs.edit().putLong(KEY_COUNTER, value).apply()
-        }
+    /*
+     * The stored value is a reserved upper bound, written with commit() before any
+     * counter below it goes on air. A killed process then skips the unused rest of the
+     * block instead of reusing a counter the ESP already rejected as a replay.
+     */
+    private var reserved: Long = prefs.getLong(KEY_COUNTER, 0L)
+    private var counter: Long = reserved
 
     fun nextCounter(): Long {
         val next = counter + 1L
+        if (next > reserved) {
+            reserved = next + COUNTER_BLOCK
+            prefs.edit().putLong(KEY_COUNTER, reserved).commit()
+        }
         counter = next
         return next
     }
@@ -44,5 +50,6 @@ class PhoneStore(context: Context) {
         const val KEY_ID = "id"
         const val KEY_SECRET = "key"
         const val KEY_COUNTER = "counter"
+        const val COUNTER_BLOCK = 64L
     }
 }
