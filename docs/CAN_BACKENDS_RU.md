@@ -203,6 +203,8 @@
 - ожидание `onServiceConnected` (таймаут ожидания **2,5 с**),
 - получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
 
+Notification Listener может поднять `BackgroundService` до `sys.boot_completed`. На A9 mbCAN это безвредно, на A10 Car-сервис к этому моменту часто ещё не готов. Первый connect VHAL в таком случае ждёт свойство `sys.boot_completed=1`, но не дольше **25 с** (опрос каждые 500 мс), и только один раз за процесс. Если загрузка уже завершена или свойство прочитать нельзя, паузы нет: рестарт службы на работающем ГУ не откладывается.
+
 Если `onServiceConnected` не пришёл за 2,5 с, в журнал пишется `Car service connection timeout` с `waitedMs`. Если `getCarManager` падает, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause` (у самого `InvocationTargetException` message обычно пустой).
 
 `onServiceDisconnected` переподключает только текущую сессию. Колбэк от уже брошенной попытки connect не рвёт живое подключение и не запускает второй connect.

@@ -1122,7 +1122,45 @@ object Android10VhalRepository {
         )
     }
 
+    private val earlyBootGate = Mutex()
+    @Volatile
+    private var earlyBootGatePassed = false
+
+    /**
+     * NLS binds this process before BOOT_COMPLETED. Car service is often not up yet,
+     * so the first A10 connect waits out that window once. A later restart, when
+     * boot has already finished, connects immediately.
+     */
+    private suspend fun awaitEarlyBootIfNeeded() {
+        if (earlyBootGatePassed) return
+        earlyBootGate.withLock {
+            if (earlyBootGatePassed) return@withLock
+            val raw = VhalBootGate.readBootCompleted()
+            if (!VhalBootGate.shouldDefer(raw, gateAlreadyPassed = false)) {
+                logInfo("VHAL init boot already completed raw=${raw ?: "unreadable"}")
+                earlyBootGatePassed = true
+                return@withLock
+            }
+            logInfo("VHAL init deferred until sys.boot_completed (early start, raw=$raw)")
+            val startedAt = SystemClock.elapsedRealtime()
+            var latest = raw
+            while (
+                VhalBootGate.shouldDefer(latest, gateAlreadyPassed = false) &&
+                SystemClock.elapsedRealtime() - startedAt < VhalBootGate.MAX_WAIT_MS
+            ) {
+                delay(VhalBootGate.POLL_MS)
+                latest = VhalBootGate.readBootCompleted()
+            }
+            logInfo(
+                "VHAL init continuing bootCompletedRaw=${latest ?: "unreadable"} " +
+                    "waitedMs=${SystemClock.elapsedRealtime() - startedAt}"
+            )
+            earlyBootGatePassed = true
+        }
+    }
+
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
+        awaitEarlyBootIfNeeded()
         var newlyConnected = false
         val result = carConnectMutex.withLock {
             val context = AppContextHolder.appContextOrNull
