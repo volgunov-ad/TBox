@@ -87,6 +87,8 @@ private class CarPropertyBridge(private val context: Context) {
             val carClass = Class.forName("android.car.Car")
             val carInstance = createCar(carClass)
                 ?: throw IllegalStateException("Car instance is null")
+            // Held before connect so a failed attempt still unbinds it in disconnect().
+            car = carInstance
             carClass.getMethod("connect").invoke(carInstance)
             waitForServiceConnection()
             if (!serviceConnected) {
@@ -97,7 +99,6 @@ private class CarPropertyBridge(private val context: Context) {
                 carClass.getField("PROPERTY_SERVICE").get(null) as String
             }.getOrDefault("property")
             val manager = acquirePropertyManager(carClass, carInstance, propertyService)
-            car = carInstance
             propertyManager = manager
             Android10VhalRepository.logInfo("VHAL connected, propertyService=$propertyService")
         }.fold(
@@ -168,9 +169,10 @@ private class CarPropertyBridge(private val context: Context) {
         runCatching { stopDeepDiagnosticSubscriptions() }
         runCatching { syncPushSubscriptions(emptySet()) }
         runCatching {
-            val c = car ?: return
-            c.javaClass.getMethod("disconnect").invoke(c)
-            Android10VhalRepository.logInfo("VHAL disconnected")
+            car?.let { c ->
+                c.javaClass.getMethod("disconnect").invoke(c)
+                Android10VhalRepository.logInfo("VHAL disconnected")
+            }
         }.onFailure {
             Android10VhalRepository.logWarn(
                 "VHAL disconnect error: ${it.javaClass.simpleName}: ${it.message}"
