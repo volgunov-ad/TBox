@@ -1018,7 +1018,7 @@
     <string name="esp_ble_learn_hint">Press any button on the remote within 30 s</string>
     <string name="esp_ble_learning">Waiting for press…</string>
     <string name="esp_ble_bound_macs">Bound MACs</string>
-    <string name="esp_ble_devices">Devices</string>
+    <string name="esp_ble_devices">Remotes</string>
     <string name="esp_ble_no_devices">No bound remotes — tap “Learn remote”</string>
     <string name="esp_ble_device_name">Device name</string>
     <string name="esp_ble_save_name">Save name</string>
@@ -1027,8 +1027,8 @@
     <string name="esp_ble_last_event">Last event</string>
     <string name="esp_ble_battery">Remote battery</string>
     <string name="esp_ble_need_fw">Companion firmware 0.8+ required</string>
-    <string name="esp_phone_need_fw">Phone: companion firmware 0.10+ required</string>
-    <string name="esp_phone_slots">Devices: %1$d of 20</string>
+    <string name="esp_phone_need_fw">Companion firmware 0.10+ required</string>
+    <string name="esp_phone_slots">Remotes and phones: %1$d of 20</string>
     <string name="esp_phone_pair">Connect phone</string>
     <string name="esp_phone_pair_cancel">Close window</string>
     <string name="esp_phone_pairing">Pairing window is open</string>

@@ -601,6 +601,11 @@ fun EspCompanionTabContent(
                             description = stringResource(R.string.esp_ble_scan_desc),
                             enabled = controlsEnabled,
                         )
+                        if (info.phone) {
+                            CompanionHelperText(
+                                stringResource(R.string.esp_phone_slots, bleMacs.size + phones.size),
+                            )
+                        }
                         if (bleLearn) {
                             Text(
                                 text = stringResource(R.string.esp_ble_learning),
@@ -657,88 +662,6 @@ fun EspCompanionTabContent(
                                         style = MaterialTheme.typography.tboxButton,
                                         textAlign = TextAlign.Center,
                                     )
-                                }
-                            }
-                        }
-                        if (!info.phone) {
-                            CompanionHelperText(stringResource(R.string.esp_phone_need_fw))
-                        } else {
-                            Text(
-                                text = stringResource(
-                                    R.string.esp_phone_slots,
-                                    bleMacs.size + phones.size,
-                                ),
-                                style = MaterialTheme.typography.tboxBody,
-                            )
-                            if (phoneLearn) {
-                                Text(
-                                    text = stringResource(R.string.esp_phone_pairing),
-                                    style = MaterialTheme.typography.tboxBody,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                CompanionHelperText(stringResource(R.string.esp_phone_pair_hint))
-                            }
-                            OutlinedButton(
-                                onClick = rememberWrappedOnClick {
-                                    context.startService(
-                                        Intent(context, BackgroundService::class.java).apply {
-                                            action = if (phoneLearn) {
-                                                BackgroundService.ACTION_ESP_PHONE_LEARN_END
-                                            } else {
-                                                BackgroundService.ACTION_ESP_PHONE_LEARN_BEGIN
-                                            }
-                                        },
-                                    )
-                                },
-                                enabled = controlsEnabled,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        if (phoneLearn) {
-                                            R.string.esp_phone_pair_cancel
-                                        } else {
-                                            R.string.esp_phone_pair
-                                        },
-                                    ),
-                                    style = MaterialTheme.typography.tboxButton,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-                            if (phones.isEmpty()) {
-                                CompanionHelperText(stringResource(R.string.esp_phone_empty))
-                            } else {
-                                CompanionSectionHeader(stringResource(R.string.esp_phone_devices))
-                                for (phone in phones) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = phone.name.ifBlank { phone.id },
-                                            style = MaterialTheme.typography.tboxBody,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        OutlinedButton(
-                                            onClick = rememberWrappedOnClick {
-                                                context.startService(
-                                                    Intent(context, BackgroundService::class.java).apply {
-                                                        action = BackgroundService.ACTION_ESP_PHONE_FORGET
-                                                        putExtra(BackgroundService.EXTRA_ESP_PHONE_ID, phone.id)
-                                                    },
-                                                )
-                                            },
-                                            enabled = controlsEnabled,
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.esp_ble_forget),
-                                                style = MaterialTheme.typography.tboxButton,
-                                            )
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -820,6 +743,91 @@ fun EspCompanionTabContent(
                                         modifier = Modifier.padding(top = 4.dp),
                                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                                     )
+                                }
+                            }
+                        }
+                        CompanionSectionHeader(stringResource(R.string.esp_phone_devices))
+                        if (!info.phone) {
+                            CompanionHelperText(stringResource(R.string.esp_phone_need_fw))
+                        } else {
+                            if (phoneLearn) {
+                                Text(
+                                    text = stringResource(R.string.esp_phone_pairing),
+                                    style = MaterialTheme.typography.tboxBody,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                CompanionHelperText(stringResource(R.string.esp_phone_pair_hint))
+                            }
+                            OutlinedButton(
+                                onClick = rememberWrappedOnClick {
+                                    context.startService(
+                                        Intent(context, BackgroundService::class.java).apply {
+                                            action = if (phoneLearn) {
+                                                BackgroundService.ACTION_ESP_PHONE_LEARN_END
+                                            } else {
+                                                BackgroundService.ACTION_ESP_PHONE_LEARN_BEGIN
+                                            }
+                                        },
+                                    )
+                                },
+                                enabled = controlsEnabled,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (phoneLearn) {
+                                            R.string.esp_phone_pair_cancel
+                                        } else {
+                                            R.string.esp_phone_pair
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.tboxButton,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                            if (phones.isEmpty()) {
+                                CompanionHelperText(stringResource(R.string.esp_phone_empty))
+                            } else {
+                                for (phone in phones) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            if (phone.name.isNotBlank()) {
+                                                Text(
+                                                    text = phone.name,
+                                                    style = MaterialTheme.typography.tboxBody,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                )
+                                            }
+                                            Text(
+                                                text = phone.id,
+                                                style = MaterialTheme.typography.tboxCaption,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            )
+                                        }
+                                        TextButton(
+                                            onClick = rememberWrappedOnClick {
+                                                context.startService(
+                                                    Intent(context, BackgroundService::class.java).apply {
+                                                        action = BackgroundService.ACTION_ESP_PHONE_FORGET
+                                                        putExtra(BackgroundService.EXTRA_ESP_PHONE_ID, phone.id)
+                                                    },
+                                                )
+                                            },
+                                            enabled = controlsEnabled,
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.esp_ble_forget),
+                                                style = MaterialTheme.typography.tboxButton,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
