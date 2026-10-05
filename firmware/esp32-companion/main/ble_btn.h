@@ -13,6 +13,14 @@ int ble_btn_gap_event(struct ble_gap_event *event, void *arg);
 /** Pause scanning so a queued phone advertisement can go out. */
 void ble_btn_request_phone_airtime(void);
 
+/**
+ * Recursive lock for radio and phone state. NimBLE host, TinyUSB RX and the
+ * main loop all touch it. NimBLE calls GAP callbacks without its own host lock,
+ * so taking this inside a callback cannot deadlock against ble_gap_* calls.
+ */
+void ble_radio_lock(void);
+void ble_radio_unlock(void);
+
 /** Init NVS state and optionally start NimBLE scan if previously enabled. */
 void ble_btn_init(void);
 

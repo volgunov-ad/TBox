@@ -361,16 +361,17 @@ void protocol_send_ble_status(void)
     macs_json[mp] = '\0';
     char last_mac[18];
     ble_btn_last_mac(last_mac);
-    char *phones_json = malloc(1024);
-    char *buf = malloc(1800);
+    /* 20 phones with escaped 26-byte names need ~1.7 KB. */
+    char *phones_json = malloc(2048);
+    char *buf = malloc(2800);
     if (!phones_json || !buf) {
         free(phones_json);
         free(buf);
         return;
     }
-    ble_phone_write_json(phones_json, 1024);
+    ble_phone_write_json(phones_json, 2048);
     if (last_mac[0]) {
-        snprintf(buf, 1800,
+        snprintf(buf, 2800,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
                  "\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
                  ble_btn_is_on() ? "true" : "false",
@@ -382,7 +383,7 @@ void protocol_send_ble_status(void)
                  ble_btn_last_rssi(),
                  last_mac);
     } else {
-        snprintf(buf, 1800,
+        snprintf(buf, 2800,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
                  "\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d}\n",
                  ble_btn_is_on() ? "true" : "false",
@@ -1184,7 +1185,7 @@ static void handle_line(const char *line)
             return;
         }
         bool ok = ble_phone_allow(id);
-        protocol_send_ble_ack("phoneAllow", ok, ok ? NULL : "full");
+        protocol_send_ble_ack("phoneAllow", ok, ok ? NULL : (ble_phone_slots_full() ? "full" : "fail"));
         protocol_send_ble_status();
         return;
     }

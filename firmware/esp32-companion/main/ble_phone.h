@@ -13,6 +13,8 @@ bool ble_phone_is_learn(void);
 bool ble_phone_learn_begin(uint32_t timeout_ms);
 void ble_phone_learn_end(void);
 bool ble_phone_allow(const char *id_hex);
+/** All BLE_DEVICE_MAX slots (phones + remotes) are taken. */
+bool ble_phone_slots_full(void);
 void ble_phone_deny(const char *id_hex);
 bool ble_phone_forget(const char *id_hex);
 
