@@ -5770,8 +5770,10 @@ class BackgroundService : Service() {
         }.joinToString("||")
     }
 
-    private fun reportUsageStatsFailure(androidLog: String, journal: String, error: Exception) {
-        if (error is CancellationException) throw error
+    private suspend fun reportUsageStatsFailure(androidLog: String, journal: String, error: Exception) {
+        // Service scope cancelled on restart/stop: stop quietly. A foreign CancellationException
+        // (e.g. an inner timeout) is a real failure; the collector must keep running.
+        if (error is CancellationException) currentCoroutineContext().ensureActive()
         Log.e("BackgroundService", androidLog, error)
         TboxRepository.addLog("ERROR", "UsageStats", "$journal: ${error.message}")
     }

@@ -42,6 +42,7 @@ object UniversalCanRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
+    @Volatile
     private var lateRetryJob: Job? = null
     private val modeSwitchMutex = Mutex()
     private val sourceWidgetKeys = ConcurrentHashMap<String, Set<String>>()
@@ -1108,9 +1109,6 @@ object UniversalCanRepository {
     }
 
     suspend fun setMode(mode: HeadUnitCanMode) {
-        if (_mode.value != mode) {
-            cancelLateRetries()
-        }
         modeSwitchMutex.withLock {
             setModeLocked(mode, rebindIfBound = true)
         }
@@ -1387,16 +1385,19 @@ object UniversalCanRepository {
                 "AUTO_CAN alternative failed mode=${alternativeMode.storageValue} reason=${alternativeResult.reason}"
             )
 
+            // Not pinned: the next start probes both stacks again.
+            unbindLocked()
             setModeLocked(primaryMode, rebindIfBound = false)
             settingsManager.saveHeadUnitCanMode(primaryMode)
-            settingsManager.saveCanAutoBindLocked(true)
+            settingsManager.saveCanAutoBindLocked(false)
             settingsManager.saveCanAutoBindLastResult(
-                "locked_after_fail:${primaryMode.storageValue}|${alternativeMode.storageValue}"
+                "${CanAutoBindPolicy.LOCKED_AFTER_FAIL_PREFIX}" +
+                    "${primaryMode.storageValue}|${alternativeMode.storageValue}"
             )
             bindLocked(scope)
             MbCanDiagnostics.log(
                 "WARN",
-                "AUTO_CAN locked after failed retries; reverted to ${primaryMode.storageValue}"
+                "AUTO_CAN both stacks failed; reverted to ${primaryMode.storageValue}, not pinned"
             )
             scheduleLateRetries(settingsManager, scope, primaryMode)
         }
@@ -1434,9 +1435,13 @@ object UniversalCanRepository {
             return
         }
         val reason = compactAutoBindReason(pinnedResult.reason)
-        settingsManager.saveCanAutoBindLastResult(
-            "${CanAutoBindPolicy.PINNED_UNAVAILABLE_PREFIX}${mode.storageValue}:$reason"
-        )
+        // Keep an earlier success record: it names the pinned mode for the next start.
+        val previous = settingsManager.canAutoBindLastResultFlow.first()
+        if (CanAutoBindPolicy.modeFromSuccessfulResult(previous) == null) {
+            settingsManager.saveCanAutoBindLastResult(
+                "${CanAutoBindPolicy.PINNED_UNAVAILABLE_PREFIX}${mode.storageValue}:$reason"
+            )
+        }
         MbCanDiagnostics.log(
             "WARN",
             "AUTO_CAN pinned unavailable mode=${mode.storageValue} reason=$reason"
@@ -1527,9 +1532,11 @@ object UniversalCanRepository {
         repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
             val attempt = index + 1
             setModeLocked(mode, rebindIfBound = false)
-            // First attempt: bind without tearing down; retries unbind then rebind.
+            // First attempt keeps a live session of this mode; retries unbind then rebind.
             if (index > 0) {
                 unbindLocked()
+            } else {
+                unbindOtherBackendLocked(mode)
             }
             bindLocked(scope)
             val attemptResult = waitForAvailability(
@@ -1635,7 +1642,6 @@ object UniversalCanRepository {
 
     private suspend fun setModeLocked(mode: HeadUnitCanMode, rebindIfBound: Boolean) {
         if (_mode.value == mode) return
-        cancelLateRetries()
         _mode.value = mode
         if (!rebindIfBound) return
         val scopeToRebind = boundScope ?: return
@@ -1667,6 +1673,15 @@ object UniversalCanRepository {
         boundScope = null
         MbCanRepository.unbind()
         Android10VhalRepository.unbind()
+    }
+
+    /** The service binds the saved mode before auto-resolve may switch away from it. */
+    private suspend fun unbindOtherBackendLocked(mode: HeadUnitCanMode) {
+        if (mode == HeadUnitCanMode.Android9MbCan) {
+            Android10VhalRepository.unbind()
+        } else {
+            MbCanRepository.unbind()
+        }
     }
 
     private suspend fun applyAllInterestsLocked(mode: HeadUnitCanMode) {

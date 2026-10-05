@@ -12,6 +12,8 @@ internal object CanAutoBindPolicy {
     const val USER_RESULT_PREFIX = "user:"
     const val PINNED_OK_PREFIX = "pinned_ok:"
     const val PINNED_UNAVAILABLE_PREFIX = "pinned_unavailable:"
+    /** Neither stack connected on that start. Older builds also set the lock with this result. */
+    const val LOCKED_AFTER_FAIL_PREFIX = "locked_after_fail:"
 
     fun decide(
         enabled: Boolean,
@@ -22,7 +24,9 @@ internal object CanAutoBindPolicy {
         if (!enabled) return Decision(Startup.Disabled, current)
         val remembered = modeFromSuccessfulResult(lastResult)
         if (remembered != null) return Decision(Startup.Pinned, remembered)
-        if (locked) return Decision(Startup.Pinned, current)
+        if (locked && !lastResult.startsWith(LOCKED_AFTER_FAIL_PREFIX)) {
+            return Decision(Startup.Pinned, current)
+        }
         return Decision(Startup.ProbeWithFallback, current)
     }
 

@@ -31,6 +31,17 @@ class CanAutoBindPolicyTest {
     }
 
     @Test
+    fun lockLeftByAFailedProbeDoesNotPin() {
+        val decision = CanAutoBindPolicy.decide(
+            enabled = true,
+            locked = true,
+            lastResult = "locked_after_fail:android9_mbcan|android10_vhal",
+            current = HeadUnitCanMode.Android9MbCan,
+        )
+        assertEquals(CanAutoBindPolicy.Startup.ProbeWithFallback, decision.startup)
+    }
+
+    @Test
     fun previousSuccessPinsThatModeEvenIfSettingsWereOverwritten() {
         val decision = CanAutoBindPolicy.decide(
             enabled = true,
