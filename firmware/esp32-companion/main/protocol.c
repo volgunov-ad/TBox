@@ -9,6 +9,7 @@
 #include "esp_crc.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "gnss_detect.h"
 #include "ota_update.h"
@@ -51,6 +52,26 @@ static bool s_can_light_mode;
 static uint8_t s_can_batch[OTA_FRAME_MAX_PAYLOAD];
 static size_t s_can_batch_len;
 
+/*
+ * Senders run on several tasks (main loop, USB RX worker, UM980 / Wi-Fi workers, BLE).
+ * TinyUSB's CDC FIFO is not thread-safe and messages must not interleave mid-line/frame.
+ */
+static SemaphoreHandle_t s_cdc_tx_mutex;
+
+static void cdc_tx_lock(void)
+{
+    if (s_cdc_tx_mutex) {
+        xSemaphoreTake(s_cdc_tx_mutex, portMAX_DELAY);
+    }
+}
+
+static void cdc_tx_unlock(void)
+{
+    if (s_cdc_tx_mutex) {
+        xSemaphoreGive(s_cdc_tx_mutex);
+    }
+}
+
 static void cdc_write_str(const char *s)
 {
     // Prefer DTR-connected, but some Android USB hosts never assert DTR even
@@ -58,6 +79,7 @@ static void cdc_write_str(const char *s)
     if (!tud_ready() || !s) {
         return;
     }
+    cdc_tx_lock();
     size_t len = strlen(s);
     size_t off = 0;
     int spins = 0;
@@ -78,6 +100,7 @@ static void cdc_write_str(const char *s)
         spins = 0;
     }
     tud_cdc_write_flush();
+    cdc_tx_unlock();
 }
 
 static void json_escape_append(char *dst, size_t dst_sz, size_t *pos, const char *src)
@@ -98,6 +121,10 @@ static void json_escape_append(char *dst, size_t dst_sz, size_t *pos, const char
 
 void protocol_init(void)
 {
+    if (!s_cdc_tx_mutex) {
+        s_cdc_tx_mutex = xSemaphoreCreateMutex();
+        configASSERT(s_cdc_tx_mutex);
+    }
     s_line_len = 0;
     s_relay_cb = NULL;
     s_um980_cb = NULL;
@@ -648,6 +675,7 @@ static void cdc_write_bin(const uint8_t *data, size_t len)
     if (!tud_ready() || !data || len == 0) {
         return;
     }
+    cdc_tx_lock();
     size_t off = 0;
     int spins = 0;
     while (off < len && spins < 4000) {
@@ -667,6 +695,7 @@ static void cdc_write_bin(const uint8_t *data, size_t len)
         spins = 0;
     }
     tud_cdc_write_flush();
+    cdc_tx_unlock();
 }
 
 static void encode_bridge_frame(const uint8_t *payload, uint16_t plen, uint8_t *out, size_t *out_len)
