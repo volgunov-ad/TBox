@@ -27,16 +27,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 
 class PhoneActivity : ComponentActivity() {
@@ -54,13 +51,13 @@ class PhoneActivity : ComponentActivity() {
 private fun PhoneScreen() {
     val context = LocalContext.current
     val store = remember { PhoneStore(context) }
-    val scope = rememberCoroutineScope()
     var snap by remember { mutableStateOf(PhoneBleCodec.Snapshot()) }
     var lastSnapAt by remember { mutableLongStateOf(0L) }
+    var refreshAt by remember { mutableLongStateOf(0L) }
     var lastVolume by remember { mutableIntStateOf(10) }
     var ready by remember { mutableStateOf(false) }
     var bluetoothOn by remember { mutableStateOf(true) }
-    val air = remember { Air() }
+    var linked by remember { mutableStateOf(false) }
     val phoneName = stringResource(R.string.phone_name)
     val radio = remember {
         PhoneRadio(context) { next ->
@@ -73,7 +70,6 @@ private fun PhoneScreen() {
         if (Build.VERSION.SDK_INT >= 31) {
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_ADVERTISE,
                 Manifest.permission.BLUETOOTH_CONNECT,
             )
         } else {
@@ -87,11 +83,8 @@ private fun PhoneScreen() {
     }
     DisposableEffect(ready) {
         radio.storeKey = store.key
-        if (ready) radio.startScan()
-        onDispose {
-            radio.stopScan()
-            radio.stopAdvertise()
-        }
+        if (ready) radio.start()
+        onDispose { radio.stop() }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         launcher.launch(permissions)
@@ -100,25 +93,23 @@ private fun PhoneScreen() {
         if (!ready) return@LaunchedEffect
         while (isActive) {
             bluetoothOn = radio.bluetoothOn
-            radio.ensureScan()
-            val fresh = lastSnapAt != 0L && SystemClock.elapsedRealtime() - lastSnapAt < 2_000L
-            if (!fresh && air.job?.isActive != true) {
+            linked = radio.linkUp
+            if (bluetoothOn) radio.start()
+            val now = SystemClock.elapsedRealtime()
+            val fresh = lastSnapAt != 0L && now - lastSnapAt < 2_000L
+            if (radio.linkUp && !fresh && now - refreshAt >= 2_000L) {
+                refreshAt = now
                 val counter = store.nextCounter()
                 radio.waitingCounter = counter
-                val payload = PhoneBleCodec.seal(
-                    store.key,
-                    PhoneBleCodec.TYPE_REFRESH,
-                    store.id,
-                    counter,
-                    PhoneBleCodec.refreshBody(),
+                radio.write(
+                    PhoneBleCodec.seal(
+                        store.key,
+                        PhoneBleCodec.TYPE_REFRESH,
+                        store.id,
+                        counter,
+                        PhoneBleCodec.refreshBody(),
+                    ),
                 )
-                air.job = scope.launch {
-                    repeat(4) {
-                        radio.advertise(payload)
-                        delay(250)
-                    }
-                    radio.stopAdvertise()
-                }
             }
             delay(500)
         }
@@ -138,15 +129,9 @@ private fun PhoneScreen() {
             PhoneBleCodec.commandBody(op, seat, arg),
         )
         snap = applyLocally(snap, op, seat, arg)
-        // The ESP listens in short windows between its own replies; ~1 s on air covers several.
-        air.job?.cancel()
-        air.job = scope.launch {
-            repeat(5) {
-                radio.advertise(payload)
-                delay(200)
-            }
-            radio.stopAdvertise()
-        }
+        lastSnapAt = 0L
+        refreshAt = 0L
+        radio.write(payload)
     }
 
     Column(
@@ -162,8 +147,8 @@ private fun PhoneScreen() {
             }
         } else if (!bluetoothOn) {
             Text(stringResource(R.string.bluetooth_off))
-        } else if (!radio.canAdvertise) {
-            Text(stringResource(R.string.need_radio))
+        } else if (!linked) {
+            Text(stringResource(R.string.looking))
         }
         Button(
             onClick = {
@@ -171,17 +156,7 @@ private fun PhoneScreen() {
                     launcher.launch(permissions)
                     return@Button
                 }
-                air.job?.cancel()
-                air.job = scope.launch {
-                    val pages = PhoneBleCodec.pairPages(store.id, store.key, phoneName)
-                    repeat(4) {
-                        for (page in pages) {
-                            radio.advertise(page)
-                            delay(250)
-                        }
-                    }
-                    radio.stopAdvertise()
-                }
+                radio.write(PhoneBleCodec.pairPacket(store.id, store.key, phoneName))
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -254,10 +229,6 @@ private fun PhoneScreen() {
             Button(onClick = { send(PhoneBleCodec.OP_MEDIA_NEXT, 0, 0) }) { Text(stringResource(R.string.next)) }
         }
     }
-}
-
-private class Air {
-    var job: Job? = null
 }
 
 @Composable

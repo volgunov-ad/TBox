@@ -9,16 +9,13 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Legacy BLE advertisement for the phone companion.
+ * GATT link between the phone and the ESP32 companion.
  *
- * Service data UUID 0x7B0E. Payload max 24 bytes.
- * Legacy advertising is 31 bytes, Android adds a 3-byte flags field, and the
- * 16-bit service-data AD header takes 4 more, so the service payload is 24.
+ * Service 0x7B0E. The phone writes inbox 0x7B0F and subscribes to snapshot 0x7B10.
+ * ATT payload needs MTU 64: a sealed packet is 24 bytes and a pair packet is up to 47.
  *
- * PAIR (clear), type 1, up to 3 pages:
- *   u8 type, u32le id, u8 (index<<4)|count, chunk
- *   page 0 chunk: key[16] + name utf-8
- *   later pages: the rest of the name (26 bytes max)
+ * PAIR (clear), type 1:
+ *   u8 type, u32le id, key[16], name utf-8 (26 bytes max)
  *
  * Sealed CMD=2, REFRESH=3, SNAP=4, 24 bytes:
  *   u8 type, u32le id, maskedCounter[4], cipher[11], tag[4]
@@ -38,7 +35,12 @@ import javax.crypto.spec.SecretKeySpec
  */
 object PhoneBleCodec {
     const val SERVICE_UUID16: Int = 0x7B0E
+    const val INBOX_UUID16: Int = 0x7B0F
+    const val SNAP_UUID16: Int = 0x7B10
     val SERVICE_UUID: UUID = UUID.fromString("00007b0e-0000-1000-8000-00805f9b34fb")
+    val INBOX_UUID: UUID = UUID.fromString("00007b0f-0000-1000-8000-00805f9b34fb")
+    val SNAP_UUID: UUID = UUID.fromString("00007b10-0000-1000-8000-00805f9b34fb")
+    const val ATT_MTU: Int = 64
 
     const val TYPE_PAIR: Int = 1
     const val TYPE_CMD: Int = 2
@@ -49,10 +51,8 @@ object PhoneBleCodec {
     const val KEY_LEN: Int = 16
     const val BODY_LEN: Int = 11
     const val NAME_MAX: Int = 26
-    const val PAYLOAD_MAX: Int = 24
-    const val PAIR_HEADER: Int = 6
-    const val PAIR_CHUNK: Int = PAYLOAD_MAX - PAIR_HEADER
     const val SEALED_LEN: Int = 1 + ID_LEN + 4 + BODY_LEN + 4
+    const val PAYLOAD_MAX: Int = SEALED_LEN
     const val SNAP_PAGES: Int = 4
     const val MISSING_TEMP: Int = 0x7FFF
     const val MISSING_U8: Int = 0xFF
@@ -73,13 +73,6 @@ object PhoneBleCodec {
     const val TEMP_MIN: Int = 160
     const val TEMP_MAX: Int = 300
     const val TEMP_STEP: Int = 5
-
-    data class PairPage(
-        val id: ByteArray,
-        val index: Int,
-        val count: Int,
-        val chunk: ByteArray,
-    )
 
     data class PairMaterial(
         val id: ByteArray,
@@ -134,68 +127,26 @@ object PhoneBleCodec {
         return raw.copyOf(end)
     }
 
-    fun pairPages(id: ByteArray, key: ByteArray, name: String): List<ByteArray> {
+    fun pairPacket(id: ByteArray, key: ByteArray, name: String): ByteArray {
         require(id.size == ID_LEN && key.size == KEY_LEN)
         val nameBytes = utf8Truncate(name, NAME_MAX)
-        val chunks = ArrayList<ByteArray>(3)
-        val firstName = minOf(nameBytes.size, PAIR_CHUNK - KEY_LEN)
-        chunks.add(key + nameBytes.copyOfRange(0, firstName))
-        var offset = firstName
-        while (offset < nameBytes.size) {
-            val end = minOf(offset + PAIR_CHUNK, nameBytes.size)
-            chunks.add(nameBytes.copyOfRange(offset, end))
-            offset = end
-        }
-        return chunks.mapIndexed { index, chunk ->
-            val payload = ByteArray(PAIR_HEADER + chunk.size)
-            payload[0] = TYPE_PAIR.toByte()
-            id.copyInto(payload, 1)
-            payload[5] = ((index shl 4) or chunks.size).toByte()
-            chunk.copyInto(payload, PAIR_HEADER)
-            payload
-        }
+        val payload = ByteArray(1 + ID_LEN + KEY_LEN + nameBytes.size)
+        payload[0] = TYPE_PAIR.toByte()
+        id.copyInto(payload, 1)
+        key.copyInto(payload, 1 + ID_LEN)
+        nameBytes.copyInto(payload, 1 + ID_LEN + KEY_LEN)
+        return payload
     }
 
-    fun parsePairPage(payload: ByteArray): PairPage? {
-        if (payload.size < PAIR_HEADER || payload[0].toInt() and 0xFF != TYPE_PAIR) return null
-        val packed = payload[5].toInt() and 0xFF
-        val index = packed shr 4
-        val count = packed and 0x0F
-        if (count !in 1..3 || index >= count) return null
-        return PairPage(
-            id = payload.copyOfRange(1, 5),
-            index = index,
-            count = count,
-            chunk = payload.copyOfRange(PAIR_HEADER, payload.size),
-        )
-    }
-
-    fun assemblePair(pages: List<PairPage>): PairMaterial? {
-        if (pages.isEmpty()) return null
-        val count = pages.first().count
-        if (pages.any { it.count != count || !it.id.contentEquals(pages.first().id) }) return null
-        val byIndex = pages.associateBy { it.index }
-        if ((0 until count).any { it !in byIndex }) return null
-        val first = byIndex.getValue(0).chunk
-        if (first.size < KEY_LEN) return null
-        val name = ByteArray(NAME_MAX)
-        var nameLen = 0
-        val head = first.copyOfRange(KEY_LEN, first.size)
-        val take = minOf(head.size, NAME_MAX)
-        head.copyInto(name, 0, 0, take)
-        nameLen = take
-        for (index in 1 until count) {
-            val rest = byIndex.getValue(index).chunk
-            val room = NAME_MAX - nameLen
-            if (room <= 0) break
-            val n = minOf(rest.size, room)
-            rest.copyInto(name, nameLen, 0, n)
-            nameLen += n
-        }
+    fun parsePair(payload: ByteArray): PairMaterial? {
+        if (payload.size < 1 + ID_LEN + KEY_LEN) return null
+        if (payload[0].toInt() and 0xFF != TYPE_PAIR) return null
+        val nameBytes = payload.copyOfRange(1 + ID_LEN + KEY_LEN, payload.size)
+        val name = if (nameBytes.size <= NAME_MAX) nameBytes else nameBytes.copyOf(NAME_MAX)
         return PairMaterial(
-            id = pages.first().id.copyOf(),
-            key = first.copyOfRange(0, KEY_LEN),
-            name = name.copyOf(nameLen).decodeToString(),
+            id = payload.copyOfRange(1, 1 + ID_LEN),
+            key = payload.copyOfRange(1 + ID_LEN, 1 + ID_LEN + KEY_LEN),
+            name = name.decodeToString(),
         )
     }
 

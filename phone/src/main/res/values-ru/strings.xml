@@ -15,7 +15,7 @@
     <string name="play">Играть</string>
     <string name="next">Дальше</string>
     <string name="waiting">Ждём головное устройство</string>
-    <string name="need_radio">Этот телефон не объявляет BLE</string>
+    <string name="looking">Ищем компаньон</string>
     <string name="phone_name">Телефон</string>
     <string name="eco">Эко</string>
     <string name="comfort">Комфорт</string>

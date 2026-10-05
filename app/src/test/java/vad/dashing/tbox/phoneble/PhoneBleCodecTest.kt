@@ -22,10 +22,9 @@ class PhoneBleCodecTest {
 
     @Test
     fun pairRoundTrip_keepsKeyAndRussianName() {
-        val pages = PhoneBleCodec.pairPages(id, key, "Телефон")
-        assertEquals(2, pages.size)
-        assertTrue(pages.all { it.size <= PhoneBleCodec.PAYLOAD_MAX })
-        val material = PhoneBleCodec.assemblePair(pages.map { PhoneBleCodec.parsePairPage(it)!! })
+        val packet = PhoneBleCodec.pairPacket(id, key, "Телефон")
+        assertTrue(packet.size <= 47)
+        val material = PhoneBleCodec.parsePair(packet)
         assertNotNull(material)
         assertTrue(key.contentEquals(material!!.key))
         assertTrue(id.contentEquals(material.id))
@@ -33,14 +32,11 @@ class PhoneBleCodecTest {
     }
 
     @Test
-    fun pairLongName_roundTripOutOfOrder() {
-        val name = "Я".repeat(13)
-        val pages = PhoneBleCodec.pairPages(id, key, name)
-        assertEquals(3, pages.size)
-        assertTrue(pages.all { it.size <= PhoneBleCodec.PAYLOAD_MAX })
-        val parsed = pages.map { PhoneBleCodec.parsePairPage(it)!! }.reversed()
-        val material = PhoneBleCodec.assemblePair(parsed)
-        assertEquals(name, material!!.name)
+    fun pairLongName_truncatedOnUtf8Boundary() {
+        val name = "Я".repeat(20)
+        val packet = PhoneBleCodec.pairPacket(id, key, name)
+        val material = PhoneBleCodec.parsePair(packet)
+        assertEquals("Я".repeat(13), material!!.name)
         assertTrue(key.contentEquals(material.key))
     }
 

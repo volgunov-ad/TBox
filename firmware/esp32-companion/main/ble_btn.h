@@ -10,8 +10,6 @@
 
 struct ble_gap_event;
 int ble_btn_gap_event(struct ble_gap_event *event, void *arg);
-/** Pause scanning so a queued phone advertisement can go out. */
-void ble_btn_request_phone_airtime(void);
 
 /**
  * Recursive lock for radio and phone state. NimBLE host, TinyUSB RX and the
@@ -48,3 +46,8 @@ void ble_btn_last_mac(char out[18]);
 
 /** Main-loop tick: expire learn window. */
 void ble_btn_poll(uint32_t now_ms);
+
+/** Stop the Shelly scan without waiting for DISC_COMPLETE. */
+void ble_btn_suspend_scan(void);
+/** Start the scan again when BLE is on. */
+void ble_btn_kick_scan(void);

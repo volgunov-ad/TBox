@@ -217,4 +217,4 @@ USB: Espressif VID `0x303A`.
 - UPrecise passthrough (частично: `um980Bridge` для прошивки UM980)
 - OTA rollback UI (IDF rollback можно включить позже)
 - Калибровка компаса и источники курса DR (`COMPASS` / `GYRO_COMPASS`) — [COMPASS_HEADING_PLAN_RU.md](COMPASS_HEADING_PLAN_RU.md) фазы 2–3. Телеметрия и выбор чипа уже в fw 0.6.
-- Телефонный канал BLE (fw **0.10.0+**): ключ хранит ESP32 и шифрует эфир; по USB ГУ отдаёт открытый снимок и принимает обычную команду. Дальше те же данные компаньон возьмёт с CAN сам — [PHONE_COMPANION_BLE_PLAN_RU.md](PHONE_COMPANION_BLE_PLAN_RU.md).
+- Телефонный канал BLE (fw **0.10.0+**): телефон подключается к службе `0x7B0E`. Ключ хранит ESP32 и шифрует команды и снимок; по USB ГУ отдаёт открытый снимок и принимает обычную команду. Дальше те же данные компаньон возьмёт с CAN сам — [PHONE_COMPANION_BLE_PLAN_RU.md](PHONE_COMPANION_BLE_PLAN_RU.md).

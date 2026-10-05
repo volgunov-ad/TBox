@@ -25,8 +25,6 @@ static const char *TAG = "ble_btn";
 #define NVS_KEY_COUNT "n"
 #define NVS_KEY_MAC0 "m0"
 #define BTHOME_UUID16 0xFCD2
-/* Listen window between queued phone advertisements: phones and Shelly stay audible. */
-#define PHONE_SCAN_GAP_MS 150
 
 #define BTH_OBJ_PID 0x00
 #define BTH_OBJ_BATTERY 0x01
@@ -49,7 +47,6 @@ typedef struct {
 static bool s_inited;
 static bool s_nimble_ready;
 static bool s_scanning;
-static bool s_scan_timed;
 static SemaphoreHandle_t s_radio_lock;
 static bool s_on;
 static bool s_learn;
@@ -272,7 +269,6 @@ static bool add_mac_locked(const uint8_t *addr)
 }
 
 static int start_scan(void);
-static int start_scan_ms(int32_t duration_ms);
 static void stop_scan(void);
 
 void ble_radio_lock(void)
@@ -350,73 +346,54 @@ int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
                 uint16_t uuid = (uint16_t)ad_data[0] | ((uint16_t)ad_data[1] << 8);
                 if (uuid == BTHOME_UUID16) {
                     handle_bthome_adv(addr, disc->rssi, ad_data + 2, ad_dlen - 2);
-                } else if (uuid == 0x7B0E) {
-                    ble_phone_on_adv(ad_data + 2, (uint8_t)(ad_dlen - 2));
                 }
             }
             i += 1 + ad_len;
         }
         return 0;
     }
-    /* NimBLE reports DISC_COMPLETE only when a timed scan expires or is preempted;
-     * ble_gap_disc_cancel() stops the scan silently. */
+    /* A connection preempts the scan. ble_gap_disc_cancel() itself sends nothing. */
     case BLE_GAP_EVENT_DISC_COMPLETE:
         ble_radio_lock();
-        if (!s_scan_timed) {
-            ESP_LOGI(TAG, "scan complete reason=%d", event->disc_complete.reason);
-        }
+        ESP_LOGI(TAG, "scan complete reason=%d", event->disc_complete.reason);
         s_scanning = false;
-        s_scan_timed = false;
-        if (s_on && s_nimble_ready && !ble_phone_kick_adv()) {
+        if (s_on && s_nimble_ready) {
             start_scan();
         }
         ble_radio_unlock();
         return 0;
+    case BLE_GAP_EVENT_CONNECT:
+    case BLE_GAP_EVENT_DISCONNECT:
+    case BLE_GAP_EVENT_SUBSCRIBE:
+    case BLE_GAP_EVENT_MTU:
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        ble_radio_lock();
-        if (s_on && s_nimble_ready) {
-            if (ble_phone_adv_pending()) {
-                if (start_scan_ms(PHONE_SCAN_GAP_MS) != 0 && !ble_phone_kick_adv()) {
-                    start_scan();
-                }
-            } else {
-                start_scan();
-            }
-        }
-        ble_radio_unlock();
+        ble_phone_on_gap(event);
         return 0;
     default:
         return 0;
     }
 }
 
-static int start_scan_ms(int32_t duration_ms)
+static int start_scan(void)
 {
     if (!s_nimble_ready || s_scanning) return 0;
+    /* 40 ms window every 80 ms: the connectable phone advert and a phone link share the radio. */
     struct ble_gap_disc_params params = {
-        .itvl = 0,
-        .window = 0,
+        .itvl = 0x80,
+        .window = 0x40,
         .filter_policy = 0,
         .limited = 0,
         .passive = 1,
         .filter_duplicates = 0,
     };
-    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, duration_ms, &params, ble_btn_gap_event, NULL);
+    int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, ble_btn_gap_event, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "ble_gap_disc rc=%d", rc);
         return rc;
     }
     s_scanning = true;
-    s_scan_timed = duration_ms != BLE_HS_FOREVER;
-    if (!s_scan_timed) {
-        ESP_LOGI(TAG, "BLE scan started");
-    }
+    ESP_LOGI(TAG, "BLE scan started");
     return 0;
-}
-
-static int start_scan(void)
-{
-    return start_scan_ms(BLE_HS_FOREVER);
 }
 
 static void stop_scan(void)
@@ -424,20 +401,20 @@ static void stop_scan(void)
     if (s_scanning) {
         ble_gap_disc_cancel();
         s_scanning = false;
-        s_scan_timed = false;
     }
 }
 
-void ble_btn_request_phone_airtime(void)
+void ble_btn_suspend_scan(void)
 {
     ble_radio_lock();
-    if (s_nimble_ready && s_on && !ble_gap_adv_active() && !s_scan_timed) {
-        /* A timed listen window ends in DISC_COMPLETE, which starts the next page. */
-        stop_scan();
-        if (!ble_phone_kick_adv()) {
-            start_scan();
-        }
-    }
+    stop_scan();
+    ble_radio_unlock();
+}
+
+void ble_btn_kick_scan(void)
+{
+    ble_radio_lock();
+    if (s_on && s_nimble_ready) start_scan();
     ble_radio_unlock();
 }
 
@@ -445,11 +422,15 @@ static void on_sync(void)
 {
     ble_radio_lock();
     s_nimble_ready = true;
-    ESP_LOGI(TAG, "NimBLE sync");
-    if (s_on) {
-        start_scan();
-    }
+    bool on = s_on;
     ble_radio_unlock();
+    ESP_LOGI(TAG, "NimBLE sync");
+    if (on) {
+        ble_phone_start_adv();
+        ble_radio_lock();
+        start_scan();
+        ble_radio_unlock();
+    }
 }
 
 static void on_reset(int reason)
@@ -458,7 +439,6 @@ static void on_reset(int reason)
     ble_radio_lock();
     s_nimble_ready = false;
     s_scanning = false;
-    s_scan_timed = false;
     ble_radio_unlock();
 }
 
@@ -490,6 +470,7 @@ void ble_btn_init(void)
         ESP_LOGE(TAG, "nimble_port_init: %s", esp_err_to_name(err));
         return;
     }
+    ble_phone_gatts_register();
     start_nimble();
 }
 
@@ -523,15 +504,22 @@ bool ble_btn_set_on(bool on)
     ble_radio_lock();
     s_on = on;
     save_nvs();
-    if (on) {
-        if (s_nimble_ready && !ble_gap_adv_active()) start_scan();
-    } else {
+    bool ready = s_nimble_ready;
+    if (!on) {
         stop_scan();
-        if (s_nimble_ready && ble_gap_adv_active()) ble_gap_adv_stop();
         s_learn = false;
         ble_phone_learn_end();
     }
     ble_radio_unlock();
+    if (!ready) return true;
+    if (on) {
+        ble_phone_start_adv();
+        ble_radio_lock();
+        start_scan();
+        ble_radio_unlock();
+    } else {
+        ble_phone_stop_link();
+    }
     return true;
 }
 

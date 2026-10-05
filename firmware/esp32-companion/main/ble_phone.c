@@ -12,7 +12,14 @@
 #include "mbedtls/md.h"
 
 #include "host/ble_gap.h"
+#include "host/ble_gatt.h"
+#include "host/ble_hs.h"
 #include "host/ble_hs_adv.h"
+#include "host/ble_uuid.h"
+#include "host/ble_hs_mbuf.h"
+#include "os/os_mbuf.h"
+#include "services/gap/ble_svc_gap.h"
+#include "services/gatt/ble_svc_gatt.h"
 
 #include "ble_btn.h"
 #include "protocol.h"
@@ -24,13 +31,13 @@ static const char *TAG = "ble_phone";
 #define PHONE_NAME_MAX 26
 #define BODY_LEN 11
 #define SEALED_LEN 24
-#define PAIR_CHUNK 18
-#define PAIR_PAGES_MAX 3
 #define SNAP_FRESH_MS 2000u
 #define SNAP_WAIT_MS 1500u
-#define ADV_MS 200
-#define QUEUE_MAX 80
 #define CMD_OUT_MAX 16
+#define TX_MAX 16
+/* A connected stranger that never sends a valid packet is dropped. */
+#define LINK_IDLE_MS 20000u
+#define BLE_ERR_REM_USER_CONN_TERM 0x13
 /*
  * NVS is 24 KB. A counter write per packet (one refresh every ~2 s per open
  * phone screen) would cycle its pages quickly. Counters are flushed at most this
@@ -80,16 +87,9 @@ static bool s_learn;
 static uint32_t s_learn_deadline_ms;
 static bool s_pending_pair;
 static phone_rec_t s_pending;
-/* Denied during this learn session; the phone keeps repeating its pages. */
+/* Denied during this learn session; the phone may write the packet again. */
 static bool s_denied_valid;
 static uint8_t s_denied_id[4];
-
-static uint8_t s_asm_id[4];
-static uint8_t s_asm_mask;
-static uint8_t s_asm_count;
-static uint8_t s_asm_chunk[PAIR_PAGES_MAX][PAIR_CHUNK];
-static uint8_t s_asm_chunk_len[PAIR_PAGES_MAX];
-static bool s_asm_active;
 
 static bool s_cache_valid;
 static uint32_t s_cache_ms;
@@ -102,9 +102,15 @@ static int s_wait_n;
 static bool s_snap_inflight;
 static uint32_t s_snap_req_ms;
 
-static uint8_t s_queue[QUEUE_MAX][SEALED_LEN];
-static int s_q_head;
-static int s_q_len;
+static uint8_t s_tx[TX_MAX][SEALED_LEN];
+static int s_tx_n;
+
+static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
+static uint16_t s_snap_handle;
+static bool s_notify;
+static uint16_t s_mtu = 23;
+static uint32_t s_link_ms;
+static bool s_link_seen;
 
 /* USB messages are sent from ble_phone_poll (main loop), never from the NimBLE host task. */
 static bool s_out_pair;
@@ -386,16 +392,14 @@ static bool unseal(const uint8_t key[16], const uint8_t *payload, uint8_t len,
     return true;
 }
 
-static void queue_push(const uint8_t pkt[SEALED_LEN])
+static void tx_push(const uint8_t pkt[SEALED_LEN])
 {
-    if (s_q_len >= QUEUE_MAX) {
-        s_q_head = (s_q_head + 1) % QUEUE_MAX;
-        s_q_len--;
+    if (s_tx_n >= TX_MAX) {
+        memmove(s_tx[0], s_tx[1], (size_t)(TX_MAX - 1) * SEALED_LEN);
+        s_tx_n = TX_MAX - 1;
     }
-    int tail = (s_q_head + s_q_len) % QUEUE_MAX;
-    memcpy(s_queue[tail], pkt, SEALED_LEN);
-    s_q_len++;
-    ble_btn_request_phone_airtime();
+    memcpy(s_tx[s_tx_n], pkt, SEALED_LEN);
+    s_tx_n++;
 }
 
 static void enqueue_snap(int phone_index, uint32_t counter)
@@ -431,7 +435,7 @@ static void enqueue_snap(int phone_index, uint32_t counter)
             body[2] = (uint8_t)((s_cache_mask & SNAP_VOL) ? s_cache_vals[11] : 0xFF);
         }
         seal(phone->key, 4, phone->id, counter, body, pkt);
-        queue_push(pkt);
+        tx_push(pkt);
     }
 }
 
@@ -473,72 +477,40 @@ static void note_refresh(int phone_index, uint32_t counter, uint32_t t)
     request_snap_if_needed(t);
 }
 
-static void accept_pair_pages(void)
+/** Cleartext write: type, id[4], key[16], name. Name is at most PHONE_NAME_MAX bytes. */
+static void on_pair_packet(const uint8_t *payload, uint8_t len)
 {
-    if (!s_learn || s_asm_count == 0) return;
-    if (s_asm_mask != (uint8_t)((1u << s_asm_count) - 1u)) return;
-    if (s_asm_chunk_len[0] < 16) return;
-    s_asm_active = false;
-    s_asm_mask = 0;
-
-    const uint8_t *key = s_asm_chunk[0];
-    if (s_denied_valid && memcmp(s_denied_id, s_asm_id, 4) == 0) {
-        return;
-    }
-    /* The phone repeats its pairing pages; one dialog per pairing is enough. */
-    if (s_pending_pair && memcmp(s_pending.id, s_asm_id, 4) == 0 &&
+    if (!s_learn || len < 21) return;
+    const uint8_t *id = payload + 1;
+    const uint8_t *key = payload + 5;
+    if (s_denied_valid && memcmp(s_denied_id, id, 4) == 0) return;
+    /* One dialog per phone and key, even if the app writes the packet twice. */
+    if (s_pending_pair && memcmp(s_pending.id, id, 4) == 0 &&
         memcmp(s_pending.key, key, 16) == 0) {
+        s_link_seen = true;
         return;
     }
-    int existing = find_phone(s_asm_id);
+    int existing = find_phone(id);
     if (existing >= 0 && memcmp(s_phones[existing].key, key, 16) == 0) {
+        s_link_seen = true;
         return;
     }
 
     memset(&s_pending, 0, sizeof(s_pending));
-    memcpy(s_pending.id, s_asm_id, 4);
+    memcpy(s_pending.id, id, 4);
     memcpy(s_pending.key, key, 16);
-    int name_len = s_asm_chunk_len[0] - 16;
+    int name_len = (int)len - 21;
     if (name_len > PHONE_NAME_MAX) name_len = PHONE_NAME_MAX;
-    if (name_len > 0) memcpy(s_pending.name, s_asm_chunk[0] + 16, (size_t)name_len);
-    for (int page = 1; page < s_asm_count && name_len < PHONE_NAME_MAX; page++) {
-        int room = PHONE_NAME_MAX - name_len;
-        int n = s_asm_chunk_len[page] < room ? s_asm_chunk_len[page] : room;
-        if (n > 0) memcpy(s_pending.name + name_len, s_asm_chunk[page], (size_t)n);
-        name_len += n;
-    }
+    if (name_len > 0) memcpy(s_pending.name, payload + 21, (size_t)name_len);
     s_pending.name_len = (uint8_t)name_len;
     sanitize_name(s_pending.name, s_pending.name_len);
     s_pending_pair = true;
+    s_link_seen = true;
 
     memcpy(s_out_pair_id, s_pending.id, 4);
     memcpy(s_out_pair_name, s_pending.name, s_pending.name_len);
     s_out_pair_name[s_pending.name_len] = '\0';
     s_out_pair = true;
-}
-
-static void on_pair_page(const uint8_t *payload, uint8_t len)
-{
-    if (!s_learn || len < 6) return;
-    const uint8_t *id = payload + 1;
-    uint8_t packed = payload[5];
-    int index = packed >> 4;
-    int count = packed & 0x0F;
-    if (count < 1 || count > PAIR_PAGES_MAX || index >= count) return;
-    int chunk_len = (int)len - 6;
-    if (chunk_len > PAIR_CHUNK) return;
-    if (index == 0 && chunk_len < 16) return;
-    if (!s_asm_active || memcmp(s_asm_id, id, 4) != 0 || s_asm_count != (uint8_t)count) {
-        memset(s_asm_chunk_len, 0, sizeof(s_asm_chunk_len));
-        s_asm_mask = 0;
-        s_asm_count = (uint8_t)count;
-        memcpy(s_asm_id, id, 4);
-        s_asm_active = true;
-    }
-    memcpy(s_asm_chunk[index], payload + 6, (size_t)chunk_len);
-    s_asm_chunk_len[index] = (uint8_t)chunk_len;
-    s_asm_mask = (uint8_t)(s_asm_mask | (1u << index));
-    accept_pair_pages();
 }
 
 static void on_sealed(const uint8_t *payload, uint8_t len)
@@ -551,6 +523,7 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
     uint8_t body[BODY_LEN];
     if (!unseal(s_phones[index].key, payload, len, &type, &counter, body)) return;
     if (counter <= s_phones[index].counter) return;
+    s_link_seen = true;
     s_phones[index].counter = counter;
     s_counter_dirty |= (1u << index);
     if (type == 2) {
@@ -590,18 +563,16 @@ bool ble_phone_is_learn(void)
 
 bool ble_phone_learn_begin(uint32_t timeout_ms)
 {
-    ble_radio_lock();
     if (!ble_btn_is_on()) {
         ble_btn_set_on(true);
     }
+    ble_radio_lock();
     if (timeout_ms == 0) timeout_ms = 90000u;
     if (timeout_ms < 60000u) timeout_ms = 60000u;
     if (timeout_ms > 120000u) timeout_ms = 120000u;
     s_learn = true;
     s_pending_pair = false;
     s_denied_valid = false;
-    s_asm_active = false;
-    s_asm_mask = 0;
     s_learn_deadline_ms = now_ms() + timeout_ms;
     ble_radio_unlock();
     return true;
@@ -612,7 +583,6 @@ void ble_phone_learn_end(void)
     ble_radio_lock();
     s_learn = false;
     s_pending_pair = false;
-    s_asm_active = false;
     s_out_pair = false;
     ble_radio_unlock();
 }
@@ -693,13 +663,13 @@ bool ble_phone_forget(const char *id_hex)
     return ok;
 }
 
-void ble_phone_on_adv(const uint8_t *payload, uint8_t len)
+static void on_incoming(const uint8_t *payload, uint8_t len)
 {
     if (!payload || len < 1) return;
     ble_radio_lock();
     uint8_t type = payload[0];
     if (type == 1) {
-        on_pair_page(payload, len);
+        on_pair_packet(payload, len);
     } else if ((type == 2 || type == 3) && len == SEALED_LEN) {
         on_sealed(payload, len);
     }
@@ -731,12 +701,16 @@ void ble_phone_poll(uint32_t t)
     int cmd_n = 0;
     bool send_snap_req = false;
     bool send_status = false;
+    uint8_t note[SEALED_LEN];
+    bool send_note = false;
+    uint16_t note_conn = BLE_HS_CONN_HANDLE_NONE;
+    uint16_t note_handle = 0;
+    uint16_t drop_conn = BLE_HS_CONN_HANDLE_NONE;
 
     ble_radio_lock();
     if (s_learn && (int32_t)(t - s_learn_deadline_ms) >= 0) {
         s_learn = false;
         s_pending_pair = false;
-        s_asm_active = false;
         s_out_pair = false;
         s_out_status = true;
     }
@@ -772,6 +746,22 @@ void ble_phone_poll(uint32_t t)
     s_out_snap_req = false;
     send_status = s_out_status;
     s_out_status = false;
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE && !s_link_seen &&
+        (uint32_t)(t - s_link_ms) > LINK_IDLE_MS) {
+        drop_conn = s_conn;
+        s_link_seen = true;
+    }
+    if (s_tx_n > 0 && s_notify && s_conn != BLE_HS_CONN_HANDLE_NONE &&
+        s_mtu >= (uint16_t)(SEALED_LEN + 3)) {
+        memcpy(note, s_tx[0], SEALED_LEN);
+        if (s_tx_n > 1) {
+            memmove(s_tx[0], s_tx[1], (size_t)(s_tx_n - 1) * SEALED_LEN);
+        }
+        s_tx_n--;
+        send_note = true;
+        note_conn = s_conn;
+        note_handle = s_snap_handle;
+    }
     ble_radio_unlock();
 
     if (send_pair) {
@@ -787,6 +777,18 @@ void ble_phone_poll(uint32_t t)
     }
     if (send_status) {
         protocol_send_ble_status();
+    }
+    if (send_note) {
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(note, SEALED_LEN);
+        if (om) {
+            int rc = ble_gatts_notify_custom(note_conn, note_handle, om);
+            if (rc != 0) {
+                ESP_LOGW(TAG, "notify rc=%d", rc);
+            }
+        }
+    }
+    if (drop_conn != BLE_HS_CONN_HANDLE_NONE) {
+        ble_gap_terminate(drop_conn, BLE_ERR_REM_USER_CONN_TERM);
     }
 }
 
@@ -823,49 +825,198 @@ int ble_phone_write_json(char *out, size_t cap)
     return (int)pos;
 }
 
-bool ble_phone_adv_pending(void)
+static int inbox_access(uint16_t conn_handle, uint16_t attr_handle,
+                        struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
-    ble_radio_lock();
-    bool pending = s_q_len > 0;
-    ble_radio_unlock();
-    return pending;
+    (void)conn_handle;
+    (void)attr_handle;
+    (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint16_t len = OS_MBUF_PKTLEN(ctxt->om);
+    if (len == 0 || len > 64) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    uint8_t buf[64];
+    uint16_t copied = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &copied) != 0) {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+    on_incoming(buf, (uint8_t)copied);
+    return 0;
 }
 
-bool ble_phone_kick_adv(void)
+static int snap_access(uint16_t conn_handle, uint16_t attr_handle,
+                       struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
-    bool started = false;
-    ble_radio_lock();
-    if (s_q_len > 0 && !ble_gap_adv_active()) {
-        uint8_t svc[2 + SEALED_LEN];
-        struct ble_hs_adv_fields fields;
-        struct ble_gap_adv_params params;
-        svc[0] = 0x0E;
-        svc[1] = 0x7B;
-        memcpy(svc + 2, s_queue[s_q_head], SEALED_LEN);
-        memset(&fields, 0, sizeof(fields));
-        fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-        fields.svc_data_uuid16 = svc;
-        fields.svc_data_uuid16_len = (uint8_t)sizeof(svc);
-        int rc = ble_gap_adv_set_fields(&fields);
-        if (rc != 0) {
-            ESP_LOGW(TAG, "adv fields rc=%d", rc);
-        } else {
-            memset(&params, 0, sizeof(params));
-            params.conn_mode = BLE_GAP_CONN_MODE_NON;
-            params.disc_mode = BLE_GAP_DISC_MODE_GEN;
-            params.itvl_min = 0x20;
-            params.itvl_max = 0x30;
-            rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, ADV_MS, &params,
-                                   ble_btn_gap_event, NULL);
-            if (rc != 0) {
-                ESP_LOGW(TAG, "adv start rc=%d", rc);
-            } else {
-                s_q_head = (s_q_head + 1) % QUEUE_MAX;
-                s_q_len--;
-                started = true;
-            }
-        }
+    (void)conn_handle;
+    (void)attr_handle;
+    (void)ctxt;
+    (void)arg;
+    return 0;
+}
+
+static const struct ble_gatt_svc_def s_svcs[] = {
+    {
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = BLE_UUID16_DECLARE(0x7B0E),
+        .characteristics = (struct ble_gatt_chr_def[]) {
+            {
+                .uuid = BLE_UUID16_DECLARE(0x7B0F),
+                .access_cb = inbox_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+            },
+            {
+                .uuid = BLE_UUID16_DECLARE(0x7B10),
+                .access_cb = snap_access,
+                .val_handle = &s_snap_handle,
+                .flags = BLE_GATT_CHR_F_NOTIFY,
+            },
+            { 0 },
+        },
+    },
+    { 0 },
+};
+
+static ble_uuid16_t s_adv_uuid = BLE_UUID16_INIT(0x7B0E);
+
+void ble_phone_gatts_register(void)
+{
+    ble_svc_gap_init();
+    ble_svc_gatt_init();
+    int rc = ble_gatts_count_cfg(s_svcs);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "gatts count rc=%d", rc);
+        return;
     }
+    rc = ble_gatts_add_svcs(s_svcs);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "gatts add rc=%d", rc);
+        return;
+    }
+    ble_svc_gap_device_name_set("TBox");
+}
+
+static int start_adv_locked(void)
+{
+    if (!ble_btn_is_on() || s_conn != BLE_HS_CONN_HANDLE_NONE || ble_gap_adv_active()) return 0;
+    struct ble_hs_adv_fields fields;
+    struct ble_gap_adv_params params;
+    memset(&fields, 0, sizeof(fields));
+    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    fields.uuids16 = &s_adv_uuid;
+    fields.num_uuids16 = 1;
+    fields.uuids16_is_complete = 1;
+    fields.name = (uint8_t *)"TBox";
+    fields.name_len = 4;
+    fields.name_is_complete = 1;
+    int rc = ble_gap_adv_set_fields(&fields);
+    if (rc != 0) return rc;
+    memset(&params, 0, sizeof(params));
+    params.conn_mode = BLE_GAP_CONN_MODE_UND;
+    params.disc_mode = BLE_GAP_DISC_MODE_GEN;
+    /* 100–200 ms, so the Shelly scan still gets airtime. */
+    params.itvl_min = 0xA0;
+    params.itvl_max = 0x140;
+    return ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER, &params,
+                             ble_btn_gap_event, NULL);
+}
+
+void ble_phone_start_adv(void)
+{
+    int rc = ble_gatts_start();
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGW(TAG, "gatts start rc=%d", rc);
+    }
+    ble_radio_lock();
+    rc = start_adv_locked();
     ble_radio_unlock();
-    return started;
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        /* Advertising and a running scan do not always start together. */
+        ble_btn_suspend_scan();
+        ble_radio_lock();
+        rc = start_adv_locked();
+        ble_radio_unlock();
+        ble_btn_kick_scan();
+    }
+    if (rc != 0 && rc != BLE_HS_EALREADY) {
+        ESP_LOGW(TAG, "adv start rc=%d", rc);
+    }
+}
+
+void ble_phone_stop_link(void)
+{
+    uint16_t conn;
+    ble_radio_lock();
+    conn = s_conn;
+    s_conn = BLE_HS_CONN_HANDLE_NONE;
+    s_notify = false;
+    s_tx_n = 0;
+    s_link_seen = false;
+    s_mtu = 23;
+    ble_radio_unlock();
+    if (ble_gap_adv_active()) ble_gap_adv_stop();
+    if (conn != BLE_HS_CONN_HANDLE_NONE) {
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
+}
+
+void ble_phone_on_gap(struct ble_gap_event *event)
+{
+    switch (event->type) {
+    case BLE_GAP_EVENT_CONNECT:
+        if (event->connect.status != 0) {
+            ESP_LOGW(TAG, "connect status=%d", event->connect.status);
+            ble_phone_start_adv();
+            break;
+        }
+        ble_radio_lock();
+        s_conn = event->connect.conn_handle;
+        s_notify = false;
+        s_mtu = 23;
+        s_link_ms = now_ms();
+        s_link_seen = false;
+        s_tx_n = 0;
+        ble_radio_unlock();
+        {
+            struct ble_gap_upd_params upd;
+            memset(&upd, 0, sizeof(upd));
+            upd.itvl_min = 80;
+            upd.itvl_max = 120;
+            upd.latency = 0;
+            upd.supervision_timeout = 500;
+            ble_gap_update_params(event->connect.conn_handle, &upd);
+        }
+        ESP_LOGI(TAG, "phone connected");
+        break;
+    case BLE_GAP_EVENT_DISCONNECT:
+        ble_radio_lock();
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE ||
+            event->disconnect.conn.conn_handle == s_conn) {
+            s_conn = BLE_HS_CONN_HANDLE_NONE;
+            s_notify = false;
+            s_tx_n = 0;
+            s_link_seen = false;
+            s_mtu = 23;
+        }
+        ble_radio_unlock();
+        ESP_LOGI(TAG, "phone disconnected reason=%d", event->disconnect.reason);
+        if (ble_btn_is_on()) ble_phone_start_adv();
+        break;
+    case BLE_GAP_EVENT_SUBSCRIBE:
+        if (event->subscribe.attr_handle == s_snap_handle) {
+            ble_radio_lock();
+            s_notify = event->subscribe.cur_notify != 0;
+            ble_radio_unlock();
+        }
+        break;
+    case BLE_GAP_EVENT_MTU:
+        ble_radio_lock();
+        if (event->mtu.conn_handle == s_conn) s_mtu = event->mtu.value;
+        ble_radio_unlock();
+        break;
+    case BLE_GAP_EVENT_ADV_COMPLETE:
+        /* reason 0 is the advertising stopping because a phone connected. */
+        if (event->adv_complete.reason != 0 && ble_btn_is_on()) ble_phone_start_adv();
+        break;
+    default:
+        break;
+    }
 }
