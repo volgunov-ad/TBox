@@ -4729,8 +4729,10 @@ class SettingsManager(private val context: Context) {
     suspend fun saveHeadUnitCanModeByUser(mode: HeadUnitCanMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[HEAD_UNIT_CAN_MODE_KEY] = mode.storageValue
-            preferences[CAN_AUTO_BIND_LOCKED_KEY] = false
-            preferences.remove(CAN_AUTO_BIND_LAST_RESULT_KEY)
+            // Manual choice sticks. Auto-probe must not switch away on the next start.
+            preferences[CAN_AUTO_BIND_LOCKED_KEY] = true
+            preferences[CAN_AUTO_BIND_LAST_RESULT_KEY] =
+                "${CanAutoBindPolicy.USER_RESULT_PREFIX}${mode.storageValue}"
         }
     }
 

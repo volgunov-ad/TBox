@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import vad.dashing.tbox.CanAutoBindPolicy
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.esp.HuCanMarkLog
@@ -35,9 +37,13 @@ object UniversalCanRepository {
     private const val AUTO_BIND_ATTEMPTS_PER_MODE = 3
     private const val AUTO_BIND_ATTEMPT_TIMEOUT_MS = 3_500L
     private const val AUTO_BIND_ATTEMPT_PAUSE_MS = 1_200L
+    /** After the fast startup attempts fail, keep retrying the same mode until it connects. */
+    private const val AUTO_BIND_LATE_RETRY_MS = 10_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var boundScope: CoroutineScope? = null
+    @Volatile
+    private var lateRetryJob: Job? = null
     private val modeSwitchMutex = Mutex()
     private val sourceWidgetKeys = ConcurrentHashMap<String, Set<String>>()
     private val sourceSignals = ConcurrentHashMap<String, Set<MbCanSignal>>()
@@ -1115,6 +1121,7 @@ object UniversalCanRepository {
     }
 
     suspend fun unbind() {
+        cancelLateRetries()
         modeSwitchMutex.withLock {
             unbindLocked()
         }
@@ -1289,15 +1296,43 @@ object UniversalCanRepository {
         scope: CoroutineScope,
     ) {
         modeSwitchMutex.withLock {
-            if (!settingsManager.canAutoBindEnabledFlow.first()) {
-                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
-                return
-            }
-            if (settingsManager.canAutoBindLockedFlow.first()) {
-                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: locked")
-                return
-            }
+            cancelLateRetries()
+            val enabled = settingsManager.canAutoBindEnabledFlow.first()
+            val locked = settingsManager.canAutoBindLockedFlow.first()
+            val lastResult = settingsManager.canAutoBindLastResultFlow.first()
             val primaryMode = settingsManager.headUnitCanModeFlow.first()
+            val decision = CanAutoBindPolicy.decide(
+                enabled = enabled,
+                locked = locked,
+                lastResult = lastResult,
+                current = primaryMode,
+            )
+            when (decision.startup) {
+                CanAutoBindPolicy.Startup.Disabled -> {
+                    MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
+                    return
+                }
+                CanAutoBindPolicy.Startup.Pinned -> {
+                    if (decision.mode != primaryMode) {
+                        setModeLocked(decision.mode, rebindIfBound = false)
+                        settingsManager.saveHeadUnitCanMode(decision.mode)
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN restore pinned mode=${decision.mode.storageValue} " +
+                                "saved=${primaryMode.storageValue}"
+                        )
+                    }
+                    retryPinnedMode(
+                        settingsManager = settingsManager,
+                        scope = scope,
+                        mode = decision.mode,
+                        pinSource = if (locked) "locked" else "history:$lastResult",
+                    )
+                    return
+                }
+                CanAutoBindPolicy.Startup.ProbeWithFallback -> Unit
+            }
+
             val alternativeMode = primaryMode.otherMode()
             settingsManager.saveCanAutoBindLastPrimaryMode(primaryMode)
             MbCanDiagnostics.log(
@@ -1311,12 +1346,13 @@ object UniversalCanRepository {
                 attemptLabel = "primary"
             )
             if (primaryResult.success) {
-                settingsManager.saveCanAutoBindLastResult(
-                    "primary_ok:${primaryMode.storageValue}:attempt=${primaryResult.attempt}"
+                pinMode(
+                    settingsManager,
+                    "primary_ok:${primaryMode.storageValue}:attempt=${primaryResult.attempt}",
                 )
                 MbCanDiagnostics.log(
                     "INFO",
-                    "AUTO_CAN primary success mode=${primaryMode.storageValue} attempt=${primaryResult.attempt}"
+                    "AUTO_CAN primary success mode=${primaryMode.storageValue} attempt=${primaryResult.attempt} pinned"
                 )
                 return
             }
@@ -1334,12 +1370,13 @@ object UniversalCanRepository {
                 attemptLabel = "alternative"
             )
             if (alternativeResult.success) {
-                settingsManager.saveCanAutoBindLastResult(
-                    "alternative_ok:${alternativeMode.storageValue}:attempt=${alternativeResult.attempt}"
+                pinMode(
+                    settingsManager,
+                    "alternative_ok:${alternativeMode.storageValue}:attempt=${alternativeResult.attempt}",
                 )
                 MbCanDiagnostics.log(
                     "INFO",
-                    "AUTO_CAN alternative success mode=${alternativeMode.storageValue} attempt=${alternativeResult.attempt}"
+                    "AUTO_CAN alternative success mode=${alternativeMode.storageValue} attempt=${alternativeResult.attempt} pinned"
                 )
                 return
             }
@@ -1348,18 +1385,143 @@ object UniversalCanRepository {
                 "AUTO_CAN alternative failed mode=${alternativeMode.storageValue} reason=${alternativeResult.reason}"
             )
 
+            // Not pinned: the next start probes both stacks again.
+            unbindLocked()
             setModeLocked(primaryMode, rebindIfBound = false)
             settingsManager.saveHeadUnitCanMode(primaryMode)
-            settingsManager.saveCanAutoBindLocked(true)
+            settingsManager.saveCanAutoBindLocked(false)
             settingsManager.saveCanAutoBindLastResult(
-                "locked_after_fail:${primaryMode.storageValue}|${alternativeMode.storageValue}"
+                "${CanAutoBindPolicy.LOCKED_AFTER_FAIL_PREFIX}" +
+                    "${primaryMode.storageValue}|${alternativeMode.storageValue}"
             )
             bindLocked(scope)
             MbCanDiagnostics.log(
                 "WARN",
-                "AUTO_CAN locked after failed retries; reverted to ${primaryMode.storageValue}"
+                "AUTO_CAN both stacks failed; reverted to ${primaryMode.storageValue}, not pinned"
+            )
+            scheduleLateRetries(settingsManager, scope, primaryMode)
+        }
+    }
+
+    /**
+     * Saved mode already worked, or the user chose it. Retry that stack only.
+     */
+    private suspend fun retryPinnedMode(
+        settingsManager: SettingsManager,
+        scope: CoroutineScope,
+        mode: HeadUnitCanMode,
+        pinSource: String,
+    ) {
+        if (!settingsManager.canAutoBindLockedFlow.first()) {
+            settingsManager.saveCanAutoBindLocked(true)
+        }
+        MbCanDiagnostics.log(
+            "INFO",
+            "AUTO_CAN startup pinned mode=${mode.storageValue} source=$pinSource"
+        )
+        val pinnedResult = bindModeWithRetries(
+            mode = mode,
+            scope = scope,
+            attemptLabel = "pinned",
+        )
+        if (pinnedResult.success) {
+            settingsManager.saveCanAutoBindLastResult(
+                "${CanAutoBindPolicy.PINNED_OK_PREFIX}${mode.storageValue}:attempt=${pinnedResult.attempt}"
+            )
+            MbCanDiagnostics.log(
+                "INFO",
+                "AUTO_CAN pinned success mode=${mode.storageValue} attempt=${pinnedResult.attempt}"
+            )
+            return
+        }
+        val reason = compactAutoBindReason(pinnedResult.reason)
+        // Keep an earlier success record: it names the pinned mode for the next start.
+        val previous = settingsManager.canAutoBindLastResultFlow.first()
+        if (CanAutoBindPolicy.modeFromSuccessfulResult(previous) == null) {
+            settingsManager.saveCanAutoBindLastResult(
+                "${CanAutoBindPolicy.PINNED_UNAVAILABLE_PREFIX}${mode.storageValue}:$reason"
             )
         }
+        MbCanDiagnostics.log(
+            "WARN",
+            "AUTO_CAN pinned unavailable mode=${mode.storageValue} reason=$reason"
+        )
+        scheduleLateRetries(settingsManager, scope, mode)
+    }
+
+    private suspend fun pinMode(settingsManager: SettingsManager, result: String) {
+        settingsManager.saveCanAutoBindLocked(true)
+        settingsManager.saveCanAutoBindLastResult(result)
+    }
+
+    private fun compactAutoBindReason(reason: String?): String =
+        reason.orEmpty().replace('\n', ' ').take(240)
+
+    /**
+     * Startup attempts are done and this [mode] is the one to keep.
+     * Retry it every [AUTO_BIND_LATE_RETRY_MS] until it connects, the mode changes, or the service stops.
+     */
+    private fun scheduleLateRetries(
+        settingsManager: SettingsManager,
+        scope: CoroutineScope,
+        mode: HeadUnitCanMode,
+    ) {
+        lateRetryJob?.cancel()
+        MbCanDiagnostics.log(
+            "INFO",
+            "AUTO_CAN late retry scheduled mode=${mode.storageValue} intervalMs=$AUTO_BIND_LATE_RETRY_MS"
+        )
+        lateRetryJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                delay(AUTO_BIND_LATE_RETRY_MS)
+                attempt += 1
+                val connected = modeSwitchMutex.withLock {
+                    if (_mode.value != mode) {
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN late retry stopped: mode changed to ${_mode.value.storageValue}"
+                        )
+                        return@withLock null
+                    }
+                    if (directBackendAvailability() is MbCanAvailability.Available) {
+                        return@withLock true
+                    }
+                    unbindLocked()
+                    bindLocked(scope)
+                    val result = waitForAvailability(
+                        timeoutMs = AUTO_BIND_ATTEMPT_TIMEOUT_MS,
+                        onTimeoutProbe = { warmUpAvailabilityForUiLocked() }
+                    )
+                    MbCanDiagnostics.log(
+                        "INFO",
+                        "AUTO_CAN late retry attempt=$attempt mode=${mode.storageValue} " +
+                            "result=${result.summary}"
+                    )
+                    result.success
+                }
+                when (connected) {
+                    null -> return@launch
+                    true -> {
+                        settingsManager.saveCanAutoBindLocked(true)
+                        settingsManager.saveCanAutoBindLastResult(
+                            "${CanAutoBindPolicy.PINNED_OK_PREFIX}${mode.storageValue}:late=$attempt"
+                        )
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN late retry success mode=${mode.storageValue} attempt=$attempt"
+                        )
+                        return@launch
+                    }
+                    false -> Unit
+                }
+            }
+        }
+    }
+
+    private fun cancelLateRetries() {
+        lateRetryJob?.cancel()
+        lateRetryJob = null
     }
 
     private suspend fun bindModeWithRetries(
@@ -1370,9 +1532,11 @@ object UniversalCanRepository {
         repeat(AUTO_BIND_ATTEMPTS_PER_MODE) { index ->
             val attempt = index + 1
             setModeLocked(mode, rebindIfBound = false)
-            // First attempt: bind without tearing down; retries unbind then rebind.
+            // First attempt keeps a live session of this mode; retries unbind then rebind.
             if (index > 0) {
                 unbindLocked()
+            } else {
+                unbindOtherBackendLocked(mode)
             }
             bindLocked(scope)
             val attemptResult = waitForAvailability(
@@ -1394,7 +1558,7 @@ object UniversalCanRepository {
         return AutoBindAttemptResult(
             success = false,
             attempt = AUTO_BIND_ATTEMPTS_PER_MODE,
-            reason = (availability.value as? MbCanAvailability.Unavailable)?.reason
+            reason = (directBackendAvailability() as? MbCanAvailability.Unavailable)?.reason
                 ?: "timeout_unknown"
         )
     }
@@ -1405,7 +1569,7 @@ object UniversalCanRepository {
     ): AvailabilityAttemptResult {
         val startedAt = System.currentTimeMillis()
         while ((System.currentTimeMillis() - startedAt) < timeoutMs) {
-            when (val current = availability.value) {
+            when (val current = directBackendAvailability()) {
                 MbCanAvailability.Available -> return AvailabilityAttemptResult(
                     success = true,
                     summary = "available"
@@ -1421,7 +1585,7 @@ object UniversalCanRepository {
             delay(120L)
         }
         onTimeoutProbe()
-        return when (val current = availability.value) {
+        return when (val current = directBackendAvailability()) {
             MbCanAvailability.Available -> AvailabilityAttemptResult(
                 success = true,
                 summary = "available_after_timeout_probe"
@@ -1434,6 +1598,19 @@ object UniversalCanRepository {
                 success = false,
                 summary = "timeout_unknown"
             )
+        }
+    }
+
+    /**
+     * [availability] is a [stateIn] copy and can still show the previous failure
+     * for a moment after bind() has already stored Available. Reading that copy
+     * made the next startup attempt unbind a VHAL session that had just connected.
+     */
+    private fun directBackendAvailability(): MbCanAvailability {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.availability.value
+        } else {
+            Android10VhalRepository.availability.value
         }
     }
 
@@ -1496,6 +1673,15 @@ object UniversalCanRepository {
         boundScope = null
         MbCanRepository.unbind()
         Android10VhalRepository.unbind()
+    }
+
+    /** The service binds the saved mode before auto-resolve may switch away from it. */
+    private suspend fun unbindOtherBackendLocked(mode: HeadUnitCanMode) {
+        if (mode == HeadUnitCanMode.Android9MbCan) {
+            Android10VhalRepository.unbind()
+        } else {
+            MbCanRepository.unbind()
+        }
     }
 
     private suspend fun applyAllInterestsLocked(mode: HeadUnitCanMode) {
