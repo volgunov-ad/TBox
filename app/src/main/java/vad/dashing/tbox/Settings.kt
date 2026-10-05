@@ -5,8 +5,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import android.util.Log
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -15,6 +18,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,7 +44,18 @@ import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
-internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = DATASTORE_NAME,
+    corruptionHandler = resetOnCorruption(DATASTORE_NAME),
+)
+
+/** A corrupt preferences file would otherwise throw on every read and crash-loop the app. */
+internal fun resetOnCorruption(storeName: String): ReplaceFileCorruptionHandler<Preferences> =
+    ReplaceFileCorruptionHandler { error ->
+        Log.e("DataStore", "Corrupt $storeName, resetting", error)
+        TboxRepository.addLog("ERROR", "DataStore", "Corrupt $storeName reset: ${error.message}")
+        emptyPreferences()
+    }
 
 enum class SetLauncherAppCustomIconResult {
     Success,
@@ -1181,7 +1196,7 @@ class SettingsManager(private val context: Context) {
         )
 
         // Кэш ключей для производительности
-        private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
+        private val stringKeysCache = ConcurrentHashMap<String, Preferences.Key<String>>()
 
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
