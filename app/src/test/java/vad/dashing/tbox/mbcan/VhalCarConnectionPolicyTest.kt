@@ -28,6 +28,12 @@ class VhalCarConnectionPolicyTest {
     }
 
     @Test
+    fun reconnectsOnlyTheActiveBridge() {
+        assertTrue(VhalCarConnectionPolicy.shouldReconnectAfterDisconnect(activeBridgeIsSource = true))
+        assertFalse(VhalCarConnectionPolicy.shouldReconnectAfterDisconnect(activeBridgeIsSource = false))
+    }
+
+    @Test
     fun doesNotReuseWhenUnavailableOrMissingBridge() {
         assertFalse(
             VhalCarConnectionPolicy.shouldReuseExistingBridge(

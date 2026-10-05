@@ -13,4 +13,11 @@ internal object VhalCarConnectionPolicy {
         serviceConnected: Boolean,
         availabilityAvailable: Boolean,
     ): Boolean = bridgePresent && serviceConnected && availabilityAvailable
+
+    /**
+     * A failed or replaced Car session can still receive
+     * [android.content.ServiceConnection.onServiceDisconnected] after disconnect.
+     * That callback must not drop the live session or start another connect.
+     */
+    fun shouldReconnectAfterDisconnect(activeBridgeIsSource: Boolean): Boolean = activeBridgeIsSource
 }
