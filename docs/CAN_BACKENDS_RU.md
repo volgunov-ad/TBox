@@ -201,12 +201,14 @@
 
 - `Car.createCar(Context, ServiceConnection)` (основной путь),
 - `car.connect()`,
-- ожидание `onServiceConnected` (таймаут **8 с**, выход сразу по колбэку; на холодном старте колбэк приходит через 3–8 с, на тёплом — около 2 с),
+- ожидание `onServiceConnected`: выход сразу по колбэку (на тёплом старте около 2 с). Первая попытка за процесс ждёт до **30 с**, последующие — до **8 с**. На холодном старте Car-сервис отвечает через 5–18 с после `sys.boot_completed=1`, примерно к рассылке `BOOT_COMPLETED`. Один `Car` дожидается этого момента, а не пересоздаётся каждые несколько секунд,
 - получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
 
 Notification Listener может поднять `BackgroundService` до `sys.boot_completed`. На A9 mbCAN это безвредно, на A10 Car-сервис к этому моменту часто ещё не готов. Первый connect VHAL в таком случае ждёт свойство `sys.boot_completed=1`, но не дольше **25 с** (опрос каждые 500 мс), и только один раз за процесс. Если загрузка уже завершена или свойство прочитать нельзя, паузы нет: рестарт службы на работающем ГУ не откладывается.
 
-Если `onServiceConnected` не пришёл за 8 с, в журнал пишется `Car service connection timeout` с `waitedMs`, и `getCarManager` в этой попытке уже не вызывается. Неудачная попытка всегда вызывает `car.disconnect()` (объект `Car` сохраняется до `connect()`), иначе каждая попытка оставляла бы привязку к Car-сервису. Если `getCarManager` падает после колбэка, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause`.
+Каждый `CarPropertyBridge` получает номер `session=N`. Он есть в строках `Using Car.createCar`, `Car service connected/disconnected`, `Car service connection timeout`, `VHAL connected`, `VHAL connect failed` и `VHAL disconnected`, так что поздний колбэк сопоставляется со своей попыткой.
+
+Если `onServiceConnected` не пришёл за отведённое время, в журнал пишется `Car service connection timeout` с `waitedMs` и `limitMs`, и `getCarManager` в этой попытке уже не вызывается. Неудачная попытка всегда вызывает `car.disconnect()` (объект `Car` сохраняется до `connect()`), иначе каждая попытка оставляла бы привязку к Car-сервису. Если `getCarManager` падает после колбэка, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause`.
 
 Итог попытки и проверка «уже подключено» перед поздним повтором читаются из `availability` самого backend, а не из общей `stateIn`-копии: копия ещё мгновение держит прошлый `Unavailable`, и следующая попытка из-за этого делала `disconnect` уже поднятому VHAL.
 
@@ -468,7 +470,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Минимальный чеклист по логам:
 
-1. Есть `VHAL connected, propertyService=property`.
+1. Есть `VHAL connected session=N propertyService=property`, и после него нет `VHAL disconnected session=N` с тем же номером.
 2. Есть `Availability: AVAILABLE`.
 3. Есть `polling started: signals=...` при открытии виджетов.
 4. Для push-пути есть `VHAL push onChange propertyId=...` (если property поддерживает push).
