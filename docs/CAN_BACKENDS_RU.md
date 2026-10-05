@@ -33,12 +33,17 @@
   - `Android10Vhal`
 - настройка хранится в `DataStore` (через `SettingsManager` / `SettingsViewModel`).
 
-Дополнительно к ручному выбору работает автоfallback backend:
+Дополнительно к ручному выбору работает автоподбор backend, пока режим ещё не закреплён:
 
-- на старте выполняется цикл попыток `3 + 3`:
+- на старте, если режим **не закреплён**, выполняется цикл `3 + 3`:
   - 3 попытки bind для сохранённого режима;
   - при неуспехе — автопереключение на альтернативный режим и ещё 3 попытки;
-  - если оба backend неуспешны — возврат в исходный режим и `lock` автоfallback.
+  - если оба backend неуспешны — возврат в исходный режим и закрепление (`can_auto_bind_locked`).
+- режим **закрепляется** и больше не переключается на другую схему, если:
+  - bind этого режима хотя бы раз завершился успехом (`primary_ok` / `alternative_ok` / `pinned_ok` в `can_auto_bind_last_result`, либо уже выставлен `can_auto_bind_locked`);
+  - пользователь вручную выбрал Android 9 или Android 10 (тот же `can_auto_bind_locked`, результат `user:<mode>`).
+- отдельного нового флага нет: достаточно `can_auto_bind_locked`. Успех прошлых запусков тоже считается закреплением. Режим берётся из `can_auto_bind_last_result` (`primary_ok` / `alternative_ok` / `pinned_ok` / `user`), а не из текущего значения: неудачный автоподбор записывает альтернативную схему ещё до того, как она подключится.
+- пока режим закреплён, старт делает **3 попытки того же режима** и не пробует альтернативу. Временный обрыв VHAL режим не меняет.
 - между попытками выдерживается пауза `1.2s`;
 - окно одной попытки bind — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail);
 - `SettingsManager` хранит служебные поля:
@@ -46,7 +51,6 @@
   - `can_auto_bind_locked`,
   - `can_auto_bind_last_primary_mode`,
   - `can_auto_bind_last_result`.
-- при ручном выборе режима lock автоfallback сбрасывается.
 
 Где применяется:
 
@@ -107,7 +111,7 @@
 - `setAudioVolume(value: Int): MbCanCommandResult`  
   `value` — целевая громкость. На A9 тоже native get/set на `mbcan-state-apply`.
 - `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
-  выполняет автоfallback `3+3` на старте.
+  пока режим не закреплён — автоподбор `3+3`; после успеха или ручного выбора — только повтор того же режима.
 - `enqueueClearSource(sourceId: String)`  
   снимает интересы источника с debounce **3 минуты** (одинаково в обоих backend).
 - `widgetConfigsNeedMbCan(dataKeys: Set<String>)`  
@@ -197,6 +201,10 @@
 - `car.connect()`,
 - ожидание `onServiceConnected` (таймаут ожидания **2,5 с**),
 - получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
+
+Если `onServiceConnected` не пришёл за 2,5 с, в журнал пишется `Car service connection timeout` с `waitedMs`. Если `getCarManager` падает, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause` (у самого `InvocationTargetException` message обычно пустой).
+
+`onServiceDisconnected` переподключает только текущую сессию. Колбэк от уже брошенной попытки connect не рвёт живое подключение и не запускает второй connect.
 
 Функции/аргументы подключения:
 

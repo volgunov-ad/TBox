@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import vad.dashing.tbox.CanAutoBindPolicy
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.esp.HuCanMarkLog
@@ -1289,15 +1290,42 @@ object UniversalCanRepository {
         scope: CoroutineScope,
     ) {
         modeSwitchMutex.withLock {
-            if (!settingsManager.canAutoBindEnabledFlow.first()) {
-                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
-                return
-            }
-            if (settingsManager.canAutoBindLockedFlow.first()) {
-                MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: locked")
-                return
-            }
+            val enabled = settingsManager.canAutoBindEnabledFlow.first()
+            val locked = settingsManager.canAutoBindLockedFlow.first()
+            val lastResult = settingsManager.canAutoBindLastResultFlow.first()
             val primaryMode = settingsManager.headUnitCanModeFlow.first()
+            val decision = CanAutoBindPolicy.decide(
+                enabled = enabled,
+                locked = locked,
+                lastResult = lastResult,
+                current = primaryMode,
+            )
+            when (decision.startup) {
+                CanAutoBindPolicy.Startup.Disabled -> {
+                    MbCanDiagnostics.log("INFO", "AUTO_CAN startup skipped: disabled")
+                    return
+                }
+                CanAutoBindPolicy.Startup.Pinned -> {
+                    if (decision.mode != primaryMode) {
+                        setModeLocked(decision.mode, rebindIfBound = false)
+                        settingsManager.saveHeadUnitCanMode(decision.mode)
+                        MbCanDiagnostics.log(
+                            "INFO",
+                            "AUTO_CAN restore pinned mode=${decision.mode.storageValue} " +
+                                "saved=${primaryMode.storageValue}"
+                        )
+                    }
+                    retryPinnedMode(
+                        settingsManager = settingsManager,
+                        scope = scope,
+                        mode = decision.mode,
+                        pinSource = if (locked) "locked" else "history:$lastResult",
+                    )
+                    return
+                }
+                CanAutoBindPolicy.Startup.ProbeWithFallback -> Unit
+            }
+
             val alternativeMode = primaryMode.otherMode()
             settingsManager.saveCanAutoBindLastPrimaryMode(primaryMode)
             MbCanDiagnostics.log(
@@ -1311,12 +1339,13 @@ object UniversalCanRepository {
                 attemptLabel = "primary"
             )
             if (primaryResult.success) {
-                settingsManager.saveCanAutoBindLastResult(
-                    "primary_ok:${primaryMode.storageValue}:attempt=${primaryResult.attempt}"
+                pinMode(
+                    settingsManager,
+                    "primary_ok:${primaryMode.storageValue}:attempt=${primaryResult.attempt}",
                 )
                 MbCanDiagnostics.log(
                     "INFO",
-                    "AUTO_CAN primary success mode=${primaryMode.storageValue} attempt=${primaryResult.attempt}"
+                    "AUTO_CAN primary success mode=${primaryMode.storageValue} attempt=${primaryResult.attempt} pinned"
                 )
                 return
             }
@@ -1334,12 +1363,13 @@ object UniversalCanRepository {
                 attemptLabel = "alternative"
             )
             if (alternativeResult.success) {
-                settingsManager.saveCanAutoBindLastResult(
-                    "alternative_ok:${alternativeMode.storageValue}:attempt=${alternativeResult.attempt}"
+                pinMode(
+                    settingsManager,
+                    "alternative_ok:${alternativeMode.storageValue}:attempt=${alternativeResult.attempt}",
                 )
                 MbCanDiagnostics.log(
                     "INFO",
-                    "AUTO_CAN alternative success mode=${alternativeMode.storageValue} attempt=${alternativeResult.attempt}"
+                    "AUTO_CAN alternative success mode=${alternativeMode.storageValue} attempt=${alternativeResult.attempt} pinned"
                 )
                 return
             }
@@ -1361,6 +1391,55 @@ object UniversalCanRepository {
             )
         }
     }
+
+    /**
+     * Saved mode already worked, or the user chose it. Retry that stack only.
+     */
+    private suspend fun retryPinnedMode(
+        settingsManager: SettingsManager,
+        scope: CoroutineScope,
+        mode: HeadUnitCanMode,
+        pinSource: String,
+    ) {
+        if (!settingsManager.canAutoBindLockedFlow.first()) {
+            settingsManager.saveCanAutoBindLocked(true)
+        }
+        MbCanDiagnostics.log(
+            "INFO",
+            "AUTO_CAN startup pinned mode=${mode.storageValue} source=$pinSource"
+        )
+        val pinnedResult = bindModeWithRetries(
+            mode = mode,
+            scope = scope,
+            attemptLabel = "pinned",
+        )
+        if (pinnedResult.success) {
+            settingsManager.saveCanAutoBindLastResult(
+                "${CanAutoBindPolicy.PINNED_OK_PREFIX}${mode.storageValue}:attempt=${pinnedResult.attempt}"
+            )
+            MbCanDiagnostics.log(
+                "INFO",
+                "AUTO_CAN pinned success mode=${mode.storageValue} attempt=${pinnedResult.attempt}"
+            )
+            return
+        }
+        val reason = compactAutoBindReason(pinnedResult.reason)
+        settingsManager.saveCanAutoBindLastResult(
+            "${CanAutoBindPolicy.PINNED_UNAVAILABLE_PREFIX}${mode.storageValue}:$reason"
+        )
+        MbCanDiagnostics.log(
+            "WARN",
+            "AUTO_CAN pinned unavailable mode=${mode.storageValue} reason=$reason"
+        )
+    }
+
+    private suspend fun pinMode(settingsManager: SettingsManager, result: String) {
+        settingsManager.saveCanAutoBindLocked(true)
+        settingsManager.saveCanAutoBindLastResult(result)
+    }
+
+    private fun compactAutoBindReason(reason: String?): String =
+        reason.orEmpty().replace('\n', ' ').take(240)
 
     private suspend fun bindModeWithRetries(
         mode: HeadUnitCanMode,
