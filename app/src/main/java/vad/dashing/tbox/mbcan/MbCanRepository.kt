@@ -842,6 +842,21 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushEpbParkLampPushRunnable)
             cfgPushHandler.removeCallbacks(flushCurrentGearNumberPushRunnable)
             cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
+            cfgPushHandler.removeCallbacks(flushFuelLevelPushRunnable)
+            cfgPushHandler.removeCallbacks(flushOdometerPushRunnable)
+            cfgPushHandler.removeCallbacks(flushGearBoxModePushRunnable)
+            cfgPushHandler.removeCallbacks(flushReverseGearPushRunnable)
+            cfgPushHandler.removeCallbacks(flushTurnSignalsPushRunnable)
+            cfgPushHandler.removeCallbacks(flushWheelPulsePushRunnable)
+            synchronized(pendingFuelLevelPush) {
+                pendingFuelLevelPercent = null
+                pendingDistanceToFuelEmptyKm = null
+                pendingFuelLevelFlushScheduled = false
+            }
+            synchronized(pendingOdometerPush) {
+                pendingOdometerKm = null
+                pendingOdometerFlushScheduled = false
+            }
             synchronized(pendingCfgPushes) { pendingCfgPushes.clear() }
             synchronized(pendingAudioPushes) { pendingAudioPushes.clear() }
             synchronized(cfgPushScheduleLock) { cfgPushFlushScheduled = false }
@@ -921,6 +936,8 @@ object MbCanRepository {
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             MbCanEngineFacade.syncLkaSlaStatusListener(false)
+            MbCanEngineFacade.syncFrmDectInfoListener(false)
+            MbCanEngineFacade.syncGaspedStatusListener(false)
             MbCanEngineFacade.syncImbVehicleListener(
                 needSteer = false,
                 needTurnLights = false,
