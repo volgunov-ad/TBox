@@ -279,6 +279,8 @@ class BackgroundService : Service() {
     private val tboxClientReconnectMutex = Mutex()
     /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
     private val commandRouterMutex = Mutex()
+    /** Main-thread only: set once the service has entered the foreground state. */
+    private var foregroundPromoted = false
     private val tripsPersistMutex = Mutex()
     private val refuelsPersistMutex = Mutex()
     private val packetProcessingDispatcher =
@@ -455,6 +457,7 @@ class BackgroundService : Service() {
         private const val UDA_CODE = 0x38.toByte()
         private const val SELF_CODE = 0x50.toByte()
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
+        @Volatile
         private var isRunning = false
         const val LOCATION_UPDATE_TIME = 1
         const val NOTIFICATION_ID = 50047
@@ -1253,6 +1256,9 @@ class BackgroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Every startForegroundService() must be answered with startForeground() within a few
+        // seconds; the router below may wait on commandRouterMutex (restart, trips reload).
+        ensureForegroundPromoted()
         scope.launch(Dispatchers.Main.immediate + exceptionHandler) {
             commandRouterMutex.withLock {
                 val kickoffStart =
@@ -2395,6 +2401,17 @@ class BackgroundService : Service() {
 
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+    }
+
+    private fun ensureForegroundPromoted() {
+        if (foregroundPromoted) return
+        try {
+            startForeground(NOTIFICATION_ID, createNotification("Start service"))
+            foregroundPromoted = true
+        } catch (e: Exception) {
+            Log.e("Background Service", "startForeground failed", e)
+            TboxRepository.addLog("ERROR", "Service", "startForeground failed: ${e.message}")
+        }
     }
 
     private fun createNotification(text: String?): Notification {
