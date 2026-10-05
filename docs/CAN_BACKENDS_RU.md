@@ -33,20 +33,26 @@
   - `Android10Vhal`
 - настройка хранится в `DataStore` (через `SettingsManager` / `SettingsViewModel`).
 
-Дополнительно к ручному выбору работает автоfallback backend:
+Дополнительно к ручному выбору работает автоподбор backend, пока режим ещё не закреплён:
 
-- на старте выполняется цикл попыток `3 + 3`:
+- на старте, если режим **не закреплён**, выполняется цикл `3 + 3`:
   - 3 попытки bind для сохранённого режима;
   - при неуспехе — автопереключение на альтернативный режим и ещё 3 попытки;
-  - если оба backend неуспешны — возврат в исходный режим и `lock` автоfallback.
-- между попытками выдерживается пауза `1.2s`;
-- окно одной попытки bind — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail);
+  - если оба backend неуспешны — возврат в исходный режим **без закрепления** (`locked_after_fail:` в `can_auto_bind_last_result`); следующий старт снова проверит обе схемы. Старые сборки в этом случае ставили `can_auto_bind_locked`; такую блокировку с `locked_after_fail:` политика тоже не считает закреплением.
+- режим **закрепляется** и больше не переключается на другую схему, если:
+  - bind этого режима хотя бы раз завершился успехом (`primary_ok` / `alternative_ok` / `pinned_ok` в `can_auto_bind_last_result`, либо уже выставлен `can_auto_bind_locked`);
+  - пользователь вручную выбрал Android 9 или Android 10 (тот же `can_auto_bind_locked`, результат `user:<mode>`).
+- отдельного нового флага нет: достаточно `can_auto_bind_locked`. Успех прошлых запусков тоже считается закреплением. Режим берётся из `can_auto_bind_last_result` (`primary_ok` / `alternative_ok` / `pinned_ok` / `user`), а не из текущего значения: неудачный автоподбор записывает альтернативную схему ещё до того, как она подключится.
+- пока режим закреплён, старт делает **3 попытки того же режима** и не пробует альтернативу. Временный обрыв VHAL режим не меняет. Неудачный старт закреплённого режима не затирает прежнюю запись об успехе в `can_auto_bind_last_result`.
+- первая попытка режима отключает другой backend, который служба подняла по сохранённому значению до автоподбора: mbCAN и VHAL не работают одновременно.
+- если эти 3 попытки не подняли закреплённый режим (и если на первом запуске не поднялись оба backend), тот же режим повторяется **каждые 10 с**, пока не подключится, пока пользователь не сменит схему или пока служба не остановится. На другую схему эти поздние попытки не переключают. Смена схемы проверяется на каждом тике, поэтому запоздавшее событие настроек со старым значением, которое сразу сменилось обратно, повторы не останавливает.
+- между быстрыми попытками выдерживается пауза `1.2s`;
+- окно одной попытки после возврата из `bind()` — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail). Само ожидание `onServiceConnected` на A10 идёт внутри `bind()` и может занять до 8 с;
 - `SettingsManager` хранит служебные поля:
   - `can_auto_bind_enabled`,
   - `can_auto_bind_locked`,
   - `can_auto_bind_last_primary_mode`,
   - `can_auto_bind_last_result`.
-- при ручном выборе режима lock автоfallback сбрасывается.
 
 Где применяется:
 
@@ -107,7 +113,7 @@
 - `setAudioVolume(value: Int): MbCanCommandResult`  
   `value` — целевая громкость. На A9 тоже native get/set на `mbcan-state-apply`.
 - `autoResolveModeOnStartup(settingsManager: SettingsManager, scope: CoroutineScope)`  
-  выполняет автоfallback `3+3` на старте.
+  пока режим не закреплён — автоподбор `3+3`; после успеха или ручного выбора — только повтор того же режима.
 - `enqueueClearSource(sourceId: String)`  
   снимает интересы источника с debounce **3 минуты** (одинаково в обоих backend).
 - `widgetConfigsNeedMbCan(dataKeys: Set<String>)`  
@@ -195,8 +201,18 @@
 
 - `Car.createCar(Context, ServiceConnection)` (основной путь),
 - `car.connect()`,
-- ожидание `onServiceConnected` (таймаут ожидания **2,5 с**),
+- ожидание `onServiceConnected`: выход сразу по колбэку (на тёплом старте около 2 с). Первая попытка за процесс ждёт до **30 с**, последующие — до **8 с**. На холодном старте Car-сервис отвечает через 5–18 с после `sys.boot_completed=1`, примерно к рассылке `BOOT_COMPLETED`. Один `Car` дожидается этого момента, а не пересоздаётся каждые несколько секунд,
 - получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
+
+Notification Listener может поднять `BackgroundService` до `sys.boot_completed`. На A9 mbCAN это безвредно, на A10 Car-сервис к этому моменту часто ещё не готов. Первый connect VHAL в таком случае ждёт свойство `sys.boot_completed=1`, но не дольше **25 с** (опрос каждые 500 мс), и только один раз за процесс. Если загрузка уже завершена или свойство прочитать нельзя, паузы нет: рестарт службы на работающем ГУ не откладывается.
+
+Каждый `CarPropertyBridge` получает номер `session=N`. Он есть в строках `Using Car.createCar`, `Car service connected/disconnected`, `Car service connection timeout`, `VHAL connected`, `VHAL connect failed` и `VHAL disconnected`, так что поздний колбэк сопоставляется со своей попыткой.
+
+Если `onServiceConnected` не пришёл за отведённое время, в журнал пишется `Car service connection timeout` с `waitedMs` и `limitMs`, и `getCarManager` в этой попытке уже не вызывается. Неудачная попытка всегда вызывает `car.disconnect()` (объект `Car` сохраняется до `connect()`), иначе каждая попытка оставляла бы привязку к Car-сервису. Если `getCarManager` падает после колбэка, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause`.
+
+Итог попытки и проверка «уже подключено» перед поздним повтором читаются из `availability` самого backend, а не из общей `stateIn`-копии: копия ещё мгновение держит прошлый `Unavailable`, и следующая попытка из-за этого делала `disconnect` уже поднятому VHAL.
+
+`onServiceDisconnected` переподключает только текущую сессию. Колбэк от уже брошенной попытки connect не рвёт живое подключение и не запускает второй connect.
 
 Функции/аргументы подключения:
 
@@ -454,7 +470,7 @@ Polling остаётся fallback-механизмом: даже при push-с�
 
 Минимальный чеклист по логам:
 
-1. Есть `VHAL connected, propertyService=property`.
+1. Есть `VHAL connected session=N propertyService=property`, и после него нет `VHAL disconnected session=N` с тем же номером.
 2. Есть `Availability: AVAILABLE`.
 3. Есть `polling started: signals=...` при открытии виджетов.
 4. Для push-пути есть `VHAL push onChange propertyId=...` (если property поддерживает push).

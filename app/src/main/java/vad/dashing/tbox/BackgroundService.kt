@@ -5770,6 +5770,14 @@ class BackgroundService : Service() {
         }.joinToString("||")
     }
 
+    private suspend fun reportUsageStatsFailure(androidLog: String, journal: String, error: Exception) {
+        // Service scope cancelled on restart/stop: stop quietly. A foreign CancellationException
+        // (e.g. an inner timeout) is a real failure; the collector must keep running.
+        if (error is CancellationException) currentCoroutineContext().ensureActive()
+        Log.e("BackgroundService", androidLog, error)
+        TboxRepository.addLog("ERROR", "UsageStats", "$journal: ${error.message}")
+    }
+
     private fun startUsageStatsFloatingHideWatcher() {
         if (usageStatsFloatingHideJob?.isActive == true) return
         OemOverlayAppMonitor.start(this)
@@ -5780,17 +5788,19 @@ class BackgroundService : Service() {
                         try {
                             applyUsageStatsOverlayRulesIfChanged()
                         } catch (e: Exception) {
-                            Log.e("BackgroundService", "UsageStats suppress collect apply failed", e)
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "UsageStats",
-                                "suppress apply: ${e.message}",
+                            reportUsageStatsFailure(
+                                "UsageStats suppress collect apply failed",
+                                "suppress apply",
+                                e,
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("BackgroundService", "UsageStats suppress collect failed", e)
-                    TboxRepository.addLog("ERROR", "UsageStats", "suppress collect: ${e.message}")
+                    reportUsageStatsFailure(
+                        "UsageStats suppress collect failed",
+                        "suppress collect",
+                        e,
+                    )
                 }
             }
             launch {
@@ -5799,21 +5809,19 @@ class BackgroundService : Service() {
                         try {
                             applyUsageStatsOverlayRulesIfChanged()
                         } catch (e: Exception) {
-                            Log.e(
-                                "BackgroundService",
+                            reportUsageStatsFailure(
                                 "UsageStats automation-watch collect apply failed",
+                                "automation watch apply",
                                 e,
-                            )
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "UsageStats",
-                                "automation watch apply: ${e.message}",
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("BackgroundService", "UsageStats automation-watch collect failed", e)
-                    TboxRepository.addLog("ERROR", "UsageStats", "automation watch: ${e.message}")
+                    reportUsageStatsFailure(
+                        "UsageStats automation-watch collect failed",
+                        "automation watch",
+                        e,
+                    )
                 }
             }
             // Re-evaluate immediately when MainActivity resumes/pauses — do not wait for the
@@ -5824,21 +5832,19 @@ class BackgroundService : Service() {
                         try {
                             applyUsageStatsOverlayRulesIfChanged()
                         } catch (e: Exception) {
-                            Log.e(
-                                "BackgroundService",
+                            reportUsageStatsFailure(
                                 "UsageStats main-foreground collect apply failed",
+                                "main fg apply",
                                 e,
-                            )
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "UsageStats",
-                                "main fg apply: ${e.message}",
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("BackgroundService", "UsageStats main-foreground collect failed", e)
-                    TboxRepository.addLog("ERROR", "UsageStats", "main fg collect: ${e.message}")
+                    reportUsageStatsFailure(
+                        "UsageStats main-foreground collect failed",
+                        "main fg collect",
+                        e,
+                    )
                 }
             }
             launch {
@@ -5847,21 +5853,19 @@ class BackgroundService : Service() {
                         try {
                             applyUsageStatsOverlayRulesIfChanged()
                         } catch (e: Exception) {
-                            Log.e(
-                                "BackgroundService",
+                            reportUsageStatsFailure(
                                 "UsageStats overlay collect apply failed",
+                                "overlay apply",
                                 e,
-                            )
-                            TboxRepository.addLog(
-                                "ERROR",
-                                "UsageStats",
-                                "overlay apply: ${e.message}",
                             )
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("BackgroundService", "UsageStats overlay collect failed", e)
-                    TboxRepository.addLog("ERROR", "UsageStats", "overlay collect: ${e.message}")
+                    reportUsageStatsFailure(
+                        "UsageStats overlay collect failed",
+                        "overlay collect",
+                        e,
+                    )
                 }
             }
             while (isActive) {
@@ -5869,8 +5873,11 @@ class BackgroundService : Service() {
                 try {
                     applyUsageStatsOverlayRulesIfChanged()
                 } catch (e: Exception) {
-                    Log.e("BackgroundService", "UsageStats overlay rules apply failed", e)
-                    TboxRepository.addLog("ERROR", "UsageStats", "rules apply: ${e.message}")
+                    reportUsageStatsFailure(
+                        "UsageStats overlay rules apply failed",
+                        "rules apply",
+                        e,
+                    )
                 }
             }
         }

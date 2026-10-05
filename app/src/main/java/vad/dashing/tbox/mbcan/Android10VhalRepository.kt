@@ -43,7 +43,11 @@ data class VhalKeyDiagnosticSubscription(
     val detail: String,
 )
 
-private class CarPropertyBridge(private val context: Context) {
+private class CarPropertyBridge(
+    private val context: Context,
+    /** Tags journal lines so a late Car callback can be matched to its createCar. */
+    val sessionId: Long,
+) {
     private var car: Any? = null
     private var propertyManager: Any? = null
     private var pushListener: Any? = null
@@ -68,50 +72,64 @@ private class CarPropertyBridge(private val context: Context) {
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: android.content.ComponentName?, service: android.os.IBinder?) {
             serviceConnected = true
-            Android10VhalRepository.logInfo("Car service connected")
+            Android10VhalRepository.logInfo("Car service connected session=$sessionId")
         }
 
         override fun onServiceDisconnected(name: android.content.ComponentName?) {
             serviceConnected = false
             // Fail-fast reads; leave `car` for disconnect() cleanup on the reconnect path.
             propertyManager = null
-            Android10VhalRepository.logWarn("Car service disconnected")
+            Android10VhalRepository.logWarn("Car service disconnected session=$sessionId")
             onServiceConnectionLost?.invoke()
         }
     }
 
     fun isServiceConnected(): Boolean = serviceConnected
 
-    fun connect(): MbCanAvailability {
+    fun connect(serviceWaitMs: Long): MbCanAvailability {
         return runCatching {
             val carClass = Class.forName("android.car.Car")
             val carInstance = createCar(carClass)
                 ?: throw IllegalStateException("Car instance is null")
+            // Held before connect so a failed attempt still unbinds it in disconnect().
+            car = carInstance
             carClass.getMethod("connect").invoke(carInstance)
-            waitForServiceConnection()
+            waitForServiceConnection(serviceWaitMs)
+            if (!serviceConnected) {
+                throw IllegalStateException("Car service not connected")
+            }
 
             val propertyService = runCatching {
                 carClass.getField("PROPERTY_SERVICE").get(null) as String
             }.getOrDefault("property")
             val manager = acquirePropertyManager(carClass, carInstance, propertyService)
-            car = carInstance
             propertyManager = manager
-            Android10VhalRepository.logInfo("VHAL connected, propertyService=$propertyService")
+            Android10VhalRepository.logInfo(
+                "VHAL connected session=$sessionId propertyService=$propertyService"
+            )
         }.fold(
             onSuccess = { MbCanAvailability.Available },
-            onFailure = {
-                val root = (it as? java.lang.reflect.InvocationTargetException)?.targetException ?: it
-                val msg = "VHAL connect failed: ${root.javaClass.simpleName}: ${root.message}"
+            onFailure = { error ->
+                val msg = "VHAL connect failed session=$sessionId serviceConnected=$serviceConnected " +
+                    VhalThrowableDetail.describe(error)
                 Android10VhalRepository.logError(msg)
                 MbCanAvailability.Unavailable(msg)
             }
         )
     }
 
-    private fun waitForServiceConnection(timeoutMs: Long = 2_500L, stepMs: Long = 50L) {
-        val start = System.currentTimeMillis()
-        while (!serviceConnected && (System.currentTimeMillis() - start) < timeoutMs) {
+    /** Returns as soon as the callback arrives, so a long [timeoutMs] does not slow a warm start. */
+    private fun waitForServiceConnection(timeoutMs: Long, stepMs: Long = 50L) {
+        val start = SystemClock.elapsedRealtime()
+        while (!serviceConnected && (SystemClock.elapsedRealtime() - start) < timeoutMs) {
             Thread.sleep(stepMs)
+        }
+        if (!serviceConnected) {
+            val waitedMs = SystemClock.elapsedRealtime() - start
+            Android10VhalRepository.logWarn(
+                "Car service connection timeout session=$sessionId serviceConnected=false " +
+                    "waitedMs=$waitedMs limitMs=$timeoutMs"
+            )
         }
     }
 
@@ -129,7 +147,10 @@ private class CarPropertyBridge(private val context: Context) {
             if (manager != null) return manager
             Thread.sleep(100L)
         }
-        throw IllegalStateException("CarPropertyManager is null: ${lastError?.javaClass?.simpleName}: ${lastError?.message}")
+        throw IllegalStateException(
+            "CarPropertyManager is null serviceConnected=$serviceConnected",
+            lastError,
+        )
     }
 
     private fun createCar(carClass: Class<*>): Any? {
@@ -139,7 +160,9 @@ private class CarPropertyBridge(private val context: Context) {
             carClass.getMethod("createCar", Context::class.java, ServiceConnection::class.java)
         }.getOrNull()
         if (method2 != null) {
-            Android10VhalRepository.logInfo("Using Car.createCar(Context, ServiceConnection)")
+            Android10VhalRepository.logInfo(
+                "Using Car.createCar(Context, ServiceConnection) session=$sessionId"
+            )
             return method2.invoke(null, context, serviceConnection)
         }
         Android10VhalRepository.logError("Missing Car.createCar(Context, ServiceConnection)")
@@ -151,12 +174,13 @@ private class CarPropertyBridge(private val context: Context) {
         runCatching { stopDeepDiagnosticSubscriptions() }
         runCatching { syncPushSubscriptions(emptySet()) }
         runCatching {
-            val c = car ?: return
-            c.javaClass.getMethod("disconnect").invoke(c)
-            Android10VhalRepository.logInfo("VHAL disconnected")
+            car?.let { c ->
+                c.javaClass.getMethod("disconnect").invoke(c)
+                Android10VhalRepository.logInfo("VHAL disconnected session=$sessionId")
+            }
         }.onFailure {
             Android10VhalRepository.logWarn(
-                "VHAL disconnect error: ${it.javaClass.simpleName}: ${it.message}"
+                "VHAL disconnect error session=$sessionId ${VhalThrowableDetail.describe(it)}"
             )
         }
         serviceConnected = false
@@ -642,6 +666,12 @@ object Android10VhalRepository {
     private const val BURST_DURATION_MS = 15_000L
     /** Debounce Car binder death → reconnect (vendor may flap). */
     private const val CAR_RECONNECT_DELAY_MS = 750L
+    /**
+     * After sys.boot_completed=1 the Car service still answered 5–18 s later on cold boot.
+     * One Car waits it out instead of being recreated every few seconds.
+     */
+    private const val FIRST_CAR_SERVICE_WAIT_MS = 30_000L
+    private const val CAR_SERVICE_WAIT_MS = 8_000L
     private const val LOG_TAG = "VHAL_A10"
     private const val CAR_INFO_PERMISSION = "android.car.permission.CAR_INFO"
     private const val CAR_ENGINE_DETAILED_PERMISSION = "android.car.permission.CAR_ENGINE_DETAILED"
@@ -691,6 +721,9 @@ object Android10VhalRepository {
     private val carConnectMutex = Mutex()
     /** Bumps on each disconnect so only the latest reconnect attempt runs. */
     private val carReconnectGeneration = AtomicLong(0L)
+    private val carSessionCounter = AtomicLong(0L)
+    /** Guarded by [carConnectMutex]. */
+    private var firstCarConnectPending = true
     @Volatile
     private var burstUntilMs: Long = 0L
     private val readErrorsLogged = mutableSetOf<String>()
@@ -1113,7 +1146,45 @@ object Android10VhalRepository {
         )
     }
 
+    private val earlyBootGate = Mutex()
+    @Volatile
+    private var earlyBootGatePassed = false
+
+    /**
+     * NLS binds this process before BOOT_COMPLETED. Car service is often not up yet,
+     * so the first A10 connect waits out that window once. A later restart, when
+     * boot has already finished, connects immediately.
+     */
+    private suspend fun awaitEarlyBootIfNeeded() {
+        if (earlyBootGatePassed) return
+        earlyBootGate.withLock {
+            if (earlyBootGatePassed) return@withLock
+            val raw = VhalBootGate.readBootCompleted()
+            if (!VhalBootGate.shouldDefer(raw, gateAlreadyPassed = false)) {
+                logInfo("VHAL init boot already completed raw=${raw ?: "unreadable"}")
+                earlyBootGatePassed = true
+                return@withLock
+            }
+            logInfo("VHAL init deferred until sys.boot_completed (early start, raw=$raw)")
+            val startedAt = SystemClock.elapsedRealtime()
+            var latest = raw
+            while (
+                VhalBootGate.shouldDefer(latest, gateAlreadyPassed = false) &&
+                SystemClock.elapsedRealtime() - startedAt < VhalBootGate.MAX_WAIT_MS
+            ) {
+                delay(VhalBootGate.POLL_MS)
+                latest = VhalBootGate.readBootCompleted()
+            }
+            logInfo(
+                "VHAL init continuing bootCompletedRaw=${latest ?: "unreadable"} " +
+                    "waitedMs=${SystemClock.elapsedRealtime() - startedAt}"
+            )
+            earlyBootGatePassed = true
+        }
+    }
+
     private suspend fun ensureConnected(): MbCanAvailability = withContext(Dispatchers.Default) {
+        awaitEarlyBootIfNeeded()
         var newlyConnected = false
         val result = carConnectMutex.withLock {
             val context = AppContextHolder.appContextOrNull
@@ -1135,13 +1206,15 @@ object Android10VhalRepository {
             }
             // Drop stale / disconnected bridge before opening another Car session.
             if (existing != null) {
-                runCatching { existing.disconnect() }
+                releaseBridge(existing)
                 bridge = null
             }
-            val newBridge = CarPropertyBridge(context).also { created ->
-                created.onServiceConnectionLost = { onCarServiceDisconnected() }
+            val newBridge = CarPropertyBridge(context, carSessionCounter.incrementAndGet()).also { created ->
+                created.onServiceConnectionLost = { onCarServiceDisconnected(created) }
             }
-            val connectResult = newBridge.connect()
+            val serviceWaitMs = if (firstCarConnectPending) FIRST_CAR_SERVICE_WAIT_MS else CAR_SERVICE_WAIT_MS
+            firstCarConnectPending = false
+            val connectResult = newBridge.connect(serviceWaitMs)
             _availability.value = connectResult
             if (connectResult is MbCanAvailability.Available) {
                 bridge = newBridge
@@ -1151,7 +1224,7 @@ object Android10VhalRepository {
                     lastAvailabilityReason = "AVAILABLE"
                 }
             } else {
-                runCatching { newBridge.disconnect() }
+                releaseBridge(newBridge)
                 val reason = (connectResult as? MbCanAvailability.Unavailable)?.reason ?: "VHAL unavailable"
                 if (lastAvailabilityReason != reason) {
                     logWarn("Availability: $reason")
@@ -1174,29 +1247,40 @@ object Android10VhalRepository {
     /**
      * Car binder died while we still held a [CarPropertyBridge]. Drop the dead session and
      * schedule reconnect + push re-subscribe — critical for overlay-only A10 (no Activity warm-up).
+     *
+     * [source] must still be the active [bridge]. A timed-out connect also unbinds and the Car
+     * service later delivers [android.content.ServiceConnection.onServiceDisconnected] for that
+     * abandoned session; acting on it used to tear down a newer successful connection.
      */
-    private fun onCarServiceDisconnected() {
-        val generation = carReconnectGeneration.incrementAndGet()
+    private fun onCarServiceDisconnected(source: CarPropertyBridge) {
         scope.launch {
-            carConnectMutex.withLock {
-                val existing = bridge
-                if (existing != null) {
-                    runCatching { existing.disconnect() }
-                    bridge = null
+            val generation = carConnectMutex.withLock {
+                if (!VhalCarConnectionPolicy.shouldReconnectAfterDisconnect(bridge === source)) {
+                    logInfo("Car service disconnected ignored: stale session=${source.sessionId}")
+                    return@withLock null
                 }
+                val generation = carReconnectGeneration.incrementAndGet()
+                releaseBridge(source)
+                bridge = null
                 val reason = "Car service disconnected"
                 _availability.value = MbCanAvailability.Unavailable(reason)
                 if (lastAvailabilityReason != reason) {
                     logWarn("Availability: $reason")
                     lastAvailabilityReason = reason
                 }
-            }
+                generation
+            } ?: return@launch
             delay(CAR_RECONNECT_DELAY_MS)
             if (generation != carReconnectGeneration.get()) return@launch
             logInfo("VHAL reconnect after Car service disconnect")
             ensureConnected()
             restartPolling()
         }
+    }
+
+    private fun releaseBridge(target: CarPropertyBridge) {
+        target.onServiceConnectionLost = null
+        runCatching { target.disconnect() }
     }
 
     suspend fun bind(_scope: CoroutineScope) {
@@ -1228,7 +1312,7 @@ object Android10VhalRepository {
                 pendingPushDebug.clear()
                 pushDebugFlushScheduled = false
             }
-            bridge?.disconnect()
+            bridge?.let { releaseBridge(it) }
             bridge = null
         }
     }
