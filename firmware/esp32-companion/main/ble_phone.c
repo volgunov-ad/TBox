@@ -21,7 +21,7 @@ static const char *TAG = "ble_phone";
 
 #define NVS_NS "ble_phone"
 #define PHONE_REC_LEN 51
-#define NAME_MAX 26
+#define PHONE_NAME_MAX 26
 #define BODY_LEN 11
 #define SEALED_LEN 24
 #define PAIR_CHUNK 18
@@ -56,7 +56,7 @@ typedef struct {
     uint8_t key[16];
     uint32_t counter;
     uint8_t name_len;
-    char name[NAME_MAX];
+    char name[PHONE_NAME_MAX];
 } phone_rec_t;
 
 typedef struct {
@@ -109,7 +109,7 @@ static int s_q_len;
 /* USB messages are sent from ble_phone_poll (main loop), never from the NimBLE host task. */
 static bool s_out_pair;
 static uint8_t s_out_pair_id[4];
-static char s_out_pair_name[NAME_MAX + 1];
+static char s_out_pair_name[PHONE_NAME_MAX + 1];
 static cmd_out_t s_out_cmd[CMD_OUT_MAX];
 static int s_out_cmd_n;
 static bool s_out_snap_req;
@@ -163,9 +163,11 @@ static void sanitize_name(char *name, uint8_t len)
     }
 }
 
-static void counter_key(int index, char key[8])
+#define COUNTER_KEY_LEN 12
+
+static void counter_key(int index, char key[COUNTER_KEY_LEN])
 {
-    snprintf(key, 8, "c%d", index);
+    snprintf(key, COUNTER_KEY_LEN, "c%d", index);
 }
 
 static void rec_to_blob(const phone_rec_t *rec, uint8_t blob[PHONE_REC_LEN])
@@ -191,7 +193,7 @@ static bool blob_to_rec(const uint8_t blob[PHONE_REC_LEN], phone_rec_t *rec)
     rec->counter = (uint32_t)blob[20] | ((uint32_t)blob[21] << 8) |
                    ((uint32_t)blob[22] << 16) | ((uint32_t)blob[23] << 24);
     rec->name_len = blob[24];
-    if (rec->name_len > NAME_MAX) return false;
+    if (rec->name_len > PHONE_NAME_MAX) return false;
     if (rec->name_len > 0) memcpy(rec->name, blob + 25, rec->name_len);
     sanitize_name(rec->name, rec->name_len);
     return true;
@@ -204,7 +206,7 @@ static bool save_nvs(void)
     nvs_set_u8(h, "n", (uint8_t)s_count);
     for (int i = 0; i < BLE_DEVICE_MAX; i++) {
         char key[8];
-        char ckey[8];
+        char ckey[COUNTER_KEY_LEN];
         snprintf(key, sizeof(key), "p%d", i);
         counter_key(i, ckey);
         if (i < s_count) {
@@ -231,7 +233,7 @@ static void save_counter(int index)
 {
     nvs_handle_t h;
     if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
-    char ckey[8];
+    char ckey[COUNTER_KEY_LEN];
     counter_key(index, ckey);
     nvs_set_u32(h, ckey, s_phones[index].counter);
     nvs_commit(h);
@@ -248,7 +250,7 @@ static void load_nvs(void)
     if (n > BLE_DEVICE_MAX) n = BLE_DEVICE_MAX;
     for (int i = 0; i < n; i++) {
         char key[8];
-        char ckey[8];
+        char ckey[COUNTER_KEY_LEN];
         snprintf(key, sizeof(key), "p%d", i);
         counter_key(i, ckey);
         uint8_t blob[PHONE_REC_LEN];
@@ -497,10 +499,10 @@ static void accept_pair_pages(void)
     memcpy(s_pending.id, s_asm_id, 4);
     memcpy(s_pending.key, key, 16);
     int name_len = s_asm_chunk_len[0] - 16;
-    if (name_len > NAME_MAX) name_len = NAME_MAX;
+    if (name_len > PHONE_NAME_MAX) name_len = PHONE_NAME_MAX;
     if (name_len > 0) memcpy(s_pending.name, s_asm_chunk[0] + 16, (size_t)name_len);
-    for (int page = 1; page < s_asm_count && name_len < NAME_MAX; page++) {
-        int room = NAME_MAX - name_len;
+    for (int page = 1; page < s_asm_count && name_len < PHONE_NAME_MAX; page++) {
+        int room = PHONE_NAME_MAX - name_len;
         int n = s_asm_chunk_len[page] < room ? s_asm_chunk_len[page] : room;
         if (n > 0) memcpy(s_pending.name + name_len, s_asm_chunk[page], (size_t)n);
         name_len += n;
@@ -724,7 +726,7 @@ void ble_phone_poll(uint32_t t)
 {
     bool send_pair = false;
     char pair_hex[9];
-    char pair_name[NAME_MAX + 1];
+    char pair_name[PHONE_NAME_MAX + 1];
     cmd_out_t cmds[CMD_OUT_MAX];
     int cmd_n = 0;
     bool send_snap_req = false;
