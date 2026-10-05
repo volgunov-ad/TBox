@@ -46,7 +46,7 @@
 - пока режим закреплён, старт делает **3 попытки того же режима** и не пробует альтернативу. Временный обрыв VHAL режим не меняет.
 - если эти 3 попытки не подняли закреплённый режим (и если на первом запуске не поднялись оба backend), тот же режим повторяется **каждые 10 с**, пока не подключится, пока пользователь не сменит схему или пока служба не остановится. На другую схему эти поздние попытки не переключают.
 - между быстрыми попытками выдерживается пауза `1.2s`;
-- окно одной попытки bind — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail);
+- окно одной попытки после возврата из `bind()` — `3.5s` (с финальной проверкой `warmUpAvailabilityForUi()` перед fail). Само ожидание `onServiceConnected` на A10 идёт внутри `bind()` и может занять до 8 с;
 - `SettingsManager` хранит служебные поля:
   - `can_auto_bind_enabled`,
   - `can_auto_bind_locked`,
@@ -200,12 +200,14 @@
 
 - `Car.createCar(Context, ServiceConnection)` (основной путь),
 - `car.connect()`,
-- ожидание `onServiceConnected` (таймаут ожидания **2,5 с**),
+- ожидание `onServiceConnected` (таймаут **8 с**, выход сразу по колбэку; на холодном старте колбэк приходит через 3–8 с, на тёплом — около 2 с),
 - получение property manager через `getCarManager("property")` (до **20** повторов по 100 ms).
 
 Notification Listener может поднять `BackgroundService` до `sys.boot_completed`. На A9 mbCAN это безвредно, на A10 Car-сервис к этому моменту часто ещё не готов. Первый connect VHAL в таком случае ждёт свойство `sys.boot_completed=1`, но не дольше **25 с** (опрос каждые 500 мс), и только один раз за процесс. Если загрузка уже завершена или свойство прочитать нельзя, паузы нет: рестарт службы на работающем ГУ не откладывается.
 
-Если `onServiceConnected` не пришёл за 2,5 с, в журнал пишется `Car service connection timeout` с `waitedMs`. Если `getCarManager` падает, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause` (у самого `InvocationTargetException` message обычно пустой).
+Если `onServiceConnected` не пришёл за 8 с, в журнал пишется `Car service connection timeout` с `waitedMs`, и `getCarManager` в этой попытке уже не вызывается. Если `getCarManager` падает после колбэка, `VHAL connect failed` содержит `serviceConnected` и цепочку причин: `InvocationTargetException` разворачивается до `targetException` / `cause`.
+
+Итог попытки и проверка «уже подключено» перед поздним повтором читаются из `availability` самого backend, а не из общей `stateIn`-копии: копия ещё мгновение держит прошлый `Unavailable`, и следующая попытка из-за этого делала `disconnect` уже поднятому VHAL.
 
 `onServiceDisconnected` переподключает только текущую сессию. Колбэк от уже брошенной попытки connect не рвёт живое подключение и не запускает второй connect.
 

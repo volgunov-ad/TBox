@@ -1479,7 +1479,7 @@ object UniversalCanRepository {
                         )
                         return@withLock null
                     }
-                    if (availability.value is MbCanAvailability.Available) {
+                    if (directBackendAvailability() is MbCanAvailability.Available) {
                         return@withLock true
                     }
                     unbindLocked()
@@ -1551,7 +1551,7 @@ object UniversalCanRepository {
         return AutoBindAttemptResult(
             success = false,
             attempt = AUTO_BIND_ATTEMPTS_PER_MODE,
-            reason = (availability.value as? MbCanAvailability.Unavailable)?.reason
+            reason = (directBackendAvailability() as? MbCanAvailability.Unavailable)?.reason
                 ?: "timeout_unknown"
         )
     }
@@ -1562,7 +1562,7 @@ object UniversalCanRepository {
     ): AvailabilityAttemptResult {
         val startedAt = System.currentTimeMillis()
         while ((System.currentTimeMillis() - startedAt) < timeoutMs) {
-            when (val current = availability.value) {
+            when (val current = directBackendAvailability()) {
                 MbCanAvailability.Available -> return AvailabilityAttemptResult(
                     success = true,
                     summary = "available"
@@ -1578,7 +1578,7 @@ object UniversalCanRepository {
             delay(120L)
         }
         onTimeoutProbe()
-        return when (val current = availability.value) {
+        return when (val current = directBackendAvailability()) {
             MbCanAvailability.Available -> AvailabilityAttemptResult(
                 success = true,
                 summary = "available_after_timeout_probe"
@@ -1591,6 +1591,19 @@ object UniversalCanRepository {
                 success = false,
                 summary = "timeout_unknown"
             )
+        }
+    }
+
+    /**
+     * [availability] is a [stateIn] copy and can still show the previous failure
+     * for a moment after bind() has already stored Available. Reading that copy
+     * made the next startup attempt unbind a VHAL session that had just connected.
+     */
+    private fun directBackendAvailability(): MbCanAvailability {
+        return if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            MbCanRepository.availability.value
+        } else {
+            Android10VhalRepository.availability.value
         }
     }
 

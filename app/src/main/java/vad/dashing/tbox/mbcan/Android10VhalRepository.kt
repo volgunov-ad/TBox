@@ -89,6 +89,9 @@ private class CarPropertyBridge(private val context: Context) {
                 ?: throw IllegalStateException("Car instance is null")
             carClass.getMethod("connect").invoke(carInstance)
             waitForServiceConnection()
+            if (!serviceConnected) {
+                throw IllegalStateException("Car service not connected")
+            }
 
             val propertyService = runCatching {
                 carClass.getField("PROPERTY_SERVICE").get(null) as String
@@ -108,7 +111,12 @@ private class CarPropertyBridge(private val context: Context) {
         )
     }
 
-    private fun waitForServiceConnection(timeoutMs: Long = 2_500L, stepMs: Long = 50L) {
+    /**
+     * Cold boot delivers [ServiceConnection.onServiceConnected] about 3–8 s after createCar.
+     * 2.5 s abandoned the session; the late callback then belonged to a Car the next attempt disconnected.
+     * Returns as soon as the callback arrives, so a warm start still finishes in about 2 s.
+     */
+    private fun waitForServiceConnection(timeoutMs: Long = 8_000L, stepMs: Long = 50L) {
         val start = SystemClock.elapsedRealtime()
         while (!serviceConnected && (SystemClock.elapsedRealtime() - start) < timeoutMs) {
             Thread.sleep(stepMs)
