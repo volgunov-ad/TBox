@@ -184,7 +184,8 @@ object GeoDebugLogRecorder {
         UniversalCanRepository.enqueueClearSource(STEERING_INTEREST_SOURCE_ID)
         if (!was && outFile == null) return
         val sc = scope
-        val path = outFile?.absolutePath
+        val file = outFile
+        val path = file?.absolutePath
         if (sc != null) {
             sc.launch(Dispatchers.IO) {
                 writeMutex.withLock {
@@ -192,7 +193,7 @@ object GeoDebugLogRecorder {
                         "\n# stopped=${formatWall(System.currentTimeMillis())}" +
                             " auto=$auto ticks=${_ui.value.ticks}\n",
                     )
-                    flushPendingLocked()
+                    flushPendingLocked(file)
                 }
                 val ctx = appContext
                 if (ctx != null && path != null) {
@@ -281,9 +282,13 @@ object GeoDebugLogRecorder {
         writeMutex.withLock { flushPendingLocked() }
     }
 
-    private fun flushPendingLocked() {
+    /** [file] is passed explicitly by [stop], which clears [outFile] before the final flush runs. */
+    private fun flushPendingLocked(file: File? = outFile) {
         if (pending.isEmpty()) return
-        val file = outFile ?: return
+        if (file == null) {
+            pending.clear()
+            return
+        }
         val bytes = pending.toString().toByteArray(StandardCharsets.UTF_8)
         pending.clear()
         try {
