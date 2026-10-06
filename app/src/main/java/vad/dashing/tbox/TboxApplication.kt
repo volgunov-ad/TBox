@@ -1,12 +1,14 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.ui.AppIconCache
 import vad.dashing.tbox.ui.LaunchableAppsCatalog
 
 class TboxApplication : Application() {
@@ -46,6 +48,18 @@ class TboxApplication : Application() {
             } catch (_: Exception) {
                 // [BackgroundService.onCreate] reloads trips; motor hours stay at default until service.
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // UI_HIDDEN is skipped: floating panels keep showing tiles after the activity hides.
+        val pressure = level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE
+        if (pressure) {
+            AppIconCache.clear()
         }
     }
 }

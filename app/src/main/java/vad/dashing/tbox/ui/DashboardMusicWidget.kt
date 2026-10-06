@@ -1494,30 +1494,43 @@ private fun MusicWidgetPlayerAvatar(
     val enumPlayer = remember(selectedPackage) {
         SupportedMediaPlayer.fromPackage(selectedPackage)
     }
-    val appIcon = produceState<ImageBitmap?>(
-        initialValue = null,
-        selectedPackage,
-        context,
-        launcherIconRevision,
-        iconSizePx,
-        iconLookup,
-        suppressCustomIcon,
+    val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
+    val iconKey = remember(selectedPackage, iconSizePx, iconLookup, suppressCustomIcon, launcherIconRevision, packagesRevision) {
+        AppIconCache.Key(
+            packageName = selectedPackage,
+            sizePx = iconSizePx,
+            lookup = iconLookup,
+            suppressCustomIcon = suppressCustomIcon,
+            customIconRevision = launcherIconRevision,
+            packagesRevision = packagesRevision,
+        )
+    }
+    val appIcon = produceState(
+        initialValue = if (selectedPackage.isBlank() || enumPlayer != null) null else AppIconCache.peek(iconKey),
+        iconKey,
+        enumPlayer,
     ) {
         if (selectedPackage.isBlank() || enumPlayer != null) {
             value = null
             return@produceState
         }
+        AppIconCache.peek(iconKey)?.let {
+            value = it
+            return@produceState
+        }
         value = withContext(Dispatchers.IO) {
-            val custom = if (!suppressCustomIcon) {
-                decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
-            } else {
-                null
+            AppIconCache.getOrLoad(iconKey) {
+                val custom = if (!suppressCustomIcon) {
+                    decodeLauncherAppCustomIconIfPresent(context, selectedPackage, iconSizePx, iconLookup)
+                } else {
+                    null
+                }
+                custom ?: runCatching {
+                    val pm = context.packageManager
+                    val info = pm.getApplicationInfo(selectedPackage, 0)
+                    info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
+                }.getOrNull()
             }
-            custom ?: runCatching {
-                val pm = context.packageManager
-                val info = pm.getApplicationInfo(selectedPackage, 0)
-                info.loadIcon(pm).toBitmap(iconSizePx, iconSizePx).asImageBitmap()
-            }.getOrNull()
         }
     }.value
     val clip = Modifier.clip(RoundedCornerShape(4.dp))

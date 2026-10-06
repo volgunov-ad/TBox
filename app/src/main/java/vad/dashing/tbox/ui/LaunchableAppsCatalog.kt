@@ -105,6 +105,7 @@ internal object LaunchableAppsCatalog {
             cachedPackageNames = null
             _packagesRevision.value = _packagesRevision.value + 1
         }
+        AppIconCache.clear()
     }
 
     /**

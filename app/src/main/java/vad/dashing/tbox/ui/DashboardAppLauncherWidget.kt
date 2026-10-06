@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -91,28 +92,45 @@ internal fun DashboardAppLauncherWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val imageBitmap = produceState<ImageBitmap?>(
-        initialValue = null,
-        packageName,
-        customIconRevision,
-        iconLookup,
-        suppressCustomIcon,
-    ) {
+    val packagesRevision by LaunchableAppsCatalog.packagesRevision.collectAsStateWithLifecycle()
+    val iconKey = remember(packageName, iconLookup, suppressCustomIcon, customIconRevision, packagesRevision) {
+        AppIconCache.Key(
+            packageName = packageName,
+            sizePx = APP_LAUNCHER_WIDGET_ICON_MAX_PX,
+            lookup = iconLookup,
+            suppressCustomIcon = suppressCustomIcon,
+            customIconRevision = customIconRevision,
+            packagesRevision = packagesRevision,
+        )
+    }
+    val imageBitmap = produceState(initialValue = AppIconCache.peek(iconKey), iconKey) {
+        AppIconCache.peek(iconKey)?.let {
+            value = it
+            return@produceState
+        }
         value = withContext(Dispatchers.IO) {
-            loadAppLauncherWidgetIcon(context, packageName, iconLookup, suppressCustomIcon)
+            AppIconCache.getOrLoad(iconKey) {
+                loadAppLauncherWidgetIcon(context, packageName, iconLookup, suppressCustomIcon)
+            }
         }
     }.value
-    val appLabel = remember(packageName) {
+    val appLabel = produceState(
+        initialValue = if (packageName.isBlank()) "" else AppIconCache.peekLabel(packageName, packagesRevision).orEmpty(),
+        packageName,
+        packagesRevision,
+    ) {
         if (packageName.isBlank()) {
-            ""
-        } else {
-            runCatching {
-                val pm = context.packageManager
-                val info = pm.getApplicationInfo(packageName, 0)
-                info.loadLabel(pm).toString()
-            }.getOrElse { packageName }
+            value = ""
+            return@produceState
         }
-    }
+        AppIconCache.peekLabel(packageName, packagesRevision)?.let {
+            value = it
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            AppIconCache.loadLabel(context.packageManager, packageName, packagesRevision)
+        }
+    }.value
     val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
     DashboardWidgetScaffold(
         modifier = Modifier.fillMaxSize(),
