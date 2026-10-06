@@ -78,6 +78,9 @@ static const char *TAG = "ble_phone";
 #define GROUP_MEDIA   0x04u
 #define GROUP_WINDOWS 0x08u
 #define GROUP_ALL     0x0Fu
+/* Header temperatures only: page 6, which every answer carries. */
+#define GROUP_HEADER  0x10u
+#define GROUP_MASK    (GROUP_ALL | GROUP_HEADER)
 
 typedef struct {
     uint8_t id[4];
@@ -477,7 +480,7 @@ static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_
     const phone_media_t *m = &s_cache_media;
     int pages[7 + (PHONE_TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK];
     int page_n = 0;
-    uint8_t want = (groups & GROUP_ALL) ? (uint8_t)(groups & GROUP_ALL) : GROUP_ALL;
+    uint8_t want = (groups & GROUP_MASK) ? (uint8_t)(groups & GROUP_MASK) : GROUP_ALL;
     if (want & GROUP_CLIMATE) {
         pages[page_n++] = 0;
         pages[page_n++] = 1;

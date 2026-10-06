@@ -223,6 +223,7 @@ class PhoneBleCodecTest {
         assertEquals(listOf(2, PhoneBleCodec.PAGE_CABIN), PhoneBleCodec.pagesForGroups(PhoneBleCodec.GROUP_SEATS))
         assertEquals(listOf(0, 1, 2, 3, 4, 5, 6), PhoneBleCodec.pagesForGroups(0))
         assertEquals(0, PhoneBleCodec.readRefreshGroups(ByteArray(2)))
+        assertEquals(listOf(PhoneBleCodec.PAGE_CABIN), PhoneBleCodec.pagesForGroups(PhoneBleCodec.GROUP_HEADER))
         val seatsOnly = PhoneBleCodec.snapshotBodies(
             1,
             PhoneBleCodec.Snapshot(title = "Song"),

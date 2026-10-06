@@ -29,7 +29,8 @@ import javax.crypto.spec.SecretKeySpec
  *   OP_WINDOW: seat 0..3 = FL, FR, RL, RR, 4 = all; arg WINDOW_CMD_*
  *   OP_SUNROOF: arg percent 0..100 step 10, or ROOF_TILT. OP_SUNSHADE: arg percent
  * REFRESH body: textHash u16le the phone already shows (0 = none), groups u8 the screen
- *   shows (GROUP_*, 0 = all), then zeros. Page 6 is sent for every group.
+ *   shows (GROUP_*, 0 = all for older apps), then zeros. Page 6 is sent for every group;
+ *   GROUP_HEADER alone asks for page 6 only.
  * SNAP body: page u8, gen u8, data[9]
  *   page 0: left i16le, right i16le, fan u8. Missing temp 0x7FFF, fan 0xFF
  *   page 1: mode, auto, blow, sync. Missing 0xFF
@@ -98,6 +99,9 @@ object PhoneBleCodec {
     const val GROUP_MEDIA: Int = 4
     const val GROUP_WINDOWS: Int = 8
     const val GROUP_ALL: Int = GROUP_CLIMATE or GROUP_SEATS or GROUP_MEDIA or GROUP_WINDOWS
+    /** Header temperatures only (page 6 is part of every answer). */
+    const val GROUP_HEADER: Int = 16
+    private const val GROUP_MASK: Int = GROUP_ALL or GROUP_HEADER
 
     const val WINDOW_ALL: Int = 4
     const val WINDOW_CMD_CLOSE: Int = 0
@@ -175,7 +179,7 @@ object PhoneBleCodec {
 
     /** Pages the companion sends for [groups] (0 = all), without text pages. */
     fun pagesForGroups(groups: Int): List<Int> {
-        val wanted = if (groups and GROUP_ALL == 0) GROUP_ALL else groups
+        val wanted = if (groups and GROUP_MASK == 0) GROUP_ALL else groups
         return buildList {
             if (wanted and GROUP_CLIMATE != 0) addAll(listOf(0, 1))
             if (wanted and GROUP_SEATS != 0) add(2)
@@ -251,12 +255,12 @@ object PhoneBleCodec {
     fun refreshBody(textHash: Int = 0, groups: Int = 0): ByteArray =
         ByteArray(BODY_LEN).also {
             putU16(it, 0, textHash and 0xFFFF)
-            it[2] = (groups and GROUP_ALL).toByte()
+            it[2] = (groups and GROUP_MASK).toByte()
         }
 
     fun readRefreshTextHash(body: ByteArray): Int = if (body.size < 2) 0 else getU16(body, 0)
 
-    fun readRefreshGroups(body: ByteArray): Int = if (body.size < 3) 0 else body[2].toInt() and GROUP_ALL
+    fun readRefreshGroups(body: ByteArray): Int = if (body.size < 3) 0 else body[2].toInt() and GROUP_MASK
 
     /** Drops characters the firmware JSON reader does not unescape, then fits [maxBytes]. */
     fun clipText(text: String?, maxBytes: Int): String {
