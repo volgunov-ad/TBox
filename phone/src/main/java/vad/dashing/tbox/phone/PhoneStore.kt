@@ -53,11 +53,19 @@ class PhoneStore(context: Context) {
             prefs.edit().putBoolean(KEY_PAIRED, value).apply()
         }
 
+    /** Last page shown, by name; null before the first choice. */
+    var page: String?
+        get() = prefs.getString(KEY_PAGE, null)
+        set(value) {
+            prefs.edit().putString(KEY_PAGE, value).apply()
+        }
+
     private companion object {
         const val KEY_ID = "id"
         const val KEY_SECRET = "key"
         const val KEY_COUNTER = "counter"
         const val KEY_PAIRED = "paired"
+        const val KEY_PAGE = "page"
         const val COUNTER_BLOCK = 64L
     }
 }
