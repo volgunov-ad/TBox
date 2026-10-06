@@ -143,8 +143,7 @@ class UsbNmeaGnssSession(
         this.requestGst = requestGst
         if (!running.compareAndSet(false, true)) {
             // Already running ù update target and reconnect.
-            closeConnectionOnly()
-            tryConnect()
+            reconnectOnUsbIo("start")
             return
         }
         val filter = IntentFilter(ACTION_USB_PERMISSION).apply {
@@ -182,8 +181,7 @@ class UsbNmeaGnssSession(
         this.requestGst = requestGst
         if (!running.get()) return
         if (changed) {
-            closeConnectionOnly()
-            tryConnect()
+            reconnectOnUsbIo("updateTarget")
         } else if (connection == null) {
             tryConnect()
         }
@@ -197,13 +195,18 @@ class UsbNmeaGnssSession(
             return
         }
         Log.i(TAG, "forceReopen id=$targetStableId")
+        reconnectOnUsbIo("forceReopen")
+    }
+
+    /** Close and reopen on usb-gnss-io so it never overlaps an in-flight [openDeviceOnIoThread]. */
+    private fun reconnectOnUsbIo(reason: String) {
         runCatching {
             runOnUsbIo(timeoutMs = OPEN_TIMEOUT_MS) {
                 closeConnectionOnly()
                 tryConnect()
             }
         }.onFailure { e ->
-            Log.w(TAG, "forceReopen failed: ${e.message}", e)
+            Log.w(TAG, "$reason reconnect failed: ${e.message}", e)
             onError("USB reopen failed: ${e.message}")
         }
     }
@@ -510,6 +513,7 @@ class UsbNmeaGnssSession(
     }
 
     private fun openDeviceOnIoThread(device: UsbDevice) {
+        if (!running.get()) return
         val actualSerial = runCatching { device.serialNumber }.getOrNull()?.trim().orEmpty()
         val parsed = UsbGnssDeviceIds.parseStableId(targetStableId)
         val wantSerial = parsed?.serial?.trim().orEmpty()
@@ -533,56 +537,18 @@ class UsbNmeaGnssSession(
             onError("openDevice failed")
             return
         }
-        if (commIntf != null) {
-            try {
-                conn.claimInterface(commIntf, true)
-            } catch (_: Exception) {
-            }
-            setLineCoding(conn, commIntf.id, targetBaud)
-            assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
+        val published = try {
+            configureAndPublish(device, conn, dataIntf, commIntf)
+        } catch (e: Exception) {
+            Log.w(TAG, "USB configure failed: ${e.message}", e)
+            onError("USB configure failed: ${e.message}")
+            false
         }
-        if (!conn.claimInterface(dataIntf, true)) {
-            conn.close()
-            onError("claimInterface failed")
+        if (!published) {
+            runCatching { conn.releaseInterface(dataIntf) }
+            commIntf?.let { runCatching { conn.releaseInterface(it) } }
+            runCatching { conn.close() }
             return
-        }
-        // CP210x / CH340 / FTDI / Prolific need vendor baud+DTR; CDC alone is not enough.
-        val vendorInit = UsbUartBridgeInit.applyIfNeeded(
-            device = device,
-            connection = conn,
-            interfaceId = dataIntf.id,
-            baud = targetBaud,
-        )
-        if (!vendorInit && commIntf == null) {
-            Log.w(
-                TAG,
-                "No CDC COMM and no known UART vendor init " +
-                    "vid=${"%04x".format(device.vendorId)} ù RX may stay empty",
-            )
-        }
-        var epIn: UsbEndpoint? = null
-        var epOut: UsbEndpoint? = null
-        for (e in 0 until dataIntf.endpointCount) {
-            val ep = dataIntf.getEndpoint(e)
-            if (ep.type != UsbConstants.USB_ENDPOINT_XFER_BULK) continue
-            if (ep.direction == UsbConstants.USB_DIR_IN) epIn = ep
-            if (ep.direction == UsbConstants.USB_DIR_OUT) epOut = ep
-        }
-        if (epIn == null) {
-            conn.releaseInterface(dataIntf)
-            conn.close()
-            onError("Missing bulk IN endpoint")
-            return
-        }
-        synchronized(ioLock) {
-            connection = conn
-            usbInterface = dataIntf
-            commInterface = commIntf
-            inEndpoint = epIn
-            outEndpoint = epOut
-            openDeviceId = device.deviceId
-            ftdiStatusFilter = UsbUartBridgeInit.needsFtdiStatusFilter(device.vendorId)
-            inMaxPacketSize = epIn.maxPacketSize.coerceAtLeast(8)
         }
         onConnectionChanged(true)
         startReadLoop()
@@ -611,9 +577,74 @@ class UsbNmeaGnssSession(
         }
         Log.i(
             TAG,
-            "USB GNSS connected: ${device.deviceName} baud=$targetBaud id=$targetStableId " +
-                "vendorInit=$vendorInit",
+            "USB GNSS connected: ${device.deviceName} baud=$targetBaud id=$targetStableId",
         )
+    }
+
+    /**
+     * Claims interfaces, applies line coding and publishes [conn] under [ioLock].
+     * Returns false (caller closes [conn]) on failure or when [close] ran meanwhile.
+     */
+    private fun configureAndPublish(
+        device: UsbDevice,
+        conn: UsbDeviceConnection,
+        dataIntf: UsbInterface,
+        commIntf: UsbInterface?,
+    ): Boolean {
+        if (commIntf != null) {
+            try {
+                conn.claimInterface(commIntf, true)
+            } catch (_: Exception) {
+            }
+            setLineCoding(conn, commIntf.id, targetBaud)
+            assertCdcControlLineState(conn, commIntf.id, dtr = true, rts = true)
+        }
+        if (!conn.claimInterface(dataIntf, true)) {
+            onError("claimInterface failed")
+            return false
+        }
+        // CP210x / CH340 / FTDI / Prolific need vendor baud+DTR; CDC alone is not enough.
+        val vendorInit = UsbUartBridgeInit.applyIfNeeded(
+            device = device,
+            connection = conn,
+            interfaceId = dataIntf.id,
+            baud = targetBaud,
+        )
+        if (!vendorInit && commIntf == null) {
+            Log.w(
+                TAG,
+                "No CDC COMM and no known UART vendor init " +
+                    "vid=${"%04x".format(device.vendorId)} ù RX may stay empty",
+            )
+        }
+        var epIn: UsbEndpoint? = null
+        var epOut: UsbEndpoint? = null
+        for (e in 0 until dataIntf.endpointCount) {
+            val ep = dataIntf.getEndpoint(e)
+            if (ep.type != UsbConstants.USB_ENDPOINT_XFER_BULK) continue
+            if (ep.direction == UsbConstants.USB_DIR_IN) epIn = ep
+            if (ep.direction == UsbConstants.USB_DIR_OUT) epOut = ep
+        }
+        if (epIn == null) {
+            onError("Missing bulk IN endpoint")
+            return false
+        }
+        synchronized(ioLock) {
+            if (!running.get()) {
+                Log.i(TAG, "session closed during open; dropping new connection")
+                return false
+            }
+            connection = conn
+            usbInterface = dataIntf
+            commInterface = commIntf
+            inEndpoint = epIn
+            outEndpoint = epOut
+            openDeviceId = device.deviceId
+            ftdiStatusFilter = UsbUartBridgeInit.needsFtdiStatusFilter(device.vendorId)
+            inMaxPacketSize = epIn.maxPacketSize.coerceAtLeast(8)
+        }
+        Log.i(TAG, "USB configured vendorInit=$vendorInit")
+        return true
     }
 
     private fun sendOptionalNmeaEnableCommands() {
