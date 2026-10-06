@@ -34,7 +34,12 @@ static const char *TAG = "ble_phone";
 #define SNAP_FRESH_MS 2000u
 #define SNAP_WAIT_MS 1500u
 #define CMD_OUT_MAX 16
-#define TX_MAX 16
+/* One snapshot is up to 5 value pages and 11 text pages. */
+#define TX_MAX 24
+#define PAGE_MEDIA 4
+#define PAGE_TEXT_FIRST 8
+#define SNAP_PAGE_TYPE_BASE 0x20
+#define TEXT_CHUNK 9
 /* A connected stranger that never sends a valid packet is dropped. */
 #define LINK_IDLE_MS 20000u
 #define IDLE_BLOCK_MS 60000u
@@ -70,6 +75,8 @@ typedef struct {
 typedef struct {
     int index;
     uint32_t counter;
+    /* Text the phone already shows; its text pages are skipped when this matches. */
+    uint16_t text_hash;
 } refresh_pending_t;
 
 typedef struct {
@@ -97,6 +104,8 @@ static uint32_t s_cache_ms;
 static int s_cache_gen;
 static uint16_t s_cache_mask;
 static int s_cache_vals[12];
+static phone_media_t s_cache_media = { .playing = -1, .pos_ms = -1, .dur_ms = -1 };
+static uint16_t s_cache_text_hash;
 
 static refresh_pending_t s_wait[BLE_DEVICE_MAX];
 static int s_wait_n;
@@ -408,11 +417,46 @@ static void tx_push(const uint8_t pkt[SEALED_LEN])
     s_tx_n++;
 }
 
-static void enqueue_snap(int phone_index, uint32_t counter)
+/* FNV-1a 32 folded to 16 bits, never 0 for non-empty text. Same as PhoneBleCodec.textHash. */
+static uint16_t text_hash(const uint8_t *text, size_t len)
+{
+    if (len == 0) return 0;
+    uint32_t h = 0x811C9DC5u;
+    for (size_t i = 0; i < len; i++) {
+        h ^= text[i];
+        h *= 0x01000193u;
+    }
+    uint16_t folded = (uint16_t)((h ^ (h >> 16)) & 0xFFFFu);
+    return folded == 0 ? 1 : folded;
+}
+
+static void put_u16(uint8_t *dst, uint32_t v)
+{
+    dst[0] = (uint8_t)v;
+    dst[1] = (uint8_t)(v >> 8);
+}
+
+static uint32_t seconds_u16(int64_t ms)
+{
+    if (ms < 0) return 0xFFFFu;
+    int64_t s = ms / 1000;
+    return s >= 0xFFFF ? 0xFFFEu : (uint32_t)s;
+}
+
+static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_hash)
 {
     if (phone_index < 0 || phone_index >= s_count || !s_cache_valid) return;
     const phone_rec_t *phone = &s_phones[phone_index];
-    for (int page = 0; page < 4; page++) {
+    const phone_media_t *m = &s_cache_media;
+    int pages[5 + (PHONE_TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK];
+    int page_n = 0;
+    for (int page = 0; page <= PAGE_MEDIA; page++) pages[page_n++] = page;
+    if (m->text_len > 0 && phone_text_hash != s_cache_text_hash) {
+        int chunks = (int)((m->text_len + TEXT_CHUNK - 1) / TEXT_CHUNK);
+        for (int c = 0; c < chunks; c++) pages[page_n++] = PAGE_TEXT_FIRST + c;
+    }
+    for (int pi = 0; pi < page_n; pi++) {
+        int page = pages[pi];
         uint8_t body[BODY_LEN];
         uint8_t pkt[SEALED_LEN];
         memset(body, 0, sizeof(body));
@@ -437,10 +481,33 @@ static void enqueue_snap(int phone_index, uint32_t counter)
                 uint16_t bit = (uint16_t)(SNAP_S0 << s);
                 body[2 + s] = (uint8_t)((s_cache_mask & bit) ? s_cache_vals[7 + s] : 0xFF);
             }
-        } else {
+        } else if (page == 3) {
             body[2] = (uint8_t)((s_cache_mask & SNAP_VOL) ? s_cache_vals[11] : 0xFF);
+        } else if (page == PAGE_MEDIA) {
+            int64_t pos = m->pos_ms;
+            /* The cache may be up to SNAP_FRESH_MS old. */
+            if (m->playing == 1 && pos >= 0) {
+                pos += (int64_t)(uint32_t)(now_ms() - s_cache_ms);
+                if (m->dur_ms > 0 && pos > m->dur_ms) pos = m->dur_ms;
+            }
+            body[2] = (uint8_t)(m->playing < 0 ? 0xFF : m->playing);
+            put_u16(body + 3, seconds_u16(pos));
+            put_u16(body + 5, seconds_u16(m->dur_ms));
+            put_u16(body + 7, s_cache_text_hash);
+            body[9] = (uint8_t)m->text_len;
+        } else {
+            size_t from = (size_t)(page - PAGE_TEXT_FIRST) * TEXT_CHUNK;
+            size_t n = m->text_len - from;
+            if (n > TEXT_CHUNK) n = TEXT_CHUNK;
+            memcpy(body + 2, m->text + from, n);
         }
-        seal(phone->key, 4, phone->id, counter, body, pkt);
+        /*
+         * Pages 0..3 keep type 4 for older phone apps, so they share one keystream.
+         * Later pages carry their own type, hence their own nonce: track names must not
+         * be recoverable by XOR with a page of known content.
+         */
+        uint8_t type = page >= PAGE_MEDIA ? (uint8_t)(SNAP_PAGE_TYPE_BASE + page) : 4;
+        seal(phone->key, type, phone->id, counter, body, pkt);
         tx_push(pkt);
     }
 }
@@ -458,7 +525,7 @@ static void request_snap_if_needed(uint32_t t)
     if (s_wait_n == 0) return;
     if (s_cache_valid && (uint32_t)(t - s_cache_ms) < SNAP_FRESH_MS) {
         for (int i = 0; i < s_wait_n; i++) {
-            enqueue_snap(s_wait[i].index, s_wait[i].counter);
+            enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash);
         }
         s_wait_n = 0;
         s_snap_inflight = false;
@@ -471,7 +538,7 @@ static void request_snap_if_needed(uint32_t t)
     }
 }
 
-static void note_refresh(int phone_index, uint32_t counter, uint32_t t)
+static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, uint32_t t)
 {
     int slot = wait_find(phone_index);
     if (slot < 0 && s_wait_n < BLE_DEVICE_MAX) {
@@ -480,6 +547,7 @@ static void note_refresh(int phone_index, uint32_t counter, uint32_t t)
     if (slot < 0) return;
     s_wait[slot].index = phone_index;
     s_wait[slot].counter = counter;
+    s_wait[slot].text_hash = text_hash;
     request_snap_if_needed(t);
 }
 
@@ -542,7 +610,7 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
         /* The cached state predates this command. */
         s_cache_valid = false;
     } else if (type == 3) {
-        note_refresh(index, counter, now_ms());
+        note_refresh(index, counter, (uint16_t)(body[0] | (body[1] << 8)), now_ms());
     }
 }
 
@@ -686,17 +754,27 @@ static void on_incoming(const uint8_t *payload, uint8_t len)
     ble_radio_unlock();
 }
 
-void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12])
+void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12], const phone_media_t *media)
 {
     ble_radio_lock();
     s_cache_gen = gen;
     s_cache_mask = mask;
     memcpy(s_cache_vals, vals, sizeof(s_cache_vals));
+    if (media) {
+        s_cache_media = *media;
+        if (s_cache_media.text_len > PHONE_TEXT_MAX) s_cache_media.text_len = PHONE_TEXT_MAX;
+    } else {
+        memset(&s_cache_media, 0, sizeof(s_cache_media));
+        s_cache_media.playing = -1;
+        s_cache_media.pos_ms = -1;
+        s_cache_media.dur_ms = -1;
+    }
+    s_cache_text_hash = text_hash(s_cache_media.text, s_cache_media.text_len);
     s_cache_valid = true;
     s_cache_ms = now_ms();
     s_snap_inflight = false;
     for (int i = 0; i < s_wait_n; i++) {
-        enqueue_snap(s_wait[i].index, s_wait[i].counter);
+        enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash);
     }
     s_wait_n = 0;
     ble_radio_unlock();

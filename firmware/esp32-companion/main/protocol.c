@@ -877,6 +877,16 @@ static bool extract_json_string(const char *line, const char *key, char *out, si
     return true;
 }
 
+/** Length of s cut to at most max bytes without splitting a UTF-8 sequence. */
+static size_t utf8_fit(const char *s, size_t max)
+{
+    size_t len = strlen(s);
+    if (len <= max) return len;
+    len = max;
+    while (len > 0 && ((uint8_t)s[len] & 0xC0) == 0x80) len--;
+    return len;
+}
+
 static uint32_t extract_json_u32(const char *line, const char *key, bool *found)
 {
     char pattern[48];
@@ -1267,7 +1277,30 @@ static void handle_line(const char *line)
             vals[i] = (int)extract_json_u32(line, keys[i], &has);
             if (has) mask = (uint16_t)(mask | (1u << i));
         }
-        ble_phone_set_snapshot((int)gen, mask, vals);
+        phone_media_t media;
+        memset(&media, 0, sizeof(media));
+        bool has = false;
+        uint32_t play = extract_json_u32(line, "play", &has);
+        media.playing = has ? (play ? 1 : 0) : -1;
+        uint32_t pos = extract_json_u32(line, "pos", &has);
+        media.pos_ms = has ? (int64_t)pos : -1;
+        uint32_t dur = extract_json_u32(line, "dur", &has);
+        media.dur_ms = has && dur > 0 ? (int64_t)dur : -1;
+        char title[PHONE_TITLE_MAX * 2 + 1];
+        char artist[PHONE_ARTIST_MAX * 2 + 1];
+        title[0] = '\0';
+        artist[0] = '\0';
+        extract_json_string(line, "title", title, sizeof(title));
+        extract_json_string(line, "artist", artist, sizeof(artist));
+        size_t title_len = utf8_fit(title, PHONE_TITLE_MAX);
+        size_t artist_len = utf8_fit(artist, PHONE_ARTIST_MAX);
+        if (title_len > 0 || artist_len > 0) {
+            memcpy(media.text, title, title_len);
+            media.text[title_len] = 0;
+            memcpy(media.text + title_len + 1, artist, artist_len);
+            media.text_len = title_len + 1 + artist_len;
+        }
+        ble_phone_set_snapshot((int)gen, mask, vals, &media);
         return;
     }
     if (strstr(line, "\"t\":\"apCfg\"") || strstr(line, "\"t\": \"apCfg\"")) {

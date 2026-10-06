@@ -29,11 +29,24 @@ void ble_phone_stop_link(void);
 /** CONNECT, DISCONNECT, SUBSCRIBE, MTU, ADV_COMPLETE. */
 void ble_phone_on_gap(struct ble_gap_event *event);
 
+#define PHONE_TITLE_MAX 60
+#define PHONE_ARTIST_MAX 30
+/* title, '\0', artist */
+#define PHONE_TEXT_MAX (PHONE_TITLE_MAX + 1 + PHONE_ARTIST_MAX)
+
+typedef struct {
+    int playing;      /* 1, 0, or -1 when unknown */
+    int64_t pos_ms;   /* -1 when unknown */
+    int64_t dur_ms;   /* -1 when unknown */
+    uint8_t text[PHONE_TEXT_MAX];
+    size_t text_len;  /* 0 when there is no title and no artist */
+} phone_media_t;
+
 /**
  * vals: left, right, fan, mode, auto, blow, sync, seat0..3, vol.
- * Missing fields have the corresponding mask bit clear.
+ * Missing fields have the corresponding mask bit clear. media may be NULL.
  */
-void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12]);
+void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12], const phone_media_t *media);
 
 void ble_phone_poll(uint32_t now_ms);
 
