@@ -73,6 +73,38 @@ static void cdc_tx_unlock(void)
     }
 }
 
+/* Host not draining the FIFO: stop waiting after this long per message; later messages drop at once until it drains. */
+#define CDC_TX_STALL_MS 200
+
+static bool s_cdc_tx_stalled;
+
+static void cdc_write_locked(const uint8_t *data, size_t len)
+{
+    size_t off = 0;
+    int waited_ms = 0;
+    while (off < len) {
+        uint32_t avail = tud_cdc_write_available();
+        if (avail == 0) {
+            tud_cdc_write_flush();
+            if (s_cdc_tx_stalled || waited_ms >= CDC_TX_STALL_MS) {
+                s_cdc_tx_stalled = true;
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(1));
+            waited_ms++;
+            continue;
+        }
+        s_cdc_tx_stalled = false;
+        size_t n = len - off;
+        if (n > avail) {
+            n = avail;
+        }
+        tud_cdc_write(data + off, n);
+        off += n;
+    }
+    tud_cdc_write_flush();
+}
+
 static void cdc_write_str(const char *s)
 {
     // Prefer DTR-connected, but some Android USB hosts never assert DTR even
@@ -81,26 +113,7 @@ static void cdc_write_str(const char *s)
         return;
     }
     cdc_tx_lock();
-    size_t len = strlen(s);
-    size_t off = 0;
-    int spins = 0;
-    while (off < len && spins < 2000) {
-        uint32_t avail = tud_cdc_write_available();
-        if (avail == 0) {
-            tud_cdc_write_flush();
-            vTaskDelay(pdMS_TO_TICKS(1));
-            spins++;
-            continue;
-        }
-        size_t n = len - off;
-        if (n > avail) {
-            n = avail;
-        }
-        tud_cdc_write(s + off, n);
-        off += n;
-        spins = 0;
-    }
-    tud_cdc_write_flush();
+    cdc_write_locked((const uint8_t *)s, strlen(s));
     cdc_tx_unlock();
 }
 
@@ -727,25 +740,7 @@ static void cdc_write_bin(const uint8_t *data, size_t len)
         return;
     }
     cdc_tx_lock();
-    size_t off = 0;
-    int spins = 0;
-    while (off < len && spins < 4000) {
-        uint32_t avail = tud_cdc_write_available();
-        if (avail == 0) {
-            tud_cdc_write_flush();
-            vTaskDelay(pdMS_TO_TICKS(1));
-            spins++;
-            continue;
-        }
-        size_t n = len - off;
-        if (n > avail) {
-            n = avail;
-        }
-        tud_cdc_write(data + off, n);
-        off += n;
-        spins = 0;
-    }
-    tud_cdc_write_flush();
+    cdc_write_locked(data, len);
     cdc_tx_unlock();
 }
 
@@ -1130,7 +1125,6 @@ static void handle_line(const char *line)
     if (strstr(line, "\"t\":\"magChipSet\"") || strstr(line, "\"t\": \"magChipSet\"")) {
         char chip[16];
         const char *seen_ptrs[8] = {0};
-        int seen_count = 0;
         if (!extract_json_string(line, "chip", chip, sizeof(chip))) {
             protocol_send_mag_chip(s_hello_mag_chip, false, s_hello_mag, seen_ptrs, 0);
             return;

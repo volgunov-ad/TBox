@@ -33,6 +33,8 @@ typedef struct {
     uint8_t follow_channel;
 } wifi_job_t;
 
+#define WIFI_RADIO_RETRY_MS 5000
+
 static char s_hu_ssid[33];
 static char s_hu_psk[64];
 static char s_ap_ssid[33] = "TBox";
@@ -442,10 +444,15 @@ static void start_softap(uint8_t channel)
             sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
             s_hold_reconnect = true;
             esp_wifi_stop();
-            ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap));
-            ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta));
-            ESP_ERROR_CHECK(esp_wifi_start());
+            s_radio_on = false;
+            if ((err = esp_wifi_set_mode(WIFI_MODE_APSTA)) != ESP_OK ||
+                (err = esp_wifi_set_config(WIFI_IF_AP, &ap)) != ESP_OK ||
+                (err = esp_wifi_set_config(WIFI_IF_STA, &sta)) != ESP_OK ||
+                (err = esp_wifi_start()) != ESP_OK) {
+                ESP_LOGE(TAG, "wifi restart %s, retry later", esp_err_to_name(err));
+                s_hold_reconnect = false;
+                return;
+            }
             s_radio_on = true;
             s_ap_started = true;
             s_hold_reconnect = false;
@@ -533,13 +540,18 @@ static void connect_sta(const char *ssid, const char *psk)
     strncpy((char *)sta.sta.ssid, s_hu_ssid, sizeof(sta.sta.ssid) - 1);
     strncpy((char *)sta.sta.password, s_hu_psk, sizeof(sta.sta.password) - 1);
     sta.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    s_want_sta = true;
     if (!s_radio_on) {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-        ESP_ERROR_CHECK(esp_wifi_start());
+        esp_err_t err;
+        if ((err = esp_wifi_set_mode(WIFI_MODE_STA)) != ESP_OK ||
+            (err = esp_wifi_start()) != ESP_OK) {
+            ESP_LOGE(TAG, "wifi start %s, retry later", esp_err_to_name(err));
+            s_sta_up = false;
+            return;
+        }
         s_radio_on = true;
     }
     esp_wifi_set_config(WIFI_IF_STA, &sta);
-    s_want_sta = true;
     s_sta_up = false;
     esp_wifi_disconnect();
     esp_wifi_connect();
@@ -639,8 +651,15 @@ static void worker(void *arg)
     (void)arg;
     wifi_job_t job;
     while (1) {
-        if (xQueueReceive(s_q, &job, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(s_q, &job, pdMS_TO_TICKS(WIFI_RADIO_RETRY_MS)) == pdTRUE) {
             handle_job(&job);
+        } else if (s_wifi_up && s_want_sta && !s_radio_on && s_hu_ssid[0]) {
+            char ssid[sizeof(s_hu_ssid)];
+            char psk[sizeof(s_hu_psk)];
+            memcpy(ssid, s_hu_ssid, sizeof(ssid));
+            memcpy(psk, s_hu_psk, sizeof(psk));
+            connect_sta(ssid, psk);
+            publish();
         }
     }
 }

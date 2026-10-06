@@ -113,6 +113,8 @@ static void feed_probe_byte(char c, char *line, size_t *line_len, size_t line_ca
     }
 }
 
+#define UBX_MON_VER_MAX_LEN 1024
+
 static void feed_ubx_byte(uint8_t b, probe_state_t *st, int *ubx_state, int *payload_len,
                           int *payload_idx, uint8_t *payload, size_t payload_cap)
 {
@@ -121,27 +123,23 @@ static void feed_ubx_byte(uint8_t b, probe_state_t *st, int *ubx_state, int *pay
         if (b == 0xB5) *ubx_state = 1;
         break;
     case 1:
-        *ubx_state = (b == 0x62) ? 2 : 0;
+        *ubx_state = (b == 0x62) ? 2 : ((b == 0xB5) ? 1 : 0);
         break;
-    case 2:
-        ubx_ck_reset();
-        ubx_ck_feed(b);
-        *ubx_state = 3;
-        break;
-    case 3:
-        ubx_ck_feed(b);
+    case 2: /* class MON */
         if (b == 0x0A) {
-            *ubx_state = 4;
+            ubx_ck_reset();
+            ubx_ck_feed(b);
+            *ubx_state = 3;
         } else {
-            *ubx_state = 0;
+            *ubx_state = (b == 0xB5) ? 1 : 0;
         }
         break;
-    case 4:
-        ubx_ck_feed(b);
+    case 3: /* id VER */
         if (b == 0x04) {
+            ubx_ck_feed(b);
             *ubx_state = 5;
         } else {
-            *ubx_state = 0;
+            *ubx_state = (b == 0xB5) ? 1 : 0;
         }
         break;
     case 5:
@@ -154,44 +152,41 @@ static void feed_ubx_byte(uint8_t b, probe_state_t *st, int *ubx_state, int *pay
         ubx_ck_feed(b);
         *payload_len |= ((int)b << 8);
         *payload_idx = 0;
-        if (*payload_len <= 0 || *payload_len > (int)payload_cap) {
+        if (*payload_len <= 0 || *payload_len > UBX_MON_VER_MAX_LEN) {
             *ubx_state = 0;
         } else {
             *ubx_state = 7;
         }
         break;
     case 7:
+        /* MON-VER is 40 + 30*N bytes: keep the head (SW/HW version), checksum the whole payload. */
         ubx_ck_feed(b);
-        if (*payload_idx < *payload_len && *payload_idx < (int)payload_cap) {
-            payload[(*payload_idx)++] = b;
+        if (*payload_idx < (int)payload_cap) {
+            payload[*payload_idx] = b;
         }
+        (*payload_idx)++;
         if (*payload_idx >= *payload_len) {
             *ubx_state = 8;
         }
         break;
     case 8:
-        ubx_ck_feed(b);
-        *ubx_state = 9;
+        *ubx_state = (b == ubx_ck_sum_a) ? 9 : 0;
         break;
     case 9:
-        ubx_ck_feed(b);
-        if (b == ubx_ck_sum_a) {
-            *ubx_state = 10;
-        } else {
-            *ubx_state = 0;
-        }
-        break;
-    case 10:
         *ubx_state = 0;
-        if (b == ubx_ck_sum_b && *payload_len > 0) {
+        if (b == ubx_ck_sum_b) {
             st->got_ubx_mon_ver = true;
-            size_t n = (size_t)(*payload_len < 63 ? *payload_len : 63);
+            int stored = *payload_len < (int)payload_cap ? *payload_len : (int)payload_cap;
+            size_t n = (size_t)(stored < 63 ? stored : 63);
             memcpy(st->ublox_model, payload, n);
             st->ublox_model[n] = '\0';
             for (size_t i = 0; i < n; i++) {
                 if (st->ublox_model[i] == '\0') {
                     st->ublox_model[i] = ' ';
                 }
+            }
+            while (n > 0 && st->ublox_model[n - 1] == ' ') {
+                st->ublox_model[--n] = '\0';
             }
         }
         break;

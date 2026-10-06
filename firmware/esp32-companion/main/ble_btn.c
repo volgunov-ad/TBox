@@ -259,15 +259,6 @@ static bool parse_bthome(const uint8_t *data, uint8_t len, bthome_parse_t *out)
     return out->button_count > 0 || out->battery >= 0 || out->have_pid;
 }
 
-static bool add_mac_locked(const uint8_t *addr)
-{
-    if (find_mac(addr) >= 0) return true;
-    if (s_mac_count + ble_phone_count() >= BLE_DEVICE_MAX) return false;
-    memcpy(s_macs[s_mac_count], addr, 6);
-    s_mac_count++;
-    return save_nvs();
-}
-
 static int start_scan(void);
 static void stop_scan(void);
 
@@ -279,6 +270,32 @@ void ble_radio_lock(void)
 void ble_radio_unlock(void)
 {
     if (s_radio_lock) xSemaphoreGiveRecursive(s_radio_lock);
+}
+
+/* s_macs / s_mac_count are shared with ble_phone (common device limit): always under ble_radio_lock. */
+static bool add_mac(const uint8_t *addr)
+{
+    ble_radio_lock();
+    bool ok = true;
+    if (find_mac(addr) < 0) {
+        if (s_mac_count + ble_phone_count() >= BLE_DEVICE_MAX) {
+            ok = false;
+        } else {
+            memcpy(s_macs[s_mac_count], addr, 6);
+            s_mac_count++;
+            ok = save_nvs();
+        }
+    }
+    ble_radio_unlock();
+    return ok;
+}
+
+static bool mac_allowed(const uint8_t *addr)
+{
+    ble_radio_lock();
+    bool allowed = find_mac(addr) >= 0;
+    ble_radio_unlock();
+    return allowed;
 }
 
 static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
@@ -299,12 +316,12 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
     memcpy(s_last_mac, addr, 6);
     s_have_last_mac = true;
 
-    const bool allowed = find_mac(addr) >= 0;
+    const bool allowed = mac_allowed(addr);
     const bool has_btn_event = parsed.button_count > 0;
 
     if (s_learn && has_btn_event && !allowed) {
         protocol_send_ble_seen(mac_str, rssi, now_ms);
-        if (add_mac_locked(addr)) {
+        if (add_mac(addr)) {
             ESP_LOGI(TAG, "learned %s", mac_str);
             s_learn = false;
             protocol_send_ble_ack("allow", true, NULL);
@@ -315,7 +332,7 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
         }
     }
 
-    if (find_mac(addr) < 0) return;
+    if (!mac_allowed(addr)) return;
     if (dedup_hit(addr, parsed.pid, parsed.have_pid)) return;
 
     for (int b = 0; b < parsed.button_count; b++) {
@@ -486,16 +503,21 @@ bool ble_btn_is_learn(void)
 
 int ble_btn_mac_count(void)
 {
-    return s_mac_count;
+    ble_radio_lock();
+    int n = s_mac_count;
+    ble_radio_unlock();
+    return n;
 }
 
 int ble_btn_get_macs(char out[][18], int max_out)
 {
+    ble_radio_lock();
     int n = s_mac_count;
     if (n > max_out) n = max_out;
     for (int i = 0; i < n; i++) {
         mac_to_str(s_macs[i], out[i]);
     }
+    ble_radio_unlock();
     return n;
 }
 
@@ -544,27 +566,34 @@ bool ble_btn_allow(const char *mac_str)
 {
     uint8_t addr[6];
     if (!parse_mac_str(mac_str, addr)) return false;
-    if (!add_mac_locked(addr)) return false;
-    return true;
+    return add_mac(addr);
 }
 
 bool ble_btn_forget(const char *mac_str)
 {
     uint8_t addr[6];
     if (!parse_mac_str(mac_str, addr)) return false;
+    ble_radio_lock();
     int idx = find_mac(addr);
-    if (idx < 0) return false;
-    for (int i = idx; i < s_mac_count - 1; i++) {
-        memcpy(s_macs[i], s_macs[i + 1], 6);
+    bool ok = false;
+    if (idx >= 0) {
+        for (int i = idx; i < s_mac_count - 1; i++) {
+            memcpy(s_macs[i], s_macs[i + 1], 6);
+        }
+        s_mac_count--;
+        ok = save_nvs();
     }
-    s_mac_count--;
-    return save_nvs();
+    ble_radio_unlock();
+    return ok;
 }
 
 bool ble_btn_forget_all(void)
 {
+    ble_radio_lock();
     s_mac_count = 0;
-    return save_nvs();
+    bool ok = save_nvs();
+    ble_radio_unlock();
+    return ok;
 }
 
 int ble_btn_last_bat(void)
