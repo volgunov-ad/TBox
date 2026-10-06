@@ -1,6 +1,7 @@
 package vad.dashing.tbox.adb
 
 import java.io.File
+import java.io.IOException
 import java.math.BigInteger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -87,6 +88,8 @@ object AdbAuthKeys {
     fun decodePublicKey(text: String): PublicKey =
         KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(Base64.getDecoder().decode(text.trim())))
 
+    /** Both files must come from one pair: concurrent callers would otherwise interleave two pairs. */
+    @Synchronized
     fun loadOrCreate(directory: File): KeyPair {
         val keyFile = File(directory, "adb_key")
         val pubFile = File(directory, "adb_key.pub")
@@ -100,9 +103,21 @@ object AdbAuthKeys {
         }
         val keyPair = generateKeyPair()
         directory.mkdirs()
-        keyFile.writeText(encodePrivateKey(keyPair.private))
-        pubFile.writeText(encodePublicKey(keyPair.public))
+        writeAtomically(keyFile, encodePrivateKey(keyPair.private))
+        writeAtomically(pubFile, encodePublicKey(keyPair.public))
         return keyPair
+    }
+
+    private fun writeAtomically(target: File, text: String) {
+        val tmp = File(target.parentFile, "${target.name}.tmp")
+        tmp.writeText(text)
+        if (!tmp.renameTo(target)) {
+            target.delete()
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                throw IOException("Cannot write ${target.name}")
+            }
+        }
     }
 
     private fun toBigEndianBytes(value: BigInteger, size: Int): ByteArray {

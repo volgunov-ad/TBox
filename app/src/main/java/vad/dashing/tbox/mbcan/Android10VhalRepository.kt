@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -189,7 +190,7 @@ private class CarPropertyBridge(
         pushListener = null
         diagnosticPushListener = null
         deepDiagnosticPushListener = null
-        registeredPushPropertyIds.clear()
+        synchronized(this) { registeredPushPropertyIds.clear() }
         registeredDiagnosticPropertyIds.clear()
         registeredDeepDiagnosticPropertyIds.clear()
         onPushPropertyChanged = null
@@ -246,6 +247,8 @@ private class CarPropertyBridge(
         onPushPropertyError = onError
     }
 
+    /** Interest changes and [disconnect] can race on different threads; the set diff must be atomic. */
+    @Synchronized
     fun syncPushSubscriptions(propertyIds: Set<Int>) {
         val manager = propertyManager ?: return
         val listener = ensurePushListener()
@@ -1948,33 +1951,32 @@ object Android10VhalRepository {
 
     private fun applyVhalTirePressureCorner(corner: Int, bar: Float?) {
         val now = SystemClock.elapsedRealtime()
-        _wheelsPressureState.value = TirePressureDomain.mergeWheelsPressureCorner(
-            current = _wheelsPressureState.value,
-            corner = corner,
-            incoming = bar,
-            now = now,
-            debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
-        )
+        _wheelsPressureState.update { current ->
+            TirePressureDomain.mergeWheelsPressureCorner(
+                current = current,
+                corner = corner,
+                incoming = bar,
+                now = now,
+                debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
+            )
+        }
     }
 
     /** Disk restore for HU tire pressure (same AppData keys as TBox). */
     fun restoreWheelsPressureFromSaved(saved: Wheels) {
         val now = SystemClock.elapsedRealtime()
-        val cur = _wheelsPressureState.value
-        val merged = TirePressureDomain.restoreMissingPressures(cur, saved, now)
-        if (merged != cur) {
-            _wheelsPressureState.value = merged
-        }
+        _wheelsPressureState.update { cur -> TirePressureDomain.restoreMissingPressures(cur, saved, now) }
     }
 
     private fun applyVhalTireTemperatureCorner(corner: Int, celsius: Float?) {
-        val cur = _wheelsTemperatureState.value
-        _wheelsTemperatureState.value = when (corner) {
-            0 -> cur.copy(wheel1 = celsius)
-            1 -> cur.copy(wheel2 = celsius)
-            2 -> cur.copy(wheel3 = celsius)
-            3 -> cur.copy(wheel4 = celsius)
-            else -> cur
+        _wheelsTemperatureState.update { cur ->
+            when (corner) {
+                0 -> cur.copy(wheel1 = celsius)
+                1 -> cur.copy(wheel2 = celsius)
+                2 -> cur.copy(wheel3 = celsius)
+                3 -> cur.copy(wheel4 = celsius)
+                else -> cur
+            }
         }
     }
 

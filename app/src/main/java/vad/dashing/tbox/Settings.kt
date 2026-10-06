@@ -7,6 +7,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -3469,19 +3470,19 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveMainScreenPageCount(pageCount: Int) {
         val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
-        val prefs = context.settingsDataStore.data.first()
-        val oldPageCount = PagingStateNormalizer.normalizePageCount(
-            prefs[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val rawJson = prefs[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
-        val parsePageCount = if (oldPageCount == 1 && normalized > 1) 1 else normalized
-        val panels = parseMainScreenDashboardsJson(rawJson, parsePageCount)
-        val adjusted = PagingStateNormalizer.adjustPanelsForPageCountChange(
-            panels = panels,
-            oldPageCount = oldPageCount,
-            newPageCount = normalized,
-        )
+        val dashboardsKey = getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)
         context.settingsDataStore.edit { preferences ->
+            val oldPageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+            )
+            val parsePageCount = if (oldPageCount == 1 && normalized > 1) 1 else normalized
+            val panels = parseMainScreenDashboardsJson(preferences[dashboardsKey] ?: "", parsePageCount)
+            val adjusted = PagingStateNormalizer.adjustPanelsForPageCountChange(
+                panels = panels,
+                oldPageCount = oldPageCount,
+                newPageCount = normalized,
+            )
+            preferences[dashboardsKey] = serializeMainScreenDashboards(normalizeMainScreenDashboards(adjusted))
             preferences[MAIN_SCREEN_PAGE_COUNT_KEY] = normalized
             val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
@@ -3493,28 +3494,23 @@ class SettingsManager(private val context: Context) {
                     PagingStateNormalizer.normalizeCurrentPage(windowPage, normalized)
             }
         }
-        saveMainScreenDashboards(adjusted)
     }
 
     suspend fun saveMainScreenCurrentPage(page: Int) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
-        )
-        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = normalized
+            val pageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         }
     }
 
     suspend fun saveMainScreenWindowModeCurrentPage(page: Int) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
-        )
-        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = normalized
+            val pageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         }
     }
 
@@ -3633,13 +3629,20 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveDriveModeThemePath(rawValue: Int, uri: String) {
-        val current = driveModeThemePathsFlow.first().toMutableMap()
-        if (uri.isBlank()) {
-            current.remove(rawValue)
-        } else {
-            current[rawValue] = uri
+        context.settingsDataStore.edit { preferences ->
+            val current = parseDriveModeThemePathsJson(preferences[DRIVE_MODE_THEME_PATHS_KEY].orEmpty())
+                .toMutableMap()
+            if (uri.isBlank()) {
+                current.remove(rawValue)
+            } else {
+                current[rawValue] = uri
+            }
+            if (current.isEmpty()) {
+                preferences.remove(DRIVE_MODE_THEME_PATHS_KEY)
+            } else {
+                preferences[DRIVE_MODE_THEME_PATHS_KEY] = serializeDriveModeThemePaths(current)
+            }
         }
-        saveDriveModeThemePaths(current)
     }
 
     suspend fun clearDriveModeThemePaths() {
@@ -3763,15 +3766,9 @@ class SettingsManager(private val context: Context) {
         forLightTheme: Boolean,
         fileName: String,
     ) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
-        val current = mainScreenWallpaperSelectionByPageFlow.first()
-        saveMainScreenWallpaperSelectionsByPage(
-            current.withFileName(normalizedPage, forLightTheme, fileName),
-        )
+        context.settingsDataStore.edit { preferences ->
+            preferences.putWallpaperSelectionForPage(page, forLightTheme, fileName)
+        }
     }
 
     /** Single DataStore write when picking wallpaper (folder URI + selected file name for [page]). */
@@ -3780,21 +3777,9 @@ class SettingsManager(private val context: Context) {
         selectedFileName: String,
         page: Int,
     ) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
-        val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
-        ).withFileName(normalizedPage, forLightTheme = true, selectedFileName)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY] = folderUriString
-            if (selections.isEmpty()) {
-                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
-            } else {
-                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
-            }
+            preferences.putWallpaperSelectionForPage(page, forLightTheme = true, selectedFileName)
         }
     }
 
@@ -3803,21 +3788,29 @@ class SettingsManager(private val context: Context) {
         selectedFileName: String,
         page: Int,
     ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
+            preferences.putWallpaperSelectionForPage(page, forLightTheme = false, selectedFileName)
+        }
+    }
+
+    /** Read-modify-write of the per-page selection inside the caller's DataStore transaction. */
+    private fun MutablePreferences.putWallpaperSelectionForPage(
+        page: Int,
+        forLightTheme: Boolean,
+        fileName: String,
+    ) {
         val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+            this[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
         )
         val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
-        ).withFileName(normalizedPage, forLightTheme = false, selectedFileName)
-        context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
-            if (selections.isEmpty()) {
-                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
-            } else {
-                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
-            }
+            this[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+        ).withFileName(normalizedPage, forLightTheme, fileName)
+        if (selections.isEmpty()) {
+            remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+        } else {
+            this[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
         }
     }
 
@@ -4482,7 +4475,14 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
-        val normalized = configs
+        saveCustomString(
+            MAIN_SCREEN_DASHBOARDS_LIST_KEY,
+            serializeMainScreenDashboards(normalizeMainScreenDashboards(configs)),
+        )
+    }
+
+    private fun normalizeMainScreenDashboards(configs: List<MainScreenPanelConfig>): List<MainScreenPanelConfig> =
+        configs
             .filter { it.id.isNotBlank() }
             .distinctBy { it.id }
             .map {
@@ -4495,8 +4495,6 @@ class SettingsManager(private val context: Context) {
                     relHeight = it.relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
                 )
             }
-        saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
-    }
 
     suspend fun ensureDefaultFloatingDashboards() {
         // Historical API: empty floating panel list is valid; no default injection.

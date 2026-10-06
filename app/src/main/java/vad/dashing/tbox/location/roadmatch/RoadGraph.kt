@@ -517,6 +517,7 @@ data class RoadGraph(
 
 /** Cache of loaded graphs for installed packs (process-wide). */
 object RoadGraphStore {
+    /** Copy-on-write: readers take the volatile snapshot, writers are @Synchronized so updates are not lost. */
     @Volatile
     private var cache: Map<String, RoadGraph> = emptyMap()
 
@@ -567,19 +568,23 @@ object RoadGraphStore {
         return any
     }
 
+    @Synchronized
     fun put(regionId: String, graph: RoadGraph) {
         cache = cache + (regionId to graph)
     }
 
+    @Synchronized
     fun remove(regionId: String) {
         cache = cache.filterKeys { it != regionId && !it.startsWith("$regionId/") }
     }
 
     /** Keep only graphs selected around the current pose (tile cache eviction). */
+    @Synchronized
     fun retainOnly(keys: Set<String>) {
         cache = cache.filterKeys { it in keys }
     }
 
+    @Synchronized
     fun clear() {
         cache = emptyMap()
     }
