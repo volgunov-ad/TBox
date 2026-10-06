@@ -9,6 +9,7 @@
 #include "wifi_router.h"
 #include "esp_crc.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -73,25 +74,30 @@ static void cdc_tx_unlock(void)
     }
 }
 
-/* Host not draining the FIFO: stop waiting after this long per message; later messages drop at once until it drains. */
-#define CDC_TX_STALL_MS 200
+/*
+ * Host not draining the FIFO: stop waiting after this long per message; later messages
+ * drop at once until it drains. Measured in real time: at CONFIG_FREERTOS_HZ=100,
+ * pdMS_TO_TICKS(1) is 0 and a delay loop would give up after a few microseconds.
+ */
+#define CDC_TX_STALL_US (300 * 1000)
 
 static bool s_cdc_tx_stalled;
+/* The previous text line was cut mid-way; the host must see a '\n' before the next one. */
+static bool s_cdc_tx_line_cut;
 
-static void cdc_write_locked(const uint8_t *data, size_t len)
+static size_t cdc_write_locked(const uint8_t *data, size_t len)
 {
     size_t off = 0;
-    int waited_ms = 0;
+    const int64_t start_us = esp_timer_get_time();
     while (off < len) {
         uint32_t avail = tud_cdc_write_available();
         if (avail == 0) {
             tud_cdc_write_flush();
-            if (s_cdc_tx_stalled || waited_ms >= CDC_TX_STALL_MS) {
+            if (s_cdc_tx_stalled || esp_timer_get_time() - start_us >= CDC_TX_STALL_US) {
                 s_cdc_tx_stalled = true;
                 break;
             }
-            vTaskDelay(pdMS_TO_TICKS(1));
-            waited_ms++;
+            vTaskDelay(1);
             continue;
         }
         s_cdc_tx_stalled = false;
@@ -103,6 +109,7 @@ static void cdc_write_locked(const uint8_t *data, size_t len)
         off += n;
     }
     tud_cdc_write_flush();
+    return off;
 }
 
 static void cdc_write_str(const char *s)
@@ -113,7 +120,19 @@ static void cdc_write_str(const char *s)
         return;
     }
     cdc_tx_lock();
-    cdc_write_locked((const uint8_t *)s, strlen(s));
+    if (s_cdc_tx_line_cut) {
+        /* Terminate the broken line so the host drops it instead of gluing it to this one. */
+        if (cdc_write_locked((const uint8_t *)"\n", 1) == 1) {
+            s_cdc_tx_line_cut = false;
+        }
+    }
+    if (!s_cdc_tx_line_cut) {
+        size_t len = strlen(s);
+        size_t sent = cdc_write_locked((const uint8_t *)s, len);
+        if (sent > 0 && sent < len) {
+            s_cdc_tx_line_cut = true;
+        }
+    }
     cdc_tx_unlock();
 }
 
@@ -1057,6 +1076,8 @@ static void handle_line(const char *line)
 {
     if (strstr(line, "\"t\":\"hello\"") || strstr(line, "\"t\": \"hello\"")) {
         protocol_send_hello();
+        /* hello has no phone list or pairing state; a restarted host needs both. */
+        protocol_send_ble_status();
         return;
     }
     if (strstr(line, "\"t\":\"otaBegin\"") || strstr(line, "\"t\": \"otaBegin\"")) {

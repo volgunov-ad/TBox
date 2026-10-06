@@ -615,6 +615,10 @@ bool ble_phone_allow(const char *id_hex)
             }
             s_pending_pair = false;
             ok = save_nvs();
+            if (ok) {
+                s_learn = false;
+                s_out_pair = false;
+            }
         }
     }
     ble_radio_unlock();
