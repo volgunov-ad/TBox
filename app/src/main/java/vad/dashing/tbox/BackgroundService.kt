@@ -7176,6 +7176,7 @@ class BackgroundService : Service() {
         stopConstantDrAutoCalibJob()
         stopWifiModemPoller()
         stopHuInternetMonitor()
+        OemOverlayAppMonitor.stop()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()

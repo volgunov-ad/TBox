@@ -113,9 +113,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 @Composable
 private fun FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId: String) {
-    DisposableEffect(panelId) {
-        onDispose { disposeAppLauncherPickerIconCache() }
-    }
+    AppLauncherPickerIconCacheHostEffect(panelId)
 }
 
 @Composable

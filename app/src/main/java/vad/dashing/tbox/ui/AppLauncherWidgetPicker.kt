@@ -48,6 +48,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,9 +68,23 @@ private data class FreeformOverlayPageDropdownOption(
     override fun toString(): String = label
 }
 
-/** Drop decoded picker icons when the host Compose tree is torn down (Activity or overlay). */
-internal fun disposeAppLauncherPickerIconCache() {
-    LaunchableAppsCatalog.clearIcons()
+private val appLauncherIconCacheHosts = AtomicInteger(0)
+
+/**
+ * Keeps decoded picker icons while any host Compose tree (Activity or floating panel) is alive;
+ * the last one to leave drops them.
+ */
+@Composable
+internal fun AppLauncherPickerIconCacheHostEffect(key: Any) {
+    DisposableEffect(key) {
+        appLauncherIconCacheHosts.incrementAndGet()
+        onDispose {
+            if (appLauncherIconCacheHosts.decrementAndGet() <= 0) {
+                appLauncherIconCacheHosts.set(0)
+                LaunchableAppsCatalog.clearIcons()
+            }
+        }
+    }
 }
 
 @Composable

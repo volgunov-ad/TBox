@@ -12,8 +12,10 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.ExternalAppWidgetBinder.PickBindStatus
 
 /**
@@ -29,6 +31,7 @@ class WidgetPickerActivity : ComponentActivity() {
         const val EXTRA_SHOW_TITLE = "extra_show_title"
         const val EXTRA_SHOW_UNIT = "extra_show_unit"
         const val EXTRA_SAVE_TARGET = "extra_save_target"
+        private const val STATE_APP_WIDGET_ID = "state_app_widget_id"
 
         /** Update a floating overlay panel ([SettingsManager.saveFloatingDashboards]). */
         const val SAVE_TARGET_FLOATING = 0
@@ -70,6 +73,7 @@ class WidgetPickerActivity : ComponentActivity() {
     private var showTitle: Boolean = false
     private var showUnit: Boolean = true
     private var pendingProviderInfo: AppWidgetProviderInfo? = null
+    private var selectionSaved = false
 
     private val pickWidgetLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -137,6 +141,13 @@ class WidgetPickerActivity : ComponentActivity() {
             return
         }
 
+        if (savedInstanceState != null) {
+            // Recreated while a system picker/bind/configure screen is open: its result comes back here.
+            appWidgetId = savedInstanceState.getInt(STATE_APP_WIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) finish()
+            return
+        }
+
         appWidgetId = ExternalWidgetHostManager.allocateAppWidgetId(this)
         if (appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             finish()
@@ -147,6 +158,18 @@ class WidgetPickerActivity : ComponentActivity() {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
         }
         pickWidgetLauncher.launch(pickIntent)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(STATE_APP_WIDGET_ID, appWidgetId)
+    }
+
+    override fun onDestroy() {
+        if (isFinishing && !selectionSaved) {
+            releaseAppWidgetId()
+        }
+        super.onDestroy()
     }
 
     private fun handlePickResult(data: Intent?) {
@@ -305,13 +328,21 @@ class WidgetPickerActivity : ComponentActivity() {
 
     private fun saveSelectionAndFinish() {
         lifecycleScope.launch {
-            val settingsManager = SettingsManager(applicationContext)
-            settingsManager.ensureDefaultFloatingDashboards()
-            when (saveTarget) {
-                SAVE_TARGET_FLOATING -> saveFloating(settingsManager)
-                SAVE_TARGET_MAIN_SCREEN -> saveMainScreen(settingsManager)
-                SAVE_TARGET_MAIN_DASHBOARD -> saveMainDashboard(settingsManager)
+            try {
+                withContext(NonCancellable) {
+                    val settingsManager = SettingsManager(applicationContext)
+                    settingsManager.ensureDefaultFloatingDashboards()
+                    when (saveTarget) {
+                        SAVE_TARGET_FLOATING -> saveFloating(settingsManager)
+                        SAVE_TARGET_MAIN_SCREEN -> saveMainScreen(settingsManager)
+                        SAVE_TARGET_MAIN_DASHBOARD -> saveMainDashboard(settingsManager)
+                    }
+                    selectionSaved = true
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save picked widget appWidgetId=$appWidgetId", e)
             }
+            if (!selectionSaved) releaseAppWidgetId()
             finish()
         }
     }
@@ -374,10 +405,15 @@ class WidgetPickerActivity : ComponentActivity() {
         return list
     }
 
-    private fun cleanupAndFinish() {
+    private fun releaseAppWidgetId() {
         if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
             ExternalWidgetHostManager.deleteAppWidgetId(this, appWidgetId)
+            appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
         }
+    }
+
+    private fun cleanupAndFinish() {
+        releaseAppWidgetId()
         finish()
     }
 }

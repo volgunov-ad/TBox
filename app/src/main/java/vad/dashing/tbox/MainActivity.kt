@@ -22,13 +22,12 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
-import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
+import vad.dashing.tbox.ui.AppLauncherPickerIconCacheHostEffect
 import vad.dashing.tbox.update.InstallPermissionHelper
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
@@ -156,9 +155,7 @@ class MainActivity : ComponentActivity() {
 
         MainActivityLoadTimings.mark("main_before_setContent")
         setContent {
-            DisposableEffect(Unit) {
-                onDispose { disposeAppLauncherPickerIconCache() }
-            }
+            AppLauncherPickerIconCacheHostEffect(Unit)
             Surface(
                 modifier = Modifier.fillMaxSize()
             ) {
