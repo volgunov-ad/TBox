@@ -1,8 +1,7 @@
 package vad.dashing.tbox.adb
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
+import vad.dashing.tbox.findActivityOrNull
 
 /**
  * Classifies ADB I/O failures that are expected when a session is torn down
@@ -36,14 +35,5 @@ internal object AdbIoErrors {
         if (AdbShutdownGate.shouldSuppressBenignDisconnect()) return true
         val activity = context?.findActivityOrNull()
         return activity != null && (activity.isFinishing || activity.isDestroyed)
-    }
-
-    private fun Context.findActivityOrNull(): Activity? {
-        var current: Context? = this
-        while (current is ContextWrapper) {
-            if (current is Activity) return current
-            current = current.baseContext
-        }
-        return current as? Activity
     }
 }

@@ -204,7 +204,14 @@ class UpdateRepository(
             is UpdateUiState.ReadyToInstall -> state.apkFile
             else -> preparedApkFile
         } ?: return
-        ApkInstaller.install(context, apkFile)
+        try {
+            ApkInstaller.install(context, apkFile)
+        } catch (error: Exception) {
+            _uiState.value = UpdateUiState.Error(
+                message = error.message ?: error.javaClass.simpleName,
+                cachedInfo = lastAvailableInfo,
+            )
+        }
     }
 
     fun resetAfterChannelChange() {

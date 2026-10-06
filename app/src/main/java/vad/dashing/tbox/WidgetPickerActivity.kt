@@ -285,7 +285,8 @@ class WidgetPickerActivity : ComponentActivity() {
             .setPositiveButton(R.string.widget_external_bind_failed_ok) { _, _ ->
                 cleanupAndFinish()
             }
-            .show()
+            .showSafely()
+            ?: cleanupAndFinish()
     }
 
     private fun isConfigureActivityExported(component: ComponentName): Boolean {

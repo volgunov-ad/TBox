@@ -6,6 +6,8 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
+import vad.dashing.tbox.showSafely
+import vad.dashing.tbox.startActivitySafely
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
@@ -2015,7 +2017,7 @@ private fun showAlertDialog(title: String, message: String, context: Context) {
         .setTitle(title)
         .setMessage(message)
         .setNeutralButton(context.getString(R.string.action_close), null)
-        .show()
+        .showSafely()
 }
 
 private fun showLocationRequirementsDialog(context: Context) {
@@ -2038,11 +2040,10 @@ private fun showLocationRequirementsDialog(context: Context) {
         .setTitle(context.getString(R.string.dialog_mock_location_requirements_title))
         .setMessage(requirements)
         .setPositiveButton(context.getString(R.string.action_configure)) { _, _ ->
-            val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-            context.startActivity(intent)
+            context.startActivitySafely(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
         }
         .setNegativeButton(context.getString(R.string.action_cancel), null)
-        .show()
+        .showSafely()
 }
 
 private fun showOverlayRequirementsDialog(context: Context) {
@@ -2054,10 +2055,10 @@ private fun showOverlayRequirementsDialog(context: Context) {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 "package:${context.packageName}".toUri()
             )
-            context.startActivity(intent)
+            context.startActivitySafely(intent)
         }
         .setNegativeButton(context.getString(R.string.action_cancel), null)
-        .show()
+        .showSafely()
 }
 
 private fun formatDrFloat(value: Float?): String =

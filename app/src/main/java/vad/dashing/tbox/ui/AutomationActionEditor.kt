@@ -287,9 +287,18 @@ private fun CanCommandFields(
             style = MaterialTheme.typography.tboxCaption,
         )
     }
+    val selectedEntry = entry ?: catalogEntries.firstOrNull()
+    if (selectedEntry == null) {
+        Text(
+            text = "Для текущего CAN-режима нет доступных команд.",
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.tboxCaption,
+        )
+        return
+    }
     AutomationDropdown(
         label = "CAN-действие",
-        value = entry ?: catalogEntries.first(),
+        value = selectedEntry,
         options = catalogEntries,
         optionLabel = { it.label },
         onValueChange = { selected ->
