@@ -2,54 +2,83 @@
 <html lang="__APP_LANG__">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-cache">
+  <meta name="color-scheme" content="dark light">
   <title>TBox</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0e1116;
-      --card: #1a1f27;
-      --text: #e8edf5;
-      --muted: #9aa6b8;
-      --line: #2c3442;
-      --btn: #2a3140;
-      --accent: #4c8dff;
+      --bg: #292f3b;
+      --card: #131c2d;
+      --text: #e2e2e6;
+      --muted: #c2c7cf;
+      --btn: #42474e;
+      --line: #42474e;
+      --accent: #0066cc;
+      --accent-soft: rgba(0, 102, 204, 0.28);
+      --accent-text: #a8c7ff;
+      --shadow: none;
       --heat: #e85d4c;
       --vent: #3dbeff;
       --eco: #00a400;
       --comfort: #00c8ff;
       --strong: #f3a721;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --bg: #f8f9fa;
+        --card: #ffffff;
+        --text: #1a1c1e;
+        --muted: #72777f;
+        --btn: #e8ecf0;
+        --line: #e1e5ea;
+        --accent-soft: rgba(0, 102, 204, 0.14);
+        --accent-text: #0066cc;
+        --shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+      }
+    }
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0;
       background: var(--bg);
       color: var(--text);
-      font: 16px/1.35 system-ui, sans-serif;
+      font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
-    main {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 16px 16px 32px;
+    .top, main, .tabs-inner { max-width: 720px; margin: 0 auto; }
+    .top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: max(14px, env(safe-area-inset-top)) 16px 10px;
     }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
-    #status { min-height: 1.2em; margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-    .temps {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
+    .brand { flex: 1 1 auto; min-width: 0; }
+    .title { font-size: 22px; font-weight: 650; margin: 0; }
+    #status { color: var(--muted); font-size: 13px; min-height: 1.2em; }
+    .temps { display: flex; gap: 8px; }
+    .chip {
+      background: var(--card);
+      box-shadow: var(--shadow);
+      border-radius: 14px;
+      padding: 6px 12px;
+      min-width: 76px;
+      text-align: center;
     }
+    .chip span { display: block; color: var(--muted); font-size: 12px; }
+    .chip b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    main { padding: 4px 16px calc(96px + env(safe-area-inset-bottom)); }
+    .page[hidden] { display: none; }
     .card {
       background: var(--card);
+      box-shadow: var(--shadow);
       border-radius: 16px;
       padding: 14px;
       margin-bottom: 12px;
     }
-    .temp-label { display: block; color: var(--muted); font-size: 13px; }
-    .temp-value { font-size: 36px; font-weight: 650; letter-spacing: -0.03em; }
+    h2 { font-size: 17px; margin: 0 0 6px; font-weight: 650; }
+    .label { color: var(--muted); font-size: 14px; }
     .row {
       display: flex;
       align-items: center;
@@ -57,7 +86,8 @@
       gap: 8px;
       padding: 8px 0;
     }
-    .row + .row { border-top: 1px solid var(--line); }
+    .row + .row, .block + .block, .row + .choice, .choice + .choice, .pair + .choice { border-top: 1px solid var(--line); }
+    .row + .pair { border-top: 1px solid var(--line); padding-top: 10px; margin-bottom: 4px; }
     .row-label { min-width: 7.5em; }
     .stepper { display: flex; align-items: center; gap: 8px; }
     .readout { min-width: 4.2em; text-align: center; font-size: 22px; font-variant-numeric: tabular-nums; }
@@ -72,11 +102,11 @@
       min-width: 0;
     }
     .volume-controls .readout { min-width: 2.4em; }
-    .np-title { font-size: 18px; font-weight: 650; }
+    .np-title { font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
     .np-artist { color: var(--muted); font-size: 14px; min-height: 1.2em; }
-    .progress { height: 6px; background: var(--line); border-radius: 99px; margin: 12px 0 6px; overflow: hidden; }
+    .progress { height: 6px; background: var(--btn); border-radius: 99px; margin: 12px 0 6px; overflow: hidden; }
     .progress > div { height: 100%; width: 0; background: var(--accent); }
-    .np-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-bottom: 10px; }
+    .np-time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; min-height: 1.2em; margin-bottom: 10px; }
     .transport { display: flex; gap: 8px; }
     .transport button { flex: 1; }
     button {
@@ -88,26 +118,40 @@
       min-width: 44px;
       padding: 0 12px;
       font: inherit;
+      font-size: 15px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
     button:active { transform: scale(0.98); }
-    button:disabled { opacity: 0.4; }
+    button:disabled { opacity: 0.4; cursor: default; }
     button.on-heat { background: var(--heat); color: #fff; }
     button.on-vent { background: var(--vent); color: #082028; }
     button.on-off { background: var(--accent); color: #fff; }
     button.on-eco { background: var(--eco); color: #fff; }
     button.on-comfort { background: var(--comfort); color: #082028; }
     button.on-strong { background: var(--strong); color: #1a1200; }
-    .levels { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-    .hint, #pair-status { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+    .levels { display: flex; flex-wrap: wrap; gap: 6px; }
+    .levels button { flex: 1 1 auto; }
+    .pair { display: flex; gap: 8px; }
+    .pair button { flex: 1 1 0; }
+    .choice { padding: 8px 0; }
+    .choice .label { margin-bottom: 6px; }
+    .block { padding: 10px 0; }
+    .block:first-of-type { padding-top: 4px; }
+    .block-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+    .block-title { font-size: 17px; font-weight: 650; }
+    .block-state { color: var(--muted); font-size: 14px; text-align: right; }
+    .block-state.open { color: var(--accent-text); font-weight: 600; }
+    .grid { display: grid; gap: 6px; }
+    .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid.cols-7 { grid-template-columns: repeat(7, 1fr); gap: 5px; }
+    .grid button { padding: 0 4px; min-width: 0; }
+    .hint, #pair-status { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
     #pair-status { min-height: 1.2em; margin: 8px 0 0; }
+    .linked { color: var(--accent-text); font-weight: 600; margin: 0 0 10px; }
     button.primary { background: var(--accent); color: #fff; width: 100%; }
     details summary { color: var(--muted); cursor: pointer; margin: 12px 0 8px; }
-    #connect > summary {
-      font-size: 15px;
-      font-weight: 600;
-      margin: 0;
-      padding: 10px 0;
-    }
     .token { display: flex; gap: 8px; }
     .token input {
       flex: 1;
@@ -119,28 +163,65 @@
       padding: 0 12px;
       font: inherit;
     }
+    .tabs {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--card);
+      box-shadow: 0 -1px 0 var(--line);
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+      z-index: 2;
+    }
+    .tabs-inner { display: flex; }
+    .tab {
+      flex: 1 1 0;
+      min-width: 0;
+      background: transparent;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 2px 0;
+      min-height: 56px;
+      font-size: 12px;
+    }
+    .tab .pill {
+      width: 56px;
+      height: 30px;
+      border-radius: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tab svg { width: 22px; height: 22px; fill: currentColor; }
+    .tab .tab-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .tab.selected { color: var(--accent-text); font-weight: 600; }
+    .tab.selected .pill { background: var(--accent-soft); }
+    @media (min-width: 640px) {
+      .windows { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; }
+      .windows .block.all { grid-column: 1 / -1; }
+      .windows .block + .block { border-top: 1px solid var(--line); }
+    }
   </style>
 </head>
 <body>
+  <header class="top">
+    <div class="brand">
+      <h1 class="title" id="title">Автомобиль</h1>
+      <div id="status"></div>
+    </div>
+    <div class="temps">
+      <div class="chip"><span id="lbl-out">Улица</span><b id="out">—</b></div>
+      <div class="chip"><span id="lbl-in">Салон</span><b id="in">—</b></div>
+    </div>
+  </header>
   <main id="tbox-climate-panel">
-    <h1 id="title">Автомобиль</h1>
-    <p id="status"></p>
-    <section class="temps">
-      <div class="card">
-        <span class="temp-label" id="lbl-out">Улица</span>
-        <div class="temp-value" id="out">—</div>
-      </div>
-      <div class="card">
-        <span class="temp-label" id="lbl-in">Салон</span>
-        <div class="temp-value" id="in">—</div>
-      </div>
-    </section>
-    <section class="card" id="audio"></section>
-    <section class="card" id="climate"></section>
-    <section class="card" id="seats"></section>
-    <section class="card">
-      <details id="connect" open>
-        <summary id="lbl-connect">Подключение</summary>
+    <section class="page" data-page="connect">
+      <div class="card" id="connect">
+        <h2 id="lbl-connect">Подключение</h2>
+        <p class="linked" id="linked" hidden></p>
         <p class="hint" id="pair-hint">На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.</p>
         <button id="pair-btn" class="primary" type="button">Отправить запрос</button>
         <p id="pair-status"></p>
@@ -151,13 +232,23 @@
             <button id="save-token" type="button">OK</button>
           </div>
         </details>
-      </details>
+      </div>
+    </section>
+    <section class="page" data-page="climate" hidden><div class="card" id="climate"></div></section>
+    <section class="page" data-page="seats" hidden><div class="card" id="seats"></div></section>
+    <section class="page" data-page="music" hidden><div class="card" id="audio"></div></section>
+    <section class="page" data-page="body" hidden>
+      <div class="card" id="windows"></div>
+      <div class="card" id="roof"></div>
+      <div class="card" id="shade"></div>
     </section>
   </main>
+  <nav class="tabs"><div class="tabs-inner" id="tabs"></div></nav>
   <script>
     (function () {
       var TOKEN_KEY = "tbox.climate.token";
       var CLIENT_ID_KEY = "tbox.climate.clientId";
+      var PAGE_KEY = "tbox.panel.page";
       var POLL_MS = 2000;
       var LEFT_TEMP = 37;
       var RIGHT_TEMP = 111;
@@ -166,6 +257,13 @@
       var SYNC = 94;
       var BLOW = 40;
       var HVAC_MODE = 140;
+      var SUNROOF = 45;
+      var SUNSHADE = 46;
+      var WINDOW_ALL = 47;
+      var ROOF_TILT = 102;
+      var ROOF_TILT_WRITE = 12;
+      var ROOF_TILT_PERCENT = 10;
+      var WINDOW_BETWEEN = -1;
       var HVAC_MODES = [
         { state: "eco", value: 1, label: "modeEco" },
         { state: "comfort", value: 2, label: "modeComfort" },
@@ -190,6 +288,11 @@
           title: "Автомобиль",
           outside: "Улица",
           inside: "Салон",
+          tabConnect: "Связь",
+          tabClimate: "Климат",
+          tabSeats: "Сиденья",
+          tabMusic: "Музыка",
+          tabBody: "Окна",
           audio: "Звук",
           music: "Музыка",
           media: "Медиа",
@@ -218,13 +321,30 @@
           rearLeft: "Сзади слева",
           rearRight: "Сзади справа",
           off: "Выкл",
+          windows: "Окна, люк и шторка",
+          windowsTitle: "Окна",
+          allWindows: "Все окна",
+          frontLeft: "Переднее левое",
+          frontRight: "Переднее правое",
+          rearLeftWindow: "Заднее левое",
+          rearRightWindow: "Заднее правое",
+          sunroof: "Люк",
+          sunshade: "Шторка",
+          close: "Закрыть",
+          open: "Открыть",
+          vent: "Щель",
+          tilt: "Откинуть",
+          stClosed: "Закрыто",
+          stOpen: "Открыто",
+          stTilted: "Откинут",
           connect: "Подключение",
+          linked: "Подключено к головному устройству.",
           pairHint: "На ГУ: Настройки → API → Подключить приложение. Затем нажмите кнопку и подтвердите запрос.",
           pair: "Отправить запрос",
           token: "Токен вручную",
           save: "Сохранить",
           clientName: "Веб-панель",
-          needToken: "На ГУ включите «Подключить приложение», затем нажмите «Отправить запрос».",
+          needToken: "Не подключено",
           unauthorized: "Токен не принят. Отправьте запрос сопряжения ещё раз.",
           offline: "Нет ответа от головного устройства.",
           updated: "Обновлено",
@@ -240,6 +360,11 @@
           title: "Vehicle",
           outside: "Outside",
           inside: "Cabin",
+          tabConnect: "Link",
+          tabClimate: "Climate",
+          tabSeats: "Seats",
+          tabMusic: "Music",
+          tabBody: "Windows",
           audio: "Audio",
           music: "Music",
           media: "Media",
@@ -268,13 +393,30 @@
           rearLeft: "Rear left",
           rearRight: "Rear right",
           off: "Off",
+          windows: "Windows, sunroof and shade",
+          windowsTitle: "Windows",
+          allWindows: "All windows",
+          frontLeft: "Front left",
+          frontRight: "Front right",
+          rearLeftWindow: "Rear left",
+          rearRightWindow: "Rear right",
+          sunroof: "Sunroof",
+          sunshade: "Sunshade",
+          close: "Close",
+          open: "Open",
+          vent: "Vent",
+          tilt: "Tilt",
+          stClosed: "Closed",
+          stOpen: "Open",
+          stTilted: "Tilted",
           connect: "Connection",
+          linked: "Connected to the head unit.",
           pairHint: "On the head unit: Settings → API → Connect app. Then tap the button and approve the request.",
           pair: "Send request",
           token: "Manual token",
           save: "Save",
           clientName: "Web panel",
-          needToken: "On the head unit turn on Connect app, then tap Send request.",
+          needToken: "Not connected",
           unauthorized: "Token rejected. Send the pairing request again.",
           offline: "No response from the head unit.",
           updated: "Updated",
@@ -288,6 +430,14 @@
         }
       };
       var lang = "__APP_LANG__" === "en" ? STR.en : STR.ru;
+      /* Same 24×24 icons as the phone app. */
+      var PAGES = [
+        { id: "connect", label: lang.tabConnect, icon: "M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" },
+        { id: "climate", label: lang.tabClimate, icon: "M22 11h-4.17l3.24-3.24-1.41-1.42L15 11h-2V9l4.66-4.66-1.42-1.41L13 6.17V2h-2v4.17L7.76 2.93 6.34 4.34 11 9v2H9L4.34 6.34 2.93 7.76 6.17 11H2v2h4.17l-3.24 3.24 1.41 1.42L9 13h2v2l-4.66 4.66 1.42 1.41L11 17.83V22h2v-4.17l3.24 3.24 1.42-1.42L13 15v-2h2l4.66 4.66 1.41-1.42L17.83 13H22z" },
+        { id: "seats", label: lang.tabSeats, icon: "M7.59 5.41c-.78-.78-.78-2.05 0-2.83.78-.78 2.05-.78 2.83 0 .78.78.78 2.05 0 2.83-.79.79-2.05.79-2.83 0zM6 16V7H4v9c0 2.76 2.24 5 5 5h6v-2H9c-1.66 0-3-1.34-3-3zm14 4.07L14.93 15H11.5v-3.68c1.4 1.15 3.6 2.16 5.5 2.16v-2.16c-1.66.02-3.61-.87-4.67-2.04l-1.4-1.55c-.19-.21-.43-.38-.69-.5-.29-.14-.62-.23-.96-.23h-.03C8.01 7 7 8.01 7 9.25V15c0 1.66 1.34 3 3 3h5.07l3.5 3.5L20 20.07z" },
+        { id: "music", label: lang.tabMusic, icon: "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" },
+        { id: "body", label: lang.tabBody, icon: "M3 20V11l6-7h10a2 2 0 0 1 2 2v14H3zm2.8-8L10 7h8v5H5.8zM14 14h4v1.6h-4z", evenOdd: true }
+      ];
       var FRONT = [
         { state: "off", value: 1, label: lang.off, kind: "off" },
         { state: "heat_1", value: 2, label: "H1", kind: "heat" },
@@ -299,11 +449,49 @@
       ];
       var REAR = FRONT.slice(0, 4);
       var seats = [
-        { propertyId: 138, label: lang.driver, levels: FRONT },
-        { propertyId: 139, label: lang.passenger, levels: FRONT },
-        { propertyId: 318, label: lang.rearLeft, levels: REAR },
-        { propertyId: 319, label: lang.rearRight, levels: REAR }
+        { propertyId: 138, signal: "front_left_seat_mode", label: lang.driver, levels: FRONT },
+        { propertyId: 139, signal: "front_right_seat_mode", label: lang.passenger, levels: FRONT },
+        { propertyId: 318, signal: "rear_left_seat_mode", label: lang.rearLeft, levels: REAR },
+        { propertyId: 319, signal: "rear_right_seat_mode", label: lang.rearRight, levels: REAR }
       ];
+      var WINDOWS = [
+        { propertyId: 56, signal: "window_front_left", label: lang.frontLeft },
+        { propertyId: 55, signal: "window_front_right", label: lang.frontRight },
+        { propertyId: 58, signal: "window_rear_left", label: lang.rearLeftWindow },
+        { propertyId: 57, signal: "window_rear_right", label: lang.rearRightWindow }
+      ];
+      /* Android 9 holds 0 / 20 / 80 / 100 %; Android 10 has close / vent / open. */
+      var WINDOW_CMDS_A9 = [
+        { key: "close", label: lang.close, match: function (v) { return v === 0; } },
+        { key: "vent", label: "20%", match: function (v) { return v === 20; } },
+        { key: "comfort_open", label: "80%", match: function (v) { return v === 80; } },
+        { key: "open", label: lang.open, match: function (v) { return v === 100; } }
+      ];
+      var WINDOW_CMDS_A10 = [
+        { key: "close", label: lang.close, match: function (v) { return v === 0; } },
+        { key: "vent", label: lang.vent, match: function (v) { return v > 0 && v <= 30; } },
+        { key: "open", label: lang.open, match: function (v) { return v === WINDOW_BETWEEN || v > 30; } }
+      ];
+      var ROOF_STEPS = [0, 20, 50, 80, 100];
+      var PAGE_SIGNALS = {
+        connect: { head_unit: [], app: [] },
+        climate: {
+          head_unit: ["hvac_temperature_left", "hvac_temperature_right", "hvac_fan_speed", "hvac_auto", "hvac_sync", "hvac_fan_direction", "hvac_custom_mode"],
+          app: []
+        },
+        seats: {
+          head_unit: ["front_left_seat_mode", "front_right_seat_mode", "rear_left_seat_mode", "rear_right_seat_mode"],
+          app: []
+        },
+        music: {
+          head_unit: [],
+          app: ["hu_media_volume", "media_title", "media_artist", "media_playing", "media_position_ms", "media_duration_ms"]
+        },
+        body: {
+          head_unit: ["window_front_left", "window_front_right", "window_rear_left", "window_rear_right", "sunroof", "sunshade"],
+          app: []
+        }
+      };
       var state = {
         outside: null,
         inside: null,
@@ -320,18 +508,26 @@
         sync: null,
         blow: null,
         mode: null,
-        seat: {}
+        seat: {},
+        window: {},
+        sunroof: null,
+        sunshade: null
       };
+      var android10 = false;
       var chain = Promise.resolve();
       var pendingWrites = 0;
       var timer = null;
       var polling = false;
+      var pollAgain = false;
+      var pairing = false;
+      var page = "connect";
 
       document.getElementById("title").textContent = lang.title;
       document.title = "TBox " + lang.title;
       document.getElementById("lbl-out").textContent = lang.outside;
       document.getElementById("lbl-in").textContent = lang.inside;
       document.getElementById("lbl-connect").textContent = lang.connect;
+      document.getElementById("linked").textContent = lang.linked;
       document.getElementById("pair-hint").textContent = lang.pairHint;
       document.getElementById("pair-btn").textContent = lang.pair;
       document.getElementById("lbl-token").textContent = lang.token;
@@ -346,22 +542,97 @@
         history.replaceState(null, "", next);
       }
       document.getElementById("token").value = localStorage.getItem(TOKEN_KEY) || "";
-      document.getElementById("connect").open = !token();
       document.getElementById("save-token").addEventListener("click", function () {
         localStorage.setItem(TOKEN_KEY, document.getElementById("token").value.trim());
-        document.getElementById("connect").open = !token();
+        paintConnect();
+        if (token()) showPage(storedPage());
         tick();
       });
 
+      renderTabs();
       renderAudio();
       renderClimate();
       renderSeats();
+      renderBody();
       renderTemps();
-
-      var pairing = false;
+      paintConnect();
+      showPage(token() ? storedPage() : "connect");
+      loadPlatform();
 
       function token() {
         return (localStorage.getItem(TOKEN_KEY) || "").trim();
+      }
+
+      function storedPage() {
+        var saved = localStorage.getItem(PAGE_KEY);
+        for (var i = 0; i < PAGES.length; i++) {
+          if (PAGES[i].id === saved) return saved;
+        }
+        return "climate";
+      }
+
+      function svgIcon(path, evenOdd) {
+        var ns = "http://www.w3.org/2000/svg";
+        var svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        var shape = document.createElementNS(ns, "path");
+        shape.setAttribute("d", path);
+        if (evenOdd) shape.setAttribute("fill-rule", "evenodd");
+        svg.appendChild(shape);
+        return svg;
+      }
+
+      function renderTabs() {
+        var root = document.getElementById("tabs");
+        PAGES.forEach(function (entry) {
+          var el = document.createElement("button");
+          el.type = "button";
+          el.className = "tab";
+          el.setAttribute("data-tab", entry.id);
+          var pill = document.createElement("span");
+          pill.className = "pill";
+          pill.appendChild(svgIcon(entry.icon, entry.evenOdd));
+          var label = document.createElement("span");
+          label.className = "tab-label";
+          label.textContent = entry.label;
+          el.appendChild(pill);
+          el.appendChild(label);
+          el.addEventListener("click", function () { showPage(entry.id); });
+          root.appendChild(el);
+        });
+      }
+
+      function showPage(id) {
+        page = id;
+        if (id !== "connect" || token()) localStorage.setItem(PAGE_KEY, id);
+        var pages = document.querySelectorAll("[data-page]");
+        for (var i = 0; i < pages.length; i++) {
+          pages[i].hidden = pages[i].getAttribute("data-page") !== id;
+        }
+        var tabs = document.querySelectorAll("[data-tab]");
+        for (var j = 0; j < tabs.length; j++) {
+          var selected = tabs[j].getAttribute("data-tab") === id;
+          tabs[j].className = selected ? "tab selected" : "tab";
+          tabs[j].setAttribute("aria-current", selected ? "page" : "false");
+        }
+        tick();
+      }
+
+      function paintConnect() {
+        document.getElementById("linked").hidden = !token();
+      }
+
+      function loadPlatform() {
+        fetch("/v1/health").then(function (response) {
+          return response.json();
+        }).then(function (body) {
+          var next = body && body.headUnit === "android10";
+          if (next !== android10) {
+            android10 = next;
+            renderBody();
+          }
+        }).catch(function () {});
       }
 
       function clientId() {
@@ -441,8 +712,8 @@
               localStorage.setItem(TOKEN_KEY, res.body.accessToken);
               document.getElementById("token").value = res.body.accessToken;
               setPairStatus(lang.pairOk);
-              document.getElementById("connect").open = false;
-              tick();
+              paintConnect();
+              showPage(storedPage());
               return;
             }
             setPairStatus(lang.offline);
@@ -451,6 +722,12 @@
 
       function setStatus(text) {
         document.getElementById("status").textContent = text;
+      }
+
+      function unauthorized() {
+        setStatus(lang.unauthorized);
+        document.getElementById("linked").hidden = true;
+        showPage("connect");
       }
 
       function fmtTemp(value) {
@@ -478,6 +755,7 @@
         paintNowPlaying();
         paintSeats();
         paintClimate();
+        paintBody();
       }
 
       function paintClimate() {
@@ -510,6 +788,12 @@
         return el;
       }
 
+      function heading(root, text) {
+        var title = document.createElement("h2");
+        title.textContent = text;
+        root.appendChild(title);
+      }
+
       function stepperRow(label, readoutId, onMinus, onPlus) {
         var row = document.createElement("div");
         row.className = "row";
@@ -532,9 +816,7 @@
 
       function renderAudio() {
         var root = document.getElementById("audio");
-        var title = document.createElement("h2");
-        title.textContent = lang.music;
-        root.appendChild(title);
+        heading(root, lang.music);
         var track = document.createElement("div");
         track.id = "np-title";
         track.className = "np-title";
@@ -577,22 +859,19 @@
 
       function renderClimate() {
         var root = document.getElementById("climate");
-        var title = document.createElement("h2");
-        title.textContent = lang.climate;
-        root.appendChild(title);
+        heading(root, lang.climate);
         root.appendChild(stepperRow(lang.driver, "left-readout", function () { bumpTemp("left", false); }, function () { bumpTemp("left", true); }));
         root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
         root.appendChild(stepperRow(lang.fan, "fan-readout", function () { bumpFan(false); }, function () { bumpFan(true); }));
-        root.appendChild(choiceRow(lang.auto, [
-          button(lang.auto, toggleAuto)
-        ], function (el) {
-          el.setAttribute("data-auto", "1");
-        }));
-        root.appendChild(choiceRow(lang.sync, [
-          button("SYNC", toggleSync)
-        ], function (el) {
-          el.setAttribute("data-sync", "1");
-        }));
+        var toggles = document.createElement("div");
+        toggles.className = "pair";
+        var autoButton = button(lang.auto, toggleAuto);
+        autoButton.setAttribute("data-auto", "1");
+        var syncButton = button("SYNC", toggleSync);
+        syncButton.setAttribute("data-sync", "1");
+        toggles.appendChild(autoButton);
+        toggles.appendChild(syncButton);
+        root.appendChild(toggles);
         root.appendChild(choiceRow(lang.mode, HVAC_MODES.map(function (mode) {
           var el = button(lang[mode.label], function () { setHvacMode(mode); });
           el.setAttribute("data-hvac-mode", mode.state);
@@ -605,18 +884,15 @@
         })));
       }
 
-      function choiceRow(label, buttons, decorate) {
+      function choiceRow(label, buttons, columns) {
         var row = document.createElement("div");
-        row.className = "row";
+        row.className = "choice";
         var name = document.createElement("div");
-        name.className = "row-label";
+        name.className = "label";
         name.textContent = label;
         var levels = document.createElement("div");
-        levels.className = "levels";
-        buttons.forEach(function (el) {
-          if (decorate) decorate(el);
-          levels.appendChild(el);
-        });
+        levels.className = columns ? "grid cols-" + columns : "levels";
+        buttons.forEach(function (el) { levels.appendChild(el); });
         row.appendChild(name);
         row.appendChild(levels);
         return row;
@@ -624,27 +900,15 @@
 
       function renderSeats() {
         var root = document.getElementById("seats");
-        var title = document.createElement("h2");
-        title.textContent = lang.seats;
-        root.appendChild(title);
+        heading(root, lang.seats);
         seats.forEach(function (seat) {
-          var row = document.createElement("div");
-          row.className = "row";
-          var name = document.createElement("div");
-          name.className = "row-label";
-          name.textContent = seat.label;
-          var levels = document.createElement("div");
-          levels.className = "levels";
-          seat.levels.forEach(function (level) {
+          root.appendChild(choiceRow(seat.label, seat.levels.map(function (level) {
             var el = button(level.label, function () { setSeat(seat, level); });
             el.setAttribute("data-seat", String(seat.propertyId));
             el.setAttribute("data-state", level.state);
             el.setAttribute("data-kind", level.kind);
-            levels.appendChild(el);
-          });
-          row.appendChild(name);
-          row.appendChild(levels);
-          root.appendChild(row);
+            return el;
+          }), seat.levels.length));
         });
       }
 
@@ -654,6 +918,164 @@
           var el = buttons[i];
           var active = state.seat[el.getAttribute("data-seat")] === el.getAttribute("data-state");
           el.className = active ? "on-" + el.getAttribute("data-kind") : "";
+        }
+      }
+
+      function block(root, label, stateId, extraClass, titled) {
+        var el = document.createElement("div");
+        el.className = "block" + (extraClass ? " " + extraClass : "");
+        var head = document.createElement("div");
+        head.className = "block-head";
+        var name = document.createElement("div");
+        name.textContent = label;
+        if (titled) name.className = "block-title";
+        var st = document.createElement("div");
+        st.className = "block-state";
+        st.id = stateId;
+        st.textContent = "—";
+        head.appendChild(name);
+        head.appendChild(st);
+        el.appendChild(head);
+        root.appendChild(el);
+        return el;
+      }
+
+      function grid(parent, columns) {
+        var el = document.createElement("div");
+        el.className = "grid cols-" + columns;
+        parent.appendChild(el);
+        return el;
+      }
+
+      function windowCmds() {
+        return android10 ? WINDOW_CMDS_A10 : WINDOW_CMDS_A9;
+      }
+
+      function roofLabel(percent) {
+        if (percent === 0) return lang.close;
+        if (percent === 100) return lang.open;
+        return percent + "%";
+      }
+
+      function renderBody() {
+        var windows = document.getElementById("windows");
+        windows.textContent = "";
+        heading(windows, lang.windowsTitle);
+        var list = document.createElement("div");
+        list.className = "windows";
+        windows.appendChild(list);
+        var cmds = windowCmds();
+        var all = block(list, lang.allWindows, "window-all-state", "all");
+        var allGrid = grid(all, cmds.length);
+        cmds.forEach(function (cmd) {
+          var el = button(cmd.label, function () { setWindow(WINDOW_ALL, cmd); });
+          el.setAttribute("data-window", "all");
+          el.setAttribute("data-cmd", cmd.key);
+          allGrid.appendChild(el);
+        });
+        WINDOWS.forEach(function (pane) {
+          var el = block(list, pane.label, "window-state-" + pane.signal);
+          var paneGrid = grid(el, cmds.length);
+          cmds.forEach(function (cmd) {
+            var b = button(cmd.label, function () { setWindow(pane.propertyId, cmd); });
+            b.setAttribute("data-window", pane.signal);
+            b.setAttribute("data-cmd", cmd.key);
+            paneGrid.appendChild(b);
+          });
+        });
+
+        var roof = document.getElementById("roof");
+        roof.textContent = "";
+        var roofBlock = block(roof, lang.sunroof, "roof-state", "", true);
+        var roofGrid = grid(roofBlock, 3);
+        ROOF_STEPS.concat([ROOF_TILT]).forEach(function (percent) {
+          var label = percent === ROOF_TILT ? lang.tilt : roofLabel(percent);
+          var el = button(label, function () { setRoof(SUNROOF, percent); });
+          el.setAttribute("data-roof", "sunroof");
+          el.setAttribute("data-percent", String(percent));
+          roofGrid.appendChild(el);
+        });
+
+        var shade = document.getElementById("shade");
+        shade.textContent = "";
+        var shadeBlock = block(shade, lang.sunshade, "shade-state", "", true);
+        var shadeGrid = grid(shadeBlock, 3);
+        ROOF_STEPS.forEach(function (percent) {
+          var el = button(roofLabel(percent), function () { setRoof(SUNSHADE, percent); });
+          el.setAttribute("data-roof", "sunshade");
+          el.setAttribute("data-percent", String(percent));
+          shadeGrid.appendChild(el);
+        });
+        paintBody();
+      }
+
+      function windowOpen(value) {
+        return value === WINDOW_BETWEEN || (value != null && value > 0);
+      }
+
+      function windowText(value) {
+        if (value == null) return "—";
+        if (value === 0) return lang.stClosed;
+        if (value === WINDOW_BETWEEN) return lang.stOpen;
+        return lang.stOpen + " · " + value + "%";
+      }
+
+      function roofTilted(value) {
+        return value === ROOF_TILT || value === ROOF_TILT_PERCENT;
+      }
+
+      function roofText(value, allowTilt) {
+        if (value == null) return "—";
+        if (allowTilt && roofTilted(value)) return lang.stTilted;
+        if (value === 0) return lang.stClosed;
+        return lang.stOpen + " · " + value + "%";
+      }
+
+      function paintState(id, text, open) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = text;
+        el.className = open ? "block-state open" : "block-state";
+      }
+
+      function paintBody() {
+        var cmds = windowCmds();
+        var values = WINDOWS.map(function (pane) { return state.window[pane.signal]; });
+        WINDOWS.forEach(function (pane, index) {
+          paintState("window-state-" + pane.signal, windowText(values[index]), windowOpen(values[index]));
+        });
+        var known = values.filter(function (v) { return v != null; });
+        var openCount = known.filter(windowOpen).length;
+        var allText = known.length === 0 ? "—"
+          : openCount === 0 ? lang.stClosed
+          : lang.stOpen + " · " + openCount + "/" + known.length;
+        paintState("window-all-state", allText, openCount > 0);
+        var buttons = document.querySelectorAll("[data-window]");
+        for (var i = 0; i < buttons.length; i++) {
+          var el = buttons[i];
+          var target = el.getAttribute("data-window");
+          var cmd = cmds.filter(function (c) { return c.key === el.getAttribute("data-cmd"); })[0];
+          var active;
+          if (target === "all") {
+            active = known.length === WINDOWS.length && values.every(function (v) { return cmd.match(v); });
+          } else {
+            var v = state.window[target];
+            active = v != null && cmd.match(v);
+          }
+          el.className = active ? "on-off" : "";
+        }
+        paintState("roof-state", roofText(state.sunroof, true), state.sunroof != null && state.sunroof !== 0);
+        paintState("shade-state", roofText(state.sunshade, false), state.sunshade != null && state.sunshade !== 0);
+        var roofButtons = document.querySelectorAll("[data-roof]");
+        for (var r = 0; r < roofButtons.length; r++) {
+          var rb = roofButtons[r];
+          var isRoof = rb.getAttribute("data-roof") === "sunroof";
+          var current = isRoof ? state.sunroof : state.sunshade;
+          var percent = Number(rb.getAttribute("data-percent"));
+          var on = current != null && (
+            percent === ROOF_TILT ? roofTilted(current) : (current === percent && !(isRoof && roofTilted(current)))
+          );
+          rb.className = on ? "on-off" : "";
         }
       }
 
@@ -713,6 +1135,7 @@
         var current = token();
         if (!current) {
           setStatus(lang.needToken);
+          showPage("connect");
           return Promise.resolve();
         }
         return fetch("/v1/actions/invoke", {
@@ -725,8 +1148,7 @@
         }).then(function (response) {
           return response.json().then(function (body) {
             if (response.status === 401) {
-              setStatus(lang.unauthorized);
-              document.getElementById("connect").open = true;
+              unauthorized();
               return;
             }
             if (!response.ok) {
@@ -777,9 +1199,11 @@
       function fmtClock(ms) {
         if (ms == null || !isFinite(ms) || ms < 0) return "—";
         var total = Math.floor(ms / 1000);
-        var minutes = Math.floor(total / 60);
-        var seconds = total % 60;
-        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
+        var hours = Math.floor(total / 3600);
+        var minutes = Math.floor(total / 60) % 60;
+        var ss = (total % 60 < 10 ? "0" : "") + (total % 60);
+        if (hours > 0) return hours + ":" + (minutes < 10 ? "0" : "") + minutes + ":" + ss;
+        return Math.floor(total / 60) + ":" + ss;
       }
 
       function paintNowPlaying() {
@@ -789,8 +1213,8 @@
         var time = document.getElementById("np-time");
         var play = document.getElementById("np-play");
         if (!title) return;
-        title.textContent = state.mediaTitle || "—";
-        artist.textContent = state.mediaArtist || "";
+        title.textContent = state.mediaTitle || state.mediaArtist || "—";
+        artist.textContent = state.mediaTitle ? (state.mediaArtist || "") : "";
         var pos = shownMediaPosition();
         var dur = state.mediaDuration;
         var fraction = dur > 0 && pos != null ? Math.max(0, Math.min(1, pos / dur)) : 0;
@@ -869,6 +1293,16 @@
         enqueue(function () { return invoke(seat.propertyId, level.value); });
       }
 
+      /* Windows, sunroof and shade move for seconds: the screen follows the car, not the tap. */
+      function setWindow(propertyId, cmd) {
+        enqueue(function () { return invoke(propertyId, cmd.key); });
+      }
+
+      function setRoof(propertyId, percent) {
+        var write = percent === ROOF_TILT ? ROOF_TILT_WRITE : Math.floor(percent / 10) + 1;
+        enqueue(function () { return invoke(propertyId, write); });
+      }
+
       function indexSignals(payload) {
         var map = {};
         var list = (payload && payload.signals) || [];
@@ -892,8 +1326,27 @@
         return signal.value;
       }
 
+      /** "open" (between the stops) → −1, "N%" → N. */
+      function windowValue(signal) {
+        var value = stateOrNull(signal);
+        if (value == null) return null;
+        if (value === "open") return WINDOW_BETWEEN;
+        var percent = parseInt(value, 10);
+        return isFinite(percent) ? percent : null;
+      }
+
+      /** "tilt" → 102, "N%" → N. */
+      function roofValue(signal) {
+        var value = stateOrNull(signal);
+        if (value == null) return null;
+        if (value === "tilt") return ROOF_TILT;
+        var percent = parseInt(value, 10);
+        return isFinite(percent) ? percent : null;
+      }
+
       function loadSignals(source, ids) {
-        return fetch("/v1/signals?ids=" + encodeURIComponent(ids) + "&source=" + source, {
+        if (!ids.length) return Promise.resolve({ status: 200, body: { signals: [] } });
+        return fetch("/v1/signals?ids=" + encodeURIComponent(ids.join(",")) + "&source=" + source, {
           headers: { "Authorization": "Bearer " + token() }
         }).then(function (response) {
           return response.json().then(function (body) {
@@ -902,16 +1355,32 @@
         });
       }
 
-      function applySnapshot(hu, tbox, app) {
+      function applySnapshot(shown, hu, tbox, app) {
         var outside = pick(hu.outside_temperature, tbox.outside_temperature);
         var inside = pick(tbox.inside_temperature, null);
         state.outside = numberOrNull(outside);
         state.inside = numberOrNull(inside);
-        state.left = numberOrNull(hu.hvac_temperature_left);
-        state.right = numberOrNull(hu.hvac_temperature_right);
-        state.fan = numberOrNull(hu.hvac_fan_speed);
-        if (state.fan != null) state.fan = Math.round(state.fan);
-        if (app) {
+        if (shown === "climate") {
+          state.left = numberOrNull(hu.hvac_temperature_left);
+          state.right = numberOrNull(hu.hvac_temperature_right);
+          state.fan = numberOrNull(hu.hvac_fan_speed);
+          if (state.fan != null) state.fan = Math.round(state.fan);
+          var auto = stateOrNull(hu.hvac_auto);
+          if (auto != null) state.auto = auto;
+          var sync = stateOrNull(hu.hvac_sync);
+          if (sync != null) state.sync = sync;
+          var blow = stateOrNull(hu.hvac_fan_direction);
+          if (blow != null) state.blow = blow;
+          var custom = stateOrNull(hu.hvac_custom_mode);
+          if (custom != null) state.mode = custom;
+        }
+        if (shown === "seats") {
+          seats.forEach(function (seat) {
+            var mode = stateOrNull(hu[seat.signal]);
+            if (mode != null) state.seat[String(seat.propertyId)] = mode;
+          });
+        }
+        if (shown === "music" && app) {
           state.volume = numberOrNull(app.hu_media_volume);
           if (state.volume != null) {
             state.volume = Math.round(state.volume);
@@ -924,22 +1393,13 @@
           state.mediaPlaying = stateOrNull(app.media_playing);
           mediaAnchorAt = Date.now();
         }
-        var auto = stateOrNull(hu.hvac_auto);
-        if (auto != null) state.auto = auto;
-        var sync = stateOrNull(hu.hvac_sync);
-        if (sync != null) state.sync = sync;
-        var blow = stateOrNull(hu.hvac_fan_direction);
-        if (blow != null) state.blow = blow;
-        var custom = stateOrNull(hu.hvac_custom_mode);
-        if (custom != null) state.mode = custom;
-        seats.forEach(function (seat) {
-          var id = seat.propertyId === 138 ? "front_left_seat_mode"
-            : seat.propertyId === 139 ? "front_right_seat_mode"
-            : seat.propertyId === 318 ? "rear_left_seat_mode"
-            : "rear_right_seat_mode";
-          var mode = stateOrNull(hu[id]);
-          if (mode != null) state.seat[String(seat.propertyId)] = mode;
-        });
+        if (shown === "body") {
+          WINDOWS.forEach(function (pane) {
+            state.window[pane.signal] = windowValue(hu[pane.signal]);
+          });
+          state.sunroof = roofValue(hu.sunroof);
+          state.sunshade = roofValue(hu.sunshade);
+        }
         renderTemps();
       }
 
@@ -952,28 +1412,30 @@
           return;
         }
         if (polling) {
-          timer = setTimeout(tick, POLL_MS);
+          pollAgain = true;
           return;
         }
         polling = true;
+        var shown = page;
+        var wanted = PAGE_SIGNALS[shown] || PAGE_SIGNALS.connect;
         Promise.all([
-          loadSignals("head_unit", "outside_temperature,hvac_temperature_left,hvac_temperature_right,hvac_fan_speed,hvac_auto,hvac_sync,hvac_fan_direction,hvac_custom_mode,front_left_seat_mode,front_right_seat_mode,rear_left_seat_mode,rear_right_seat_mode"),
-          loadSignals("tbox", "inside_temperature,outside_temperature"),
-          loadSignals("app", "hu_media_volume,media_title,media_artist,media_playing,media_position_ms,media_duration_ms")
+          loadSignals("head_unit", ["outside_temperature"].concat(wanted.head_unit)),
+          loadSignals("tbox", ["inside_temperature", "outside_temperature"]),
+          loadSignals("app", wanted.app)
         ]).then(function (parts) {
           var denied = parts[0].status === 401 || parts[1].status === 401 || parts[2].status === 401;
           if (denied) {
-            setStatus(lang.unauthorized);
-            document.getElementById("connect").open = true;
+            unauthorized();
             return;
           }
           if (parts[0].status !== 200) {
             setStatus(lang.offline);
             return;
           }
-          if (pendingWrites > 0) return;
+          if (pendingWrites > 0 || shown !== page) return;
           var app = parts[2].status === 200 ? indexSignals(parts[2].body) : null;
-          applySnapshot(indexSignals(parts[0].body), indexSignals(parts[1].body), app);
+          applySnapshot(shown, indexSignals(parts[0].body), indexSignals(parts[1].body), app);
+          paintConnect();
           var now = new Date();
           var hh = String(now.getHours()).padStart(2, "0");
           var mm = String(now.getMinutes()).padStart(2, "0");
@@ -983,7 +1445,13 @@
           setStatus(lang.offline);
         }).then(function () {
           polling = false;
-          if (!document.hidden && token()) timer = setTimeout(tick, POLL_MS);
+          if (pollAgain) {
+            pollAgain = false;
+            tick();
+          } else if (!document.hidden && token()) {
+            clearTimeout(timer);
+            timer = setTimeout(tick, POLL_MS);
+          }
         });
       }
 
@@ -992,11 +1460,11 @@
           clearTimeout(timer);
           timer = null;
         } else {
+          loadPlatform();
           tick();
         }
       });
 
-      tick();
       setInterval(function () {
         if (!document.hidden && state.mediaPlaying === "on") paintNowPlaying();
       }, 500);
