@@ -89,6 +89,27 @@ class PhoneBleCodecTest {
     }
 
     @Test
+    fun newGenerationKeepsFieldsOfPagesNotYetReceived() {
+        val old = PhoneBleCodec.Snapshot(
+            leftTenths = 230,
+            fan = 3,
+            mode = 2,
+            seats = listOf(2, 1, 1, 1),
+            volume = 10,
+            gen = 4,
+        )
+        val next = PhoneBleCodec.Snapshot(leftTenths = 235, fan = 4, gen = 5)
+        val page0 = PhoneBleCodec.snapshotBodies(5, next)[0]
+        val merged = PhoneBleCodec.overlaySnapshot(old, page0)
+        assertEquals(235, merged.leftTenths)
+        assertEquals(4, merged.fan)
+        assertEquals(2, merged.mode)
+        assertEquals(listOf(2, 1, 1, 1), merged.seats)
+        assertEquals(10, merged.volume)
+        assertEquals(5, merged.gen)
+    }
+
+    @Test
     fun hostMapsSignalsAndVolumeCommand() {
         val hu = JSONObject(
             """

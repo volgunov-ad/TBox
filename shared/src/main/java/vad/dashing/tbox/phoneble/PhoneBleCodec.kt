@@ -198,34 +198,37 @@ object PhoneBleCodec {
         }
     }
 
+    /**
+     * Every snapshot has a new gen and its pages arrive one by one. Fields of pages not
+     * yet received keep the previous values; resetting them would blink a dash on screen.
+     */
     fun overlaySnapshot(base: Snapshot, body: ByteArray): Snapshot {
         if (body.size < 6) return base
         val page = body[0].toInt() and 0xFF
         val gen = body[1].toInt() and 0xFF
-        val fresh = if (base.gen == gen) base else Snapshot(gen = gen)
         return when (page) {
-            0 -> fresh.copy(
+            0 -> base.copy(
                 gen = gen,
                 leftTenths = optionalTemp(getI16(body, 2)),
                 rightTenths = optionalTemp(getI16(body, 4)),
                 fan = optionalU8(body[6].toInt() and 0xFF),
             )
-            1 -> fresh.copy(
+            1 -> base.copy(
                 gen = gen,
                 mode = optionalU8(body[2].toInt() and 0xFF),
                 auto = optionalU8(body[3].toInt() and 0xFF),
                 blow = optionalU8(body[4].toInt() and 0xFF),
                 sync = optionalU8(body[5].toInt() and 0xFF),
             )
-            2 -> fresh.copy(
+            2 -> base.copy(
                 gen = gen,
                 seats = List(4) { index -> optionalU8(body[2 + index].toInt() and 0xFF) },
             )
-            3 -> fresh.copy(
+            3 -> base.copy(
                 gen = gen,
                 volume = optionalU8(body[2].toInt() and 0xFF),
             )
-            else -> fresh
+            else -> base
         }
     }
 
