@@ -48,12 +48,23 @@ object AutomationValidator {
         return issues
     }
 
-    /** Ad-hoc action lists (External API invoke) have no triggers to reference. */
+    /**
+     * Ad-hoc action lists (External API invoke) have no triggers to reference. Media commands
+     * may omit the player: the executor then targets the active media session.
+     */
     fun validateActions(actions: List<AutomationAction>): List<AutomationValidationIssue> {
         val issues = mutableListOf<AutomationValidationIssue>()
         val actionCounter = IntArray(1)
         actions.forEachIndexed { index, action ->
-            validateAction(action, emptySet(), "actions[$index]", 0, actionCounter, issues)
+            validateAction(
+                action,
+                emptySet(),
+                "actions[$index]",
+                0,
+                actionCounter,
+                issues,
+                requireMediaPlayer = false,
+            )
         }
         return issues
     }
@@ -572,6 +583,7 @@ object AutomationValidator {
         depth: Int,
         actionCounter: IntArray,
         issues: MutableList<AutomationValidationIssue>,
+        requireMediaPlayer: Boolean = true,
     ) {
         actionCounter[0] += 1
         if (depth > AUTOMATION_MAX_ACTION_DEPTH) {
@@ -598,6 +610,7 @@ object AutomationValidator {
                         depth + 1,
                         actionCounter,
                         issues,
+                        requireMediaPlayer,
                     )
                 }
                 action.elseActions.forEachIndexed { index, nested ->
@@ -608,6 +621,7 @@ object AutomationValidator {
                         depth + 1,
                         actionCounter,
                         issues,
+                        requireMediaPlayer,
                     )
                 }
             }
@@ -673,7 +687,7 @@ object AutomationValidator {
                 }
             }
 
-            is AutomationAction.Builtin -> validateBuiltin(action, path, issues)
+            is AutomationAction.Builtin -> validateBuiltin(action, path, issues, requireMediaPlayer)
         }
     }
 
@@ -696,6 +710,7 @@ object AutomationValidator {
         action: AutomationAction.Builtin,
         path: String,
         issues: MutableList<AutomationValidationIssue>,
+        requireMediaPlayer: Boolean,
     ) {
         when (action.type) {
             AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
@@ -925,6 +940,7 @@ object AutomationValidator {
             }
         }
         if (
+            requireMediaPlayer &&
             action.type in MEDIA_PACKAGE_ACTIONS &&
             action.stringValue.isBlank()
         ) {
