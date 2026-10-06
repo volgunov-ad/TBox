@@ -84,6 +84,10 @@ class EspCompanionManager(
         private const val UM980_POST_SAVE_REFRESH_DELAY_MS = 2_000L
         private const val UM980_ENSURE_SIGNALGROUP_NONE = 0
         private const val UM980_BAUD_SETTLE_MS = 400L
+        /** A lost hello reply leaves board info (UM980, BLE, CAN) empty until the next link. */
+        private const val HELLO_RETRY_MS = 3_000L
+        /** Firmware closes the window itself; this covers a lost closing bleStatus. */
+        private const val PHONE_LEARN_GRACE_MS = 5_000L
     }
 
     private var session: EspUsbSerialSession? = null
@@ -109,6 +113,8 @@ class EspCompanionManager(
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
+    private var lastHelloRetryMs = 0L
+    private val phoneLearnDeadlineMs = AtomicLong(0L)
 
     private fun currentReopenIntervalMs(): Long {
         val idx = reopenFailureStreak.coerceIn(0, REOPEN_BACKOFF_MS.lastIndex)
@@ -191,6 +197,22 @@ class EspCompanionManager(
                     lastReconnectAttemptMs = now
                     reopenFailureStreak = (reopenFailureStreak + 1).coerceAtMost(REOPEN_BACKOFF_MS.lastIndex)
                 }
+                if (EspCompanionRepository.connected.value &&
+                    EspCompanionRepository.deviceInfo.value.firmwareVersion.isBlank() &&
+                    now - lastHelloRetryMs >= HELLO_RETRY_MS
+                ) {
+                    lastHelloRetryMs = now
+                    requestHello()
+                }
+                val learnDeadline = phoneLearnDeadlineMs.get()
+                if (learnDeadline > 0L && now >= learnDeadline &&
+                    phoneLearnDeadlineMs.compareAndSet(learnDeadline, 0L)
+                ) {
+                    if (EspCompanionRepository.phoneLearnActive.value) {
+                        EspCompanionRepository.closePhoneLearn()
+                        requestHello()
+                    }
+                }
                 // Periodic restore when option is on (manager only runs if enabled).
                 val reconnectGap = currentReopenIntervalMs()
                 if (!EspCompanionRepository.connected.value &&
@@ -220,6 +242,8 @@ class EspCompanionManager(
         session = null
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
+        lastHelloRetryMs = 0L
+        phoneLearnDeadlineMs.set(0L)
         reopenFailureStreak = 0
         optionalNmeaEnableSentForLink = false
         canLightRefCount.set(0)
@@ -672,19 +696,26 @@ class EspCompanionManager(
 
     fun beginPhoneLearn(timeoutMs: Long = 90_000L) {
         if (EspCompanionRepository.otaBusy.value) return
+        // Firmware clamps the window to 60..120 s.
+        val windowMs = timeoutMs.coerceIn(60_000L, 120_000L)
+        phoneLearnDeadlineMs.set(System.currentTimeMillis() + windowMs + PHONE_LEARN_GRACE_MS)
         writeLine(EspCompanionProtocol.encodePhoneLearnBegin(timeoutMs))
     }
 
     fun endPhoneLearn() {
         if (EspCompanionRepository.otaBusy.value) return
-        EspCompanionRepository.clearPendingPhone()
+        phoneLearnDeadlineMs.set(0L)
+        EspCompanionRepository.closePhoneLearn()
         writeLine(EspCompanionProtocol.encodePhoneLearnEnd())
     }
 
     fun allowPhone(id: String) {
         if (EspCompanionRepository.otaBusy.value) return
-        EspCompanionRepository.clearPendingPhone()
+        phoneLearnDeadlineMs.set(0L)
+        EspCompanionRepository.closePhoneLearn()
         writeLine(EspCompanionProtocol.encodePhoneAllow(id))
+        // Firmware before 0.10.3 keeps the window open after allow.
+        writeLine(EspCompanionProtocol.encodePhoneLearnEnd())
     }
 
     fun denyPhone(id: String) {

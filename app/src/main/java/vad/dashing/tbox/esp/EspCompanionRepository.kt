@@ -355,6 +355,11 @@ object EspCompanionRepository {
         touchMessage()
     }
 
+    fun closePhoneLearn() {
+        _phoneLearnActive.value = false
+        _pendingPhone.value = null
+    }
+
     fun setPendingPhone(phone: EspPhoneDevice) {
         if (phone.id.isBlank()) return
         _pendingPhone.value = phone
