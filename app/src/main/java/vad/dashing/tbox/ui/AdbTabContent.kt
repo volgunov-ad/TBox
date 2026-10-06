@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -68,6 +69,7 @@ fun AdbTabContent(
     settingsViewModel: SettingsViewModel,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val focusManager = LocalFocusManager.current
     val scope = rememberCoroutineScope()
     val savedHost by settingsViewModel.adbLastHost.collectAsStateWithLifecycle()
@@ -100,7 +102,7 @@ fun AdbTabContent(
             is AdbShellScriptParser.CountGate.Rejected -> {
                 Toast.makeText(
                     context,
-                    context.getString(
+                    resources.getString(
                         R.string.adb_script_too_many,
                         gate.count,
                         AdbShellScriptParser.HARD_CAP,
@@ -173,19 +175,19 @@ fun AdbTabContent(
         if (scriptRun.active) return@LaunchedEffect
         val message = when (outcome) {
             AdbRepository.ScriptOutcome.COMPLETED -> doneAllToast
-            AdbRepository.ScriptOutcome.STOPPED -> context.getString(
+            AdbRepository.ScriptOutcome.STOPPED -> resources.getString(
                 R.string.adb_script_done_stopped,
                 scriptRun.completedCount,
                 scriptRun.failedCount,
                 scriptRun.total,
             )
-            AdbRepository.ScriptOutcome.ABORTED -> context.getString(
+            AdbRepository.ScriptOutcome.ABORTED -> resources.getString(
                 R.string.adb_script_done_aborted,
                 scriptRun.completedCount,
                 scriptRun.failedCount,
                 scriptRun.total,
             )
-            AdbRepository.ScriptOutcome.CANCELLED -> context.getString(
+            AdbRepository.ScriptOutcome.CANCELLED -> resources.getString(
                 R.string.adb_script_done_cancelled,
                 scriptRun.completedCount,
                 scriptRun.failedCount,

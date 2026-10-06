@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -246,6 +247,7 @@ internal fun AppListDialog(
     if (!visible) return
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val uninstallFailedToast = stringResource(R.string.app_list_uninstall_failed)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -361,7 +363,7 @@ internal fun AppListDialog(
                     ) {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.app_list_adb_session_fail, detail),
+                            resources.getString(R.string.app_list_adb_session_fail, detail),
                             Toast.LENGTH_LONG,
                         ).show()
                     }
@@ -600,7 +602,7 @@ internal fun AppListDialog(
                                     val detail = outcome.detail.ifBlank { pkg }
                                     Toast.makeText(
                                         context,
-                                        context.getString(toastRes, detail),
+                                        resources.getString(toastRes, detail),
                                         Toast.LENGTH_LONG,
                                     ).show()
                                     when (
@@ -623,7 +625,7 @@ internal fun AppListDialog(
                                     ) {
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.app_list_adb_toast_fail, detail),
+                                            resources.getString(R.string.app_list_adb_toast_fail, detail),
                                             Toast.LENGTH_LONG,
                                         ).show()
                                     }

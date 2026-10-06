@@ -52,7 +52,7 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 
 ### Lint
 
-- `./gradlew lintRuDebug` — the codebase has pre-existing lint errors; lint will fail. This is a pre-existing condition, not caused by the dev environment.
+- `./gradlew lintRuDebug` (or `lintEnDebug`) — must pass with zero errors; warnings (mostly `UnusedResources`) are tolerated. Lint needs the 4 GB Gradle heap from `gradle.properties`; a stale daemon started with less memory fails with `OutOfMemoryError` (run `./gradlew --stop`).
 
 ### Tools
 
