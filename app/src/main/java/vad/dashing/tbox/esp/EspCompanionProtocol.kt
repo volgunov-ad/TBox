@@ -260,6 +260,15 @@ object EspCompanionProtocol {
             ?.let { extras["title"] = it }
         PhoneBleCodec.clipText(snap.artist, PhoneBleCodec.ARTIST_MAX).takeIf { it.isNotEmpty() }
             ?.let { extras["artist"] = it }
+        snap.windows.forEachIndexed { index, value ->
+            val wire = PhoneBleCodec.windowWire(value)
+            if (wire != PhoneBleCodec.MISSING_U8) extras["w$index"] = wire
+        }
+        snap.sunroof?.let { extras["roof"] = it }
+        snap.sunshade?.let { extras["shade"] = it }
+        snap.android10?.let { extras["hu"] = if (it) 10 else 9 }
+        snap.outsideTenths?.let { extras["out"] = it }
+        snap.insideTenths?.let { extras["in"] = it }
         return line(TYPE_PHONE_SNAP, extras)
     }
 

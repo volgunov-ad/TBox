@@ -294,7 +294,12 @@ class ExternalApiController(
             PhoneCompanionHost.appSignalIds,
             AutomationSignalSource.APP,
         )
-        return PhoneCompanionHost.snapshotFromSignals(headUnit, app)
+        val tbox = signalReader.readSnapshot(
+            PhoneCompanionHost.tboxSignalIds,
+            AutomationSignalSource.TBOX,
+        )
+        val android10 = UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal
+        return PhoneCompanionHost.snapshotFromSignals(headUnit, app, tbox, android10)
     }
 
     suspend fun executePhoneCommand(op: Int, seat: Int, arg: Int) {

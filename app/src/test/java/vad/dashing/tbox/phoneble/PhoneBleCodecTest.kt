@@ -12,7 +12,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
+import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.esp.EspCompanionProtocol
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -147,7 +149,7 @@ class PhoneBleCodecTest {
         assertTrue(got.textHash != 0)
 
         val again = PhoneBleCodec.snapshotBodies(4, snap.copy(playing = 0), got.textHash)
-        assertEquals(PhoneBleCodec.PAGE_MEDIA + 1, again.size)
+        assertEquals(PhoneBleCodec.pagesForGroups(0), again.map { it[0].toInt() })
         again.forEach { assembler.accept(PhoneBleCodec.snapType(it[0].toInt()), it) }
         assertEquals(0, assembler.snapshot.playing)
         assertEquals("Исполнитель", assembler.snapshot.artist)
@@ -181,6 +183,118 @@ class PhoneBleCodecTest {
         assertNull(assembler.snapshot.playing)
         assembler.accept(PhoneBleCodec.snapType(PhoneBleCodec.PAGE_MEDIA), media)
         assertEquals(1, assembler.snapshot.playing)
+    }
+
+    @Test
+    fun bodyAndCabinPages_roundTrip() {
+        val snap = PhoneBleCodec.Snapshot(
+            windows = listOf(0, PhoneBleCodec.WINDOW_BETWEEN, 80, null),
+            sunroof = PhoneBleCodec.ROOF_TILT,
+            sunshade = 50,
+            android10 = false,
+            outsideTenths = -125,
+            insideTenths = 214,
+        )
+        val assembler = PhoneBleCodec.SnapshotAssembler()
+        PhoneBleCodec.snapshotBodies(2, snap, groups = PhoneBleCodec.GROUP_WINDOWS).forEach { body ->
+            val type = PhoneBleCodec.snapType(body[0].toInt())
+            val open = PhoneBleCodec.open(key, PhoneBleCodec.seal(key, type, id, 3, body))!!
+            assembler.accept(open.type, open.body)
+        }
+        val got = assembler.snapshot
+        assertEquals(listOf(0, PhoneBleCodec.WINDOW_BETWEEN, 80, null), got.windows)
+        assertEquals(PhoneBleCodec.ROOF_TILT, got.sunroof)
+        assertEquals(50, got.sunshade)
+        assertEquals(false, got.android10)
+        assertEquals(-125, got.outsideTenths)
+        assertEquals(214, got.insideTenths)
+        assertNull(got.leftTenths)
+        assertTrue(PhoneBleCodec.windowOpen(PhoneBleCodec.WINDOW_BETWEEN))
+        assertTrue(PhoneBleCodec.windowOpen(20))
+        assertFalse(PhoneBleCodec.windowOpen(0))
+        assertFalse(PhoneBleCodec.windowOpen(null))
+    }
+
+    @Test
+    fun refreshGroups_selectPagesAndAlwaysCabin() {
+        val body = PhoneBleCodec.refreshBody(0x1234, PhoneBleCodec.GROUP_SEATS)
+        assertEquals(0x1234, PhoneBleCodec.readRefreshTextHash(body))
+        assertEquals(PhoneBleCodec.GROUP_SEATS, PhoneBleCodec.readRefreshGroups(body))
+        assertEquals(listOf(2, PhoneBleCodec.PAGE_CABIN), PhoneBleCodec.pagesForGroups(PhoneBleCodec.GROUP_SEATS))
+        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6), PhoneBleCodec.pagesForGroups(0))
+        assertEquals(0, PhoneBleCodec.readRefreshGroups(ByteArray(2)))
+        val seatsOnly = PhoneBleCodec.snapshotBodies(
+            1,
+            PhoneBleCodec.Snapshot(title = "Song"),
+            groups = PhoneBleCodec.GROUP_SEATS,
+        )
+        assertEquals(listOf(2, PhoneBleCodec.PAGE_CABIN), seatsOnly.map { it[0].toInt() })
+    }
+
+    @Test
+    fun hostMapsWindowsRoofAndShade() {
+        val hu = JSONObject(
+            """
+            {"signals":[
+              {"id":"window_front_left","available":true,"value":"open"},
+              {"id":"window_front_right","available":true,"value":"20%"},
+              {"id":"window_rear_left","available":true,"value":"0%"},
+              {"id":"window_rear_right","available":false,"value":null},
+              {"id":"sunroof","available":true,"value":"tilt"},
+              {"id":"sunshade","available":true,"value":"80%"},
+              {"id":"outside_temperature","available":true,"value":-3.5}
+            ]}
+            """.trimIndent(),
+        )
+        val tbox = JSONObject(
+            """
+            {"signals":[
+              {"id":"outside_temperature","available":true,"value":-4.0},
+              {"id":"inside_temperature","available":true,"value":21.4}
+            ]}
+            """.trimIndent(),
+        )
+        val snap = PhoneCompanionHost.snapshotFromSignals(hu, JSONObject(), tbox, android10 = true)
+        assertEquals(listOf(PhoneBleCodec.WINDOW_BETWEEN, 20, 0, null), snap.windows)
+        assertEquals(PhoneBleCodec.ROOF_TILT, snap.sunroof)
+        assertEquals(80, snap.sunshade)
+        assertEquals(-35, snap.outsideTenths)
+        assertEquals(214, snap.insideTenths)
+        val line = JSONObject(EspCompanionProtocol.encodePhoneSnap(1, snap))
+        assertEquals(PhoneBleCodec.WIRE_WINDOW_BETWEEN, line.getInt("w0"))
+        assertEquals(20, line.getInt("w1"))
+        assertFalse(line.has("w3"))
+        assertEquals(102, line.getInt("roof"))
+        assertEquals(10, line.getInt("hu"))
+        assertEquals(-35, line.getInt("out"))
+        assertEquals(214, line.getInt("in"))
+    }
+
+    @Test
+    fun hostMapsWindowRoofShadeCommands() {
+        val comfort = PhoneCompanionHost.toAction(PhoneBleCodec.OP_WINDOW, 1, PhoneBleCodec.WINDOW_CMD_COMFORT)
+            as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.WINDOW_FR_POS, comfort.propertyId)
+        assertEquals(AutomationCanValueCodec.KEY_COMFORT_OPEN, comfort.valueKey)
+        assertEquals(80, comfort.value)
+        val all = PhoneCompanionHost.toAction(PhoneBleCodec.OP_WINDOW, PhoneBleCodec.WINDOW_ALL, PhoneBleCodec.WINDOW_CMD_CLOSE)
+            as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.WINDOW_POS, all.propertyId)
+        assertEquals(AutomationCanValueCodec.KEY_CLOSE, all.valueKey)
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_WINDOW, 5, 0))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_WINDOW, 0, 4))
+
+        val tilt = PhoneCompanionHost.toAction(PhoneBleCodec.OP_SUNROOF, 0, PhoneBleCodec.ROOF_TILT)
+            as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL, tilt.propertyId)
+        assertEquals(MbCanKnownVehiclePropertyId.SUNROOF_TILT, tilt.value)
+        val roof = PhoneCompanionHost.toAction(PhoneBleCodec.OP_SUNROOF, 0, 50) as AutomationAction.CanCommand
+        assertEquals(6, roof.value)
+        val shade = PhoneCompanionHost.toAction(PhoneBleCodec.OP_SUNSHADE, 0, 100) as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.SUNSHADE_POS, shade.propertyId)
+        assertEquals(11, shade.value)
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SUNSHADE, 0, PhoneBleCodec.ROOF_TILT))
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SUNROOF, 0, 25))
     }
 
     @Test

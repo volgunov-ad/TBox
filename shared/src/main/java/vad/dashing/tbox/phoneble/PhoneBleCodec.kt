@@ -26,7 +26,10 @@ import javax.crypto.spec.SecretKeySpec
  *   tag = HMAC-SHA256(key, type||id||counter_le||body)[0:4]
  *
  * CMD body: op u8, seat u8, arg i16le
- * REFRESH body: textHash u16le the phone already shows (0 = none), then zeros
+ *   OP_WINDOW: seat 0..3 = FL, FR, RL, RR, 4 = all; arg WINDOW_CMD_*
+ *   OP_SUNROOF: arg percent 0..100 step 10, or ROOF_TILT. OP_SUNSHADE: arg percent
+ * REFRESH body: textHash u16le the phone already shows (0 = none), groups u8 the screen
+ *   shows (GROUP_*, 0 = all), then zeros. Page 6 is sent for every group.
  * SNAP body: page u8, gen u8, data[9]
  *   page 0: left i16le, right i16le, fan u8. Missing temp 0x7FFF, fan 0xFF
  *   page 1: mode, auto, blow, sync. Missing 0xFF
@@ -34,6 +37,9 @@ import javax.crypto.spec.SecretKeySpec
  *   page 3: media volume. Missing 0xFF. 0 is mute
  *   page 4: playing u8 (1/0, missing 0xFF), position s u16le, duration s u16le
  *           (missing 0xFFFF), textHash u16le, textLen u8
+ *   page 5: windows FL, FR, RL, RR (0..100 %, 0xFE between stops, missing 0xFF),
+ *           sunroof (0..100 %, 102 tilt), sunshade (0..100 %), head unit 9 / 10
+ *   page 6: outside i16le, cabin i16le tenths of °C. Missing 0x7FFF
  *   pages 8..18: now-playing text, 9 bytes each: title utf-8, 0x00, artist utf-8.
  *           Sent only when textHash differs from the one in REFRESH.
  *   Pages 0..3 are sealed as type 4 (older apps). Page 4 and later are sealed as type
@@ -62,6 +68,8 @@ object PhoneBleCodec {
     const val PAYLOAD_MAX: Int = SEALED_LEN
     const val SNAP_PAGES: Int = 4
     const val PAGE_MEDIA: Int = 4
+    const val PAGE_BODY: Int = 5
+    const val PAGE_CABIN: Int = 6
     const val PAGE_TEXT_FIRST: Int = 8
     const val TEXT_CHUNK: Int = 9
     const val TITLE_MAX: Int = 60
@@ -80,6 +88,24 @@ object PhoneBleCodec {
         type == TYPE_CMD || type == TYPE_REFRESH || isSnapType(type)
     const val MISSING_TEMP: Int = 0x7FFF
     const val MISSING_U8: Int = 0xFF
+    const val WIRE_WINDOW_BETWEEN: Int = 0xFE
+    /** Window between the stops 0 / 20 / 80 / 100 (A9 BCM reads −1). */
+    const val WINDOW_BETWEEN: Int = -1
+    const val ROOF_TILT: Int = 102
+
+    const val GROUP_CLIMATE: Int = 1
+    const val GROUP_SEATS: Int = 2
+    const val GROUP_MEDIA: Int = 4
+    const val GROUP_WINDOWS: Int = 8
+    const val GROUP_ALL: Int = GROUP_CLIMATE or GROUP_SEATS or GROUP_MEDIA or GROUP_WINDOWS
+
+    const val WINDOW_ALL: Int = 4
+    const val WINDOW_CMD_CLOSE: Int = 0
+    /** 20 % on Android 9, vent command on Android 10. */
+    const val WINDOW_CMD_VENT: Int = 1
+    /** 80 % on Android 9; Android 10 opens fully. */
+    const val WINDOW_CMD_COMFORT: Int = 2
+    const val WINDOW_CMD_OPEN: Int = 3
 
     const val OP_TEMP_LEFT: Int = 1
     const val OP_TEMP_RIGHT: Int = 2
@@ -93,6 +119,9 @@ object PhoneBleCodec {
     const val OP_MEDIA_PREV: Int = 17
     const val OP_MEDIA_PLAY_PAUSE: Int = 18
     const val OP_MEDIA_NEXT: Int = 19
+    const val OP_WINDOW: Int = 24
+    const val OP_SUNROOF: Int = 25
+    const val OP_SUNSHADE: Int = 26
 
     const val TEMP_MIN: Int = 160
     const val TEMP_MAX: Int = 300
@@ -133,8 +162,30 @@ object PhoneBleCodec {
         val title: String? = null,
         val artist: String? = null,
         val textHash: Int = 0,
+        /** FL, FR, RL, RR: 0..100 %, [WINDOW_BETWEEN], or null. */
+        val windows: List<Int?> = listOf(null, null, null, null),
+        /** 0..100 %, [ROOF_TILT] when tilted. */
+        val sunroof: Int? = null,
+        val sunshade: Int? = null,
+        val android10: Boolean? = null,
+        val outsideTenths: Int? = null,
+        val insideTenths: Int? = null,
         val gen: Int = 0,
     )
+
+    /** Pages the companion sends for [groups] (0 = all), without text pages. */
+    fun pagesForGroups(groups: Int): List<Int> {
+        val wanted = if (groups and GROUP_ALL == 0) GROUP_ALL else groups
+        return buildList {
+            if (wanted and GROUP_CLIMATE != 0) addAll(listOf(0, 1))
+            if (wanted and GROUP_SEATS != 0) add(2)
+            if (wanted and GROUP_MEDIA != 0) addAll(listOf(3, PAGE_MEDIA))
+            if (wanted and GROUP_WINDOWS != 0) add(PAGE_BODY)
+            add(PAGE_CABIN)
+        }
+    }
+
+    fun windowOpen(raw: Int?): Boolean = raw == WINDOW_BETWEEN || (raw != null && raw in 1..100)
 
     fun idHex(id: ByteArray): String =
         id.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
@@ -197,10 +248,15 @@ object PhoneBleCodec {
         )
     }
 
-    fun refreshBody(textHash: Int = 0): ByteArray =
-        ByteArray(BODY_LEN).also { putU16(it, 0, textHash and 0xFFFF) }
+    fun refreshBody(textHash: Int = 0, groups: Int = 0): ByteArray =
+        ByteArray(BODY_LEN).also {
+            putU16(it, 0, textHash and 0xFFFF)
+            it[2] = (groups and GROUP_ALL).toByte()
+        }
 
     fun readRefreshTextHash(body: ByteArray): Int = if (body.size < 2) 0 else getU16(body, 0)
+
+    fun readRefreshGroups(body: ByteArray): Int = if (body.size < 3) 0 else body[2].toInt() and GROUP_ALL
 
     /** Drops characters the firmware JSON reader does not unescape, then fits [maxBytes]. */
     fun clipText(text: String?, maxBytes: Int): String {
@@ -229,14 +285,15 @@ object PhoneBleCodec {
         return if (folded == 0) 1 else folded
     }
 
-    /** Reference encoder for the pages the firmware builds; [phoneTextHash] as in REFRESH. */
-    fun snapshotBodies(gen: Int, snap: Snapshot, phoneTextHash: Int = 0): List<ByteArray> {
+    /** Reference encoder for the pages the firmware builds; [phoneTextHash], [groups] as in REFRESH. */
+    fun snapshotBodies(gen: Int, snap: Snapshot, phoneTextHash: Int = 0, groups: Int = 0): List<ByteArray> {
         val generation = gen and 0xFF
         val text = textBytes(snap.title, snap.artist)
         val hash = textHash(text)
+        val valuePages = pagesForGroups(groups)
         val pages = buildList {
-            addAll(0..PAGE_MEDIA)
-            if (text.isNotEmpty() && hash != phoneTextHash) {
+            addAll(valuePages)
+            if (PAGE_MEDIA in valuePages && text.isNotEmpty() && hash != phoneTextHash) {
                 addAll(PAGE_TEXT_FIRST until PAGE_TEXT_FIRST + (text.size + TEXT_CHUNK - 1) / TEXT_CHUNK)
             }
         }
@@ -269,6 +326,22 @@ object PhoneBleCodec {
                     putU16(body, 7, hash)
                     body[9] = text.size.toByte()
                 }
+                PAGE_BODY -> {
+                    repeat(4) { index ->
+                        body[2 + index] = windowWire(snap.windows.getOrNull(index)).toByte()
+                    }
+                    body[6] = (snap.sunroof ?: MISSING_U8).toByte()
+                    body[7] = (snap.sunshade ?: MISSING_U8).toByte()
+                    body[8] = when (snap.android10) {
+                        true -> 10
+                        false -> 9
+                        null -> MISSING_U8
+                    }.toByte()
+                }
+                PAGE_CABIN -> {
+                    putI16(body, 2, snap.outsideTenths ?: MISSING_TEMP)
+                    putI16(body, 4, snap.insideTenths ?: MISSING_TEMP)
+                }
                 else -> {
                     val from = (page - PAGE_TEXT_FIRST) * TEXT_CHUNK
                     text.copyInto(body, 2, from, minOf(text.size, from + TEXT_CHUNK))
@@ -276,6 +349,18 @@ object PhoneBleCodec {
             }
             body
         }
+    }
+
+    fun windowWire(raw: Int?): Int = when {
+        raw == WINDOW_BETWEEN -> WIRE_WINDOW_BETWEEN
+        raw != null && raw in 0..100 -> raw
+        else -> MISSING_U8
+    }
+
+    private fun windowFromWire(wire: Int): Int? = when (wire) {
+        WIRE_WINDOW_BETWEEN -> WINDOW_BETWEEN
+        in 0..100 -> wire
+        else -> null
     }
 
     private fun seconds(ms: Long?): Int =
@@ -391,6 +476,22 @@ object PhoneBleCodec {
                 playing = optionalU8(body[2].toInt() and 0xFF),
                 positionMs = optionalU16(getU16(body, 3))?.let { it * 1000L },
                 durationMs = optionalU16(getU16(body, 5))?.let { it * 1000L },
+            )
+            PAGE_BODY -> if (body.size < 9) base else base.copy(
+                gen = gen,
+                windows = List(4) { index -> windowFromWire(body[2 + index].toInt() and 0xFF) },
+                sunroof = optionalU8(body[6].toInt() and 0xFF)?.takeIf { it in 0..100 || it == ROOF_TILT },
+                sunshade = optionalU8(body[7].toInt() and 0xFF)?.takeIf { it in 0..100 },
+                android10 = when (body[8].toInt() and 0xFF) {
+                    10 -> true
+                    9 -> false
+                    else -> null
+                },
+            )
+            PAGE_CABIN -> base.copy(
+                gen = gen,
+                outsideTenths = optionalTemp(getI16(body, 2)),
+                insideTenths = optionalTemp(getI16(body, 4)),
             )
             else -> base
         }

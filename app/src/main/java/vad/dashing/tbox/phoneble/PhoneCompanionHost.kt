@@ -6,6 +6,8 @@ import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanBus
 import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCanValueCodec
+import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import kotlin.math.roundToInt
 
 /**
@@ -37,7 +39,29 @@ object PhoneCompanionHost {
         "front_right_seat_mode",
         "rear_left_seat_mode",
         "rear_right_seat_mode",
+        "window_front_left",
+        "window_front_right",
+        "window_rear_left",
+        "window_rear_right",
+        "sunroof",
+        "sunshade",
+        "outside_temperature",
     )
+
+    val tboxSignalIds: List<String> = listOf(
+        "outside_temperature",
+        "inside_temperature",
+    )
+
+    private val windowPropertyIds: List<Int> = listOf(
+        MbCanKnownVehiclePropertyId.WINDOW_FL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_FR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RL_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_RR_POS,
+        MbCanKnownVehiclePropertyId.WINDOW_POS,
+    )
+
+    private val roofPercents: Set<Int> = (0..100 step 10).toSet()
 
     val appSignalIds: List<String> = listOf(
         "hu_media_volume",
@@ -76,6 +100,27 @@ object PhoneCompanionHost {
         PhoneBleCodec.OP_MEDIA_PREV -> builtin(AutomationBuiltinActionType.MEDIA_PREVIOUS)
         PhoneBleCodec.OP_MEDIA_PLAY_PAUSE -> builtin(AutomationBuiltinActionType.MEDIA_PLAY_PAUSE)
         PhoneBleCodec.OP_MEDIA_NEXT -> builtin(AutomationBuiltinActionType.MEDIA_NEXT)
+        PhoneBleCodec.OP_WINDOW -> {
+            val propertyId = windowPropertyIds.getOrNull(seat) ?: return null
+            val key = when (arg) {
+                PhoneBleCodec.WINDOW_CMD_CLOSE -> AutomationCanValueCodec.KEY_CLOSE
+                PhoneBleCodec.WINDOW_CMD_VENT -> AutomationCanValueCodec.KEY_VENT
+                PhoneBleCodec.WINDOW_CMD_COMFORT -> AutomationCanValueCodec.KEY_COMFORT_OPEN
+                PhoneBleCodec.WINDOW_CMD_OPEN -> AutomationCanValueCodec.KEY_OPEN
+                else -> return null
+            }
+            keySet(propertyId, key)
+        }
+        PhoneBleCodec.OP_SUNROOF -> when (arg) {
+            PhoneBleCodec.ROOF_TILT ->
+                canSet(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL, MbCanKnownVehiclePropertyId.SUNROOF_TILT)
+            in roofPercents ->
+                canSet(MbCanKnownVehiclePropertyId.SUNROOF_CONTROL, BodyComfortDomain.percentToWrite(arg))
+            else -> null
+        }
+        PhoneBleCodec.OP_SUNSHADE -> arg.takeIf { it in roofPercents }?.let {
+            canSet(MbCanKnownVehiclePropertyId.SUNSHADE_POS, BodyComfortDomain.percentToWrite(it))
+        }
         else -> null
     }
 
@@ -83,9 +128,15 @@ object PhoneCompanionHost {
         tenths in PhoneBleCodec.TEMP_MIN..PhoneBleCodec.TEMP_MAX &&
             (tenths - PhoneBleCodec.TEMP_MIN) % PhoneBleCodec.TEMP_STEP == 0
 
-    fun snapshotFromSignals(headUnit: JSONObject, app: JSONObject): PhoneBleCodec.Snapshot {
+    fun snapshotFromSignals(
+        headUnit: JSONObject,
+        app: JSONObject,
+        tbox: JSONObject = JSONObject(),
+        android10: Boolean? = null,
+    ): PhoneBleCodec.Snapshot {
         val hu = indexSignals(headUnit)
         val audio = indexSignals(app)
+        val box = indexSignals(tbox)
         return PhoneBleCodec.Snapshot(
             leftTenths = tenths(hu["hvac_temperature_left"]),
             rightTenths = tenths(hu["hvac_temperature_right"]),
@@ -106,8 +157,44 @@ object PhoneCompanionHost {
             durationMs = longValue(audio["media_duration_ms"])?.takeIf { it > 0L },
             title = (audio["media_title"] as? String)?.takeIf { it.isNotBlank() },
             artist = (audio["media_artist"] as? String)?.takeIf { it.isNotBlank() },
+            windows = listOf(
+                windowValue(hu["window_front_left"]),
+                windowValue(hu["window_front_right"]),
+                windowValue(hu["window_rear_left"]),
+                windowValue(hu["window_rear_right"]),
+            ),
+            sunroof = roofValue(hu["sunroof"], allowTilt = true),
+            sunshade = roofValue(hu["sunshade"], allowTilt = false),
+            android10 = android10,
+            outsideTenths = tenths(hu["outside_temperature"]) ?: tenths(box["outside_temperature"]),
+            insideTenths = tenths(box["inside_temperature"]),
         )
     }
+
+    private fun windowValue(raw: Any?): Int? {
+        val state = text(raw) ?: return null
+        if (state == BodyComfortDomain.STATE_OPEN) return PhoneBleCodec.WINDOW_BETWEEN
+        return percentValue(state)
+    }
+
+    private fun roofValue(raw: Any?, allowTilt: Boolean): Int? {
+        val state = text(raw) ?: return null
+        if (state == BodyComfortDomain.STATE_TILT) return if (allowTilt) PhoneBleCodec.ROOF_TILT else null
+        return percentValue(state)
+    }
+
+    private fun percentValue(state: String): Int? =
+        state.removeSuffix("%").trim().toIntOrNull()?.takeIf { it in 0..100 }
+
+    private fun keySet(propertyId: Int, key: String): AutomationAction =
+        AutomationCanValueCodec.canonicalize(
+            AutomationAction.CanCommand(
+                bus = AutomationCanBus.VEHICLE,
+                propertyId = propertyId,
+                operation = AutomationCanOperation.SET,
+                valueKey = key,
+            ),
+        )
 
     private fun canSet(propertyId: Int, value: Int): AutomationAction =
         AutomationCanValueCodec.canonicalize(
