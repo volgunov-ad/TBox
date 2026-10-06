@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
@@ -114,6 +118,7 @@ fun Um980SettingsContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val companionSnapshot by EspCompanionRepository.um980ConfigSnapshot.collectAsStateWithLifecycle()
     val companionBusy by EspCompanionRepository.um980ConfigBusy.collectAsStateWithLifecycle()
     val usbSnapshot by Um980ConfigUiStore.snapshot.collectAsStateWithLifecycle()
@@ -196,19 +201,21 @@ fun Um980SettingsContent(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        prepareUm980PkgCache(context, uri).fold(
-            onSuccess = { (file, name) ->
-                pendingFwFile = file
-                pendingFwDisplayName = name
-            },
-            onFailure = { e ->
-                Toast.makeText(
-                    context,
-                    um980FwErrorMessage(context, e.message),
-                    Toast.LENGTH_LONG,
-                ).show()
-            },
-        )
+        scope.launch {
+            prepareUm980PkgCache(context, uri).fold(
+                onSuccess = { (file, name) ->
+                    pendingFwFile = file
+                    pendingFwDisplayName = name
+                },
+                onFailure = { e ->
+                    Toast.makeText(
+                        context,
+                        um980FwErrorMessage(context, e.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                },
+            )
+        }
     }
     var pendingSignalGroup by remember { mutableStateOf<Um980SignalGroupOption?>(null) }
     var precisionCmdsExpanded by remember { mutableStateOf(false) }
@@ -1115,33 +1122,34 @@ fun Um980SettingsContent(
     }
 }
 
-private fun prepareUm980PkgCache(context: Context, uri: Uri): Result<Pair<File, String>> {
-    return runCatching {
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: "um980.pkg"
-        val out = File(context.cacheDir, "um980_fw_${System.currentTimeMillis()}.pkg")
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            out.outputStream().use { output -> input.copyTo(output) }
-        } ?: error("empty")
-        if (out.length() == 0L) {
-            out.delete()
-            error("empty")
-        }
-        val first4 = ByteArray(4)
-        out.inputStream().use { input ->
-            var off = 0
-            while (off < 4) {
-                val n = input.read(first4, off, 4 - off)
-                if (n <= 0) break
-                off += n
+private suspend fun prepareUm980PkgCache(context: Context, uri: Uri): Result<Pair<File, String>> =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "um980.pkg"
+            val out = File(context.cacheDir, "um980_fw_${System.currentTimeMillis()}.pkg")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                out.outputStream().use { output -> input.copyTo(output) }
+            } ?: error("empty")
+            if (out.length() == 0L) {
+                out.delete()
+                error("empty")
             }
+            val first4 = ByteArray(4)
+            out.inputStream().use { input ->
+                var off = 0
+                while (off < 4) {
+                    val n = input.read(first4, off, 4 - off)
+                    if (n <= 0) break
+                    off += n
+                }
+            }
+            Um980PkgValidator.validate(out.length(), first4)?.let { code ->
+                out.delete()
+                error(code)
+            }
+            out to name
         }
-        Um980PkgValidator.validate(out.length(), first4)?.let { code ->
-            out.delete()
-            error(code)
-        }
-        out to name
     }
-}
 
 private fun um980FwErrorMessage(context: Context, code: String?): String {
     return when (code) {

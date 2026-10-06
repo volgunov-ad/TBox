@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +34,7 @@ import vad.dashing.tbox.esp.EspApStatus
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.hotspot.EspSoftApIdentity
 import vad.dashing.tbox.hotspot.HuSoftApCodec
-import vad.dashing.tbox.hotspot.huSoftApQrImage
+import vad.dashing.tbox.hotspot.rememberHuSoftApQrImage
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -268,13 +269,17 @@ private fun CompanionApDetails(
         HuSoftApCodec.wifiQrPayload(ssid, password, 4)
     }
     val sizePx = with(LocalDensity.current) { 220.dp.roundToPx() }
-    val image = remember(payload, sizePx) { huSoftApQrImage(payload, sizePx) }
+    val image = rememberHuSoftApQrImage(payload, sizePx).value
     Column(modifier = Modifier.padding(top = 8.dp)) {
-        Image(
-            bitmap = image,
-            contentDescription = stringResource(R.string.settings_api_hotspot_qr),
-            modifier = Modifier.size(220.dp),
-        )
+        if (image != null) {
+            Image(
+                bitmap = image,
+                contentDescription = stringResource(R.string.settings_api_hotspot_qr),
+                modifier = Modifier.size(220.dp),
+            )
+        } else {
+            Spacer(modifier = Modifier.size(220.dp))
+        }
     }
 }
 

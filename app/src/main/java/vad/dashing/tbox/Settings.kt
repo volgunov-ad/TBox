@@ -1,7 +1,6 @@
 package vad.dashing.tbox
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
@@ -3393,26 +3392,27 @@ class SettingsManager(private val context: Context) {
                 if (snapshot[folderUriKey].orEmpty().isNotEmpty()) return false
                 val hadLegacyFlag = snapshot[legacyBooleanKey] == true
                 if (!hadLegacyFlag && !legacyFile.isFile) return false
-                val bmp = runCatching {
-                    BitmapFactory.decodeFile(legacyFile.absolutePath)
-                }.getOrNull()
-                if (bmp == null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                runCatching { BitmapFactory.decodeFile(legacyFile.absolutePath, bounds) }
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
                     if (legacyFile.exists()) legacyFile.delete()
                     if (hadLegacyFlag) {
                         context.settingsDataStore.edit { it[legacyBooleanKey] = false }
                     }
                     return false
                 }
+                val extension = when (bounds.outMimeType) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    else -> "jpg"
+                }
                 val dir = File(context.filesDir, dirRel)
                 dir.mkdirs()
-                val dest = File(dir, "migrated_wallpaper.jpg")
+                val dest = File(dir, "migrated_wallpaper.$extension")
                 val ok = runCatching {
-                    dest.outputStream().use { out ->
-                        bmp.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                    }
+                    legacyFile.copyTo(dest, overwrite = true)
                     dest.length() > 0L
                 }.getOrDefault(false)
-                bmp.recycle()
                 if (!ok) {
                     dest.delete()
                     return false

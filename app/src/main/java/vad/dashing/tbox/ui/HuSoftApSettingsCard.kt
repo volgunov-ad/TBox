@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,7 +29,7 @@ import vad.dashing.tbox.hotspot.HuSoftApClient
 import vad.dashing.tbox.hotspot.HuSoftApCodec
 import vad.dashing.tbox.hotspot.HuSoftApRead
 import vad.dashing.tbox.hotspot.HuSoftApSnapshot
-import vad.dashing.tbox.hotspot.huSoftApQrImage
+import vad.dashing.tbox.hotspot.rememberHuSoftApQrImage
 
 @Composable
 fun HuSoftApSettingsCard() {
@@ -142,13 +143,17 @@ fun HuSoftApSettingsCard() {
                 HuSoftApCodec.wifiQrPayload(read.ssid, read.password, read.authType)
             }
             val sizePx = with(LocalDensity.current) { 220.dp.roundToPx() }
-            val image = remember(payload, sizePx) { huSoftApQrImage(payload, sizePx) }
+            val image = rememberHuSoftApQrImage(payload, sizePx).value
             Column(modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)) {
-                Image(
-                    bitmap = image,
-                    contentDescription = stringResource(R.string.settings_api_hotspot_qr),
-                    modifier = Modifier.size(220.dp),
-                )
+                if (image != null) {
+                    Image(
+                        bitmap = image,
+                        contentDescription = stringResource(R.string.settings_api_hotspot_qr),
+                        modifier = Modifier.size(220.dp),
+                    )
+                } else {
+                    Spacer(modifier = Modifier.size(220.dp))
+                }
             }
         }
     }
