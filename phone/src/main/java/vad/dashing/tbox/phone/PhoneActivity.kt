@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -80,6 +82,7 @@ private fun PhoneScreen() {
     var refreshAt by remember { mutableLongStateOf(0L) }
     var linkedAt by remember { mutableLongStateOf(0L) }
     var lastVolume by remember { mutableIntStateOf(10) }
+    var positionAt by remember { mutableLongStateOf(0L) }
     var ready by remember { mutableStateOf(false) }
     var bluetoothOn by remember { mutableStateOf(true) }
     var linked by remember { mutableStateOf(false) }
@@ -90,8 +93,10 @@ private fun PhoneScreen() {
     val phoneName = remember { Build.MODEL?.trim().orEmpty().ifEmpty { fallbackName } }
     val radio = remember {
         PhoneRadio(context) { next ->
+            val now = SystemClock.elapsedRealtime()
+            if (next.positionMs != snap.positionMs || next.playing != snap.playing) positionAt = now
             snap = next
-            lastSnapAt = SystemClock.elapsedRealtime()
+            lastSnapAt = now
             if (next.volume != null && next.volume > 0) lastVolume = next.volume
             if (!paired) {
                 paired = true
@@ -144,7 +149,7 @@ private fun PhoneScreen() {
                         PhoneBleCodec.TYPE_REFRESH,
                         store.id,
                         counter,
-                        PhoneBleCodec.refreshBody(),
+                        PhoneBleCodec.refreshBody(radio.textHash),
                     ),
                 )
             }
@@ -169,7 +174,16 @@ private fun PhoneScreen() {
             counter,
             PhoneBleCodec.commandBody(op, seat, arg),
         )
-        snap = applyLocally(snap, op, seat, arg)
+        if (op == PhoneBleCodec.OP_MEDIA_PLAY_PAUSE && snap.playing != null) {
+            val now = SystemClock.elapsedRealtime()
+            snap = snap.copy(
+                playing = if (snap.playing == 1) 0 else 1,
+                positionMs = shownPositionMs(snap, positionAt, now),
+            )
+            positionAt = now
+        } else {
+            snap = applyLocally(snap, op, seat, arg)
+        }
         lastSnapAt = 0L
         refreshAt = 0L
         radio.write(payload)
@@ -324,6 +338,7 @@ private fun PhoneScreen() {
 
         Card {
             SectionTitle(stringResource(R.string.media))
+            NowPlaying(snap, positionAt)
             Stepper(stringResource(R.string.volume), snap.volume?.toString() ?: "—") { up ->
                 val current = snap.volume ?: return@Stepper
                 val next = (current + if (up) 1 else -1).coerceIn(0, 31)
@@ -343,7 +358,12 @@ private fun PhoneScreen() {
                 ModeButton(stringResource(R.string.prev), false, Modifier.weight(1f)) {
                     send(PhoneBleCodec.OP_MEDIA_PREV, 0, 0)
                 }
-                ModeButton(stringResource(R.string.play), false, Modifier.weight(1f)) {
+                val playing = snap.playing == 1
+                ModeButton(
+                    stringResource(if (playing) R.string.pause else R.string.play),
+                    playing,
+                    Modifier.weight(1f),
+                ) {
                     send(PhoneBleCodec.OP_MEDIA_PLAY_PAUSE, 0, 0)
                 }
                 ModeButton(stringResource(R.string.next), false, Modifier.weight(1f)) {
@@ -351,6 +371,85 @@ private fun PhoneScreen() {
                 }
             }
         }
+    }
+}
+
+/** Same as the web panel: title, artist, progress bar and elapsed / total time. */
+@Composable
+private fun NowPlaying(snap: PhoneBleCodec.Snapshot, positionAt: Long) {
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(snap.playing, positionAt) {
+        now = SystemClock.elapsedRealtime()
+        while (isActive && snap.playing == 1) {
+            delay(500)
+            now = SystemClock.elapsedRealtime()
+        }
+    }
+    val title = snap.title ?: snap.artist
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Label(stringResource(R.string.now_playing))
+        Text(
+            text = title ?: stringResource(R.string.nothing_playing),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (title != null) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (snap.title != null && snap.artist != null) {
+            Text(
+                text = snap.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val duration = snap.durationMs
+        if (duration != null && duration > 0L) {
+            val position = shownPositionMs(snap, positionAt, now)
+            LinearProgressIndicator(
+                progress = { ((position ?: 0L).toFloat() / duration).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                drawStopIndicator = {},
+            )
+            Text(
+                text = "${formatClock(position)} / ${formatClock(duration)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Playback goes on between snapshots, as in the web panel. */
+private fun shownPositionMs(snap: PhoneBleCodec.Snapshot, positionAt: Long, now: Long): Long? {
+    val base = snap.positionMs ?: return null
+    var position = base
+    if (snap.playing == 1 && positionAt > 0L) position += (now - positionAt).coerceAtLeast(0L)
+    val duration = snap.durationMs
+    if (duration != null && duration > 0L) position = position.coerceAtMost(duration)
+    return position
+}
+
+private fun formatClock(ms: Long?): String {
+    if (ms == null || ms < 0L) return "—"
+    val total = ms / 1000L
+    val hours = total / 3600L
+    val minutes = (total / 60L) % 60L
+    val seconds = total % 60L
+    return if (hours > 0L) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(total / 60L, seconds)
     }
 }
 

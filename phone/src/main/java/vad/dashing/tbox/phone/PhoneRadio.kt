@@ -43,7 +43,10 @@ class PhoneRadio(
     private var writing = false
     private var snapOnLink = false
     private var strangerDrop = false
-    private var snapshot = PhoneBleCodec.Snapshot()
+    private val assembler = PhoneBleCodec.SnapshotAssembler()
+
+    /** Sent in REFRESH so the companion skips text pages the phone already shows. */
+    val textHash: Int get() = assembler.snapshot.textHash
 
     @Volatile var linkUp: Boolean = false
         private set
@@ -244,11 +247,10 @@ class PhoneRadio(
 
     private fun acceptSnap(value: ByteArray) {
         val open = PhoneBleCodec.open(storeKey, value) ?: return
-        if (open.type != PhoneBleCodec.TYPE_SNAP) return
+        if (!PhoneBleCodec.isSnapType(open.type)) return
         if (open.counter != waitingCounter) return
         snapOnLink = true
-        snapshot = PhoneBleCodec.overlaySnapshot(snapshot, open.body)
-        onSnap(snapshot)
+        onSnap(assembler.accept(open.type, open.body))
     }
 
     private fun writeInbox(

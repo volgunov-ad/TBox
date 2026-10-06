@@ -11,6 +11,9 @@
     <string name="rear_left">Зад лев.</string>
     <string name="rear_right">Зад прав.</string>
     <string name="prev">Назад</string>
+    <string name="pause">Пауза</string>
+    <string name="now_playing">Сейчас играет</string>
+    <string name="nothing_playing">Ничего не играет</string>
     <string name="play">Играть</string>
     <string name="next">Дальше</string>
     <string name="waiting">Ждём головное устройство</string>
