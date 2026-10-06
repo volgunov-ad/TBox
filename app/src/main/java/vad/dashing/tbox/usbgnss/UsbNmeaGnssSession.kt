@@ -46,6 +46,8 @@ class UsbNmeaGnssSession(
         private const val OPEN_TIMEOUT_MS = 30_000L
         private const val PERMISSION_RETRY_MIN_MS = 45_000L
         private const val MAX_LINE_BUFFER = 32 * 1024
+        private const val CMD_RAW_COLLECT_MAX_BYTES = 256 * 1024
+        private const val CMD_LINE_COLLECT_MAX = 2_000
     }
 
     private val usbManager = context.getSystemService(Context.USB_SERVICE) as UsbManager
@@ -748,7 +750,9 @@ class UsbNmeaGnssSession(
                     buf.copyOf(n)
                 }
                 synchronized(cmdProbeLock) {
-                    cmdRawCollector?.write(rawSlice)
+                    cmdRawCollector?.let { raw ->
+                        if (raw.size() + rawSlice.size <= CMD_RAW_COLLECT_MAX_BYTES) raw.write(rawSlice)
+                    }
                 }
                 if (exclusiveMode) {
                     if (rawSlice.isNotEmpty()) {
@@ -782,7 +786,9 @@ class UsbNmeaGnssSession(
                         lineBuffer.delete(0, idx + 1)
                         if (line.isNotEmpty()) {
                             synchronized(cmdProbeLock) {
-                                cmdLineCollector?.add(line)
+                                cmdLineCollector?.let { lines ->
+                                    if (lines.size < CMD_LINE_COLLECT_MAX) lines.add(line)
+                                }
                             }
                             try {
                                 onLine(line)

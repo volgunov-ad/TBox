@@ -683,6 +683,7 @@ object Android10VhalRepository {
     private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = CanInterestClear.UI_DISPOSE_DEBOUNCE_MS
     private const val PUSH_STATE_COALESCE_MS = 200L
     private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
+    private const val MAX_LOGGED_ERROR_KEYS = 512
     private val KEY_DIAGNOSTIC_PROPERTY_IDS = linkedSetOf(
         289475088,
         560991239,
@@ -1102,9 +1103,9 @@ object Android10VhalRepository {
     }
 
     internal fun logReadFailure(propertyId: Int, areaId: Int, throwable: Throwable) {
-        val key = "$propertyId:$areaId:${throwable.javaClass.name}:${throwable.message}"
+        val key = "$propertyId:$areaId:${throwable.javaClass.name}"
         synchronized(readErrorsLogged) {
-            if (!readErrorsLogged.add(key)) return
+            if (readErrorsLogged.size >= MAX_LOGGED_ERROR_KEYS || !readErrorsLogged.add(key)) return
         }
         val root = (throwable.cause ?: throwable)
         val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "READ_FAILED"
@@ -1126,9 +1127,9 @@ object Android10VhalRepository {
     }
 
     internal fun logWriteFailure(propertyId: Int, areaId: Int, value: Int, throwable: Throwable) {
-        val key = "$propertyId:$areaId:$value:${throwable.javaClass.name}:${throwable.message}"
+        val key = "$propertyId:$areaId:$value:${throwable.javaClass.name}"
         synchronized(writeErrorsLogged) {
-            if (!writeErrorsLogged.add(key)) return
+            if (writeErrorsLogged.size >= MAX_LOGGED_ERROR_KEYS || !writeErrorsLogged.add(key)) return
         }
         val root = (throwable.cause ?: throwable)
         val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "WRITE_FAILED"

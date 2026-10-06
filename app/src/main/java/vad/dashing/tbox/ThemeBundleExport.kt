@@ -16,12 +16,17 @@ import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import vad.dashing.tbox.utils.readBytesAtMost
 
 object ThemeBundleExport {
 
     const val THEME_FILE_EXTENSION = "tboxtheme"
     /** Skip individual zip entries larger than this (same cap as main-screen wallpaper files). */
     private const val MAX_ENTRY_BYTES = MAIN_SCREEN_WALLPAPER_MAX_FILE_BYTES
+    /** Upper bound for a `.tboxtheme` file read into memory before unzip. */
+    const val MAX_BUNDLE_FILE_BYTES = 64L * 1024 * 1024
+    /** Upper bound for the sum of all uncompressed entries kept in memory during import. */
+    private const val MAX_TOTAL_UNCOMPRESSED_BYTES = 96L * 1024 * 1024
     private const val THEME_JSON_ENTRY = "theme.json"
     const val ASSETS_WALLPAPER_LIGHT_DIR = "assets/wallpaper/light/"
     const val ASSETS_WALLPAPER_DARK_DIR = "assets/wallpaper/dark/"
@@ -113,7 +118,16 @@ object ThemeBundleExport {
         val panelBackgrounds: MutableMap<String, ByteArray> = linkedMapOf(),
         val lightWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
         val darkWallpapers: MutableMap<String, ByteArray> = linkedMapOf(),
+        var totalBytes: Long = 0L,
     )
+
+    private fun ZipBundleReadState.readEntry(zis: ZipInputStream): ByteArray {
+        val remaining = MAX_TOTAL_UNCOMPRESSED_BYTES - totalBytes
+        val limit = minOf(MAX_ENTRY_BYTES, remaining)
+        val data = zis.readBytesAtMost(limit)
+        totalBytes += data.size
+        return data
+    }
 
     private fun zipAssetSuffix(normalizedPath: String, assetsDir: String): String? {
         val idx = normalizedPath.indexOf(assetsDir)
@@ -127,22 +141,22 @@ object ThemeBundleExport {
         val normalized = normalizeZipEntryPath(entry.name)
         themeJsonZipEntryPriority(normalized)?.let { priority ->
             if (priority < state.themeJsonPriority) {
-                state.themeJson = zis.readBytes().toString(Charsets.UTF_8)
+                state.themeJson = state.readEntry(zis).toString(Charsets.UTF_8)
                 state.themeJsonPriority = priority
             }
             return
         }
         zipAssetSuffix(normalized, ASSETS_ICONS_DIR)?.let { filename ->
-            state.icons[filename] = zis.readBytes()
+            state.icons[filename] = state.readEntry(zis)
             return
         }
         zipAssetSuffix(normalized, ASSETS_HTTP_REQUEST_ICONS_DIR)?.let { filename ->
-            state.httpRequestIcons[filename] = zis.readBytes()
+            state.httpRequestIcons[filename] = state.readEntry(zis)
             return
         }
         zipAssetSuffix(normalized, ASSETS_UI_ICONS_DIR)?.let { filename ->
             if (UiIconPaths.isValidStorageFileName(filename)) {
-                state.uiIcons[filename] = zis.readBytes()
+                state.uiIcons[filename] = state.readEntry(zis)
             }
             return
         }
@@ -151,7 +165,7 @@ object ThemeBundleExport {
                     "${TileBackgroundImageStorage.DIR_NAME}/$rel"
                 )
             ) {
-                state.tileBackgrounds[rel] = zis.readBytes()
+                state.tileBackgrounds[rel] = state.readEntry(zis)
             }
             return
         }
@@ -160,16 +174,16 @@ object ThemeBundleExport {
                     "${PanelBackgroundImageStorage.DIR_NAME}/$rel"
                 )
             ) {
-                state.panelBackgrounds[rel] = zis.readBytes()
+                state.panelBackgrounds[rel] = state.readEntry(zis)
             }
             return
         }
         zipAssetSuffix(normalized, ASSETS_WALLPAPER_LIGHT_DIR)?.let { filename ->
-            state.lightWallpapers[filename] = zis.readBytes()
+            state.lightWallpapers[filename] = state.readEntry(zis)
             return
         }
         zipAssetSuffix(normalized, ASSETS_WALLPAPER_DARK_DIR)?.let { filename ->
-            state.darkWallpapers[filename] = zis.readBytes()
+            state.darkWallpapers[filename] = state.readEntry(zis)
         }
     }
 

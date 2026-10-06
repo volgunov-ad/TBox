@@ -13,10 +13,12 @@ import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.SettingsManager
@@ -139,6 +141,7 @@ class UpdateRepository(
                     path = "/${info.apkFileName}",
                     destination = destination,
                     onProgress = { downloaded, total ->
+                        if (!isActive) return@downloadToFile
                         val elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0
                         val speed = if (elapsedSeconds >= 0.5) {
                             (downloaded / elapsedSeconds).toLong().takeIf { it > 0L }
@@ -170,7 +173,7 @@ class UpdateRepository(
             lastAvailableInfo = infoWithSize
             _uiState.value = UpdateUiState.ReadyToInstall(destination, infoWithSize)
         } catch (error: CancellationException) {
-            withContext(Dispatchers.IO) {
+            withContext(NonCancellable + Dispatchers.IO) {
                 prepareForDownload()
             }
             _uiState.value = UpdateUiState.Available(info)
@@ -187,10 +190,16 @@ class UpdateRepository(
         }
     }
 
+    /**
+     * While [downloadAndVerify] is running the caller must cancel its job: the download
+     * coroutine then removes partial files itself after the IO loop has stopped writing.
+     */
     fun cancelDownload() {
         if (_uiState.value !is UpdateUiState.Downloading) return
         val info = lastAvailableInfo
-        prepareForDownload()
+        if (!downloadInProgress) {
+            prepareForDownload()
+        }
         _uiState.value = if (info != null) {
             UpdateUiState.Available(info)
         } else {

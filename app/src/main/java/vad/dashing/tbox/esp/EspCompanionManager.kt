@@ -857,6 +857,9 @@ class EspCompanionManager(
                     "esp_ota_trace.txt",
                 ).delete()
             }
+            if (file.length() > EspCompanionProtocol.OTA_MAX_IMAGE_SIZE) {
+                throw IllegalArgumentException("too_large")
+            }
             val image = file.readBytes()
             val imageSize = image.size.toLong()
             if (image.isEmpty()) throw IllegalArgumentException("empty")

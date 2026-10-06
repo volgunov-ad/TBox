@@ -56,6 +56,8 @@ import vad.dashing.tbox.esp.Um980ConfigUiStore
 import vad.dashing.tbox.um980fw.Um980FirmwareUiStore
 import vad.dashing.tbox.um980fw.Um980PkgValidator
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
+import vad.dashing.tbox.utils.SizeLimitExceededException
+import vad.dashing.tbox.utils.copyToAtMost
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import java.io.File
@@ -1127,9 +1129,16 @@ private suspend fun prepareUm980PkgCache(context: Context, uri: Uri): Result<Pai
         runCatching {
             val name = uri.lastPathSegment?.substringAfterLast('/') ?: "um980.pkg"
             val out = File(context.cacheDir, "um980_fw_${System.currentTimeMillis()}.pkg")
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                out.outputStream().use { output -> input.copyTo(output) }
-            } ?: error("empty")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    out.outputStream().use { output ->
+                        input.copyToAtMost(output, Um980PkgValidator.MAX_PKG_SIZE)
+                    }
+                } ?: error("empty")
+            } catch (_: SizeLimitExceededException) {
+                out.delete()
+                error("too_large")
+            }
             if (out.length() == 0L) {
                 out.delete()
                 error("empty")

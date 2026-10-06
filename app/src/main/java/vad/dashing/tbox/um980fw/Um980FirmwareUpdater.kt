@@ -2,6 +2,8 @@ package vad.dashing.tbox.um980fw
 
 import android.util.Log
 import kotlinx.coroutines.delay
+import vad.dashing.tbox.utils.SizeLimitExceededException
+import vad.dashing.tbox.utils.readBytesAtMost
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.Charset
@@ -18,7 +20,9 @@ class Um980FirmwareUpdater(
         workingBaud: Int,
     ): Result<String> {
         val image = try {
-            pkgFile.readBytes()
+            pkgFile.readBytesAtMost(Um980PkgValidator.MAX_PKG_SIZE)
+        } catch (_: SizeLimitExceededException) {
+            return fail("too_large")
         } catch (e: Exception) {
             return fail("bad_file", e)
         }
