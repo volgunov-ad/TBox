@@ -638,21 +638,16 @@
 | Сохранённое включение плавающих панелей | `toggle_floating_panels_enabled` | `intValue`: 0 переключить, 1 включить, 2 выключить; `stringValue`: `""` для всех или ID одной панели |
 | Переключить ESP-реле | `esp_relay_toggle` | `intValue`: канал `0..7` |
 | Импульс ESP-реле | `esp_relay_pulse` | `intValue`: канал `0..7`; `stringValue`: `""` для стандартной длительности либо число `1..60000` мс как строка |
-| Предыдущий трек | `media_previous` | `stringValue`: package name медиаплеера |
-| Воспроизведение/пауза | `media_play_pause` | `stringValue`: package name медиаплеера |
-| Воспроизведение | `media_play` | `stringValue`: package name медиаплеера |
-| Следующий трек | `media_next` | `stringValue`: package name медиаплеера (пусто = активная сессия) |
-| Предыдущий трек | `media_previous` | то же |
-| Play/Pause | `media_play_pause` | то же |
-| Play | `media_play` | то же |
+| Предыдущий трек | `media_previous` | `stringValue`: package name медиаплеера или `""` (активный плеер) |
+| Воспроизведение/пауза | `media_play_pause` | то же |
+| Воспроизведение | `media_play` | то же |
+| Следующий трек | `media_next` | то же |
 | VAD Voice: слушать | `start_vad_voice` | без параметров; открывает `vad.dashing.voice` с Intent LISTEN |
-| Поставить/снять «Нравится» | `media_toggle_like` | `stringValue`: package name медиаплеера |
+| Поставить/снять «Нравится» | `media_toggle_like` | то же |
 | Установить громкость медиа | `set_media_volume` | `intValue`: `0..31` |
 | Установить громкость телефона | `set_phone_volume` | `intValue`: `1..31` |
 | Установить громкость навигатора | `set_navi_volume` | `intValue`: `0..10` |
 | Установить громкость голоса | `set_voice_volume` | `intValue`: `2..10` |
-
-Пустой `stringValue` у `media_previous`, `media_play_pause`, `media_play`, `media_next` и `media_toggle_like` отправляет команду в сессию, которая сейчас играет. Виджет музыки не нужен. Нужен доступ к уведомлениям.
 | Динамик подголовника | `set_headrest_speaker` | `stringValue`: `only` / `assist` / `off` |
 | Следующий режим подмены геопозиции | `cycle_mock_location_mode` | значения по умолчанию |
 | Перезапустить GNSS-модуль | `gnss_module_reboot` | значения по умолчанию |
@@ -678,6 +673,8 @@
 | Круиз: возобновить (RES+) | `cruise_resume` | `stringValue`: `acc` / `ccs`. Только Standby → RES+ |
 | Круиз: активировать на текущей скорости (SET−) | `cruise_activate_at_current_speed` | `stringValue`: `acc` / `ccs`. Standby → SET− (как свайп вниз статус-плитки); Off → enable+SET−. Через `AccCruiseController.activateAtCurrentSpeed`, не сырой MFS 214 |
 | Круиз: уставка ±1 | `cruise_nudge` | `stringValue`: `acc` / `ccs`; `intValue`: `1` (RES+) или `-1` (SET−). Только Active/Override |
+
+Пустой `stringValue` у медиакоманд (в редакторе — «Активный плеер») отправляет команду в сессию, которая сейчас играет, а если ничего не играет — в первую открытую сессию. Виджет музыки не нужен. Нужен доступ к уведомлениям.
 
 Не используй `esp_relay_set`: это устаревшее и отклоняемое действие. Для медиакоманд нужен
 доступ TBox Monitor к уведомлениям. Для `show_alert` нужно разрешение «Поверх других окон».

@@ -1274,6 +1274,7 @@ internal fun AutomationPackagePicker(
     packageName: String,
     apps: List<LaunchableAppEntry>,
     onValueChange: (String) -> Unit,
+    blankLabel: String = "Выберите…",
 ) {
     val known = apps
         .filter { it.packageName.isNotBlank() }
@@ -1291,7 +1292,7 @@ internal fun AutomationPackagePicker(
         options = options,
         optionLabel = { pkg ->
             when {
-                pkg.isBlank() -> "Выберите…"
+                pkg.isBlank() -> blankLabel
                 else -> apps.firstOrNull { it.packageName == pkg }?.label
                     ?.let { "$it ($pkg)" } ?: pkg
             }

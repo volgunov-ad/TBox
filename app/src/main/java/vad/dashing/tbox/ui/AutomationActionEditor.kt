@@ -663,8 +663,7 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
                         type == AutomationBuiltinActionType.ADB_SET_TCP,
                     stringValue = when {
-                        type in MEDIA_PACKAGE_ACTION_TYPES ||
-                            type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
+                        type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
                             apps.firstOrNull()?.packageName.orEmpty()
                         type == AutomationBuiltinActionType.WIFI_CONNECT ->
                             WifiStaController.savedSsids(context).firstOrNull().orEmpty()
@@ -733,6 +732,7 @@ private fun BuiltinActionFields(
             packageName = action.stringValue,
             apps = apps,
             onValueChange = { onChange(action.copy(stringValue = it)) },
+            blankLabel = "Активный плеер",
         )
 
         AutomationBuiltinActionType.SET_MEDIA_VOLUME -> AutomationIntField(
@@ -1294,14 +1294,6 @@ private fun <T> List<T>.moved(from: Int, to: Int): List<T> {
         list.add(to, item)
     }
 }
-
-private val MEDIA_PACKAGE_ACTION_TYPES = setOf(
-    AutomationBuiltinActionType.MEDIA_PREVIOUS,
-    AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
-    AutomationBuiltinActionType.MEDIA_PLAY,
-    AutomationBuiltinActionType.MEDIA_NEXT,
-    AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
-)
 
 @Composable
 private fun FloatingPanelVisibilityActionFields(

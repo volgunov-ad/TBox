@@ -48,23 +48,12 @@ object AutomationValidator {
         return issues
     }
 
-    /**
-     * Ad-hoc action lists (External API invoke) have no triggers to reference. Media commands
-     * may omit the player: the executor then targets the active media session.
-     */
+    /** Ad-hoc action lists (External API invoke) have no triggers to reference. */
     fun validateActions(actions: List<AutomationAction>): List<AutomationValidationIssue> {
         val issues = mutableListOf<AutomationValidationIssue>()
         val actionCounter = IntArray(1)
         actions.forEachIndexed { index, action ->
-            validateAction(
-                action,
-                emptySet(),
-                "actions[$index]",
-                0,
-                actionCounter,
-                issues,
-                requireMediaPlayer = false,
-            )
+            validateAction(action, emptySet(), "actions[$index]", 0, actionCounter, issues)
         }
         return issues
     }
@@ -583,7 +572,6 @@ object AutomationValidator {
         depth: Int,
         actionCounter: IntArray,
         issues: MutableList<AutomationValidationIssue>,
-        requireMediaPlayer: Boolean = true,
     ) {
         actionCounter[0] += 1
         if (depth > AUTOMATION_MAX_ACTION_DEPTH) {
@@ -610,7 +598,6 @@ object AutomationValidator {
                         depth + 1,
                         actionCounter,
                         issues,
-                        requireMediaPlayer,
                     )
                 }
                 action.elseActions.forEachIndexed { index, nested ->
@@ -621,7 +608,6 @@ object AutomationValidator {
                         depth + 1,
                         actionCounter,
                         issues,
-                        requireMediaPlayer,
                     )
                 }
             }
@@ -687,7 +673,7 @@ object AutomationValidator {
                 }
             }
 
-            is AutomationAction.Builtin -> validateBuiltin(action, path, issues, requireMediaPlayer)
+            is AutomationAction.Builtin -> validateBuiltin(action, path, issues)
         }
     }
 
@@ -710,7 +696,6 @@ object AutomationValidator {
         action: AutomationAction.Builtin,
         path: String,
         issues: MutableList<AutomationValidationIssue>,
-        requireMediaPlayer: Boolean,
     ) {
         when (action.type) {
             AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
@@ -939,16 +924,6 @@ object AutomationValidator {
                 )
             }
         }
-        if (
-            requireMediaPlayer &&
-            action.type in MEDIA_PACKAGE_ACTIONS &&
-            action.stringValue.isBlank()
-        ) {
-            issues += AutomationValidationIssue(
-                "$path.stringValue",
-                "Выберите медиаплеер",
-            )
-        }
         if (action.type in USER_MESSAGE_ACTIONS) {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {
@@ -970,13 +945,6 @@ object AutomationValidator {
         }
     }
 
-    private val MEDIA_PACKAGE_ACTIONS = setOf(
-        AutomationBuiltinActionType.MEDIA_PREVIOUS,
-        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
-        AutomationBuiltinActionType.MEDIA_PLAY,
-        AutomationBuiltinActionType.MEDIA_NEXT,
-        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
-    )
 
     private val USER_MESSAGE_ACTIONS = setOf(
         AutomationBuiltinActionType.SHOW_TOAST,
