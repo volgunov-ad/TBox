@@ -15,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.BuildConfig
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.TboxRepository
@@ -27,6 +28,7 @@ import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationTriggerContext
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneCompanionHost
 import java.net.Inet4Address
@@ -116,7 +118,13 @@ class ExternalApiController(
         webPanelEnabled = { climatePanelEnabled },
         pageLanguage = { appContext.getString(R.string.web_panel_language) },
         onAuthenticated = ::noteTokenUsed,
+        headUnitPlatform = { headUnitPlatform() },
     )
+
+    private fun headUnitPlatform(): String = when (UniversalCanRepository.mode.value) {
+        HeadUnitCanMode.Android9MbCan -> "android9"
+        HeadUnitCanMode.Android10Vhal -> "android10"
+    }
 
     fun start() {
         if (observeJob != null) return

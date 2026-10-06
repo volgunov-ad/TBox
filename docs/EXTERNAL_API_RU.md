@@ -224,9 +224,12 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   "catalogVersion": 3,
   "serverEnabled": true,
   "pairingActive": false,
-  "appVersion": "1.0.0"
+  "appVersion": "1.0.0",
+  "headUnit": "android9"
 }
 ```
+
+`headUnit` — `android9` (mbCAN) или `android10` (VHAL). От него зависит набор команд стёкол: на A9 — `close` / `vent` (20 %) / `comfort_open` (80 %) / `open`, на A10 — `close` / `vent` / `open`.
 
 ### 7.2. `POST /v1/pair/request`
 
@@ -313,6 +316,7 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 ```
 
 Для state-сигналов `value` — строка канонического состояния (`"D"`, `"on"`, …).  
+У стёкол (`window_front_left`, `window_front_right`, `window_rear_left`, `window_rear_right`) `value` — `"0%"`, `"20%"`, `"80%"`, `"100%"` или `"open"` (стекло между остановками, A9 отдаёт −1), и есть поле `"open": true/false` — открыто ли стекло в любом положении.  
 Для `geo_position` — объект координат по схеме, согласованной с автоматизациями (уточнить в
 реализации; не сырой byte dump).
 

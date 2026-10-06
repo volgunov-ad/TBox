@@ -9,9 +9,11 @@ import vad.dashing.tbox.automation.AutomationSignalId
 import vad.dashing.tbox.automation.AutomationSignalKey
 import vad.dashing.tbox.automation.AutomationSignalReads
 import vad.dashing.tbox.automation.AutomationSignalSource
+import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationSignalValue
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.huInterestForSignal
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -101,6 +103,12 @@ class ExternalApiSignalReader {
                 is AutomationSignalValue.State -> json
                     .put("value", value.value)
                     .put("available", true)
+                    .also {
+                        val signal = AutomationSignalId.fromStorageKey(id)
+                        if (signal != null && AutomationSignalStateEncoding.isWindowSignal(signal)) {
+                            it.put("open", BodyComfortDomain.windowStateOpen(value.value))
+                        }
+                    }
 
                 is AutomationSignalValue.Position -> json
                     .put(

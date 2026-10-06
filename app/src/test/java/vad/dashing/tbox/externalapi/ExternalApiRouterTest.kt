@@ -9,6 +9,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.automation.AutomationActionResult
+import vad.dashing.tbox.automation.AutomationSignalSource
+import vad.dashing.tbox.automation.AutomationSignalValue
+import vad.dashing.tbox.automation.AutomationSignalValueType
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -25,6 +28,7 @@ class ExternalApiRouterTest {
             automationsProvider = { emptyList() },
             executeActions = { emptyList() },
             runAutomationNow = { null },
+            headUnitPlatform = { "android9" },
         )
         val response = router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "")
         assertEquals(200, response.status)
@@ -34,6 +38,21 @@ class ExternalApiRouterTest {
         assertEquals(3, json.getInt("catalogVersion"))
         assertTrue(json.getBoolean("serverEnabled"))
         assertEquals("0.18.1-test", json.getString("appVersion"))
+        assertEquals("android9", json.getString("headUnit"))
+    }
+
+    @Test
+    fun windowSignalJson_carriesOpenFlag() {
+        fun json(id: String, state: String) = ExternalApiSignalReader.signalToJson(
+            id = id,
+            source = AutomationSignalSource.HEAD_UNIT,
+            valueType = AutomationSignalValueType.STATE,
+            value = AutomationSignalValue.State(state),
+        )
+        assertTrue(json("window_front_left", "open").getBoolean("open"))
+        assertTrue(json("window_front_left", "80%").getBoolean("open"))
+        assertEquals(false, json("window_rear_right", "0%").getBoolean("open"))
+        assertEquals(false, json("hvac_auto", "on").has("open"))
     }
 
     @Test

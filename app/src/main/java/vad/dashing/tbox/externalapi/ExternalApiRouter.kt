@@ -29,6 +29,8 @@ class ExternalApiRouter(
     private val webPanelEnabled: () -> Boolean = { false },
     private val pageLanguage: () -> String = { "ru" },
     private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
+    /** `android9` / `android10`: which window commands the head unit accepts. */
+    private val headUnitPlatform: () -> String = { "" },
 ) {
     fun handle(
         method: String,
@@ -88,7 +90,8 @@ class ExternalApiRouter(
                 .put("serverEnabled", serverEnabled())
                 .put("webPanelEnabled", webPanelEnabled())
                 .put("pairingActive", pairingSession.isPairingActive())
-                .put("appVersion", appVersion),
+                .put("appVersion", appVersion)
+                .put("headUnit", headUnitPlatform()),
         )
 
     private fun handleWebPanel(method: String): ExternalApiHttpResponse {
