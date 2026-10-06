@@ -456,6 +456,33 @@ object EspCompanionProtocol {
         return null
     }
 
+    private val OTA_REPLY_MARKERS = arrayOf(
+        "\"t\":\"otaAck\"",
+        "\"t\":\"otaDone\"",
+        "\"t\": \"otaAck\"",
+        "\"t\": \"otaDone\"",
+    )
+
+    /**
+     * Cuts one message out of a received line. OTA replies can arrive glued to binary
+     * junk on both sides, and they are flat, so they end at the first '}'. Other messages
+     * nest objects (`phones`) and must be kept whole. A line cut by older firmware is glued
+     * to the next message; the last `{"v":` is where that message starts.
+     */
+    fun extractMessageJson(line: String): String {
+        for (marker in OTA_REPLY_MARKERS) {
+            val at = line.indexOf(marker)
+            if (at < 0) continue
+            val start = line.lastIndexOf('{', at)
+            val end = line.indexOf('}', at)
+            if (start >= 0 && end > start) return line.substring(start, end + 1)
+        }
+        val glued = line.lastIndexOf("{\"v\":")
+        if (glued > 0) return line.substring(glued)
+        val start = line.indexOf('{')
+        return if (start < 0) line else line.substring(start)
+    }
+
     fun parseLine(line: String): EspMessage? {
         val trimmed = line.trim()
         if (trimmed.isEmpty() || !trimmed.startsWith("{")) return null

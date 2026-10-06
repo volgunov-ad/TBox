@@ -1035,27 +1035,6 @@ class EspCompanionManager(
         }
     }
 
-    private fun extractOtaJson(line: String): String {
-        val markers = arrayOf(
-            "\"t\":\"otaAck\"",
-            "\"t\":\"otaDone\"",
-            "\"t\": \"otaAck\"",
-            "\"t\": \"otaDone\"",
-        )
-        for (marker in markers) {
-            val at = line.indexOf(marker)
-            if (at < 0) continue
-            val start = line.lastIndexOf('{', at)
-            val end = line.indexOf('}', at)
-            if (start >= 0 && end > start) return line.substring(start, end + 1)
-        }
-        val start = line.indexOf('{')
-        if (start < 0) return line
-        val end = line.indexOf('}', start)
-        if (end > start) return line.substring(start, end + 1)
-        return line.substring(start)
-    }
-
     private suspend fun awaitOta(
         channel: Channel<EspMessage>,
         timeoutMs: Long,
@@ -1088,7 +1067,7 @@ class EspCompanionManager(
             otaRxTraceLeft--
             traceOta("rx " + line.take(160).replace('\u0000', '?'))
         }
-        val msg = EspCompanionProtocol.parseLine(extractOtaJson(line)) ?: return
+        val msg = EspCompanionProtocol.parseLine(EspCompanionProtocol.extractMessageJson(line)) ?: return
         EspCompanionRepository.noteRxMessage()
         noteSuccessfulRx()
         logCompanionRx(msg, line)

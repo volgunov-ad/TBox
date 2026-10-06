@@ -508,4 +508,33 @@ class EspCompanionProtocolTest {
         assertTrue(allow.contains("\"id\":\"0a1b2c3d\""))
         assertFalse(allow.contains("key"))
     }
+
+    private fun parseReceived(line: String): EspMessage? =
+        EspCompanionProtocol.parseLine(EspCompanionProtocol.extractMessageJson(line))
+
+    @Test
+    fun receivedBleStatusKeepsNestedPhones() {
+        val status = parseReceived(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":true,"macs":[],""" +
+                """"phones":[{"id":"0a1b2c3d","name":"Pixel"},{"id":"11223344","name":"A"}],"lastBat":-1,"lastRssi":0}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.phoneLearn)
+        assertEquals(listOf("0a1b2c3d", "11223344"), status.phones.map { it.id })
+    }
+
+    @Test
+    fun receivedLineCutByOldFirmwareYieldsTheGluedMessage() {
+        val msg = parseReceived(
+            """{"v":1,"t":"hello","fw":"0.10.2","gpioIn":8,"rel""" +
+                """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":false,"macs":[],"phones":[]}""",
+        )
+        assertTrue(msg is EspMessage.BleStatus)
+    }
+
+    @Test
+    fun receivedOtaAckIsCutOutOfBinaryJunk() {
+        val msg = parseReceived("\u0000\u00a5Z{\"v\":1,\"t\":\"otaAck\",\"phase\":\"begin\",\"ok\":true}\u0001\u0002")
+        assertNotNull(msg)
+        assertTrue(msg is EspMessage.OtaAck)
+    }
 }
