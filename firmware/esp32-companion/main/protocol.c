@@ -905,6 +905,19 @@ static uint32_t extract_json_u32(const char *line, const char *key, bool *found)
     return (uint32_t)strtoul(p + 1, NULL, 0);
 }
 
+/**
+ * Integer at "key": exactly. Short keys like "in" must not match a title or artist
+ * value that happens to be the same word.
+ */
+static int extract_json_key_int(const char *line, const char *key, bool *found)
+{
+    char pattern[48];
+    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
+    const char *p = strstr(line, pattern);
+    *found = p != NULL;
+    return p ? (int)strtol(p + strlen(pattern), NULL, 10) : 0;
+}
+
 static void handle_ota_begin(const char *line)
 {
     bool found_size = false;
@@ -1266,16 +1279,17 @@ static void handle_line(const char *line)
         bool found = false;
         uint32_t gen = extract_json_u32(line, "gen", &found);
         if (!found) return;
-        int vals[12];
-        uint16_t mask = 0;
-        const char *keys[12] = {
+        int vals[PHONE_SNAP_VALS];
+        uint32_t mask = 0;
+        const char *keys[PHONE_SNAP_VALS] = {
             "left", "right", "fan", "mode", "auto", "blow", "sync",
             "s0", "s1", "s2", "s3", "vol",
+            "w0", "w1", "w2", "w3", "roof", "shade", "hu", "out", "in",
         };
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < PHONE_SNAP_VALS; i++) {
             bool has = false;
-            vals[i] = (int)extract_json_u32(line, keys[i], &has);
-            if (has) mask = (uint16_t)(mask | (1u << i));
+            vals[i] = extract_json_key_int(line, keys[i], &has);
+            if (has) mask |= (1u << i);
         }
         phone_media_t media;
         memset(&media, 0, sizeof(media));

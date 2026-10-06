@@ -34,9 +34,11 @@ static const char *TAG = "ble_phone";
 #define SNAP_FRESH_MS 2000u
 #define SNAP_WAIT_MS 1500u
 #define CMD_OUT_MAX 16
-/* One snapshot is up to 5 value pages and 11 text pages. */
+/* One snapshot is up to 7 value pages and 11 text pages. */
 #define TX_MAX 24
 #define PAGE_MEDIA 4
+#define PAGE_BODY 5
+#define PAGE_CABIN 6
 #define PAGE_TEXT_FIRST 8
 #define SNAP_PAGE_TYPE_BASE 0x20
 #define TEXT_CHUNK 9
@@ -63,6 +65,19 @@ static const char *TAG = "ble_phone";
 #define SNAP_S2    (1u << 9)
 #define SNAP_S3    (1u << 10)
 #define SNAP_VOL   (1u << 11)
+#define SNAP_W0    (1u << 12)
+#define SNAP_ROOF  (1u << 16)
+#define SNAP_SHADE (1u << 17)
+#define SNAP_HU    (1u << 18)
+#define SNAP_OUT   (1u << 19)
+#define SNAP_IN    (1u << 20)
+
+/* REFRESH body[2]: what the phone screen shows. 0 (older apps) = everything. */
+#define GROUP_CLIMATE 0x01u
+#define GROUP_SEATS   0x02u
+#define GROUP_MEDIA   0x04u
+#define GROUP_WINDOWS 0x08u
+#define GROUP_ALL     0x0Fu
 
 typedef struct {
     uint8_t id[4];
@@ -77,6 +92,7 @@ typedef struct {
     uint32_t counter;
     /* Text the phone already shows; its text pages are skipped when this matches. */
     uint16_t text_hash;
+    uint8_t groups;
 } refresh_pending_t;
 
 typedef struct {
@@ -102,8 +118,8 @@ static uint8_t s_denied_id[4];
 static bool s_cache_valid;
 static uint32_t s_cache_ms;
 static int s_cache_gen;
-static uint16_t s_cache_mask;
-static int s_cache_vals[12];
+static uint32_t s_cache_mask;
+static int s_cache_vals[PHONE_SNAP_VALS];
 static phone_media_t s_cache_media = { .playing = -1, .pos_ms = -1, .dur_ms = -1 };
 static uint16_t s_cache_text_hash;
 
@@ -443,15 +459,37 @@ static uint32_t seconds_u16(int64_t ms)
     return s >= 0xFFFF ? 0xFFFEu : (uint32_t)s;
 }
 
-static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_hash)
+static int cache_val(uint32_t bit, int index, int missing)
+{
+    return (s_cache_mask & bit) ? s_cache_vals[index] : missing;
+}
+
+static void put_i16(uint8_t *dst, int v)
+{
+    dst[0] = (uint8_t)v;
+    dst[1] = (uint8_t)((uint16_t)v >> 8);
+}
+
+static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_hash, uint8_t groups)
 {
     if (phone_index < 0 || phone_index >= s_count || !s_cache_valid) return;
     const phone_rec_t *phone = &s_phones[phone_index];
     const phone_media_t *m = &s_cache_media;
-    int pages[5 + (PHONE_TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK];
+    int pages[7 + (PHONE_TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK];
     int page_n = 0;
-    for (int page = 0; page <= PAGE_MEDIA; page++) pages[page_n++] = page;
-    if (m->text_len > 0 && phone_text_hash != s_cache_text_hash) {
+    uint8_t want = (groups & GROUP_ALL) ? (uint8_t)(groups & GROUP_ALL) : GROUP_ALL;
+    if (want & GROUP_CLIMATE) {
+        pages[page_n++] = 0;
+        pages[page_n++] = 1;
+    }
+    if (want & GROUP_SEATS) pages[page_n++] = 2;
+    if (want & GROUP_MEDIA) {
+        pages[page_n++] = 3;
+        pages[page_n++] = PAGE_MEDIA;
+    }
+    if (want & GROUP_WINDOWS) pages[page_n++] = PAGE_BODY;
+    pages[page_n++] = PAGE_CABIN;
+    if ((want & GROUP_MEDIA) && m->text_len > 0 && phone_text_hash != s_cache_text_hash) {
         int chunks = (int)((m->text_len + TEXT_CHUNK - 1) / TEXT_CHUNK);
         for (int c = 0; c < chunks; c++) pages[page_n++] = PAGE_TEXT_FIRST + c;
     }
@@ -495,6 +533,16 @@ static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_
             put_u16(body + 5, seconds_u16(m->dur_ms));
             put_u16(body + 7, s_cache_text_hash);
             body[9] = (uint8_t)m->text_len;
+        } else if (page == PAGE_BODY) {
+            for (int w = 0; w < 4; w++) {
+                body[2 + w] = (uint8_t)cache_val(SNAP_W0 << w, 12 + w, 0xFF);
+            }
+            body[6] = (uint8_t)cache_val(SNAP_ROOF, 16, 0xFF);
+            body[7] = (uint8_t)cache_val(SNAP_SHADE, 17, 0xFF);
+            body[8] = (uint8_t)cache_val(SNAP_HU, 18, 0xFF);
+        } else if (page == PAGE_CABIN) {
+            put_i16(body + 2, cache_val(SNAP_OUT, 19, 0x7FFF));
+            put_i16(body + 4, cache_val(SNAP_IN, 20, 0x7FFF));
         } else {
             size_t from = (size_t)(page - PAGE_TEXT_FIRST) * TEXT_CHUNK;
             size_t n = m->text_len - from;
@@ -525,7 +573,7 @@ static void request_snap_if_needed(uint32_t t)
     if (s_wait_n == 0) return;
     if (s_cache_valid && (uint32_t)(t - s_cache_ms) < SNAP_FRESH_MS) {
         for (int i = 0; i < s_wait_n; i++) {
-            enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash);
+            enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups);
         }
         s_wait_n = 0;
         s_snap_inflight = false;
@@ -538,7 +586,7 @@ static void request_snap_if_needed(uint32_t t)
     }
 }
 
-static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, uint32_t t)
+static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, uint8_t groups, uint32_t t)
 {
     int slot = wait_find(phone_index);
     if (slot < 0 && s_wait_n < BLE_DEVICE_MAX) {
@@ -548,6 +596,7 @@ static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, 
     s_wait[slot].index = phone_index;
     s_wait[slot].counter = counter;
     s_wait[slot].text_hash = text_hash;
+    s_wait[slot].groups = groups;
     request_snap_if_needed(t);
 }
 
@@ -610,7 +659,7 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
         /* The cached state predates this command. */
         s_cache_valid = false;
     } else if (type == 3) {
-        note_refresh(index, counter, (uint16_t)(body[0] | (body[1] << 8)), now_ms());
+        note_refresh(index, counter, (uint16_t)(body[0] | (body[1] << 8)), body[2], now_ms());
     }
 }
 
@@ -754,7 +803,7 @@ static void on_incoming(const uint8_t *payload, uint8_t len)
     ble_radio_unlock();
 }
 
-void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12], const phone_media_t *media)
+void ble_phone_set_snapshot(int gen, uint32_t mask, const int vals[PHONE_SNAP_VALS], const phone_media_t *media)
 {
     ble_radio_lock();
     s_cache_gen = gen;
@@ -774,7 +823,7 @@ void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12], const ph
     s_cache_ms = now_ms();
     s_snap_inflight = false;
     for (int i = 0; i < s_wait_n; i++) {
-        enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash);
+        enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups);
     }
     s_wait_n = 0;
     ble_radio_unlock();

@@ -42,11 +42,15 @@ typedef struct {
     size_t text_len;  /* 0 when there is no title and no artist */
 } phone_media_t;
 
+#define PHONE_SNAP_VALS 21
+
 /**
- * vals: left, right, fan, mode, auto, blow, sync, seat0..3, vol.
+ * vals: left, right, fan, mode, auto, blow, sync, seat0..3, vol, window FL/FR/RL/RR
+ * (0..100, 0xFE between stops), sunroof (0..100, 102 tilt), sunshade, head unit 9/10,
+ * outside and cabin temperature in tenths of °C.
  * Missing fields have the corresponding mask bit clear. media may be NULL.
  */
-void ble_phone_set_snapshot(int gen, uint16_t mask, const int vals[12], const phone_media_t *media);
+void ble_phone_set_snapshot(int gen, uint32_t mask, const int vals[PHONE_SNAP_VALS], const phone_media_t *media);
 
 void ble_phone_poll(uint32_t now_ms);
 
