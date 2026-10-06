@@ -81,6 +81,8 @@ internal const val MEDIA_AUTOMATION_SOURCE_HOLD_MS =
 /** One extra HTTP attempt after a failed album-art URI decode. */
 private const val ALBUM_ART_URI_MAX_RETRY_ATTEMPTS = 1
 private const val ALBUM_ART_URI_RETRY_DELAY_MS = 1_000L
+private const val MEDIA_CONTROL_PREFS = "media_control"
+private const val PREF_LAST_PLAYED_PACKAGE = "last_played_package"
 
 enum class SupportedMediaPlayer(
     val packageName: String,
@@ -196,6 +198,26 @@ fun resolveSelectedMediaPlayerForWidget(config: FloatingDashboardWidgetConfig): 
     return canonicalMediaPlayerPackage(config.mediaSelectedPlayer).orEmpty()
 }
 
+/** Package playing now; the one that started last when several play at once. */
+internal fun currentlyPlayingPackage(states: Map<String, MediaPlayerState>): String? =
+    states.entries
+        .filter { it.value.isPlaying }
+        .maxByOrNull { it.value.lastBecamePlayingElapsedRealtimeMs }
+        ?.key
+
+/**
+ * Player to launch when no media session took a play command: the requested one, then the
+ * widget's list, then the player that played last (kept across reboots).
+ */
+internal fun mediaLaunchTarget(
+    selectedPackages: Set<String>,
+    preferredPackage: String,
+    lastPlayedPackage: String?,
+): String? =
+    canonicalMediaPlayerPackage(preferredPackage)
+        ?: orderedMediaPlayerPackages(selectedPackages).firstOrNull()
+        ?: lastPlayedPackage?.let(::canonicalMediaPlayerPackage)
+
 fun collectMediaPlayersFromWidgetConfigs(
     configs: List<FloatingDashboardWidgetConfig>
 ): Set<String> {
@@ -220,6 +242,9 @@ object SharedMediaControlService {
     private var activeSessionsListenerRegistered: Boolean = false
     private var listenerComponent: ComponentName? = null
     private var notificationAccessGranted: Boolean = false
+    @Volatile
+    private var lastPlayedPackage: String? = null
+    private var lastPlayedLoaded: Boolean = false
 
     private val sourceSelections = mutableMapOf<String, Set<String>>()
     private val sourceHolds = mutableMapOf<String, MediaSourceSelectionHold>()
@@ -620,6 +645,13 @@ object SharedMediaControlService {
             appContext = context.applicationContext
         }
         val contextRef = appContext ?: return
+        if (!lastPlayedLoaded) {
+            lastPlayedLoaded = true
+            lastPlayedPackage = contextRef
+                .getSharedPreferences(MEDIA_CONTROL_PREFS, Context.MODE_PRIVATE)
+                .getString(PREF_LAST_PLAYED_PACKAGE, null)
+                ?.let(::canonicalMediaPlayerPackage)
+        }
         if (mediaSessionManager == null) {
             mediaSessionManager = contextRef.getSystemService(MediaSessionManager::class.java)
         }
@@ -803,16 +835,26 @@ object SharedMediaControlService {
                 ?: candidates.firstOrNull { it.playbackState.isPlayingState() }
                 ?: candidates.first()
         }
-        return candidates.firstOrNull { it.playbackState.isPlayingState() } ?: candidates.first()
+        return candidates.firstOrNull { it.playbackState.isPlayingState() }
+            ?: candidates.firstOrNull { canonicalMediaPlayerPackage(it.packageName) == lastPlayedPackage }
+            ?: candidates.first()
     }
 
     private fun resolveTargetPackage(
         selectedPackages: Set<String>,
         preferredPackage: String
-    ): String? {
-        val normalizedPreferred = normalizeMediaPlayerPackages(listOf(preferredPackage)).firstOrNull()
-        if (normalizedPreferred != null) return normalizedPreferred
-        return orderedMediaPlayerPackages(selectedPackages).firstOrNull()
+    ): String? = mediaLaunchTarget(selectedPackages, preferredPackage, lastPlayedPackage)
+
+    private fun rememberLastPlayedLocked(states: Map<String, MediaPlayerState>) {
+        val playing = currentlyPlayingPackage(states) ?: return
+        if (playing == lastPlayedPackage) return
+        val context = appContext ?: return
+        if (playing == context.packageName) return
+        lastPlayedPackage = playing
+        context.getSharedPreferences(MEDIA_CONTROL_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(PREF_LAST_PLAYED_PACKAGE, playing)
+            .apply()
     }
 
     private fun shouldMonitorLocked(): Boolean =
@@ -876,6 +918,7 @@ object SharedMediaControlService {
             pendingAlbumArtUriLoads.remove(it)
         }
 
+        rememberLastPlayedLocked(updatedStates)
         _playerStates.value = updatedStates
     }
 
