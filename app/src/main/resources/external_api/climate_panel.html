@@ -295,7 +295,7 @@
           tabBody: "Окна",
           audio: "Звук",
           music: "Музыка",
-          media: "Медиа",
+          media: "Громкость",
           sound: "Звук",
           previous: "Назад",
           play: "Играть",
@@ -311,7 +311,7 @@
           modeEco: "Эко",
           modeComfort: "Комфорт",
           modeStrong: "Сильный",
-          direction: "Направление",
+          direction: "Направление обдува",
           blowFace: "Лицо",
           blowFoot: "Ноги",
           blowFaceFoot: "Лицо и ноги",
@@ -321,6 +321,8 @@
           rearLeft: "Сзади слева",
           rearRight: "Сзади справа",
           off: "Выкл",
+          heat: "О",
+          vent2: "В",
           windows: "Окна, люк и шторка",
           windowsTitle: "Окна",
           allWindows: "Все окна",
@@ -367,7 +369,7 @@
           tabBody: "Windows",
           audio: "Audio",
           music: "Music",
-          media: "Media",
+          media: "Volume",
           sound: "Sound",
           previous: "Previous",
           play: "Play",
@@ -383,7 +385,7 @@
           modeEco: "ECO",
           modeComfort: "Comfort",
           modeStrong: "Strong",
-          direction: "Direction",
+          direction: "Air direction",
           blowFace: "Face",
           blowFoot: "Feet",
           blowFaceFoot: "Face and feet",
@@ -393,6 +395,8 @@
           rearLeft: "Rear left",
           rearRight: "Rear right",
           off: "Off",
+          heat: "H",
+          vent2: "V",
           windows: "Windows, sunroof and shade",
           windowsTitle: "Windows",
           allWindows: "All windows",
@@ -440,12 +444,12 @@
       ];
       var FRONT = [
         { state: "off", value: 1, label: lang.off, kind: "off" },
-        { state: "heat_1", value: 2, label: "H1", kind: "heat" },
-        { state: "heat_2", value: 3, label: "H2", kind: "heat" },
-        { state: "heat_3", value: 4, label: "H3", kind: "heat" },
-        { state: "vent_1", value: 5, label: "V1", kind: "vent" },
-        { state: "vent_2", value: 6, label: "V2", kind: "vent" },
-        { state: "vent_3", value: 7, label: "V3", kind: "vent" }
+        { state: "heat_1", value: 2, label: lang.heat + "1", kind: "heat" },
+        { state: "heat_2", value: 3, label: lang.heat + "2", kind: "heat" },
+        { state: "heat_3", value: 4, label: lang.heat + "3", kind: "heat" },
+        { state: "vent_1", value: 5, label: lang.vent2 + "1", kind: "vent" },
+        { state: "vent_2", value: 6, label: lang.vent2 + "2", kind: "vent" },
+        { state: "vent_3", value: 7, label: lang.vent2 + "3", kind: "vent" }
       ];
       var REAR = FRONT.slice(0, 4);
       var seats = [
