@@ -225,6 +225,53 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun windowOpen_firesOnceAcrossOpenPositions_rearmsOnClose() {
+        val trigger = AutomationTrigger.StateEquals(
+            id = "win",
+            signal = AutomationSignalId.WINDOW_FRONT_LEFT,
+            source = AutomationSignalSource.HEAD_UNIT,
+            expectedState = "open",
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.WINDOW_FRONT_LEFT,
+            AutomationSignalSource.HEAD_UNIT,
+        )
+        fun sample(state: String, at: Long) = AutomationSignalSample(
+            key = key,
+            value = AutomationSignalValue.State(state),
+            observedAtElapsedMillis = at,
+        )
+        assertNull(evaluator.onSignalSample(sample("0%", 0L)))
+        assertEquals("win", evaluator.onSignalSample(sample("open", 1_000L))?.triggerId)
+        assertNull(evaluator.onSignalSample(sample("20%", 2_000L)))
+        assertNull(evaluator.onSignalSample(sample("open", 3_000L)))
+        assertNull(evaluator.onSignalSample(sample("100%", 4_000L)))
+        assertNull(evaluator.onSignalSample(sample("0%", 5_000L)))
+        assertEquals("win", evaluator.onSignalSample(sample("80%", 6_000L))?.triggerId)
+    }
+
+    @Test
+    fun windowOpen_conditionMatchesEveryOpenPosition() {
+        val key = AutomationSignalKey(
+            AutomationSignalId.WINDOW_REAR_RIGHT,
+            AutomationSignalSource.HEAD_UNIT,
+        )
+        val condition = AutomationCondition.State(
+            signal = AutomationSignalId.WINDOW_REAR_RIGHT,
+            source = AutomationSignalSource.HEAD_UNIT,
+            expectedState = "open",
+        )
+        fun matches(state: String) = AutomationEvaluator.evaluateCondition(
+            condition = condition,
+            context = AutomationTriggerContext("a", "1", 0L),
+            snapshot = mapOf(key to AutomationSignalValue.State(state)),
+        )
+        listOf("open", "20%", "80%", "100%").forEach { assertTrue(it, matches(it)) }
+        assertFalse(matches("0%"))
+    }
+
+    @Test
     fun stateEquals_unavailableAfterBaselineRearmsAndFiresOnReturn() {
         val trigger = AutomationTrigger.StateEquals(
             id = "fg",

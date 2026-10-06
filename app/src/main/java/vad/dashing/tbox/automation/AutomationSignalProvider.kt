@@ -443,8 +443,8 @@ internal fun Flow<BodyComfortRawRead>.shadeRoofStateFlow(
 internal fun Flow<BodyComfortRawRead>.windowStateFlow(
     selector: (BodyComfortRawRead) -> Int?,
 ): Flow<AutomationSignalValue> = map { raw ->
-    selector(raw)?.takeIf { it in 0..100 }
-        ?.let { AutomationSignalValue.State("$it%") }
+    BodyComfortDomain.windowStateValue(selector(raw))
+        ?.let(AutomationSignalValue::State)
         ?: AutomationSignalValue.Unavailable
 }
 

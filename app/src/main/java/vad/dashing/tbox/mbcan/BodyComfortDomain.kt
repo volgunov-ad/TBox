@@ -30,6 +30,14 @@ object BodyComfortDomain {
     const val SUNROOF_STATUS_TILT = 102
     /** Roof tilt lives at 10 %: the car reports 10 or 102 for the tilted roof. */
     const val ROOF_TILT_PERCENT = 10
+    /**
+     * A9 BCM window byte between the stops 0 / 20 / 80 / 100: the car reports −1, never
+     * the exact percent. Only accepted once a real position was read, so a missing frame
+     * does not show as open.
+     */
+    const val WINDOW_RAW_BETWEEN_STOPS = -1
+    /** Window automation state: anything but closed (−1, 20 %, 80 %, 100 %, or any A10 percent). */
+    const val STATE_OPEN = "open"
 
     fun sanitizeStatusRaw(raw: Int?): Int? =
         raw?.takeIf { it >= 0 && it <= SUNROOF_STATUS_TILT }
@@ -49,7 +57,36 @@ object BodyComfortDomain {
     val SHADE_STATE_OPTIONS: List<String> = (0..100 step 10).map { "$it%" }
     val ROOF_STATE_OPTIONS: List<String> = SHADE_STATE_OPTIONS + STATE_TILT
     val WINDOW_STATE_OPTIONS: List<String> =
-        BodyComfortWrite.WINDOW_A9_PERCENT_STEPS.map { "$it%" }
+        BodyComfortWrite.WINDOW_A9_PERCENT_STEPS.map { "$it%" } + STATE_OPEN
+
+    /** Next stored window raw: −1 only after a valid 0…100 read, otherwise keep [previous]. */
+    fun nextWindowRaw(raw: Int?, previous: Int?): Int? = when {
+        raw == WINDOW_RAW_BETWEEN_STOPS -> if (previous != null) raw else null
+        raw != null && raw in 0..100 -> raw
+        else -> previous
+    }
+
+    /** Automation state for a stored window raw: `N%`, or `open` between stops. */
+    fun windowStateValue(raw: Int?): String? = when {
+        raw == WINDOW_RAW_BETWEEN_STOPS -> STATE_OPEN
+        raw != null && raw in 0..100 -> "$raw%"
+        else -> null
+    }
+
+    /** True for a window state string that is not closed. */
+    fun windowStateOpen(state: String?): Boolean {
+        val value = state?.trim()?.lowercase() ?: return false
+        if (value == STATE_OPEN) return true
+        val percent = value.removeSuffix("%").toIntOrNull() ?: return false
+        return percent in 1..100
+    }
+
+    /** Window state match: `open` covers every open position, other states are exact. */
+    fun windowStateMatches(actual: String, expected: String): Boolean {
+        val wanted = expected.trim()
+        if (wanted.equals(STATE_OPEN, ignoreCase = true)) return windowStateOpen(actual)
+        return actual.trim().equals(wanted, ignoreCase = true)
+    }
 
     /**
      * Shade/roof live status. Write scale is 1…11 (+12 tilt). Read scale on A9 roof
@@ -69,11 +106,12 @@ object BodyComfortDomain {
 
     /**
      * Window position: 0…100 % (A9 BCM / A10 `*_WIN_Position`).
-     * 0 closed, 1…30 vent (stock A9 щель is 20), 31…100 open.
+     * 0 closed, 1…30 vent (stock A9 щель is 20), 31…100 open, −1 (A9 between stops) open.
      */
     fun decodeWindow(raw: Int?): WindowPanePosition? {
         if (raw == null) return null
         return when (raw) {
+            WINDOW_RAW_BETWEEN_STOPS -> WindowPanePosition.Open
             0 -> WindowPanePosition.Closed
             in 1..30 -> WindowPanePosition.Vent
             in 31..100 -> WindowPanePosition.Open

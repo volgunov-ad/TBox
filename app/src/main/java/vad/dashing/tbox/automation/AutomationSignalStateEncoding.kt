@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
@@ -62,6 +63,23 @@ object AutomationSignalStateEncoding {
         }?.widgetLabel
 
     fun headlightFromRaw(raw: Int): String? = HeadlightMode.fromRaw(raw)?.widgetLabel
+
+    private val windowSignals = setOf(
+        AutomationSignalId.WINDOW_FRONT_LEFT,
+        AutomationSignalId.WINDOW_FRONT_RIGHT,
+        AutomationSignalId.WINDOW_REAR_LEFT,
+        AutomationSignalId.WINDOW_REAR_RIGHT,
+    )
+
+    fun isWindowSignal(signal: AutomationSignalId): Boolean = signal in windowSignals
+
+    /** STATE trigger/condition match. Windows: `open` holds for every open position. */
+    fun stateMatches(signal: AutomationSignalId, actual: String, expected: String): Boolean =
+        if (signal in windowSignals) {
+            BodyComfortDomain.windowStateMatches(actual, expected)
+        } else {
+            actual.equals(expected.trim(), ignoreCase = true)
+        }
 
     fun migrateLegacyStateValue(signal: AutomationSignalId, raw: String): String {
         val trimmed = raw.trim()

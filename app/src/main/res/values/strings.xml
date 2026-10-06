@@ -228,6 +228,7 @@
     <string name="car_settings_windows_vent_percent">Щель (20%)</string>
     <string name="car_settings_windows_status_tilt">откинут</string>
     <string name="car_settings_windows_status_unknown">—</string>
+    <string name="car_settings_windows_status_between">открыто</string>
     <string name="car_settings_windows_row_with_status">%1$s: %2$s</string>
     <string name="car_settings_hud_section_title">Экраны</string>
     <string name="car_settings_first_blowing_title">Первый обдув</string>

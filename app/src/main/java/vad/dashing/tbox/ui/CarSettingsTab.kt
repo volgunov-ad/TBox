@@ -1276,15 +1276,23 @@ private fun shadeRoofStatusText(raw: Int?): String =
     if (BodyComfortDomain.shadeRoofTilted(raw)) {
         stringResource(R.string.car_settings_windows_status_tilt)
     } else {
-        percentStatusText(raw)
+        raw?.takeIf { it in 0..100 }?.let { "$it%" }
+            ?: stringResource(R.string.car_settings_windows_status_unknown)
     }
 
 @Composable
-private fun percentStatusText(raw: Int?): String =
-    percentStatusText(raw, stringResource(R.string.car_settings_windows_status_unknown))
+private fun windowStatusText(raw: Int?): String =
+    windowStatusText(
+        raw,
+        stringResource(R.string.car_settings_windows_status_unknown),
+        stringResource(R.string.car_settings_windows_status_between),
+    )
 
-private fun percentStatusText(raw: Int?, unknown: String): String =
-    raw?.takeIf { it in 0..100 }?.let { "$it%" } ?: unknown
+private fun windowStatusText(raw: Int?, unknown: String, between: String): String = when {
+    raw == BodyComfortDomain.WINDOW_RAW_BETWEEN_STOPS -> between
+    raw != null && raw in 0..100 -> "$raw%"
+    else -> unknown
+}
 
 @Composable
 private fun windowsRowTitle(title: String, status: String): String =
@@ -1310,6 +1318,7 @@ private fun CarSettingsWindowsSection(
     val roofOptions = sunroofPositionOptions()
     val windowOptions = windowCommandOptions(android10)
     val unknownStatus = stringResource(R.string.car_settings_windows_status_unknown)
+    val betweenStatus = stringResource(R.string.car_settings_windows_status_between)
 
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
@@ -1349,7 +1358,7 @@ private fun CarSettingsWindowsSection(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_all_title),
             listOf(raw.windowFl, raw.windowFr, raw.windowRl, raw.windowRr)
-                .joinToString(" / ") { percentStatusText(it, unknownStatus) },
+                .joinToString(" / ") { windowStatusText(it, unknownStatus, betweenStatus) },
         ),
         options = windowOptions,
         selectedRawValue = lastAllWindows,
@@ -1362,7 +1371,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fl_title),
-            percentStatusText(raw.windowFl),
+            windowStatusText(raw.windowFl),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1379,7 +1388,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fr_title),
-            percentStatusText(raw.windowFr),
+            windowStatusText(raw.windowFr),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1396,7 +1405,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rl_title),
-            percentStatusText(raw.windowRl),
+            windowStatusText(raw.windowRl),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1413,7 +1422,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rr_title),
-            percentStatusText(raw.windowRr),
+            windowStatusText(raw.windowRr),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(

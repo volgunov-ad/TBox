@@ -59,7 +59,8 @@ object AutomationSignalCatalog {
     private val rearSeatStates = listOf("off", "heat_1", "heat_2", "heat_3")
     private const val windowPositionTypicalRange =
         "Только ГУ. Положение 0…100 %: 0 закрыто, штатная щель 20, комфортное открытие 80, " +
-            "100 полностью открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
+            "100 полностью открыто; open (Открыто) — любое открытое положение: 20, 80, 100 и " +
+            "промежуточное (A9 BCM отдаёт там −1). A9 BCM getVehicleWindow; A10 *_WIN_Position."
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(

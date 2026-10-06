@@ -31,7 +31,7 @@ class BodyComfortDomainTest {
         assertEquals(WindowPanePosition.Vent, BodyComfortDomain.decodeWindow(30))
         assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindow(31))
         assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindow(100))
-        assertNull(BodyComfortDomain.decodeWindow(-1))
+        assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindow(-1))
         assertNull(BodyComfortDomain.decodeWindow(101))
     }
 
@@ -63,7 +63,7 @@ class BodyComfortDomainTest {
             BodyComfortDomain.SHADE_STATE_OPTIONS + "tilt",
             BodyComfortDomain.ROOF_STATE_OPTIONS,
         )
-        assertEquals(listOf("0%", "20%", "80%", "100%"), BodyComfortDomain.WINDOW_STATE_OPTIONS)
+        assertEquals(listOf("0%", "20%", "80%", "100%", "open"), BodyComfortDomain.WINDOW_STATE_OPTIONS)
     }
 
     @Test
@@ -122,5 +122,31 @@ class BodyComfortDomainTest {
             setOf(2),
             BodyComfortDomain.selectedWindowWriteValues(null, 2, android10 = true),
         )
+    }
+
+    @Test
+    fun windowBetweenStops_acceptedOnlyAfterRealRead() {
+        assertNull(BodyComfortDomain.nextWindowRaw(-1, null))
+        assertEquals(-1, BodyComfortDomain.nextWindowRaw(-1, 20))
+        assertEquals(-1, BodyComfortDomain.nextWindowRaw(-1, -1))
+        assertEquals(80, BodyComfortDomain.nextWindowRaw(80, -1))
+        assertEquals(20, BodyComfortDomain.nextWindowRaw(null, 20))
+        assertEquals(20, BodyComfortDomain.nextWindowRaw(255, 20))
+    }
+
+    @Test
+    fun windowOpenState_coversBetweenStopsAndOpenStops() {
+        assertEquals("open", BodyComfortDomain.windowStateValue(-1))
+        assertEquals("20%", BodyComfortDomain.windowStateValue(20))
+        assertNull(BodyComfortDomain.windowStateValue(null))
+        assertTrue(BodyComfortDomain.windowStateMatches("open", "open"))
+        assertTrue(BodyComfortDomain.windowStateMatches("20%", "open"))
+        assertTrue(BodyComfortDomain.windowStateMatches("80%", "Open"))
+        assertTrue(BodyComfortDomain.windowStateMatches("100%", "open"))
+        assertTrue(BodyComfortDomain.windowStateMatches("45%", "open"))
+        assertFalse(BodyComfortDomain.windowStateMatches("0%", "open"))
+        assertTrue(BodyComfortDomain.windowStateMatches("80%", "80%"))
+        assertFalse(BodyComfortDomain.windowStateMatches("open", "80%"))
+        assertTrue("open" in BodyComfortDomain.WINDOW_STATE_OPTIONS)
     }
 }

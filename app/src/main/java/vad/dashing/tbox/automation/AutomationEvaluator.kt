@@ -433,7 +433,7 @@ class AutomationEvaluator(
                         snapshot[AutomationSignalKey(condition.signal, condition.source)]
                             as? AutomationSignalValue.State
                         )?.value ?: return false
-                    actual.equals(condition.expectedState.trim(), ignoreCase = true)
+                    AutomationSignalStateEncoding.stateMatches(condition.signal, actual, condition.expectedState)
                 }
 
                 is AutomationCondition.TriggeredBy -> context.triggerId in condition.triggerIds
@@ -704,7 +704,7 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
 
         is AutomationTrigger.StateEquals -> {
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
-            state.equals(expectedState.trim(), ignoreCase = true)
+            AutomationSignalStateEncoding.stateMatches(signal, state, expectedState)
         }
 
         is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->
@@ -737,7 +737,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 
         is AutomationTrigger.StateEquals -> {
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
-            !state.equals(expectedState.trim(), ignoreCase = true)
+            !AutomationSignalStateEncoding.stateMatches(signal, state, expectedState)
         }
 
         is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->

@@ -1932,25 +1932,16 @@ object MbCanRepository {
     }
 
     private fun applyBodyComfortBcmSnapshot(snapshot: BodyComfortBcmRaw) {
-        snapshot.windowFl?.let { raw ->
-            BodyComfortDomain.decodeWindow(raw)?.let { _windowFrontLeftState.value = it }
-        }
-        snapshot.windowFr?.let { raw ->
-            BodyComfortDomain.decodeWindow(raw)?.let { _windowFrontRightState.value = it }
-        }
-        snapshot.windowRl?.let { raw ->
-            BodyComfortDomain.decodeWindow(raw)?.let { _windowRearLeftState.value = it }
-        }
-        snapshot.windowRr?.let { raw ->
-            BodyComfortDomain.decodeWindow(raw)?.let { _windowRearRightState.value = it }
-        }
         val previous = _bodyComfortRaw.value
-        _bodyComfortRaw.value = previous.copy(
-            windowFl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFl) ?: previous.windowFl,
-            windowFr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowFr) ?: previous.windowFr,
-            windowRl = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRl) ?: previous.windowRl,
-            windowRr = BodyComfortDomain.sanitizeStatusRaw(snapshot.windowRr) ?: previous.windowRr,
-        )
+        val fl = BodyComfortDomain.nextWindowRaw(snapshot.windowFl, previous.windowFl)
+        val fr = BodyComfortDomain.nextWindowRaw(snapshot.windowFr, previous.windowFr)
+        val rl = BodyComfortDomain.nextWindowRaw(snapshot.windowRl, previous.windowRl)
+        val rr = BodyComfortDomain.nextWindowRaw(snapshot.windowRr, previous.windowRr)
+        BodyComfortDomain.decodeWindow(fl)?.let { _windowFrontLeftState.value = it }
+        BodyComfortDomain.decodeWindow(fr)?.let { _windowFrontRightState.value = it }
+        BodyComfortDomain.decodeWindow(rl)?.let { _windowRearLeftState.value = it }
+        BodyComfortDomain.decodeWindow(rr)?.let { _windowRearRightState.value = it }
+        _bodyComfortRaw.value = previous.copy(windowFl = fl, windowFr = fr, windowRl = rl, windowRr = rr)
     }
 
     private fun flushPendingWiperStsPush() {
