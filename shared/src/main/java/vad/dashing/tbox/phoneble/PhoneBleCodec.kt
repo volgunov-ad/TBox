@@ -26,12 +26,18 @@ import javax.crypto.spec.SecretKeySpec
  *   tag = HMAC-SHA256(key, type||id||counter_le||body)[0:4]
  *
  * CMD body: op u8, seat u8, arg i16le
- * REFRESH body: zeros
+ * REFRESH body: textHash u16le the phone already shows (0 = none), then zeros
  * SNAP body: page u8, gen u8, data[9]
  *   page 0: left i16le, right i16le, fan u8. Missing temp 0x7FFF, fan 0xFF
  *   page 1: mode, auto, blow, sync. Missing 0xFF
  *   page 2: four seats. Missing 0xFF
  *   page 3: media volume. Missing 0xFF. 0 is mute
+ *   page 4: playing u8 (1/0, missing 0xFF), position s u16le, duration s u16le
+ *           (missing 0xFFFF), textHash u16le, textLen u8
+ *   pages 8..18: now-playing text, 9 bytes each: title utf-8, 0x00, artist utf-8.
+ *           Sent only when textHash differs from the one in REFRESH.
+ *   Pages 0..3 are sealed as type 4 (older apps). Page 4 and later are sealed as type
+ *   0x20 + page, so each has its own nonce.
  */
 object PhoneBleCodec {
     const val SERVICE_UUID16: Int = 0x7B0E
@@ -46,6 +52,7 @@ object PhoneBleCodec {
     const val TYPE_CMD: Int = 2
     const val TYPE_REFRESH: Int = 3
     const val TYPE_SNAP: Int = 4
+    const val TYPE_SNAP_PAGE_BASE: Int = 0x20
 
     const val ID_LEN: Int = 4
     const val KEY_LEN: Int = 16
@@ -54,6 +61,23 @@ object PhoneBleCodec {
     const val SEALED_LEN: Int = 1 + ID_LEN + 4 + BODY_LEN + 4
     const val PAYLOAD_MAX: Int = SEALED_LEN
     const val SNAP_PAGES: Int = 4
+    const val PAGE_MEDIA: Int = 4
+    const val PAGE_TEXT_FIRST: Int = 8
+    const val TEXT_CHUNK: Int = 9
+    const val TITLE_MAX: Int = 60
+    const val ARTIST_MAX: Int = 30
+    const val TEXT_MAX: Int = TITLE_MAX + 1 + ARTIST_MAX
+    const val TEXT_PAGES: Int = (TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK
+    const val MISSING_U16: Int = 0xFFFF
+    private const val PAGE_MAX: Int = PAGE_TEXT_FIRST + TEXT_PAGES - 1
+
+    fun snapType(page: Int): Int = if (page >= PAGE_MEDIA) TYPE_SNAP_PAGE_BASE + page else TYPE_SNAP
+
+    fun isSnapType(type: Int): Boolean =
+        type == TYPE_SNAP || type in (TYPE_SNAP_PAGE_BASE + PAGE_MEDIA)..(TYPE_SNAP_PAGE_BASE + PAGE_MAX)
+
+    private fun isSealedType(type: Int): Boolean =
+        type == TYPE_CMD || type == TYPE_REFRESH || isSnapType(type)
     const val MISSING_TEMP: Int = 0x7FFF
     const val MISSING_U8: Int = 0xFF
 
@@ -103,6 +127,12 @@ object PhoneBleCodec {
         val sync: Int? = null,
         val seats: List<Int?> = listOf(null, null, null, null),
         val volume: Int? = null,
+        val playing: Int? = null,
+        val positionMs: Long? = null,
+        val durationMs: Long? = null,
+        val title: String? = null,
+        val artist: String? = null,
+        val textHash: Int = 0,
         val gen: Int = 0,
     )
 
@@ -167,11 +197,50 @@ object PhoneBleCodec {
         )
     }
 
-    fun refreshBody(): ByteArray = ByteArray(BODY_LEN)
+    fun refreshBody(textHash: Int = 0): ByteArray =
+        ByteArray(BODY_LEN).also { putU16(it, 0, textHash and 0xFFFF) }
 
-    fun snapshotBodies(gen: Int, snap: Snapshot): List<ByteArray> {
+    fun readRefreshTextHash(body: ByteArray): Int = if (body.size < 2) 0 else getU16(body, 0)
+
+    /** Drops characters the firmware JSON reader does not unescape, then fits [maxBytes]. */
+    fun clipText(text: String?, maxBytes: Int): String {
+        if (text == null) return ""
+        val clean = text.filter { it >= ' ' && it != '\u2028' && it != '\u2029' }.trim()
+        return utf8Truncate(clean, maxBytes).decodeToString()
+    }
+
+    /** title, 0x00, artist; empty when both are blank. */
+    fun textBytes(title: String?, artist: String?): ByteArray {
+        val t = utf8Truncate(clipText(title, TITLE_MAX), TITLE_MAX)
+        val a = utf8Truncate(clipText(artist, ARTIST_MAX), ARTIST_MAX)
+        if (t.isEmpty() && a.isEmpty()) return ByteArray(0)
+        return t + byteArrayOf(0) + a
+    }
+
+    /** FNV-1a 32 folded to 16 bits, never 0 for non-empty text. Same as the firmware. */
+    fun textHash(bytes: ByteArray): Int {
+        if (bytes.isEmpty()) return 0
+        var h = 0x811C9DC5.toInt()
+        for (b in bytes) {
+            h = h xor (b.toInt() and 0xFF)
+            h *= 0x01000193
+        }
+        val folded = (h xor (h ushr 16)) and 0xFFFF
+        return if (folded == 0) 1 else folded
+    }
+
+    /** Reference encoder for the pages the firmware builds; [phoneTextHash] as in REFRESH. */
+    fun snapshotBodies(gen: Int, snap: Snapshot, phoneTextHash: Int = 0): List<ByteArray> {
         val generation = gen and 0xFF
-        return (0 until SNAP_PAGES).map { page ->
+        val text = textBytes(snap.title, snap.artist)
+        val hash = textHash(text)
+        val pages = buildList {
+            addAll(0..PAGE_MEDIA)
+            if (text.isNotEmpty() && hash != phoneTextHash) {
+                addAll(PAGE_TEXT_FIRST until PAGE_TEXT_FIRST + (text.size + TEXT_CHUNK - 1) / TEXT_CHUNK)
+            }
+        }
+        return pages.map { page ->
             val body = ByteArray(BODY_LEN)
             body[0] = page.toByte()
             body[1] = generation.toByte()
@@ -192,9 +261,98 @@ object PhoneBleCodec {
                         body[2 + seat] = (snap.seats.getOrNull(seat) ?: MISSING_U8).toByte()
                     }
                 }
-                else -> body[2] = (snap.volume ?: MISSING_U8).toByte()
+                3 -> body[2] = (snap.volume ?: MISSING_U8).toByte()
+                PAGE_MEDIA -> {
+                    body[2] = (snap.playing ?: MISSING_U8).toByte()
+                    putU16(body, 3, seconds(snap.positionMs))
+                    putU16(body, 5, seconds(snap.durationMs))
+                    putU16(body, 7, hash)
+                    body[9] = text.size.toByte()
+                }
+                else -> {
+                    val from = (page - PAGE_TEXT_FIRST) * TEXT_CHUNK
+                    text.copyInto(body, 2, from, minOf(text.size, from + TEXT_CHUNK))
+                }
             }
             body
+        }
+    }
+
+    private fun seconds(ms: Long?): Int =
+        if (ms == null || ms < 0) MISSING_U16 else (ms / 1000L).coerceAtMost(MISSING_U16 - 1L).toInt()
+
+    /**
+     * Joins SNAP pages into one [Snapshot]. Text pages of one gen are buffered until all
+     * of them and the media page with the matching length have arrived; until then the
+     * previous title stays on screen.
+     */
+    class SnapshotAssembler {
+        var snapshot: Snapshot = Snapshot()
+            private set
+        private val chunks = arrayOfNulls<ByteArray>(TEXT_PAGES)
+        private var chunkGen = -1
+        private var pendingGen = -1
+        private var pendingLen = 0
+        private var pendingHash = 0
+
+        /** [type] is the sealed packet type; it must match the page the body claims. */
+        fun accept(type: Int, body: ByteArray): Snapshot {
+            if (body.size < BODY_LEN) return snapshot
+            val page = body[0].toInt() and 0xFF
+            val gen = body[1].toInt() and 0xFF
+            if (type != snapType(page)) return snapshot
+            if (page < PAGE_TEXT_FIRST) {
+                snapshot = overlaySnapshot(snapshot, body)
+                if (page == PAGE_MEDIA) acceptTextHeader(gen, getU16(body, 7), body[9].toInt() and 0xFF)
+            } else if (page - PAGE_TEXT_FIRST < TEXT_PAGES) {
+                if (gen != chunkGen) {
+                    chunks.fill(null)
+                    chunkGen = gen
+                }
+                chunks[page - PAGE_TEXT_FIRST] = body.copyOfRange(2, BODY_LEN)
+            }
+            completeText()
+            return snapshot
+        }
+
+        /** Local change (e.g. play/pause tap) shown before the next snapshot. */
+        fun replace(next: Snapshot) {
+            snapshot = next
+        }
+
+        private fun acceptTextHeader(gen: Int, hash: Int, len: Int) {
+            when {
+                hash == snapshot.textHash -> pendingGen = -1
+                len == 0 -> {
+                    snapshot = snapshot.copy(title = null, artist = null, textHash = hash)
+                    pendingGen = -1
+                }
+                else -> {
+                    pendingGen = gen
+                    pendingLen = len.coerceAtMost(TEXT_MAX)
+                    pendingHash = hash
+                }
+            }
+        }
+
+        private fun completeText() {
+            if (pendingGen < 0 || pendingGen != chunkGen) return
+            val needed = (pendingLen + TEXT_CHUNK - 1) / TEXT_CHUNK
+            val text = ByteArray(needed * TEXT_CHUNK)
+            for (index in 0 until needed) {
+                val chunk = chunks[index] ?: return
+                chunk.copyInto(text, index * TEXT_CHUNK)
+            }
+            val bytes = text.copyOf(pendingLen)
+            val split = bytes.indexOf(0.toByte()).let { if (it < 0) bytes.size else it }
+            val title = bytes.copyOfRange(0, split).decodeToString().ifEmpty { null }
+            val artist = if (split < bytes.size) {
+                bytes.copyOfRange(split + 1, bytes.size).decodeToString().ifEmpty { null }
+            } else {
+                null
+            }
+            snapshot = snapshot.copy(title = title, artist = artist, textHash = pendingHash)
+            pendingGen = -1
         }
     }
 
@@ -228,13 +386,19 @@ object PhoneBleCodec {
                 gen = gen,
                 volume = optionalU8(body[2].toInt() and 0xFF),
             )
+            PAGE_MEDIA -> if (body.size < 7) base else base.copy(
+                gen = gen,
+                playing = optionalU8(body[2].toInt() and 0xFF),
+                positionMs = optionalU16(getU16(body, 3))?.let { it * 1000L },
+                durationMs = optionalU16(getU16(body, 5))?.let { it * 1000L },
+            )
             else -> base
         }
     }
 
     fun seal(key: ByteArray, type: Int, id: ByteArray, counter: Long, body: ByteArray): ByteArray {
         require(key.size == KEY_LEN && id.size == ID_LEN)
-        require(type == TYPE_CMD || type == TYPE_REFRESH || type == TYPE_SNAP)
+        require(isSealedType(type))
         val counterLe = counter.toInt()
         val padded = ByteArray(BODY_LEN)
         body.copyInto(padded, 0, 0, minOf(body.size, BODY_LEN))
@@ -257,7 +421,7 @@ object PhoneBleCodec {
     fun open(key: ByteArray, payload: ByteArray): OpenPacket? {
         if (key.size != KEY_LEN || payload.size != SEALED_LEN) return null
         val type = payload[0].toInt() and 0xFF
-        if (type != TYPE_CMD && type != TYPE_REFRESH && type != TYPE_SNAP) return null
+        if (!isSealedType(type)) return null
         val id = payload.copyOfRange(1, 5)
         val maskBytes = mask(key, type, id)
         var counter = 0
@@ -290,6 +454,8 @@ object PhoneBleCodec {
     private fun optionalTemp(raw: Int): Int? = raw.takeIf { it != MISSING_TEMP }
 
     private fun optionalU8(raw: Int): Int? = raw.takeIf { it != MISSING_U8 }
+
+    private fun optionalU16(raw: Int): Int? = raw.takeIf { it != MISSING_U16 }
 
     private fun counterByte(counter: Int, index: Int): Byte =
         ((counter ushr (8 * index)) and 0xFF).toByte()
@@ -342,6 +508,14 @@ object PhoneBleCodec {
         val le = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value.toShort())
         le.array().copyInto(dst, offset)
     }
+
+    private fun putU16(dst: ByteArray, offset: Int, value: Int) {
+        dst[offset] = value.toByte()
+        dst[offset + 1] = (value ushr 8).toByte()
+    }
+
+    private fun getU16(src: ByteArray, offset: Int): Int =
+        (src[offset].toInt() and 0xFF) or ((src[offset + 1].toInt() and 0xFF) shl 8)
 
     private fun getI16(src: ByteArray, offset: Int): Int =
         ByteBuffer.wrap(src, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()

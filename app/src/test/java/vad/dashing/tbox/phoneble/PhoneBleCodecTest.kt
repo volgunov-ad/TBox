@@ -110,6 +110,86 @@ class PhoneBleCodecTest {
     }
 
     @Test
+    fun textHash_matchesFirmwareVectors() {
+        assertEquals(0, PhoneBleCodec.textHash(ByteArray(0)))
+        assertEquals(0xCD20, PhoneBleCodec.textHash("a".toByteArray()))
+        assertEquals(0x5D1C, PhoneBleCodec.textHash(PhoneBleCodec.textBytes("Песня", "Artist")))
+    }
+
+    @Test
+    fun nowPlaying_assemblesTextAndSkipsItWhenPhoneHasIt() {
+        val title = "Очень длинное название песни, чтобы не влезть"
+        val snap = PhoneBleCodec.Snapshot(
+            volume = 7,
+            playing = 1,
+            positionMs = 61_500,
+            durationMs = 215_000,
+            title = title,
+            artist = "Исполнитель",
+        )
+        val assembler = PhoneBleCodec.SnapshotAssembler()
+        val bodies = PhoneBleCodec.snapshotBodies(3, snap)
+        assertTrue(bodies.size > 5)
+        bodies.forEach { body ->
+            val type = PhoneBleCodec.snapType(body[0].toInt())
+            val packet = PhoneBleCodec.seal(key, type, id, 9, body)
+            val open = PhoneBleCodec.open(key, packet)!!
+            assertTrue(PhoneBleCodec.isSnapType(open.type))
+            assembler.accept(open.type, open.body)
+        }
+        val got = assembler.snapshot
+        assertEquals(1, got.playing)
+        assertEquals(61_000L, got.positionMs)
+        assertEquals(215_000L, got.durationMs)
+        assertEquals(PhoneBleCodec.clipText(title, PhoneBleCodec.TITLE_MAX), got.title)
+        assertEquals("Исполнитель", got.artist)
+        assertEquals(7, got.volume)
+        assertTrue(got.textHash != 0)
+
+        val again = PhoneBleCodec.snapshotBodies(4, snap.copy(playing = 0), got.textHash)
+        assertEquals(PhoneBleCodec.PAGE_MEDIA + 1, again.size)
+        again.forEach { assembler.accept(PhoneBleCodec.snapType(it[0].toInt()), it) }
+        assertEquals(0, assembler.snapshot.playing)
+        assertEquals("Исполнитель", assembler.snapshot.artist)
+    }
+
+    @Test
+    fun nowPlaying_keepsOldTextUntilAllPagesArrive_andClearsOnEmpty() {
+        val assembler = PhoneBleCodec.SnapshotAssembler()
+        fun feed(bodies: List<ByteArray>) =
+            bodies.forEach { assembler.accept(PhoneBleCodec.snapType(it[0].toInt()), it) }
+        feed(PhoneBleCodec.snapshotBodies(1, PhoneBleCodec.Snapshot(title = "Old", artist = "A")))
+        assertEquals("Old", assembler.snapshot.title)
+
+        val next = PhoneBleCodec.snapshotBodies(2, PhoneBleCodec.Snapshot(title = "New song title here"))
+        feed(next.dropLast(1))
+        assertEquals("Old", assembler.snapshot.title)
+        feed(next.takeLast(1))
+        assertEquals("New song title here", assembler.snapshot.title)
+        assertNull(assembler.snapshot.artist)
+
+        feed(PhoneBleCodec.snapshotBodies(3, PhoneBleCodec.Snapshot(playing = 0)))
+        assertNull(assembler.snapshot.title)
+        assertEquals(0, assembler.snapshot.textHash)
+    }
+
+    @Test
+    fun nowPlaying_rejectsPageSealedUnderAnotherType() {
+        val assembler = PhoneBleCodec.SnapshotAssembler()
+        val media = PhoneBleCodec.snapshotBodies(1, PhoneBleCodec.Snapshot(playing = 1))[PhoneBleCodec.PAGE_MEDIA]
+        assembler.accept(PhoneBleCodec.TYPE_SNAP, media)
+        assertNull(assembler.snapshot.playing)
+        assembler.accept(PhoneBleCodec.snapType(PhoneBleCodec.PAGE_MEDIA), media)
+        assertEquals(1, assembler.snapshot.playing)
+    }
+
+    @Test
+    fun clipText_dropsControlCharsAndCutsOnUtf8Boundary() {
+        assertEquals("ab", PhoneBleCodec.clipText("a\nb", 10))
+        assertEquals("Я".repeat(5), PhoneBleCodec.clipText("Я".repeat(10), 11))
+    }
+
+    @Test
     fun hostMapsSignalsAndVolumeCommand() {
         val hu = JSONObject(
             """
@@ -129,7 +209,16 @@ class PhoneBleCodecTest {
             """.trimIndent(),
         )
         val app = JSONObject(
-            """{"signals":[{"id":"hu_media_volume","available":true,"value":11}]}""",
+            """
+            {"signals":[
+              {"id":"hu_media_volume","available":true,"value":11},
+              {"id":"media_title","available":true,"value":"Song \"1\"/2"},
+              {"id":"media_artist","available":true,"value":"Band"},
+              {"id":"media_playing","available":true,"value":"on"},
+              {"id":"media_position_ms","available":true,"value":12345.0},
+              {"id":"media_duration_ms","available":true,"value":200000.0}
+            ]}
+            """.trimIndent(),
         )
         val snap = PhoneCompanionHost.snapshotFromSignals(hu, app)
         assertEquals(230, snap.leftTenths)
@@ -139,9 +228,19 @@ class PhoneBleCodecTest {
         assertEquals(0, snap.sync)
         assertEquals(2, snap.seats[0])
         assertEquals(11, snap.volume)
+        assertEquals(1, snap.playing)
+        assertEquals(12_345L, snap.positionMs)
+        assertEquals(200_000L, snap.durationMs)
+        assertEquals("Song \"1\"/2", snap.title)
+        assertEquals("Band", snap.artist)
         val line = EspCompanionProtocol.encodePhoneSnap(4, snap)
         assertTrue(line.contains("\"t\":\"phoneSnap\""))
         assertTrue(line.contains("\"left\":230"))
+        assertTrue(line.contains("\"play\":1"))
+        assertTrue(line.contains("\"pos\":12345"))
+        assertTrue(line.contains("\"dur\":200000"))
+        assertEquals("Song \"1\"/2", JSONObject(line).getString("title"))
+        assertEquals("Band", JSONObject(line).getString("artist"))
         assertFalse(line.contains("key"))
         val action = PhoneCompanionHost.toAction(PhoneBleCodec.OP_VOLUME, 0, 0)
         val builtin = action as AutomationAction.Builtin

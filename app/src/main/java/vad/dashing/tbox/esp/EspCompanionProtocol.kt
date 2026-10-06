@@ -253,6 +253,13 @@ object EspCompanionProtocol {
             if (value != null) extras["s$index"] = value
         }
         snap.volume?.let { extras["vol"] = it }
+        snap.playing?.let { extras["play"] = it }
+        snap.positionMs?.let { extras["pos"] = it }
+        snap.durationMs?.let { extras["dur"] = it }
+        PhoneBleCodec.clipText(snap.title, PhoneBleCodec.TITLE_MAX).takeIf { it.isNotEmpty() }
+            ?.let { extras["title"] = it }
+        PhoneBleCodec.clipText(snap.artist, PhoneBleCodec.ARTIST_MAX).takeIf { it.isNotEmpty() }
+            ?.let { extras["artist"] = it }
         return line(TYPE_PHONE_SNAP, extras)
     }
 

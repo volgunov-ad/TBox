@@ -282,11 +282,11 @@ class ExternalApiController(
             PhoneCompanionHost.headUnitSignalIds,
             AutomationSignalSource.HEAD_UNIT,
         )
-        val volume = signalReader.readSnapshot(
-            listOf("hu_media_volume"),
+        val app = signalReader.readSnapshot(
+            PhoneCompanionHost.appSignalIds,
             AutomationSignalSource.APP,
         )
-        return PhoneCompanionHost.snapshotFromSignals(headUnit, volume)
+        return PhoneCompanionHost.snapshotFromSignals(headUnit, app)
     }
 
     suspend fun executePhoneCommand(op: Int, seat: Int, arg: Int) {

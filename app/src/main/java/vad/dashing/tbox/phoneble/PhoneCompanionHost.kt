@@ -39,6 +39,15 @@ object PhoneCompanionHost {
         "rear_right_seat_mode",
     )
 
+    val appSignalIds: List<String> = listOf(
+        "hu_media_volume",
+        "media_title",
+        "media_artist",
+        "media_playing",
+        "media_position_ms",
+        "media_duration_ms",
+    )
+
     /** Returns null for unknown ops and out-of-range arguments. */
     fun toAction(op: Int, seat: Int, arg: Int): AutomationAction? = when (op) {
         PhoneBleCodec.OP_TEMP_LEFT -> arg.takeIf(::validTemp)?.let { canSet(LEFT_TEMP, it) }
@@ -92,6 +101,11 @@ object PhoneCompanionHost {
                 seatValue(hu["rear_right_seat_mode"]),
             ),
             volume = intValue(audio["hu_media_volume"]),
+            playing = onOff(audio["media_playing"]),
+            positionMs = longValue(audio["media_position_ms"]),
+            durationMs = longValue(audio["media_duration_ms"])?.takeIf { it > 0L },
+            title = (audio["media_title"] as? String)?.takeIf { it.isNotBlank() },
+            artist = (audio["media_artist"] as? String)?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -141,6 +155,12 @@ object PhoneCompanionHost {
         val number = (raw as? Number)?.toDouble() ?: return null
         if (!number.isFinite()) return null
         return number.roundToInt()
+    }
+
+    private fun longValue(raw: Any?): Long? {
+        val number = (raw as? Number)?.toDouble() ?: return null
+        if (!number.isFinite() || number < 0.0) return null
+        return number.toLong()
     }
 
     private fun text(raw: Any?): String? = (raw as? String)?.trim()?.lowercase()
