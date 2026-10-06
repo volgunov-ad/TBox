@@ -46,10 +46,18 @@ class PhoneStore(context: Context) {
         return next
     }
 
+    /** Set once the companion answered with a sealed snapshot, i.e. it knows our key. */
+    var paired: Boolean
+        get() = prefs.getBoolean(KEY_PAIRED, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_PAIRED, value).apply()
+        }
+
     private companion object {
         const val KEY_ID = "id"
         const val KEY_SECRET = "key"
         const val KEY_COUNTER = "counter"
+        const val KEY_PAIRED = "paired"
         const val COUNTER_BLOCK = 64L
     }
 }

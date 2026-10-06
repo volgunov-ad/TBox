@@ -7,7 +7,6 @@
     <string name="fan">Обдув</string>
     <string name="auto">Авто</string>
     <string name="sync">Синхр.</string>
-    <string name="sound">Звук</string>
     <string name="seats">Сиденья</string>
     <string name="rear_left">Зад лев.</string>
     <string name="rear_right">Зад прав.</string>
@@ -34,4 +33,15 @@
     <string name="seat_vent_1">В1</string>
     <string name="seat_vent_2">В2</string>
     <string name="seat_vent_3">В3</string>
+    <string name="connection">Подключение</string>
+    <string name="connection_hint">В TBox Monitor откройте «Компаньон → BLE» и нажмите «Подключить телефон». Затем нажмите «Подключить» здесь и подтвердите телефон в TBox Monitor.</string>
+    <string name="pair_sent">Запрос отправлен. Подтвердите телефон в TBox Monitor.</string>
+    <string name="pair_no_link">Компаньон не найден. Подойдите ближе к машине.</string>
+    <string name="connected">Подключено</string>
+    <string name="climate">Климат</string>
+    <string name="media">Музыка</string>
+    <string name="mute">Без звука</string>
+    <string name="mode">Режим</string>
+    <string name="blow">Направление обдува</string>
+    <string name="volume">Громкость</string>
 </resources>

@@ -7,7 +7,6 @@
     <string name="fan">Fan</string>
     <string name="auto">Auto</string>
     <string name="sync">Sync</string>
-    <string name="sound">Sound</string>
     <string name="seats">Seats</string>
     <string name="rear_left">Rear left</string>
     <string name="rear_right">Rear right</string>
@@ -34,4 +33,15 @@
     <string name="seat_vent_1">V1</string>
     <string name="seat_vent_2">V2</string>
     <string name="seat_vent_3">V3</string>
+    <string name="connection">Connection</string>
+    <string name="connection_hint">In TBox Monitor open «Companion → BLE» and tap «Connect phone». Then tap «Connect» here and confirm the phone in TBox Monitor.</string>
+    <string name="pair_sent">Request sent. Confirm the phone in TBox Monitor.</string>
+    <string name="pair_no_link">Companion not found. Move closer to the car.</string>
+    <string name="connected">Connected</string>
+    <string name="climate">Climate</string>
+    <string name="media">Music</string>
+    <string name="mute">Mute</string>
+    <string name="mode">Mode</string>
+    <string name="blow">Air direction</string>
+    <string name="volume">Volume</string>
 </resources>
