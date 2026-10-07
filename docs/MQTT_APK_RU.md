@@ -46,7 +46,8 @@
 | Одна сущность | Если значение и читается, и меняется командой, в списке и в MQTT это один элемент. Пример: режим вождения — один `select`, без отдельного датчика и без второй строки |
 
 Monitor в этой задаче меняется только аддитивно: каталог начинает отдавать схему записи
-(`catalogVersion` 4). Исполнитель команд, CAN и виджеты не трогаем.
+с парами «значение сигнала → тело команды» (`catalogVersion` 4). Исполнитель команд,
+CAN и виджеты не трогаем.
 
 ---
 
@@ -57,36 +58,73 @@ Monitor в этой задаче меняется только аддитивн�
 по той же причине `can_command` не вызывает.
 
 Клиент MQTT не должен копировать `AutomationCanValueCodec`. Иначе Android 9 и Android 10
-разъедутся. Поэтому перед экраном выбора Monitor дополняет каждый `can_command`
-полями, которые старые клиенты игнорируют:
+разъедутся.
+
+Просто перечислить допустимые значения недостаточно. Сигнал и команда говорят на разных
+языках:
+
+| Что | Сигнал отдаёт | Команда ждёт |
+|-----|---------------|--------------|
+| Режим вождения | `NOR` | сырое `0` |
+| Обогрев сиденья | `heat_2` | своё целое |
+| Температура климата | `22.5` (°C) | код из `HVAC_TEMP_MB_CAN_ALLOWED` |
+| Окно | `vent` | `vent` (ключ уже переносной) |
+| Питание климата | `on` | `on` (ключ уже переносной) |
+
+Если клиент получит только `["NOR", …]` из сигнала и `[0, 1, 2]` из команды, ему придётся
+угадывать соответствие. Поэтому Monitor отдаёт у `can_command` готовую пару «значение
+сигнала → тело команды»:
 
 ```json
 {
   "type": "can_command",
   "bus": "vehicle",
-  "propertyId": 188,
-  "label": "Питание климата",
+  "propertyId": 1234,
+  "label": "Режим вождения",
   "safety": "confirm",
-  "operations": ["set", "toggle"],
-  "valueKeys": ["off", "on"],
-  "allowedValues": [],
-  "numericRange": null,
-  "signalId": "hvac_power",
+  "operations": ["set"],
+  "signalId": "drive_mode",
+  "write": {
+    "kind": "options",
+    "options": [
+      { "state": "ECO", "value": 2 },
+      { "state": "NOR", "value": 0 },
+      { "state": "SPT", "value": 1 }
+    ]
+  },
   "voiceAliasesRu": []
 }
 ```
 
+| `write.kind` | Когда | Поля | Компонент HA |
+|--------------|-------|------|--------------|
+| `binary` | `ToggleBinary` | `options` из двух пар, `state` = `off` / `on`, `value` = `off` / `on` | `switch` |
+| `options` | Конечный список (режимы, сиденья, окна, фары, обдув) | `options[]`: `state` как в сигнале, `value` — то, что положить в `value` invoke (строка-ключ или целое) | `select` |
+| `number` | Числовая уставка | `min`, `max`, `step`, `unit` в единицах сигнала; `options[]` — пары «число сигнала → value» для точного кодирования | `number` |
+| `pulse` | `trunk_pulse` и подобное | `options[]` с одним или двумя действиями (`open` / `close`) | `button` на каждое |
+
+Для температуры климата `number` показывает градусы, а `value` в паре — код, который
+сейчас считает `HvacClimateDomain.celsiusToMbCanTempRaw`. Клиент берёт ближайшую пару
+и в invoke кладёт её `value`. Своей формулы градусы → код у клиента нет.
+
+Пары строит Monitor из уже существующего: `DRIVE_MODE_WIDGET_OPTIONS`,
+`AutomationSignalStateEncoding`, `AutomationCanValueCodec`, `HvacClimateDomain`.
+Если для `can_command` пару надёжно построить нельзя, `write` = `null`, и строка
+остаётся датчиком без команды. Так лучше, чем отправить в машину не то значение.
+
 | Поле | Смысл |
 |------|--------|
 | `operations` | Что реально разрешает `AutomationCanCatalog` |
-| `valueKeys` | Строки, которые `POST /v1/actions/invoke` уже принимает в `value` (`on`, `off`, `close`, `vent`, `comfort_open`, `open`, …) |
-| `allowedValues` | Целые, если переносного ключа нет (режимы с сырым int) |
-| `numericRange` | `{ "min", "max", "step" }` для диапазона, иначе `null` |
 | `signalId` | `storageKey` сигнала-подтверждения, если он один. Иначе `null` |
+| `write` | Схема записи по таблице выше или `null` |
 
 `signalId` задаётся явной таблицей в Monitor, не угадыванием по подписи. Багажник как
 импульс (`trunk_pulse`) и датчик двери багажника остаются разными строками, если это
 разные id.
+
+Юнит-тест каталога в Monitor проверяет: каждый `state` в `options` есть в `stateOptions`
+связанного сигнала, а каждое тело `{ type: can_command, …, value }` проходит
+`AutomationCanCatalog.isAllowed` на обоих режимах ГУ, где команда поддерживается.
 
 `catalogVersion` становится **4**. Обновить [EXTERNAL_API_RU.md](EXTERNAL_API_RU.md) §7.3
 и `ExternalApiRouterTest` в том же изменении. `voiceAliasesRu` и старые поля не меняются.
@@ -140,8 +178,12 @@ BOOT_COMPLETED или кнопка в UI
 | Назначение | Топик | Retain | QoS |
 |------------|-------|--------|-----|
 | Доступность | `tbox/dashing/status` = `online` \| `offline` | да | 1 |
-| Состояние | `tbox/dashing/<component>/<object_id>/state` | да | 1 |
-| Команда | `tbox/dashing/<component>/<object_id>/set` | нет | 1 |
+| Состояние | `tbox/dashing/<object_id>/state` | да | 1 |
+| Команда | `tbox/dashing/<object_id>/set` | нет | 1 |
+
+Типа сущности (`sensor`, `select`, …) в пути нет. Если после обновления каталога датчик
+получит команду и станет `select`, топики останутся теми же, а внешние подписчики не
+сломаются. Тип живёт только в config-топике discovery.
 
 `object_id`:
 
@@ -155,22 +197,31 @@ BOOT_COMPLETED или кнопка в UI
 
 ```text
 tbox/dashing/status
-tbox/dashing/sensor/outside_temperature/state      → 12.5
-tbox/dashing/switch/hvac_power/state               → ON
-tbox/dashing/switch/hvac_power/set                 → OFF
-tbox/dashing/select/drive_mode/state               → NOR
-tbox/dashing/select/drive_mode/set                 → SPT
-tbox/dashing/select/window_front_left/state        → vent
-tbox/dashing/button/builtin_media_next/set         → PRESS
-tbox/dashing/button/automation_<uuid>/set          → PRESS
+tbox/dashing/outside_temperature/state      → 12.5
+tbox/dashing/hvac_power/state               → ON
+tbox/dashing/hvac_power/set                 → OFF
+tbox/dashing/drive_mode/state               → NOR
+tbox/dashing/drive_mode/set                 → SPT
+tbox/dashing/window_front_left/state        → vent
+tbox/dashing/builtin_media_next/set         → PRESS
+tbox/dashing/automation_<uuid>/set          → PRESS
 ```
 
 Двоичные значения API `on`/`off` на границе переводятся в `ON`/`OFF`. Остальные
 состояния (`D`, `heat_1`, `close`, `vent`) публикуются как в каталоге. Число — десятичная
 строка без единицы измерения; единица остаётся в discovery.
 
-LWT брокера совпадает с `offline` и retained. После каждого подключения клиент заново
-публикует `online`, конфиги discovery и последние известные состояния.
+LWT брокера совпадает с `offline` и retained. Keepalive 30 с: если ГУ выключили вместе
+с зажиганием, брокер сам отдаст `offline` примерно через 45 с. При штатном выключении
+(`ACTION_SHUTDOWN`) и остановке сервиса клиент публикует `offline` сам, не дожидаясь LWT.
+
+После каждого подключения клиент заново публикует `online`, конфиги discovery и
+последние известные состояния.
+
+Сигнал с `available: false` (CAN спит, нет TBox) не публикуется как `0` или пустая
+строка. В `state` уходит `unknown`, Home Assistant покажет «неизвестно». Отдельно от
+этого не публикуются заведомо служебные значения: −40 °C у температур, которые
+Monitor отдаёт как «нет данных», трактуются как недоступность.
 
 Командные топики клиент не помечает retain. Входящее сообщение с флагом retain
 игнорируется, чтобы залипшая команда не открывала окно при каждом реконнекте.
@@ -187,8 +238,8 @@ LWT брокера совпадает с `offline` и retained. После ка�
 Пользователь отмечает вещи одним тумблером на строку. Вторая галочка «только читать» /
 «ещё и команда» не показывается.
 
-Если у сигнала есть запись (`can_command` с этим `signalId` и непустые `valueKeys`,
-`allowedValues` или `numericRange`), строка сразу описывает одну управляемую сущность.
+Если у сигнала есть запись (`can_command` с этим `signalId` и непустым `write`),
+строка сразу описывает одну управляемую сущность.
 В MQTT у неё один `object_id`, один `state` и один `set`. Отдельный датчик рядом
 не публикуется, и в списке нет второй строки с тем же смыслом. Режим вождения так
 становится одним `select`: состояние уходит в `state`, выбор в Home Assistant приходит
@@ -207,12 +258,19 @@ LWT брокера совпадает с `offline` и retained. После ка�
 | Условие | Компонент HA | Команда MQTT → API |
 |---------|----------------|--------------------|
 | Число, только состояние | `sensor` | — |
-| Число и `numericRange` у связанной команды | `number` | `value` = целое из текста |
+| Число и `write.kind = number` | `number` | ближайшая пара → её `value` |
 | Состояние из `on`/`off` без команды | `binary_sensor` | — |
-| То же и команда с `valueKeys` `on`/`off` | `switch` | `ON`→`on`, `OFF`→`off`, `operation: set` |
-| Несколько значений и есть запись | `select` | текст опции как `value` |
-| `trunk_pulse` или builtin без состояния | `button` | `PRESS` → один заранее известный invoke |
+| `write.kind = binary` | `switch` | `ON`→`on`, `OFF`→`off`, `operation: set` |
+| `write.kind = options` | `select` | выбранный `state` → `value` из той же пары |
+| `write.kind = pulse` или builtin без состояния | `button` | `PRESS` → один заранее известный invoke |
 | Автоматизация | `button` | `POST /v1/automations/{id}/run` |
+
+Перед invoke клиент проверяет вход: опция есть в списке, число в `min…max`. Всё прочее
+игнорируется с записью в «последнюю ошибку», в машину не уходит.
+
+Одна и та же сущность принимает не больше одной команды в секунду. Лишнее
+отбрасывается. Так автоматизация Home Assistant, застрявшая в цикле, не дёргает CAN
+непрерывно.
 
 Окна в сигналах — дискретные положения, не процент 0…100. Это `select`
 (`close` / `vent` / `comfort_open` / `open`), не `cover`.
@@ -268,6 +326,18 @@ Home Assistant обновляет подпись того же устройст�
 
 Префикс discovery редактируется и по умолчанию равен `homeassistant`. Он должен совпасть
 с MQTT discovery prefix в Home Assistant.
+
+Клиент подписан на `<префикс discovery>/status`. Когда Home Assistant после перезапуска
+публикует там `online`, клиент заново отправляет все config и текущие состояния.
+
+Клиент хранит список config-топиков, которые он сам опубликовал. При снятии тумблера,
+смене типа сущности, смене `deviceId`, префикса discovery или выключении
+«Показывать в Home Assistant» каждый лишний топик из списка очищается пустой
+retained-публикацией. В Home Assistant не остаются сущности-сироты.
+
+В каждом config: `device.sw_version` = версия TBox MQTT и
+`origin` = `{ "name": "TBox MQTT", "sw": <версия> }`. Так в Home Assistant видно,
+откуда пришло устройство.
 
 ---
 
@@ -405,13 +475,21 @@ mqtt/
   src/test/java/vad/dashing/mqtt/
     ha/TopicLayoutTest.kt
     ha/DiscoveryPayloadTest.kt
+    ha/DiscoveryCleanupTest.kt
     ha/EntityKindTest.kt
     bridge/SignalPollBatchTest.kt
     bridge/CommandPayloadTest.kt
+    bridge/CommandGuardTest.kt
 ```
 
 Юнит-тесты без брокера и без Android-эмулятора: раскладка топиков, JSON discovery,
-выбор компонента, нарезка опроса по source и 50 id, перевод `ON`/`OFF` в тело invoke.
+очистка лишних config-топиков, выбор компонента, нарезка опроса по source и 50 id,
+перевод значения из Home Assistant в тело invoke через пары `write`, отказ на значение
+вне списка, лимит одной команды в секунду.
+
+Для ручной проверки с ПК — `tools/tbox_mqtt_smoke.py`. Ему нужен `paho-mqtt`
+в `requirements.txt`. Скрипт подписывается на `tbox/<deviceId>/#` и `homeassistant/#`,
+печатает изменения и по флагу шлёт одну команду в `set`.
 
 Сборка:
 
@@ -429,7 +507,7 @@ mqtt/
 | # | Этап | Где | Критерий |
 |---|------|-----|----------|
 | 0 | Этот план | docs | Согласован |
-| 1 | Каталог v4: operations, valueKeys, allowedValues, numericRange, signalId | app | Старые поля на месте; тест каталога знает version 4; Voice по-прежнему игнорирует новые поля |
+| 1 | Каталог v4: operations, signalId, write с парами «сигнал → команда» | app | Старые поля на месте; тест каталога знает version 4; каждая пара проходит `isAllowed`; Voice по-прежнему игнорирует новые поля |
 | 2 | Каркас `:mqtt`, тема как у Monitor, настройки, шифрование секретов, health, кнопка «Отправить запрос» и запасная вставка токена | mqtt | На ГУ экран совпадает со стилем «Настройки» Monitor; токен приходит после «Разрешить» в Monitor |
 | 3 | Топики, выбор сущности, discovery JSON, юнит-тесты | mqtt | Тесты без брокера |
 | 4 | Публикация состояний по изменению, LWT, пачки signals | mqtt | Отмеченный датчик появляется в брокере |
@@ -438,6 +516,7 @@ mqtt/
 | 7 | TLS, проверка брокера, свой CA | mqtt | 1883 без TLS и 8883 с CA |
 | 8 | Boot + foreground-сервис | mqtt | После перезагрузки ГУ мост поднимается сам, если автозапуск включён |
 | 9 | Список каталога в UI, снятие сущности удаляет discovery | mqtt | Снятый флажок убирает сущность из Home Assistant |
+| 9a | PC smoke `tools/tbox_mqtt_smoke.py` | tools | С ПК видны состояния и уходит одна команда |
 
 Этапы 1 и 3 можно делать параллельно. На ГУ проверяются 4–9; в облаке собирается APK
 и гоняются юнит-тесты.
@@ -470,4 +549,4 @@ mqtt/
 8. После перезагрузки ГУ сервис поднимается сам.
 9. Экран на ГУ использует те же цвета, кегли и строки тумблеров, что «Настройки» Monitor, в светлой и тёмной системной теме. Три раздела: «Подключение», «Состояние», «Сущности». Обычный путь — связаться, глянуть состояние, отметить имена.
 10. Имя устройства в разделе «Сущности» становится `device.name` в Home Assistant. Смена имени не меняет топики и не создаёт второе устройство.
-10. Режим вождения и любой другой сигнал с записью — одна строка в списке и одна сущность в Home Assistant (`select`, `switch` или `number` со `state` и `set`). Отдельного датчика с тем же смыслом нет.
+11. Режим вождения и любой другой сигнал с записью — одна строка в списке и одна сущность в Home Assistant (`select`, `switch` или `number` со `state` и `set`). Отдельного датчика с тем же смыслом нет.
