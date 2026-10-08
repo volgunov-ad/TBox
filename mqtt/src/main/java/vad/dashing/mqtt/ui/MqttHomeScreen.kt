@@ -9,9 +9,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,9 +28,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -266,6 +275,7 @@ private fun EntitiesTab(
     viewModel: MqttHomeViewModel,
     onSettingsSaved: () -> Unit,
 ) {
+    var filterText by rememberSaveable { mutableStateOf("") }
     if (state.settings.accessToken.isBlank()) {
         Text(
             "Сначала подключитесь к Monitor",
@@ -300,9 +310,16 @@ private fun EntitiesTab(
     if (state.entitiesMessage.isNotBlank()) {
         Text(state.entitiesMessage, style = MaterialTheme.typography.tboxBody, modifier = Modifier.padding(top = 8.dp))
     }
+    if (state.entities.isEmpty()) return
+    EntityFilterField(filterText) { filterText = it }
+    var any = false
     EntityGroup.entries.forEach { group ->
-        val rows = state.entities.filter { it.group == group }
+        val rows = state.entities.filter { entity ->
+            entity.group == group &&
+                entityMatchesFilter(entity.label, entity.description, entity.objectId, group.title, filterText)
+        }
         if (rows.isEmpty()) return@forEach
+        any = true
         SectionTitle(group.title)
         rows.forEach { entity ->
             SettingSwitch(
@@ -316,6 +333,54 @@ private fun EntitiesTab(
             )
         }
     }
+    if (!any) {
+        Text(
+            "Ничего не найдено",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+/** Same match as the widget picker: title, description and the stored key. */
+internal fun entityMatchesFilter(
+    label: String,
+    description: String,
+    objectId: String,
+    groupTitle: String,
+    query: String,
+): Boolean {
+    val needle = query.trim().lowercase()
+    if (needle.isEmpty()) return true
+    return label.lowercase().contains(needle) ||
+        description.lowercase().contains(needle) ||
+        objectId.lowercase().contains(needle) ||
+        groupTitle.lowercase().contains(needle)
+}
+
+@Composable
+private fun EntityFilterField(value: String, onValue: (String) -> Unit) {
+    val focusManager = LocalFocusManager.current
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValue,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        textStyle = MaterialTheme.typography.tboxTitle,
+        label = { Text("Поиск", style = MaterialTheme.typography.tboxBody) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        trailingIcon = {
+            if (value.isNotEmpty()) {
+                IconButton(onClick = { onValue("") }) {
+                    Icon(Icons.Filled.Clear, contentDescription = "Очистить")
+                }
+            }
+        },
+    )
 }
 
 @Composable
