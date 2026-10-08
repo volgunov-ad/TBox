@@ -138,6 +138,7 @@ class MqttBridgeService : Service() {
     }
 
     private fun onBrokerConnected(settings: MqttSettings) {
+        session.forgetSubscriptions()
         republishStatic(settings)
         syncSubscriptions(settings)
         publishStatus(settings)

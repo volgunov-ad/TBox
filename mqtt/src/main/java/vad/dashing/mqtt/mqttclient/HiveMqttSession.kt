@@ -1,8 +1,10 @@
 package vad.dashing.mqtt.mqttclient
 
+import com.hivemq.client.mqtt.MqttClientState
 import com.hivemq.client.mqtt.MqttClientSslConfig
 import com.hivemq.client.mqtt.MqttGlobalPublishFilter
 import com.hivemq.client.mqtt.datatypes.MqttQos
+import com.hivemq.client.mqtt.exceptions.MqttClientStateException
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client
 import vad.dashing.mqtt.settings.MqttSettings
@@ -32,8 +34,8 @@ class HiveMqttSession {
     ) {
         val key = settings.connectionKey() + "|" + statusTopic
         if (client != null && connectionKey == key) {
-            if (!connected) {
-                connectExisting(willTopic)
+            if (!connected && connectExisting(willTopic)) {
+                onConnected()
             }
             return
         }
@@ -45,8 +47,14 @@ class HiveMqttSession {
             .serverHost(normalized.brokerHost)
             .serverPort(normalized.brokerPort)
             .automaticReconnectWithDefaultConfig()
-            .addConnectedListener { onConnected() }
-            .addDisconnectedListener { connected = false; onDisconnected() }
+            .addConnectedListener {
+                connected = true
+                onConnected()
+            }
+            .addDisconnectedListener {
+                connected = false
+                onDisconnected()
+            }
         if (normalized.tlsEnabled) {
             builder.sslConfig(sslConfig(normalized.caPem))
         }
@@ -86,6 +94,11 @@ class HiveMqttSession {
             .get(8, TimeUnit.SECONDS)
     }
 
+    /** Clean session drops broker subscriptions. The next replace sends them again. */
+    fun forgetSubscriptions() {
+        subscribed.clear()
+    }
+
     fun replaceSubscriptions(topics: Set<String>) {
         val current = client ?: return
         if (!connected) return
@@ -109,8 +122,21 @@ class HiveMqttSession {
         closeQuietly()
     }
 
-    private fun connectExisting(statusTopic: String? = null) {
-        val current = client ?: return
+    /**
+     * @return true when the client is already connected and the caller should publish again.
+     * A fresh connect notifies through the connected listener instead.
+     */
+    private fun connectExisting(statusTopic: String? = null): Boolean {
+        val current = client ?: return false
+        when (mqttConnectStep(current.config.state)) {
+            MqttConnectStep.ALREADY_UP -> {
+                connected = true
+                subscribed.clear()
+                return true
+            }
+            MqttConnectStep.WAIT -> return false
+            MqttConnectStep.CONNECT -> Unit
+        }
         val connect = current.connectWith().keepAlive(30).cleanSession(true)
         if (statusTopic != null) {
             connect.willPublish()
@@ -120,9 +146,22 @@ class HiveMqttSession {
                 .retain(true)
                 .applyWillPublish()
         }
-        connect.send().get(15, TimeUnit.SECONDS)
+        try {
+            connect.send().get(15, TimeUnit.SECONDS)
+        } catch (error: Exception) {
+            if (error.hasCause<MqttClientStateException>()) {
+                if (current.config.state.isConnected) {
+                    connected = true
+                    subscribed.clear()
+                    return true
+                }
+                return false
+            }
+            throw error
+        }
         connected = true
         subscribed.clear()
+        return false
     }
 
     private fun closeQuietly() {
@@ -184,4 +223,29 @@ class HiveMqttSession {
             return builder.build()
         }
     }
+}
+
+internal enum class MqttConnectStep {
+    CONNECT,
+    WAIT,
+    ALREADY_UP,
+}
+
+/** Automatic reconnect already owns every state except a fully stopped client. */
+internal fun mqttConnectStep(state: MqttClientState): MqttConnectStep = when (state) {
+    MqttClientState.DISCONNECTED -> MqttConnectStep.CONNECT
+    MqttClientState.CONNECTED -> MqttConnectStep.ALREADY_UP
+    MqttClientState.CONNECTING,
+    MqttClientState.CONNECTING_RECONNECT,
+    MqttClientState.DISCONNECTED_RECONNECT,
+    -> MqttConnectStep.WAIT
+}
+
+private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is T) return true
+        current = current.cause
+    }
+    return false
 }
