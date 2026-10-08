@@ -585,6 +585,8 @@ class BackgroundService : Service() {
         const val ACTION_ESP_BLE_LEARN_BEGIN = "vad.dashing.tbox.ESP_BLE_LEARN_BEGIN"
         const val ACTION_ESP_BLE_LEARN_END = "vad.dashing.tbox.ESP_BLE_LEARN_END"
         const val EXTRA_ESP_BLE_LEARN_TIMEOUT_MS = "esp_ble_learn_timeout_ms"
+        const val EXTRA_ESP_BLE_KEY = "esp_ble_key"
+        const val ACTION_ESP_BLE_KEY_SET = "vad.dashing.tbox.ESP_BLE_KEY_SET"
         const val ACTION_ESP_BLE_FORGET = "vad.dashing.tbox.ESP_BLE_FORGET"
         const val EXTRA_ESP_BLE_MAC = "esp_ble_mac"
         const val EXTRA_ESP_BLE_FORGET_ALL = "esp_ble_forget_all"
@@ -1731,7 +1733,21 @@ class BackgroundService : Service() {
             }
             ACTION_ESP_BLE_LEARN_BEGIN -> {
                 val timeout = intent.getLongExtra(EXTRA_ESP_BLE_LEARN_TIMEOUT_MS, 30_000L)
-                espCompanionManager?.beginBleLearn(timeout.coerceIn(5_000L, 120_000L))
+                val key = EspCompanionProtocol.normalizeBleKey(
+                    intent.getStringExtra(EXTRA_ESP_BLE_KEY).orEmpty(),
+                )
+                if (key != null) {
+                    espCompanionManager?.beginBleLearn(timeout.coerceIn(5_000L, 120_000L), key)
+                }
+            }
+            ACTION_ESP_BLE_KEY_SET -> {
+                val mac = intent.getStringExtra(EXTRA_ESP_BLE_MAC).orEmpty()
+                val key = EspCompanionProtocol.normalizeBleKey(
+                    intent.getStringExtra(EXTRA_ESP_BLE_KEY).orEmpty(),
+                )
+                if (mac.isNotBlank() && key != null) {
+                    espCompanionManager?.setBleKey(mac, key)
+                }
             }
             ACTION_ESP_BLE_LEARN_END -> {
                 espCompanionManager?.endBleLearn()

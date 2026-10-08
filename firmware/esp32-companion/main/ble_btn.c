@@ -16,6 +16,7 @@
 #include "host/ble_gap.h"
 #include "services/gap/ble_svc_gap.h"
 
+#include "bthome_crypt.h"
 #include "protocol.h"
 
 static const char *TAG = "ble_btn";
@@ -59,6 +60,13 @@ static uint8_t s_last_mac[6];
 static bool s_have_last_mac;
 static ble_dedup_t s_dedup[8];
 static int s_dedup_count;
+/* Per-remote BTHome key. A keyed remote is accepted only encrypted with a rising counter. */
+static uint8_t s_keys[BLE_BTN_MAX_MACS][BTHOME_KEY_LEN];
+static bool s_has_key[BLE_BTN_MAX_MACS];
+static uint32_t s_ctr[BLE_BTN_MAX_MACS];
+static bool s_ctr_valid[BLE_BTN_MAX_MACS];
+static uint8_t s_learn_key[BTHOME_KEY_LEN];
+static bool s_learn_key_valid;
 
 static void mac_to_str(const uint8_t *addr, char out[18])
 {
@@ -117,10 +125,22 @@ static bool save_nvs(void)
     nvs_set_u8(h, NVS_KEY_ON, s_on ? 1 : 0);
     nvs_set_u8(h, NVS_KEY_COUNT, (uint8_t)s_mac_count);
     for (int i = 0; i < BLE_BTN_MAX_MACS; i++) {
-        char key[8];
+        char key[12];
         snprintf(key, sizeof(key), "m%d", i);
         if (i < s_mac_count) {
             nvs_set_blob(h, key, s_macs[i], 6);
+        } else {
+            nvs_erase_key(h, key);
+        }
+        snprintf(key, sizeof(key), "k%d", i);
+        if (i < s_mac_count && s_has_key[i]) {
+            nvs_set_blob(h, key, s_keys[i], BTHOME_KEY_LEN);
+        } else {
+            nvs_erase_key(h, key);
+        }
+        snprintf(key, sizeof(key), "c%d", i);
+        if (i < s_mac_count && s_has_key[i] && s_ctr_valid[i]) {
+            nvs_set_u32(h, key, s_ctr[i]);
         } else {
             nvs_erase_key(h, key);
         }
@@ -146,13 +166,33 @@ static void load_nvs(void)
     s_mac_count = 0;
     if (n > BLE_BTN_MAX_MACS) n = BLE_BTN_MAX_MACS;
     for (int i = 0; i < n; i++) {
-        char key[8];
+        char key[12];
         snprintf(key, sizeof(key), "m%d", i);
         size_t len = 6;
-        if (nvs_get_blob(h, key, s_macs[s_mac_count], &len) == ESP_OK && len == 6) {
-            s_mac_count++;
+        if (nvs_get_blob(h, key, s_macs[s_mac_count], &len) != ESP_OK || len != 6) continue;
+        int slot = s_mac_count++;
+        s_has_key[slot] = false;
+        s_ctr_valid[slot] = false;
+        snprintf(key, sizeof(key), "k%d", i);
+        len = BTHOME_KEY_LEN;
+        if (nvs_get_blob(h, key, s_keys[slot], &len) == ESP_OK && len == BTHOME_KEY_LEN) {
+            s_has_key[slot] = true;
+            snprintf(key, sizeof(key), "c%d", i);
+            s_ctr_valid[slot] = nvs_get_u32(h, key, &s_ctr[slot]) == ESP_OK;
         }
     }
+    nvs_close(h);
+}
+
+/* Button presses are rare, so the counter is written on every accepted press. */
+static void save_counter(int idx)
+{
+    nvs_handle_t h;
+    if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
+    char key[12];
+    snprintf(key, sizeof(key), "c%d", idx);
+    nvs_set_u32(h, key, s_ctr[idx]);
+    nvs_commit(h);
     nvs_close(h);
 }
 
@@ -211,7 +251,6 @@ static int bthome_obj_size(uint8_t id)
 }
 
 typedef struct {
-    bool encrypted;
     bool have_pid;
     uint8_t pid;
     int battery; /* -1 unknown */
@@ -219,24 +258,9 @@ typedef struct {
     uint8_t buttons[4];
 } bthome_parse_t;
 
-static bool parse_bthome(const uint8_t *data, uint8_t len, bthome_parse_t *out)
+/** Objects start at data[i]; for plain frames after the info byte, for encrypted ones the plaintext. */
+static bool parse_objects(const uint8_t *data, int i, int len, bthome_parse_t *out)
 {
-    memset(out, 0, sizeof(*out));
-    out->battery = -1;
-    if (!data || len < 2) return false;
-    uint8_t info = data[0];
-    out->encrypted = (info & 0x01) != 0;
-    if (out->encrypted) return false;
-    uint8_t ver = (info >> 5) & 0x07;
-    if (ver != 2) {
-        /* Still try; some firmwares set version oddly. */
-    }
-    int i = 1;
-    if (info & 0x02) {
-        /* MAC included — 6 bytes */
-        if (i + 6 > len) return false;
-        i += 6;
-    }
     while (i < len) {
         uint8_t oid = data[i++];
         int psz = bthome_obj_size(oid);
@@ -259,6 +283,20 @@ static bool parse_bthome(const uint8_t *data, uint8_t len, bthome_parse_t *out)
     return out->button_count > 0 || out->battery >= 0 || out->have_pid;
 }
 
+static bool parse_plain(const uint8_t *data, uint8_t len, bthome_parse_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->battery = -1;
+    if (!data || len < 2) return false;
+    int i = 1;
+    if (data[0] & 0x02) {
+        /* MAC included — 6 bytes */
+        if (i + 6 > len) return false;
+        i += 6;
+    }
+    return parse_objects(data, i, len, out);
+}
+
 static int start_scan(void);
 static void stop_scan(void);
 
@@ -273,7 +311,7 @@ void ble_radio_unlock(void)
 }
 
 /* s_macs / s_mac_count are shared with ble_phone (common device limit): always under ble_radio_lock. */
-static bool add_mac(const uint8_t *addr)
+static bool add_mac(const uint8_t *addr, const uint8_t *key, uint32_t counter)
 {
     ble_radio_lock();
     bool ok = true;
@@ -281,8 +319,12 @@ static bool add_mac(const uint8_t *addr)
         if (s_mac_count + ble_phone_count() >= BLE_DEVICE_MAX) {
             ok = false;
         } else {
-            memcpy(s_macs[s_mac_count], addr, 6);
-            s_mac_count++;
+            int slot = s_mac_count++;
+            memcpy(s_macs[slot], addr, 6);
+            s_has_key[slot] = key != NULL;
+            s_ctr_valid[slot] = key != NULL;
+            s_ctr[slot] = counter;
+            if (key) memcpy(s_keys[slot], key, BTHOME_KEY_LEN);
             ok = save_nvs();
         }
     }
@@ -290,24 +332,82 @@ static bool add_mac(const uint8_t *addr)
     return ok;
 }
 
-static bool mac_allowed(const uint8_t *addr)
-{
-    ble_radio_lock();
-    bool allowed = find_mac(addr) >= 0;
-    ble_radio_unlock();
-    return allowed;
-}
-
 static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
                               const uint8_t *svc, uint8_t svc_len)
 {
+    if (!svc || svc_len < 2) return;
+    const bool encrypted = (svc[0] & 0x01) != 0;
+    uint8_t key[BTHOME_KEY_LEN];
+    bool have_key = false;
+    bool learn_key = false;
+
+    ble_radio_lock();
+    int idx = find_mac(addr);
+    const bool learn = s_learn;
+    if (idx >= 0 && s_has_key[idx]) {
+        memcpy(key, s_keys[idx], BTHOME_KEY_LEN);
+        have_key = true;
+    } else if (idx < 0 && learn && s_learn_key_valid) {
+        memcpy(key, s_learn_key, BTHOME_KEY_LEN);
+        have_key = true;
+        learn_key = true;
+    }
+    ble_radio_unlock();
+
+    /* A key means plain frames from that address are forgeries. */
+    if (have_key != encrypted) return;
+
     bthome_parse_t parsed;
-    if (!parse_bthome(svc, svc_len, &parsed)) return;
-    if (parsed.encrypted) return;
+    uint32_t counter = 0;
+    if (encrypted) {
+        uint8_t mac_msb[6];
+        uint8_t plain[32];
+        for (int i = 0; i < 6; i++) mac_msb[i] = addr[5 - i];
+        int n = bthome_decrypt(key, mac_msb, svc, svc_len, plain, sizeof(plain), &counter);
+        if (n <= 0) return;
+        memset(&parsed, 0, sizeof(parsed));
+        parsed.battery = -1;
+        if (!parse_objects(plain, 0, n, &parsed)) return;
+    } else if (!parse_plain(svc, svc_len, &parsed)) {
+        return;
+    }
 
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     char mac_str[18];
     mac_to_str(addr, mac_str);
+    const bool has_btn_event = parsed.button_count > 0;
+
+    if (idx < 0) {
+        if (!learn || !has_btn_event) return;
+        protocol_send_ble_seen(mac_str, rssi, now_ms);
+        if (add_mac(addr, learn_key ? key : NULL, counter)) {
+            ESP_LOGI(TAG, "learned %s%s", mac_str, learn_key ? " (encrypted)" : "");
+            ble_radio_lock();
+            s_learn = false;
+            s_learn_key_valid = false;
+            ble_radio_unlock();
+            protocol_send_ble_ack("allow", true, NULL);
+            protocol_send_ble_status();
+            protocol_send_ble_ack("learnEnd", true, NULL);
+        } else {
+            protocol_send_ble_ack("allow", false, "full");
+            return;
+        }
+    } else if (encrypted) {
+        bool fresh;
+        ble_radio_lock();
+        /* The slot may have moved while the frame was decrypted. */
+        idx = find_mac(addr);
+        fresh = idx >= 0 && s_has_key[idx] && (!s_ctr_valid[idx] || counter > s_ctr[idx]);
+        if (fresh) {
+            s_ctr[idx] = counter;
+            s_ctr_valid[idx] = true;
+            if (has_btn_event) save_counter(idx);
+        }
+        ble_radio_unlock();
+        /* Repeats of one frame share the counter; older counters are replays. */
+        if (!fresh) return;
+    }
 
     if (parsed.battery >= 0) {
         s_last_bat = parsed.battery;
@@ -316,23 +416,6 @@ static void handle_bthome_adv(const uint8_t *addr, int8_t rssi,
     memcpy(s_last_mac, addr, 6);
     s_have_last_mac = true;
 
-    const bool allowed = mac_allowed(addr);
-    const bool has_btn_event = parsed.button_count > 0;
-
-    if (s_learn && has_btn_event && !allowed) {
-        protocol_send_ble_seen(mac_str, rssi, now_ms);
-        if (add_mac(addr)) {
-            ESP_LOGI(TAG, "learned %s", mac_str);
-            s_learn = false;
-            protocol_send_ble_ack("allow", true, NULL);
-            protocol_send_ble_status();
-            protocol_send_ble_ack("learnEnd", true, NULL);
-        } else {
-            protocol_send_ble_ack("allow", false, "full");
-        }
-    }
-
-    if (!mac_allowed(addr)) return;
     if (dedup_hit(addr, parsed.pid, parsed.have_pid)) return;
 
     for (int b = 0; b < parsed.button_count; b++) {
@@ -530,6 +613,7 @@ bool ble_btn_set_on(bool on)
     if (!on) {
         stop_scan();
         s_learn = false;
+        s_learn_key_valid = false;
         ble_phone_learn_end();
     }
     ble_radio_unlock();
@@ -545,28 +629,64 @@ bool ble_btn_set_on(bool on)
     return true;
 }
 
-bool ble_btn_learn_begin(uint32_t timeout_ms)
+bool ble_btn_learn_begin(uint32_t timeout_ms, const uint8_t *key)
 {
     if (!s_on) {
         /* Auto-enable scan for learn. */
         ble_btn_set_on(true);
     }
     if (timeout_ms == 0) timeout_ms = BLE_BTN_LEARN_DEFAULT_MS;
+    ble_radio_lock();
+    s_learn_key_valid = key != NULL;
+    if (key) memcpy(s_learn_key, key, BTHOME_KEY_LEN);
     s_learn = true;
     s_learn_deadline_ms = (uint32_t)(esp_timer_get_time() / 1000ULL) + timeout_ms;
+    ble_radio_unlock();
     return true;
 }
 
 void ble_btn_learn_end(void)
 {
+    ble_radio_lock();
     s_learn = false;
+    s_learn_key_valid = false;
+    ble_radio_unlock();
 }
 
 bool ble_btn_allow(const char *mac_str)
 {
     uint8_t addr[6];
     if (!parse_mac_str(mac_str, addr)) return false;
-    return add_mac(addr);
+    return add_mac(addr, NULL, 0);
+}
+
+bool ble_btn_set_key(const char *mac_str, const uint8_t *key)
+{
+    uint8_t addr[6];
+    if (!parse_mac_str(mac_str, addr)) return false;
+    ble_radio_lock();
+    int idx = find_mac(addr);
+    bool ok = false;
+    if (idx >= 0) {
+        s_has_key[idx] = key != NULL;
+        if (key) memcpy(s_keys[idx], key, BTHOME_KEY_LEN);
+        /* A new key (or a remote with a fresh battery) starts its counter again. */
+        s_ctr_valid[idx] = false;
+        ok = save_nvs();
+    }
+    ble_radio_unlock();
+    return ok;
+}
+
+int ble_btn_get_keyed(char out[][18], int max_out)
+{
+    ble_radio_lock();
+    int n = 0;
+    for (int i = 0; i < s_mac_count && n < max_out; i++) {
+        if (s_has_key[i]) mac_to_str(s_macs[i], out[n++]);
+    }
+    ble_radio_unlock();
+    return n;
 }
 
 bool ble_btn_forget(const char *mac_str)
@@ -579,6 +699,10 @@ bool ble_btn_forget(const char *mac_str)
     if (idx >= 0) {
         for (int i = idx; i < s_mac_count - 1; i++) {
             memcpy(s_macs[i], s_macs[i + 1], 6);
+            memcpy(s_keys[i], s_keys[i + 1], BTHOME_KEY_LEN);
+            s_has_key[i] = s_has_key[i + 1];
+            s_ctr[i] = s_ctr[i + 1];
+            s_ctr_valid[i] = s_ctr_valid[i + 1];
         }
         s_mac_count--;
         ok = save_nvs();
@@ -591,6 +715,8 @@ bool ble_btn_forget_all(void)
 {
     ble_radio_lock();
     s_mac_count = 0;
+    memset(s_has_key, 0, sizeof(s_has_key));
+    memset(s_ctr_valid, 0, sizeof(s_ctr_valid));
     bool ok = save_nvs();
     ble_radio_unlock();
     return ok;
@@ -618,7 +744,7 @@ void ble_btn_last_mac(char out[18])
 void ble_btn_poll(uint32_t now_ms)
 {
     if (s_learn && (int32_t)(now_ms - s_learn_deadline_ms) >= 0) {
-        s_learn = false;
+        ble_btn_learn_end();
         protocol_send_ble_ack("learnEnd", false, "timeout");
         protocol_send_ble_status();
     }

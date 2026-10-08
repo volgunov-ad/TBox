@@ -1,5 +1,6 @@
 package vad.dashing.tbox.esp
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -462,6 +463,49 @@ class EspCompanionProtocolTest {
         assertTrue(learn.contains("15000"))
         val forget = EspCompanionProtocol.encodeBleForgetAll()
         assertTrue(forget.contains("\"all\":true"))
+    }
+
+    @Test
+    fun bleKeyMessages() {
+        val hello = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.11.0","ble":true,"bleOn":true,"bleMacs":[],"bleKey":true}""",
+        ) as EspMessage.Hello
+        assertTrue(hello.bleKey)
+        val oldHello = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.10.5","ble":true}""",
+        ) as EspMessage.Hello
+        assertFalse(oldHello.bleKey)
+
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,""" +
+                """"macs":["11:22:33:44:55:66","aa:bb:cc:dd:ee:ff"],"keyed":["AA:BB:CC:DD:EE:FF"]}""",
+        ) as EspMessage.BleStatus
+        assertEquals(listOf("aa:bb:cc:dd:ee:ff"), status.keyed)
+
+        val key = "231d39c1d7cc1ab1aee224cd096db932"
+        val learn = JSONObject(EspCompanionProtocol.encodeBleLearnBegin(20_000L, key))
+        assertEquals("bleLearnBegin", learn.getString("t"))
+        assertEquals(key, learn.getString("key"))
+        assertFalse(JSONObject(EspCompanionProtocol.encodeBleLearnBegin(20_000L)).has("key"))
+
+        val set = JSONObject(EspCompanionProtocol.encodeBleKey("AA:BB:CC:DD:EE:FF", key))
+        assertEquals("bleKey", set.getString("t"))
+        assertEquals("aa:bb:cc:dd:ee:ff", set.getString("mac"))
+        assertEquals(key, set.getString("key"))
+        assertEquals("", JSONObject(EspCompanionProtocol.encodeBleKey("aa:bb:cc:dd:ee:ff", "")).getString("key"))
+    }
+
+    @Test
+    fun normalizeBleKey() {
+        val key = "231d39c1d7cc1ab1aee224cd096db932"
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey(key))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey(" 231D39C1D7CC1AB1AEE224CD096DB932 "))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey("23:1d:39:c1:d7:cc:1a:b1:ae:e2:24:cd:09:6d:b9:32"))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey("231d 39c1 d7cc 1ab1 aee2 24cd 096d b932"))
+        assertEquals("", EspCompanionProtocol.normalizeBleKey("   "))
+        assertNull(EspCompanionProtocol.normalizeBleKey("231d39c1d7cc1ab1aee224cd096db9"))
+        assertNull(EspCompanionProtocol.normalizeBleKey("231d39c1d7cc1ab1aee224cd096db93g"))
+        assertNull(EspCompanionProtocol.normalizeBleKey("2 31d39c1d7cc1ab1aee224cd096db932"))
     }
 
     @Test

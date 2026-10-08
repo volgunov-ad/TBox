@@ -29,6 +29,7 @@ data class EspDeviceInfo(
     val ble: Boolean = false,
     val bleOn: Boolean = false,
     val bleMacs: List<String> = emptyList(),
+    val bleKey: Boolean = false,
     val ap: Boolean = false,
     val phone: Boolean = false,
 )
@@ -181,6 +182,9 @@ object EspCompanionRepository {
     private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
     val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
 
+    private val _bleKeyedMacs = MutableStateFlow<Set<String>>(emptySet())
+    val bleKeyedMacs: StateFlow<Set<String>> = _bleKeyedMacs.asStateFlow()
+
     private val _phones = MutableStateFlow<List<EspPhoneDevice>>(emptyList())
     val phones: StateFlow<List<EspPhoneDevice>> = _phones.asStateFlow()
 
@@ -286,6 +290,7 @@ object EspCompanionRepository {
             _routerBusy.value = false
             _bleLearnActive.value = false
             _bleMacs.value = emptyList()
+            _bleKeyedMacs.value = emptySet()
             _phones.value = emptyList()
             _phoneLearnActive.value = false
             _pendingPhone.value = null
@@ -327,7 +332,9 @@ object EspCompanionRepository {
         lastMac: String? = null,
         phoneLearn: Boolean = false,
         phones: List<EspPhoneDevice> = emptyList(),
+        keyed: List<String> = emptyList(),
     ) {
+        _bleKeyedMacs.value = keyed.map(::normalizeEspBleMac).filter { it.isNotEmpty() }.toSet()
         _bleOn.value = on
         _bleLearnActive.value = learn
         _phoneLearnActive.value = phoneLearn

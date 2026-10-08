@@ -31,13 +31,18 @@ int ble_btn_get_macs(char out[][18], int max_out);
 /** Enable/disable passive scan; persists to NVS. */
 bool ble_btn_set_on(bool on);
 
-bool ble_btn_learn_begin(uint32_t timeout_ms);
+/** key: 16-byte BTHome key the new remote encrypts with, or NULL for a plain remote. */
+bool ble_btn_learn_begin(uint32_t timeout_ms, const uint8_t *key);
 void ble_btn_learn_end(void);
 
 /** Add MAC string "aa:bb:cc:dd:ee:ff" (any case, ':' or '-' ok). */
 bool ble_btn_allow(const char *mac_str);
 bool ble_btn_forget(const char *mac_str);
 bool ble_btn_forget_all(void);
+/** Set (key != NULL) or clear the BTHome key of a known remote; resets its counter. */
+bool ble_btn_set_key(const char *mac_str, const uint8_t *key);
+/** Remotes that have a key, same format as ble_btn_get_macs. */
+int ble_btn_get_keyed(char out[][18], int max_out);
 
 /** Last known battery (-1 if unknown) and RSSI for status. */
 int ble_btn_last_bat(void);

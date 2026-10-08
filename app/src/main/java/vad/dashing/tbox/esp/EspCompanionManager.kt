@@ -669,11 +669,18 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeBleSet(on))
     }
 
-    fun beginBleLearn(timeoutMs: Long = 30_000L) {
+    /** [key] is a normalized BTHome key or empty; never logged. */
+    fun beginBleLearn(timeoutMs: Long = 30_000L, key: String = "") {
         if (EspCompanionRepository.otaBusy.value) return
-        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs")
+        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs encrypted=${key.isNotEmpty()}")
         EspCompanionRepository.setBleLearnActive(true)
-        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs))
+        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs, key))
+    }
+
+    fun setBleKey(mac: String, key: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE key mac=$mac set=${key.isNotEmpty()}")
+        writeLine(EspCompanionProtocol.encodeBleKey(mac, key))
     }
 
     fun endBleLearn() {
@@ -1100,6 +1107,7 @@ class EspCompanionManager(
                         ble = msg.ble,
                         bleOn = msg.bleOn,
                         bleMacs = msg.bleMacs,
+                        bleKey = msg.bleKey,
                         ap = msg.ap,
                         phone = msg.phone,
                     )
@@ -1276,6 +1284,7 @@ class EspCompanionManager(
                     lastMac = msg.lastMac,
                     phoneLearn = msg.phoneLearn,
                     phones = msg.phones,
+                    keyed = msg.keyed,
                 )
             }
             is EspMessage.PhonePair -> {
