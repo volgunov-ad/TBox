@@ -301,8 +301,9 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
         // MBVehicleProperty.eDVD_LDWSWITCH
         MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415717, // R_0B00_FCM_2_LDWOnOffSts
-        // MBVehicleProperty.eTIMEGAPSET1REQ
-        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415688, // R_0B00_FRM_3_TimeGapSet_DVD
+        // Live ACC gap is the cluster status, same 0/1/2 table as stock launcher.
+        // DVD echo R_0B00_FRM_3_TimeGapSet_DVD (289415688) is the sibling 2-bit signal.
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415687, // R_0B00_FRM_3_TimeGapSet_ICM
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415723, // R_0B00_SRR_1_BSDState
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415729,
         MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415696,

@@ -792,6 +792,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `remote_lock_feedback` | `head_unit` | `light`, `horn`, `light_horn` |
 | `las_mode` | `head_unit` | `ldw`, `lka`, `off` |
 | `fcw_sensitivity` | `head_unit` | `far`, `standard`, `near` |
+| `acc_time_gap` | `head_unit` | `near`, `medium`, `far` |
 | `ldw_sensitivity` | `head_unit` | `high`, `low` |
 | `hvac_custom_mode` | `head_unit` | `eco`, `comfort`, `strong` |
 | `fragrance_smell` | `head_unit` | `meteor`, `boss`, `tea`; только A9/mbCAN |
@@ -913,6 +914,7 @@ TCP :5555 включают только если порт ещё не слуша
 | Комфортные мигания | 8 | A9+A10 | 1 = 3, 2 = 5, 3 = 7 миганий |
 | Режим удержания полосы | 17 | A9+A10 | 1 LDW, 2 LKA, 3 выкл |
 | Чувствительность FCW | 97 | A9+A10 | 3 дальняя, 1 стандарт, 2 ближняя |
+| Дистанция ACC | 95 | A9+A10 | 3 ближняя, 1 средняя, 2 дальняя |
 | Чувствительность LDW | 16 | A9+A10 | 1 высокая, 0 низкая |
 | Режим климата | 140 | A9+A10 | 1 ECO, 2 комфорт, 3 сильный |
 | Аромат | 34 | A9 | 1 Meteor, 2 Boss, 3 Tea |

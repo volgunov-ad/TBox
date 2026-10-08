@@ -8,6 +8,7 @@ import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.AccTimeGap
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.FirmwareVehicleJsonMapper
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
@@ -136,6 +137,7 @@ object AutomationCanCatalog {
         MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH,
         MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING,
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY,
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET,
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL,
         MbCanKnownVehiclePropertyId.HMA_SWITCH,
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM,
@@ -309,6 +311,13 @@ object AutomationCanCatalog {
             FcwSensitivity.Far -> "Дальняя"
             FcwSensitivity.Standard -> "Стандарт"
             FcwSensitivity.Near -> "Ближняя"
+            null -> value.toString()
+        }
+
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> when (CarSettingsAdasDomain.decodeAccTimeGapRequest(value)) {
+            AccTimeGap.Near -> "Ближняя"
+            AccTimeGap.Medium -> "Средняя"
+            AccTimeGap.Far -> "Дальняя"
             null -> value.toString()
         }
 

@@ -1065,8 +1065,9 @@ object MbCanRepository {
                         )
                     MbCanKnownVehiclePropertyId.LDW_SWITCH ->
                         CarSettingsAdasDomain.decodeLdwSwitchMbCan(raw)?.let { _ldwSwitchState.value = it }
-                    MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET ->
-                        HoldLastKnown.set(_accTimeGap, CarSettingsAdasDomain.decodeAccTimeGapMbCan(raw))
+                    MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> {
+                        // Request echo (0 = Not_Active, 1..3 = tauGap). Live level is FRM ICM.
+                    }
                     MbCanKnownVehiclePropertyId.HMA_SWITCH ->
                         stateEngine.applyHmaCandidate(
                             MbCanSignalStateEngine.decodeSteeringWheelHeatRaw(raw)
@@ -1316,6 +1317,10 @@ object MbCanRepository {
 
     fun scheduleFrmTimeGapIcmPush(raw: Int) {
         recordPushDebugEvent("frm_time_gap_icm", "raw=$raw")
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            HoldLastKnown.set(_accTimeGap, CarSettingsAdasDomain.decodeAccTimeGapStatus(raw))
+        }
     }
 
     /**
@@ -2392,11 +2397,8 @@ object MbCanRepository {
             MbCanSignal.LasModeSelection -> refreshLasMode()
             MbCanSignal.TjaIca -> refreshTjaIca()
             MbCanSignal.LdwSwitch -> refreshAdasBinary(MbCanKnownVehiclePropertyId.LDW_SWITCH, _ldwSwitchState)
-            MbCanSignal.AccTimeGap -> HoldLastKnown.set(
-                _accTimeGap,
-                MbCanEngineFacade.canGetVehicleParam(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
-                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapMbCan),
-            )
+            // Request id 95 echoes Not_Active/1..3, not the cluster level. Status is FRM ICM push.
+            MbCanSignal.AccTimeGap -> Unit
             MbCanSignal.HmaSwitch -> refreshHma()
             MbCanSignal.Bsd -> refreshAdasBinary(MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION, _bsdState)
             MbCanSignal.Dow -> refreshAdasBinary(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING, _dowState)
@@ -4126,7 +4128,8 @@ object MbCanRepository {
             val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
             MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
-                mergedSignals.contains(MbCanSignal.FrmTargetDistance)
+                mergedSignals.contains(MbCanSignal.FrmTargetDistance) ||
+                mergedSignals.contains(MbCanSignal.AccTimeGap)
             MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
             val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.GasPedal)

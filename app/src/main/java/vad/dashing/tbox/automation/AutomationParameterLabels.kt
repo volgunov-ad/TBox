@@ -36,6 +36,7 @@ object AutomationParameterLabels {
         MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH -> "Автоторможение AEB"
         MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING -> "Предупреждение дистанции"
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY -> "Чувствительность FCW"
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> "Дистанция ACC"
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL -> "Чувствительность LDW"
         MbCanKnownVehiclePropertyId.HMA_SWITCH -> "Автоматический дальний свет (HMA)"
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM -> "Режим климата"
@@ -193,6 +194,7 @@ object AutomationParameterLabels {
         AutomationSignalId.DOOR_OPEN_WARNING -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING)
         AutomationSignalId.FCW -> vehicleLabel(MbCanKnownVehiclePropertyId.FCW_SWITCH)
         AutomationSignalId.FCW_SENSITIVITY -> vehicleLabel(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY)
+        AutomationSignalId.ACC_TIME_GAP -> vehicleLabel(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
         AutomationSignalId.LDW_SENSITIVITY -> vehicleLabel(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL)
         AutomationSignalId.HVAC_CUSTOM_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.HVAC_CUSTOM)
         AutomationSignalId.FRONT_WINDSCREEN_HEAT -> vehicleLabel(MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH)

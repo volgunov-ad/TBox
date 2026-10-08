@@ -7,6 +7,7 @@ import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.AccTimeGap
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
 import vad.dashing.tbox.mbcan.HvacBlowMode
@@ -34,6 +35,7 @@ object AutomationSignalStateEncoding {
     val remoteLockFeedbackOptions = listOf("light", "horn", "light_horn")
     val lasModeOptions = listOf("ldw", "lka", "off")
     val fcwSensitivityOptions = listOf("far", "standard", "near")
+    val accTimeGapOptions = listOf("near", "medium", "far")
     val ldwSensitivityOptions = listOf("high", "low")
     val hvacCustomOptions = listOf("eco", "comfort", "strong")
     val fragranceSmellOptions = listOf("meteor", "boss", "tea")
@@ -160,6 +162,15 @@ object AutomationSignalStateEncoding {
         FcwSensitivity.Near -> "near"
         null -> null
     }
+
+    fun accTimeGapStateKey(value: AccTimeGap): String = when (value) {
+        AccTimeGap.Near -> "near"
+        AccTimeGap.Medium -> "medium"
+        AccTimeGap.Far -> "far"
+    }
+
+    fun accTimeGapFromRequestRaw(raw: Int): String? =
+        CarSettingsAdasDomain.decodeAccTimeGapRequest(raw)?.let(::accTimeGapStateKey)
 
     fun ldwSensitivityFromRaw(raw: Int): String? = when (CarSettingsAdasDomain.decodeLdwSensitivityMbCan(raw)) {
         LdwSensitivity.High -> "high"

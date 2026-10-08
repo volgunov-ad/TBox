@@ -518,6 +518,12 @@ object AutomationSignalCatalog {
             AutomationSignalStateEncoding.fcwSensitivityOptions,
         ),
         state(
+            AutomationSignalId.ACC_TIME_GAP,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACC_TIME_GAP),
+            headUnitOnly,
+            AutomationSignalStateEncoding.accTimeGapOptions,
+        ),
+        state(
             AutomationSignalId.LDW_SENSITIVITY,
             AutomationParameterLabels.signalLabel(AutomationSignalId.LDW_SENSITIVITY),
             headUnitOnly,

@@ -51,6 +51,7 @@ import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.AccTimeGap
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.LdwSensitivity
 import vad.dashing.tbox.mbcan.BodyComfortDomain
@@ -193,6 +194,22 @@ private fun remoteFeedbackOptions(): List<CarSettingsModeOption> = listOf(
 )
 
 @Composable
+private fun accTimeGapOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Near),
+        stringResource(R.string.car_settings_acc_time_gap_near),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Medium),
+        stringResource(R.string.car_settings_acc_time_gap_medium),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Far),
+        stringResource(R.string.car_settings_acc_time_gap_far),
+    ),
+)
+
+@Composable
 private fun fcwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
     CarSettingsModeOption(
         CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Far),
@@ -243,6 +260,7 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.SlaSpeedLimit,
         MbCanSignal.LasModeSelection,
         MbCanSignal.TjaIca,
+        MbCanSignal.AccTimeGap,
         MbCanSignal.HmaSwitch,
         MbCanSignal.Bsd,
         MbCanSignal.Dow,
@@ -772,6 +790,7 @@ private fun CarSettingsDriverAssistSection(
     val slaOnOffState by UniversalCanRepository.slaOnOffState.collectAsStateWithLifecycle()
     val lasModeRaw by UniversalCanRepository.lasModeRaw.collectAsStateWithLifecycle()
     val tjaIcaState by UniversalCanRepository.tjaIcaState.collectAsStateWithLifecycle()
+    val accTimeGap by UniversalCanRepository.accTimeGap.collectAsStateWithLifecycle()
     val hmaState by UniversalCanRepository.hmaState.collectAsStateWithLifecycle()
     val bsdState by UniversalCanRepository.bsdState.collectAsStateWithLifecycle()
     val dowState by UniversalCanRepository.dowState.collectAsStateWithLifecycle()
@@ -815,6 +834,13 @@ private fun CarSettingsDriverAssistSection(
         text = stringResource(R.string.car_settings_tja_ica_title),
         description = stringResource(R.string.car_settings_tja_ica_desc),
         enabled = mbCanOk,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_acc_time_gap_title),
+        options = accTimeGapOptions(),
+        selectedRawValue = accTimeGap?.let(CarSettingsAdasDomain::encodeAccTimeGapRequest),
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET, it) },
     )
     SettingSwitch(
         isChecked = hmaState is MbCanBinaryState.On,

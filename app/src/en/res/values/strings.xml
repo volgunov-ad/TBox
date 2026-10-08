@@ -291,6 +291,10 @@
     <string name="car_settings_fcw_sensitivity_far">Far</string>
     <string name="car_settings_fcw_sensitivity_standard">Standard</string>
     <string name="car_settings_fcw_sensitivity_near">Near</string>
+    <string name="car_settings_acc_time_gap_title">ACC distance</string>
+    <string name="car_settings_acc_time_gap_near">Near</string>
+    <string name="car_settings_acc_time_gap_medium">Medium</string>
+    <string name="car_settings_acc_time_gap_far">Far</string>
     <string name="car_settings_ldw_sensitivity_title">LDW sensitivity</string>
     <string name="car_settings_ldw_sensitivity_high">High</string>
     <string name="car_settings_ldw_sensitivity_low">Low</string>

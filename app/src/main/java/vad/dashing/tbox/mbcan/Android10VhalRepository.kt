@@ -2139,8 +2139,7 @@ object Android10VhalRepository {
                 CarSettingsAdasDomain.decodeLdwSensitivityMbCan(mbCanValue)
                     ?.let(CarSettingsAdasDomain::encodeLdwSensitivityVhal)
             MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET ->
-                CarSettingsAdasDomain.decodeAccTimeGapMbCan(mbCanValue)
-                    ?.let(CarSettingsAdasDomain::encodeAccTimeGapVhal)
+                mbCanValue.takeIf { CarSettingsAdasDomain.decodeAccTimeGapRequest(it) != null }
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
                 HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
@@ -2317,7 +2316,7 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET) ->
                 HoldLastKnown.set(
                     _accTimeGap,
-                    raw?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+                    raw?.let(CarSettingsAdasDomain::decodeAccTimeGapStatus),
                 )
             resolved(MbCanKnownVehiclePropertyId.HMA_SWITCH) ->
                 raw?.let {
@@ -3077,7 +3076,7 @@ object Android10VhalRepository {
             MbCanSignal.AccTimeGap -> HoldLastKnown.set(
                 _accTimeGap,
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
-                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapStatus),
             )
             MbCanSignal.HmaSwitch -> {
                 val raw = readMappedIntProperty(MbCanKnownVehiclePropertyId.HMA_SWITCH)

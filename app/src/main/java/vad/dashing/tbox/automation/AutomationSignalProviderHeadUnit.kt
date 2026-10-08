@@ -168,6 +168,10 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
             }
         }?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.ACC_TIME_GAP -> UniversalCanRepository.accTimeGap.map { value ->
+        value?.let(AutomationSignalStateEncoding::accTimeGapStateKey)
+            ?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.LDW_SENSITIVITY -> UniversalCanRepository.ldwSensitivity.map { value ->
         value?.let {
             when (it) {
@@ -378,6 +382,7 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.DOOR_OPEN_WARNING -> vad.dashing.tbox.mbcan.MbCanSignal.Dow
     AutomationSignalId.FCW -> vad.dashing.tbox.mbcan.MbCanSignal.Fcw
     AutomationSignalId.FCW_SENSITIVITY -> vad.dashing.tbox.mbcan.MbCanSignal.FcwSensitivity
+    AutomationSignalId.ACC_TIME_GAP -> vad.dashing.tbox.mbcan.MbCanSignal.AccTimeGap
     AutomationSignalId.LDW_SENSITIVITY -> vad.dashing.tbox.mbcan.MbCanSignal.LdwSensitivity
     AutomationSignalId.HVAC_CUSTOM_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.HvacCustomMode
     AutomationSignalId.FRONT_WINDSCREEN_HEAT -> vad.dashing.tbox.mbcan.MbCanSignal.FrontWindscreenHeat

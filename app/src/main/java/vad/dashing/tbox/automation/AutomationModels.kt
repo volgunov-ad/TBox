@@ -147,6 +147,7 @@ enum class AutomationSignalId(
     DOOR_OPEN_WARNING("door_open_warning", AutomationSignalValueType.STATE),
     FCW("fcw", AutomationSignalValueType.STATE),
     FCW_SENSITIVITY("fcw_sensitivity", AutomationSignalValueType.STATE),
+    ACC_TIME_GAP("acc_time_gap", AutomationSignalValueType.STATE),
     LDW_SENSITIVITY("ldw_sensitivity", AutomationSignalValueType.STATE),
     HVAC_CUSTOM_MODE("hvac_custom_mode", AutomationSignalValueType.STATE),
     FRONT_WINDSCREEN_HEAT("front_windscreen_heat", AutomationSignalValueType.STATE),

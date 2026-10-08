@@ -291,6 +291,10 @@
     <string name="car_settings_fcw_sensitivity_far">Дальняя</string>
     <string name="car_settings_fcw_sensitivity_standard">Стандарт</string>
     <string name="car_settings_fcw_sensitivity_near">Ближняя</string>
+    <string name="car_settings_acc_time_gap_title">Дистанция ACC</string>
+    <string name="car_settings_acc_time_gap_near">Ближняя</string>
+    <string name="car_settings_acc_time_gap_medium">Средняя</string>
+    <string name="car_settings_acc_time_gap_far">Дальняя</string>
     <string name="car_settings_ldw_sensitivity_title">Чувствительность LDW</string>
     <string name="car_settings_ldw_sensitivity_high">Высокая</string>
     <string name="car_settings_ldw_sensitivity_low">Низкая</string>

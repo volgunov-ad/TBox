@@ -10,11 +10,21 @@ enum class LdwSensitivity {
 }
 
 /**
- * ACC following-distance time-gap (`eTIMEGAPSET1REQ` / mbCAN **95**).
- * Raw **1…4** (typical closest→farthest). A9 HU log saw **1** with TJA on and **4** with TJA off.
+ * ACC following distance. Stock has three gaps, not four.
+ *
+ * Factory `RRM_8_TimeGapSet1Req` (`eTIMEGAPSET1REQ`): **0** Not_Active, **1** tauGap_0,
+ * **2** tauGap_1, **3** tauGap_2, **4…7** reserved.
+ * Cluster `FRM_3_TimeGapSet_ICM` (and A10 DVD echo) uses the same names at **0 / 1 / 2**;
+ * **3** is no icon. Stock launcher and TTG draw **0** as two bars (medium), **1** as three
+ * bars (far), **2** as one bar (near).
  */
 enum class AccTimeGap {
-    Level1, Level2, Level3, Level4
+    /** tauGap_2 — closest. Status **2**, request **3**. */
+    Near,
+    /** tauGap_0 — middle. Status **0**, request **1**. */
+    Medium,
+    /** tauGap_1 — farthest. Status **1**, request **2**. */
+    Far,
 }
 
 object CarSettingsAdasDomain {
@@ -67,28 +77,29 @@ object CarSettingsAdasDomain {
         LdwSensitivity.Low -> 0
     }
 
-    /** mbCAN / VHAL share raw **1…4** for [AccTimeGap] (A9 log: 1, 4). */
-    fun decodeAccTimeGapMbCan(raw: Int): AccTimeGap? = decodeAccTimeGap(raw)
-
-    fun encodeAccTimeGapMbCan(value: AccTimeGap): Int = encodeAccTimeGap(value)
-
-    fun decodeAccTimeGapVhal(raw: Int): AccTimeGap? = decodeAccTimeGap(raw)
-
-    fun encodeAccTimeGapVhal(value: AccTimeGap): Int = encodeAccTimeGap(value)
-
-    private fun decodeAccTimeGap(raw: Int): AccTimeGap? = when (raw) {
-        1 -> AccTimeGap.Level1
-        2 -> AccTimeGap.Level2
-        3 -> AccTimeGap.Level3
-        4 -> AccTimeGap.Level4
+    /** Cluster / DVD status: **0** medium, **1** far, **2** near. **3** is no icon. */
+    fun decodeAccTimeGapStatus(raw: Int): AccTimeGap? = when (raw) {
+        0 -> AccTimeGap.Medium
+        1 -> AccTimeGap.Far
+        2 -> AccTimeGap.Near
         else -> null
     }
 
-    private fun encodeAccTimeGap(value: AccTimeGap): Int = when (value) {
-        AccTimeGap.Level1 -> 1
-        AccTimeGap.Level2 -> 2
-        AccTimeGap.Level3 -> 3
-        AccTimeGap.Level4 -> 4
+    /**
+     * `eTIMEGAPSET1REQ` / VHAL `TimeGapSet1Req`: **1** medium, **2** far, **3** near.
+     * **0** is Not_Active and is not a gap.
+     */
+    fun decodeAccTimeGapRequest(raw: Int): AccTimeGap? = when (raw) {
+        1 -> AccTimeGap.Medium
+        2 -> AccTimeGap.Far
+        3 -> AccTimeGap.Near
+        else -> null
+    }
+
+    fun encodeAccTimeGapRequest(value: AccTimeGap): Int = when (value) {
+        AccTimeGap.Medium -> 1
+        AccTimeGap.Far -> 2
+        AccTimeGap.Near -> 3
     }
 
     /**
