@@ -15,6 +15,10 @@ class FastPublishGate {
         return true
     }
 
+    fun mark(objectId: String, nowMs: Long) {
+        lastSentAtMs[objectId] = nowMs
+    }
+
     fun retain(objectIds: Set<String>) {
         lastSentAtMs.keys.retainAll(objectIds)
     }

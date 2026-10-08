@@ -31,7 +31,7 @@ class MqttSettingsStore private constructor(context: Context) {
         fastPublishSeconds = prefs.getInt(KEY_FAST, 5),
         accessToken = prefs.getString(KEY_TOKEN, "").orEmpty(),
         selectedObjectIds = decodeIds(prefs.getString(KEY_SELECTED, "[]").orEmpty()),
-    )
+    ).normalized()
 
     fun save(normalized: MqttSettings) {
         prefs.edit()

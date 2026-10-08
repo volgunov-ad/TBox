@@ -189,16 +189,18 @@ class ExternalApiRouter(
 
         val builtins = JSONArray()
         AutomationBuiltinActionType.entries.forEach { type ->
-            builtins.put(
-                JSONObject()
-                    .put("type", "builtin")
-                    .put("actionType", type.storageKey)
-                    .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey)
-                    .put(
-                        "voiceAliasesRu",
-                        jsonStringArray(ExternalApiVoiceAliasesRu.forBuiltin(type)),
-                    ),
-            )
+            val item = JSONObject()
+                .put("type", "builtin")
+                .put("actionType", type.storageKey)
+                .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey)
+                .put(
+                    "voiceAliasesRu",
+                    jsonStringArray(ExternalApiVoiceAliasesRu.forBuiltin(type)),
+                )
+            ExternalApiCatalogWrite.builtinWrite(type)?.let { schema ->
+                item.put("write", ExternalApiCatalogWrite.writeJson(schema))
+            }
+            builtins.put(item)
         }
 
         val canCommands = JSONArray()

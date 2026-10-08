@@ -34,10 +34,19 @@ object DiscoveryPayload {
         val json = baseFields(entity.label, deviceId, entity.objectId, deviceName, swVersion)
         when (entity.component) {
             HaComponent.SENSOR, HaComponent.BINARY_SENSOR -> {
-                json.put("state_topic", Topics.state(base, entity.objectId))
+                val stateTopic = Topics.state(base, entity.objectId)
+                json.put("state_topic", stateTopic)
                 if (entity.component == HaComponent.BINARY_SENSOR) {
                     json.put("payload_on", "ON")
                     json.put("payload_off", "OFF")
+                }
+                if (entity.media != null) {
+                    json.put("icon", "mdi:music")
+                    json.put(
+                        "value_template",
+                        "{{ value_json.title if value_json.title else value_json.state }}",
+                    )
+                    json.put("json_attributes_topic", stateTopic)
                 }
                 putUnit(json, entity)
             }

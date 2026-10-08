@@ -136,8 +136,9 @@ CAN и виджеты не трогаем.
 и `ExternalApiRouterTest` в том же изменении. `voiceAliasesRu` и старые поля не меняются.
 
 Builtin без параметров (`media_next`, `media_play_pause`, …) уже описываются
-`actionType`. Отдельная схема для `set_media_volume` и яркости экрана в v1 не добавляется:
-у них нет диапазона в каталоге, в список они не попадают.
+`actionType`. У `set_media_volume` в каталоге есть `write.kind = number` с диапазоном 0…31:
+это громкость микшера медиа, её забирает карточка музыки. Яркость экрана и остальные
+громкости (телефон, навигация, голос) по-прежнему без диапазона и в список не попадают.
 
 ---
 
@@ -303,6 +304,56 @@ LWT брокера совпадает с `offline` и retained. Keepalive 30 с:
 Климат — набор отдельных сущностей (питание, левая и правая температуры, вентилятор,
 auto, рециркуляция). Карточку `climate` Home Assistant из этого не собираем: в каталоге
 режимы кондиционера — отдельные тумблеры.
+
+Музыка — одна строка «Музыка». Внутри неё трек, исполнитель, играет или пауза, позиция,
+длительность и громкость медиа 0…31. Отдельные датчики трека и кнопки «следующий» /
+«пауза» в список не попадают. «Нравится» остаётся своей кнопкой. В брокер уходит один
+датчик `…/media/state` (JSON) и команды на `…/media/set`: `PLAY`, `PAUSE`, `NEXT`,
+`PREVIOUS`, `VOLUME 15`. `PAUSE` при уже стоящей паузе ничего не делает: отдельной
+команды паузы у машины нет, только переключение. Позиция трека подчиняется интервалу
+быстрых данных, смена трека уходит сразу.
+
+Штатный MQTT Home Assistant не умеет сущность `media_player`. Датчик появляется сам.
+Карточка плеера — шаблон, его один раз вставляют в `configuration.yaml` (префикс и
+идентификатор машины как в «Дополнительно»):
+
+```yaml
+template:
+  - media_player:
+      - name: Музыка
+        unique_id: tbox_dashing_media_player
+        state: "{{ state_attr('sensor.media', 'state') }}"
+        media_title: "{{ state_attr('sensor.media', 'title') }}"
+        media_artist: "{{ state_attr('sensor.media', 'artist') }}"
+        media_position: "{{ state_attr('sensor.media', 'position') | float(0) }}"
+        media_duration: "{{ state_attr('sensor.media', 'duration') | float(0) }}"
+        volume_level: "{{ (state_attr('sensor.media', 'volume') | float(0)) / 31 }}"
+        play:
+          action: mqtt.publish
+          data:
+            topic: tbox/dashing/media/set
+            payload: PLAY
+        pause:
+          action: mqtt.publish
+          data:
+            topic: tbox/dashing/media/set
+            payload: PAUSE
+        next_track:
+          action: mqtt.publish
+          data:
+            topic: tbox/dashing/media/set
+            payload: NEXT
+        previous_track:
+          action: mqtt.publish
+          data:
+            topic: tbox/dashing/media/set
+            payload: PREVIOUS
+        volume_set:
+          action: mqtt.publish
+          data:
+            topic: tbox/dashing/media/set
+            payload: "VOLUME {{ (volume_level * 31) | round(0) }}"
+```
 
 Имя сущности в discovery — `label` каталога. У автоматизации — `name` из списка.
 Привязка автоматизации хранится по `id`: переименование в Monitor меняет только имя.
@@ -599,7 +650,7 @@ mqtt/
 ## 10. Вне первой версии
 
 - Сводная сущность `climate` и `cover` с положением окна в процентах.
-- `set_media_volume`, яркость экрана и другие builtin с параметрами — когда в каталоге появится их схема.
+- Яркость экрана и громкости телефона, навигации и голоса — когда в каталоге появится их схема. Громкость медиа уже на карточке музыки.
 - Поток сигналов (WebSocket / SSE) в Monitor. Пока хватает опроса.
 - Второй брокер, MQTT over WebSocket, MQTT 5.
 - Прямой доступ к mbCAN или VHAL из этого процесса.
@@ -626,3 +677,4 @@ mqtt/
 12. Выключенный «Принимать команды» сразу делает все команды в Home Assistant недоступными, датчики продолжают обновляться.
 13. Включённое «Местоположение» показывает машину на карте Home Assistant и не шлёт точки чаще интервала быстрых данных (по умолчанию 5 с) и пока машина не сдвинулась на 50 м.
 14. Брокер без пароля, без TLS и с внешним адресом вызывает предупреждение на «Подключении».
+15. Отмеченная «Музыка» публикует один JSON-датчик (трек, исполнитель, играет или пауза, позиция, громкость медиа). Команды `PLAY`, `PAUSE`, `NEXT`, `PREVIOUS` и `VOLUME n` уходят в Monitor. Карточка плеера в Home Assistant — шаблон из §4, не discovery `media_player`.
