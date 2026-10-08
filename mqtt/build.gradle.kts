@@ -55,6 +55,11 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
     packaging {
+        jniLibs {
+            // Head units unpack native libraries. Loading libgojni.so straight from the APK
+            // fails there and the next call only reports the class name wgstack.Wgstack.
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "META-INF/INDEX.LIST"

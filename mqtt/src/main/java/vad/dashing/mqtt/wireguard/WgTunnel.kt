@@ -1,5 +1,6 @@
 package vad.dashing.mqtt.wireguard
 
+import android.content.Context
 import vad.dashing.mqtt.settings.MqttSettings
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -16,6 +17,30 @@ object WgTunnel {
     private val lock = Any()
     private var runningKey: String? = null
     private var runningPort: Int = 0
+    private var libraryReady = false
+    private var libraryFailure: String? = null
+
+    internal fun blockedByLibrary(): String? = libraryFailure
+
+    internal fun libraryLoaded(): Boolean = libraryReady
+
+    internal fun rememberLibraryFailure(message: String) {
+        libraryFailure = message
+    }
+
+    /** Load libgojni on the main thread, before a broker check touches the class. */
+    fun prepare(context: Context) {
+        synchronized(lock) {
+            if (libraryReady || libraryFailure != null) return
+            try {
+                System.loadLibrary("gojni")
+                go.Seq.setContext(context.applicationContext)
+                libraryReady = true
+            } catch (error: Throwable) {
+                libraryFailure = wireguardFailure(error)
+            }
+        }
+    }
 
     /** Null means the broker is dialed directly. */
     fun route(settings: MqttSettings): TunnelEndpoint? {
@@ -93,20 +118,48 @@ private fun resolveEndpoint(host: String, port: Int): String {
 
 private object WgNative {
     fun start(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {
-        try {
-            return wgstack.Wgstack.start(ipc, addresses, dns, mtu, broker)
-        } catch (error: Throwable) {
-            val unavailable = error is UnsatisfiedLinkError || error is ExceptionInInitializerError
-            val message = if (unavailable) {
-                "WireGuard недоступен на этом устройстве"
-            } else {
-                error.message?.takeIf { it.isNotBlank() } ?: "Не удалось поднять WireGuard"
-            }
-            throw WgRouteException(message)
+        WgTunnel.blockedByLibrary()?.let { throw WgRouteException(it) }
+        if (!WgTunnel.libraryLoaded()) {
+            throw WgRouteException("Не удалось загрузить библиотеку WireGuard")
         }
+        return startNative(ipc, addresses, dns, mtu, broker)
     }
 
     fun stop() {
+        if (!WgTunnel.libraryLoaded()) return
         runCatching { wgstack.Wgstack.stop() }
     }
+}
+
+private fun startNative(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {
+    try {
+        return wgstack.Wgstack.start(ipc, addresses, dns, mtu, broker)
+    } catch (error: Throwable) {
+        val message = wireguardFailure(error)
+        val brokenLibrary = generateSequence(error) { it.cause }.any {
+            it is LinkageError || it is ClassNotFoundException
+        }
+        if (brokenLibrary) WgTunnel.rememberLibraryFailure(message)
+        throw WgRouteException(message)
+    }
+}
+
+/** Class-init failures surface as "wgstack.Wgstack". Keep the linker text instead. */
+internal fun wireguardFailure(error: Throwable): String {
+    val messages = generateSequence(error) { it.cause }
+        .mapNotNull { it.message?.trim()?.takeIf(String::isNotEmpty) }
+        .filterNot { it == "wgstack.Wgstack" || it.startsWith("wgstack.") }
+        .toList()
+    val detail = messages.lastOrNull()
+    val brokenLibrary = generateSequence(error) { it.cause }.any {
+        it is LinkageError || it is ClassNotFoundException
+    }
+    if (brokenLibrary) {
+        return if (detail == null) {
+            "Не удалось загрузить библиотеку WireGuard"
+        } else {
+            "Не удалось загрузить библиотеку WireGuard: $detail"
+        }
+    }
+    return detail ?: "Не удалось поднять WireGuard"
 }

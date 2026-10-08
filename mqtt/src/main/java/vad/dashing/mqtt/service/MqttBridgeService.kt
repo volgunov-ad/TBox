@@ -46,6 +46,7 @@ import vad.dashing.mqtt.ha.buildEntities
 import vad.dashing.mqtt.mqttclient.HiveMqttSession
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
+import vad.dashing.mqtt.wireguard.WgRouteException
 import java.time.Instant
 
 class MqttBridgeService : Service() {
@@ -167,8 +168,12 @@ class MqttBridgeService : Service() {
             // By start id: a start that raced in with fresh settings keeps the service alive.
             stopSelf(lastStartId)
         } else {
+            var tunnelError: String? = null
             try {
                 connectBroker(settings)
+            } catch (error: WgRouteException) {
+                tunnelError = error.message ?: "Туннель WireGuard не поднялся"
+                lastError = tunnelError
             } catch (error: Exception) {
                 lastError = error.message ?: "Нет связи с брокером"
             }
@@ -177,6 +182,7 @@ class MqttBridgeService : Service() {
             } catch (error: Exception) {
                 lastError = error.message ?: "Ошибка моста"
             }
+            if (tunnelError != null) lastError = tunnelError
         }
         runCatching { publishStatus(settings) }
         reschedule(settings.pollSeconds)

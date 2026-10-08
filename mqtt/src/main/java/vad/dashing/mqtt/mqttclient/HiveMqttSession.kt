@@ -39,13 +39,14 @@ class HiveMqttSession {
         onMessage: (topic: String, payload: String, retained: Boolean) -> Unit,
     ) {
         val normalized = settings.normalized()
-        val tunnel = try {
-            WgTunnel.route(normalized)
-        } catch (error: WgRouteException) {
+        val base = normalized.connectionKey() + "|" + statusTopic
+        val turningOff = !normalized.wireguardEnabled || normalized.wireguardConf.isBlank()
+        // Drop the old session while its tunnel is still up, so offline is a clean DISCONNECT.
+        if (turningOff && client != null && connectionKey.substringBeforeLast('|') != base) {
             closeQuietly()
-            throw error
         }
-        val key = normalized.connectionKey() + "|" + statusTopic + "|" + (tunnel?.port ?: 0)
+        val tunnel = WgTunnel.route(normalized)
+        val key = base + "|" + (tunnel?.port ?: 0)
         if (client != null && connectionKey == key) {
             if (!connected && connectExisting(willTopic)) {
                 onConnected()
