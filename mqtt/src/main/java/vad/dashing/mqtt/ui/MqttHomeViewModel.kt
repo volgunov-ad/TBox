@@ -17,6 +17,7 @@ import vad.dashing.mqtt.ha.AutomationRow
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.buildEntities
 import vad.dashing.mqtt.mqttclient.HiveMqttSession
+import vad.dashing.mqtt.wireguard.parseWgConf
 import vad.dashing.mqtt.service.BridgeStatus
 import vad.dashing.mqtt.service.MqttBridgeService
 import vad.dashing.mqtt.service.BridgeStatusStore
@@ -88,6 +89,38 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 selectedObjectIds = next.selectedObjectIds,
             ),
         )
+    }
+
+    fun reportConnection(message: String) {
+        _state.value = _state.value.copy(connectionMessage = message)
+    }
+
+    fun setWireguardEnabled(enabled: Boolean) {
+        if (enabled && _state.value.connectionDraft.wireguardConf.isBlank()) {
+            reportConnection("Сначала выберите файл .conf")
+            return
+        }
+        editConnection { it.copy(wireguardEnabled = enabled) }
+    }
+
+    fun importWireguard(fileName: String, text: String) {
+        val failure = parseWgConf(text).exceptionOrNull()
+        if (failure != null) {
+            reportConnection(failure.message ?: "Файл WireGuard не разобран")
+            return
+        }
+        editConnection {
+            it.copy(
+                wireguardConf = text,
+                wireguardFileName = fileName.trim().ifBlank { "wireguard.conf" },
+                wireguardEnabled = true,
+            )
+        }
+        reportConnection("Файл прочитан. Нажмите «Сохранить».")
+    }
+
+    fun clearWireguard() {
+        editConnection { it.copy(wireguardEnabled = false, wireguardConf = "", wireguardFileName = "") }
     }
 
     fun editConnection(transform: (MqttSettings) -> MqttSettings) {
