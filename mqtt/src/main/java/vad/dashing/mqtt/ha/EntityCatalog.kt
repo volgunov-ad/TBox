@@ -68,7 +68,7 @@ data class AutomationRow(
     val name: String,
 )
 
-/** One Home Assistant row that stands in for the track, transport buttons and media volume. */
+/** Composite «Музыка» row. Track sensors, transport buttons and the media-volume sensor stay in the list as well. */
 data class MediaBundle(
     val signalIds: Set<String>,
     val source: String,
@@ -91,19 +91,6 @@ private val MEDIA_SIGNAL_IDS = setOf(
     "media_duration_ms",
     "hu_media_volume",
 )
-
-private val MEDIA_FOLDED_OBJECT_IDS = MEDIA_SIGNAL_IDS + setOf(
-    "builtin_media_previous",
-    "builtin_media_play_pause",
-    "builtin_media_play",
-    "builtin_media_next",
-)
-
-/** Old per-field selections become the single music row. */
-fun migrateMediaSelection(selected: Set<String>): Set<String> {
-    if (selected.none { it in MEDIA_FOLDED_OBJECT_IDS }) return selected
-    return selected - MEDIA_FOLDED_OBJECT_IDS + MEDIA_OBJECT_ID
-}
 
 private val BUTTON_BUILTINS = setOf(
     "open_menu",
@@ -163,19 +150,17 @@ fun buildEntities(catalogJson: String, automations: List<AutomationRow> = emptyL
         volumeMin = write.optInt("min", volumeMin)
         volumeMax = write.optInt("max", volumeMax)
     }
-    return foldMediaPlayer(rows, volumeMin, volumeMax)
+    return appendMediaPlayer(rows, volumeMin, volumeMax)
         .sortedWith(compareBy({ it.group.order }, { it.label.lowercase() }, { it.objectId }))
 }
 
-private fun foldMediaPlayer(
+private fun appendMediaPlayer(
     rows: List<CatalogEntity>,
     volumeMin: Int,
     volumeMax: Int,
 ): List<CatalogEntity> {
-    val parts = rows.filter { it.signalId in MEDIA_SIGNAL_IDS || it.objectId in MEDIA_FOLDED_OBJECT_IDS }
-    if (parts.none { it.signalId in MEDIA_SIGNAL_IDS }) return rows
-    val source = parts.firstOrNull { it.signalId in MEDIA_SIGNAL_IDS }?.source ?: "app"
-    val kept = rows.filter { it.signalId !in MEDIA_SIGNAL_IDS && it.objectId !in MEDIA_FOLDED_OBJECT_IDS }
+    val mediaSignal = rows.firstOrNull { it.signalId in MEDIA_SIGNAL_IDS } ?: return rows
+    val source = mediaSignal.source ?: "app"
     val player = CatalogEntity(
         objectId = MEDIA_OBJECT_ID,
         label = "Музыка",
@@ -196,7 +181,7 @@ private fun foldMediaPlayer(
             volumeMax = volumeMax,
         ),
     )
-    return kept + player
+    return rows + player
 }
 
 private fun signalEntity(item: JSONObject): CatalogEntity? {
