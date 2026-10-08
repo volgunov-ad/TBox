@@ -213,6 +213,17 @@ private fun ConnectionTab(
                 current.copy(repeatMinutes = it.toIntOrNull() ?: current.repeatMinutes)
             }
         }
+        NumberField("Быстрые данные, не чаще, с", connection.fastPublishSeconds.toString()) {
+            viewModel.editConnection { current ->
+                current.copy(fastPublishSeconds = it.toIntOrNull() ?: current.fastPublishSeconds)
+            }
+        }
+        Text(
+            "Скорость, обороты, другие числа и местоположение. 0 — при каждом изменении. Местоположение ещё ждёт сдвига на 50 м.",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
         TextField("PEM своего CA", connection.caPem) {
             viewModel.editConnection { current -> current.copy(caPem = it) }
         }
