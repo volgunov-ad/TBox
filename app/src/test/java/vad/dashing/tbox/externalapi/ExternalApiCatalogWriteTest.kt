@@ -134,6 +134,7 @@ class ExternalApiCatalogWriteTest {
         assertEquals("vent", byState["20%"])
         assertEquals("comfort_open", byState["80%"])
         assertEquals("open", byState["100%"])
+        assertFalse(byState.containsKey("open"))
     }
 
     @Test

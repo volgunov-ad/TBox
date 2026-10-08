@@ -131,8 +131,9 @@ object ExternalApiCatalogWrite {
         entry: AutomationCanCatalogEntry,
         signal: AutomationSignalDescriptor,
     ): WriteSchema? {
-        val options = signal.stateOptions.map { state ->
-            val key = WINDOW_STATE_TO_KEY[state] ?: return null
+        // `open` is the live between-stops reading, not a write target.
+        val options = signal.stateOptions.mapNotNull { state ->
+            val key = WINDOW_STATE_TO_KEY[state] ?: return@mapNotNull null
             WriteOption(state, key)
         }
         if (options.isEmpty()) return null
