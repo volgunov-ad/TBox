@@ -36,6 +36,23 @@ data class MqttSettings(
         repeatMinutes = repeatMinutes.coerceIn(0, 60),
     )
 
+    /** Broker fields from [from]. Token, entities and the Monitor port stay on this copy. */
+    fun applyingConnection(from: MqttSettings): MqttSettings = copy(
+        brokerHost = from.brokerHost,
+        brokerPort = from.brokerPort,
+        username = from.username,
+        password = from.password,
+        tlsEnabled = from.tlsEnabled,
+        caPem = from.caPem,
+        topicPrefix = from.topicPrefix,
+        discoveryPrefix = from.discoveryPrefix,
+        deviceId = from.deviceId,
+        mqttClientId = from.mqttClientId,
+        autostart = from.autostart,
+        pollSeconds = from.pollSeconds,
+        repeatMinutes = from.repeatMinutes,
+    )
+
     val ready: Boolean
         get() = accessToken.isNotBlank() && brokerHost.isNotBlank()
 

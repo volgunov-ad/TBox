@@ -32,6 +32,8 @@ data class MqttHomeState(
     val advancedOpen: Boolean = false,
     val manualTokenOpen: Boolean = false,
     val manualToken: String = "",
+    val connectionDraft: MqttSettings = MqttSettings(),
+    val connectionMessage: String = "",
     val bridge: BridgeStatus = BridgeStatus(),
 )
 
@@ -45,7 +47,11 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     init {
         val settings = store.load()
         val startTab = if (settings.ready) 1 else 0
-        _state.value = _state.value.copy(settings = settings, tab = startTab)
+        _state.value = _state.value.copy(
+            settings = settings,
+            connectionDraft = settings,
+            tab = startTab,
+        )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
                 val current = _state.value
@@ -62,9 +68,39 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun update(transform: (MqttSettings) -> MqttSettings) {
-        val next = transform(_state.value.settings)
+        val current = _state.value
+        val next = transform(current.settings)
         store.save(next)
-        _state.value = _state.value.copy(settings = next)
+        _state.value = current.copy(
+            settings = next,
+            connectionDraft = current.connectionDraft.copy(
+                apiPort = next.apiPort,
+                accessToken = next.accessToken,
+                deviceName = next.deviceName,
+                discoveryEnabled = next.discoveryEnabled,
+                acceptCommands = next.acceptCommands,
+                selectedObjectIds = next.selectedObjectIds,
+            ),
+        )
+    }
+
+    fun editConnection(transform: (MqttSettings) -> MqttSettings) {
+        val current = _state.value
+        _state.value = current.copy(
+            connectionDraft = transform(current.connectionDraft),
+            connectionMessage = "",
+        )
+    }
+
+    fun saveConnection() {
+        val current = _state.value
+        val merged = current.settings.applyingConnection(current.connectionDraft).normalized()
+        store.save(merged)
+        _state.value = current.copy(
+            settings = merged,
+            connectionDraft = merged,
+            connectionMessage = "Сохранено",
+        )
     }
 
     fun toggleAdvanced() {
@@ -113,15 +149,16 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                             if (token.isBlank()) {
                                 updateUi { it.copy(pairBusy = false, pairMessage = "Monitor не вернул токен") }
                             } else {
-                                val saved = _state.value.settings.copy(accessToken = token).normalized()
-                                store.save(saved)
-                                updateUi {
-                                    it.copy(
-                                        settings = saved,
-                                        pairBusy = false,
-                                        pairMessage = "Доступ разрешён",
-                                    )
-                                }
+                            val saved = _state.value.settings.copy(accessToken = token).normalized()
+                            store.save(saved)
+                            updateUi {
+                                it.copy(
+                                    settings = saved,
+                                    connectionDraft = it.connectionDraft.copy(accessToken = token),
+                                    pairBusy = false,
+                                    pairMessage = "Доступ разрешён",
+                                )
+                            }
                                 refreshEntities()
                             }
                             return@launch
@@ -151,7 +188,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.brokerBusy) return
         viewModelScope.launch(Dispatchers.IO) {
             updateUi { it.copy(brokerBusy = true, brokerMessage = "Проверка") }
-            val message = HiveMqttSession.probe(_state.value.settings)
+            val message = HiveMqttSession.probe(_state.value.connectionDraft)
             updateUi {
                 it.copy(
                     brokerBusy = false,
@@ -192,7 +229,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun brokerWarning(): String? {
-        val settings = _state.value.settings
+        val settings = _state.value.connectionDraft
         return if (BrokerWarning.shouldWarn(settings.username, settings.tlsEnabled, settings.brokerHost)) {
             BrokerWarning.TEXT
         } else {

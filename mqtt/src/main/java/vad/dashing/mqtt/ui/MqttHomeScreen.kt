@@ -92,6 +92,7 @@ private fun ConnectionTab(
     onSettingsSaved: () -> Unit,
 ) {
     val settings = state.settings
+    val connection = state.connectionDraft
     SectionTitle("Monitor")
     NumberField("Порт API", settings.apiPort.toString()) {
         viewModel.update { current -> current.copy(apiPort = it.toIntOrNull() ?: current.apiPort) }
@@ -117,29 +118,24 @@ private fun ConnectionTab(
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
     SectionTitle("Брокер")
-    TextField("Адрес", settings.brokerHost) {
-        viewModel.update { current -> current.copy(brokerHost = it) }
-        onSettingsSaved()
+    TextField("Адрес", connection.brokerHost) {
+        viewModel.editConnection { current -> current.copy(brokerHost = it) }
     }
-    NumberField("Порт", settings.brokerPort.toString()) {
-        viewModel.update { current -> current.copy(brokerPort = it.toIntOrNull() ?: current.brokerPort) }
-        onSettingsSaved()
+    NumberField("Порт", connection.brokerPort.toString()) {
+        viewModel.editConnection { current -> current.copy(brokerPort = it.toIntOrNull() ?: current.brokerPort) }
     }
-    TextField("Пользователь", settings.username) {
-        viewModel.update { current -> current.copy(username = it) }
-        onSettingsSaved()
+    TextField("Пользователь", connection.username) {
+        viewModel.editConnection { current -> current.copy(username = it) }
     }
-    TextField("Пароль", settings.password, password = true) {
-        viewModel.update { current -> current.copy(password = it) }
-        onSettingsSaved()
+    TextField("Пароль", connection.password, password = true) {
+        viewModel.editConnection { current -> current.copy(password = it) }
     }
     SettingSwitch(
-        checked = settings.tlsEnabled,
+        checked = connection.tlsEnabled,
         title = "Шифрование TLS",
-        description = if (settings.tlsEnabled) "Порт обычно 8883" else "По умолчанию выключено, порт 1883",
-        onChecked = {
-            viewModel.update { current -> current.copy(tlsEnabled = it) }
-            onSettingsSaved()
+        description = if (connection.tlsEnabled) "Порт обычно 8883" else "По умолчанию выключено, порт 1883",
+        onChecked = { enabled ->
+            viewModel.editConnection { current -> current.copy(tlsEnabled = enabled) }
         },
     )
     viewModel.brokerWarning()?.let { warning ->
@@ -147,6 +143,23 @@ private fun ConnectionTab(
             warning,
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+    Button(
+        onClick = {
+            viewModel.saveConnection()
+            onSettingsSaved()
+        },
+        modifier = Modifier.padding(top = 12.dp),
+    ) {
+        Text("Сохранить", style = MaterialTheme.typography.tboxButton)
+    }
+    if (state.connectionMessage.isNotBlank()) {
+        Text(
+            state.connectionMessage,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
         )
     }
@@ -166,12 +179,11 @@ private fun ConnectionTab(
         )
     }
     SettingSwitch(
-        checked = settings.autostart,
+        checked = connection.autostart,
         title = "Автозапуск",
         description = "Поднимать мост после включения головного устройства",
-        onChecked = {
-            viewModel.update { current -> current.copy(autostart = it) }
-            onSettingsSaved()
+        onChecked = { enabled ->
+            viewModel.editConnection { current -> current.copy(autostart = enabled) }
         },
     )
     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -179,33 +191,30 @@ private fun ConnectionTab(
         Text(if (state.advancedOpen) "Скрыть дополнительно" else "Дополнительно", style = MaterialTheme.typography.tboxButton)
     }
     if (state.advancedOpen) {
-        TextField("Идентификатор машины", settings.deviceId) {
-            viewModel.update { current -> current.copy(deviceId = it) }
-            onSettingsSaved()
+        TextField("Идентификатор машины", connection.deviceId) {
+            viewModel.editConnection { current -> current.copy(deviceId = it) }
         }
-        TextField("Префикс топиков", settings.topicPrefix) {
-            viewModel.update { current -> current.copy(topicPrefix = it) }
-            onSettingsSaved()
+        TextField("Префикс топиков", connection.topicPrefix) {
+            viewModel.editConnection { current -> current.copy(topicPrefix = it) }
         }
-        TextField("Префикс discovery", settings.discoveryPrefix) {
-            viewModel.update { current -> current.copy(discoveryPrefix = it) }
-            onSettingsSaved()
+        TextField("Префикс discovery", connection.discoveryPrefix) {
+            viewModel.editConnection { current -> current.copy(discoveryPrefix = it) }
         }
-        NumberField("Интервал опроса, с", settings.pollSeconds.toString()) {
-            viewModel.update { current -> current.copy(pollSeconds = it.toIntOrNull() ?: current.pollSeconds) }
-            onSettingsSaved()
+        NumberField("Интервал опроса, с", connection.pollSeconds.toString()) {
+            viewModel.editConnection { current ->
+                current.copy(pollSeconds = it.toIntOrNull() ?: current.pollSeconds)
+            }
         }
-        NumberField("Повтор состояний, мин", settings.repeatMinutes.toString()) {
-            viewModel.update { current -> current.copy(repeatMinutes = it.toIntOrNull() ?: current.repeatMinutes) }
-            onSettingsSaved()
+        NumberField("Повтор состояний, мин", connection.repeatMinutes.toString()) {
+            viewModel.editConnection { current ->
+                current.copy(repeatMinutes = it.toIntOrNull() ?: current.repeatMinutes)
+            }
         }
-        TextField("PEM своего CA", settings.caPem) {
-            viewModel.update { current -> current.copy(caPem = it) }
-            onSettingsSaved()
+        TextField("PEM своего CA", connection.caPem) {
+            viewModel.editConnection { current -> current.copy(caPem = it) }
         }
-        TextField("Идентификатор MQTT-клиента", settings.mqttClientId) {
-            viewModel.update { current -> current.copy(mqttClientId = it) }
-            onSettingsSaved()
+        TextField("Идентификатор MQTT-клиента", connection.mqttClientId) {
+            viewModel.editConnection { current -> current.copy(mqttClientId = it) }
         }
         OutlinedButton(onClick = viewModel::toggleManualToken, modifier = Modifier.padding(top = 8.dp)) {
             Text("Токен вручную", style = MaterialTheme.typography.tboxButton)
