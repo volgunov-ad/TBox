@@ -70,6 +70,38 @@ class DiscoveryPayloadTest {
         assertEquals("tbox/dashing/last_seen/state", seen.getString("state_topic"))
     }
 
+    @Test
+    fun musicIsASensorWithAttributesAndNoCommandTopic() {
+        val entity = sample().copy(
+            objectId = "media",
+            label = "Музыка",
+            component = HaComponent.SENSOR,
+            signalId = null,
+            writable = true,
+            media = MediaBundle(
+                signalIds = setOf("media_title"),
+                source = "app",
+                playAction = "media_play",
+                pauseToggleAction = "media_play_pause",
+                nextAction = "media_next",
+                previousAction = "media_previous",
+                volumeAction = "set_media_volume",
+                volumeMin = 0,
+                volumeMax = 31,
+            ),
+        )
+        val topic = DiscoveryPayload.configTopic("homeassistant", "dashing", entity)
+        assertEquals("homeassistant/sensor/tbox_dashing/media/config", topic)
+        val json = JSONObject(
+            DiscoveryPayload.entityConfig(entity, "tbox", "homeassistant", "dashing", "Jetour Dashing", "0.1.0"),
+        )
+        assertEquals("tbox/dashing/media/state", json.getString("state_topic"))
+        assertEquals("tbox/dashing/media/state", json.getString("json_attributes_topic"))
+        assertEquals("mdi:music", json.getString("icon"))
+        assertTrue(json.getString("value_template").contains("value_json.title"))
+        assertFalse(json.has("command_topic"))
+    }
+
     private fun sample() = CatalogEntity(
         objectId = "drive_mode",
         label = "Режим вождения",

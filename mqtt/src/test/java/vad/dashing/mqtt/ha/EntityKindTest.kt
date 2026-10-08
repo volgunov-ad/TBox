@@ -57,6 +57,23 @@ class EntityKindTest {
         assertEquals(3, window.pairs.size)
     }
 
+    @Test
+    fun mediaSignalsAndTransportFoldIntoOneRow() {
+        val rows = buildEntities(MEDIA)
+        val music = rows.single { it.objectId == "media" }
+        assertEquals(HaComponent.SENSOR, music.component)
+        assertEquals("Музыка", music.label)
+        assertTrue(music.writable)
+        assertEquals("app", music.source)
+        assertEquals(0, music.media!!.volumeMin)
+        assertEquals(31, music.media.volumeMax)
+        assertEquals("set_media_volume", music.media.volumeAction)
+        assertTrue(rows.none { it.objectId == "media_title" || it.objectId == "hu_media_volume" })
+        assertTrue(rows.none { it.objectId == "builtin_media_next" || it.objectId == "builtin_media_play" })
+        assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_toggle_like" }.component)
+        assertEquals(HaComponent.SENSOR, rows.single { it.objectId == "hu_phone_volume" }.component)
+    }
+
     private companion object {
         val CATALOG = """
             {
@@ -147,6 +164,29 @@ class EntityKindTest {
                 {"type": "launch_application", "safety": "confirm"},
                 {"type": "http_request", "safety": "confirm"},
                 {"type": "delay", "safety": "safe"}
+              ]
+            }
+        """.trimIndent()
+
+        val MEDIA = """
+            {
+              "signals": [
+                {"id": "media_title", "label": "Название", "valueType": "state", "sources": ["app"], "stateOptions": []},
+                {"id": "media_artist", "label": "Исполнитель", "valueType": "state", "sources": ["app"], "stateOptions": []},
+                {"id": "media_playing", "label": "Играет", "valueType": "state", "sources": ["app"], "stateOptions": ["off", "on"]},
+                {"id": "media_position_ms", "label": "Позиция", "unit": "мс", "valueType": "number", "sources": ["app"], "stateOptions": []},
+                {"id": "media_duration_ms", "label": "Длительность", "unit": "мс", "valueType": "number", "sources": ["app"], "stateOptions": []},
+                {"id": "hu_media_volume", "label": "Громкость медиа", "valueType": "number", "sources": ["app"], "stateOptions": []},
+                {"id": "hu_phone_volume", "label": "Громкость телефона", "valueType": "number", "sources": ["app"], "stateOptions": []}
+              ],
+              "actionTypes": [
+                {"type": "builtin", "actionType": "media_previous", "safety": "safe"},
+                {"type": "builtin", "actionType": "media_play_pause", "safety": "safe"},
+                {"type": "builtin", "actionType": "media_play", "safety": "safe"},
+                {"type": "builtin", "actionType": "media_next", "safety": "safe"},
+                {"type": "builtin", "actionType": "media_toggle_like", "safety": "safe"},
+                {"type": "builtin", "actionType": "set_media_volume", "safety": "safe",
+                 "write": {"kind": "number", "options": [], "min": 0, "max": 31, "step": 1}}
               ]
             }
         """.trimIndent()

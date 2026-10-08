@@ -113,11 +113,11 @@ private fun canBody(bus: String, propertyId: Int, operation: String, value: Any)
     return JSONObject().put("actions", JSONArray().put(action)).toString()
 }
 
-private fun builtinBody(actionType: String): String {
+fun builtinBody(actionType: String, intValue: Int = 0): String {
     val action = JSONObject()
         .put("type", "builtin")
         .put("actionType", actionType)
-        .put("intValue", 0)
+        .put("intValue", intValue)
         .put("stringValue", "")
         .put("boolValue", false)
     return JSONObject().put("actions", JSONArray().put(action)).toString()

@@ -178,8 +178,14 @@ class ExternalApiCatalogWriteTest {
             ) {
                 drive = item
             }
-            if (item.optString("type") == "builtin") {
+            if (item.optString("type") == "builtin" && item.optString("actionType") != "set_media_volume") {
                 assertFalse(item.has("write"))
+            }
+            if (item.optString("actionType") == "set_media_volume") {
+                val write = item.getJSONObject("write")
+                assertEquals("number", write.getString("kind"))
+                assertEquals(0, write.getInt("min"))
+                assertEquals(31, write.getInt("max"))
             }
         }
         assertNotNull(drive)

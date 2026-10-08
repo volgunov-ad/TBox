@@ -33,4 +33,16 @@ class MqttSettingsTest {
         assertEquals(0, MqttSettings(fastPublishSeconds = -1).normalized().fastPublishSeconds)
         assertEquals(60, MqttSettings(fastPublishSeconds = 90).normalized().fastPublishSeconds)
     }
+
+    @Test
+    fun oldTrackRowsBecomeTheMusicEntity() {
+        val migrated = MqttSettings(
+            selectedObjectIds = setOf("drive_mode", "media_title", "builtin_media_next", "hu_media_volume"),
+        ).normalized()
+        assertEquals(setOf("drive_mode", "media"), migrated.selectedObjectIds)
+        assertEquals(
+            setOf("drive_mode"),
+            MqttSettings(selectedObjectIds = setOf("drive_mode")).normalized().selectedObjectIds,
+        )
+    }
 }

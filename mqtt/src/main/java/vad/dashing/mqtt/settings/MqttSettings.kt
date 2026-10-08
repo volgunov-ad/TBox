@@ -1,6 +1,7 @@
 package vad.dashing.mqtt.settings
 
 import vad.dashing.mqtt.ha.Topics
+import vad.dashing.mqtt.ha.migrateMediaSelection
 
 data class MqttSettings(
     val apiPort: Int = 8765,
@@ -36,6 +37,7 @@ data class MqttSettings(
         pollSeconds = pollSeconds.coerceIn(1, 60),
         repeatMinutes = repeatMinutes.coerceIn(0, 60),
         fastPublishSeconds = fastPublishSeconds.coerceIn(0, 60),
+        selectedObjectIds = migrateMediaSelection(selectedObjectIds),
     )
 
     /** Broker fields from [from]. Token, entities and the Monitor port stay on this copy. */

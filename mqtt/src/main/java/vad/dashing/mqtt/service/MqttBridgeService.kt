@@ -24,6 +24,12 @@ import vad.dashing.mqtt.api.SignalSample
 import vad.dashing.mqtt.bridge.CommandGuard
 import vad.dashing.mqtt.bridge.FastPublishGate
 import vad.dashing.mqtt.bridge.GeoPoint
+import vad.dashing.mqtt.bridge.MediaCommand
+import vad.dashing.mqtt.bridge.MediaSample
+import vad.dashing.mqtt.bridge.mediaInvoke
+import vad.dashing.mqtt.bridge.mediaViewOf
+import vad.dashing.mqtt.bridge.mergeMedia
+import vad.dashing.mqtt.bridge.parseMediaCommand
 import vad.dashing.mqtt.bridge.InvokeRequest
 import vad.dashing.mqtt.bridge.LocationThrottle
 import vad.dashing.mqtt.bridge.SignalRef
@@ -267,10 +273,15 @@ class MqttBridgeService : Service() {
     }
 
     private fun pollSignals(settings: MqttSettings) {
-        val refs = entities.mapNotNull { entity ->
-            val id = entity.signalId ?: return@mapNotNull null
-            val source = entity.source ?: return@mapNotNull null
-            SignalRef(id, source)
+        val refs = entities.flatMap { entity ->
+            val media = entity.media
+            if (media != null) {
+                media.signalIds.map { SignalRef(it, media.source) }
+            } else {
+                val id = entity.signalId ?: return@flatMap emptyList()
+                val source = entity.source ?: return@flatMap emptyList()
+                listOf(SignalRef(id, source))
+            }
         }
         val samples = mutableListOf<SignalSample>()
         batchSignals(refs).forEach { batch ->
@@ -282,6 +293,10 @@ class MqttBridgeService : Service() {
         val fastIntervalMs = settings.fastPublishSeconds * 1000L
         var sawFresh = false
         entities.forEach { entity ->
+            if (entity.media != null) {
+                if (publishMedia(entity, byId, base, now, fastIntervalMs)) sawFresh = true
+                return@forEach
+            }
             val sample = byId[entity.signalId] ?: return@forEach
             if (!sample.available) return@forEach
             if (entity.component == HaComponent.DEVICE_TRACKER) {
@@ -306,6 +321,29 @@ class MqttBridgeService : Service() {
             sawFresh = true
         }
         if (sawFresh) publishLastSeen(settings, force = false)
+    }
+
+    private fun publishMedia(
+        entity: CatalogEntity,
+        byId: Map<String, SignalSample>,
+        base: String,
+        now: Long,
+        fastIntervalMs: Long,
+    ): Boolean {
+        val samples = byId.mapValues { (_, sample) ->
+            MediaSample(sample.available, sample.text, sample.number)
+        }
+        val previous = mediaViewOf(lastState[entity.objectId])
+        val next = mergeMedia(previous, samples)
+        if (next == previous) return false
+        val positionOnly = previous != null && next.sameExceptPosition(previous)
+        if (positionOnly) {
+            if (!fastPublish.allow(entity.objectId, now, fastIntervalMs)) return false
+        } else {
+            fastPublish.mark(entity.objectId, now)
+        }
+        publishState(base, entity.objectId, next.json())
+        return true
     }
 
     private fun maybeRepeat(settings: MqttSettings) {
@@ -426,7 +464,27 @@ class MqttBridgeService : Service() {
         )
         if (decision != null) return
         try {
-            val command = commandToInvoke(entity, payload)
+            val bundle = entity.media
+            val command = if (bundle != null) {
+                val parsed = parseMediaCommand(payload)
+                if (parsed == null) {
+                    lastError = "Команда не из списка"
+                    restoreState(base, entity)
+                    return
+                }
+                val playing = mediaViewOf(lastState[entity.objectId])?.state == "playing"
+                val invoke = mediaInvoke(bundle, parsed, playing)
+                if (invoke == null) {
+                    if (parsed is MediaCommand.Volume) {
+                        lastError = "Громкость вне диапазона"
+                        restoreState(base, entity)
+                    }
+                    return
+                }
+                invoke
+            } else {
+                commandToInvoke(entity, payload)
+            }
             if (command == null) {
                 lastError = "Команда не из списка"
                 restoreState(base, entity)
