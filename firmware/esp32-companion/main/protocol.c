@@ -1314,6 +1314,7 @@ static void handle_line(const char *line)
             "left", "right", "fan", "mode", "auto", "blow", "sync",
             "s0", "s1", "s2", "s3", "vol",
             "w0", "w1", "w2", "w3", "roof", "shade", "hu", "out", "in",
+            "recirc", "front", "ac",
         };
         for (int i = 0; i < PHONE_SNAP_VALS; i++) {
             bool has = false;

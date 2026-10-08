@@ -70,6 +70,9 @@ class PhoneBleCodecTest {
             auto = 1,
             blow = 1,
             sync = 0,
+            recirc = 1,
+            front = 1,
+            ac = 0,
             seats = listOf(2, 1, 1, 1),
             volume = 10,
             gen = 4,
@@ -85,6 +88,9 @@ class PhoneBleCodecTest {
         assertEquals(2, merged.mode)
         assertEquals(1, merged.auto)
         assertEquals(0, merged.sync)
+        assertEquals(1, merged.recirc)
+        assertEquals(1, merged.front)
+        assertEquals(0, merged.ac)
         assertEquals(listOf(2, 1, 1, 1), merged.seats)
         assertEquals(10, merged.volume)
         assertEquals(4, merged.gen)
@@ -314,6 +320,9 @@ class PhoneBleCodecTest {
               {"id":"hvac_fan_speed","available":true,"value":3},
               {"id":"hvac_auto","available":true,"value":"on"},
               {"id":"hvac_sync","available":true,"value":"off"},
+              {"id":"hvac_recirculation","available":true,"value":"on"},
+              {"id":"hvac_front_off","available":true,"value":"on"},
+              {"id":"hvac_power","available":true,"value":"off"},
               {"id":"hvac_fan_direction","available":true,"value":"face"},
               {"id":"hvac_custom_mode","available":true,"value":"comfort"},
               {"id":"front_left_seat_mode","available":true,"value":"heat_1"},
@@ -341,6 +350,9 @@ class PhoneBleCodecTest {
         assertEquals(2, snap.mode)
         assertEquals(1, snap.auto)
         assertEquals(0, snap.sync)
+        assertEquals(1, snap.recirc)
+        assertEquals(0, snap.front)
+        assertEquals(0, snap.ac)
         assertEquals(2, snap.seats[0])
         assertEquals(11, snap.volume)
         assertEquals(1, snap.playing)
@@ -351,6 +363,9 @@ class PhoneBleCodecTest {
         val line = EspCompanionProtocol.encodePhoneSnap(4, snap)
         assertTrue(line.contains("\"t\":\"phoneSnap\""))
         assertTrue(line.contains("\"left\":230"))
+        assertTrue(line.contains("\"recirc\":1"))
+        assertTrue(line.contains("\"front\":0"))
+        assertTrue(line.contains("\"ac\":0"))
         assertTrue(line.contains("\"play\":1"))
         assertTrue(line.contains("\"pos\":12345"))
         assertTrue(line.contains("\"dur\":200000"))
@@ -372,6 +387,16 @@ class PhoneBleCodecTest {
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_BLOW, 0, 0))
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_MODE, 0, 4))
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_AUTO, 0, 2))
+        val recirc = PhoneCompanionHost.toAction(PhoneBleCodec.OP_RECIRC, 0, 1) as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION, recirc.propertyId)
+        assertEquals(AutomationCanValueCodec.KEY_ON, recirc.valueKey)
+        val front = PhoneCompanionHost.toAction(PhoneBleCodec.OP_FRONT, 0, 1) as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF, front.propertyId)
+        assertEquals(AutomationCanValueCodec.KEY_ON, front.valueKey)
+        val ac = PhoneCompanionHost.toAction(PhoneBleCodec.OP_AC, 0, 0) as AutomationAction.CanCommand
+        assertEquals(MbCanKnownVehiclePropertyId.HVAC_POWER, ac.propertyId)
+        assertEquals(AutomationCanValueCodec.KEY_OFF, ac.valueKey)
+        assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_AC, 0, 2))
         assertNotNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 0, 7))
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 2, 5))
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_SEAT, 4, 1))

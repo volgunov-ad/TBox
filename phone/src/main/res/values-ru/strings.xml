@@ -7,6 +7,9 @@
     <string name="fan">Обдув</string>
     <string name="auto">Авто</string>
     <string name="sync">SYNC</string>
+    <string name="climate_recirc">Рециркуляция</string>
+    <string name="climate_power">Климат</string>
+    <string name="climate_ac">Кондиционер</string>
     <string name="seats">Сиденья</string>
     <string name="rear_left">Сзади слева</string>
     <string name="rear_right">Сзади справа</string>

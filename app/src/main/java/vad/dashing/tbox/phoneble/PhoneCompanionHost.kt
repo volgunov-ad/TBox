@@ -35,6 +35,9 @@ object PhoneCompanionHost {
         "hvac_sync",
         "hvac_fan_direction",
         "hvac_custom_mode",
+        "hvac_recirculation",
+        "hvac_front_off",
+        "hvac_power",
         "front_left_seat_mode",
         "front_right_seat_mode",
         "rear_left_seat_mode",
@@ -81,6 +84,16 @@ object PhoneCompanionHost {
         PhoneBleCodec.OP_BLOW -> arg.takeIf { it in 1..5 }?.let { canSet(BLOW, it) }
         PhoneBleCodec.OP_MODE -> arg.takeIf { it in 1..3 }?.let { canSet(HVAC_MODE, it) }
         PhoneBleCodec.OP_SYNC -> arg.takeIf { it in 0..1 }?.let { binarySet(SYNC, it) }
+        PhoneBleCodec.OP_RECIRC -> arg.takeIf { it in 0..1 }?.let {
+            binarySet(MbCanKnownVehiclePropertyId.HVAC_AIR_RECIRCULATION, it)
+        }
+        // arg 1 asks for the front section to run. Registry onValue 2 is that write.
+        PhoneBleCodec.OP_FRONT -> arg.takeIf { it in 0..1 }?.let {
+            binarySet(MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF, it)
+        }
+        PhoneBleCodec.OP_AC -> arg.takeIf { it in 0..1 }?.let {
+            binarySet(MbCanKnownVehiclePropertyId.HVAC_POWER, it)
+        }
         PhoneBleCodec.OP_SEAT -> {
             val (propertyId, maxMode) = when (seat) {
                 0 -> SEAT_DRIVER to 7
@@ -145,6 +158,10 @@ object PhoneCompanionHost {
             auto = onOff(hu["hvac_auto"]),
             blow = blowValue(hu["hvac_fan_direction"]),
             sync = onOff(hu["hvac_sync"]),
+            recirc = onOff(hu["hvac_recirculation"]),
+            // Signal "on" means FRONT_OFF is active, so the front section is stopped.
+            front = onOff(hu["hvac_front_off"])?.let { if (it == 1) 0 else 1 },
+            ac = onOff(hu["hvac_power"]),
             seats = listOf(
                 seatValue(hu["front_left_seat_mode"]),
                 seatValue(hu["front_right_seat_mode"]),

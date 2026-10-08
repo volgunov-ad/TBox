@@ -7,6 +7,9 @@
     <string name="fan">Fan</string>
     <string name="auto">Auto</string>
     <string name="sync">SYNC</string>
+    <string name="climate_recirc">Recirculation</string>
+    <string name="climate_power">Climate</string>
+    <string name="climate_ac">A/C</string>
     <string name="seats">Seats</string>
     <string name="rear_left">Rear left</string>
     <string name="rear_right">Rear right</string>
