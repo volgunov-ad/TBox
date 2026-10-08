@@ -3474,6 +3474,7 @@ fun InfoTabContent(
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
+    var udaDtcDialogVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(updateVersionButtonEnabled) {
         if (!updateVersionButtonEnabled) {
@@ -3579,20 +3580,13 @@ fun InfoTabContent(
             if (isExpertModeEnabled) {
                 item {
                     Button(
-                        onClick = rememberWrappedOnClick {
-                            onServiceCommand(
-                                BackgroundService.ACTION_UDA_READ_DTC,
-                                "",
-                                "",
-                            )
-                        },
-                        enabled = tboxConnected,
+                        onClick = rememberWrappedOnClick { udaDtcDialogVisible = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.button_uda_read_dtc),
+                            text = stringResource(R.string.button_uda_dtc),
                             style = MaterialTheme.typography.tboxButton,
                             maxLines = 2,
                             textAlign = TextAlign.Center,
@@ -3600,6 +3594,14 @@ fun InfoTabContent(
                     }
                 }
             }
+        }
+        if (isExpertModeEnabled) {
+            UdaDtcDialog(
+                visible = udaDtcDialogVisible,
+                tboxConnected = tboxConnected,
+                onServiceCommand = onServiceCommand,
+                onDismiss = { udaDtcDialogVisible = false },
+            )
         }
     }
 }

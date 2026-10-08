@@ -1849,8 +1849,16 @@
     <string name="info_app_version_mdc">Версия приложения MDC</string>
     <string name="info_app_version_swd">Версия приложения SWD</string>
     <string name="info_app_version_uda">Версия приложения UDA</string>
-    <string name="button_uda_read_dtc">UDA: Read DTC (probe)</string>
-    <string name="button_uda_read_dtc_desc">Эксперт: DiagReq ReadDtc через UDA UDP (параметры ECU = 0)</string>
+    <string name="button_uda_dtc">Ошибки блоков</string>
+    <string name="uda_dtc_dialog_title">Ошибки блоков</string>
+    <string name="uda_dtc_dialog_hint">Чтение кодов неисправности выбранного блока. Ответ добавляется в список и не стирает другие блоки.</string>
+    <string name="uda_dtc_empty">Список пуст</string>
+    <string name="uda_dtc_clear">Очистить список</string>
+    <string name="uda_dtc_none">В блоке %1$s нет ошибок</string>
+    <string name="uda_dtc_code">%1$s: %2$s</string>
+    <string name="uda_dtc_failure">%1$s: %2$s</string>
+    <string name="uda_dtc_timeout">%1$s: нет ответа</string>
+    <string name="uda_dtc_reading">Чтение %1$s…</string>
     <string name="info_sw_version">Версия SW</string>
     <string name="info_hw_version">Версия HW</string>
     <string name="info_vin">VIN код</string>

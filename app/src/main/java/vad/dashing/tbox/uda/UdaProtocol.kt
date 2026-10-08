@@ -106,6 +106,15 @@ object UdaProtocol {
         return out
     }
 
+    /**
+     * ReadDtc for one CFG ecu id. Payload is the status mask for UDS `19 02`
+     * (`0xFF` = all DTCs) plus a reserved byte.
+     */
+    fun buildReadDtc(
+        ecuId: Int,
+        payload: ByteArray = UdaDiag.READ_DTC_PAYLOAD,
+    ): ByteArray = buildDiagReq(DiagType.ReadDtc, payload, ecuParam = ecuId)
+
     /** Probe ReadDtc with zeroed ECU/param bytes — validates UDA pipe; may fail UDS without CFG params. */
     fun buildReadDtcProbe(
         ecuParam: Int = 0,

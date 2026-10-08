@@ -70,6 +70,10 @@ import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigUiStore
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.uda.CrtVctrlProtocol
+import vad.dashing.tbox.uda.UdaDiag
+import vad.dashing.tbox.uda.UdaDtcEntry
+import vad.dashing.tbox.uda.UdaDtcSession
+import vad.dashing.tbox.uda.UdaEcuCatalog
 import vad.dashing.tbox.uda.UdaProtocol
 import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
 import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
@@ -212,6 +216,7 @@ class BackgroundService : Service() {
     private var espApSsid = ""
     private var espApPsk = ""
     private val espSoftApRouterGeneration = AtomicInteger(0)
+    private val udaDtcReadTicket = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
     private var elm327Manager: Elm327Manager? = null
@@ -512,8 +517,9 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
-        /** Expert: UDA DiagReq ReadDtc probe (CFG path + zeroed ECU params). */
+        /** Expert: UDA DiagReq ReadDtc for one CFG ecu id. Extra: [EXTRA_UDA_ECU_ID]. */
         const val ACTION_UDA_READ_DTC = "vad.dashing.tbox.UDA_READ_DTC"
+        const val EXTRA_UDA_ECU_ID = "vad.dashing.tbox.EXTRA_UDA_ECU_ID"
         /** Expert: raw CRT vctrl frame (CMD 0x26, 45 bytes). Extra: hex payload or empty for lock-close. */
         const val ACTION_CRT_VCTRL = "vad.dashing.tbox.CRT_VCTRL"
         const val EXTRA_CRT_VCTRL_HEX = "vad.dashing.tbox.EXTRA_CRT_VCTRL_HEX"
@@ -1452,7 +1458,10 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
-            ACTION_UDA_READ_DTC -> udaReadDtcProbe()
+            ACTION_UDA_READ_DTC -> {
+                val ecuId = intent.getStringExtra(EXTRA_UDA_ECU_ID)?.toIntOrNull()
+                if (ecuId != null) udaReadDtc(ecuId)
+            }
             ACTION_CRT_VCTRL -> {
                 val hex = intent.getStringExtra(EXTRA_CRT_VCTRL_HEX).orEmpty().trim()
                 crtVctrlSend(hex)
@@ -6733,30 +6742,86 @@ class BackgroundService : Service() {
         settingsManager.saveCustomString("vin_code", "")
     }
 
-    private fun udaReadDtcProbe() {
+    private fun udaReadDtc(ecuId: Int) {
+        val ecu = UdaEcuCatalog.find(ecuId) ?: return
         if (!TboxRepository.tboxConnected.value) return
+        val ticket = udaDtcReadTicket.incrementAndGet()
+        UdaDtcSession.markPending(ecu.id)
         scope.launch {
             try {
-                val payload = UdaProtocol.buildReadDtcProbe()
+                val payload = UdaProtocol.buildReadDtc(ecu.id)
                 TboxRepository.addLog(
                     "INFO",
                     "UDA send",
-                    "DiagReq ReadDtc probe len=${payload.size}",
+                    "DiagReq ReadDtc ${ecu.name} ecuId=${ecu.id} len=${payload.size}",
                 )
-                sendTboxMessage(
+                val sent = sendTboxMessage(
                     UDA_CODE,
                     SELF_CODE,
                     UdaProtocol.CMD_DIAG_REQ,
                     payload,
                     false,
                 )
+                if (!sent) {
+                    if (ticket == udaDtcReadTicket.get()) {
+                        UdaDtcSession.append(listOf(UdaDtcEntry.Failure(ecu.name, "send")))
+                        UdaDtcSession.finishPending()
+                    }
+                    return@launch
+                }
+                delay(30_000)
+                if (ticket == udaDtcReadTicket.get()) {
+                    UdaDtcSession.append(listOf(UdaDtcEntry.Timeout(ecu.name)))
+                    UdaDtcSession.finishPending()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "UDA", "ReadDtc probe failed: ${e.message}")
-                Log.e("UDA", "ReadDtc probe failed", e)
+                if (ticket == udaDtcReadTicket.get()) {
+                    UdaDtcSession.append(listOf(UdaDtcEntry.Failure(ecu.name, e.message ?: "error")))
+                    UdaDtcSession.finishPending()
+                }
+                TboxRepository.addLog("ERROR", "UDA", "ReadDtc ${ecu.name} failed: ${e.message}")
+                Log.e("UDA", "ReadDtc failed", e)
             }
         }
+    }
+
+    private fun onUdaDiagAck(data: ByteArray) {
+        val resp = UdaDiag.parseAckResp(data)
+        TboxRepository.addLog(
+            "INFO",
+            "UDA response",
+            "DiagReq ack: ${toHexString(data)}",
+        )
+        if (resp != null && resp != 0) {
+            udaDtcReadTicket.incrementAndGet()
+            val name = UdaEcuCatalog.nameOf(UdaDtcSession.pendingEcuId.value ?: -1)
+            UdaDtcSession.append(listOf(UdaDtcEntry.Failure(name, "ack 0x${resp.toUInt().toString(16)}")))
+            UdaDtcSession.finishPending()
+        }
+    }
+
+    private fun onUdaDiagReport(data: ByteArray) {
+        val result = UdaDiag.parseResult(data)
+        if (result == null) {
+            TboxRepository.addLog(
+                "WARN",
+                "UDA response",
+                "DiagReport len=${data.size}: ${toHexString(data.copyOfRange(0, minOf(64, data.size)))}",
+            )
+            return
+        }
+        udaDtcReadTicket.incrementAndGet()
+        val name = UdaEcuCatalog.nameOf(result.ecuId)
+        val entries = UdaDiag.entriesFor(name, result)
+        UdaDtcSession.append(entries)
+        UdaDtcSession.finishPending()
+        TboxRepository.addLog(
+            "INFO",
+            "UDA response",
+            "DiagReport ${name} ecuId=${result.ecuId} ${result.resultInfo.ifBlank { "ude=0x${result.udeCode.toString(16)}" }} dtcs=${entries.count { it is UdaDtcEntry.Code }}",
+        )
     }
 
     private fun crtVctrlSend(hexPayload: String) {
@@ -7551,20 +7616,11 @@ class BackgroundService : Service() {
                             needEndLog = !ansVersion(tidName, receivedData, requireStatusPrefix = false)
                         }
                         UdaProtocol.RSP_DIAG_REQ -> {
-                            TboxRepository.addLog(
-                                "INFO",
-                                "UDA response",
-                                "DiagReq ack: ${toHexString(receivedData)}",
-                            )
+                            onUdaDiagAck(receivedData)
                             needEndLog = false
                         }
                         UdaProtocol.RSP_DIAG_REPORT -> {
-                            val previewLen = minOf(64, receivedData.size)
-                            TboxRepository.addLog(
-                                "INFO",
-                                "UDA response",
-                                "DiagReport len=${receivedData.size}: ${toHexString(receivedData.copyOfRange(0, previewLen))}",
-                            )
+                            onUdaDiagReport(receivedData)
                             needEndLog = false
                         }
                         UdaProtocol.RSP_DIAG_RESULT, UdaProtocol.RSP_PROCESS_INFO -> {

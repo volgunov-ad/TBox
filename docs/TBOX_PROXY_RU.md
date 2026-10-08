@@ -128,7 +128,7 @@ TCP-режим (`127.0.0.1:5555` и т.п.) — отдельно, для shell �
 
 DiagReq payload (см. `UdaProtocol.kt`): путь к `libJX65_n720_CFG.so` + type @`0x84` + ecuParam @`0x85` + dataLen @`0x89` + data @`0x8d`.
 
-В UI: «Запросить информацию» читает VERSION UDA; в эксперт-режиме на вкладке Info — кнопка Read DTC probe.
+В UI: «Запросить информацию» читает VERSION UDA. В эксперт-режиме на вкладке «Информация» кнопка «Ошибки блоков» открывает окно: чтение DTC (`19 02`, маска `0xFF`) по `ecuId` из CFG. Ответ `0x86` — `Uda_DiagResultResp_t` (53 байта заголовка: type, ecuId, endCode, resultCode=`ret|0x80000000`, resultInfo, dataLen, затем данные). Строки разных блоков копятся и не затирают друг друга.
 
 ### CRT CMD `0x26` — vctrl (MCU)
 
