@@ -20,6 +20,7 @@ class MqttSettingsTest {
             accessToken = "",
             selectedObjectIds = emptySet(),
             deviceName = "другое",
+            fastPublishSeconds = 10,
         )
         val merged = saved.applyingConnection(draft)
         assertEquals("192.168.1.10", merged.brokerHost)
@@ -28,5 +29,8 @@ class MqttSettingsTest {
         assertEquals("token", merged.accessToken)
         assertEquals(setOf("drive_mode"), merged.selectedObjectIds)
         assertEquals("Jetour Dashing", merged.deviceName)
+        assertEquals(10, merged.fastPublishSeconds)
+        assertEquals(0, MqttSettings(fastPublishSeconds = -1).normalized().fastPublishSeconds)
+        assertEquals(60, MqttSettings(fastPublishSeconds = 90).normalized().fastPublishSeconds)
     }
 }

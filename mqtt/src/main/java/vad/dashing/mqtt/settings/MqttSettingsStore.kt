@@ -28,6 +28,7 @@ class MqttSettingsStore private constructor(context: Context) {
         autostart = prefs.getBoolean(KEY_AUTOSTART, true),
         pollSeconds = prefs.getInt(KEY_POLL, 3),
         repeatMinutes = prefs.getInt(KEY_REPEAT, 5),
+        fastPublishSeconds = prefs.getInt(KEY_FAST, 5),
         accessToken = prefs.getString(KEY_TOKEN, "").orEmpty(),
         selectedObjectIds = decodeIds(prefs.getString(KEY_SELECTED, "[]").orEmpty()),
     )
@@ -51,6 +52,7 @@ class MqttSettingsStore private constructor(context: Context) {
             .putBoolean(KEY_AUTOSTART, normalized.autostart)
             .putInt(KEY_POLL, normalized.pollSeconds)
             .putInt(KEY_REPEAT, normalized.repeatMinutes)
+            .putInt(KEY_FAST, normalized.fastPublishSeconds)
             .putString(KEY_TOKEN, normalized.accessToken.trim())
             .putString(KEY_SELECTED, encodeIds(normalized.selectedObjectIds))
             .apply()
@@ -108,6 +110,7 @@ class MqttSettingsStore private constructor(context: Context) {
         private const val KEY_AUTOSTART = "autostart"
         private const val KEY_POLL = "poll_seconds"
         private const val KEY_REPEAT = "repeat_minutes"
+        private const val KEY_FAST = "fast_publish_seconds"
         private const val KEY_TOKEN = "access_token"
         private const val KEY_SELECTED = "selected_ids"
         private const val KEY_PAIR_ID = "pair_client_id"

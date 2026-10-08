@@ -20,6 +20,7 @@ data class MqttSettings(
     val autostart: Boolean = true,
     val pollSeconds: Int = 3,
     val repeatMinutes: Int = 5,
+    val fastPublishSeconds: Int = 5,
     val accessToken: String = "",
     val selectedObjectIds: Set<String> = emptySet(),
 ) {
@@ -34,6 +35,7 @@ data class MqttSettings(
         deviceName = Topics.deviceName(deviceName),
         pollSeconds = pollSeconds.coerceIn(1, 60),
         repeatMinutes = repeatMinutes.coerceIn(0, 60),
+        fastPublishSeconds = fastPublishSeconds.coerceIn(0, 60),
     )
 
     /** Broker fields from [from]. Token, entities and the Monitor port stay on this copy. */
@@ -51,6 +53,7 @@ data class MqttSettings(
         autostart = from.autostart,
         pollSeconds = from.pollSeconds,
         repeatMinutes = from.repeatMinutes,
+        fastPublishSeconds = from.fastPublishSeconds,
     )
 
     val ready: Boolean

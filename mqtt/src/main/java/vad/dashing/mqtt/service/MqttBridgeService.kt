@@ -22,6 +22,7 @@ import vad.dashing.mqtt.api.ApiCallException
 import vad.dashing.mqtt.api.MonitorApi
 import vad.dashing.mqtt.api.SignalSample
 import vad.dashing.mqtt.bridge.CommandGuard
+import vad.dashing.mqtt.bridge.FastPublishGate
 import vad.dashing.mqtt.bridge.GeoPoint
 import vad.dashing.mqtt.bridge.InvokeRequest
 import vad.dashing.mqtt.bridge.LocationThrottle
@@ -49,6 +50,7 @@ class MqttBridgeService : Service() {
     private val session = HiveMqttSession()
     private val guard = CommandGuard()
     private val location = LocationThrottle()
+    private val fastPublish = FastPublishGate()
     private val cleanup = DiscoveryCleanup()
     private val lastState = HashMap<String, String>()
     private var allEntities: List<CatalogEntity> = emptyList()
@@ -252,7 +254,9 @@ class MqttBridgeService : Service() {
         }
         val selected = settings.selectedObjectIds
         entities = allEntities.filter { it.objectId in selected }
-        lastState.keys.retainAll(entities.map { it.objectId }.toSet())
+        val liveIds = entities.map { it.objectId }.toSet()
+        lastState.keys.retainAll(liveIds)
+        fastPublish.retain(liveIds)
         val signature = entities.joinToString(",") { it.objectId } +
             "|${settings.discoveryEnabled}|${settings.deviceName}|${settings.deviceId}|" +
             "${settings.topicPrefix}|${settings.discoveryPrefix}|${settings.acceptCommands}"
@@ -274,27 +278,30 @@ class MqttBridgeService : Service() {
         }
         val byId = samples.associateBy { it.id }
         val base = Topics.base(settings.topicPrefix, settings.deviceId)
+        val now = System.currentTimeMillis()
+        val fastIntervalMs = settings.fastPublishSeconds * 1000L
         var sawFresh = false
         entities.forEach { entity ->
             val sample = byId[entity.signalId] ?: return@forEach
             if (!sample.available) return@forEach
             if (entity.component == HaComponent.DEVICE_TRACKER) {
                 val point = geoOf(sample) ?: return@forEach
-                val now = System.currentTimeMillis()
-                if (location.shouldSend(point, now, force = false)) {
+                if (location.shouldSend(point, now, force = false, minIntervalMs = fastIntervalMs)) {
                     publishGeo(base, entity, point)
                     location.markSent(point, now)
                     sawFresh = true
                 }
                 return@forEach
             }
+            val number = sample.number
             val text = when {
-                sample.number != null -> StateFormat.numberText(sample.number, entity.unit)
+                number != null -> StateFormat.numberText(number, entity.unit)
                 sample.text != null -> StateFormat.text(sample.text, entity.unit, entity.component)
                 else -> null
             } ?: return@forEach
             if (entity.component == HaComponent.SELECT && text !in entity.options) return@forEach
             if (lastState[entity.objectId] == text) return@forEach
+            if (number != null && !fastPublish.allow(entity.objectId, now, fastIntervalMs)) return@forEach
             publishState(base, entity.objectId, text)
             sawFresh = true
         }
