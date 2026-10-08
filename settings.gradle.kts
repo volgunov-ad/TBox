@@ -23,4 +23,5 @@ dependencyResolutionManagement {
 rootProject.name = "TBox"
 include(":app")
 include(":voice")
+include(":mqtt")
  

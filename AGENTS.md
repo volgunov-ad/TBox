@@ -67,10 +67,6 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 
 Separate app **VAD Voice** (`vad.dashing.voice`). Plan: [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md).
 
-### MQTT APK (`:mqtt`)
-
-Planned separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT broker and optional Home Assistant discovery. Plan: [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md). Module is not in the Gradle build until that plan is implemented.
-
 Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via Gradle (no Python):
 
 ```
@@ -80,6 +76,15 @@ Piper TTS + Vosk STT models are **not** in git. `assemble*` downloads them via G
 ```
 
 APK ships Irina RU int8 + vosk-model-small-ru (~45 MB); only `armeabi-v7a` / `arm64-v8a`.
+
+### MQTT APK (`:mqtt`)
+
+Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT broker and optional Home Assistant discovery. Plan: [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md).
+
+```
+./gradlew :mqtt:testDebugUnitTest
+./gradlew :mqtt:assembleDebug
+```
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).

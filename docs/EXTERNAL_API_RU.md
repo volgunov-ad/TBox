@@ -221,7 +221,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 3,
+  "catalogVersion": 4,
   "serverEnabled": true,
   "pairingActive": false,
   "appVersion": "1.0.0"
@@ -267,7 +267,18 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   вопросов),
 - действия: типы из automations (`can_command`, `builtin`, `launch_application`, …) +
   `safety` (`safe`\|`confirm`\|`dangerous`) + **`voiceAliasesRu`**,
-- `catalogVersion` (сейчас **3** — aliases + builtin `start_vad_voice`).
+- `catalogVersion` (сейчас **4** — у `can_command` добавлены `operations`, `signalId` и `write`).
+
+`write` — схема записи для сопряжённого клиента (TBox MQTT). Поле аддитивное: голосовой клиент его не читает.
+
+| `write.kind` | Смысл |
+|--------------|--------|
+| `binary` | пары `off`/`on` → значение invoke |
+| `options` | `state` как у сигнала, `value` — тело команды (ключ или целое) |
+| `number` | `min`/`max`/`step`/`unit` и пары «число сигнала → value» |
+| `pulse` | кнопки `open`/`close`, без `signalId` |
+
+Если пару надёжно построить нельзя, `write` = `null`, а `signalId` всё равно указывает сигнал-подтверждение, когда он один. `catalogVersion` **3** остаётся в истории как aliases + `start_vad_voice`.
 
 Источник истины для id — те же каталоги, что UI автоматизаций и
 [AUTOMATIONS_AI_JSON_GUIDE_RU.md](AUTOMATIONS_AI_JSON_GUIDE_RU.md). Поле `voiceAliasesRu` —
@@ -444,7 +455,7 @@ Intent из Monitor).
 
 MQTT-клиент для Home Assistant — отдельное приложение на том же API:
 [MQTT_APK_RU.md](MQTT_APK_RU.md) (**TBox MQTT**, `vad.dashing.mqtt`, модуль `:mqtt`).
-Для команд ему нужна схема записи в каталоге (`catalogVersion` 4); пока каталог v3.
+Схема записи команд — `catalogVersion` 4 (`operations`, `signalId`, `write`).
 
 ---
 
