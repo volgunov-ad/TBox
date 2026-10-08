@@ -1,7 +1,6 @@
 package vad.dashing.mqtt.settings
 
 import vad.dashing.mqtt.ha.Topics
-import vad.dashing.mqtt.ha.migrateMediaSelection
 import java.security.MessageDigest
 
 data class MqttSettings(
@@ -43,7 +42,6 @@ data class MqttSettings(
             pollSeconds = pollSeconds.coerceIn(1, 60),
             repeatMinutes = repeatMinutes.coerceIn(0, 60),
             fastPublishSeconds = fastPublishSeconds.coerceIn(0, 60),
-            selectedObjectIds = migrateMediaSelection(selectedObjectIds),
             wireguardConf = conf,
             wireguardFileName = wireguardFileName.trim(),
             wireguardEnabled = wireguardEnabled && conf.isNotBlank(),

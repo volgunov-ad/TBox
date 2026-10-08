@@ -58,7 +58,7 @@ class EntityKindTest {
     }
 
     @Test
-    fun mediaSignalsAndTransportFoldIntoOneRow() {
+    fun mediaPlayerSitsBesideIndividualTrackAndVolumeRows() {
         val rows = buildEntities(MEDIA)
         val music = rows.single { it.objectId == "media" }
         assertEquals(HaComponent.SENSOR, music.component)
@@ -68,8 +68,12 @@ class EntityKindTest {
         assertEquals(0, music.media!!.volumeMin)
         assertEquals(31, music.media.volumeMax)
         assertEquals("set_media_volume", music.media.volumeAction)
-        assertTrue(rows.none { it.objectId == "media_title" || it.objectId == "hu_media_volume" })
-        assertTrue(rows.none { it.objectId == "builtin_media_next" || it.objectId == "builtin_media_play" })
+        assertEquals(HaComponent.SENSOR, rows.single { it.objectId == "media_title" }.component)
+        assertEquals(HaComponent.SENSOR, rows.single { it.objectId == "hu_media_volume" }.component)
+        assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_next" }.component)
+        assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_play" }.component)
+        assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_play_pause" }.component)
+        assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_previous" }.component)
         assertEquals(HaComponent.BUTTON, rows.single { it.objectId == "builtin_media_toggle_like" }.component)
         assertEquals(HaComponent.SENSOR, rows.single { it.objectId == "hu_phone_volume" }.component)
     }

@@ -41,14 +41,14 @@ class MqttSettingsTest {
     }
 
     @Test
-    fun oldTrackRowsBecomeTheMusicEntity() {
-        val migrated = MqttSettings(
-            selectedObjectIds = setOf("drive_mode", "media_title", "builtin_media_next", "hu_media_volume"),
-        ).normalized()
-        assertEquals(setOf("drive_mode", "media"), migrated.selectedObjectIds)
-        assertEquals(
-            setOf("drive_mode"),
-            MqttSettings(selectedObjectIds = setOf("drive_mode")).normalized().selectedObjectIds,
+    fun individualMediaRowsStaySelectedNextToMusic() {
+        val selected = setOf(
+            "drive_mode",
+            "media",
+            "media_title",
+            "builtin_media_next",
+            "hu_media_volume",
         )
+        assertEquals(selected, MqttSettings(selectedObjectIds = selected).normalized().selectedObjectIds)
     }
 }
