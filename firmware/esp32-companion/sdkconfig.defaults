@@ -9,7 +9,9 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=n
 # Avoid GCC ICE on esp_lcd rgb panel with -Og (xtensa-esp-elf 14.2).
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 
-# Shelly Blu RC Button 4 — NimBLE observer, plus one phone connection (peripheral).
+# Shelly Blu RC Button 4 — NimBLE observer, plus up to three phone links (peripheral).
+# Connection interval is 200–300 ms so the 40 ms / 80 ms Shelly scan still gets airtime.
+# Controller defaults already allow 3 connections and 6 activities (scan + adv + 3 links).
 # Keep default NimBLE roles: stripping peripheral/broadcaster breaks IDF 5.3.2 ble_gap.c
 # (-Werror=implicit-function-declaration on ble_gap_call_conn_event_cb / adv_active_instance).
 CONFIG_BT_ENABLED=y
@@ -19,7 +21,7 @@ CONFIG_BT_BLUEDROID_ENABLED=n
 CONFIG_BT_NIMBLE_NVS_PERSIST=n
 CONFIG_BT_NIMBLE_SM_LEGACY=n
 CONFIG_BT_NIMBLE_SM_SC=n
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
 
 # Companion SoftAP + STA NAT (phone -> ESP -> head-unit AP). fw 0.9+
 CONFIG_LWIP_L2_TO_L3_COPY=y

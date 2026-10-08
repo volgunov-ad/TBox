@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define ESP_COMPANION_FW_VERSION "0.11.0"
+#define ESP_COMPANION_FW_VERSION "0.12.0"
 #define ESP_COMPANION_GPIO_IN_COUNT 4
 #define ESP_COMPANION_RELAY_COUNT 2
 #define ESP_COMPANION_PROTO_V 1

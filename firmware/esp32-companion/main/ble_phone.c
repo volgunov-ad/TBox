@@ -22,6 +22,7 @@
 #include "services/gatt/ble_svc_gatt.h"
 
 #include "ble_btn.h"
+#include "phone_link_policy.h"
 #include "protocol.h"
 
 static const char *TAG = "ble_phone";
@@ -96,6 +97,8 @@ typedef struct {
     /* Text the phone already shows; its text pages are skipped when this matches. */
     uint16_t text_hash;
     uint8_t groups;
+    /* Link that asked. Conn handle 0 is valid; missing is BLE_HS_CONN_HANDLE_NONE. */
+    uint16_t conn;
 } refresh_pending_t;
 
 typedef struct {
@@ -131,20 +134,32 @@ static int s_wait_n;
 static bool s_snap_inflight;
 static uint32_t s_snap_req_ms;
 
-static uint8_t s_tx[TX_MAX][SEALED_LEN];
-static int s_tx_n;
+typedef struct {
+    uint16_t handle;
+    bool notify;
+    bool seen;
+    bool kick;
+    uint16_t mtu;
+    uint32_t link_ms;
+    ble_addr_t addr;
+    int phone_index;
+    uint8_t tx[TX_MAX][SEALED_LEN];
+    int tx_n;
+} phone_link_t;
 
-static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
+static phone_link_t s_links[PHONE_LINK_MAX];
+static bool s_links_ready;
+/* Set for the duration of a GATT write so the packet marks that link. */
+static phone_link_t *s_rx_link;
 static uint16_t s_snap_handle;
-static bool s_notify;
-static uint16_t s_mtu = 23;
-static uint32_t s_link_ms;
-static bool s_link_seen;
-static ble_addr_t s_link_addr;
-/* A dropped stranger reconnects at once and would hold the only link slot. */
-static bool s_idle_valid;
-static ble_addr_t s_idle_addr;
-static uint32_t s_idle_until_ms;
+
+/* Dropped strangers reconnect at once and would walk through every slot. */
+#define IDLE_BLOCK_MAX 4
+typedef struct {
+    ble_addr_t addr;
+    uint32_t until_ms;
+} idle_block_t;
+static idle_block_t s_blocked[IDLE_BLOCK_MAX];
 
 /* USB messages are sent from ble_phone_poll (main loop), never from the NimBLE host task. */
 static bool s_out_pair;
@@ -426,14 +441,129 @@ static bool unseal(const uint8_t key[16], const uint8_t *payload, uint8_t len,
     return true;
 }
 
-static void tx_push(const uint8_t pkt[SEALED_LEN])
+/* BSS leaves handle 0, and 0 is a live NimBLE conn handle. */
+static void links_ensure(void)
 {
-    if (s_tx_n >= TX_MAX) {
-        memmove(s_tx[0], s_tx[1], (size_t)(TX_MAX - 1) * SEALED_LEN);
-        s_tx_n = TX_MAX - 1;
+    if (s_links_ready) return;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        s_links[i].handle = BLE_HS_CONN_HANDLE_NONE;
+        s_links[i].phone_index = -1;
     }
-    memcpy(s_tx[s_tx_n], pkt, SEALED_LEN);
-    s_tx_n++;
+    s_links_ready = true;
+}
+
+static phone_link_t *link_by_conn(uint16_t conn)
+{
+    links_ensure();
+    if (conn == BLE_HS_CONN_HANDLE_NONE) return NULL;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (s_links[i].handle == conn) return &s_links[i];
+    }
+    return NULL;
+}
+
+static phone_link_t *link_alloc_new(uint16_t conn)
+{
+    links_ensure();
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (s_links[i].handle == BLE_HS_CONN_HANDLE_NONE) {
+            memset(&s_links[i], 0, sizeof(s_links[i]));
+            s_links[i].handle = conn;
+            s_links[i].phone_index = -1;
+            return &s_links[i];
+        }
+    }
+    return NULL;
+}
+
+static int link_count(void)
+{
+    links_ensure();
+    int n = 0;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (s_links[i].handle != BLE_HS_CONN_HANDLE_NONE) n++;
+    }
+    return n;
+}
+
+static void clear_link(phone_link_t *link)
+{
+    uint16_t conn = link->handle;
+    memset(link, 0, sizeof(*link));
+    link->handle = BLE_HS_CONN_HANDLE_NONE;
+    link->phone_index = -1;
+    for (int i = 0; i < s_wait_n; ) {
+        if (s_wait[i].conn == conn) {
+            for (int j = i; j < s_wait_n - 1; j++) s_wait[j] = s_wait[j + 1];
+            s_wait_n--;
+            continue;
+        }
+        i++;
+    }
+}
+
+static void tx_push(phone_link_t *link, const uint8_t pkt[SEALED_LEN])
+{
+    if (!link) return;
+    if (link->tx_n >= TX_MAX) {
+        memmove(link->tx[0], link->tx[1], (size_t)(TX_MAX - 1) * SEALED_LEN);
+        link->tx_n = TX_MAX - 1;
+    }
+    memcpy(link->tx[link->tx_n], pkt, SEALED_LEN);
+    link->tx_n++;
+}
+
+static void mark_link_seen(void)
+{
+    if (s_rx_link) s_rx_link->seen = true;
+}
+
+/* The same phone on a new link: snapshots and the counter follow the new one. */
+static void bind_phone(int phone_index)
+{
+    if (!s_rx_link) return;
+    s_rx_link->phone_index = phone_index;
+    s_rx_link->seen = true;
+    s_rx_link->kick = false;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        phone_link_t *other = &s_links[i];
+        if (other == s_rx_link) continue;
+        if (other->handle == BLE_HS_CONN_HANDLE_NONE) continue;
+        if (other->phone_index == phone_index) other->kick = true;
+    }
+}
+
+static void block_addr(const ble_addr_t *addr, uint32_t until_ms)
+{
+    if (until_ms == 0) until_ms = 1;
+    int free_slot = -1;
+    int same = -1;
+    int oldest = 0;
+    for (int i = 0; i < IDLE_BLOCK_MAX; i++) {
+        if (s_blocked[i].until_ms == 0) {
+            if (free_slot < 0) free_slot = i;
+            continue;
+        }
+        if (ble_addr_cmp(&s_blocked[i].addr, addr) == 0) same = i;
+        if (s_blocked[i].until_ms < s_blocked[oldest].until_ms) oldest = i;
+    }
+    int slot = same >= 0 ? same : (free_slot >= 0 ? free_slot : oldest);
+    s_blocked[slot].addr = *addr;
+    s_blocked[slot].until_ms = until_ms;
+}
+
+static bool addr_blocked(const ble_addr_t *addr, uint32_t t)
+{
+    if (s_learn) return false;
+    for (int i = 0; i < IDLE_BLOCK_MAX; i++) {
+        if (s_blocked[i].until_ms == 0) continue;
+        if ((int32_t)(t - s_blocked[i].until_ms) >= 0) {
+            s_blocked[i].until_ms = 0;
+            continue;
+        }
+        if (ble_addr_cmp(&s_blocked[i].addr, addr) == 0) return true;
+    }
+    return false;
 }
 
 /* FNV-1a 32 folded to 16 bits, never 0 for non-empty text. Same as PhoneBleCodec.textHash. */
@@ -473,9 +603,11 @@ static void put_i16(uint8_t *dst, int v)
     dst[1] = (uint8_t)((uint16_t)v >> 8);
 }
 
-static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_hash, uint8_t groups)
+static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_hash, uint8_t groups,
+                          uint16_t conn)
 {
-    if (phone_index < 0 || phone_index >= s_count || !s_cache_valid) return;
+    phone_link_t *link = link_by_conn(conn);
+    if (phone_index < 0 || phone_index >= s_count || !s_cache_valid || !link) return;
     const phone_rec_t *phone = &s_phones[phone_index];
     const phone_media_t *m = &s_cache_media;
     int pages[7 + (PHONE_TEXT_MAX + TEXT_CHUNK - 1) / TEXT_CHUNK];
@@ -559,7 +691,7 @@ static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_
          */
         uint8_t type = page >= PAGE_MEDIA ? (uint8_t)(SNAP_PAGE_TYPE_BASE + page) : 4;
         seal(phone->key, type, phone->id, counter, body, pkt);
-        tx_push(pkt);
+        tx_push(link, pkt);
     }
 }
 
@@ -576,7 +708,8 @@ static void request_snap_if_needed(uint32_t t)
     if (s_wait_n == 0) return;
     if (s_cache_valid && (uint32_t)(t - s_cache_ms) < SNAP_FRESH_MS) {
         for (int i = 0; i < s_wait_n; i++) {
-            enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups);
+            enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups,
+                         s_wait[i].conn);
         }
         s_wait_n = 0;
         s_snap_inflight = false;
@@ -591,6 +724,7 @@ static void request_snap_if_needed(uint32_t t)
 
 static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, uint8_t groups, uint32_t t)
 {
+    if (!s_rx_link) return;
     int slot = wait_find(phone_index);
     if (slot < 0 && s_wait_n < BLE_DEVICE_MAX) {
         slot = s_wait_n++;
@@ -600,6 +734,7 @@ static void note_refresh(int phone_index, uint32_t counter, uint16_t text_hash, 
     s_wait[slot].counter = counter;
     s_wait[slot].text_hash = text_hash;
     s_wait[slot].groups = groups;
+    s_wait[slot].conn = s_rx_link->handle;
     request_snap_if_needed(t);
 }
 
@@ -613,12 +748,12 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len)
     /* One dialog per phone and key, even if the app writes the packet twice. */
     if (s_pending_pair && memcmp(s_pending.id, id, 4) == 0 &&
         memcmp(s_pending.key, key, 16) == 0) {
-        s_link_seen = true;
+        mark_link_seen();
         return;
     }
     int existing = find_phone(id);
     if (existing >= 0 && memcmp(s_phones[existing].key, key, 16) == 0) {
-        s_link_seen = true;
+        mark_link_seen();
         return;
     }
 
@@ -631,7 +766,7 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len)
     s_pending.name_len = (uint8_t)name_len;
     sanitize_name(s_pending.name, s_pending.name_len);
     s_pending_pair = true;
-    s_link_seen = true;
+    mark_link_seen();
 
     memcpy(s_out_pair_id, s_pending.id, 4);
     memcpy(s_out_pair_name, s_pending.name, s_pending.name_len);
@@ -649,7 +784,7 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
     uint8_t body[BODY_LEN];
     if (!unseal(s_phones[index].key, payload, len, &type, &counter, body)) return;
     if (counter <= s_phones[index].counter) return;
-    s_link_seen = true;
+    bind_phone(index);
     s_phones[index].counter = counter;
     s_counter_dirty |= (1u << index);
     if (type == 2) {
@@ -669,6 +804,7 @@ static void on_sealed(const uint8_t *payload, uint8_t len)
 void ble_phone_init(void)
 {
     ble_radio_lock();
+    links_ensure();
     load_nvs();
     ESP_LOGI(TAG, "phones=%d", s_count);
     ble_radio_unlock();
@@ -787,22 +923,29 @@ bool ble_phone_forget(const char *id_hex)
             if (s_wait[i].index > index) s_wait[i].index--;
             i++;
         }
+        links_ensure();
+        for (int i = 0; i < PHONE_LINK_MAX; i++) {
+            if (s_links[i].phone_index == index) s_links[i].phone_index = -1;
+            else if (s_links[i].phone_index > index) s_links[i].phone_index--;
+        }
         ok = save_nvs();
     }
     ble_radio_unlock();
     return ok;
 }
 
-static void on_incoming(const uint8_t *payload, uint8_t len)
+static void on_incoming(uint16_t conn, const uint8_t *payload, uint8_t len)
 {
     if (!payload || len < 1) return;
     ble_radio_lock();
+    s_rx_link = link_by_conn(conn);
     uint8_t type = payload[0];
     if (type == 1) {
         on_pair_packet(payload, len);
     } else if ((type == 2 || type == 3) && len == SEALED_LEN) {
         on_sealed(payload, len);
     }
+    s_rx_link = NULL;
     ble_radio_unlock();
 }
 
@@ -826,7 +969,8 @@ void ble_phone_set_snapshot(int gen, uint32_t mask, const int vals[PHONE_SNAP_VA
     s_cache_ms = now_ms();
     s_snap_inflight = false;
     for (int i = 0; i < s_wait_n; i++) {
-        enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups);
+        enqueue_snap(s_wait[i].index, s_wait[i].counter, s_wait[i].text_hash, s_wait[i].groups,
+                     s_wait[i].conn);
     }
     s_wait_n = 0;
     ble_radio_unlock();
@@ -841,11 +985,12 @@ void ble_phone_poll(uint32_t t)
     int cmd_n = 0;
     bool send_snap_req = false;
     bool send_status = false;
-    uint8_t note[SEALED_LEN];
-    bool send_note = false;
-    uint16_t note_conn = BLE_HS_CONN_HANDLE_NONE;
+    uint8_t notes[PHONE_LINK_MAX][SEALED_LEN];
+    uint16_t note_conn[PHONE_LINK_MAX];
+    int note_n = 0;
     uint16_t note_handle = 0;
-    uint16_t drop_conn = BLE_HS_CONN_HANDLE_NONE;
+    uint16_t drop_conn[PHONE_LINK_MAX];
+    int drop_n = 0;
 
     ble_radio_lock();
     if (s_learn && (int32_t)(t - s_learn_deadline_ms) >= 0) {
@@ -886,24 +1031,27 @@ void ble_phone_poll(uint32_t t)
     s_out_snap_req = false;
     send_status = s_out_status;
     s_out_status = false;
-    if (s_conn != BLE_HS_CONN_HANDLE_NONE && !s_link_seen &&
-        (uint32_t)(t - s_link_ms) > LINK_IDLE_MS) {
-        drop_conn = s_conn;
-        s_link_seen = true;
-        s_idle_valid = true;
-        s_idle_addr = s_link_addr;
-        s_idle_until_ms = t + IDLE_BLOCK_MS;
-    }
-    if (s_tx_n > 0 && s_notify && s_conn != BLE_HS_CONN_HANDLE_NONE &&
-        s_mtu >= (uint16_t)(SEALED_LEN + 3)) {
-        memcpy(note, s_tx[0], SEALED_LEN);
-        if (s_tx_n > 1) {
-            memmove(s_tx[0], s_tx[1], (size_t)(s_tx_n - 1) * SEALED_LEN);
+    links_ensure();
+    note_handle = s_snap_handle;
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        phone_link_t *link = &s_links[i];
+        if (link->handle == BLE_HS_CONN_HANDLE_NONE) continue;
+        if (link->kick || (!link->seen && (uint32_t)(t - link->link_ms) > LINK_IDLE_MS)) {
+            /* A duplicate of a live phone shares its address; do not block that address. */
+            if (!link->kick) block_addr(&link->addr, t + IDLE_BLOCK_MS);
+            if (drop_n < PHONE_LINK_MAX) drop_conn[drop_n++] = link->handle;
+            link->seen = true;
+            link->kick = false;
         }
-        s_tx_n--;
-        send_note = true;
-        note_conn = s_conn;
-        note_handle = s_snap_handle;
+        if (link->tx_n > 0 && link->notify &&
+            link->mtu >= (uint16_t)(SEALED_LEN + 3) && note_n < PHONE_LINK_MAX) {
+            memcpy(notes[note_n], link->tx[0], SEALED_LEN);
+            if (link->tx_n > 1) {
+                memmove(link->tx[0], link->tx[1], (size_t)(link->tx_n - 1) * SEALED_LEN);
+            }
+            link->tx_n--;
+            note_conn[note_n++] = link->handle;
+        }
     }
     ble_radio_unlock();
 
@@ -921,17 +1069,16 @@ void ble_phone_poll(uint32_t t)
     if (send_status) {
         protocol_send_ble_status();
     }
-    if (send_note) {
-        struct os_mbuf *om = ble_hs_mbuf_from_flat(note, SEALED_LEN);
-        if (om) {
-            int rc = ble_gatts_notify_custom(note_conn, note_handle, om);
-            if (rc != 0) {
-                ESP_LOGW(TAG, "notify rc=%d", rc);
-            }
+    for (int i = 0; i < note_n; i++) {
+        struct os_mbuf *om = ble_hs_mbuf_from_flat(notes[i], SEALED_LEN);
+        if (!om) continue;
+        int rc = ble_gatts_notify_custom(note_conn[i], note_handle, om);
+        if (rc != 0) {
+            ESP_LOGW(TAG, "notify rc=%d", rc);
         }
     }
-    if (drop_conn != BLE_HS_CONN_HANDLE_NONE) {
-        ble_gap_terminate(drop_conn, BLE_ERR_REM_USER_CONN_TERM);
+    for (int i = 0; i < drop_n; i++) {
+        ble_gap_terminate(drop_conn[i], BLE_ERR_REM_USER_CONN_TERM);
     }
 }
 
@@ -971,7 +1118,6 @@ int ble_phone_write_json(char *out, size_t cap)
 static int inbox_access(uint16_t conn_handle, uint16_t attr_handle,
                         struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
-    (void)conn_handle;
     (void)attr_handle;
     (void)arg;
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
@@ -982,7 +1128,7 @@ static int inbox_access(uint16_t conn_handle, uint16_t attr_handle,
     if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &copied) != 0) {
         return BLE_ATT_ERR_UNLIKELY;
     }
-    on_incoming(buf, (uint8_t)copied);
+    on_incoming(conn_handle, buf, (uint8_t)copied);
     return 0;
 }
 
@@ -1039,7 +1185,7 @@ void ble_phone_gatts_register(void)
 
 static int start_adv_locked(void)
 {
-    if (!ble_btn_is_on() || s_conn != BLE_HS_CONN_HANDLE_NONE || ble_gap_adv_active()) return 0;
+    if (!ble_btn_is_on() || link_count() >= PHONE_LINK_MAX || ble_gap_adv_active()) return 0;
     struct ble_hs_adv_fields fields;
     struct ble_gap_adv_params params;
     memset(&fields, 0, sizeof(fields));
@@ -1082,96 +1228,130 @@ void ble_phone_start_adv(void)
 
 void ble_phone_stop_link(void)
 {
-    uint16_t conn;
+    uint16_t conns[PHONE_LINK_MAX];
+    int n = 0;
     ble_radio_lock();
-    conn = s_conn;
-    s_conn = BLE_HS_CONN_HANDLE_NONE;
-    s_notify = false;
-    s_tx_n = 0;
-    s_link_seen = false;
-    s_mtu = 23;
+    links_ensure();
+    for (int i = 0; i < PHONE_LINK_MAX; i++) {
+        if (s_links[i].handle == BLE_HS_CONN_HANDLE_NONE) continue;
+        conns[n++] = s_links[i].handle;
+        clear_link(&s_links[i]);
+    }
     ble_radio_unlock();
     if (ble_gap_adv_active()) ble_gap_adv_stop();
-    if (conn != BLE_HS_CONN_HANDLE_NONE) {
-        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    for (int i = 0; i < n; i++) {
+        ble_gap_terminate(conns[i], BLE_ERR_REM_USER_CONN_TERM);
     }
 }
 
-void ble_phone_on_gap(struct ble_gap_event *event)
+/* HCI 0x3B: unacceptable connection interval. L2CAP can only accept or reject. */
+#define BLE_ERR_UNACCEPTABLE_CONN_INTERVAL 0x3B
+
+static void prefer_interval(uint16_t conn)
+{
+    struct ble_gap_upd_params upd;
+    memset(&upd, 0, sizeof(upd));
+    phone_link_preferred(&upd.itvl_min, &upd.itvl_max, &upd.latency, &upd.supervision_timeout);
+    ble_gap_update_params(conn, &upd);
+}
+
+static int on_param_req(struct ble_gap_event *event)
+{
+    const struct ble_gap_upd_params *peer = event->conn_update_req.peer_params;
+    struct ble_gap_upd_params *self = event->conn_update_req.self_params;
+    if (!peer || phone_link_params_ok(peer->itvl_min)) return 0;
+    /* L2CAP can only accept or reject. A short interval is refused. */
+    if (event->type == BLE_GAP_EVENT_L2CAP_UPDATE_REQ || !self) {
+        return BLE_ERR_UNACCEPTABLE_CONN_INTERVAL;
+    }
+    phone_link_preferred(&self->itvl_min, &self->itvl_max, &self->latency,
+                         &self->supervision_timeout);
+    return 0;
+}
+
+int ble_phone_on_gap(struct ble_gap_event *event)
 {
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status != 0) {
             ESP_LOGW(TAG, "connect status=%d", event->connect.status);
             ble_phone_start_adv();
-            break;
+            return 0;
         }
         {
             struct ble_gap_conn_desc desc;
-            bool blocked = false;
+            bool reject = false;
+            int n = 0;
             uint32_t t = now_ms();
             memset(&desc, 0, sizeof(desc));
             ble_gap_conn_find(event->connect.conn_handle, &desc);
             ble_radio_lock();
-            s_conn = event->connect.conn_handle;
-            s_notify = false;
-            s_mtu = 23;
-            s_link_ms = t;
-            s_link_seen = false;
-            s_tx_n = 0;
-            s_link_addr = desc.peer_id_addr;
-            if (s_idle_valid && (int32_t)(t - s_idle_until_ms) >= 0) s_idle_valid = false;
-            blocked = s_idle_valid && !s_learn &&
-                      ble_addr_cmp(&s_idle_addr, &desc.peer_id_addr) == 0;
-            if (blocked) s_link_seen = true;
-            ble_radio_unlock();
-            if (blocked) {
-                ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
-                break;
+            phone_link_t *link = link_by_conn(event->connect.conn_handle);
+            bool blocked = addr_blocked(&desc.peer_id_addr, t);
+            /* A blocked address must not take a slot: poll would idle-drop link_ms 0. */
+            if (!blocked && !link) {
+                link = link_alloc_new(event->connect.conn_handle);
             }
+            reject = !link || blocked;
+            if (!reject && link->link_ms == 0) {
+                link->notify = false;
+                link->seen = false;
+                link->kick = false;
+                link->mtu = 23;
+                link->tx_n = 0;
+                link->link_ms = t ? t : 1;
+                link->addr = desc.peer_id_addr;
+                link->phone_index = -1;
+            }
+            n = link_count();
+            ble_radio_unlock();
+            if (reject) {
+                ble_gap_terminate(event->connect.conn_handle, BLE_ERR_REM_USER_CONN_TERM);
+                return 0;
+            }
+            prefer_interval(event->connect.conn_handle);
+            if (n >= PHONE_LINK_MAX && ble_gap_adv_active()) {
+                ble_gap_adv_stop();
+            } else {
+                ble_phone_start_adv();
+            }
+            ESP_LOGI(TAG, "phone connected (%d)", n);
         }
-        {
-            struct ble_gap_upd_params upd;
-            memset(&upd, 0, sizeof(upd));
-            upd.itvl_min = 80;
-            upd.itvl_max = 120;
-            upd.latency = 0;
-            upd.supervision_timeout = 500;
-            ble_gap_update_params(event->connect.conn_handle, &upd);
-        }
-        ESP_LOGI(TAG, "phone connected");
-        break;
+        return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ble_radio_lock();
-        if (s_conn == BLE_HS_CONN_HANDLE_NONE ||
-            event->disconnect.conn.conn_handle == s_conn) {
-            s_conn = BLE_HS_CONN_HANDLE_NONE;
-            s_notify = false;
-            s_tx_n = 0;
-            s_link_seen = false;
-            s_mtu = 23;
+        {
+            phone_link_t *link = link_by_conn(event->disconnect.conn.conn_handle);
+            if (link) clear_link(link);
         }
         ble_radio_unlock();
         ESP_LOGI(TAG, "phone disconnected reason=%d", event->disconnect.reason);
         if (ble_btn_is_on()) ble_phone_start_adv();
-        break;
+        return 0;
     case BLE_GAP_EVENT_SUBSCRIBE:
         if (event->subscribe.attr_handle == s_snap_handle) {
             ble_radio_lock();
-            s_notify = event->subscribe.cur_notify != 0;
+            phone_link_t *link = link_by_conn(event->subscribe.conn_handle);
+            if (link) link->notify = event->subscribe.cur_notify != 0;
             ble_radio_unlock();
         }
-        break;
+        return 0;
     case BLE_GAP_EVENT_MTU:
         ble_radio_lock();
-        if (event->mtu.conn_handle == s_conn) s_mtu = event->mtu.value;
+        {
+            phone_link_t *link = link_by_conn(event->mtu.conn_handle);
+            if (link) link->mtu = event->mtu.value;
+        }
         ble_radio_unlock();
-        break;
+        return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        /* reason 0 is the advertising stopping because a phone connected. */
-        if (event->adv_complete.reason != 0 && ble_btn_is_on()) ble_phone_start_adv();
-        break;
+        /* reason 0 is advertising stopping because a phone connected. Resume if a slot is free. */
+        if (ble_btn_is_on()) ble_phone_start_adv();
+        return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+    case BLE_GAP_EVENT_L2CAP_UPDATE_REQ:
+        return on_param_req(event);
     default:
-        break;
+        return 0;
     }
 }
