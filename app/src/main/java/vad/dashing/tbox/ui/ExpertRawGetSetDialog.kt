@@ -2,16 +2,20 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +48,9 @@ import vad.dashing.tbox.mbcan.HeadUnitCanModeLabel
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
+
+/** Floor for the parameter list. Chrome scrolls with the dialog so this block can stay tall. */
+private val ExpertRawParamListMinHeight = 320.dp
 
 @Composable
 fun ExpertRawGetSetDialog(
@@ -130,155 +137,159 @@ fun ExpertRawGetSetDialog(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                AppAlertDialogTitle(stringResource(R.string.expert_raw_get_set_title))
-                Text(
-                    text = stringResource(R.string.expert_raw_get_set_desc),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = stringResource(R.string.expert_raw_get_set_mode, modeStorage),
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                OutlinedTextField(
-                    value = filterText,
-                    onValueChange = { filterText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(stringResource(R.string.expert_raw_get_set_filter)) },
-                    textStyle = MaterialTheme.typography.tboxBody,
-                )
-
-                LazyColumn(
+                // The list keeps a tall viewport. Title, filter and Get/Set sit in the
+                // same scroll, so a short window can move them off and show more rows.
+                val listHeight = maxOf(ExpertRawParamListMinHeight, maxHeight * 0.72f)
+                Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(
-                        filtered,
-                        key = { "${it.bus.name}-${it.mbCanId}-${it.name}" },
-                    ) { param ->
-                        val isSelected = param == selected
-                        Text(
-                            text = param.displayLabel(),
-                            style = MaterialTheme.typography.tboxCaption,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(
-                                    onClick = rememberWrappedOnClick {
-                                        selected = param
-                                        statusText = ""
-                                    },
-                                )
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
-                        )
-                    }
-                }
-
-                selected?.let { param ->
-                    SelectionContainer {
-                        Text(
-                            text = ExpertRawCanCatalog.formatIdsSummary(param, modeLabel),
-                            style = MaterialTheme.typography.tboxCaption.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (modeLabel == HeadUnitCanModeLabel.Android10Vhal && param.readWriteDiffer) {
-                        Text(
-                            text = stringResource(
-                                R.string.expert_raw_get_set_rw_differ,
-                                param.vhalReadId.toString(),
-                                param.vhalWriteId.toString(),
-                            ),
-                            style = MaterialTheme.typography.tboxCaption,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Button(
-                        onClick = rememberWrappedOnClick { runGet() },
-                        enabled = selected != null && !busy,
-                    ) {
-                        AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_get))
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Switch(
-                        checked = writeEnabled,
-                        onCheckedChange = rememberWrappedOnCheckedChange { writeEnabled = it },
+                    AppAlertDialogTitle(stringResource(R.string.expert_raw_get_set_title))
+                    Text(
+                        text = stringResource(R.string.expert_raw_get_set_desc),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = stringResource(R.string.expert_raw_get_set_allow_write),
-                        style = MaterialTheme.typography.tboxBody,
-                        modifier = Modifier.weight(1f),
+                        text = stringResource(R.string.expert_raw_get_set_mode, modeStorage),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-
-                OutlinedTextField(
-                    value = setValueText,
-                    onValueChange = { setValueText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    enabled = writeEnabled && !busy,
-                    label = { Text(stringResource(R.string.expert_raw_get_set_value)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    textStyle = MaterialTheme.typography.tboxBody.copy(fontFamily = FontFamily.Monospace),
-                )
-
-                Button(
-                    onClick = rememberWrappedOnClick { showSetConfirm = true },
-                    enabled = writeEnabled &&
-                        selected != null &&
-                        !busy &&
-                        setValueText.trim().toIntOrNull() != null,
-                ) {
-                    AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_set))
-                }
-
-                if (statusText.isNotEmpty()) {
-                    SelectionContainer {
+                    OutlinedTextField(
+                        value = filterText,
+                        onValueChange = { filterText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.expert_raw_get_set_filter)) },
+                        textStyle = MaterialTheme.typography.tboxBody,
+                    )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(listHeight),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        items(
+                            filtered,
+                            key = { "${it.bus.name}-${it.mbCanId}-${it.name}" },
+                        ) { param ->
+                            val isSelected = param == selected
+                            Text(
+                                text = param.displayLabel(),
+                                style = MaterialTheme.typography.tboxCaption,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(
+                                        onClick = rememberWrappedOnClick {
+                                            selected = param
+                                            statusText = ""
+                                        },
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                            )
+                        }
+                    }
+                    selected?.let { param ->
+                        SelectionContainer {
+                            Text(
+                                text = ExpertRawCanCatalog.formatIdsSummary(param, modeLabel),
+                                style = MaterialTheme.typography.tboxCaption.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (modeLabel == HeadUnitCanModeLabel.Android10Vhal && param.readWriteDiffer) {
+                            Text(
+                                text = stringResource(
+                                    R.string.expert_raw_get_set_rw_differ,
+                                    param.vhalReadId.toString(),
+                                    param.vhalWriteId.toString(),
+                                ),
+                                style = MaterialTheme.typography.tboxCaption,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = rememberWrappedOnClick { runGet() },
+                            enabled = selected != null && !busy,
+                        ) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_get))
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Switch(
+                            checked = writeEnabled,
+                            onCheckedChange = rememberWrappedOnCheckedChange { writeEnabled = it },
+                        )
                         Text(
-                            text = statusText,
-                            style = MaterialTheme.typography.tboxCaption.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
+                            text = stringResource(R.string.expert_raw_get_set_allow_write),
+                            style = MaterialTheme.typography.tboxBody,
+                            modifier = Modifier.weight(1f),
                         )
                     }
-                }
-
-                OutlinedButton(
-                    onClick = rememberWrappedOnClick(onDismiss),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                ) {
-                    AppAlertDialogButtonLabel(stringResource(R.string.action_close))
+                    OutlinedTextField(
+                        value = setValueText,
+                        onValueChange = { setValueText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        enabled = writeEnabled && !busy,
+                        label = { Text(stringResource(R.string.expert_raw_get_set_value)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        textStyle = MaterialTheme.typography.tboxBody.copy(fontFamily = FontFamily.Monospace),
+                    )
+                    Button(
+                        onClick = rememberWrappedOnClick { showSetConfirm = true },
+                        enabled = writeEnabled &&
+                            selected != null &&
+                            !busy &&
+                            setValueText.trim().toIntOrNull() != null,
+                    ) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_set))
+                    }
+                    if (statusText.isNotEmpty()) {
+                        SelectionContainer {
+                            Text(
+                                text = statusText,
+                                style = MaterialTheme.typography.tboxCaption.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick(onDismiss),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                    ) {
+                        AppAlertDialogButtonLabel(stringResource(R.string.action_close))
+                    }
                 }
             }
         }
