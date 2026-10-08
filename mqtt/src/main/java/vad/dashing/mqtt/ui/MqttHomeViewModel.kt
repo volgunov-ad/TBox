@@ -140,6 +140,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             connectionDraft = merged,
             connectionMessage = "Сохранено",
         )
+        startBridgeIfReady()
     }
 
     fun toggleAdvanced() {
