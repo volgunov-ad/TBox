@@ -8,6 +8,9 @@ import com.hivemq.client.mqtt.exceptions.MqttClientStateException
 import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client
 import vad.dashing.mqtt.settings.MqttSettings
+import vad.dashing.mqtt.wireguard.TunnelEndpoint
+import vad.dashing.mqtt.wireguard.WgRouteException
+import vad.dashing.mqtt.wireguard.WgTunnel
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
@@ -35,7 +38,14 @@ class HiveMqttSession {
         onDisconnected: () -> Unit,
         onMessage: (topic: String, payload: String, retained: Boolean) -> Unit,
     ) {
-        val key = settings.connectionKey() + "|" + statusTopic
+        val normalized = settings.normalized()
+        val tunnel = try {
+            WgTunnel.route(normalized)
+        } catch (error: WgRouteException) {
+            closeQuietly()
+            throw error
+        }
+        val key = normalized.connectionKey() + "|" + statusTopic + "|" + (tunnel?.port ?: 0)
         if (client != null && connectionKey == key) {
             if (!connected && connectExisting(willTopic)) {
                 onConnected()
@@ -44,14 +54,12 @@ class HiveMqttSession {
         }
         closeQuietly()
         connectionKey = key
-        val normalized = settings.normalized()
         val own = generation.incrementAndGet()
         val holder = AtomicReference<Mqtt3AsyncClient?>(null)
         val builder = Mqtt3Client.builder()
             .identifier(clientId(normalized))
-            .serverHost(normalized.brokerHost)
-            .serverPort(normalized.brokerPort)
-            .automaticReconnectWithDefaultConfig()
+        bindBroker(builder, normalized, tunnel)
+        builder.automaticReconnectWithDefaultConfig()
             .addConnectedListener {
                 if (generation.get() != own) {
                     // Same client id: a late stale connect would kick the live client off the broker.
@@ -138,6 +146,7 @@ class HiveMqttSession {
 
     fun disconnect() {
         closeQuietly()
+        WgTunnel.stop()
     }
 
     /**
@@ -212,12 +221,16 @@ class HiveMqttSession {
         fun probe(settings: MqttSettings): String? {
             val normalized = settings.normalized()
             if (normalized.brokerHost.isBlank()) return "Укажите адрес брокера"
+            val tunnel = try {
+                WgTunnel.route(normalized)
+            } catch (error: WgRouteException) {
+                return error.message
+            }
             var client: Mqtt3AsyncClient? = null
             return try {
                 val builder = Mqtt3Client.builder()
                     .identifier(clientId(normalized) + "-check")
-                    .serverHost(normalized.brokerHost)
-                    .serverPort(normalized.brokerPort)
+                bindBroker(builder, normalized, tunnel)
                 if (normalized.tlsEnabled) builder.sslConfig(sslConfig(normalized.caPem))
                 if (normalized.username.isNotBlank()) {
                     builder.simpleAuth()
@@ -233,6 +246,18 @@ class HiveMqttSession {
                 error.message ?: error.javaClass.simpleName
             } finally {
                 client?.let { runCatching { it.disconnect().get(4, TimeUnit.SECONDS) } }
+            }
+        }
+
+        private fun bindBroker(
+            builder: com.hivemq.client.mqtt.mqtt3.Mqtt3ClientBuilder,
+            settings: MqttSettings,
+            tunnel: TunnelEndpoint?,
+        ) {
+            if (tunnel == null) {
+                builder.serverHost(settings.brokerHost).serverPort(settings.brokerPort)
+            } else {
+                builder.serverAddress(tunnel.socket)
             }
         }
 

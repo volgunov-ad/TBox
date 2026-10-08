@@ -31,6 +31,9 @@ class MqttSettingsStore private constructor(context: Context) {
         fastPublishSeconds = prefs.getInt(KEY_FAST, 5),
         accessToken = prefs.getString(KEY_TOKEN, "").orEmpty(),
         selectedObjectIds = decodeIds(prefs.getString(KEY_SELECTED, "[]").orEmpty()),
+        wireguardEnabled = prefs.getBoolean(KEY_WG_ENABLED, false),
+        wireguardConf = prefs.getString(KEY_WG_CONF, "").orEmpty(),
+        wireguardFileName = prefs.getString(KEY_WG_FILE, "").orEmpty(),
     ).normalized()
 
     fun save(normalized: MqttSettings) {
@@ -55,6 +58,9 @@ class MqttSettingsStore private constructor(context: Context) {
             .putInt(KEY_FAST, normalized.fastPublishSeconds)
             .putString(KEY_TOKEN, normalized.accessToken.trim())
             .putString(KEY_SELECTED, encodeIds(normalized.selectedObjectIds))
+            .putBoolean(KEY_WG_ENABLED, normalized.wireguardEnabled)
+            .putString(KEY_WG_CONF, normalized.wireguardConf)
+            .putString(KEY_WG_FILE, normalized.wireguardFileName)
             .apply()
     }
 
@@ -115,6 +121,9 @@ class MqttSettingsStore private constructor(context: Context) {
         private const val KEY_SELECTED = "selected_ids"
         private const val KEY_PAIR_ID = "pair_client_id"
         private const val KEY_PUBLISHED = "published_configs"
+        private const val KEY_WG_ENABLED = "wg_enabled"
+        private const val KEY_WG_CONF = "wg_conf"
+        private const val KEY_WG_FILE = "wg_file"
 
         private fun openPrefs(context: Context): SharedPreferences {
             return try {

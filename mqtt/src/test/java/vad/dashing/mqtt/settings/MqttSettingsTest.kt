@@ -21,6 +21,9 @@ class MqttSettingsTest {
             selectedObjectIds = emptySet(),
             deviceName = "другое",
             fastPublishSeconds = 10,
+            wireguardEnabled = true,
+            wireguardConf = "wg",
+            wireguardFileName = "home.conf",
         )
         val merged = saved.applyingConnection(draft)
         assertEquals("192.168.1.10", merged.brokerHost)
@@ -29,20 +32,23 @@ class MqttSettingsTest {
         assertEquals("token", merged.accessToken)
         assertEquals(setOf("drive_mode"), merged.selectedObjectIds)
         assertEquals("Jetour Dashing", merged.deviceName)
+        assertEquals(true, merged.wireguardEnabled)
+        assertEquals("wg", merged.wireguardConf)
         assertEquals(10, merged.fastPublishSeconds)
         assertEquals(0, MqttSettings(fastPublishSeconds = -1).normalized().fastPublishSeconds)
         assertEquals(60, MqttSettings(fastPublishSeconds = 90).normalized().fastPublishSeconds)
+        assertEquals(false, MqttSettings(wireguardEnabled = true).normalized().wireguardEnabled)
     }
 
     @Test
-    fun oldTrackRowsBecomeTheMusicEntity() {
-        val migrated = MqttSettings(
-            selectedObjectIds = setOf("drive_mode", "media_title", "builtin_media_next", "hu_media_volume"),
-        ).normalized()
-        assertEquals(setOf("drive_mode", "media"), migrated.selectedObjectIds)
-        assertEquals(
-            setOf("drive_mode"),
-            MqttSettings(selectedObjectIds = setOf("drive_mode")).normalized().selectedObjectIds,
+    fun individualMediaRowsStaySelectedNextToMusic() {
+        val selected = setOf(
+            "drive_mode",
+            "media",
+            "media_title",
+            "builtin_media_next",
+            "hu_media_volume",
         )
+        assertEquals(selected, MqttSettings(selectedObjectIds = selected).normalized().selectedObjectIds)
     }
 }

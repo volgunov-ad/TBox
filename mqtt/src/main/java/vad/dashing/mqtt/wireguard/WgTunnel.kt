@@ -1,0 +1,112 @@
+package vad.dashing.mqtt.wireguard
+
+import vad.dashing.mqtt.settings.MqttSettings
+import java.net.InetAddress
+import java.net.InetSocketAddress
+
+class WgRouteException(message: String) : Exception(message)
+
+/** Local TCP socket that carries the broker name for TLS, while the bytes go to 127.0.0.1. */
+class TunnelEndpoint(
+    val port: Int,
+    val socket: InetSocketAddress,
+)
+
+object WgTunnel {
+    private val lock = Any()
+    private var runningKey: String? = null
+    private var runningPort: Int = 0
+
+    /** Null means the broker is dialed directly. */
+    fun route(settings: MqttSettings): TunnelEndpoint? {
+        synchronized(lock) {
+            if (!settings.wireguardEnabled || settings.wireguardConf.isBlank()) {
+                if (runningKey != null) stopLocked()
+                return null
+            }
+            if (settings.brokerHost.isBlank()) throw WgRouteException("Укажите адрес брокера")
+            val conf = parseWgConf(settings.wireguardConf).getOrElse {
+                throw WgRouteException(it.message ?: "Файл WireGuard не разобран")
+            }
+            val target = brokerTarget(conf, settings.brokerHost, settings.brokerPort)
+            val endpoints = conf.peers.map { peer ->
+                resolveEndpoint(peer.endpointHost, peer.endpointPort)
+            }
+            val ipc = conf.toIpc(endpoints)
+            val key = ipc + "|" + target
+            if (runningKey == key && runningPort != 0) {
+                return endpoint(settings.brokerHost, runningPort)
+            }
+            stopLocked()
+            val port = WgNative.start(ipc, conf.addressCsv(), conf.dnsCsv(), conf.mtu, target)
+            runningKey = key
+            runningPort = port
+            return endpoint(settings.brokerHost, port)
+        }
+    }
+
+    fun stop() {
+        synchronized(lock) { stopLocked() }
+    }
+
+    private fun stopLocked() {
+        runningKey = null
+        runningPort = 0
+        runCatching { WgNative.stop() }
+    }
+
+    private fun endpoint(host: String, port: Int): TunnelEndpoint {
+        // Hostname stays on the address so TLS checks the broker name, not 127.0.0.1.
+        val loopback = InetAddress.getByAddress(host, byteArrayOf(127, 0, 0, 1))
+        return TunnelEndpoint(port, InetSocketAddress(loopback, port))
+    }
+}
+
+private fun brokerTarget(conf: WgConf, host: String, port: Int): String {
+    if (isLiteralIp(host)) {
+        if (!conf.allows(host)) {
+            throw WgRouteException("Адрес брокера не входит в AllowedIPs")
+        }
+        return formatEndpoint(host, port)
+    }
+    if (conf.dns.isNotEmpty()) return formatEndpoint(host, port)
+    val resolved = try {
+        InetAddress.getAllByName(host).firstOrNull()
+    } catch (_: Exception) {
+        null
+    } ?: throw WgRouteException("Имя брокера не открывается, а в файле нет DNS")
+    val ip = resolved.hostAddress ?: throw WgRouteException("Имя брокера не открывается, а в файле нет DNS")
+    if (!conf.allows(ip)) throw WgRouteException("Адрес брокера не входит в AllowedIPs")
+    return formatEndpoint(ip, port)
+}
+
+private fun resolveEndpoint(host: String, port: Int): String {
+    if (isLiteralIp(host)) return formatEndpoint(host, port)
+    val resolved = try {
+        InetAddress.getAllByName(host).firstOrNull()
+    } catch (_: Exception) {
+        null
+    } ?: throw WgRouteException("Сервер WireGuard не найден")
+    val ip = resolved.hostAddress ?: throw WgRouteException("Сервер WireGuard не найден")
+    return formatEndpoint(ip, port)
+}
+
+private object WgNative {
+    fun start(ipc: String, addresses: String, dns: String, mtu: Int, broker: String): Int {
+        try {
+            return wgstack.Wgstack.start(ipc, addresses, dns, mtu, broker)
+        } catch (error: Throwable) {
+            val unavailable = error is UnsatisfiedLinkError || error is ExceptionInInitializerError
+            val message = if (unavailable) {
+                "WireGuard недоступен на этом устройстве"
+            } else {
+                error.message?.takeIf { it.isNotBlank() } ?: "Не удалось поднять WireGuard"
+            }
+            throw WgRouteException(message)
+        }
+    }
+
+    fun stop() {
+        runCatching { wgstack.Wgstack.stop() }
+    }
+}

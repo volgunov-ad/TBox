@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.hivemq:hivemq-mqtt-client:1.3.5")
+    implementation(files("libs/wgstack.aar"))
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

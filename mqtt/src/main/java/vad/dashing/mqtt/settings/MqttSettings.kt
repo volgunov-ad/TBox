@@ -1,7 +1,7 @@
 package vad.dashing.mqtt.settings
 
 import vad.dashing.mqtt.ha.Topics
-import vad.dashing.mqtt.ha.migrateMediaSelection
+import java.security.MessageDigest
 
 data class MqttSettings(
     val apiPort: Int = 8765,
@@ -24,21 +24,29 @@ data class MqttSettings(
     val fastPublishSeconds: Int = 5,
     val accessToken: String = "",
     val selectedObjectIds: Set<String> = emptySet(),
+    val wireguardEnabled: Boolean = false,
+    val wireguardConf: String = "",
+    val wireguardFileName: String = "",
 ) {
-    fun normalized(): MqttSettings = copy(
-        apiPort = apiPort.coerceIn(1, 65535),
-        brokerPort = brokerPort.coerceIn(1, 65535),
-        brokerHost = brokerHost.trim(),
-        username = username.trim(),
-        topicPrefix = Topics.normalizePrefix(topicPrefix, Topics.DEFAULT_TOPIC_PREFIX),
-        discoveryPrefix = Topics.normalizePrefix(discoveryPrefix, Topics.DEFAULT_DISCOVERY_PREFIX),
-        deviceId = Topics.normalizeDeviceId(deviceId),
-        deviceName = Topics.deviceName(deviceName),
-        pollSeconds = pollSeconds.coerceIn(1, 60),
-        repeatMinutes = repeatMinutes.coerceIn(0, 60),
-        fastPublishSeconds = fastPublishSeconds.coerceIn(0, 60),
-        selectedObjectIds = migrateMediaSelection(selectedObjectIds),
-    )
+    fun normalized(): MqttSettings {
+        val conf = wireguardConf.trim().removePrefix("\uFEFF").replace("\r\n", "\n")
+        return copy(
+            apiPort = apiPort.coerceIn(1, 65535),
+            brokerPort = brokerPort.coerceIn(1, 65535),
+            brokerHost = brokerHost.trim(),
+            username = username.trim(),
+            topicPrefix = Topics.normalizePrefix(topicPrefix, Topics.DEFAULT_TOPIC_PREFIX),
+            discoveryPrefix = Topics.normalizePrefix(discoveryPrefix, Topics.DEFAULT_DISCOVERY_PREFIX),
+            deviceId = Topics.normalizeDeviceId(deviceId),
+            deviceName = Topics.deviceName(deviceName),
+            pollSeconds = pollSeconds.coerceIn(1, 60),
+            repeatMinutes = repeatMinutes.coerceIn(0, 60),
+            fastPublishSeconds = fastPublishSeconds.coerceIn(0, 60),
+            wireguardConf = conf,
+            wireguardFileName = wireguardFileName.trim(),
+            wireguardEnabled = wireguardEnabled && conf.isNotBlank(),
+        )
+    }
 
     /** Broker fields from [from]. Token, entities and the Monitor port stay on this copy. */
     fun applyingConnection(from: MqttSettings): MqttSettings = copy(
@@ -56,6 +64,9 @@ data class MqttSettings(
         pollSeconds = from.pollSeconds,
         repeatMinutes = from.repeatMinutes,
         fastPublishSeconds = from.fastPublishSeconds,
+        wireguardEnabled = from.wireguardEnabled,
+        wireguardConf = from.wireguardConf,
+        wireguardFileName = from.wireguardFileName,
     )
 
     val ready: Boolean
@@ -69,5 +80,13 @@ data class MqttSettings(
         tlsEnabled.toString(),
         caPem,
         Topics.mqttClientId(mqttClientId, deviceId),
+        wireguardEnabled.toString(),
+        sha256(wireguardConf),
     ).joinToString("|")
+}
+
+private fun sha256(text: String): String {
+    if (text.isEmpty()) return ""
+    val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
+    return digest.joinToString("") { "%02x".format(it) }
 }

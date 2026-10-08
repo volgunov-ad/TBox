@@ -1,5 +1,10 @@
 package vad.dashing.mqtt.ui
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -32,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -40,6 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.mqtt.ha.EntityGroup
+import vad.dashing.mqtt.settings.MqttSettings
+import vad.dashing.mqtt.wireguard.parseWgConf
 import vad.dashing.mqtt.ui.theme.tboxBody
 import vad.dashing.mqtt.ui.theme.tboxButton
 import vad.dashing.mqtt.ui.theme.tboxHeadline
@@ -150,6 +158,7 @@ private fun ConnectionTab(
             viewModel.editConnection { current -> current.copy(tlsEnabled = enabled) }
         },
     )
+    WireguardBlock(connection, viewModel)
     viewModel.brokerWarning()?.let { warning ->
         Text(
             warning,
@@ -248,6 +257,94 @@ private fun ConnectionTab(
                 Text("Сохранить токен", style = MaterialTheme.typography.tboxButton)
             }
         }
+    }
+}
+
+@Composable
+private fun WireguardBlock(connection: MqttSettings, viewModel: MqttHomeViewModel) {
+    val context = LocalContext.current
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        when (val text = readConf(context, uri)) {
+            null -> viewModel.reportConnection("Не удалось прочитать файл")
+            ConfTooLarge -> viewModel.reportConnection("Файл слишком большой")
+            else -> viewModel.importWireguard(displayName(context, uri), text)
+        }
+    }
+    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+    SectionTitle("WireGuard")
+    SettingSwitch(
+        checked = connection.wireguardEnabled,
+        title = "Через WireGuard",
+        description = "К брокеру ходит только эта программа. Остальные приложения головного устройства туннель не видят",
+        onChecked = viewModel::setWireguardEnabled,
+    )
+    OutlinedButton(
+        onClick = { picker.launch(arrayOf("*/*")) },
+        modifier = Modifier.padding(top = 8.dp),
+    ) {
+        Text("Выбрать файл .conf", style = MaterialTheme.typography.tboxButton)
+    }
+    if (connection.wireguardConf.isNotBlank()) {
+        val parsed = parseWgConf(connection.wireguardConf)
+        Text(
+            connection.wireguardFileName.ifBlank { "wireguard.conf" },
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Text(
+            parsed.fold(
+                onSuccess = { it.summary() },
+                onFailure = { it.message ?: "Файл не разобран" },
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = if (parsed.isSuccess) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+        )
+        OutlinedButton(
+            onClick = viewModel::clearWireguard,
+            modifier = Modifier.padding(top = 8.dp),
+        ) {
+            Text("Убрать файл", style = MaterialTheme.typography.tboxButton)
+        }
+    }
+}
+
+private const val ConfTooLarge = "\u0000too-large"
+
+private fun readConf(context: Context, uri: Uri): String? {
+    return try {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(64 * 1024 + 1)
+            var offset = 0
+            while (offset < buffer.size) {
+                val count = input.read(buffer, offset, buffer.size - offset)
+                if (count < 0) break
+                offset += count
+            }
+            if (offset > 64 * 1024) return ConfTooLarge
+            String(buffer, 0, offset, Charsets.UTF_8)
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun displayName(context: Context, uri: Uri): String {
+    return try {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (!cursor.moveToFirst()) return ""
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index < 0) "" else cursor.getString(index).orEmpty()
+            }
+            .orEmpty()
+    } catch (_: Exception) {
+        ""
     }
 }
 
