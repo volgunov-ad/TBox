@@ -1500,7 +1500,7 @@
     <string name="key_press_diagnostics_copied">Журнал скопирован</string>
     <string name="expert_raw_get_set_open">Сырой Get/Set mbCAN/VHAL</string>
     <string name="expert_raw_get_set_title">Сырой Get/Set параметра mbCAN/VHAL</string>
-    <string name="expert_raw_get_set_desc">Выберите параметр из известного каталога (vehicle/audio). Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). На A10 показаны отдельные read/write id, если они различаются. Включайте разрешение записи только осознанно.</string>
+    <string name="expert_raw_get_set_desc">Выберите параметр из известного каталога (vehicle/audio) или прямой VHAL-телеметрии. Прямые VHAL id читаются и пишутся только на Android 10. Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). На A10 показаны отдельные read/write id, если они различаются. Включайте разрешение записи только осознанно.</string>
     <string name="expert_raw_get_set_mode">Режим ГУ: %1$s</string>
     <string name="expert_raw_get_set_filter">Фильтр по имени или id</string>
     <string name="expert_raw_get_set_param">Параметр</string>

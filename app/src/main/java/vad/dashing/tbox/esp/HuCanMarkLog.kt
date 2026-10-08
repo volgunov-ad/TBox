@@ -98,6 +98,8 @@ object HuCanMarkLog {
             if (!Modifier.isStatic(field.modifiers)) continue
             if (field.type != Int::class.javaPrimitiveType) continue
             val name = field.name
+            // Kotlin stability marker (`$stable`) is a static int, not a property id.
+            if (name.startsWith("$")) continue
             if (isValueAliasConstName(name)) continue
             field.isAccessible = true
             val id = field.getInt(null)
@@ -113,11 +115,15 @@ object HuCanMarkLog {
 
     private fun isValueAliasConstName(name: String): Boolean {
         // Value enums / write payloads — not property ids (e.g. LIGHTCONTROL_OFF, LAS_MODE_LDW).
+        // LAS_MODE_SELECTION is a property id; only the 1/2/3 payloads are aliases.
         if (name.endsWith("_VALUE") || name.contains("_VALUE_")) return true
         if (name.startsWith("LIGHTCONTROL_")) return true
-        if (name.startsWith("LAS_MODE_")) return true
+        if (name.startsWith("LAS_MODE_") && name != "LAS_MODE_SELECTION") return true
         if (name.startsWith("HVAC_CUSTOM_")) return true
         if (name.startsWith("HVAC_AIR_RECIRCULATION_VALUE")) return true
+        if (name.startsWith("HVAC_FAN_DIRECTION_")) return true
+        if (name.startsWith("WINDOW_A10_")) return true
+        if (name == "SUNROOF_TILT") return true
         return false
     }
 }

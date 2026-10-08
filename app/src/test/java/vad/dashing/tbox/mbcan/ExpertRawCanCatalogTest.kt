@@ -31,7 +31,55 @@ class ExpertRawCanCatalogTest {
     fun allParams_skipsValueAliasConsts() {
         val params = ExpertRawCanCatalog.allParams()
         assertFalse(params.any { it.name.startsWith("LIGHTCONTROL_") && it.name != "LIGHTCONTROL" })
-        assertFalse(params.any { it.name.startsWith("LAS_MODE_") })
+        assertTrue(
+            params.any {
+                it.name == "LAS_MODE_SELECTION" &&
+                    it.mbCanId == MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION
+            },
+        )
+        assertFalse(params.any { it.name == "LAS_MODE_LDW" || it.name == "LAS_MODE_LKA" || it.name == "LAS_MODE_OFF" })
+        assertFalse(params.any { it.name.startsWith("HVAC_FAN_DIRECTION_") })
+        assertFalse(params.any { it.name == "SUNROOF_TILT" || it.name.startsWith("WINDOW_A10_") })
+        assertTrue(params.any { it.name == "HVAC_FAN_DIRECTION" })
+    }
+
+    @Test
+    fun allParams_keepsPropertiesThatShareNumbersWithValueCodes() {
+        val params = ExpertRawCanCatalog.allParams()
+        assertTrue(params.any { it.name == "DOOR_AUTO_LOCK" && it.mbCanId == MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK })
+        assertTrue(params.any { it.name == "DOOR_IGNOFF_UNLOCK" && it.mbCanId == MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK })
+        assertTrue(params.any { it.name == "DEFENCES_PROMPT" && it.mbCanId == MbCanKnownVehiclePropertyId.DEFENCES_PROMPT })
+        assertTrue(
+            params.any {
+                it.bus == ExpertRawCanBus.Vehicle &&
+                    it.name == "MIRROR_AUTOFOLD_SW" &&
+                    it.mbCanId == MbCanKnownVehiclePropertyId.MIRROR_AUTOFOLD_SW
+            },
+        )
+        assertFalse(params.any { it.name.startsWith("$") || it.mbCanId == 0 })
+    }
+
+    @Test
+    fun allParams_includesDecodedDirectVhalIds() {
+        val direct = ExpertRawCanCatalog.allParams().filter { it.bus == ExpertRawCanBus.VhalDirect }
+        assertEquals(65, direct.size)
+        assertTrue(direct.all { it.vhalReadId == it.mbCanId && it.vhalWriteId == it.mbCanId })
+        assertTrue(direct.any { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" && it.mbCanId == FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID })
+        assertTrue(direct.any { it.name == "VHAL_CAR_SPEED_PROPERTY_ID" })
+        assertTrue(direct.any { it.name == "VHAL_CEM2_DRIVER_DOOR_STS" })
+        assertFalse(direct.any { it.name == "VHAL_MCU_REPLY_SPEED_PROPERTY_ID" })
+        assertFalse(direct.any { it.mbCanId == FirmwareVehicleJsonMapper.VHAL_FL_WIN_POSITION })
+        assertFalse(direct.any { it.mbCanId == FirmwareVehicleJsonMapper.VHAL_SUNROOF_CMD_STS })
+        assertFalse(direct.any { it.mbCanId == FirmwareVehicleJsonMapper.VHAL_SUNSHADE_CMD_STS })
+        val rpm = direct.first { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" }
+        assertEquals(
+            "vhal=${rpm.mbCanId} (A10 only)",
+            ExpertRawCanCatalog.formatIdsSummary(rpm, HeadUnitCanModeLabel.Android9MbCan),
+        )
+        assertEquals(
+            "vhal=${rpm.mbCanId}",
+            ExpertRawCanCatalog.formatIdsSummary(rpm, HeadUnitCanModeLabel.Android10Vhal),
+        )
     }
 
     @Test

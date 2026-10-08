@@ -3578,7 +3578,11 @@ object Android10VhalRepository {
         if (connection !is MbCanAvailability.Available) {
             return ExpertRawGetResult(false, message = currentUnavailableReason())
         }
-        val effectiveId = FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId) ?: propertyId
+        val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+            propertyId
+        } else {
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId) ?: propertyId
+        }
         permissionDeniedReasonForProperty(effectiveId)?.let {
             return ExpertRawGetResult(
                 success = false,
@@ -3612,16 +3616,24 @@ object Android10VhalRepository {
         if (connection !is MbCanAvailability.Available) {
             return ExpertRawSetResult(false, message = currentUnavailableReason())
         }
-        val windowIds = FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
+        val windowIds = if (bus == ExpertRawCanBus.VhalDirect) {
+            null
+        } else {
+            FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
+        }
         if (windowIds != null && windowIds.size > 1) {
             return ExpertRawSetResult(
                 success = false,
                 message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
             )
         }
-        val effectiveId = windowIds?.singleOrNull()
-            ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
-            ?: propertyId
+        val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+            propertyId
+        } else {
+            windowIds?.singleOrNull()
+                ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
+                ?: propertyId
+        }
         permissionDeniedReasonForProperty(effectiveId)?.let {
             return ExpertRawSetResult(
                 success = false,
