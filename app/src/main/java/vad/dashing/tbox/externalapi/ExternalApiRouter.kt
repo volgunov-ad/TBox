@@ -203,6 +203,7 @@ class ExternalApiRouter(
 
         val canCommands = JSONArray()
         AutomationCanCatalog.entries.forEach { entry ->
+            val schema = ExternalApiCatalogWrite.forEntry(entry)
             canCommands.put(
                 JSONObject()
                     .put("type", "can_command")
@@ -210,6 +211,9 @@ class ExternalApiRouter(
                     .put("propertyId", entry.propertyId)
                     .put("label", entry.label)
                     .put("safety", ExternalApiActionSafety.CONFIRM.storageKey)
+                    .put("operations", jsonStringArray(schema.operations))
+                    .put("signalId", schema.signalId ?: JSONObject.NULL)
+                    .put("write", ExternalApiCatalogWrite.writeJson(schema.write))
                     .put(
                         "voiceAliasesRu",
                         jsonStringArray(
