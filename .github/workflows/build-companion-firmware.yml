@@ -49,6 +49,8 @@ jobs:
           cd firmware/esp32-companion/host_test
           gcc -Wall -Wextra -Werror -I../main bthome_crypt_test.c ../main/bthome_crypt.c -lmbedcrypto -o bthome_crypt_test
           ./bthome_crypt_test
+          gcc -Wall -Wextra -Werror -I../main phone_link_policy_test.c ../main/phone_link_policy.c -o phone_link_policy_test
+          ./phone_link_policy_test
 
       - name: Build with ESP-IDF
         uses: espressif/esp-idf-ci-action@v1

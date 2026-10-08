@@ -467,8 +467,9 @@ int ble_btn_gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_SUBSCRIBE:
     case BLE_GAP_EVENT_MTU:
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        ble_phone_on_gap(event);
-        return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE_REQ:
+    case BLE_GAP_EVENT_L2CAP_UPDATE_REQ:
+        return ble_phone_on_gap(event);
     default:
         return 0;
     }

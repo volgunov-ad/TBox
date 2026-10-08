@@ -22,12 +22,15 @@ struct ble_gap_event;
 
 /** Register the phone GATT service. Call after nimble_port_init, before the host task. */
 void ble_phone_gatts_register(void);
-/** Connectable advertising so a phone can connect. No-op while a phone is linked. */
+/** Connectable advertising so a phone can connect. Keeps going while a slot is free. */
 void ble_phone_start_adv(void);
-/** Drop the phone link and stop advertising. */
+/** Drop every phone link and stop advertising. */
 void ble_phone_stop_link(void);
-/** CONNECT, DISCONNECT, SUBSCRIBE, MTU, ADV_COMPLETE. */
-void ble_phone_on_gap(struct ble_gap_event *event);
+/**
+ * CONNECT, DISCONNECT, SUBSCRIBE, MTU, ADV_COMPLETE, and connection-parameter requests.
+ * The return value is the GAP result: 0, or an HCI error that rejects a short interval.
+ */
+int ble_phone_on_gap(struct ble_gap_event *event);
 
 #define PHONE_TITLE_MAX 60
 #define PHONE_ARTIST_MAX 30
