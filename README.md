@@ -99,7 +99,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md) | Внешний HTTP API: контракт (LAN, pairing, signals/invoke/RunNow) |
 | [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md) | Инструкция API: включение, ручной токен, curl / телефон / Tasker |
 | [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md) | План Voice APK: STT/TTS/NLU, этапы MVP |
-| [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md) | План TBox MQTT: брокер, каталог API, Home Assistant discovery |
+| [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md) | TBox MQTT (`:mqtt`): брокер, каталог API, Home Assistant discovery |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |

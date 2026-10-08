@@ -1,6 +1,6 @@
 # TBox MQTT — план клиента для Home Assistant
 
-Статус: **план согласован**, код не начат.
+Статус: **первая версия в модуле `:mqtt`**. Сборка: `./gradlew :mqtt:testDebugUnitTest` и `./gradlew :mqtt:assembleDebug`.
 
 Отдельное Android-приложение **TBox MQTT** (`vad.dashing.mqtt`) на головном устройстве.
 Оно читает сигналы и выполняет действия через External HTTP API TBox Monitor и публикует
