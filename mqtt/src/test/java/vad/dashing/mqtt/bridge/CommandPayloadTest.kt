@@ -57,8 +57,15 @@ class CommandPayloadTest {
     fun unavailableTemperatureIsNotPublished() {
         assertNull(StateFormat.numberText(-40.0, "°C"))
         assertEquals("12.5", StateFormat.numberText(12.5, "°C"))
-        assertEquals("ON", StateFormat.text("on", ""))
-        assertEquals("NOR", StateFormat.text("NOR", ""))
+        assertEquals("NOR", StateFormat.text("NOR", "", HaComponent.SENSOR))
+    }
+
+    @Test
+    fun onOffBecomesUpperCaseOnlyForBinaryPayloads() {
+        assertEquals("ON", StateFormat.text("on", "", HaComponent.BINARY_SENSOR))
+        assertEquals("OFF", StateFormat.text("off", "", HaComponent.SWITCH))
+        assertEquals("off", StateFormat.text("off", "", HaComponent.SELECT))
+        assertEquals("on", StateFormat.text("on", "", HaComponent.SENSOR))
     }
 
     private fun actions(request: InvokeRequest): JSONArray {

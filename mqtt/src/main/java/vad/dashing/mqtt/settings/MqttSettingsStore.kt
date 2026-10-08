@@ -7,8 +7,8 @@ import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import java.util.UUID
 
-class MqttSettingsStore(context: Context) {
-    private val prefs: SharedPreferences = openPrefs(context.applicationContext)
+class MqttSettingsStore private constructor(context: Context) {
+    private val prefs: SharedPreferences = openPrefs(context)
 
     fun load(): MqttSettings = MqttSettings(
         apiPort = prefs.getInt(KEY_API_PORT, 8765),
@@ -32,8 +32,7 @@ class MqttSettingsStore(context: Context) {
         selectedObjectIds = decodeIds(prefs.getString(KEY_SELECTED, "[]").orEmpty()),
     )
 
-    fun save(settings: MqttSettings) {
-        val normalized = settings
+    fun save(normalized: MqttSettings) {
         prefs.edit()
             .putInt(KEY_API_PORT, normalized.apiPort)
             .putString(KEY_HOST, normalized.brokerHost)
@@ -72,14 +71,6 @@ class MqttSettingsStore(context: Context) {
         prefs.edit().putString(KEY_PUBLISHED, encodeIds(topics)).apply()
     }
 
-    fun registerListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-    }
-
-    fun unregisterListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.unregisterOnSharedPreferenceChangeListener(listener)
-    }
-
     private object TopicsDefault {
         const val TOPIC = "tbox"
         const val DISCOVERY = "homeassistant"
@@ -89,6 +80,17 @@ class MqttSettingsStore(context: Context) {
 
     companion object {
         private const val FILE = "mqtt_settings"
+        // Never reuse FILE: plain entries mixed into the encrypted file break it on the next open.
+        private const val PLAIN_FILE = "mqtt_settings_plain"
+
+        @Volatile
+        private var instance: MqttSettingsStore? = null
+
+        /** One instance per process: opening the keystore-backed file is slow and done on the main thread. */
+        fun get(context: Context): MqttSettingsStore =
+            instance ?: synchronized(this) {
+                instance ?: MqttSettingsStore(context.applicationContext).also { instance = it }
+            }
         private const val KEY_API_PORT = "api_port"
         private const val KEY_HOST = "broker_host"
         private const val KEY_PORT = "broker_port"
@@ -124,7 +126,7 @@ class MqttSettingsStore(context: Context) {
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
                 )
             } catch (_: Exception) {
-                context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+                context.getSharedPreferences(PLAIN_FILE, Context.MODE_PRIVATE)
             }
         }
 

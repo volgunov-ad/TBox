@@ -5,6 +5,8 @@ object Topics {
     const val DEFAULT_TOPIC_PREFIX = "tbox"
     const val DEFAULT_DISCOVERY_PREFIX = "homeassistant"
     const val DEFAULT_DEVICE_NAME = "Jetour Dashing"
+    private const val MAX_OBJECT_ID = 96
+    private val OBJECT_ID = Regex("[A-Za-z0-9_-]+")
 
     fun normalizeDeviceId(raw: String): String {
         val cleaned = raw.trim().lowercase()
@@ -19,6 +21,14 @@ object Topics {
             .replace(Regex("/+"), "/")
             .trim('/')
         return cleaned.ifEmpty { fallback }
+    }
+
+    /** Keeps valid ids as is, so saved selections survive; others get a slug plus a hash. */
+    fun safeObjectId(raw: String): String {
+        if (raw.isNotEmpty() && raw.length <= MAX_OBJECT_ID && OBJECT_ID.matches(raw)) return raw
+        val slug = raw.replace(Regex("[^A-Za-z0-9_-]"), "_").trim('_').take(MAX_OBJECT_ID - 9)
+        val hash = "%08x".format(raw.hashCode())
+        return if (slug.isEmpty()) "id_$hash" else "${slug}_$hash"
     }
 
     fun deviceName(raw: String): String =

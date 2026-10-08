@@ -2,6 +2,8 @@ package vad.dashing.mqtt.ha
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TopicLayoutTest {
@@ -28,5 +30,14 @@ class TopicLayoutTest {
         )
         assertEquals("tbox_dashing", Topics.deviceIdentifier("dashing"))
         assertEquals("Jetour Dashing", Topics.deviceName("  "))
+    }
+
+    @Test
+    fun objectIdKeepsValidIdsAndEscapesTopicWildcards() {
+        assertEquals("automation_3f2a-11", Topics.safeObjectId("automation_3f2a-11"))
+        val odd = Topics.safeObjectId("automation_a/b+#")
+        assertTrue(odd.matches(Regex("[A-Za-z0-9_-]+")))
+        assertNotEquals(Topics.safeObjectId("automation_a/b"), Topics.safeObjectId("automation_a+b"))
+        assertTrue(Topics.safeObjectId("x".repeat(300)).length <= 96)
     }
 }

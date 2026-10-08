@@ -11,10 +11,11 @@ class DiscoveryCleanup(
 
     fun publishedTopics(): Set<String> = published.toSet()
 
-    fun plan(next: Set<String>): List<String> {
-        val stale = (published - next).sorted()
+    /** Topics to clear. The remembered set changes only in [commit], after the clears succeed. */
+    fun plan(next: Set<String>): List<String> = (published - next).sorted()
+
+    fun commit(next: Set<String>) {
         published.clear()
         published.addAll(next)
-        return stale
     }
 }

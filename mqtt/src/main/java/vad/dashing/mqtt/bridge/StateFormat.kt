@@ -1,24 +1,18 @@
 package vad.dashing.mqtt.bridge
 
+import vad.dashing.mqtt.ha.HaComponent
 import java.util.Locale
 import kotlin.math.abs
 
 object StateFormat {
-    fun publishText(value: Any?, unit: String): String? {
-        if (value == null) return null
-        return when (value) {
-            is Boolean -> if (value) "ON" else "OFF"
-            is Number -> numberText(value.toDouble(), unit)
-            is String -> text(value, unit)
-            else -> null
-        }
-    }
-
-    fun text(raw: String, unit: String): String? {
+    /** HA binary_sensor/switch use ON/OFF payloads; a select must echo its option verbatim. */
+    fun text(raw: String, unit: String, component: HaComponent): String? {
         val trimmed = raw.trim()
         if (trimmed.isEmpty()) return null
-        if (trimmed.equals("on", ignoreCase = true)) return "ON"
-        if (trimmed.equals("off", ignoreCase = true)) return "OFF"
+        if (component == HaComponent.BINARY_SENSOR || component == HaComponent.SWITCH) {
+            if (trimmed.equals("on", ignoreCase = true)) return "ON"
+            if (trimmed.equals("off", ignoreCase = true)) return "OFF"
+        }
         if (isMissingTemperature(trimmed, unit)) return null
         return trimmed
     }

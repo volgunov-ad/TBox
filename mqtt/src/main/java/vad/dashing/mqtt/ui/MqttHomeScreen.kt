@@ -20,6 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -386,5 +389,11 @@ private fun TextField(
 
 @Composable
 private fun NumberField(label: String, value: String, onValue: (String) -> Unit) {
-    TextField(label, value, onValue = onValue)
+    // Local text lets the field be cleared before typing; the model only takes valid numbers.
+    var text by remember(value) { mutableStateOf(value) }
+    TextField(label, text) { typed ->
+        val digits = typed.filter { it.isDigit() }.take(6)
+        text = digits
+        if (digits.isNotEmpty()) onValue(digits)
+    }
 }

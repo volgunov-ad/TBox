@@ -27,14 +27,14 @@ class MainActivity : ComponentActivity() {
         ) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-        if (MqttSettingsStore(this).load().normalized().ready) {
+        if (MqttSettingsStore.get(this).load().normalized().ready) {
             MqttBridgeService.start(this)
         }
         setContent {
             TboxMqttTheme(dark = isSystemInDarkTheme()) {
                 MqttHomeScreen(
                     onSettingsSaved = {
-                        if (MqttSettingsStore(this).load().normalized().ready) {
+                        if (MqttSettingsStore.get(this).load().normalized().ready) {
                             MqttBridgeService.start(this)
                         }
                     },

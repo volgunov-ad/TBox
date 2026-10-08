@@ -8,13 +8,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.mqtt.api.ApiCallException
 import vad.dashing.mqtt.api.MonitorApi
+import vad.dashing.mqtt.ha.AutomationRow
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.buildEntities
 import vad.dashing.mqtt.mqttclient.HiveMqttSession
 import vad.dashing.mqtt.service.BridgeStatus
+import vad.dashing.mqtt.service.MqttBridgeService
 import vad.dashing.mqtt.service.BridgeStatusStore
 import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
@@ -38,7 +42,7 @@ data class MqttHomeState(
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
-    private val store = MqttSettingsStore(app)
+    private val store = MqttSettingsStore.get(app)
     private val api = MonitorApi()
     private val _state = MutableStateFlow(MqttHomeState())
     val state: StateFlow<MqttHomeState> = _state
@@ -54,9 +58,11 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
-                val current = _state.value
-                val tab = if (status.lastError == "Monitor не принимает токен") 0 else current.tab
-                _state.value = current.copy(bridge = status, tab = tab)
+                _state.update { current ->
+                    val rejected = status.lastError == TOKEN_REJECTED &&
+                        current.bridge.lastError != TOKEN_REJECTED
+                    current.copy(bridge = status, tab = if (rejected) 0 else current.tab)
+                }
             }
         }
         if (settings.accessToken.isNotBlank()) refreshEntities()
@@ -123,6 +129,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
         update { it.copy(accessToken = token) }
         _state.value = _state.value.copy(manualToken = "", manualTokenOpen = false, pairMessage = "Токен сохранён")
+        startBridgeIfReady()
         refreshEntities()
     }
 
@@ -149,17 +156,12 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                             if (token.isBlank()) {
                                 updateUi { it.copy(pairBusy = false, pairMessage = "Monitor не вернул токен") }
                             } else {
-                            val saved = _state.value.settings.copy(accessToken = token).normalized()
-                            store.save(saved)
-                            updateUi {
-                                it.copy(
-                                    settings = saved,
-                                    connectionDraft = it.connectionDraft.copy(accessToken = token),
-                                    pairBusy = false,
-                                    pairMessage = "Доступ разрешён",
-                                )
-                            }
-                                refreshEntities()
+                                withContext(Dispatchers.Main) {
+                                    update { it.copy(accessToken = token) }
+                                    updateUi { it.copy(pairBusy = false, pairMessage = "Доступ разрешён") }
+                                    startBridgeIfReady()
+                                    refreshEntities()
+                                }
                             }
                             return@launch
                         }
@@ -219,7 +221,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val catalog = api.catalog(settings.apiPort, settings.accessToken)
                 val automations = api.automations(settings.apiPort, settings.accessToken)
-                    .map { vad.dashing.mqtt.ha.AutomationRow(it.id, it.name) }
+                    .map { AutomationRow(it.id, it.name) }
                 val rows = buildEntities(catalog, automations)
                 updateUi { it.copy(entities = rows, entitiesMessage = "") }
             } catch (error: Exception) {
@@ -237,10 +239,18 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun startBridgeIfReady() {
+        if (_state.value.settings.normalized().ready) MqttBridgeService.start(getApplication())
+    }
+
     private fun updateUi(transform: (MqttHomeState) -> MqttHomeState) {
-        _state.value = transform(_state.value)
+        _state.update(transform)
     }
 
     private fun normalizeToken(raw: String): String =
         raw.trim().replace(Regex("^Bearer\\s+", RegexOption.IGNORE_CASE), "").trim()
+
+    private companion object {
+        const val TOKEN_REJECTED = "Monitor не принимает токен"
+    }
 }

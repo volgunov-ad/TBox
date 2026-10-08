@@ -29,6 +29,7 @@ import vad.dashing.mqtt.bridge.SignalRef
 import vad.dashing.mqtt.bridge.StateFormat
 import vad.dashing.mqtt.bridge.batchSignals
 import vad.dashing.mqtt.bridge.commandToInvoke
+import vad.dashing.mqtt.ha.AutomationRow
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.DiscoveryCleanup
 import vad.dashing.mqtt.ha.DiscoveryPayload
@@ -54,6 +55,7 @@ class MqttBridgeService : Service() {
     private var entities: List<CatalogEntity> = emptyList()
     private var catalogJson: String = ""
     private var catalogAtMs: Long = 0L
+    private var catalogVersion: Int = -1
     private var publishSignature: String = ""
     private var lastSeenAtMs: Long = 0L
     private var lastRepeatAtMs: Long = 0L
@@ -61,67 +63,123 @@ class MqttBridgeService : Service() {
     private var unauthorized = false
     private var lastError = ""
     private var running = false
+    @Volatile
+    private var lastStartId = 0
+    @Volatile
+    private var expedite = false
+    @Volatile
+    private var notifiedText: String? = null
+    @Volatile
+    private var channelReady = false
     private val loop = Runnable { cycle() }
 
     private val shutdownReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SHUTDOWN) {
-                handler.post { publishOffline() }
+                post { publishOffline() }
             }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        store = MqttSettingsStore(this)
-        cleanup.plan(store.loadPublishedTopics())
+        store = MqttSettingsStore.get(this)
+        cleanup.commit(store.loadPublishedTopics())
         startAsForeground(notificationText(monitorUp = false, brokerUp = false))
         thread.start()
         handler = Handler(thread.looper)
-        registerReceiver(shutdownReceiver, IntentFilter(Intent.ACTION_SHUTDOWN))
+        val shutdown = IntentFilter(Intent.ACTION_SHUTDOWN)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(shutdownReceiver, shutdown, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(shutdownReceiver, shutdown)
+        }
         running = true
         handler.post(loop)
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        lastStartId = startId
+        expedite = true
+        // Every startForegroundService() call must be answered, not only the first one.
+        startAsForeground(notifiedText ?: notificationText(monitorUp = false, brokerUp = false))
+        if (::handler.isInitialized) {
+            handler.removeCallbacks(loop)
+            handler.postDelayed(loop, START_SETTLE_MS)
+        }
+        return START_STICKY
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        stopSelf()
+    }
+
     override fun onDestroy() {
         running = false
-        if (::handler.isInitialized) handler.removeCallbacks(loop)
         runCatching { unregisterReceiver(shutdownReceiver) }
         if (::handler.isInitialized) {
-            handler.post {
+            handler.removeCallbacksAndMessages(null)
+            post {
                 publishOffline()
                 session.disconnect()
             }
         }
         thread.quitSafely()
+        BridgeStatusStore.state.value = BridgeStatus()
         super.onDestroy()
+    }
+
+    /** Anything thrown on the bridge looper would kill the whole process. */
+    private fun post(block: () -> Unit) {
+        handler.post {
+            try {
+                block()
+            } catch (error: Exception) {
+                lastError = error.message ?: error.javaClass.simpleName
+            }
+        }
     }
 
     private fun cycle() {
         if (!running) return
-        val settings = store.load().normalized()
-        try {
-            if (!settings.ready) {
-                monitorUp = false
-                publishOffline()
-                session.disconnect()
-                lastError = ""
-            } else {
-                connectBroker(settings)
-                refreshMonitor(settings)
-            }
+        val settings = try {
+            store.load().normalized()
         } catch (error: Exception) {
-            lastError = error.message ?: "Ошибка моста"
+            lastError = error.message ?: "Настройки не читаются"
+            reschedule(MqttSettings().pollSeconds)
+            return
         }
-        publishStatus(settings)
-        if (running) {
-            handler.removeCallbacks(loop)
-            handler.postDelayed(loop, settings.pollSeconds.coerceIn(1, 60) * 1000L)
+        if (!settings.ready) {
+            monitorUp = false
+            lastError = ""
+            runCatching { publishOffline() }
+            session.disconnect()
+            // By start id: a start that raced in with fresh settings keeps the service alive.
+            stopSelf(lastStartId)
+        } else {
+            try {
+                connectBroker(settings)
+            } catch (error: Exception) {
+                lastError = error.message ?: "Нет связи с брокером"
+            }
+            try {
+                refreshMonitor(settings)
+            } catch (error: Exception) {
+                lastError = error.message ?: "Ошибка моста"
+            }
         }
+        runCatching { publishStatus(settings) }
+        reschedule(settings.pollSeconds)
+    }
+
+    private fun reschedule(pollSeconds: Int) {
+        if (!running) return
+        val delay = if (expedite) START_SETTLE_MS else pollSeconds.coerceIn(1, 60) * 1000L
+        expedite = false
+        handler.removeCallbacks(loop)
+        handler.postDelayed(loop, delay)
     }
 
     private fun connectBroker(settings: MqttSettings) {
@@ -129,10 +187,10 @@ class MqttBridgeService : Service() {
         session.ensureConnected(
             settings = settings,
             statusTopic = Topics.status(base),
-            onConnected = { handler.post { onBrokerConnected(store.load().normalized()) } },
-            onDisconnected = { handler.post { publishStatus(store.load().normalized()) } },
+            onConnected = { post { onBrokerConnected(store.load().normalized()) } },
+            onDisconnected = { post { publishStatus(store.load().normalized()) } },
             onMessage = { topic, payload, retained ->
-                handler.post { onMqttMessage(store.load().normalized(), topic, payload, retained) }
+                post { onMqttMessage(store.load().normalized(), topic, payload, retained) }
             },
         )
     }
@@ -146,37 +204,49 @@ class MqttBridgeService : Service() {
 
     private fun refreshMonitor(settings: MqttSettings) {
         val wasUp = monitorUp
-        try {
+        val health = try {
             api.health(settings.apiPort)
-            unauthorized = false
-            monitorUp = true
         } catch (error: ApiCallException) {
-            monitorUp = false
-            unauthorized = error.httpStatus == 401 || error.code == "unauthorized"
-            lastError = if (unauthorized) {
-                "Monitor не принимает токен"
-            } else {
-                "Нет связи с Monitor"
-            }
-            if (wasUp) publishOffline()
+            markMonitorDown(settings, wasUp, "Нет связи с Monitor")
             return
         }
-        if (!wasUp) {
-            publishAvailability(settings, "online")
+        val catalogChanged = health.catalogVersion != catalogVersion
+        // /v1/health is open; only token calls prove the pairing is still valid.
+        try {
+            reloadCatalogIfNeeded(settings, force = unauthorized || catalogChanged)
+            pollSignals(settings)
+        } catch (error: ApiCallException) {
+            if (error.httpStatus == 401 || error.code == "unauthorized") {
+                unauthorized = true
+                markMonitorDown(settings, wasUp, "Monitor не принимает токен")
+                return
+            }
+            throw error
         }
-        reloadCatalogIfNeeded(settings)
-        pollSignals(settings)
+        catalogVersion = health.catalogVersion
+        unauthorized = false
+        monitorUp = true
+        if (!wasUp) publishAvailability(settings, "online")
         maybeRepeat(settings)
         syncSubscriptions(settings)
         lastError = ""
     }
 
-    private fun reloadCatalogIfNeeded(settings: MqttSettings) {
+    private fun markMonitorDown(settings: MqttSettings, wasUp: Boolean, reason: String) {
+        monitorUp = false
+        lastError = reason
+        if (wasUp) {
+            publishOffline()
+            syncSubscriptions(settings)
+        }
+    }
+
+    private fun reloadCatalogIfNeeded(settings: MqttSettings, force: Boolean) {
         val now = System.currentTimeMillis()
-        if (catalogJson.isEmpty() || now - catalogAtMs >= CATALOG_PERIOD_MS) {
+        if (force || catalogJson.isEmpty() || now - catalogAtMs >= CATALOG_PERIOD_MS) {
             catalogJson = api.catalog(settings.apiPort, settings.accessToken)
             val automations = api.automations(settings.apiPort, settings.accessToken)
-                .map { vad.dashing.mqtt.ha.AutomationRow(it.id, it.name) }
+                .map { AutomationRow(it.id, it.name) }
             catalogAtMs = now
             allEntities = buildEntities(catalogJson, automations)
         }
@@ -220,9 +290,10 @@ class MqttBridgeService : Service() {
             }
             val text = when {
                 sample.number != null -> StateFormat.numberText(sample.number, entity.unit)
-                sample.text != null -> StateFormat.text(sample.text, entity.unit)
+                sample.text != null -> StateFormat.text(sample.text, entity.unit, entity.component)
                 else -> null
             } ?: return@forEach
+            if (entity.component == HaComponent.SELECT && text !in entity.options) return@forEach
             if (lastState[entity.objectId] == text) return@forEach
             publishState(base, entity.objectId, text)
             sawFresh = true
@@ -304,6 +375,7 @@ class MqttBridgeService : Service() {
         }
         val stale = cleanup.plan(next)
         stale.forEach { topic -> session.publish(topic, "", retain = true) }
+        cleanup.commit(next)
         store.savePublishedTopics(cleanup.publishedTopics())
     }
 
@@ -350,6 +422,7 @@ class MqttBridgeService : Service() {
             val command = commandToInvoke(entity, payload)
             if (command == null) {
                 lastError = "Команда не из списка"
+                restoreState(base, entity)
                 return
             }
             val ok = when (val request = command.request) {
@@ -421,8 +494,10 @@ class MqttBridgeService : Service() {
             publishedCount = entities.size,
             lastError = lastError,
         )
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, buildNotification(notificationText(monitorUp, brokerUp)))
+        val text = notificationText(monitorUp && !unauthorized, brokerUp)
+        if (text == notifiedText) return
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(text))
     }
 
     private fun geoOf(sample: SignalSample): GeoPoint? {
@@ -446,15 +521,16 @@ class MqttBridgeService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
-        val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        notifiedText = text
+        if (!channelReady && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 getString(R.string.notification_channel),
                 NotificationManager.IMPORTANCE_LOW,
             )
             channel.setSound(null, null)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            channelReady = true
         }
         val pending = PendingIntent.getActivity(
             this,
@@ -482,6 +558,7 @@ class MqttBridgeService : Service() {
         private const val CHANNEL_ID = "mqtt_bridge"
         private const val NOTIFICATION_ID = 42
         private const val CATALOG_PERIOD_MS = 10L * 60L * 1000L
+        private const val START_SETTLE_MS = 700L
 
         fun start(context: Context) {
             val intent = Intent(context, MqttBridgeService::class.java)

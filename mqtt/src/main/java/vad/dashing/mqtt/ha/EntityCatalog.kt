@@ -107,7 +107,7 @@ fun buildEntities(catalogJson: String, automations: List<AutomationRow> = emptyL
     automations.forEach { row ->
         if (row.id.isBlank()) return@forEach
         rows += CatalogEntity(
-            objectId = "automation_${row.id}",
+            objectId = Topics.safeObjectId("automation_${row.id}"),
             label = row.name.ifBlank { "Автоматизация" },
             description = "Выполнить сейчас",
             group = EntityGroup.OTHER,
@@ -130,7 +130,7 @@ private fun signalEntity(item: JSONObject): CatalogEntity? {
     val source = sources.firstOrNull()
     if (id == "geo_position" || valueType == "position") {
         return CatalogEntity(
-            objectId = id,
+            objectId = Topics.safeObjectId(id),
             label = "Местоположение",
             description = "Координаты машины попадут в брокер и в Home Assistant",
             group = EntityGroup.TRIP,
@@ -142,7 +142,7 @@ private fun signalEntity(item: JSONObject): CatalogEntity? {
     val binary = valueType == "state" && stateOptions == listOf("off", "on")
     val component = if (binary) HaComponent.BINARY_SENSOR else HaComponent.SENSOR
     return CatalogEntity(
-        objectId = id,
+        objectId = Topics.safeObjectId(id),
         label = label,
         description = if (unit.isNotBlank()) unit else "Только чтение",
         group = groupFor(id),
@@ -176,7 +176,7 @@ private fun mergeCommand(
             component = componentForWrite(kind),
             description = "Состояние и команда",
             writable = true,
-            options = pairs.map { it.state },
+            options = writeOptions(component = componentForWrite(kind), readStates = base.options, pairs = pairs),
             pairs = pairs,
             numberMin = write.optDoubleOrNull("min"),
             numberMax = write.optDoubleOrNull("max"),
@@ -199,7 +199,7 @@ private fun mergeCommand(
             else -> pair.state
         }
         rows += CatalogEntity(
-            objectId = "can_${bus}_${propertyId}_${pair.state}",
+            objectId = Topics.safeObjectId("can_${bus}_${propertyId}_${pair.state}"),
             label = "$label: $action",
             description = "Кнопка",
             group = groupFor("trunk"),
@@ -223,7 +223,7 @@ private fun builtinEntity(item: JSONObject): CatalogEntity? {
     if (item.optString("safety") == "dangerous") return null
     val label = builtinLabel(actionType)
     return CatalogEntity(
-        objectId = "builtin_$actionType",
+        objectId = Topics.safeObjectId("builtin_$actionType"),
         label = label,
         description = "Кнопка",
         group = EntityGroup.OTHER,
@@ -231,6 +231,20 @@ private fun builtinEntity(item: JSONObject): CatalogEntity? {
         writable = true,
         builtinAction = actionType,
     )
+}
+
+/**
+ * A select must list every state it can report, or HA drops the value.
+ * Read-only states (a window between stops) stay listed; picking one is refused and restored.
+ */
+private fun writeOptions(
+    component: HaComponent,
+    readStates: List<String>,
+    pairs: List<WritePair>,
+): List<String> {
+    val writeStates = pairs.map { it.state }
+    if (component != HaComponent.SELECT) return writeStates
+    return (readStates + writeStates).distinct()
 }
 
 private fun componentForWrite(kind: String): HaComponent = when (kind) {

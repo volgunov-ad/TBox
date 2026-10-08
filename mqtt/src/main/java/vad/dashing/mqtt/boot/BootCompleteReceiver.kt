@@ -9,7 +9,7 @@ import vad.dashing.mqtt.settings.MqttSettingsStore
 class BootCompleteReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
-        val settings = runCatching { MqttSettingsStore(context).load().normalized() }.getOrNull() ?: return
+        val settings = runCatching { MqttSettingsStore.get(context).load().normalized() }.getOrNull() ?: return
         if (!settings.autostart || !settings.ready) return
         MqttBridgeService.start(context)
     }

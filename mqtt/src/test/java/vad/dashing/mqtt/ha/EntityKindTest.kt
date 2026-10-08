@@ -33,6 +33,30 @@ class EntityKindTest {
         assertEquals(EntityGroup.TRIP, rows.single { it.objectId == "geo_position" }.group)
     }
 
+    @Test
+    fun selectListsReadOnlyStatesSoHaKeepsTheValue() {
+        val catalog = """
+            {
+              "signals": [
+                {"id": "window_fl", "label": "Окно", "valueType": "state", "sources": ["head_unit"],
+                 "stateOptions": ["closed", "open", "vent", "opened"]}
+              ],
+              "actionTypes": [
+                {"type": "can_command", "bus": "vehicle", "propertyId": 5, "label": "Окно",
+                 "safety": "confirm", "signalId": "window_fl",
+                 "write": {"kind": "options", "options": [
+                   {"state": "closed", "value": "close"},
+                   {"state": "vent", "value": "vent"},
+                   {"state": "opened", "value": "open"}
+                 ]}}
+              ]
+            }
+        """.trimIndent()
+        val window = buildEntities(catalog).single()
+        assertEquals(listOf("closed", "open", "vent", "opened"), window.options)
+        assertEquals(3, window.pairs.size)
+    }
+
     private companion object {
         val CATALOG = """
             {

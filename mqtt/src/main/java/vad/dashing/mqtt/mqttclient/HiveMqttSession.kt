@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.TrustManagerFactory
 
 class HiveMqttSession {
@@ -20,6 +22,7 @@ class HiveMqttSession {
     private val subscribed = mutableSetOf<String>()
     private var connectionKey: String = ""
     private var willTopic: String? = null
+    private val generation = AtomicInteger(0)
 
     @Volatile
     var connected: Boolean = false
@@ -42,16 +45,29 @@ class HiveMqttSession {
         closeQuietly()
         connectionKey = key
         val normalized = settings.normalized()
+        val own = generation.incrementAndGet()
+        val holder = AtomicReference<Mqtt3AsyncClient?>(null)
         val builder = Mqtt3Client.builder()
             .identifier(clientId(normalized))
             .serverHost(normalized.brokerHost)
             .serverPort(normalized.brokerPort)
             .automaticReconnectWithDefaultConfig()
             .addConnectedListener {
+                if (generation.get() != own) {
+                    // Same client id: a late stale connect would kick the live client off the broker.
+                    // disconnect() returns a hot future; waiting here would stall the client loop.
+                    holder.get()?.disconnect()
+                    return@addConnectedListener
+                }
                 connected = true
                 onConnected()
             }
-            .addDisconnectedListener {
+            .addDisconnectedListener { context ->
+                if (generation.get() != own) {
+                    // disconnect() is a no-op between reconnect attempts; stop the loop here.
+                    context.reconnector.reconnect(false)
+                    return@addDisconnectedListener
+                }
                 connected = false
                 onDisconnected()
             }
@@ -65,9 +81,11 @@ class HiveMqttSession {
                 .applySimpleAuth()
         }
         val created = builder.buildAsync()
+        holder.set(created)
         client = created
         willTopic = statusTopic
         created.publishes(MqttGlobalPublishFilter.ALL) { publish ->
+            if (generation.get() != own) return@publishes
             val bytes = publish.payload.map { buffer ->
                 val copy = ByteArray(buffer.remaining())
                 buffer.get(copy)
@@ -106,6 +124,7 @@ class HiveMqttSession {
         val add = topics - subscribed
         remove.forEach { topic ->
             current.unsubscribeWith().topicFilter(topic).send().get(8, TimeUnit.SECONDS)
+            subscribed.remove(topic)
         }
         add.forEach { topic ->
             current.subscribeWith()
@@ -113,9 +132,8 @@ class HiveMqttSession {
                 .qos(MqttQos.AT_LEAST_ONCE)
                 .send()
                 .get(8, TimeUnit.SECONDS)
+            subscribed.add(topic)
         }
-        subscribed.clear()
-        subscribed.addAll(topics)
     }
 
     fun disconnect() {
@@ -165,40 +183,56 @@ class HiveMqttSession {
     }
 
     private fun closeQuietly() {
+        generation.incrementAndGet()
         val current = client
+        val oldWill = willTopic
+        val wasConnected = connected
         client = null
         connected = false
         subscribed.clear()
         connectionKey = ""
         willTopic = null
-        if (current != null) {
-            runCatching { current.disconnect().get(4, TimeUnit.SECONDS) }
+        if (current == null) return
+        // A clean DISCONNECT suppresses the will, so the old status topic would stay "online".
+        if (wasConnected && oldWill != null) {
+            runCatching {
+                current.publishWith()
+                    .topic(oldWill)
+                    .payload("offline".toByteArray(StandardCharsets.UTF_8))
+                    .qos(MqttQos.AT_LEAST_ONCE)
+                    .retain(true)
+                    .send()
+                    .get(4, TimeUnit.SECONDS)
+            }
         }
+        runCatching { current.disconnect().get(4, TimeUnit.SECONDS) }
     }
 
     companion object {
         fun probe(settings: MqttSettings): String? {
             val normalized = settings.normalized()
             if (normalized.brokerHost.isBlank()) return "Укажите адрес брокера"
-            val builder = Mqtt3Client.builder()
-                .identifier(clientId(normalized) + "-check")
-                .serverHost(normalized.brokerHost)
-                .serverPort(normalized.brokerPort)
-            if (normalized.tlsEnabled) builder.sslConfig(sslConfig(normalized.caPem))
-            if (normalized.username.isNotBlank()) {
-                builder.simpleAuth()
-                    .username(normalized.username)
-                    .password(normalized.password.toByteArray(StandardCharsets.UTF_8))
-                    .applySimpleAuth()
-            }
-            val client = builder.buildAsync()
+            var client: Mqtt3AsyncClient? = null
             return try {
-                client.connectWith().keepAlive(30).cleanSession(true).send().get(12, TimeUnit.SECONDS)
-                runCatching { client.disconnect().get(4, TimeUnit.SECONDS) }
+                val builder = Mqtt3Client.builder()
+                    .identifier(clientId(normalized) + "-check")
+                    .serverHost(normalized.brokerHost)
+                    .serverPort(normalized.brokerPort)
+                if (normalized.tlsEnabled) builder.sslConfig(sslConfig(normalized.caPem))
+                if (normalized.username.isNotBlank()) {
+                    builder.simpleAuth()
+                        .username(normalized.username)
+                        .password(normalized.password.toByteArray(StandardCharsets.UTF_8))
+                        .applySimpleAuth()
+                }
+                val built = builder.buildAsync()
+                client = built
+                built.connectWith().keepAlive(30).cleanSession(true).send().get(12, TimeUnit.SECONDS)
                 null
             } catch (error: Exception) {
-                runCatching { client.disconnect() }
-                error.message ?: "Не удалось подключиться"
+                error.message ?: error.javaClass.simpleName
+            } finally {
+                client?.let { runCatching { it.disconnect().get(4, TimeUnit.SECONDS) } }
             }
         }
 
