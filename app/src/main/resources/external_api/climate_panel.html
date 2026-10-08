@@ -134,6 +134,10 @@
     .levels button { flex: 1 1 auto; }
     .pair { display: flex; gap: 8px; }
     .pair button { flex: 1 1 0; }
+    .switches { margin-top: 8px; }
+    .pair + .switches { border-top: 1px solid var(--line); padding-top: 10px; }
+    .switches + .choice { border-top: 1px solid var(--line); }
+    .switches button { white-space: normal; line-height: 1.15; padding: 6px 4px; }
     .choice { padding: 8px 0; }
     .choice .label { margin-bottom: 6px; }
     .block { padding: 10px 0; }
@@ -255,6 +259,9 @@
       var FAN = 38;
       var AUTO = 110;
       var SYNC = 94;
+      var RECIRC = 39;
+      var FRONT = 90;
+      var AC = 36;
       var BLOW = 40;
       var HVAC_MODE = 140;
       var SUNROOF = 45;
@@ -307,6 +314,9 @@
           fan: "Обдув",
           auto: "Авто",
           sync: "Синхронизация",
+          recirc: "Рециркуляция",
+          climatePower: "Климат",
+          ac: "Кондиционер",
           mode: "Режим климата",
           modeEco: "Эко",
           modeComfort: "Комфорт",
@@ -381,6 +391,9 @@
           fan: "Fan",
           auto: "Auto",
           sync: "Sync",
+          recirc: "Recirculation",
+          climatePower: "Climate",
+          ac: "A/C",
           mode: "Climate mode",
           modeEco: "ECO",
           modeComfort: "Comfort",
@@ -480,7 +493,7 @@
       var PAGE_SIGNALS = {
         connect: { head_unit: [], app: [] },
         climate: {
-          head_unit: ["hvac_temperature_left", "hvac_temperature_right", "hvac_fan_speed", "hvac_auto", "hvac_sync", "hvac_fan_direction", "hvac_custom_mode"],
+          head_unit: ["hvac_temperature_left", "hvac_temperature_right", "hvac_fan_speed", "hvac_auto", "hvac_sync", "hvac_recirculation", "hvac_front_off", "hvac_power", "hvac_fan_direction", "hvac_custom_mode"],
           app: []
         },
         seats: {
@@ -510,6 +523,9 @@
         mediaPlaying: null,
         auto: null,
         sync: null,
+        recirc: null,
+        front: null,
+        ac: null,
         blow: null,
         mode: null,
         seat: {},
@@ -762,6 +778,13 @@
         paintBody();
       }
 
+      function paintOnOff(selector, value) {
+        var buttons = document.querySelectorAll(selector);
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].className = value === "on" ? "on-off" : "";
+        }
+      }
+
       function paintClimate() {
         var autoButtons = document.querySelectorAll("[data-auto]");
         for (var i = 0; i < autoButtons.length; i++) {
@@ -771,6 +794,9 @@
         for (var s = 0; s < syncButtons.length; s++) {
           syncButtons[s].className = state.sync === "on" ? "on-off" : "";
         }
+        paintOnOff("[data-recirc]", state.recirc);
+        paintOnOff("[data-front]", state.front);
+        paintOnOff("[data-ac]", state.ac);
         var blowButtons = document.querySelectorAll("[data-blow]");
         for (var j = 0; j < blowButtons.length; j++) {
           var el = blowButtons[j];
@@ -876,6 +902,18 @@
         toggles.appendChild(autoButton);
         toggles.appendChild(syncButton);
         root.appendChild(toggles);
+        var switches = document.createElement("div");
+        switches.className = "grid cols-3 switches";
+        var recircButton = button(lang.recirc, toggleRecirc);
+        recircButton.setAttribute("data-recirc", "1");
+        var frontButton = button(lang.climatePower, toggleFront);
+        frontButton.setAttribute("data-front", "1");
+        var acButton = button(lang.ac, toggleAc);
+        acButton.setAttribute("data-ac", "1");
+        switches.appendChild(recircButton);
+        switches.appendChild(frontButton);
+        switches.appendChild(acButton);
+        root.appendChild(switches);
         root.appendChild(choiceRow(lang.mode, HVAC_MODES.map(function (mode) {
           var el = button(lang[mode.label], function () { setHvacMode(mode); });
           el.setAttribute("data-hvac-mode", mode.state);
@@ -1279,6 +1317,20 @@
         enqueue(function () { return invoke(SYNC, next); });
       }
 
+      function toggleRecirc() { toggleNamed("recirc", RECIRC); }
+
+      function toggleAc() { toggleNamed("ac", AC); }
+
+      /* state.front is "on" while the front section is running. The car signal is the inverse. */
+      function toggleFront() { toggleNamed("front", FRONT); }
+
+      function toggleNamed(field, propertyId) {
+        var next = state[field] === "on" ? "off" : "on";
+        state[field] = next;
+        paintClimate();
+        enqueue(function () { return invoke(propertyId, next); });
+      }
+
       function setBlow(mode) {
         state.blow = mode.state;
         paintClimate();
@@ -1373,6 +1425,13 @@
           if (auto != null) state.auto = auto;
           var sync = stateOrNull(hu.hvac_sync);
           if (sync != null) state.sync = sync;
+          var recirc = stateOrNull(hu.hvac_recirculation);
+          if (recirc != null) state.recirc = recirc;
+          var ac = stateOrNull(hu.hvac_power);
+          if (ac != null) state.ac = ac;
+          /* "on" on this signal means the front section is stopped. */
+          var frontOff = stateOrNull(hu.hvac_front_off);
+          if (frontOff != null) state.front = frontOff === "on" ? "off" : "on";
           var blow = stateOrNull(hu.hvac_fan_direction);
           if (blow != null) state.blow = blow;
           var custom = stateOrNull(hu.hvac_custom_mode);
