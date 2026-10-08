@@ -1027,6 +1027,15 @@
     <string name="esp_ble_forget_all">Forget all</string>
     <string name="esp_ble_last_event">Last event</string>
     <string name="esp_ble_battery">Remote battery</string>
+    <string name="esp_ble_learn_key">New remote BTHome key</string>
+    <string name="esp_ble_key_hint">If encryption is on in the Shelly app, enter its 32-character key. Leave empty for a plain remote</string>
+    <string name="esp_ble_key_invalid">The key is 32 characters 0–9 and a–f</string>
+    <string name="esp_ble_key">BTHome key</string>
+    <string name="esp_ble_key_replace">New BTHome key</string>
+    <string name="esp_ble_encrypted_on">Encrypted: plain and replayed packets are dropped</string>
+    <string name="esp_ble_encrypted_off">Not encrypted</string>
+    <string name="esp_ble_key_save">Save key</string>
+    <string name="esp_ble_key_remove">Remove key</string>
     <string name="esp_ble_need_fw">Companion firmware 0.8+ required</string>
     <string name="esp_phone_need_fw">Companion firmware 0.10+ required</string>
     <string name="esp_phone_slots">Remotes and phones: %1$d of 20</string>

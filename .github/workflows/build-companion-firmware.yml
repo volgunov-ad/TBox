@@ -40,6 +40,16 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Host tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q libmbedtls-dev
+          cd firmware/esp32-companion/host_test
+          gcc -Wall -Wextra -Werror -I../main bthome_crypt_test.c ../main/bthome_crypt.c -lmbedcrypto -o bthome_crypt_test
+          ./bthome_crypt_test
+
       - name: Build with ESP-IDF
         uses: espressif/esp-idf-ci-action@v1
         with:

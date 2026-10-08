@@ -20,7 +20,7 @@
 
 | `t` | Поля | Смысл |
 |-----|------|--------|
-| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]`, `ble?`, `bleOn?`, `bleMacs?` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше. `ble:true` (fw **0.8+**) — NimBLE observer для Shelly Blu / BTHome |
+| `hello` | `fw`, `gpioIn`, `relays`, `gnss`, `gnssChip`, `gnssModel`, `um980`, `baud`, `can?`, `canBackend?`, `canBaud?`, `canLight?`, `mag`, `magChip`, `magSeen[]`, `ble?`, `bleOn?`, `bleMacs?`, `bleKey?` | caps / версия. GNSS и магнитометр **автоопределяются** при старте компаньона (`gnssChip`: `um980` / `neo-m8n` / `ublox` / `nmea`; `magChip`: активный чип I2C). `um980:true` только для Unicore UM980. UART baud — сохранённый/найденный. CAN — как раньше. `ble:true` (fw **0.8+**) — NimBLE observer для Shelly Blu / BTHome. `bleKey:true` (fw **0.11+**) — принимает ключи BTHome |
 | `hb` | `uptimeMs` | heartbeat ~1 с |
 | `gps` | `fix`, `lat`, `lon`, `alt`, `speedKmh`, `course`, `satsUsed`, `satsVis`, `utc`, `hdop`, `pdop`, `vdop`, `hrms`, `vrms`, `diffAge` | фиксация UM980 (`fix` = GGA quality; DOP из GGA/GSA; RMS из GST; `diffAge` из GGA; `0`/`-1` = нет данных) |
 | `mag` | `chip`, `hx`, `hy`, `hz`, `heading`, `fs`, `ok` | магнитометр ~10 Гц (µT, магнитный курс 0…360, \|H\|); не слать во время OTA/bridge |
@@ -28,7 +28,7 @@
 | `gpioEvent` | `ch`, `level`, `ms` | изменение входа |
 | `relay` | `mask` | состояние реле |
 | `bleBtn` | `mac`, `btn` (1…4), `act` (`press`/`double`/`triple`/`long`/`hold`), `bat`, `rssi`, `ms` | Shelly Blu / BTHome (fw **0.8+**); только allowlisted MAC |
-| `bleStatus` | `on`, `learn`, `macs[]`, `lastBat?`, `lastRssi?`, `lastMac?` | снимок BLE |
+| `bleStatus` | `on`, `learn`, `macs[]`, `keyed[]`, `lastBat?`, `lastRssi?`, `lastMac?` | снимок BLE; `keyed` (fw **0.11+**) — пульты с ключом BTHome |
 | `bleSeen` | `mac`, `rssi`, `ms` | кандидат во время learn |
 | `bleAck` | `phase`=`set`/`learnBegin`/`learnEnd`/`allow`/`forget`, `ok`, `err?` | подтверждения BLE |
 | `apStatus` | `on`, `sta`, `ssid`, `psk`, `ip`, `freq`, `ch`, `huIp`, `panel` | SoftAP компаньона (fw **0.9+**). `sta` — связь с точкой ГУ, `ip` — адрес точки компаньона (`192.168.4.1`), `huIp` — шлюз ГУ, `panel` — порт DNAT веб-панели |
@@ -62,9 +62,10 @@
 | `canLightEnd` | — | выйти из light-режима |
 | `magChipSet` | `chip` | *(отладка)* принудительный выбор магнитометра; в штатном режиме чип определяется автоматически |
 | `bleSet` | `on` | вкл/выкл BLE-сканер (NVS; по умолчанию выкл.) |
-| `bleLearnBegin` | `timeoutMs?` (default 30000) | окно обучения: первый BTHome-пульт с кнопкой → allowlist |
+| `bleLearnBegin` | `timeoutMs?` (default 30000), `key?` | окно обучения: первый BTHome-пульт с кнопкой → allowlist. С `key` (32 hex, fw **0.11+**) учится только пульт, чей зашифрованный пакет открылся этим ключом; неверный ключ → `bleAck learnBegin` `bad key` |
 | `bleLearnEnd` | — | отменить learn |
 | `bleAllow` | `mac` | добавить MAC в общий список (0.10.0+: не больше 20 вместе с телефонами; раньше до 4) |
+| `bleKey` | `mac`, `key` (32 hex или `""`) | fw **0.11+**: задать ключ BTHome обученному пульту или убрать (`""`). Счётчик пульта начинается заново. `bleAck key`: `bad key` / `unknown mac` |
 | `bleForget` | `mac` **или** `all:true` | удалить MAC / очистить allowlist |
 | `apCfg` | `on`, `huSsid`, `huPsk` | включить роутер: SoftAP компаньона (`TBox` / `tbox8765`, `192.168.4.1/24`) + STA к точке ГУ + NAT и DNAT `:8765` на шлюз STA. `hello` содержит `ap:true`. Только A9: приложение само переводит точку ГУ на 2,4 ГГц |
 
@@ -169,7 +170,7 @@ MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двуна�
 
 ### Shelly Blu (Button 1 / RC Button 4) (fw **0.8.0+**)
 
-Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пульты **не** перепрошиваются — заводской BTHome без encryption.
+Пассивный NimBLE observer (BTHome UUID `0xFCD2`). Пульты **не** перепрошиваются и к ним никто не подключается: нажатия приходят только рекламными пакетами.
 
 Поддерживаются:
 
@@ -183,7 +184,17 @@ MCP2515: модуль HW-184 по SPI. Если модуль 5 V — двуна�
 3. В таблице устройств: локальное **имя** (DataStore), **батарея %** и **последнее событие** по каждому MAC; глобальной строки батареи нет.
 4. Дальше `bleBtn` с `act` press/double/triple/long/hold.
 
-Магнитометр при BLE **не** останавливается (маг на кабеле). Encryption BTHome на MVP игнорируется.
+Магнитометр при BLE **не** останавливается (маг на кабеле).
+
+#### Шифрование BTHome (fw **0.11.0+**)
+
+Открытый пакет BTHome может отправить кто угодно с MAC пульта. Если в приложении Shelly включить шифрование, пульт шлёт пакеты AES-CCM (ключ 16 байт, MIC 4 байта, nonce = MAC + `D2FC` + байт info + счётчик), см. [bthome.io/encryption](https://bthome.io/encryption/).
+
+- Ключ задаётся при обучении (поле «Ключ BTHome нового пульта») или в карточке уже обученного пульта. На ГУ ключ не хранится; компаньон держит его в NVS рядом с MAC (`k<n>`).
+- Для пульта с ключом компаньон отбрасывает открытые пакеты, пакеты с неверным MIC и пакеты со счётчиком не больше последнего (повторы одного пакета и записанные чужие). Счётчик пишется в NVS (`c<n>`) на каждое принятое нажатие, поэтому повтор не проходит и после перезагрузки.
+- Если пульт сбросил счётчик (например, после смены батарейки), нажатия перестанут проходить: ключ нужно сохранить заново, это обнуляет счётчик на компаньоне.
+- Пульты без ключа работают как раньше. Зашифрованные пакеты без известного ключа игнорируются.
+- Расшифровка — `main/bthome_crypt.c`; хостовый тест на примере из спецификации — `host_test/bthome_crypt_test.c` (CI).
 
 Автоматизации:
 

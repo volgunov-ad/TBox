@@ -6,6 +6,7 @@
 
 #include "ble_btn.h"
 #include "ble_phone.h"
+#include "bthome_crypt.h"
 #include "wifi_router.h"
 #include "esp_crc.h"
 #include "esp_system.h"
@@ -312,6 +313,20 @@ static void mag_seen_json(char *dst, size_t n)
     }
 }
 
+static void mac_list_json(char *dst, size_t cap, char macs[][18], int n)
+{
+    size_t mp = 0;
+    dst[mp++] = '[';
+    for (int i = 0; i < n && mp + 24 < cap; i++) {
+        if (i > 0) dst[mp++] = ',';
+        dst[mp++] = '"';
+        json_escape_append(dst, cap, &mp, macs[i]);
+        dst[mp++] = '"';
+    }
+    dst[mp++] = ']';
+    dst[mp] = '\0';
+}
+
 void protocol_send_hello(void)
 {
     char seen[128];
@@ -326,16 +341,7 @@ void protocol_send_hello(void)
     char macs_json[512];
     char macs[ESP_COMPANION_BLE_MAX_MACS][18];
     int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
-    size_t mp = 0;
-    macs_json[mp++] = '[';
-    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
-        if (i > 0) macs_json[mp++] = ',';
-        macs_json[mp++] = '"';
-        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
-        macs_json[mp++] = '"';
-    }
-    macs_json[mp++] = ']';
-    macs_json[mp] = '\0';
+    mac_list_json(macs_json, sizeof(macs_json), macs, mac_n);
 
     const bool um980_flag = gnss_is_um980();
     char *buf = malloc(1600);
@@ -346,7 +352,7 @@ void protocol_send_hello(void)
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
                  "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"phone\":true,\"ap\":true}\n",
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -367,7 +373,7 @@ void protocol_send_hello(void)
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"phone\":true,\"ap\":true}\n",
+                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,\"ap\":true}\n",
                  ESP_COMPANION_FW_VERSION,
                  ESP_COMPANION_GPIO_IN_COUNT,
                  ESP_COMPANION_RELAY_COUNT,
@@ -406,23 +412,17 @@ void protocol_send_ble_btn(const char *mac, int btn, const char *act,
 void protocol_send_ble_status(void)
 {
     char macs[ESP_COMPANION_BLE_MAX_MACS][18];
-    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
     char macs_json[512];
-    size_t mp = 0;
-    macs_json[mp++] = '[';
-    for (int i = 0; i < mac_n && mp + 24 < sizeof(macs_json); i++) {
-        if (i > 0) macs_json[mp++] = ',';
-        macs_json[mp++] = '"';
-        json_escape_append(macs_json, sizeof(macs_json), &mp, macs[i]);
-        macs_json[mp++] = '"';
-    }
-    macs_json[mp++] = ']';
-    macs_json[mp] = '\0';
+    char keyed_json[512];
+    int mac_n = ble_btn_get_macs(macs, ESP_COMPANION_BLE_MAX_MACS);
+    mac_list_json(macs_json, sizeof(macs_json), macs, mac_n);
+    mac_n = ble_btn_get_keyed(macs, ESP_COMPANION_BLE_MAX_MACS);
+    mac_list_json(keyed_json, sizeof(keyed_json), macs, mac_n);
     char last_mac[18];
     ble_btn_last_mac(last_mac);
     /* 20 phones with escaped 26-byte names need ~1.7 KB. */
     char *phones_json = malloc(2048);
-    char *buf = malloc(2800);
+    char *buf = malloc(3400);
     if (!phones_json || !buf) {
         free(phones_json);
         free(buf);
@@ -430,25 +430,27 @@ void protocol_send_ble_status(void)
     }
     ble_phone_write_json(phones_json, 2048);
     if (last_mac[0]) {
-        snprintf(buf, 2800,
+        snprintf(buf, 3400,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
-                 "\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
+                 "\"keyed\":%s,\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
                  ble_btn_is_on() ? "true" : "false",
                  ble_btn_is_learn() ? "true" : "false",
                  ble_phone_is_learn() ? "true" : "false",
                  macs_json,
+                 keyed_json,
                  phones_json,
                  ble_btn_last_bat(),
                  ble_btn_last_rssi(),
                  last_mac);
     } else {
-        snprintf(buf, 2800,
+        snprintf(buf, 3400,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
-                 "\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d}\n",
+                 "\"keyed\":%s,\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d}\n",
                  ble_btn_is_on() ? "true" : "false",
                  ble_btn_is_learn() ? "true" : "false",
                  ble_phone_is_learn() ? "true" : "false",
                  macs_json,
+                 keyed_json,
                  phones_json,
                  ble_btn_last_bat(),
                  ble_btn_last_rssi());
@@ -1191,7 +1193,15 @@ static void handle_line(const char *line)
         bool found = false;
         uint32_t timeout = extract_json_u32(line, "timeoutMs", &found);
         if (!found) timeout = BLE_BTN_LEARN_DEFAULT_MS;
-        bool ok = ble_btn_learn_begin(timeout);
+        char key_hex[64];
+        uint8_t key[BTHOME_KEY_LEN];
+        bool keyed = extract_json_string(line, "key", key_hex, sizeof(key_hex)) && key_hex[0];
+        if (keyed && !bthome_parse_key(key_hex, key)) {
+            protocol_send_ble_ack("learnBegin", false, "bad key");
+            protocol_send_ble_status();
+            return;
+        }
+        bool ok = ble_btn_learn_begin(timeout, keyed ? key : NULL);
         protocol_send_ble_ack("learnBegin", ok, ok ? NULL : "fail");
         protocol_send_ble_status();
         return;
@@ -1210,6 +1220,25 @@ static void handle_line(const char *line)
         }
         bool ok = ble_btn_allow(mac);
         protocol_send_ble_ack("allow", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"bleKey\"") || strstr(line, "\"t\": \"bleKey\"")) {
+        char mac[24];
+        char key_hex[64];
+        uint8_t key[BTHOME_KEY_LEN];
+        if (!extract_json_string(line, "mac", mac, sizeof(mac))) {
+            protocol_send_ble_ack("key", false, "missing mac");
+            return;
+        }
+        if (!extract_json_string(line, "key", key_hex, sizeof(key_hex))) key_hex[0] = '\0';
+        bool keyed = key_hex[0] != '\0';
+        if (keyed && !bthome_parse_key(key_hex, key)) {
+            protocol_send_ble_ack("key", false, "bad key");
+            return;
+        }
+        bool ok = ble_btn_set_key(mac, keyed ? key : NULL);
+        protocol_send_ble_ack("key", ok, ok ? NULL : "unknown mac");
         protocol_send_ble_status();
         return;
     }

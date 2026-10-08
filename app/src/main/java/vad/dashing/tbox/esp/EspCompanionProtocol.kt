@@ -81,6 +81,7 @@ object EspCompanionProtocol {
     const val TYPE_BLE_LEARN_END = "bleLearnEnd"
     const val TYPE_BLE_ALLOW = "bleAllow"
     const val TYPE_BLE_FORGET = "bleForget"
+    const val TYPE_BLE_KEY = "bleKey"
     const val TYPE_PHONE_LEARN_BEGIN = "phoneLearnBegin"
     const val TYPE_PHONE_LEARN_END = "phoneLearnEnd"
     const val TYPE_PHONE_ALLOW = "phoneAllow"
@@ -215,8 +216,30 @@ object EspCompanionProtocol {
     fun encodeBleSet(on: Boolean): String =
         line(TYPE_BLE_SET, mapOf("on" to on))
 
-    fun encodeBleLearnBegin(timeoutMs: Long = 30_000L): String =
-        line(TYPE_BLE_LEARN_BEGIN, mapOf("timeoutMs" to timeoutMs))
+    /** [key] is a normalized BTHome key ([normalizeBleKey]) or empty for a plain remote. */
+    fun encodeBleLearnBegin(timeoutMs: Long = 30_000L, key: String = ""): String =
+        line(
+            TYPE_BLE_LEARN_BEGIN,
+            if (key.isEmpty()) mapOf("timeoutMs" to timeoutMs) else mapOf("timeoutMs" to timeoutMs, "key" to key),
+        )
+
+    /** Empty [key] removes the key and the remote is accepted unencrypted again. */
+    fun encodeBleKey(mac: String, key: String): String =
+        line(TYPE_BLE_KEY, mapOf("mac" to mac.trim().lowercase(Locale.US), "key" to key))
+
+    /**
+     * BTHome key as 32 lowercase hex digits, "" for blank input, null if malformed.
+     * Spaces, ':' and '-' between digit pairs are allowed, as the Shelly app shows them.
+     */
+    fun normalizeBleKey(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return ""
+        val groups = trimmed.split(' ', ':', '-').filter { it.isNotEmpty() }
+        if (groups.any { it.length % 2 != 0 }) return null
+        val hex = groups.joinToString("").lowercase(Locale.US)
+        if (hex.length != 32 || hex.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
+        return hex
+    }
 
     fun encodeBleLearnEnd(): String = line(TYPE_BLE_LEARN_END)
 
@@ -531,6 +554,7 @@ object EspCompanionProtocol {
                         ble = o.optBoolean("ble", false),
                         bleOn = o.optBoolean("bleOn", false),
                         bleMacs = parseStringList(o, "bleMacs"),
+                        bleKey = o.optBoolean("bleKey", false),
                         ap = o.optBoolean("ap", false),
                         phone = o.optBoolean("phone", false),
                     )
@@ -650,6 +674,7 @@ object EspCompanionProtocol {
                     on = o.optBoolean("on", false),
                     learn = o.optBoolean("learn", false),
                     macs = parseStringList(o, "macs"),
+                    keyed = parseStringList(o, "keyed"),
                     lastBat = if (o.has("lastBat")) o.optInt("lastBat", -1) else -1,
                     lastRssi = if (o.has("lastRssi")) o.optInt("lastRssi", 0) else 0,
                     lastMac = o.optString("lastMac", "").trim().lowercase(Locale.US)
@@ -815,6 +840,8 @@ sealed class EspMessage {
         val ble: Boolean = false,
         val bleOn: Boolean = false,
         val bleMacs: List<String> = emptyList(),
+        /** Firmware 0.11+ accepts BTHome keys (encrypted Shelly BLU). */
+        val bleKey: Boolean = false,
         /** Firmware 0.9+ SoftAP router. */
         val ap: Boolean = false,
         /** Firmware 0.10+ phone companion channel. */
@@ -925,6 +952,8 @@ sealed class EspMessage {
         val on: Boolean,
         val learn: Boolean,
         val macs: List<String> = emptyList(),
+        /** Remotes with a BTHome key; their plain frames are dropped. */
+        val keyed: List<String> = emptyList(),
         val lastBat: Int = -1,
         val lastRssi: Int = 0,
         val lastMac: String? = null,

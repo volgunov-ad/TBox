@@ -1035,6 +1035,15 @@
     <string name="esp_ble_forget_all">Забыть все</string>
     <string name="esp_ble_last_event">Последнее событие</string>
     <string name="esp_ble_battery">Батарея пульта</string>
+    <string name="esp_ble_learn_key">Ключ BTHome нового пульта</string>
+    <string name="esp_ble_key_hint">Если в приложении Shelly включено шифрование, введите ключ из 32 знаков. Пусто — пульт без шифрования</string>
+    <string name="esp_ble_key_invalid">Ключ — 32 знака 0–9 и a–f</string>
+    <string name="esp_ble_key">Ключ BTHome</string>
+    <string name="esp_ble_key_replace">Новый ключ BTHome</string>
+    <string name="esp_ble_encrypted_on">Шифрование включено: открытые и повторные пакеты отбрасываются</string>
+    <string name="esp_ble_encrypted_off">Без шифрования</string>
+    <string name="esp_ble_key_save">Сохранить ключ</string>
+    <string name="esp_ble_key_remove">Убрать ключ</string>
     <string name="esp_ble_need_fw">Нужна прошивка компаньона 0.8+</string>
     <string name="esp_phone_need_fw">Нужна прошивка компаньона 0.10+</string>
     <string name="esp_phone_slots">Пульты и телефоны: %1$d из 20</string>

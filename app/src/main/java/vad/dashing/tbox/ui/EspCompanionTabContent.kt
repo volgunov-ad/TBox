@@ -131,6 +131,11 @@ fun EspCompanionTabContent(
     val bleOn by EspCompanionRepository.bleOn.collectAsStateWithLifecycle()
     val bleLearn by EspCompanionRepository.bleLearnActive.collectAsStateWithLifecycle()
     val bleMacs by EspCompanionRepository.bleMacs.collectAsStateWithLifecycle()
+    val bleKeyed by EspCompanionRepository.bleKeyedMacs.collectAsStateWithLifecycle()
+    var bleLearnKey by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(bleLearn) {
+        if (!bleLearn) bleLearnKey = ""
+    }
     val phones by EspCompanionRepository.phones.collectAsStateWithLifecycle()
     val phoneLearn by EspCompanionRepository.phoneLearnActive.collectAsStateWithLifecycle()
     val pendingPhone by EspCompanionRepository.pendingPhone.collectAsStateWithLifecycle()
@@ -614,6 +619,13 @@ fun EspCompanionTabContent(
                             )
                             CompanionHelperText(stringResource(R.string.esp_ble_learn_hint))
                         }
+                        if (info.bleKey) {
+                            EspBleLearnKeyField(
+                                value = bleLearnKey,
+                                onValueChange = { bleLearnKey = it },
+                                enabled = controlsEnabled && !bleLearn,
+                            )
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -624,15 +636,21 @@ fun EspCompanionTabContent(
                                 onClick = rememberWrappedOnClick {
                                     context.startService(
                                         Intent(context, BackgroundService::class.java).apply {
-                                            action = if (bleLearn) {
-                                                BackgroundService.ACTION_ESP_BLE_LEARN_END
+                                            if (bleLearn) {
+                                                action = BackgroundService.ACTION_ESP_BLE_LEARN_END
                                             } else {
-                                                BackgroundService.ACTION_ESP_BLE_LEARN_BEGIN
+                                                action = BackgroundService.ACTION_ESP_BLE_LEARN_BEGIN
+                                                if (info.bleKey) {
+                                                    putExtra(BackgroundService.EXTRA_ESP_BLE_KEY, bleLearnKey)
+                                                }
                                             }
                                         },
                                     )
                                 },
-                                enabled = controlsEnabled,
+                                enabled = controlsEnabled && (
+                                    bleLearn || !info.bleKey ||
+                                        EspCompanionProtocol.normalizeBleKey(bleLearnKey) != null
+                                    ),
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Text(
@@ -739,6 +757,13 @@ fun EspCompanionTabContent(
                                         runtime?.lastEventLabel() ?: "—",
                                         showDivider = false,
                                     )
+                                    if (info.bleKey) {
+                                        EspBleRemoteKeyEditor(
+                                            mac = mac,
+                                            keyed = mac in bleKeyed,
+                                            enabled = controlsEnabled,
+                                        )
+                                    }
                                     HorizontalDivider(
                                         modifier = Modifier.padding(top = 4.dp),
                                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
