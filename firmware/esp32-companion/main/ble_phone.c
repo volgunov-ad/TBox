@@ -72,6 +72,9 @@ static const char *TAG = "ble_phone";
 #define SNAP_HU    (1u << 18)
 #define SNAP_OUT   (1u << 19)
 #define SNAP_IN    (1u << 20)
+#define SNAP_RECIRC (1u << 21)
+#define SNAP_FRONT  (1u << 22)
+#define SNAP_AC     (1u << 23)
 
 /* REFRESH body[2]: what the phone screen shows. 0 (older apps) = everything. */
 #define GROUP_CLIMATE 0x01u
@@ -649,6 +652,9 @@ static void enqueue_snap(int phone_index, uint32_t counter, uint16_t phone_text_
             body[3] = (uint8_t)((s_cache_mask & SNAP_AUTO) ? s_cache_vals[4] : 0xFF);
             body[4] = (uint8_t)((s_cache_mask & SNAP_BLOW) ? s_cache_vals[5] : 0xFF);
             body[5] = (uint8_t)((s_cache_mask & SNAP_SYNC) ? s_cache_vals[6] : 0xFF);
+            body[6] = (uint8_t)((s_cache_mask & SNAP_RECIRC) ? s_cache_vals[21] : 0xFF);
+            body[7] = (uint8_t)((s_cache_mask & SNAP_FRONT) ? s_cache_vals[22] : 0xFF);
+            body[8] = (uint8_t)((s_cache_mask & SNAP_AC) ? s_cache_vals[23] : 0xFF);
         } else if (page == 2) {
             for (int s = 0; s < 4; s++) {
                 uint16_t bit = (uint16_t)(SNAP_S0 << s);

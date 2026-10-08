@@ -513,6 +513,21 @@ private fun ClimatePage(snap: PhoneBleCodec.Snapshot, send: (Int, Int, Int) -> U
             ) { send(PhoneBleCodec.OP_SYNC, 0, if (snap.sync == 1) 0 else 1) }
         }
         Divider()
+        ButtonRows(
+            options = listOf(
+                Option(stringResource(R.string.climate_recirc), snap.recirc == 1) {
+                    send(PhoneBleCodec.OP_RECIRC, 0, if (snap.recirc == 1) 0 else 1)
+                },
+                Option(stringResource(R.string.climate_power), snap.front == 1) {
+                    send(PhoneBleCodec.OP_FRONT, 0, if (snap.front == 1) 0 else 1)
+                },
+                Option(stringResource(R.string.climate_ac), snap.ac == 1) {
+                    send(PhoneBleCodec.OP_AC, 0, if (snap.ac == 1) 0 else 1)
+                },
+            ),
+            columns = 3,
+        )
+        Divider()
         Label(stringResource(R.string.mode))
         ButtonRows(
             options = listOf(
@@ -1003,6 +1018,9 @@ private fun applyLocally(snap: PhoneBleCodec.Snapshot, op: Int, seat: Int, arg: 
         PhoneBleCodec.OP_BLOW -> snap.copy(blow = arg)
         PhoneBleCodec.OP_MODE -> snap.copy(mode = arg)
         PhoneBleCodec.OP_SYNC -> snap.copy(sync = arg)
+        PhoneBleCodec.OP_RECIRC -> snap.copy(recirc = arg)
+        PhoneBleCodec.OP_FRONT -> snap.copy(front = arg)
+        PhoneBleCodec.OP_AC -> snap.copy(ac = arg)
         PhoneBleCodec.OP_SEAT -> if (seat in snap.seats.indices) {
             snap.copy(seats = snap.seats.toMutableList().also { it[seat] = arg })
         } else {

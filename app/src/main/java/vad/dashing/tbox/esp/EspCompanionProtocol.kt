@@ -272,6 +272,9 @@ object EspCompanionProtocol {
         snap.auto?.let { extras["auto"] = it }
         snap.blow?.let { extras["blow"] = it }
         snap.sync?.let { extras["sync"] = it }
+        snap.recirc?.let { extras["recirc"] = it }
+        snap.front?.let { extras["front"] = it }
+        snap.ac?.let { extras["ac"] = it }
         snap.seats.forEachIndexed { index, value ->
             if (value != null) extras["s$index"] = value
         }

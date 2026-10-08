@@ -33,7 +33,8 @@ import javax.crypto.spec.SecretKeySpec
  *   GROUP_HEADER alone asks for page 6 only.
  * SNAP body: page u8, gen u8, data[9]
  *   page 0: left i16le, right i16le, fan u8. Missing temp 0x7FFF, fan 0xFF
- *   page 1: mode, auto, blow, sync. Missing 0xFF
+ *   page 1: mode, auto, blow, sync, recirculation, front climate, A/C.
+ *           The last three are 1 on / 0 off (front climate 1 = section running). Missing 0xFF
  *   page 2: four seats. Missing 0xFF
  *   page 3: media volume. Missing 0xFF. 0 is mute
  *   page 4: playing u8 (1/0, missing 0xFF), position s u16le, duration s u16le
@@ -119,6 +120,12 @@ object PhoneBleCodec {
     const val OP_MODE: Int = 6
     const val OP_SYNC: Int = 7
     const val OP_SEAT: Int = 8
+    /** 1 = recirculation on (air from the cabin). */
+    const val OP_RECIRC: Int = 9
+    /** 1 = front climate running. */
+    const val OP_FRONT: Int = 10
+    /** 1 = A/C compressor on. */
+    const val OP_AC: Int = 11
     const val OP_VOLUME: Int = 16
     const val OP_MEDIA_PREV: Int = 17
     const val OP_MEDIA_PLAY_PAUSE: Int = 18
@@ -158,6 +165,12 @@ object PhoneBleCodec {
         val auto: Int? = null,
         val blow: Int? = null,
         val sync: Int? = null,
+        /** 1 = recirculation on. */
+        val recirc: Int? = null,
+        /** 1 = front climate running. */
+        val front: Int? = null,
+        /** 1 = A/C compressor on. */
+        val ac: Int? = null,
         val seats: List<Int?> = listOf(null, null, null, null),
         val volume: Int? = null,
         val playing: Int? = null,
@@ -316,6 +329,9 @@ object PhoneBleCodec {
                     body[3] = (snap.auto ?: MISSING_U8).toByte()
                     body[4] = (snap.blow ?: MISSING_U8).toByte()
                     body[5] = (snap.sync ?: MISSING_U8).toByte()
+                    body[6] = (snap.recirc ?: MISSING_U8).toByte()
+                    body[7] = (snap.front ?: MISSING_U8).toByte()
+                    body[8] = (snap.ac ?: MISSING_U8).toByte()
                 }
                 2 -> {
                     repeat(4) { seat ->
@@ -466,6 +482,9 @@ object PhoneBleCodec {
                 auto = optionalU8(body[3].toInt() and 0xFF),
                 blow = optionalU8(body[4].toInt() and 0xFF),
                 sync = optionalU8(body[5].toInt() and 0xFF),
+                recirc = optionalU8(body.getOrNull(6)?.toInt()?.and(0xFF) ?: MISSING_U8),
+                front = optionalU8(body.getOrNull(7)?.toInt()?.and(0xFF) ?: MISSING_U8),
+                ac = optionalU8(body.getOrNull(8)?.toInt()?.and(0xFF) ?: MISSING_U8),
             )
             2 -> base.copy(
                 gen = gen,

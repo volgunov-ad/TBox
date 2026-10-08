@@ -45,12 +45,13 @@ typedef struct {
     size_t text_len;  /* 0 when there is no title and no artist */
 } phone_media_t;
 
-#define PHONE_SNAP_VALS 21
+#define PHONE_SNAP_VALS 24
 
 /**
  * vals: left, right, fan, mode, auto, blow, sync, seat0..3, vol, window FL/FR/RL/RR
  * (0..100, 0xFE between stops), sunroof (0..100, 102 tilt), sunshade, head unit 9/10,
- * outside and cabin temperature in tenths of °C.
+ * outside and cabin temperature in tenths of °C, recirculation, front climate, A/C
+ * (1 on, 0 off). Front climate 1 means the front section is running.
  * Missing fields have the corresponding mask bit clear. media may be NULL.
  */
 void ble_phone_set_snapshot(int gen, uint32_t mask, const int vals[PHONE_SNAP_VALS], const phone_media_t *media);
