@@ -54,6 +54,7 @@ data class CatalogEntity(
     val canCommand: CanCommandBinding? = null,
     val builtinAction: String? = null,
     val automationId: String? = null,
+    val media: MediaBundle? = null,
 ) {
     val isButton: Boolean
         get() = component == HaComponent.BUTTON
@@ -66,6 +67,43 @@ data class AutomationRow(
     val id: String,
     val name: String,
 )
+
+/** One Home Assistant row that stands in for the track, transport buttons and media volume. */
+data class MediaBundle(
+    val signalIds: Set<String>,
+    val source: String,
+    val playAction: String,
+    val pauseToggleAction: String,
+    val nextAction: String,
+    val previousAction: String,
+    val volumeAction: String,
+    val volumeMin: Int,
+    val volumeMax: Int,
+)
+
+const val MEDIA_OBJECT_ID = "media"
+
+private val MEDIA_SIGNAL_IDS = setOf(
+    "media_title",
+    "media_artist",
+    "media_playing",
+    "media_position_ms",
+    "media_duration_ms",
+    "hu_media_volume",
+)
+
+private val MEDIA_FOLDED_OBJECT_IDS = MEDIA_SIGNAL_IDS + setOf(
+    "builtin_media_previous",
+    "builtin_media_play_pause",
+    "builtin_media_play",
+    "builtin_media_next",
+)
+
+/** Old per-field selections become the single music row. */
+fun migrateMediaSelection(selected: Set<String>): Set<String> {
+    if (selected.none { it in MEDIA_FOLDED_OBJECT_IDS }) return selected
+    return selected - MEDIA_FOLDED_OBJECT_IDS + MEDIA_OBJECT_ID
+}
 
 private val BUTTON_BUILTINS = setOf(
     "open_menu",
@@ -104,6 +142,8 @@ fun buildEntities(catalogJson: String, automations: List<AutomationRow> = emptyL
             "builtin" -> builtinEntity(item)?.let { rows += it }
         }
     }
+    var volumeMin = 0
+    var volumeMax = 31
     automations.forEach { row ->
         if (row.id.isBlank()) return@forEach
         rows += CatalogEntity(
@@ -116,7 +156,47 @@ fun buildEntities(catalogJson: String, automations: List<AutomationRow> = emptyL
             automationId = row.id,
         )
     }
-    return rows.sortedWith(compareBy({ it.group.order }, { it.label.lowercase() }, { it.objectId }))
+    for (i in 0 until actions.length()) {
+        val item = actions.optJSONObject(i) ?: continue
+        if (item.optString("actionType") != "set_media_volume") continue
+        val write = item.optJSONObject("write") ?: continue
+        volumeMin = write.optInt("min", volumeMin)
+        volumeMax = write.optInt("max", volumeMax)
+    }
+    return foldMediaPlayer(rows, volumeMin, volumeMax)
+        .sortedWith(compareBy({ it.group.order }, { it.label.lowercase() }, { it.objectId }))
+}
+
+private fun foldMediaPlayer(
+    rows: List<CatalogEntity>,
+    volumeMin: Int,
+    volumeMax: Int,
+): List<CatalogEntity> {
+    val parts = rows.filter { it.signalId in MEDIA_SIGNAL_IDS || it.objectId in MEDIA_FOLDED_OBJECT_IDS }
+    if (parts.none { it.signalId in MEDIA_SIGNAL_IDS }) return rows
+    val source = parts.firstOrNull { it.signalId in MEDIA_SIGNAL_IDS }?.source ?: "app"
+    val kept = rows.filter { it.signalId !in MEDIA_SIGNAL_IDS && it.objectId !in MEDIA_FOLDED_OBJECT_IDS }
+    val player = CatalogEntity(
+        objectId = MEDIA_OBJECT_ID,
+        label = "Музыка",
+        description = "Трек, воспроизведение и громкость медиа на одной карточке",
+        group = EntityGroup.OTHER,
+        component = HaComponent.SENSOR,
+        writable = true,
+        source = source,
+        media = MediaBundle(
+            signalIds = MEDIA_SIGNAL_IDS,
+            source = source,
+            playAction = "media_play",
+            pauseToggleAction = "media_play_pause",
+            nextAction = "media_next",
+            previousAction = "media_previous",
+            volumeAction = "set_media_volume",
+            volumeMin = volumeMin,
+            volumeMax = volumeMax,
+        ),
+    )
+    return kept + player
 }
 
 private fun signalEntity(item: JSONObject): CatalogEntity? {

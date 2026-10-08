@@ -17,11 +17,16 @@ class LocationThrottle(
     private var lastSent: GeoPoint? = null
     private var lastSentAtMs: Long = 0L
 
-    fun shouldSend(point: GeoPoint, nowMs: Long, force: Boolean): Boolean {
+    fun shouldSend(
+        point: GeoPoint,
+        nowMs: Long,
+        force: Boolean,
+        minIntervalMs: Long = this.minIntervalMs,
+    ): Boolean {
         if (!point.latitude.isFinite() || !point.longitude.isFinite()) return false
         if (force) return true
         val previous = lastSent ?: return true
-        if (nowMs - lastSentAtMs < minIntervalMs) return false
+        if (minIntervalMs > 0L && nowMs - lastSentAtMs < minIntervalMs) return false
         return distanceMeters(previous, point) >= minMeters
     }
 

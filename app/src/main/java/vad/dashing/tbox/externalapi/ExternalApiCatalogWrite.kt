@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanBus
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
@@ -67,6 +68,18 @@ object ExternalApiCatalogWrite {
         val signal = linkedSignal(entry)
         val write = signal?.let { buildWrite(entry, it) }
         return CommandSchema(operations, signal?.id?.storageKey, write)
+    }
+
+    /** Mixer volume is a builtin with an int argument, not a CAN pair list. */
+    fun builtinWrite(type: AutomationBuiltinActionType): WriteSchema? = when (type) {
+        AutomationBuiltinActionType.SET_MEDIA_VOLUME -> WriteSchema(
+            kind = KIND_NUMBER,
+            options = emptyList(),
+            min = 0.0,
+            max = 31.0,
+            step = 1.0,
+        )
+        else -> null
     }
 
     fun writeJson(schema: WriteSchema?): Any {

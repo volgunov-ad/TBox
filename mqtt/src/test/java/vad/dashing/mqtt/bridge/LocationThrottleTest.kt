@@ -19,4 +19,14 @@ class LocationThrottleTest {
         assertTrue(throttle.shouldSend(moved, 31_000, force = false))
         assertTrue(throttle.shouldSend(nearby, 5_000, force = true))
     }
+
+    @Test
+    fun configuredIntervalReplacesTheDefaultThirtySeconds() {
+        val throttle = LocationThrottle()
+        val home = GeoPoint(55.75, 37.62)
+        throttle.markSent(home, 0)
+        val moved = GeoPoint(55.752, 37.62)
+        assertFalse(throttle.shouldSend(moved, 4_000, force = false, minIntervalMs = 5_000))
+        assertTrue(throttle.shouldSend(moved, 5_000, force = false, minIntervalMs = 5_000))
+    }
 }
