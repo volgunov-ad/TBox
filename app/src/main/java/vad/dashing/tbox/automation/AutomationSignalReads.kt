@@ -26,7 +26,7 @@ import vad.dashing.tbox.ui.estimatePlaybackPositionMs
 
 internal object AutomationSignalReads {
     fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
-        when (key.source) {
+        when (AutomationSignalCatalog.resolveSource(key.signal, key.source)) {
             AutomationSignalSource.TBOX -> tboxFlow(key.signal)?.withAvailability(
                 TboxRepository.tboxConnected,
             )

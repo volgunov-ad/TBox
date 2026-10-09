@@ -464,12 +464,10 @@ private fun NumericConditionFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 condition.copy(
                     signal = signal,
-                    source = condition.source.takeIf { it in sources }
-                        ?: AutomationSignalCatalog.preferredSource(sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, condition.source),
                     mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
                         condition.mac.ifBlank {
                             EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
@@ -492,7 +490,7 @@ private fun NumericConditionFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = condition.source,
+            value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
             options = AutomationSignalCatalog.sourcesForUi(condition.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
@@ -532,8 +530,7 @@ private fun StateConditionFields(
             onChange(
                 condition.copy(
                     signal = signal,
-                    source = condition.source.takeIf { it in descriptor.sources }
-                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, condition.source),
                     expectedState = automationExpectedStateForSignal(
                         signal,
                         condition.expectedState,
@@ -549,8 +546,8 @@ private fun StateConditionFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = condition.source,
-            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
+            value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),

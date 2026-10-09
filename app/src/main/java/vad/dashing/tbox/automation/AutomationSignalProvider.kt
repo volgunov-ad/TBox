@@ -59,7 +59,9 @@ class AutomationSignalProvider(
 
         val huSignals = keys
             .asSequence()
-            .filter { it.source == AutomationSignalSource.HEAD_UNIT }
+            .filter {
+                AutomationSignalCatalog.resolveSource(it.signal, it.source) == AutomationSignalSource.HEAD_UNIT
+            }
             .mapNotNull { huInterestFor(it.signal) }
             .toSet()
         if (huSignals.isEmpty()) {

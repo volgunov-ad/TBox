@@ -422,7 +422,7 @@ UI ограничителя (раздел автонастроек «Огран�
 |--------------------------|-----------------|-------------------------------|-----------------|-------------|
 | **Android 9** — Engine RPM | `readVehicleEngineRpm()` (telemetry) | float ≥ 0 | — | **Push:** telemetry bridge. **Pull:** `refreshEngineRpm` (30 s / burst) |
 | **Android 10** — Engine RPM | VHAL **289414951** `R_0900_EMS_1_EngineSpd` | raw × **4** (`decodeEngineRpm`) | — | onChange + pull |
-| **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** | — | push + pull; **в учёте поездок не используется** (только TBox CRT) |
+| **Android 9** — Coolant temp | telemetry float | °C as-is from facade; **на практике с mbCAN всегда `0.0`** | — | push + pull; **в учёте поездок не используется** (только TBox CRT). Автоматизации, внешний API и MQTT на A9 тоже читают только TBox (`AutomationSignalCatalog.headUnitUnsupported`, вместе с `target_gear`; на A10 так же `steering_speed`) |
 | **Android 10** — Coolant temp | VHAL **289414949** | raw × **0,75 − 48** | — | onChange + pull; в поездках приоритет TBox, HU если TBox stale |
 | **Android 9** — Vehicle speed | telemetry float | km/h ≥ 0 | — | push + pull |
 | **Android 10** — Vehicle speed | VHAL **557845547** `MCU_REPLY_SPEED` (штатный SystemSettings `AdayoCanManager`) | **км/ч = raw as-is** (INT32 ≥ 0; `VehicleSpeedDomain.decodeMcuReplyKmh`). Не CAN raw/16 | — | onChange (continuous rate) + pull |

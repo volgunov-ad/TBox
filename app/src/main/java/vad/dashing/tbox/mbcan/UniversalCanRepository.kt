@@ -1,6 +1,7 @@
 package vad.dashing.tbox.mbcan
 
 import java.util.concurrent.ConcurrentHashMap
+import vad.dashing.tbox.automation.AutomationSignalCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -1643,6 +1644,7 @@ object UniversalCanRepository {
     private suspend fun setModeLocked(mode: HeadUnitCanMode, rebindIfBound: Boolean) {
         if (_mode.value == mode) return
         _mode.value = mode
+        AutomationSignalCatalog.setHeadUnitMode(mode)
         if (!rebindIfBound) return
         val scopeToRebind = boundScope ?: return
         when (mode) {

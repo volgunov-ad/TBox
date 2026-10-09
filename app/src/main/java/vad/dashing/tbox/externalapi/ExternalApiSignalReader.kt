@@ -65,7 +65,12 @@ class ExternalApiSignalReader {
      */
     private suspend fun ensureHeadUnitSignals(ids: List<String>) {
         val signals = ids.mapNotNull { rawId ->
-            AutomationSignalId.fromStorageKey(rawId)?.let { huInterestForSignal(it) }
+            AutomationSignalId.fromStorageKey(rawId)
+                ?.takeIf {
+                    AutomationSignalCatalog.resolveSource(it, AutomationSignalSource.HEAD_UNIT) ==
+                        AutomationSignalSource.HEAD_UNIT
+                }
+                ?.let { huInterestForSignal(it) }
         }.toSet()
         if (signals.isEmpty()) return
         val changed = synchronized(headUnitInterestLock) {
