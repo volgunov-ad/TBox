@@ -9,6 +9,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import vad.dashing.tbox.ui.HARD_KEY_PICKER_CODES
+import vad.dashing.tbox.ui.WidgetButtonBindingSource
+import vad.dashing.tbox.ui.hardKeyCodeLabel
+import vad.dashing.tbox.ui.widgetButtonBindingUiSource
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -30,6 +34,26 @@ class WidgetButtonBindingTest {
                 WidgetButtonBinding.HardKey(keyCode = 0),
             ),
         )
+    }
+
+    @Test
+    fun uiSource_keepsIncompleteShellyDraft() {
+        val draft = WidgetButtonBinding.EspBle(mac = "", btn = 1)
+        assertNull(normalizeWidgetButtonBinding(draft))
+        assertEquals(WidgetButtonBindingSource.ESP_BLE, widgetButtonBindingUiSource(draft))
+        assertEquals(WidgetButtonBindingSource.NONE, widgetButtonBindingUiSource(null))
+        assertEquals(
+            WidgetButtonBindingSource.HARD_KEY,
+            widgetButtonBindingUiSource(WidgetButtonBinding.HardKey(115)),
+        )
+    }
+
+    @Test
+    fun hardKeyPicker_coversKnownWheelAndDoorCodes() {
+        assertTrue(115 in HARD_KEY_PICKER_CODES)
+        assertTrue(316 in HARD_KEY_PICKER_CODES)
+        assertTrue(hardKeyCodeLabel(115).contains("WHEEL_RIGHT_JOY_UP"))
+        assertTrue(hardKeyCodeLabel(999).contains("не из справочника"))
     }
 
     @Test

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -15,17 +16,28 @@ import vad.dashing.tbox.WIDGET_BUTTON_BINDING_ESP_GPIO_MIN
 import vad.dashing.tbox.WidgetButtonBinding
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MAX
 import vad.dashing.tbox.automation.AUTOMATION_ESP_BLE_BTN_MIN
-import vad.dashing.tbox.normalizeWidgetButtonBinding
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
 
-private enum class WidgetButtonBindingSource {
+internal enum class WidgetButtonBindingSource {
     NONE,
     HARD_KEY,
     ESP_BLE,
     ESP_GPIO,
 }
+
+/**
+ * UI source from the draft binding. Must not use [vad.dashing.tbox.normalizeWidgetButtonBinding]:
+ * that drops incomplete Shelly drafts (blank MAC) and makes the source appear stuck on «Нет».
+ */
+internal fun widgetButtonBindingUiSource(raw: WidgetButtonBinding?): WidgetButtonBindingSource =
+    when (raw) {
+        null -> WidgetButtonBindingSource.NONE
+        is WidgetButtonBinding.HardKey -> WidgetButtonBindingSource.HARD_KEY
+        is WidgetButtonBinding.EspBle -> WidgetButtonBindingSource.ESP_BLE
+        is WidgetButtonBinding.EspGpio -> WidgetButtonBindingSource.ESP_GPIO
+    }
 
 @Composable
 internal fun WidgetButtonBindingSettingsSection(
@@ -33,13 +45,9 @@ internal fun WidgetButtonBindingSettingsSection(
     modifier: Modifier = Modifier,
 ) {
     if (!supportsWidgetButtonBinding(state.selectedDataKey)) return
-    val binding = normalizeWidgetButtonBinding(state.buttonBinding)
-    val source = when (binding) {
-        null -> WidgetButtonBindingSource.NONE
-        is WidgetButtonBinding.HardKey -> WidgetButtonBindingSource.HARD_KEY
-        is WidgetButtonBinding.EspBle -> WidgetButtonBindingSource.ESP_BLE
-        is WidgetButtonBinding.EspGpio -> WidgetButtonBindingSource.ESP_GPIO
-    }
+    // Draft as stored in dialog state — incomplete EspBle (empty MAC) must stay visible.
+    val draft = state.buttonBinding
+    val source = widgetButtonBindingUiSource(draft)
     val sourceNone = stringResource(R.string.widget_button_binding_source_none)
     val sourceHardKey = stringResource(R.string.widget_button_binding_source_hard_key)
     val sourceEspBle = stringResource(R.string.widget_button_binding_source_esp_ble)
@@ -76,23 +84,42 @@ internal fun WidgetButtonBindingSettingsSection(
                     WidgetButtonBindingSource.NONE -> null
                     WidgetButtonBindingSource.HARD_KEY ->
                         WidgetButtonBinding.HardKey(
-                            keyCode = (binding as? WidgetButtonBinding.HardKey)?.keyCode ?: 115,
+                            keyCode = (draft as? WidgetButtonBinding.HardKey)?.keyCode ?: 115,
                         )
                     WidgetButtonBindingSource.ESP_BLE ->
                         WidgetButtonBinding.EspBle(
-                            mac = (binding as? WidgetButtonBinding.EspBle)?.mac.orEmpty(),
-                            btn = (binding as? WidgetButtonBinding.EspBle)?.btn ?: 1,
+                            mac = (draft as? WidgetButtonBinding.EspBle)?.mac.orEmpty(),
+                            btn = (draft as? WidgetButtonBinding.EspBle)?.btn ?: 1,
                         )
                     WidgetButtonBindingSource.ESP_GPIO ->
                         WidgetButtonBinding.EspGpio(
-                            channel = (binding as? WidgetButtonBinding.EspGpio)?.channel ?: 0,
+                            channel = (draft as? WidgetButtonBinding.EspGpio)?.channel ?: 0,
                         )
                 }
             },
             modifier = Modifier.fillMaxWidth(),
         )
-        when (val current = normalizeWidgetButtonBinding(state.buttonBinding)) {
+        when (val current = draft) {
             is WidgetButtonBinding.HardKey -> {
+                val keyOptions = remember(current.keyCode) {
+                    if (current.keyCode in HARD_KEY_PICKER_CODES) {
+                        HARD_KEY_PICKER_CODES
+                    } else {
+                        HARD_KEY_PICKER_CODES + current.keyCode
+                    }
+                }
+                AutomationDropdown(
+                    label = stringResource(R.string.widget_button_binding_key_picker_label),
+                    value = current.keyCode,
+                    options = keyOptions,
+                    optionLabel = ::hardKeyCodeLabel,
+                    onValueChange = {
+                        state.buttonBinding = WidgetButtonBinding.HardKey(keyCode = it)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                )
                 AutomationIntField(
                     label = stringResource(R.string.widget_button_binding_key_code_label),
                     value = current.keyCode,

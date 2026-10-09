@@ -2541,7 +2541,8 @@
     <string name="widget_button_binding_source_hard_key">Кнопка руля / двери (A9)</string>
     <string name="widget_button_binding_source_esp_ble">Shelly Blu (компаньон)</string>
     <string name="widget_button_binding_source_esp_gpio">ESP-вход (компаньон)</string>
-    <string name="widget_button_binding_key_code_label">Код кнопки</string>
+    <string name="widget_button_binding_key_picker_label">Кнопка</string>
+    <string name="widget_button_binding_key_code_label">Код кнопки вручную (верхняя левая кнопка руля зависит от комплектации)</string>
     <string name="widget_button_binding_ble_device_label">Устройство</string>
     <string name="widget_button_binding_ble_btn_label">Кнопка пульта</string>
     <string name="widget_button_binding_ble_btn_option">Кнопка %1$d</string>
