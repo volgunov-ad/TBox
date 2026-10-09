@@ -1013,6 +1013,12 @@ class SettingsManager(private val context: Context) {
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
+        /**
+         * Last left-menu tab (not [MAIN_SCREEN_TAB_KEY]). Kept when switching to Main Screen so
+         * returning to the menu can restore that item.
+         */
+        private val LAST_MENU_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}last_menu_tab")
+
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
@@ -1671,6 +1677,18 @@ class SettingsManager(private val context: Context) {
         .map { preferences ->
             vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
                 preferences[SELECTED_TAB_KEY],
+            )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Last non-main left-menu tab key. Unset / blank parses as [MAIN_SCREEN_TAB_KEY] via
+     * [vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey] (restore then falls back).
+     */
+    val lastMenuTabFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
+                preferences[LAST_MENU_TAB_KEY],
             )
         }
         .distinctUntilChanged()
@@ -3375,6 +3393,10 @@ class SettingsManager(private val context: Context) {
     suspend fun saveSelectedTab(tabKey: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[SELECTED_TAB_KEY] = tabKey
+            // Remember last menu item when leaving Main Screen; do not clear on Main.
+            if (tabKey != MAIN_SCREEN_TAB_KEY) {
+                preferences[LAST_MENU_TAB_KEY] = tabKey
+            }
         }
     }
 

@@ -195,5 +195,18 @@ data class LeftMenuLayout(
         fun isSidebarTabEnabled(tabKey: String, layout: LeftMenuLayout): Boolean =
             tabKey == SettingsManager.UPDATE_TAB_KEY ||
                 (tabKey != SettingsManager.MAIN_SCREEN_TAB_KEY && tabKey in enabledTabKeys(layout))
+
+        /**
+         * Tab to open when leaving Main Screen for the left-menu console.
+         * Prefers [lastMenuTabKey] when that sidebar tab is still enabled/visible;
+         * otherwise [firstVisibleTabKey].
+         */
+        fun resolveOpenConsoleTab(lastMenuTabKey: String?, layout: LeftMenuLayout): String {
+            val key = parseSelectedTabKey(lastMenuTabKey)
+            if (key == SettingsManager.MAIN_SCREEN_TAB_KEY) {
+                return firstVisibleTabKey(layout)
+            }
+            return if (isSidebarTabEnabled(key, layout)) key else firstVisibleTabKey(layout)
+        }
     }
 }

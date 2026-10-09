@@ -122,6 +122,60 @@ class LeftMenuLayoutTest {
     }
 
     @Test
+    fun resolveOpenConsoleTab_restoresEnabledLastMenuTab() {
+        val layout = LeftMenuLayout(
+            LeftMenuTabField.defaultOrder().map { field ->
+                LeftMenuLayout.Row(
+                    field,
+                    enabled = field == LeftMenuTabField.SETTINGS ||
+                        field == LeftMenuTabField.THEMES ||
+                        field == LeftMenuTabField.MAIN_SCREEN_SETTINGS ||
+                        field == LeftMenuTabField.FLOATING_PANELS_SETTINGS,
+                )
+            },
+        )
+        assertEquals(
+            LeftMenuTabField.THEMES.id,
+            LeftMenuLayout.resolveOpenConsoleTab(LeftMenuTabField.THEMES.id, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_disabledLastMenuTab_fallsBackToFirstVisible() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(LeftMenuTabField.TRIPS.id, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_blankOrMain_fallsBackToFirstVisible() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(null, layout),
+        )
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab("", layout),
+        )
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(SettingsManager.MAIN_SCREEN_TAB_KEY, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_updateTab_alwaysRestorable() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            SettingsManager.UPDATE_TAB_KEY,
+            LeftMenuLayout.resolveOpenConsoleTab(SettingsManager.UPDATE_TAB_KEY, layout),
+        )
+    }
+
+    @Test
     fun applyNoTboxConnectDisable_disablesAtCanCarDataAndEnablesModem() {
         val withModemOff = LeftMenuLayout(
             LeftMenuTabField.defaultOrder().map { field ->

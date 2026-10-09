@@ -103,7 +103,6 @@ fun TboxApp(
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
-    val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
@@ -137,9 +136,7 @@ fun TboxApp(
                 appDataViewModel = appDataViewModel,
                 settingsViewModel = settingsViewModel,
                 onOpenConsole = {
-                    settingsViewModel.saveSelectedTab(
-                        LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                    )
+                    settingsViewModel.openConsoleFromMain()
                 },
                 onTboxRestart = onTboxRestart,
                 onTripFinishAndStart = onTripFinishAndStart,

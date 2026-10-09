@@ -2483,6 +2483,17 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    /** Leave Main Screen for the left-menu console, restoring [SettingsManager.lastMenuTabFlow]. */
+    fun openConsoleFromMain() {
+        viewModelScope.launch {
+            val last = settingsManager.lastMenuTabFlow.first()
+            val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
+            settingsManager.saveSelectedTab(
+                LeftMenuLayout.resolveOpenConsoleTab(last, layout),
+            )
+        }
+    }
+
     fun saveLeftMenuLayout(layout: LeftMenuLayout) {
         viewModelScope.launch {
             settingsManager.saveLeftMenuLayoutJson(LeftMenuLayout.serialize(layout))
