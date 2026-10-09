@@ -26,8 +26,6 @@ data class ExpertRawCanParam(
     /** True when A10 read and write property ids differ. */
     val readWriteDiffer: Boolean
         get() = vhalReadId != null && vhalWriteId != null && vhalReadId != vhalWriteId
-
-    fun displayLabel(): String = "$name ($mbCanId)"
 }
 
 data class ExpertRawGetResult(
@@ -53,6 +51,11 @@ data class ExpertRawSetResult(
  */
 object ExpertRawCanCatalog {
     private const val LOG_TAG = "EXPERT_CAN"
+
+    private val firmwareReadNames: Map<Int, String> =
+        VhalFirmwareReadIds.all.associate { (name, id) -> id to name }
+    private val firmwareWriteNames: Map<Int, String> =
+        VhalFirmwareWriteIds.all.associate { (name, id) -> id to name }
 
     fun allParams(): List<ExpertRawCanParam> {
         // Catalog display uses explicit maps, then name-matched expert candidates
@@ -101,6 +104,18 @@ object ExpertRawCanCatalog {
                     vhalWriteId = id,
                 )
             }
+        val knownWriteIds = (vehicle + audio + direct + firmware).mapNotNull { it.vhalWriteId }.toSet()
+        val writeOnly = VhalFirmwareWriteIds.all
+            .filter { (_, id) -> id !in knownWriteIds }
+            .map { (name, id) ->
+                ExpertRawCanParam(
+                    name = name,
+                    mbCanId = id,
+                    bus = ExpertRawCanBus.VhalDirect,
+                    vhalReadId = null,
+                    vhalWriteId = id,
+                )
+            }
         val objects = DeepDiagnosticsCatalog.mbcanObjectDataTypes.map { (name, type) ->
             ExpertRawCanParam(
                 name = name,
@@ -110,10 +125,53 @@ object ExpertRawCanCatalog {
                 vhalWriteId = null,
             )
         }
-        return (vehicle + audio + direct + firmware + objects).sortedWith(
+        return (vehicle + audio + direct + firmware + writeOnly + objects).sortedWith(
             compareBy<ExpertRawCanParam> { it.bus.ordinal }
                 .thenBy { it.name },
         )
+    }
+
+    /**
+     * Rows shown in the expert list for [mode]. A9 hides pure VHAL rows.
+     * A10 hides mbCAN objects and logical rows that have no VHAL id.
+     */
+    fun isListed(param: ExpertRawCanParam, mode: HeadUnitCanModeLabel): Boolean = when (mode) {
+        HeadUnitCanModeLabel.Android9MbCan -> param.bus != ExpertRawCanBus.VhalDirect
+        HeadUnitCanModeLabel.Android10Vhal -> when (param.bus) {
+            ExpertRawCanBus.MbCanObject -> false
+            ExpertRawCanBus.Vehicle, ExpertRawCanBus.Audio ->
+                param.vhalReadId != null || param.vhalWriteId != null
+            ExpertRawCanBus.VhalDirect -> true
+        }
+    }
+
+    /**
+     * A9 keeps the mbCAN name and ordinal. A10 shows the firmware `R_` / `T_`
+     * name and VHAL id when that id is in the firmware table.
+     */
+    fun displayLabel(param: ExpertRawCanParam, mode: HeadUnitCanModeLabel): String {
+        if (mode == HeadUnitCanModeLabel.Android9MbCan || param.bus == ExpertRawCanBus.MbCanObject) {
+            return "${param.name} (${param.mbCanId})"
+        }
+        val readId = param.vhalReadId
+        val writeId = param.vhalWriteId
+        val readName = readId?.let { firmwareReadNames[it] }
+        val writeName = writeId?.let { firmwareWriteNames[it] }
+        val readPart = when {
+            readId != null && readName != null -> "$readName ($readId)"
+            readId != null -> "${param.name} ($readId)"
+            else -> null
+        }
+        val writePart = when {
+            writeId != null && writeId != readId && writeName != null -> "$writeName ($writeId)"
+            writeId != null && writeId != readId -> "${param.name} ($writeId)"
+            writeId != null && readId == null && writeName != null -> "$writeName ($writeId)"
+            writeId != null && readId == null -> "${param.name} ($writeId)"
+            writeId != null && writeId == readId && writeName != null && writeName != readName -> writeName
+            else -> null
+        }
+        return listOfNotNull(readPart, writePart).joinToString(" / ")
+            .ifEmpty { "${param.name} (${param.mbCanId})" }
     }
 
     /** Rows a snapshot reads on [mode]; others always fail there. */
@@ -121,7 +179,7 @@ object ExpertRawCanCatalog {
         HeadUnitCanModeLabel.Android9MbCan -> param.bus != ExpertRawCanBus.VhalDirect
         HeadUnitCanModeLabel.Android10Vhal -> when (param.bus) {
             ExpertRawCanBus.Vehicle, ExpertRawCanBus.Audio -> param.vhalReadId != null
-            ExpertRawCanBus.VhalDirect -> true
+            ExpertRawCanBus.VhalDirect -> param.vhalReadId != null
             ExpertRawCanBus.MbCanObject -> false
         }
     }
@@ -229,7 +287,9 @@ object ExpertRawCanCatalog {
             param.name.contains(q, ignoreCase = true) ||
                 param.mbCanId.toString().contains(q) ||
                 param.vhalReadId?.toString()?.contains(q) == true ||
-                param.vhalWriteId?.toString()?.contains(q) == true
+                param.vhalWriteId?.toString()?.contains(q) == true ||
+                param.vhalReadId?.let { firmwareReadNames[it] }?.contains(q, ignoreCase = true) == true ||
+                param.vhalWriteId?.let { firmwareWriteNames[it] }?.contains(q, ignoreCase = true) == true
         }
     }
 

@@ -77,7 +77,9 @@ fun ExpertRawGetSetDialog(
     val modeStorage = mode.storageValue
 
     var filterText by remember { mutableStateOf("") }
-    var selected by remember { mutableStateOf<ExpertRawCanParam?>(catalog.firstOrNull()) }
+    var selected by remember {
+        mutableStateOf(catalog.firstOrNull { ExpertRawCanCatalog.isListed(it, modeLabel) })
+    }
     var writeEnabled by remember { mutableStateOf(false) }
     var setValueText by remember { mutableStateOf("") }
     var statusText by remember { mutableStateOf("") }
@@ -86,8 +88,11 @@ fun ExpertRawGetSetDialog(
     var snapshot by remember { mutableStateOf<Map<String, String>?>(null) }
     val context = LocalContext.current
 
-    val filtered = remember(filterText, catalog) {
-        ExpertRawCanCatalog.filterParams(catalog, filterText)
+    val filtered = remember(filterText, catalog, modeLabel) {
+        ExpertRawCanCatalog.filterParams(
+            catalog.filter { ExpertRawCanCatalog.isListed(it, modeLabel) },
+            filterText,
+        )
     }
 
     fun runGet() {
@@ -227,7 +232,7 @@ fun ExpertRawGetSetDialog(
                         ) { param ->
                             val isSelected = param == selected
                             Text(
-                                text = param.displayLabel(),
+                                text = ExpertRawCanCatalog.displayLabel(param, modeLabel),
                                 style = MaterialTheme.typography.tboxCaption,
                                 color = if (isSelected) {
                                     MaterialTheme.colorScheme.primary
@@ -363,7 +368,7 @@ fun ExpertRawGetSetDialog(
                 AppAlertDialogText(
                     stringResource(
                         R.string.expert_raw_get_set_confirm_message,
-                        param?.displayLabel() ?: "?",
+                        param?.let { ExpertRawCanCatalog.displayLabel(it, modeLabel) } ?: "?",
                         value?.toString() ?: "?",
                     ),
                 )

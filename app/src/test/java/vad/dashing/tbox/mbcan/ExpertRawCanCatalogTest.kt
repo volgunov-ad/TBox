@@ -64,7 +64,11 @@ class ExpertRawCanCatalogTest {
     @Test
     fun allParams_includesDecodedDirectVhalIds() {
         val direct = ExpertRawCanCatalog.allParams()
-            .filter { it.bus == ExpertRawCanBus.VhalDirect && !it.name.startsWith("R_") }
+            .filter {
+                it.bus == ExpertRawCanBus.VhalDirect &&
+                    !it.name.startsWith("R_") &&
+                    !it.name.startsWith("T_")
+            }
         assertEquals(65, direct.size)
         assertTrue(direct.all { it.vhalReadId == it.mbCanId && it.vhalWriteId == it.mbCanId })
         assertTrue(direct.any { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" && it.mbCanId == FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID })
@@ -96,6 +100,60 @@ class ExpertRawCanCatalogTest {
         assertEquals(direct.size, direct.map { it.mbCanId }.toSet().size)
         val logicalReadIds = params.filter { it.bus != ExpertRawCanBus.VhalDirect }.mapNotNull { it.vhalReadId }.toSet()
         assertTrue(firmwareRows.none { it.mbCanId in logicalReadIds })
+    }
+
+    @Test
+    fun allParams_coversEveryFirmwareWriteIdOnce() {
+        val params = ExpertRawCanCatalog.allParams()
+        VhalFirmwareWriteIds.all.forEach { (name, id) ->
+            val owners = params.filter { it.vhalWriteId == id }
+            assertTrue(name, owners.isNotEmpty())
+            val asOwnRow = owners.filter { it.name == name }
+            val mappedElsewhere = owners.any { it.name != name }
+            if (mappedElsewhere) {
+                assertTrue(name, asOwnRow.isEmpty())
+            } else {
+                assertEquals(name, 1, asOwnRow.size)
+            }
+        }
+        val writeRows = params.filter { it.name.startsWith("T_") }
+        assertTrue(writeRows.isNotEmpty())
+        assertTrue(writeRows.all { it.bus == ExpertRawCanBus.VhalDirect && it.vhalReadId == null })
+        assertTrue(writeRows.none { ExpertRawCanCatalog.isReadable(it, HeadUnitCanModeLabel.Android10Vhal) })
+        assertTrue(writeRows.none { ExpertRawCanCatalog.isListed(it, HeadUnitCanModeLabel.Android9MbCan) })
+        assertTrue(writeRows.all { ExpertRawCanCatalog.isListed(it, HeadUnitCanModeLabel.Android10Vhal) })
+    }
+
+    @Test
+    fun listAndLabel_followHeadUnitMode() {
+        val params = ExpertRawCanCatalog.allParams()
+        val wash = params.first { it.name == "VEHICLE_VEHWASH_MODESET" }
+        val a10 = ExpertRawCanCatalog.displayLabel(wash, HeadUnitCanModeLabel.Android10Vhal)
+        assertTrue(a10.contains("R_0400_CEM_ALM_1_Wash_Car_Status (289412171)"))
+        assertTrue(a10.contains("T_0401_IHU_1_DVD_Set_Wash_Car (289412663)"))
+        assertFalse(a10.contains("VEHICLE_VEHWASH_MODESET"))
+        assertEquals(
+            "VEHICLE_VEHWASH_MODESET (${wash.mbCanId})",
+            ExpertRawCanCatalog.displayLabel(wash, HeadUnitCanModeLabel.Android9MbCan),
+        )
+        assertTrue(ExpertRawCanCatalog.isListed(wash, HeadUnitCanModeLabel.Android9MbCan))
+        assertTrue(ExpertRawCanCatalog.isListed(wash, HeadUnitCanModeLabel.Android10Vhal))
+
+        val fragrance = params.first { it.name == "FRAGRANCE_SWITCH" }
+        assertTrue(ExpertRawCanCatalog.isListed(fragrance, HeadUnitCanModeLabel.Android9MbCan))
+        assertFalse(ExpertRawCanCatalog.isListed(fragrance, HeadUnitCanModeLabel.Android10Vhal))
+
+        val bcm = params.first { it.name == "eMBCAN_VEHICLE_BCM_STATUS" }
+        assertTrue(ExpertRawCanCatalog.isListed(bcm, HeadUnitCanModeLabel.Android9MbCan))
+        assertFalse(ExpertRawCanCatalog.isListed(bcm, HeadUnitCanModeLabel.Android10Vhal))
+
+        val rpm = params.first { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" }
+        assertFalse(ExpertRawCanCatalog.isListed(rpm, HeadUnitCanModeLabel.Android9MbCan))
+        assertTrue(ExpertRawCanCatalog.isListed(rpm, HeadUnitCanModeLabel.Android10Vhal))
+        assertTrue(
+            ExpertRawCanCatalog.filterParams(params, "Wash_Car_Status")
+                .any { it.name == "VEHICLE_VEHWASH_MODESET" },
+        )
     }
 
     @Test
