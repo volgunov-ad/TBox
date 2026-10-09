@@ -18,9 +18,11 @@ import vad.dashing.tbox.ui.LeftMenuTabField
 class LastMenuTabSettingsTest {
 
     @Before
-    fun clearSettingsDataStore() = runBlocking {
+    fun clearSettingsDataStore() {
         // Robolectric reuses one Application; preferencesDataStore survives across @Test methods.
-        ApplicationProvider.getApplicationContext<Application>().settingsDataStore.edit { it.clear() }
+        runBlocking {
+            ApplicationProvider.getApplicationContext<Application>().settingsDataStore.edit { it.clear() }
+        }
     }
 
     @Test
