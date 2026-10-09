@@ -909,8 +909,12 @@ private fun BuiltinActionFields(
 
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS -> AutomationIntField(
             label = "Яркость экрана ГУ (1–10)",
-            value = action.intValue.coerceIn(1, 10),
-            onValueChange = { onChange(action.copy(intValue = it.coerceIn(1, 10))) },
+            value = action.intValue,
+            onValueChange = { raw ->
+                // Skip empty draft; do not clamp here or the field fights typing.
+                if (raw == Int.MIN_VALUE) return@AutomationIntField
+                onChange(action.copy(intValue = raw))
+            },
         )
 
         AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS -> AutomationDropdown(
@@ -1034,14 +1038,9 @@ private fun BuiltinActionFields(
                     .takeIf { it != 0 }
                     ?: vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT,
                 onValueChange = { raw ->
-                    onChange(
-                        action.copy(
-                            intValue = raw.coerceIn(
-                                vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN,
-                                vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX,
-                            ),
-                        ),
-                    )
+                    // Skip empty draft; do not clamp here or the field fights typing.
+                    if (raw == Int.MIN_VALUE) return@AutomationIntField
+                    onChange(action.copy(intValue = raw))
                 },
                 modifier = Modifier.fillMaxWidth(),
             )

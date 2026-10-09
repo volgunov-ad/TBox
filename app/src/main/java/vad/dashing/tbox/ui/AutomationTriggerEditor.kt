@@ -26,7 +26,6 @@ import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DOUBLE_TAP_MS
 import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_LONG_PRESS_MS
 import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
-import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationEspBleBtnAction
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
@@ -717,7 +716,7 @@ private fun SolarTriggerFields(
             onChange(
                 trigger.copy(
                     event = next.event,
-                    offsetMinutes = next.offsetMinutes.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
+                    offsetMinutes = next.offsetMinutes,
                     offsetDirection = next.offsetDirection,
                 ),
             )

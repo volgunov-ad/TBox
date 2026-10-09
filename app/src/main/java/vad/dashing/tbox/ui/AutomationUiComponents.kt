@@ -751,12 +751,9 @@ internal fun AutomationSolarInstantFields(
             label = "Минуты, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES",
             value = instant.offsetMinutes,
             onValueChange = { raw ->
+                // Skip empty draft; do not clamp here or the field fights typing.
                 if (raw == Int.MIN_VALUE) return@AutomationIntField
-                onChange(
-                    instant.copy(
-                        offsetMinutes = raw.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
-                    ),
-                )
+                onChange(instant.copy(offsetMinutes = raw))
             },
             modifier = Modifier.weight(1f),
         )
