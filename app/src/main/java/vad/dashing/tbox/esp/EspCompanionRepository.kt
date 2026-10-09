@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.automation.AutomationHardKeyStatus
+import vad.dashing.tbox.automation.AutomationTriggerEspGpioBtnEventBus
 
 data class EspDeviceInfo(
     val firmwareVersion: String = "",
@@ -468,6 +470,17 @@ object EspCompanionRepository {
         val bit = 1 shl channel
         val next = if (level) _gpioMask.value or bit else _gpioMask.value and bit.inv()
         updateGpioMask(next)
+        // Edge events only after a full snapshot; logical 1 = pressed (active-low HW).
+        if (_gpioInputsReady.value && channel in 0..3) {
+            AutomationTriggerEspGpioBtnEventBus.publish(
+                channel = channel,
+                status = if (level) {
+                    AutomationHardKeyStatus.PRESSED
+                } else {
+                    AutomationHardKeyStatus.RELEASED
+                },
+            )
+        }
     }
 
     fun updateRelayMask(mask: Int) {

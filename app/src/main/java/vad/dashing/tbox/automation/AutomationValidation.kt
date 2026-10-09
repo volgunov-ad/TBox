@@ -197,6 +197,14 @@ object AutomationValidator {
                     )
                 }
             }
+            is AutomationTrigger.EspGpioBtn -> {
+                if (trigger.channel !in 0..3) {
+                    issues += AutomationValidationIssue(
+                        "$path.channel",
+                        "ESP-вход должен быть 0…3",
+                    )
+                }
+            }
             is AutomationTrigger.Interval -> {
                 if (trigger.intervalMillis !in AUTOMATION_MIN_INTERVAL_MS..AUTOMATION_MAX_INTERVAL_MS) {
                     issues += AutomationValidationIssue(

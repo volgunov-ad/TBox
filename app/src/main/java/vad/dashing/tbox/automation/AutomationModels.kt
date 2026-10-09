@@ -499,6 +499,18 @@ sealed interface AutomationTrigger {
         val act: AutomationEspBleBtnAction = AutomationEspBleBtnAction.PRESS,
     ) : AutomationTrigger
 
+    /**
+     * Fired by ESP companion GPIO inputs 0…3.
+     * Raw edges use [AutomationHardKeyStatus.PRESSED]/[RELEASED] (logical 1 = pressed).
+     * [SINGLE], [DOUBLE], and [LONG] are synthesized like hard keys
+     * ([AUTOMATION_HARD_KEY_DOUBLE_TAP_MS], [AUTOMATION_HARD_KEY_LONG_PRESS_MS]).
+     */
+    data class EspGpioBtn(
+        override val id: String = "1",
+        val channel: Int = 0,
+        val status: AutomationHardKeyStatus = AutomationHardKeyStatus.SINGLE,
+    ) : AutomationTrigger
+
     data class Interval(
         override val id: String = "1",
         val intervalMillis: Long = AUTOMATION_DEFAULT_INTERVAL_MS,

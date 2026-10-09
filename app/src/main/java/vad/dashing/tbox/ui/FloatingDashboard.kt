@@ -661,6 +661,7 @@ fun FloatingDashboard(
                     showDialogOpen = false,
                     widgetInteractionPolicy = widgetInteractionPolicy,
                     widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+                    buttonBindingsActive = !effectiveCollapsed && !isEditMode,
                     onWidgetClick = { index ->
                         val cfg = widgetConfigs.getOrNull(index)
                         if (isEditMode && !isDraggingMode && !isResizingMode) {

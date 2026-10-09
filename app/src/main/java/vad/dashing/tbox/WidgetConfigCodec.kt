@@ -254,6 +254,11 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("automationTriggerId", automationTriggerId)
             }
         }
+        if (supportsWidgetButtonBinding(config.dataKey)) {
+            normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
+                obj.put("buttonBinding", encodeWidgetButtonBinding(binding))
+            }
+        }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
@@ -958,6 +963,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             DEFAULT_MAPS_CAM_RADAR_HOLD_M
+                        },
+                        buttonBinding = if (supportsWidgetButtonBinding(dataKey)) {
+                            decodeWidgetButtonBinding(item.optJSONObject("buttonBinding"))
+                        } else {
+                            null
                         },
                     )
                 )

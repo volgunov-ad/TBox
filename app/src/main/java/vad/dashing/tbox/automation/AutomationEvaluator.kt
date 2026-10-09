@@ -138,6 +138,15 @@ class AutomationEvaluator(
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
+    fun onEspGpioBtn(channel: Int, status: AutomationHardKeyStatus): AutomationTriggerFire? {
+        val trigger = definition.triggers.firstOrNull {
+            it is AutomationTrigger.EspGpioBtn &&
+                it.channel == channel &&
+                it.status == status
+        } ?: return null
+        return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
+    }
+
     fun onSignalSample(sample: AutomationSignalSample): AutomationTriggerFire? {
         if (sample.value == AutomationSignalValue.Unavailable) {
             latestSamples.remove(sample.key)
@@ -244,6 +253,7 @@ class AutomationEvaluator(
             is AutomationTrigger.WidgetPressed,
             is AutomationTrigger.HardKey,
             is AutomationTrigger.EspBleBtn,
+            is AutomationTrigger.EspGpioBtn,
             is AutomationTrigger.Interval,
             is AutomationTrigger.Time,
             is AutomationTrigger.Solar,
@@ -670,6 +680,7 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
     is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     -> null
@@ -689,7 +700,8 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
         is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspGpioBtn,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -721,7 +733,8 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
         is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspGpioBtn,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -753,7 +766,8 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     is AutomationTrigger.Solar,
@@ -767,7 +781,9 @@ private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = whe
     is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.WidgetPressed -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.HardKey,
-    is AutomationTrigger.EspBleBtn -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
+    -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.Interval -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
     is AutomationTrigger.StateEquals -> startupBehavior

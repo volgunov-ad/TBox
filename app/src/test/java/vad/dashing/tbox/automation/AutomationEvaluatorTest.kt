@@ -922,6 +922,33 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun espGpioBtnTrigger_firesOnExactChannelAndStatus() {
+        val evaluator = evaluator(
+            AutomationTrigger.EspGpioBtn(
+                id = "g0s",
+                channel = 0,
+                status = AutomationHardKeyStatus.SINGLE,
+            ),
+            AutomationTrigger.EspGpioBtn(
+                id = "g1d",
+                channel = 1,
+                status = AutomationHardKeyStatus.DOUBLE,
+            ),
+        )
+        assertEquals(
+            "g0s",
+            evaluator.onEspGpioBtn(0, AutomationHardKeyStatus.SINGLE)?.triggerId,
+        )
+        assertEquals(
+            "g1d",
+            evaluator.onEspGpioBtn(1, AutomationHardKeyStatus.DOUBLE)?.triggerId,
+        )
+        assertNull(evaluator.onEspGpioBtn(0, AutomationHardKeyStatus.DOUBLE))
+        assertNull(evaluator.onEspGpioBtn(2, AutomationHardKeyStatus.SINGLE))
+        assertTrue(evaluator.triggerStillMatching("g0s"))
+    }
+
+    @Test
     fun timeCondition_usesInjectedWallClock() {
         val night = AutomationCondition.Time(
             after = AutomationTimeOfDay(22, 0),

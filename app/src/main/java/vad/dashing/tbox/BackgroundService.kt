@@ -339,6 +339,7 @@ class BackgroundService : Service() {
     private var serviceStartupGeneration: Long = 0L
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
+    private var widgetButtonBindingCoordinator: WidgetButtonBindingCoordinator? = null
     private var externalApiController: ExternalApiController? = null
     private var packetSilenceChecks: Int = 0
     private var tboxSwdKeepaliveLastMs: Long = 0L
@@ -1982,6 +1983,8 @@ class BackgroundService : Service() {
         isRunning = false
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        widgetButtonBindingCoordinator?.stop()
+        widgetButtonBindingCoordinator = null
         automationEngine?.stop()
         automationEngine = null
         stopMockLocationJob()
@@ -2432,6 +2435,9 @@ class BackgroundService : Service() {
                 }
                 automationEngine?.stop()
                 automationEngine = newEngine
+                widgetButtonBindingCoordinator?.stop()
+                widgetButtonBindingCoordinator =
+                    WidgetButtonBindingCoordinator(scope).also { it.start() }
                 servicePhase = ServiceLifecyclePhase.Running
                 newEngine.notifyBackgroundServiceStarted()
                 candidateEngine = null
@@ -7240,6 +7246,8 @@ class BackgroundService : Service() {
         vad.dashing.tbox.adb.AdbRepository.disconnect()
 
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
+        widgetButtonBindingCoordinator?.stop()
+        widgetButtonBindingCoordinator = null
         automationEngine?.releaseInterests()
         automationEngine?.requestStop()
         automationEngine = null
