@@ -311,6 +311,8 @@ Polling остаётся fallback-механизмом: даже при push-с�
 - события пишутся в DEBUG-журнал тегами `CANDIAG_VHAL` / `CANDIAG_MBCAN` через `DeepCanDiagnostics` (машиночитаемый формат `propertyId=… areaId=… value=… type=… status=… name=…` / `dt=… modular=… rev=… item=… value=… name=…` / `dt=… object=…`), с delta-фильтром, окнами коалессинга 1 с (дискретные) / 5 с (быстрая телеметрия), кольцевым буфером 3000 строк и счётчиком `suppressed=`;
 - write-only `T_*` id (импульсы MFS, SLA req) в каталоге намеренно отсутствуют.
 - **A10 deep experimental** также включает CEM door ajar / hood / lock и ICM/ABM seat-belt property id (см. `DeepDiagnosticsCatalog.vhalExperimentalIdNames`).
+- **A10**: дополнительно подписываются все 374 `R_*` id таблицы прошивки (`VhalFirmwareReadIds`, сгенерирован из `docs/reference/VehiclePropertyIds.java`); имя `R_…` идёт в `name=`, если у id нет короткого имени приложения. Id, которые VHAL не принимает, попадают в `failures=` итоговой строки.
+- **A9 object mirror**: payload всех OEM push-колбэков (`IMBCanSettingsCallback`, `IMBVehicleListener`, LKA/SLA, FRM, Gasped, двери) разбирается рефлексией по полям (`MbCanObjectDump`, без вызова getter-ов и JNI) и пишется построчно `mbcan dt=<MBCanDataType> field=<path> value=<v>`; каждое поле — отдельный delta-ключ, так что пуш BCM пишет только изменившиеся поля. Метод без известного типа пишется как `dt=cb.<method>`. Пока режим включён, эти мосты регистрируются независимо от виджетов (`reapplyAllInterests`, флаг `deep`). В каталог добавлены типы `GASPED_STATUS`, `EPB_STATUS`, `FUELTANK`, `ICM_FAULT_INFO`, `ICM_ALARM_INFO`, `CEM_FRAG`, `AVM_STATUS`, `CHIME_STATUS`, `INSTRUMENT_CMDREPLY`.
 
 Логи `VHAL_A10` содержат:
 

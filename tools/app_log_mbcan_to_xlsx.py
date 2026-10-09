@@ -72,6 +72,7 @@ MODULAR_RE = re.compile(r"\bmodular=(-?\d+)\b")
 REV_RE = re.compile(r"\brev=(-?\d+)\b")
 DT_RE = re.compile(r"\bdt=(\S+)")
 NAME_RE = re.compile(r"\bname=(\S+)")
+FIELD_RE = re.compile(r"\bfield=(\S+)")
 AREA_ID_RE = re.compile(r"\bareaId=(-?\d+)\b")
 TELEMETRY_ENTRY_RE = re.compile(
     r"(?P<key>[A-Za-z0-9_./+-]+)\s+count=(?P<count>\d+)\s+last=(?P<last>.*?)(?=\s*;\s*[^;]+?\s+count=\d+\s+last=|\s*$)"
@@ -328,6 +329,24 @@ def parse_line(line: str, catalog: CatalogIndex, include_trip_fuel: bool) -> lis
                 known=known,
                 catalog_name=catalog_name or log_name,
                 modular=extract_kv_int(AREA_ID_RE, body),
+                detail=body[:500],
+                raw=raw,
+            )
+        ]
+
+    if tag == "CANDIAG_MBCAN" and FIELD_RE.search(body):
+        # Field-level object mirror: ``mbcan dt=<type> field=<path> value=<any>``
+        vm = re.search(r"\bvalue=(\S+)", body)
+        return [
+            LogEvent(
+                time=time_s,
+                level=level,
+                tag=tag,
+                kind="mbcan_obj",
+                value=vm.group(1) if vm else None,
+                known=True,
+                catalog_name=extract_kv_str(FIELD_RE, body),
+                data_type=extract_kv_str(DT_RE, body),
                 detail=body[:500],
                 raw=raw,
             )
