@@ -5,6 +5,7 @@ import java.security.MessageDigest
 
 data class MqttSettings(
     val apiPort: Int = 8765,
+    val brokerEnabled: Boolean = true,
     val brokerHost: String = "",
     val brokerPort: Int = 1883,
     val username: String = "",
@@ -71,6 +72,10 @@ data class MqttSettings(
 
     val ready: Boolean
         get() = accessToken.isNotBlank() && brokerHost.isNotBlank()
+
+    /** The bridge has nothing to do without the broker, so the switch stops the whole service. */
+    val active: Boolean
+        get() = ready && brokerEnabled
 
     fun connectionKey(): String = listOf(
         brokerHost,

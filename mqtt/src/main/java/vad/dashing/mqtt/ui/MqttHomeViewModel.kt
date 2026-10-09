@@ -60,8 +60,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
                 _state.update { current ->
-                    val rejected = status.lastError == TOKEN_REJECTED &&
-                        current.bridge.lastError != TOKEN_REJECTED
+                    val rejected = status.monitorError == TOKEN_REJECTED &&
+                        current.bridge.monitorError != TOKEN_REJECTED
                     current.copy(bridge = status, tab = if (rejected) 0 else current.tab)
                 }
             }
@@ -82,6 +82,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             settings = next,
             connectionDraft = current.connectionDraft.copy(
                 apiPort = next.apiPort,
+                brokerEnabled = next.brokerEnabled,
                 accessToken = next.accessToken,
                 deviceName = next.deviceName,
                 discoveryEnabled = next.discoveryEnabled,
@@ -89,6 +90,16 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 selectedObjectIds = next.selectedObjectIds,
             ),
         )
+    }
+
+    /** Applies at once, unlike the broker fields: the switch is the quick way to pause the bridge. */
+    fun setBrokerEnabled(enabled: Boolean) {
+        update { it.copy(brokerEnabled = enabled) }
+        if (enabled) {
+            startBridgeIfReady()
+        } else {
+            MqttBridgeService.stop(getApplication())
+        }
     }
 
     fun reportConnection(message: String) {
@@ -274,7 +285,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun startBridgeIfReady() {
-        if (_state.value.settings.normalized().ready) MqttBridgeService.start(getApplication())
+        if (_state.value.settings.normalized().active) MqttBridgeService.start(getApplication())
     }
 
     private fun updateUi(transform: (MqttHomeState) -> MqttHomeState) {

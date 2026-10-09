@@ -1,6 +1,8 @@
 package vad.dashing.mqtt.settings
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MqttSettingsTest {
@@ -50,5 +52,22 @@ class MqttSettingsTest {
             "hu_media_volume",
         )
         assertEquals(selected, MqttSettings(selectedObjectIds = selected).normalized().selectedObjectIds)
+    }
+
+    @Test
+    fun brokerSwitchStopsTheBridgeButKeepsItConfigured() {
+        val configured = MqttSettings(accessToken = "token", brokerHost = "192.168.1.10")
+        assertTrue(configured.active)
+        val off = configured.copy(brokerEnabled = false)
+        assertTrue(off.ready)
+        assertFalse(off.active)
+        assertEquals(configured.connectionKey(), off.connectionKey())
+    }
+
+    @Test
+    fun savingBrokerFieldsKeepsTheSwitch() {
+        val saved = MqttSettings(accessToken = "token", brokerHost = "a", brokerEnabled = false)
+        val draft = saved.copy(brokerHost = "b", brokerEnabled = true)
+        assertFalse(saved.applyingConnection(draft).brokerEnabled)
     }
 }

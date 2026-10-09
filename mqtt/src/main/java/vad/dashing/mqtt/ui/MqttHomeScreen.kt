@@ -53,6 +53,9 @@ import vad.dashing.mqtt.ui.theme.tboxButton
 import vad.dashing.mqtt.ui.theme.tboxHeadline
 import vad.dashing.mqtt.ui.theme.tboxTabLabel
 import vad.dashing.mqtt.ui.theme.tboxTitle
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 private val Tabs = listOf("Подключение", "Состояние", "Сущности")
 
@@ -138,6 +141,19 @@ private fun ConnectionTab(
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
     SectionTitle("Брокер")
+    SettingSwitch(
+        checked = settings.brokerEnabled,
+        title = "Подключаться к MQTT брокеру",
+        description = if (settings.brokerEnabled) {
+            "Мост работает, данные уходят в Home Assistant"
+        } else {
+            "Мост остановлен, Home Assistant видит машину offline. Настройки сохранены"
+        },
+        onChecked = { enabled ->
+            viewModel.setBrokerEnabled(enabled)
+            onSettingsSaved()
+        },
+    )
     TextField("Адрес", connection.brokerHost) {
         viewModel.editConnection { current -> current.copy(brokerHost = it) }
     }
@@ -351,8 +367,34 @@ private fun displayName(context: Context, uri: Uri): String {
 @Composable
 private fun StatusTab(state: MqttHomeState) {
     val bridge = state.bridge
-    StatusLine("Monitor", if (bridge.monitorUp) "на связи" else "нет связи")
-    StatusLine("Брокер", if (bridge.brokerUp) "на связи" else "нет связи")
+    if (!state.settings.brokerEnabled) {
+        StatusLine("Мост", "выключен: «Подключаться к MQTT брокеру» на вкладке «Подключение»", ok = false)
+        return
+    }
+    StatusLine(
+        "Monitor",
+        linkText(bridge.monitorUp, bridge.monitorSinceMs),
+        ok = bridge.monitorUp,
+        detail = bridge.monitorError,
+    )
+    StatusLine(
+        "Брокер",
+        linkText(bridge.brokerUp, bridge.brokerSinceMs),
+        ok = bridge.brokerUp,
+        detail = bridge.brokerError,
+    )
+    if (bridge.wireguardEnabled) {
+        StatusLine(
+            "WireGuard",
+            when {
+                bridge.brokerUp -> "брокер доступен через туннель"
+                bridge.tunnelError.isNotEmpty() -> "ошибка туннеля"
+                else -> "брокер не отвечает через туннель"
+            },
+            ok = bridge.brokerUp,
+            detail = bridge.tunnelError,
+        )
+    }
     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
     StatusLine("Home Assistant видит", bridge.availability)
     StatusLine("Опубликовано сущностей", bridge.publishedCount.toString())
@@ -491,14 +533,37 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun StatusLine(title: String, value: String) {
+private fun StatusLine(title: String, value: String, ok: Boolean? = null, detail: String = "") {
     Text(title, style = MaterialTheme.typography.tboxTitle, color = MaterialTheme.colorScheme.onSurface)
     Text(
         value,
         style = MaterialTheme.typography.tboxBody,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 8.dp),
+        color = when (ok) {
+            true -> MaterialTheme.colorScheme.primary
+            false -> MaterialTheme.colorScheme.error
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        modifier = Modifier.padding(bottom = if (detail.isBlank()) 8.dp else 0.dp),
     )
+    if (detail.isNotBlank()) {
+        Text(
+            detail,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+}
+
+private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+
+internal fun linkText(up: Boolean, sinceMs: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    val state = if (up) "на связи" else "нет связи"
+    if (sinceMs <= 0L) return state
+    val clock = Instant.ofEpochMilli(sinceMs).atZone(zone).format(ClockFormat)
+    return "$state с $clock"
 }
 
 @Composable

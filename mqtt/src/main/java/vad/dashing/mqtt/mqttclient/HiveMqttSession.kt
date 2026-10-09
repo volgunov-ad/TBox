@@ -15,7 +15,10 @@ import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.TrustManagerFactory
@@ -29,6 +32,11 @@ class HiveMqttSession {
 
     @Volatile
     var connected: Boolean = false
+        private set
+
+    /** Why the broker link is down; empty while connected. */
+    @Volatile
+    var lastFailure: String = ""
         private set
 
     fun ensureConnected(
@@ -60,7 +68,11 @@ class HiveMqttSession {
         val builder = Mqtt3Client.builder()
             .identifier(clientId(normalized))
         bindBroker(builder, normalized, tunnel)
-        builder.automaticReconnectWithDefaultConfig()
+        // Default backoff grows to 2 min; after a long outage the car would stay offline that long.
+        builder.automaticReconnect()
+            .initialDelay(1, TimeUnit.SECONDS)
+            .maxDelay(RECONNECT_MAX_DELAY_S, TimeUnit.SECONDS)
+            .applyAutomaticReconnect()
             .addConnectedListener {
                 if (generation.get() != own) {
                     // Same client id: a late stale connect would kick the live client off the broker.
@@ -69,6 +81,7 @@ class HiveMqttSession {
                     return@addConnectedListener
                 }
                 connected = true
+                lastFailure = ""
                 onConnected()
             }
             .addDisconnectedListener { context ->
@@ -78,6 +91,7 @@ class HiveMqttSession {
                     return@addDisconnectedListener
                 }
                 connected = false
+                lastFailure = brokerFailureText(context.cause)
                 onDisconnected()
             }
         if (normalized.tlsEnabled) {
@@ -185,9 +199,11 @@ class HiveMqttSession {
                 }
                 return false
             }
+            lastFailure = brokerFailureText(error)
             throw error
         }
         connected = true
+        lastFailure = ""
         subscribed.clear()
         return false
     }
@@ -199,6 +215,7 @@ class HiveMqttSession {
         val wasConnected = connected
         client = null
         connected = false
+        lastFailure = ""
         subscribed.clear()
         connectionKey = ""
         willTopic = null
@@ -219,6 +236,8 @@ class HiveMqttSession {
     }
 
     companion object {
+        private const val RECONNECT_MAX_DELAY_S = 30L
+
         fun probe(settings: MqttSettings): String? {
             val normalized = settings.normalized()
             if (normalized.brokerHost.isBlank()) return "Укажите адрес брокера"
@@ -244,7 +263,7 @@ class HiveMqttSession {
                 built.connectWith().keepAlive(30).cleanSession(true).send().get(12, TimeUnit.SECONDS)
                 null
             } catch (error: Exception) {
-                error.message ?: error.javaClass.simpleName
+                brokerFailureText(error)
             } finally {
                 client?.let { runCatching { it.disconnect().get(4, TimeUnit.SECONDS) } }
             }
@@ -299,6 +318,15 @@ internal fun mqttConnectStep(state: MqttClientState): MqttConnectStep = when (st
     MqttClientState.CONNECTING_RECONNECT,
     MqttClientState.DISCONNECTED_RECONNECT,
     -> MqttConnectStep.WAIT
+}
+
+/** Future wrappers carry no text of their own; a bare timeout has no message at all. */
+internal fun brokerFailureText(error: Throwable): String {
+    val cause = generateSequence(error) { it.cause }
+        .firstOrNull { it !is ExecutionException && it !is CompletionException }
+        ?: error
+    if (cause is TimeoutException) return "Брокер не ответил вовремя"
+    return cause.message?.trim()?.takeIf { it.isNotEmpty() } ?: cause.javaClass.simpleName
 }
 
 private inline fun <reified T : Throwable> Throwable.hasCause(): Boolean {
