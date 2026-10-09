@@ -219,6 +219,22 @@ object DeepDiagnosticsCatalog {
         "onCanVehicleFuelLevel" to "eMBCAN_VEHICLE_FUELLEVEL",
         "onVehicleTotalOdoMeterChange" to "eMBCAN_VEHICLE_TOTALODOMETER",
         "onWpcStatusChange" to "eMBCAN_WPC_STATUS",
+        "onVehicleSeatStatusChange" to "eMBCAN_SEAT_STATUS",
+        "onVehicleDVRStatusChange" to "eMBCAN_DVR_STATUS",
+        "onVehicleSystemModeChange" to "eMBCAN_SYSTEMMODE",
+        "onVehicleGearStatusChange" to "eMBCAN_VEHICLE_GEAR",
+        "onDoorChange" to "eMBCAN_VEHICLE_DOOR",
+        "onAvmStatusChange" to "eMBCAN_AVM_STATUS",
+        "onBsdAlarm" to "eMBCAN_BSD_ALARM",
+        "onDowAlarm" to "eMBCAN_DOW_ALARM",
+        "onRctaAlarmChange" to "eMBCAN_RCTA_ALARM",
+        "onRadarSensorChange" to "eMBCAN_RADARSENSOR",
+        "onChimeStatusChange" to "eMBCAN_CHIME_STATUS",
+        "onAlarmInfo" to "eMBCAN_ICM_ALARM_INFO",
+        "onTripInfo" to "eMBCAN_ICM_TRIP_INFO",
+        "onCanDvrParamChange" to "eMBCAN_VEHICLE_DVR_PARAM",
+        "onPMChanged" to "eMBCAN_PM25INFO",
+        "onSeatBeltStatusChange" to "eMBCAN_SEAT_BELT_STATUS",
         "onVehicleBcmStatusChange" to "eMBCAN_VEHICLE_BCM_STATUS",
         "onVehicleEngineStatusChange" to "eMBCAN_VEHICLE_ENGINE",
         "onCanVehicleTires" to "eMBCAN_VEHICLE_TIRE",
@@ -295,6 +311,22 @@ object DeepDiagnosticsCatalog {
         "eMBCAN_VEHICLE_EPB_STATUS" to 52,
         "eMBCAN_VEHICLE_CONSUMPTION" to 53,
         "eMBCAN_CHARGING_RESERVE" to 54,
+    )
+
+    /**
+     * Object types OEM never pushes (or pushes only a fragment of). Deep mode polls
+     * these on `mbcan-state-apply` so a change still reaches the journal.
+     */
+    val mbcanPollOnlyDataTypes: List<Pair<String, Int>> = listOf(
+        "eMBCAN_VEHICLE_GEAR" to 20,
+        "eMBCAN_CFG_DMS" to 25,
+        "eMBCAN_DTC" to 27,
+        "eMBCAN_VEHICLE_ENGINE_GEAR" to 29,
+        "eMBCAN_RADIO_FREQUENCYINFO" to 19,
+        "eMBCAN_RADIO_PROGRAMSTATE" to 30,
+        "eMBCAN_INSTRUMENT_CMDREPLY" to 31,
+        "eMBCAN_VEHICLE_ICM_DRIVE_INFO" to 44,
+        "eMBCAN_VEHICLE_EPB_STATUS" to 52,
     )
 
     /**

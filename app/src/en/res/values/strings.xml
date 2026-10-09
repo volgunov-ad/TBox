@@ -562,6 +562,8 @@
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
+    <string name="logs_mark_label">Mark</string>
+    <string name="logs_mark_button">Mark</string>
     <string name="logs_continuous_record_title">Continuous journal recording</string>
     <string name="logs_continuous_record_desc">Every new journal line is written to a Downloads file (tbox_app_log_…). Up to 20 MB per file, then a new one. Independent of the on-screen buffer of the last N lines.</string>
     <string name="logs_continuous_record_start">Start recording</string>

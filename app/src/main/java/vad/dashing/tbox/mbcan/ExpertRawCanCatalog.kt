@@ -329,6 +329,14 @@ object ExpertRawCanCatalog {
         HuCanMarkLog.markUi("expertSet $detail")
     }
 
+    /** INFO so a deliberate snapshot lands in the journal even without CAN diagnostics. */
+    fun logSnapshot(values: Map<String, String>, modeLabel: String) {
+        MbCanDiagnostics.log("INFO", LOG_TAG, "snapshot mode=$modeLabel values=${values.size}")
+        values.forEach { (key, value) ->
+            MbCanDiagnostics.log("INFO", LOG_TAG, "snapshot key=$key value=$value")
+        }
+    }
+
     /** INFO so a deliberate compare lands in the journal even without CAN diagnostics. */
     fun logSnapshotDiff(changes: List<ExpertRawSnapshot.Change>, modeLabel: String) {
         MbCanDiagnostics.log("INFO", LOG_TAG, "snapshotDiff mode=$modeLabel changes=${changes.size}")

@@ -211,6 +211,80 @@ private class CarPropertyBridge(
         }.getOrNull()
     }
 
+    /**
+     * [CarPropertyManager.getProperty]: any value type, not only int. [quiet] skips the
+     * read-failure journal so a baseline sweep of unknown ids does not flood it.
+     */
+    fun getPropertyValue(propertyId: Int, areaId: Int = 0, quiet: Boolean = false): Any? {
+        if (Android10VhalRepository.isPropertyPermissionDenied(propertyId)) return null
+        val manager = propertyManager ?: return null
+        val generic = runCatching {
+            val method = propertyGetMethod ?: manager.javaClass.methods.firstOrNull { candidate ->
+                candidate.name == "getProperty" &&
+                    candidate.parameterTypes.contentEquals(
+                        arrayOf(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType),
+                    )
+            }?.also { propertyGetMethod = it }
+            if (method == null) return@runCatching null
+            val boxed = method.invoke(manager, propertyId, areaId) ?: return@runCatching null
+            boxed.javaClass.methods.firstOrNull { it.name == "getValue" && it.parameterCount == 0 }
+                ?.invoke(boxed)
+        }.onFailure {
+            if (!quiet) Android10VhalRepository.logReadFailure(propertyId, areaId, it)
+        }.getOrNull()
+        if (generic != null || propertyGetMethod != null) return generic
+        // Car stacks without getProperty(int, int): try the typed getters, int first.
+        for (name in listOf("getIntProperty", "getFloatProperty", "getBooleanProperty")) {
+            val value = runCatching {
+                manager.javaClass
+                    .getMethod(name, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    .invoke(manager, propertyId, areaId)
+            }.getOrNull()
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private var propertyGetMethod: java.lang.reflect.Method? = null
+
+    data class VhalPropertyConfigInfo(
+        val propertyId: Int,
+        val access: Int?,
+        val changeMode: Int?,
+        val areaIds: List<Int>,
+        val typeName: String?,
+    )
+
+    /** Android `VehiclePropertyAccess`: 0 none, 1 read, 2 write, 3 read+write. */
+    fun isReadableAccess(access: Int?): Boolean = access == null || access == 1 || access == 3
+
+    /** Full [CarPropertyManager.getPropertyList], empty when the manager has no such method. */
+    fun listPropertyConfigs(): List<VhalPropertyConfigInfo> {
+        val manager = propertyManager ?: return emptyList()
+        val getPropertyList = manager.javaClass.methods.firstOrNull {
+            it.name == "getPropertyList" && it.parameterCount == 0
+        } ?: return emptyList()
+        val list = runCatching { getPropertyList.invoke(manager) as? Iterable<*> }.getOrNull() ?: return emptyList()
+        return list.mapNotNull { item ->
+            if (item == null) return@mapNotNull null
+            val id = runCatching { item.javaClass.getMethod("getPropertyId").invoke(item) as? Int }.getOrNull()
+                ?: return@mapNotNull null
+            val access = runCatching { item.javaClass.getMethod("getAccess").invoke(item) as? Int }.getOrNull()
+            val changeMode = runCatching { item.javaClass.getMethod("getChangeMode").invoke(item) as? Int }.getOrNull()
+            val typeName = runCatching {
+                (item.javaClass.getMethod("getPropertyType").invoke(item) as? Class<*>)?.simpleName
+            }.getOrNull()
+            val areas = runCatching { item.javaClass.getMethod("getAreaIds").invoke(item) }.getOrNull().let { value ->
+                when (value) {
+                    is IntArray -> value.toList()
+                    is Array<*> -> value.mapNotNull { (it as? Number)?.toInt() }
+                    else -> emptyList()
+                }
+            }
+            VhalPropertyConfigInfo(id, access, changeMode, areas, typeName)
+        }
+    }
+
     fun getFloatProperty(propertyId: Int, areaId: Int = 0): Float? {
         val manager = propertyManager ?: return null
         return runCatching {
@@ -692,6 +766,8 @@ object Android10VhalRepository {
     )
     private val DEEP_DIAGNOSTIC_BATCH_SIZE = 10
     private val DEEP_DIAGNOSTIC_BATCH_DELAY_MS = 500L
+    private val DEEP_BASELINE_PACE_MS = 5L
+    private val MAX_BASELINE_AREAS = 4
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
@@ -1389,9 +1465,45 @@ object Android10VhalRepository {
             return reason
         }
         return withContext(stateApplyDispatcher) {
+            val configs = bridge?.listPropertyConfigs().orEmpty()
+            configs.forEach { cfg ->
+                val areas = if (cfg.areaIds.isEmpty()) "[]" else cfg.areaIds.joinToString(",", "[", "]")
+                val name = DeepDiagnosticsCatalog.annotateVhalPropertyId(cfg.propertyId)?.let { " name=$it" } ?: ""
+                DeepCanDiagnostics.report(
+                    DeepCanDiagnostics.VHAL_TAG,
+                    "vhal config propertyId=${cfg.propertyId} access=${cfg.access ?: "?"} " +
+                        "changeMode=${cfg.changeMode ?: "?"} areas=$areas type=${cfg.typeName ?: "?"}$name",
+                )
+            }
+            val readableIds = configs
+                .filter { bridge?.isReadableAccess(it.access) == true }
+                .map { it.propertyId }
+            val subscribeIds = (ids + readableIds).distinct()
+            var baselined = 0
+            subscribeIds.forEach { propertyId ->
+                if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
+                val areas = configs.firstOrNull { it.propertyId == propertyId }?.areaIds?.ifEmpty { null } ?: listOf(0)
+                areas.take(MAX_BASELINE_AREAS).forEach { areaId ->
+                    val value = bridge?.getPropertyValue(propertyId, areaId, quiet = true) ?: return@forEach
+                    DeepCanDiagnostics.recordVhalEvent(
+                        propertyId = propertyId,
+                        areaId = areaId,
+                        value = value,
+                        valueType = value.javaClass.simpleName,
+                        status = null,
+                        timestampNanos = null,
+                    )
+                    baselined++
+                }
+                delay(DEEP_BASELINE_PACE_MS)
+            }
+            DeepCanDiagnostics.report(
+                DeepCanDiagnostics.VHAL_TAG,
+                "deepDiag vhal baseline values=$baselined configs=${configs.size} subscribe=${subscribeIds.size}",
+            )
             var subscribed = 0
             val failures = mutableListOf<String>()
-            ids.chunked(DEEP_DIAGNOSTIC_BATCH_SIZE).forEach { chunk ->
+            subscribeIds.chunked(DEEP_DIAGNOSTIC_BATCH_SIZE).forEach { chunk ->
                 if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
                 chunk.forEach { propertyId ->
                     val result = bridge?.startDeepDiagnosticSubscription(propertyId)
@@ -1404,7 +1516,7 @@ object Android10VhalRepository {
                 delay(DEEP_DIAGNOSTIC_BATCH_DELAY_MS)
             }
             if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
-            val summary = "deepDiag vhal subscribed=$subscribed failed=${failures.size} ids=${ids.size}"
+            val summary = "deepDiag vhal subscribed=$subscribed failed=${failures.size} ids=${subscribeIds.size}"
             DeepCanDiagnostics.report(
                 DeepCanDiagnostics.VHAL_TAG,
                 if (failures.isEmpty()) summary else "$summary failures=${failures.take(15).joinToString(" | ")}"
@@ -3595,19 +3707,28 @@ object Android10VhalRepository {
                 message = it,
             )
         }
-        val raw = bridge?.getIntProperty(effectiveId)
-        return if (raw == null) {
-            ExpertRawGetResult(
+        val value = bridge?.getPropertyValue(effectiveId)
+        if (value == null) {
+            return ExpertRawGetResult(
                 success = false,
                 effectivePropertyId = effectiveId,
                 message = "Get returned null (bus=$bus)",
             )
+        }
+        val intValue = (value as? Number)?.takeIf { value is Int || value is Short || value is Byte }?.toInt()
+        return if (intValue != null && value !is Float && value !is Double) {
+            ExpertRawGetResult(
+                success = true,
+                rawValue = intValue,
+                effectivePropertyId = effectiveId,
+                message = "ok",
+            )
         } else {
             ExpertRawGetResult(
                 success = true,
-                rawValue = raw,
                 effectivePropertyId = effectiveId,
-                message = "ok",
+                message = "ok ${value.javaClass.simpleName}",
+                fields = MbCanObjectDump.flatten(value),
             )
         }
     }

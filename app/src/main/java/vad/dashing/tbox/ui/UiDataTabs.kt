@@ -58,6 +58,7 @@ import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.R
+import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.WidgetsRepository
@@ -409,6 +410,32 @@ fun LogsTabContent(
                         }
                     }
                 )
+            }
+        }
+
+        var markText by remember { mutableStateOf("") }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = markText,
+                onValueChange = { markText = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                label = { Text(stringResource(R.string.logs_mark_label), style = MaterialTheme.typography.tboxBody) },
+                textStyle = MaterialTheme.typography.tboxBody,
+            )
+            Button(
+                onClick = rememberWrappedOnClick {
+                    TboxRepository.addJournalMark(markText)
+                    markText = ""
+                },
+            ) {
+                Text(stringResource(R.string.logs_mark_button), style = MaterialTheme.typography.tboxButton)
             }
         }
 

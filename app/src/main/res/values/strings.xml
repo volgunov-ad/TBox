@@ -565,6 +565,8 @@
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
+    <string name="logs_mark_label">Метка</string>
+    <string name="logs_mark_button">Метка</string>
     <string name="logs_continuous_record_title">Непрерывная запись журнала</string>
     <string name="logs_continuous_record_desc">Каждая новая строка журнала пишется в файл «Загрузки» (tbox_app_log_…). До 20 МБ на файл, дальше новый. Не зависит от экранного буфера последних строк.</string>
     <string name="logs_continuous_record_start">Начать запись</string>

@@ -649,7 +649,10 @@ object MbCanRepository {
     val bcmDoorsState: StateFlow<BcmDoorSnapshot?> = _bcmDoorsState.asStateFlow()
 
     private var seatBeltDeepPollJob: Job? = null
+    private var deepObjectPollJob: Job? = null
     private const val SEAT_BELT_DEEP_POLL_MS = 2_000L
+    private const val DEEP_OBJECT_POLL_MS = 30_000L
+    private const val DEEP_BASELINE_PACE_MS = 15L
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -932,6 +935,8 @@ object MbCanRepository {
             MbCanEngineFacade.stopDeepCmdListeners()
             seatBeltDeepPollJob?.cancel()
             seatBeltDeepPollJob = null
+            deepObjectPollJob?.cancel()
+            deepObjectPollJob = null
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -2178,26 +2183,36 @@ object MbCanRepository {
                 fields = MbCanObjectDump.flatten(obj),
             )
         }
+        val bytes = if (bus == ExpertRawCanBus.Vehicle) {
+            MbCanEngineFacade.canGetVehicleValueBytes(propertyId)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(::formatUnsignedBytes)
+        } else {
+            null
+        }
         val raw = when (bus) {
             ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
             ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
             ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> return a10OnlyVhalGet(propertyId)
         }
-        return if (raw == null) {
-            ExpertRawGetResult(
+        if (raw == null && bytes == null) {
+            return ExpertRawGetResult(
                 success = false,
                 effectivePropertyId = propertyId,
                 message = "Get returned null",
             )
-        } else {
-            ExpertRawGetResult(
-                success = true,
-                rawValue = raw,
-                effectivePropertyId = propertyId,
-                message = "ok",
-            )
         }
+        return ExpertRawGetResult(
+            success = true,
+            rawValue = raw,
+            effectivePropertyId = propertyId,
+            message = if (raw == null) "int null, bytes ok" else "ok",
+            fields = bytes?.let { listOf("bytes" to it) },
+        )
     }
+
+    private fun formatUnsignedBytes(bytes: ByteArray): String =
+        bytes.joinToString(",", "[", "]") { (it.toInt() and 0xFF).toString() }
 
     /**
      * Expert raw Set: direct facade set with the given integer (bypasses registry / encoding).
@@ -4101,6 +4116,8 @@ object MbCanRepository {
         if (!active) {
             seatBeltDeepPollJob?.cancel()
             seatBeltDeepPollJob = null
+            deepObjectPollJob?.cancel()
+            deepObjectPollJob = null
             MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
             MbCanEngineFacade.stopDeepCmdListeners()
             MbCanJobManager.setDeepTypes(false, emptySet())
@@ -4121,12 +4138,15 @@ object MbCanRepository {
         reapplyAllInterests()
         val listenerResults = MbCanEngineFacade.startDeepCmdListeners(resolved.toSet())
         val typedResults = MbCanEngineFacade.startDeepTypedObjectListeners()
+        val extraResults = MbCanEngineFacade.startDeepExtraListeners()
         val listenerCount = listenerResults.count { it.second } + typedResults.count { it.second }
         startSeatBeltDeepPoll()
+        startDeepBaselineAndPoll()
         val summary =
             "deepDiag mbcan types=${resolved.size}/${requested.size} " +
                 "cmdListeners=${listenerResults.count { it.second }} " +
                 "typed=${typedResults.joinToString { "${it.first}=${it.second}" }} " +
+                "extra=${extraResults.joinToString { "${it.first}=${it.second}" }} " +
                 "missing=${missing.joinToString()}"
         DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, summary)
         summary
@@ -4135,6 +4155,82 @@ object MbCanRepository {
     /**
      * OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on.
      */
+    /**
+     * One full read when deep mode starts (objects, every vehicle/audio int, and vehicle
+     * byte arrays that carry more than that int), then a 30 s poll of the object types
+     * OEM does not push. Both run on [stateApplyDispatcher]; [delay] lets pushes in.
+     */
+    private fun startDeepBaselineAndPoll() {
+        deepObjectPollJob?.cancel()
+        val scope = boundScope ?: return
+        deepObjectPollJob = scope.launch(stateApplyDispatcher) {
+            readDeepBaseline()
+            while (MbCanDiagnostics.deepEnabled.value) {
+                delay(DEEP_OBJECT_POLL_MS)
+                if (!MbCanDiagnostics.deepEnabled.value) break
+                pollDeepObjects()
+            }
+        }
+    }
+
+    private suspend fun readDeepBaseline() {
+        DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, "deepDiag baseline start")
+        var objects = 0
+        var params = 0
+        var wideBytes = 0
+        for ((name, type) in DeepDiagnosticsCatalog.mbcanObjectDataTypes) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val obj = MbCanEngineFacade.readMbCanDataObject(type)
+            if (obj != null) {
+                DeepCanDiagnostics.recordMbCanObjectFields(name, MbCanObjectDump.flatten(obj))
+                objects++
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+        val rows = ExpertRawCanCatalog.allParams().filter {
+            it.bus == ExpertRawCanBus.Vehicle || it.bus == ExpertRawCanBus.Audio
+        }
+        for (row in rows) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val raw = when (row.bus) {
+                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(row.mbCanId)
+                ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(row.mbCanId)
+                ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> null
+            }
+            if (raw != null) {
+                val dataType = if (row.bus == ExpertRawCanBus.Vehicle) "baseline.vehicle" else "baseline.audio"
+                DeepCanDiagnostics.recordMbCanCmdChanged(dataType, 0, 0, row.mbCanId, raw)
+                params++
+            }
+            if (row.bus == ExpertRawCanBus.Vehicle) {
+                val bytes = MbCanEngineFacade.canGetVehicleValueBytes(row.mbCanId)
+                if (bytes != null && bytes.size > 1) {
+                    DeepCanDiagnostics.recordMbCanObjectFields(
+                        "baseline.vehicleBytes",
+                        listOf("id${row.mbCanId}" to formatUnsignedBytes(bytes)),
+                    )
+                    wideBytes++
+                }
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+        DeepCanDiagnostics.report(
+            DeepCanDiagnostics.MBCAN_TAG,
+            "deepDiag baseline done objects=$objects params=$params wideBytes=$wideBytes",
+        )
+    }
+
+    private suspend fun pollDeepObjects() {
+        for ((name, type) in DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val obj = MbCanEngineFacade.readMbCanDataObject(type)
+            if (obj != null) {
+                DeepCanDiagnostics.recordMbCanObjectFields(name, MbCanObjectDump.flatten(obj))
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+    }
+
     private fun startSeatBeltDeepPoll() {
         seatBeltDeepPollJob?.cancel()
         val scope = boundScope ?: return

@@ -76,6 +76,19 @@ class DeepDiagnosticsCatalogTest {
         assertEquals("eMBCAN_VEHICLE_BCM_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onVehicleBcmStatusChange"))
         assertEquals("eMBCAN_VEHICLE_WHEEL", DeepDiagnosticsCatalog.mbcanCallbackDataType("onPull"))
         assertEquals("cb.onSomethingNew", DeepDiagnosticsCatalog.mbcanCallbackDataType("onSomethingNew"))
+        assertEquals("eMBCAN_AVM_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onAvmStatusChange"))
+        assertEquals("eMBCAN_SEAT_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onVehicleSeatStatusChange"))
+        assertEquals("eMBCAN_PM25INFO", DeepDiagnosticsCatalog.mbcanCallbackDataType("onPMChanged"))
+    }
+
+    @Test
+    fun `poll-only types are the ones OEM does not push`() {
+        val names = DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes.map { it.first }
+        assertTrue("eMBCAN_VEHICLE_ICM_DRIVE_INFO" in names)
+        assertTrue("eMBCAN_VEHICLE_EPB_STATUS" in names)
+        assertFalse("eMBCAN_VEHICLE_SPEED" in names)
+        assertFalse("eMBCAN_VEHICLE_BCM_STATUS" in names)
+        assertEquals(44, DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes.toMap()["eMBCAN_VEHICLE_ICM_DRIVE_INFO"])
     }
 
     @Test

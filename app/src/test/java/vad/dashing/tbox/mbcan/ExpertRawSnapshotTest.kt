@@ -56,4 +56,21 @@ class ExpertRawSnapshotTest {
         assertTrue(ExpertRawSnapshot.diff(before, before).isEmpty())
         assertEquals(3, ExpertRawSnapshot.okCount(before))
     }
+
+    @Test
+    fun `entries keep the int and the byte array as separate keys`() {
+        val result = ExpertRawGetResult(
+            success = true,
+            rawValue = 2,
+            message = "ok",
+            fields = listOf("bytes" to "[2,0,15]"),
+        )
+        assertEquals(
+            listOf(
+                "Vehicle/HVAC_POWER(7)" to "2",
+                "Vehicle/HVAC_POWER(7).bytes" to "[2,0,15]",
+            ),
+            ExpertRawSnapshot.entries(vehicle, result),
+        )
+    }
 }

@@ -127,6 +127,7 @@ fun ExpertRawGetSetDialog(
                 statusText = context.getString(R.string.expert_raw_get_set_snapshot_progress, done, total)
             }
             val current = ExpertRawSnapshot.toMap(results)
+            ExpertRawCanCatalog.logSnapshot(current, modeStorage)
             val okCount = ExpertRawSnapshot.okCount(current)
             statusText = if (compare && before != null) {
                 val changes = ExpertRawSnapshot.diff(before, current)

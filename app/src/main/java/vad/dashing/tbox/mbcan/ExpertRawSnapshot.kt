@@ -14,8 +14,11 @@ object ExpertRawSnapshot {
     fun entries(param: ExpertRawCanParam, result: ExpertRawGetResult): List<Pair<String, String>> {
         val key = key(param)
         if (!result.success) return listOf(key to FAILED_VALUE)
-        result.fields?.let { fields -> return fields.map { (field, value) -> "$key.$field" to value } }
-        return listOf(key to (result.rawValue?.toString() ?: "null"))
+        val rows = ArrayList<Pair<String, String>>()
+        if (result.rawValue != null) rows += key to result.rawValue.toString()
+        result.fields?.forEach { (field, value) -> rows += "$key.$field" to value }
+        if (rows.isEmpty()) rows += key to "null"
+        return rows
     }
 
     fun toMap(results: List<Pair<ExpertRawCanParam, ExpertRawGetResult>>): Map<String, String> {

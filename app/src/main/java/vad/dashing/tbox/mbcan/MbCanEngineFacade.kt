@@ -856,6 +856,26 @@ object MbCanEngineFacade {
     }
 
     /**
+     * [com.mengbo.mbCan.MBCanEngine.canGetVehicleValue]: raw bytes behind a vehicle
+     * property, which can be wider than the int from [canGetVehicleParam].
+     */
+    fun canGetVehicleValueBytes(propertyId: Int): ByteArray? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val engine = engineInstance ?: return null
+        warnIfNativeCallOnMain("getValue", propertyId)
+        return nativeCallLock.withLock {
+            runCatching {
+                val method = canGetVehicleValueMethod ?: engine.javaClass
+                    .getMethod("canGetVehicleValue", Int::class.javaPrimitiveType)
+                    .also { canGetVehicleValueMethod = it }
+                method.invoke(engine, propertyId) as? ByteArray
+            }.getOrNull()
+        }
+    }
+
+    private var canGetVehicleValueMethod: Method? = null
+
+    /**
      * Seat-belt warning raw via [getMbCanData] type **15** (`eMBCAN_SEAT_BELT_STATUS`).
      * OEM push callback for this type is empty — poll only.
      */
@@ -887,7 +907,114 @@ object MbCanEngineFacade {
         }
         deepCmdListenerProxies.clear()
         stopDeepTypedObjectListeners()
+        stopDeepExtraListeners()
     }
+
+    /**
+     * Deep-only OEM callbacks that production never registers.
+     *
+     * Listeners whose unregister also unsubscribes shared types (ACC unsubscribes BCM,
+     * air-purge unsubscribes BCM) are attached by setting the engine field, so stopping
+     * deep mode does not tear down production subscriptions. The rest use the public
+     * register/unregister pair: each one only touches its own data type.
+     */
+    @Synchronized
+    fun startDeepExtraListeners(): List<Pair<String, Boolean>> {
+        if (ensureInitialized() !is MbCanAvailability.Available || engineInstance == null) {
+            return emptyList()
+        }
+        val attached = mutableListOf<Pair<String, Boolean>>()
+        attached += "acc" to attachDeepFieldListener(
+            "mbCanVehicleAccStatusCallback",
+            "com.mengbo.mbCan.interfaces.IMbCanVehicleAccStatusCallback",
+        )
+        attached += "airPurge" to attachDeepFieldListener(
+            "mbAirPurgeListener",
+            "com.mengbo.mbCan.interfaces.IMBAirPurgeListener",
+        )
+        deepExtraListenerSpecs.forEach { spec ->
+            attached += spec.label to registerDeepExtraListener(spec)
+        }
+        return attached
+    }
+
+    @Synchronized
+    fun stopDeepExtraListeners() {
+        detachDeepFieldListeners()
+        val inst = engineInstance
+        deepExtraListenerProxies.keys.toList().forEach { label ->
+            val spec = deepExtraListenerSpecs.firstOrNull { it.label == label } ?: return@forEach
+            if (inst != null) {
+                runCatching {
+                    nativeCall { inst.javaClass.getMethod(spec.unregister).invoke(inst) }
+                }
+            }
+        }
+        deepExtraListenerProxies.clear()
+    }
+
+    private data class DeepExtraListener(val label: String, val iface: String, val register: String, val unregister: String)
+
+    private val deepExtraListenerProxies = HashMap<String, Any>()
+    private val deepFieldListenerProxies = HashMap<String, Any>()
+
+    private fun registerDeepExtraListener(spec: DeepExtraListener): Boolean {
+        if (deepExtraListenerProxies.containsKey(spec.label)) return true
+        val inst = engineInstance ?: return false
+        val iface = runCatching { Class.forName(spec.iface) }.getOrNull() ?: return false
+        val proxy = newOemProxy(iface.classLoader, iface) { _, method, args ->
+            oemSafe(method.name) { mirrorDeepCallback(method.name, args) }
+            null
+        }
+        val ok = runCatching {
+            nativeCall { inst.javaClass.getMethod(spec.register, iface).invoke(inst, proxy) }
+            true
+        }.getOrDefault(false)
+        if (ok) deepExtraListenerProxies[spec.label] = proxy
+        return ok
+    }
+
+    /** Sets an engine listener field without the OEM register method (no subscribe side effect). */
+    private fun attachDeepFieldListener(fieldName: String, ifaceName: String): Boolean {
+        if (deepFieldListenerProxies.containsKey(fieldName)) return true
+        val inst = engineInstance ?: return false
+        val iface = runCatching { Class.forName(ifaceName) }.getOrNull() ?: return false
+        val field = runCatching {
+            inst.javaClass.getDeclaredField(fieldName).apply { isAccessible = true }
+        }.getOrNull() ?: return false
+        val current = runCatching { field.get(inst) }.getOrNull()
+        if (current != null) return false
+        val proxy = newOemProxy(iface.classLoader, iface) { _, method, args ->
+            oemSafe(method.name) { mirrorDeepCallback(method.name, args) }
+            null
+        }
+        val ok = runCatching { field.set(inst, proxy); true }.getOrDefault(false)
+        if (ok) deepFieldListenerProxies[fieldName] = proxy
+        return ok
+    }
+
+    private fun detachDeepFieldListeners() {
+        val inst = engineInstance
+        deepFieldListenerProxies.forEach { (fieldName, proxy) ->
+            if (inst == null) return@forEach
+            runCatching {
+                val field = inst.javaClass.getDeclaredField(fieldName).apply { isAccessible = true }
+                if (field.get(inst) === proxy) field.set(inst, null)
+            }
+        }
+        deepFieldListenerProxies.clear()
+    }
+
+    private val deepExtraListenerSpecs = listOf(
+            DeepExtraListener("avm", "com.mengbo.mbCan.interfaces.IMbCanAvmStatusCallback", "registMBCanAvmStatusCallback", "unRegistMBCanAvmStatusCallback"),
+            DeepExtraListener("bsd", "com.mengbo.mbCan.interfaces.IMbCanBsdAlarmCallback", "registIMBBsdAlarmListener", "unRegistIMBBsdAlarmListener"),
+            DeepExtraListener("dow", "com.mengbo.mbCan.interfaces.IMbCanDowAlarmCallback", "registIMBDowAlarmListener", "unRegistIMBDowAlarmListener"),
+            DeepExtraListener("rcta", "com.mengbo.mbCan.interfaces.IMbCanRCTAAlarmCallback", "registIMBRCTAAlarmListener", "unRegistIMBRCTAAlarmListener"),
+            DeepExtraListener("radar", "com.mengbo.mbCan.interfaces.IMbCanRadarSensorCallback", "registRadarSensorListener", "unregistRadarSensorListener"),
+            DeepExtraListener("chime", "com.mengbo.mbCan.interfaces.IMBCanChimeStatusCallback", "registIMBChimeStatusListener", "unRegistIMBChimeStatusListener"),
+            DeepExtraListener("icmAlarm", "com.mengbo.mbCan.interfaces.IMbCanICMAlarmInfoCallback", "registerICMAlarmInfoListener", "unregisterICMAlarmInfoListener"),
+            DeepExtraListener("dvrParam", "com.mengbo.mbCan.interfaces.IMbCanDVRParamCallback", "registerCanDVRParamInfoCallback", "unregisterCanDVRParamInfoCallback"),
+        )
 
     private fun resolveDataTypeEnum(name: String): Any? = runCatching {
         val enumClass = Class.forName(DATA_TYPE_CLASS) as Class<out Enum<*>>
