@@ -120,8 +120,55 @@ private fun ConnectionTab(
 ) {
     val settings = state.settings
     val connection = state.connectionDraft
+    val dirty = viewModel.connectionDirty()
+    if (dirty) {
+        Button(
+            onClick = {
+                viewModel.saveConnection()
+                onSettingsSaved()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+        ) {
+            Text("Сохранить настройки подключения", style = MaterialTheme.typography.tboxButton)
+        }
+    }
+    OutlinedButton(
+        onClick = viewModel::checkBroker,
+        enabled = !state.brokerBusy,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text("Проверить подключение", style = MaterialTheme.typography.tboxButton)
+    }
+    listOf(state.connectionMessage, state.brokerMessage)
+        .filter { it.isNotBlank() }
+        .forEach { message ->
+            Text(
+                message,
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     LinkSummary(state)
-    SectionTitle("Monitor")
+    SectionTitle("TBox Monitor")
+    Text(
+        if (settings.accessToken.isBlank()) {
+            "Сопряжения ещё нет. В TBox Monitor откройте Настройки → API и нажмите «Подключить приложение». Здесь нажмите «Отправить запрос» и подтвердите «Разрешить»."
+        } else {
+            "Сопряжение выполнено"
+        },
+        style = MaterialTheme.typography.tboxBody,
+        color = if (settings.accessToken.isBlank()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        modifier = Modifier.padding(top = 4.dp),
+    )
     NumberField("Порт API", settings.apiPort.toString()) {
         viewModel.update { current -> current.copy(apiPort = it.toIntOrNull() ?: current.apiPort) }
         onSettingsSaved()
@@ -144,6 +191,15 @@ private fun ConnectionTab(
             modifier = Modifier.padding(top = 8.dp),
         )
     }
+    OutlinedButton(onClick = viewModel::toggleManualToken, modifier = Modifier.padding(top = 8.dp)) {
+        Text("Токен вручную", style = MaterialTheme.typography.tboxButton)
+    }
+    if (state.manualTokenOpen) {
+        TextField("Токен", state.manualToken) { viewModel.setManualToken(it) }
+        Button(onClick = viewModel::saveManualToken, modifier = Modifier.padding(top = 8.dp)) {
+            Text("Сохранить токен", style = MaterialTheme.typography.tboxButton)
+        }
+    }
     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
     SectionTitle("Брокер")
     SettingSwitch(
@@ -157,6 +213,14 @@ private fun ConnectionTab(
         onChecked = { enabled ->
             viewModel.setBrokerEnabled(enabled)
             onSettingsSaved()
+        },
+    )
+    SettingSwitch(
+        checked = settings.autostart,
+        title = "Автозапуск моста",
+        description = "После включения головного устройства. От «Через WireGuard» не зависит: включённый туннель поднимается вместе с мостом",
+        onChecked = { enabled ->
+            viewModel.update { current -> current.copy(autostart = enabled) }
         },
     )
     TextField("Адрес", connection.brokerHost) {
@@ -188,53 +252,6 @@ private fun ConnectionTab(
             modifier = Modifier.padding(top = 8.dp),
         )
     }
-    val dirty = viewModel.connectionDirty()
-    Row(
-        modifier = Modifier.padding(top = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Button(
-            onClick = {
-                viewModel.saveConnection()
-                onSettingsSaved()
-            },
-        ) {
-            Text("Сохранить", style = MaterialTheme.typography.tboxButton)
-        }
-        OutlinedButton(
-            onClick = viewModel::checkBroker,
-            enabled = !state.brokerBusy,
-        ) {
-            Text("Проверить", style = MaterialTheme.typography.tboxButton)
-        }
-    }
-    if (dirty) {
-        Text(
-            "Есть несохранённые изменения",
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
-    listOf(state.connectionMessage, state.brokerMessage)
-        .filter { it.isNotBlank() }
-        .forEach { message ->
-            Text(
-                message,
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-    SettingSwitch(
-        checked = settings.autostart,
-        title = "Автозапуск",
-        description = "Поднимать мост после включения головного устройства",
-        onChecked = { enabled ->
-            viewModel.update { current -> current.copy(autostart = enabled) }
-        },
-    )
     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
     OutlinedButton(onClick = viewModel::toggleAdvanced) {
         Text(if (state.advancedOpen) "Скрыть дополнительно" else "Дополнительно", style = MaterialTheme.typography.tboxButton)
@@ -275,15 +292,6 @@ private fun ConnectionTab(
         }
         TextField("Идентификатор MQTT-клиента", connection.mqttClientId) {
             viewModel.editConnection { current -> current.copy(mqttClientId = it) }
-        }
-        OutlinedButton(onClick = viewModel::toggleManualToken, modifier = Modifier.padding(top = 8.dp)) {
-            Text("Токен вручную", style = MaterialTheme.typography.tboxButton)
-        }
-        if (state.manualTokenOpen) {
-            TextField("Токен", state.manualToken) { viewModel.setManualToken(it) }
-            Button(onClick = viewModel::saveManualToken, modifier = Modifier.padding(top = 8.dp)) {
-                Text("Сохранить токен", style = MaterialTheme.typography.tboxButton)
-            }
         }
     }
 }
