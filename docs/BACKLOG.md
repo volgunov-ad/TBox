@@ -93,6 +93,7 @@
 | Пилот СКДФ maxspeed (tools, пакет НН) | [SKDF_SPEED_LIMITS_NIZHNY_RU.md](./SKDF_SPEED_LIMITS_NIZHNY_RU.md) |
 | CERT HUD/ICM без полной связки UI | [GUARANTEED_STOCK_PARAMETERS_RU.md](./GUARANTEED_STOCK_PARAMETERS_RU.md) § Backlog CERT |
 | Беспроводная зарядка на Android 10 (pull/push не wired) | [MBCAN_VHAL_PARAMETERS_RU.md](./MBCAN_VHAL_PARAMETERS_RU.md) |
+| Системные цвета интерфейса и виджетов, слот темы `systemColors` | [SYSTEM_COLORS_PLAN_RU.md](./SYSTEM_COLORS_PLAN_RU.md) |
 
 ---
 

@@ -552,6 +552,7 @@ files/themes/{cacheKey}/
 
 ## См. также
 
+- [SYSTEM_COLORS_PLAN_RU.md](SYSTEM_COLORS_PLAN_RU.md) — план палитры интерфейса и слота темы (не реализовано);
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — обмен с TBox;
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки в темах;

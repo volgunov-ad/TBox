@@ -5,8 +5,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.ui.LeftMenuTabField
+import vad.dashing.tbox.ui.MAX_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.MIN_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.normalizeLeftMenuWidthDp
 
 class LeftMenuLayoutTest {
 
@@ -141,5 +145,15 @@ class LeftMenuLayoutTest {
         assertFalse(LeftMenuLayout.isDisabledByNoTboxConnect(LeftMenuTabField.MODEM))
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.SETTINGS }.enabled)
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.TRIPS }.enabled)
+    }
+
+    @Test
+    fun normalizeLeftMenuWidthDp_clampsAndSnapsToStep() {
+        assertEquals(DEFAULT_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(330))
+        assertEquals(MIN_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(0))
+        assertEquals(MIN_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(204))
+        assertEquals(210, normalizeLeftMenuWidthDp(205))
+        assertEquals(MAX_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(10_000))
+        assertEquals(MAX_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(479))
     }
 }

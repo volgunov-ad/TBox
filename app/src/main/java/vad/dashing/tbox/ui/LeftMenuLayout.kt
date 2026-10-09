@@ -6,6 +6,20 @@ import org.json.JSONObject
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 
+/** Expanded left sidebar width. Collapsed icon strip stays 64 dp and is not this setting. */
+const val DEFAULT_LEFT_MENU_WIDTH_DP = 330
+const val MIN_LEFT_MENU_WIDTH_DP = 200
+const val MAX_LEFT_MENU_WIDTH_DP = 480
+const val LEFT_MENU_WIDTH_STEP_DP = 10
+
+/** Clamps to 200–480 dp and snaps to the nearest 10 dp step. */
+fun normalizeLeftMenuWidthDp(raw: Int): Int {
+    val clamped = raw.coerceIn(MIN_LEFT_MENU_WIDTH_DP, MAX_LEFT_MENU_WIDTH_DP)
+    val step = LEFT_MENU_WIDTH_STEP_DP
+    val snapped = ((clamped + step / 2) / step) * step
+    return snapped.coerceIn(MIN_LEFT_MENU_WIDTH_DP, MAX_LEFT_MENU_WIDTH_DP)
+}
+
 /**
  * Identifiers for configurable left-sidebar menu tabs.
  * [id] is persisted in settings JSON.
