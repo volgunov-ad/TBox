@@ -217,6 +217,7 @@ fun TboxScreen(
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val isMenuVisible by settingsViewModel.isLeftMenuVisible.collectAsStateWithLifecycle()
+    val leftMenuWidthDp by settingsViewModel.leftMenuWidthDp.collectAsStateWithLifecycle()
     val updateUiState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val showUpdateMenuEntry = when (val state = updateUiState) {
         is UpdateUiState.Available,
@@ -264,7 +265,7 @@ fun TboxScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(if (isMenuVisible) 330.dp else menuButtonSize)
+                    .width(if (isMenuVisible) leftMenuWidthDp.dp else menuButtonSize)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.background)
             ) {

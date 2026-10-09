@@ -29,6 +29,7 @@ import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.wifimodem.ModemSource
@@ -637,6 +638,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = true
+        )
+
+    val leftMenuWidthDp = settingsManager.leftMenuWidthDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_LEFT_MENU_WIDTH_DP,
         )
 
     val floatingDashboards = settingsManager.floatingDashboardsFlow
@@ -2438,6 +2446,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLeftMenuVisibleSetting(visible: Boolean) {
         viewModelScope.launch {
             settingsManager.saveLeftMenuVisibleSetting(visible)
+        }
+    }
+
+    fun saveLeftMenuWidthDp(widthDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveLeftMenuWidthDp(widthDp)
         }
     }
 

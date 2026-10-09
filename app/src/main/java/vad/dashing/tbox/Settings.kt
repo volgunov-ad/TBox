@@ -36,6 +36,8 @@ import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.hotspot.EspSoftApIdentity
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.normalizeLeftMenuWidthDp
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
@@ -1215,6 +1217,8 @@ class SettingsManager(private val context: Context) {
 
         private val LEFT_MENU_LAYOUT_KEY =
             stringPreferencesKey("${KEY_PREFIX}left_menu_layout")
+        private val LEFT_MENU_WIDTH_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}left_menu_width_dp")
 
     }
 
@@ -1653,6 +1657,14 @@ class SettingsManager(private val context: Context) {
 
     val leftMenuVisibleFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
+        .distinctUntilChanged()
+
+    val leftMenuWidthDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeLeftMenuWidthDp(
+                preferences[LEFT_MENU_WIDTH_DP_KEY] ?: DEFAULT_LEFT_MENU_WIDTH_DP,
+            )
+        }
         .distinctUntilChanged()
 
     val selectedTabFlow: Flow<String> = context.settingsDataStore.data
@@ -3312,6 +3324,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LEFT_MENU_VISIBLE] = visible
+        }
+    }
+
+    suspend fun saveLeftMenuWidthDp(widthDp: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LEFT_MENU_WIDTH_DP_KEY] = normalizeLeftMenuWidthDp(widthDp)
         }
     }
 

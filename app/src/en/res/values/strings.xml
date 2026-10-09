@@ -1385,6 +1385,8 @@
 
     <string name="settings_left_menu_title">General UI settings</string>
     <string name="settings_left_menu_edit">Configure menu items</string>
+    <string name="settings_left_menu_width_title">Menu width: %1$d dp</string>
+    <string name="settings_left_menu_width_desc">Width of the expanded left menu (200–480 dp, step 10). The collapsed icon strip stays the same. Not saved in a visual theme.</string>
     <string name="settings_app_font_family_title">Interface font</string>
     <string name="settings_app_font_family_desc">App text font: system families and bundled Google Fonts (Cabin, Nunito, Roboto). Saved in settings backup and visual theme.</string>
     <string name="settings_app_font_family_default">Default</string>

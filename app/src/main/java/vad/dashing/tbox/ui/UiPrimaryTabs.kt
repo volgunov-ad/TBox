@@ -56,6 +56,9 @@ import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.ui.LEFT_MENU_WIDTH_STEP_DP
+import vad.dashing.tbox.ui.MAX_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.MIN_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
@@ -813,6 +816,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val leftMenuWidthDp by settingsViewModel.leftMenuWidthDp.collectAsStateWithLifecycle()
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
@@ -1155,6 +1159,15 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
+        SettingSliderInt(
+            value = leftMenuWidthDp,
+            onValueChange = { settingsViewModel.saveLeftMenuWidthDp(it) },
+            text = stringResource(R.string.settings_left_menu_width_title, leftMenuWidthDp),
+            description = stringResource(R.string.settings_left_menu_width_desc),
+            minValue = MIN_LEFT_MENU_WIDTH_DP,
+            maxValue = MAX_LEFT_MENU_WIDTH_DP,
+            step = LEFT_MENU_WIDTH_STEP_DP,
+        )
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
             onFontFamilyIdChange = { settingsViewModel.saveAppFontFamilyId(it) },
