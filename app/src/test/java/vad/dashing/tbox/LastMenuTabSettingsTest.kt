@@ -1,10 +1,12 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import androidx.datastore.preferences.core.edit
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -14,6 +16,14 @@ import vad.dashing.tbox.ui.LeftMenuTabField
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
 class LastMenuTabSettingsTest {
+
+    @Before
+    fun clearSettingsDataStore() {
+        // Robolectric reuses one Application; preferencesDataStore survives across @Test methods.
+        runBlocking {
+            ApplicationProvider.getApplicationContext<Application>().settingsDataStore.edit { it.clear() }
+        }
+    }
 
     @Test
     fun saveSelectedTab_nonMain_updatesLastMenuTab() = runBlocking {
