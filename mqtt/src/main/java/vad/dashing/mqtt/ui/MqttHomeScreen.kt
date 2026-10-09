@@ -120,6 +120,15 @@ private fun ConnectionTab(
 ) {
     val settings = state.settings
     val connection = state.connectionDraft
+    SettingSwitch(
+        checked = settings.autostart,
+        title = "Автозапуск при старте системы",
+        description = "Мост поднимется после включения головного устройства. От WireGuard не зависит",
+        onChecked = { enabled ->
+            viewModel.update { current -> current.copy(autostart = enabled) }
+        },
+    )
+    HorizontalDivider()
     val dirty = viewModel.connectionDirty()
     if (dirty) {
         Button(
@@ -213,14 +222,6 @@ private fun ConnectionTab(
         onChecked = { enabled ->
             viewModel.setBrokerEnabled(enabled)
             onSettingsSaved()
-        },
-    )
-    SettingSwitch(
-        checked = settings.autostart,
-        title = "Автозапуск моста",
-        description = "После включения головного устройства. От «Через WireGuard» не зависит: включённый туннель поднимается вместе с мостом",
-        onChecked = { enabled ->
-            viewModel.update { current -> current.copy(autostart = enabled) }
         },
     )
     TextField("Адрес", connection.brokerHost) {
