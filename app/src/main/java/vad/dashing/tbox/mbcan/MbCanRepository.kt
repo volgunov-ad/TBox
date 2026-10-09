@@ -2134,26 +2134,70 @@ object MbCanRepository {
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawGetResult(false, message = "mbCAN unavailable")
             }
-            val raw = when (bus) {
-                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
-                ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
-                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalGet(propertyId)
+            readRawReady(bus, propertyId)
+        }
+
+    /**
+     * Expert snapshot: one readiness check, then every row in order with [pacingMs]
+     * between JNI reads so the shared `mbcan-state-apply` thread keeps serving pushes.
+     */
+    suspend fun readRawBatch(
+        params: List<ExpertRawCanParam>,
+        pacingMs: Long,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> = withContext(stateApplyDispatcher) {
+        ensureMbCanReadyIfNeeded()
+        if (availability.value !is MbCanAvailability.Available) {
+            val fail = ExpertRawGetResult(false, message = "mbCAN unavailable")
+            return@withContext params.map { it to fail }
+        }
+        params.mapIndexed { index, param ->
+            val result = if (param.bus == ExpertRawCanBus.VhalDirect) {
+                a10OnlyVhalGet(param.mbCanId)
+            } else {
+                readRawReady(param.bus, param.mbCanId)
             }
-            if (raw == null) {
-                ExpertRawGetResult(
+            onProgress(index + 1, params.size)
+            delay(pacingMs)
+            param to result
+        }
+    }
+
+    private fun readRawReady(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            val obj = MbCanEngineFacade.readMbCanDataObject(propertyId)
+                ?: return ExpertRawGetResult(
                     success = false,
                     effectivePropertyId = propertyId,
-                    message = "Get returned null",
+                    message = "getMbCanData returned null",
                 )
-            } else {
-                ExpertRawGetResult(
-                    success = true,
-                    rawValue = raw,
-                    effectivePropertyId = propertyId,
-                    message = "ok",
-                )
-            }
+            return ExpertRawGetResult(
+                success = true,
+                effectivePropertyId = propertyId,
+                message = "ok ${obj.javaClass.simpleName}",
+                fields = MbCanObjectDump.flatten(obj),
+            )
         }
+        val raw = when (bus) {
+            ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
+            ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
+            ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> return a10OnlyVhalGet(propertyId)
+        }
+        return if (raw == null) {
+            ExpertRawGetResult(
+                success = false,
+                effectivePropertyId = propertyId,
+                message = "Get returned null",
+            )
+        } else {
+            ExpertRawGetResult(
+                success = true,
+                rawValue = raw,
+                effectivePropertyId = propertyId,
+                message = "ok",
+            )
+        }
+    }
 
     /**
      * Expert raw Set: direct facade set with the given integer (bypasses registry / encoding).
@@ -2163,6 +2207,9 @@ object MbCanRepository {
             if (bus == ExpertRawCanBus.VhalDirect) {
                 return@withContext a10OnlyVhalSet(propertyId)
             }
+            if (bus == ExpertRawCanBus.MbCanObject) {
+                return@withContext ExpertRawSetResult(false, propertyId, "mbCAN object rows are read-only")
+            }
             ensureMbCanReadyIfNeeded()
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawSetResult(false, message = "mbCAN unavailable")
@@ -2170,7 +2217,8 @@ object MbCanRepository {
             val setResult = when (bus) {
                 ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canSetVehicleParam(propertyId, value)
                 ExpertRawCanBus.Audio -> MbCanEngineFacade.canSetAudioParam(propertyId, value)
-                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalSet(propertyId)
+                ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject ->
+                    return@withContext a10OnlyVhalSet(propertyId)
             } ?: return@withContext ExpertRawSetResult(
                 success = false,
                 effectivePropertyId = propertyId,
@@ -4136,26 +4184,24 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
                 mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
                 mergedSignals.contains(MbCanSignal.TrunkDoor)
-            MbCanEngineFacade.syncVehicleCfgCmdListener(
-                needsCfgVehicleListener || MbCanDiagnostics.deepEnabled.value
-            )
-            MbCanEngineFacade.syncAudioCfgCmdListener(
-                needsCfgAudioListener || MbCanDiagnostics.deepEnabled.value
-            )
-            if (needsSettingsTelemetry) {
+            // Deep mode keeps every OEM push bridge alive so payloads are mirrored to the journal.
+            val deep = MbCanDiagnostics.deepEnabled.value
+            MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener || deep)
+            MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener || deep)
+            if (needsSettingsTelemetry || deep) {
                 MbCanEngineFacade.registerSettingsTelemetryBridge()
             } else {
                 MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             }
             val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
-            MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
+            MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener || deep)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.FrmTargetDistance) ||
                 mergedSignals.contains(MbCanSignal.AccTimeGap)
-            MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
+            MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener || deep)
             val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.GasPedal)
-            MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
+            MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener || deep)
             val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
             val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)
             val needsWheelPulseListener = mergedSignals.contains(MbCanSignal.WheelPulse)
@@ -4163,6 +4209,7 @@ object MbCanRepository {
                 needSteer = needsSteeringListener,
                 needTurnLights = needsTurnSignalsListener,
                 needWheelPulse = needsWheelPulseListener,
+                keepForDeepDiagnostics = deep,
             )
             // Listener bridges above may ensureInitialized() as a side effect; make sure
             // JobManager types (incl. STEERING_ANGLE / TURNLIGHT / WHEEL for A9 push) are actually subscribed.

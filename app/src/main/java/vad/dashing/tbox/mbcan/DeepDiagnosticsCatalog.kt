@@ -9,7 +9,8 @@ package vad.dashing.tbox.mbcan
  *
  * A10 (VHAL): direct telemetry constants from [FirmwareVehicleJsonMapper],
  * verified read translations from [FirmwareVehicleJsonMapper.explicitReadEntries],
- * plus experimental ids. Write-only OEM `T_*` pulse ids (MFS cruise, SLA req)
+ * experimental ids and every `R_*` id of the firmware table ([VhalFirmwareReadIds]).
+ * Write-only OEM `T_*` pulse ids (MFS cruise, SLA req)
  * are deliberately absent — subscribing them yields nothing.
  *
  * A9 (mbCAN): [mbcanDataTypes] names every `MBCanDataType` to subscribe.
@@ -136,7 +137,8 @@ object DeepDiagnosticsCatalog {
     val vhalPropertyIds: List<Int> = (
         vhalTelemetryIdNames.map { it.first } +
             FirmwareVehicleJsonMapper.explicitReadEntries().map { it.second } +
-            vhalExperimentalIdNames.map { it.first }
+            vhalExperimentalIdNames.map { it.first } +
+            VhalFirmwareReadIds.all.map { it.second }
         ).distinct()
 
     /** A9 `MBCanDataType` names already used by production signals. */
@@ -186,10 +188,114 @@ object DeepDiagnosticsCatalog {
         "eMBCAN_VEHICLE_CONSUMPTION",
         "eMBCAN_VEHICLE_INVERTER_STATUS",
         "eMBCAN_VEHICLE_ENGINE_GEAR",
+        "eMBCAN_VEHICLE_GASPED_STATUS",
+        "eMBCAN_VEHICLE_EPB_STATUS",
+        "eMBCAN_VEHICLE_FUELTANK",
+        "eMBCAN_VEHICLE_ICM_FAULT_INFO",
+        "eMBCAN_ICM_ALARM_INFO",
+        "eMBCAN_VEHICLE_CEM_FRAG",
+        "eMBCAN_AVM_STATUS",
+        "eMBCAN_CHIME_STATUS",
+        "eMBCAN_INSTRUMENT_CMDREPLY",
     )
 
     /** All A9 `MBCanDataType` names to subscribe in deep mode. */
     val mbcanDataTypes: List<String> = mbcanProductionDataTypes + mbcanExperimentalDataTypes
+
+    /**
+     * OEM push callback method → `MBCanDataType` name, for deep object mirroring
+     * (`IMBCanSettingsCallback`, `IMBVehicleListener` and the typed listeners).
+     * Unknown methods are journaled as `cb.<method>`.
+     */
+    private val mbcanCallbackDataTypes: Map<String, String> = mapOf(
+        "onCanVehicleSpeed" to "eMBCAN_VEHICLE_SPEED",
+        "onSpeed" to "eMBCAN_VEHICLE_SPEED",
+        "onGear" to "eMBCAN_VEHICLE_GEAR",
+        "onSteeringWheel" to "eMBCAN_VEHICLE_STEERING_ANGLE",
+        "onVehicleTurnLightChange" to "eMBCAN_VEHICLE_TURNLIGHT",
+        "onPull" to "eMBCAN_VEHICLE_WHEEL",
+        "onVehicleDoorChange" to "eMBCAN_VEHICLE_DOOR",
+        "onVehicleAccStatusChange" to "eMBCAN_VEHICLE_ACCSTATUS",
+        "onCanVehicleFuelLevel" to "eMBCAN_VEHICLE_FUELLEVEL",
+        "onVehicleTotalOdoMeterChange" to "eMBCAN_VEHICLE_TOTALODOMETER",
+        "onWpcStatusChange" to "eMBCAN_WPC_STATUS",
+        "onVehicleBcmStatusChange" to "eMBCAN_VEHICLE_BCM_STATUS",
+        "onVehicleEngineStatusChange" to "eMBCAN_VEHICLE_ENGINE",
+        "onCanVehicleTires" to "eMBCAN_VEHICLE_TIRE",
+        "onVehicleFuelTank" to "eMBCAN_VEHICLE_FUELTANK",
+        "onVehicleGaspedStatus" to "eMBCAN_VEHICLE_GASPED_STATUS",
+        "onCanVehicleAqsStatus" to "eMBCAN_VEHICLE_AQS_STATUS",
+        "onCanVehicleExternalTemp" to "eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW",
+        "onVehicleEbsSocChange" to "eMBCAN_VEHICLE_EBS_SOC",
+        "onVehicleLkaSlaStatus" to "eMBCAN_VEHICLE_LKA_STATUS",
+        "onCanVehicleFrmInfo" to "eMBCAN_VEHICLE_FRM_INFO",
+        "onVehicleIcmInfoChange" to "eMBCAN_VEHICLE_ICM_INFO",
+        "onVehicleIcmFaultInfoChange" to "eMBCAN_VEHICLE_ICM_FAULT_INFO",
+        "onVehicleLkaFrag" to "eMBCAN_VEHICLE_CEM_FRAG",
+        "onVehicleIcmTripInfoChange" to "eMBCAN_ICM_TRIP_INFO",
+        "onVehicleInverterStatus" to "eMBCAN_VEHICLE_INVERTER_STATUS",
+        "onVehicleConsumptionChange" to "eMBCAN_VEHICLE_CONSUMPTION",
+        "onChargingReserveChange" to "eMBCAN_CHARGING_RESERVE",
+    )
+
+    fun mbcanCallbackDataType(methodName: String): String =
+        mbcanCallbackDataTypes[methodName] ?: "cb.$methodName"
+
+    /**
+     * A9 `MBCanDataType` name → numeric type for `getMbCanData` object reads in the
+     * expert raw window. CFG types (int items, already listed per id) and
+     * USB / UART / upgrade service channels are left out.
+     */
+    val mbcanObjectDataTypes: List<Pair<String, Int>> = listOf(
+        "eMBCAN_VEHICLE_SPEED" to 1,
+        "eMBCAN_VEHICLE_TURNLIGHT" to 2,
+        "eMBCAN_VEHICLE_STEERING_ANGLE" to 3,
+        "eMBCAN_VEHICLE_WHEEL" to 4,
+        "eMBCAN_VEHICLE_DOOR" to 5,
+        "eMBCAN_VEHICLE_ACCSTATUS" to 6,
+        "eMBCAN_RADARSENSOR" to 7,
+        "eMBCAN_SYSTEMMODE" to 8,
+        "eMBCAN_SEAT_STATUS" to 10,
+        "eMBCAN_RCTA_ALARM" to 11,
+        "eMBCAN_VEHICLE_FUELLEVEL" to 12,
+        "eMBCAN_DVR_STATUS" to 13,
+        "eMBCAN_WPC_STATUS" to 14,
+        "eMBCAN_SEAT_BELT_STATUS" to 15,
+        "eMBCAN_VEHICLE_TOTALODOMETER" to 16,
+        "eMBCAN_AVM_STATUS" to 17,
+        "eMBCAN_CHIME_STATUS" to 18,
+        "eMBCAN_RADIO_FREQUENCYINFO" to 19,
+        "eMBCAN_VEHICLE_GEAR" to 20,
+        "eMBCAN_VEHICLE_BCM_STATUS" to 21,
+        "eMBCAN_VEHICLE_ENGINE" to 22,
+        "eMBCAN_CFG_DMS" to 25,
+        "eMBCAN_DTC" to 27,
+        "eMBCAN_PM25INFO" to 28,
+        "eMBCAN_VEHICLE_ENGINE_GEAR" to 29,
+        "eMBCAN_RADIO_PROGRAMSTATE" to 30,
+        "eMBCAN_INSTRUMENT_CMDREPLY" to 31,
+        "eMBCAN_VEHICLE_TIRE" to 34,
+        "eMBCAN_VEHICLE_FUELTANK" to 35,
+        "eMBCAN_VEHICLE_GASPED_STATUS" to 36,
+        "eMBCAN_VEHICLE_AQS_STATUS" to 37,
+        "eMBCAN_VEHICLE_EXTERNAL_TEMP_RAW" to 38,
+        "eMBCAN_VEHICLE_EBS_SOC" to 39,
+        "eMBCAN_VEHICLE_LKA_STATUS" to 40,
+        "eMBCAN_VEHICLE_FRM_INFO" to 41,
+        "eMBCAN_VEHICLE_ICM_INFO" to 42,
+        "eMBCAN_VEHICLE_ICM_FAULT_INFO" to 43,
+        "eMBCAN_VEHICLE_ICM_DRIVE_INFO" to 44,
+        "eMBCAN_VEHICLE_CEM_FRAG" to 45,
+        "eMBCAN_DOW_ALARM" to 46,
+        "eMBCAN_BSD_ALARM" to 47,
+        "eMBCAN_ICM_TRIP_INFO" to 48,
+        "eMBCAN_ICM_ALARM_INFO" to 49,
+        "eMBCAN_VEHICLE_INVERTER_STATUS" to 50,
+        "eMBCAN_VEHICLE_DVR_PARAM" to 51,
+        "eMBCAN_VEHICLE_EPB_STATUS" to 52,
+        "eMBCAN_VEHICLE_CONSUMPTION" to 53,
+        "eMBCAN_CHARGING_RESERVE" to 54,
+    )
 
     /**
      * Short signal name for a raw A10 property id, or null when unknown
@@ -210,7 +316,11 @@ object DeepDiagnosticsCatalog {
             vhalTelemetryIdNames.forEach { (id, name) -> putIfAbsent(id, name) }
             vhalExperimentalIdNames.forEach { (id, name) -> putIfAbsent(id, name) }
             FirmwareVehicleJsonMapper.explicitReadEntries().forEach { (logicalId, vhalId) ->
-                putIfAbsent(vhalId, vehicleItemNames[logicalId] ?: "mbcan#$logicalId")
+                vehicleItemNames[logicalId]?.let { putIfAbsent(vhalId, it) }
+            }
+            VhalFirmwareReadIds.all.forEach { (name, id) -> putIfAbsent(id, name) }
+            FirmwareVehicleJsonMapper.explicitReadEntries().forEach { (logicalId, vhalId) ->
+                putIfAbsent(vhalId, "mbcan#$logicalId")
             }
         }
     }

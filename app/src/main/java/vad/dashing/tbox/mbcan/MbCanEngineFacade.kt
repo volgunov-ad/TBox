@@ -32,6 +32,17 @@ object MbCanEngineFacade {
         }
     }
 
+    /** Deep mode: every OEM push payload goes field-by-field into [DeepCanDiagnostics]. */
+    private fun mirrorDeepCallback(methodName: String, args: Array<out Any?>?) {
+        if (!MbCanDiagnostics.deepEnabled.value) return
+        runCatching {
+            DeepCanDiagnostics.recordMbCanObjectFields(
+                DeepDiagnosticsCatalog.mbcanCallbackDataType(methodName),
+                MbCanObjectDump.flattenArgs(args),
+            )
+        }.onFailure { android.util.Log.w(TAG, "deep mirror $methodName failed", it) }
+    }
+
     private const val ENGINE_CLASS = "com.mengbo.mbCan.MBCanEngine"
     private const val DATA_TYPE_CLASS = "com.mengbo.mbCan.defines.MBCanDataType"
     private const val WINDOW_CLASS = "com.mengbo.mbCan.entity.MBCanVehicleWindow"
@@ -353,7 +364,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             oemSafe(method.name) {
-
+                mirrorDeepCallback(method.name, args)
                 when (method.name) {
                     "onCanVehicleSpeed" -> {
                         val fromArgs = runCatching {
@@ -790,6 +801,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return false
         val handler = InvocationHandler { _, method, args ->
             oemSafe(method.name) {
+                mirrorDeepCallback(method.name, args)
                 if (method.name == "onVehicleDoorChange") {
                     val door = args?.getOrNull(0) ?: return@oemSafe
                     val snapshot = BcmDoorDomain.fromDoorObject(door) ?: return@oemSafe
@@ -826,6 +838,21 @@ object MbCanEngineFacade {
             }
         }
         deepDoorListenerProxy = null
+    }
+
+    /**
+     * Expert raw window: whatever object OEM holds for [dataType]. `getMbCanData`
+     * only casts, so `Object` accepts every entity class. Call off the main thread.
+     */
+    fun readMbCanDataObject(dataType: Int): Any? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        warnIfNativeCallOnMain("getMbCanData", dataType)
+        return runCatching {
+            val getMbCanData = Class.forName(ENGINE_CLASS)
+                .getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            nativeGetMbCanData(getMbCanData, inst, dataType, Any::class.java)
+        }.getOrNull()
     }
 
     /**
@@ -1512,11 +1539,12 @@ object MbCanEngineFacade {
         needSteer: Boolean,
         needTurnLights: Boolean,
         needWheelPulse: Boolean = false,
+        keepForDeepDiagnostics: Boolean = false,
     ) {
         vehicleListenerWantSteer = needSteer
         vehicleListenerWantTurnLights = needTurnLights
         vehicleListenerWantWheelPulse = needWheelPulse
-        if (!needSteer && !needTurnLights && !needWheelPulse) {
+        if (!needSteer && !needTurnLights && !needWheelPulse && !keepForDeepDiagnostics) {
             clearImbVehicleListener()
             return
         }
@@ -1531,7 +1559,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             oemSafe(method.name) {
-
+                mirrorDeepCallback(method.name, args)
                 when (method.name) {
                     "onSteeringWheel" -> {
                         if (vehicleListenerWantSteer) {
@@ -1735,7 +1763,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             oemSafe(method.name) {
-
+                mirrorDeepCallback(method.name, args)
                 if (method.name == "onVehicleLkaSlaStatus") {
                     val status = args?.getOrNull(0) ?: return@InvocationHandler null
                     val slaOnOff = runCatching {
@@ -1796,7 +1824,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             oemSafe(method.name) {
-
+                mirrorDeepCallback(method.name, args)
                 if (method.name == "onCanVehicleFrmInfo") {
                     val info = args?.getOrNull(0) ?: return@InvocationHandler null
                     val accMode = runCatching {
@@ -1863,7 +1891,7 @@ object MbCanEngineFacade {
         val loader = iface.classLoader ?: return
         val handler = InvocationHandler { _: Any?, method: Method, args: Array<out Any?>? ->
             oemSafe(method.name) {
-
+                mirrorDeepCallback(method.name, args)
                 if (method.name == "onVehicleGaspedStatus") {
                     val info = args?.getOrNull(0) ?: return@InvocationHandler null
                     val cruiseStatus = runCatching {

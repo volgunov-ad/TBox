@@ -63,7 +63,8 @@ class ExpertRawCanCatalogTest {
 
     @Test
     fun allParams_includesDecodedDirectVhalIds() {
-        val direct = ExpertRawCanCatalog.allParams().filter { it.bus == ExpertRawCanBus.VhalDirect }
+        val direct = ExpertRawCanCatalog.allParams()
+            .filter { it.bus == ExpertRawCanBus.VhalDirect && !it.name.startsWith("R_") }
         assertEquals(65, direct.size)
         assertTrue(direct.all { it.vhalReadId == it.mbCanId && it.vhalWriteId == it.mbCanId })
         assertTrue(direct.any { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" && it.mbCanId == FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID })
@@ -82,6 +83,37 @@ class ExpertRawCanCatalogTest {
             "vhal=${rpm.mbCanId}",
             ExpertRawCanCatalog.formatIdsSummary(rpm, HeadUnitCanModeLabel.Android10Vhal),
         )
+    }
+
+    @Test
+    fun allParams_coversEveryFirmwareReadIdOnce() {
+        val params = ExpertRawCanCatalog.allParams()
+        val readIds = params.mapNotNull { it.vhalReadId }.toSet()
+        VhalFirmwareReadIds.all.forEach { (name, id) -> assertTrue(name, id in readIds) }
+        val firmwareRows = params.filter { it.bus == ExpertRawCanBus.VhalDirect && it.name.startsWith("R_") }
+        assertTrue(firmwareRows.isNotEmpty())
+        val direct = params.filter { it.bus == ExpertRawCanBus.VhalDirect }
+        assertEquals(direct.size, direct.map { it.mbCanId }.toSet().size)
+        val logicalReadIds = params.filter { it.bus != ExpertRawCanBus.VhalDirect }.mapNotNull { it.vhalReadId }.toSet()
+        assertTrue(firmwareRows.none { it.mbCanId in logicalReadIds })
+    }
+
+    @Test
+    fun allParams_includesReadOnlyMbCanObjects() {
+        val params = ExpertRawCanCatalog.allParams()
+        val objects = params.filter { it.bus == ExpertRawCanBus.MbCanObject }
+        assertEquals(DeepDiagnosticsCatalog.mbcanObjectDataTypes.size, objects.size)
+        val bcm = objects.first { it.name == "eMBCAN_VEHICLE_BCM_STATUS" }
+        assertEquals(21, bcm.mbCanId)
+        assertEquals(
+            "mbCAN object dataType=21",
+            ExpertRawCanCatalog.formatIdsSummary(bcm, HeadUnitCanModeLabel.Android9MbCan),
+        )
+        assertTrue(ExpertRawCanCatalog.isReadable(bcm, HeadUnitCanModeLabel.Android9MbCan))
+        assertFalse(ExpertRawCanCatalog.isReadable(bcm, HeadUnitCanModeLabel.Android10Vhal))
+        val rpm = params.first { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" }
+        assertFalse(ExpertRawCanCatalog.isReadable(rpm, HeadUnitCanModeLabel.Android9MbCan))
+        assertTrue(ExpertRawCanCatalog.isReadable(rpm, HeadUnitCanModeLabel.Android10Vhal))
     }
 
     @Test

@@ -1502,7 +1502,7 @@
     <string name="key_press_diagnostics_copied">Журнал скопирован</string>
     <string name="expert_raw_get_set_open">Сырой Get/Set mbCAN/VHAL</string>
     <string name="expert_raw_get_set_title">Сырой Get/Set параметра mbCAN/VHAL</string>
-    <string name="expert_raw_get_set_desc">Выберите параметр из каталога OEM mbCAN (vehicle/audio) или прямой VHAL-телеметрии. Прямые VHAL id читаются и пишутся только на Android 10. Часть Android 10 id сопоставлена по имени справочника и ещё не проверена на головном устройстве. Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). На A10 показаны отдельные read/write id, если они различаются. Включайте разрешение записи только осознанно.</string>
+    <string name="expert_raw_get_set_desc">Выберите параметр из каталога OEM mbCAN (vehicle/audio), объект mbCAN (MbCanObject, только Android 9: все поля структуры через getMbCanData) или VHAL id (прямая телеметрия и все R_* id таблицы прошивки, только Android 10). Часть Android 10 id сопоставлена по имени справочника и ещё не проверена на головном устройстве. Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). Снимок читает все доступные параметры; переключите что-нибудь в машине и нажмите Сравнить — останутся только изменившиеся значения (они же пишутся в журнал, тег EXPERT_CAN). На A10 показаны отдельные read/write id, если они различаются. Включайте разрешение записи только осознанно.</string>
     <string name="expert_raw_get_set_mode">Режим ГУ: %1$s</string>
     <string name="expert_raw_get_set_filter">Фильтр по имени или id</string>
     <string name="expert_raw_get_set_param">Параметр</string>
@@ -1513,6 +1513,12 @@
     <string name="expert_raw_get_set_rw_differ">A10: read id %1$s ≠ write id %2$s</string>
     <string name="expert_raw_get_set_confirm_title">Подтверждение записи</string>
     <string name="expert_raw_get_set_confirm_message">Записать значение %2$s в параметр %1$s?</string>
+    <string name="expert_raw_get_set_snapshot">Снимок</string>
+    <string name="expert_raw_get_set_compare">Сравнить</string>
+    <string name="expert_raw_get_set_snapshot_progress">Чтение %1$d/%2$d…</string>
+    <string name="expert_raw_get_set_snapshot_done">Снимок готов: строк %1$d, прочитано значений %2$d. Переключите параметр в машине и нажмите «Сравнить».</string>
+    <string name="expert_raw_get_set_compare_none">Изменений нет (прочитано значений %1$d)</string>
+    <string name="expert_raw_get_set_compare_header">Изменилось значений: %1$d</string>
     <string name="settings_update_title">Обновление</string>
     <string name="settings_update_check_enabled_title">Проверять обновления</string>
     <string name="settings_update_check_enabled_desc">Автоматическая проверка при запуске приложения. Ручная проверка кнопкой ниже остаётся доступной.</string>

@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,8 +43,10 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.ExpertRawCanBus
 import vad.dashing.tbox.mbcan.ExpertRawCanCatalog
 import vad.dashing.tbox.mbcan.ExpertRawCanParam
+import vad.dashing.tbox.mbcan.ExpertRawSnapshot
 import vad.dashing.tbox.mbcan.HeadUnitCanModeLabel
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -51,6 +54,9 @@ import vad.dashing.tbox.ui.theme.tboxCaption
 
 /** Floor for the parameter list. Chrome scrolls with the dialog so this block can stay tall. */
 private val ExpertRawParamListMinHeight = 320.dp
+
+/** Diff lines shown on screen; the journal gets all of them. */
+private const val ExpertRawSnapshotDisplayLimit = 300
 
 @Composable
 fun ExpertRawGetSetDialog(
@@ -77,6 +83,8 @@ fun ExpertRawGetSetDialog(
     var statusText by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var showSetConfirm by remember { mutableStateOf(false) }
+    var snapshot by remember { mutableStateOf<Map<String, String>?>(null) }
+    val context = LocalContext.current
 
     val filtered = remember(filterText, catalog) {
         ExpertRawCanCatalog.filterParams(catalog, filterText)
@@ -95,13 +103,49 @@ fun ExpertRawGetSetDialog(
             }
             statusText = buildString {
                 append(if (result.success) "GET ok" else "GET fail")
-                append("  raw=${result.rawValue ?: "—"}")
+                if (result.fields == null) append("  raw=${result.rawValue ?: "—"}")
                 if (decode != null) append("  ($decode)")
                 append("\n")
                 append(ExpertRawCanCatalog.formatIdsSummary(param, modeLabel))
                 append("\n")
                 append("effective=${result.effectivePropertyId ?: "—"}  ${result.message}")
+                result.fields?.forEach { (field, value) -> append("\n$field = $value") }
             }
+            busy = false
+        }
+    }
+
+    fun runSnapshot(compare: Boolean) {
+        if (busy) return
+        val before = snapshot
+        if (compare && before == null) return
+        busy = true
+        statusText = ""
+        scope.launch {
+            val rows = catalog.filter { ExpertRawCanCatalog.isReadable(it, modeLabel) }
+            val results = UniversalCanRepository.readRawSnapshot(rows) { done, total ->
+                statusText = context.getString(R.string.expert_raw_get_set_snapshot_progress, done, total)
+            }
+            val current = ExpertRawSnapshot.toMap(results)
+            val okCount = ExpertRawSnapshot.okCount(current)
+            statusText = if (compare && before != null) {
+                val changes = ExpertRawSnapshot.diff(before, current)
+                ExpertRawCanCatalog.logSnapshotDiff(changes, modeStorage)
+                if (changes.isEmpty()) {
+                    context.getString(R.string.expert_raw_get_set_compare_none, okCount)
+                } else {
+                    buildString {
+                        append(context.getString(R.string.expert_raw_get_set_compare_header, changes.size))
+                        changes.take(ExpertRawSnapshotDisplayLimit).forEach {
+                            append("\n").append(ExpertRawSnapshot.formatChange(it))
+                        }
+                        if (changes.size > ExpertRawSnapshotDisplayLimit) append("\n…")
+                    }
+                }
+            } else {
+                context.getString(R.string.expert_raw_get_set_snapshot_done, rows.size, okCount)
+            }
+            snapshot = current
             busy = false
         }
     }
@@ -233,6 +277,18 @@ fun ExpertRawGetSetDialog(
                         ) {
                             AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_get))
                         }
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick { runSnapshot(compare = false) },
+                            enabled = !busy,
+                        ) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_snapshot))
+                        }
+                        OutlinedButton(
+                            onClick = rememberWrappedOnClick { runSnapshot(compare = true) },
+                            enabled = !busy && snapshot != null,
+                        ) {
+                            AppAlertDialogButtonLabel(stringResource(R.string.expert_raw_get_set_compare))
+                        }
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -263,6 +319,7 @@ fun ExpertRawGetSetDialog(
                         onClick = rememberWrappedOnClick { showSetConfirm = true },
                         enabled = writeEnabled &&
                             selected != null &&
+                            selected?.bus != ExpertRawCanBus.MbCanObject &&
                             !busy &&
                             setValueText.trim().toIntOrNull() != null,
                     ) {

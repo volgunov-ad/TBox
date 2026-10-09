@@ -3574,6 +3574,9 @@ object Android10VhalRepository {
      * [CarPropertyBridge.getIntProperty]. Bypasses command registry; no decode.
      */
     suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            return ExpertRawGetResult(false, effectivePropertyId = propertyId, message = "A9-only mbCAN object")
+        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return ExpertRawGetResult(false, message = currentUnavailableReason())
@@ -3614,6 +3617,9 @@ object Android10VhalRepository {
      * registry policy). Multi-pane window logical ids are rejected — pick a pane id.
      */
     suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            return ExpertRawSetResult(false, propertyId, "A9-only mbCAN object")
+        }
         val connection = ensureConnected()
         if (connection !is MbCanAvailability.Available) {
             return ExpertRawSetResult(false, message = currentUnavailableReason())
