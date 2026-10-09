@@ -8,8 +8,9 @@ import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Grants every missing entry from [AppPermissions.snapshot] via one localhost ADB session
- * (same command set as `scripts/hu-device-test/run_hu_full_test.py`).
+ * Grants missing entries from [AppPermissions.snapshot] via one localhost ADB session.
+ * [AppPermissionId.MockLocation] is not included: it is granted only by
+ * [MockLocationAutoGrant].
  */
 object PermissionsAutoGrant {
     private const val TAG = "PERMS_AUTO_GRANT"
@@ -69,7 +70,7 @@ object PermissionsAutoGrant {
         nowMs: () -> Long = { System.currentTimeMillis() },
         delayMs: (suspend (Long) -> Unit)? = null,
     ): Outcome {
-        val missingBefore = gateway.missingPermissionIds()
+        val missingBefore = gateway.missingPermissionIds().filterNot(::isExcludedFromGrantAll)
         if (missingBefore.isEmpty()) {
             return Outcome.AlreadyAllGranted
         }
@@ -105,6 +106,7 @@ object PermissionsAutoGrant {
             is LocalhostAdbSession.Result.Ok -> {
                 val applyResult = session.value
                 val stillMissing = gateway.refreshMissingPermissionIds()
+                    .filterNot(::isExcludedFromGrantAll)
                 val newlyGranted = missingBefore.filterNot { it in stillMissing }
                 when {
                     stillMissing.isEmpty() -> {
@@ -169,6 +171,7 @@ object PermissionsAutoGrant {
 
         for (id in missing) {
             when (id) {
+                AppPermissionId.MockLocation -> Unit
                 AppPermissionId.NotificationListener -> {
                     val component = AppPermissions.notificationListenerComponent(packageName)
                     val getResult = execute("settings get secure enabled_notification_listeners")
@@ -191,6 +194,9 @@ object PermissionsAutoGrant {
         }
         return ApplyGrantsResult(commandFailures = failures)
     }
+
+    private fun isExcludedFromGrantAll(id: AppPermissionId): Boolean =
+        id == AppPermissionId.MockLocation
 
     private class AndroidGateway(
         private val context: Context,

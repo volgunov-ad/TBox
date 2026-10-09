@@ -12,6 +12,7 @@ import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import vad.dashing.tbox.update.InstallPermissionHelper
+import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
 
 /** User-facing permissions that can be granted via UI and/or ADB. */
 enum class AppPermissionId {
@@ -23,6 +24,8 @@ enum class AppPermissionId {
     InstallPackages,
     Storage,
     Location,
+    /** This app selected as the mock-location provider (`appops` + `settings put`). */
+    MockLocation,
 }
 
 enum class AppPermissionGrantKind {
@@ -108,6 +111,14 @@ object AppPermissions {
                 descriptionRes = R.string.permissions_location_desc,
                 grantKind = AppPermissionGrantKind.RequestRuntime,
             ),
+            AppPermissionStatus(
+                id = AppPermissionId.MockLocation,
+                granted = context.isAppSelectedAsMockProvider(),
+                titleRes = R.string.permissions_mock_location_title,
+                descriptionRes = R.string.permissions_mock_location_desc,
+                grantKind = AppPermissionGrantKind.AdbOnly,
+                adbCommand = buildMockLocationAdbCommand(context.packageName),
+            ),
         )
     }
 
@@ -136,6 +147,7 @@ object AppPermissions {
                 }
             }
             AppPermissionId.WriteSecureSettings,
+            AppPermissionId.MockLocation,
             AppPermissionId.Location -> null
         }
     }
@@ -166,6 +178,18 @@ object AppPermissions {
 
     fun buildWriteSecureSettingsAdbCommand(packageName: String): String {
         return "adb shell ${buildWriteSecureSettingsShellCommand(packageName)}"
+    }
+
+    /** Select this package as the mock-location app (same pair as the HU smoke script). */
+    fun buildMockLocationShellCommands(packageName: String): List<String> {
+        return listOf(
+            "appops set $packageName MOCK_LOCATION allow",
+            "settings put secure mock_location $packageName",
+        )
+    }
+
+    fun buildMockLocationAdbCommand(packageName: String): String {
+        return buildMockLocationShellCommands(packageName).joinToString("\n") { "adb shell $it" }
     }
 
     /**
@@ -215,6 +239,7 @@ object AppPermissions {
                     add("pm grant $packageName android.permission.ACCESS_BACKGROUND_LOCATION")
                 }
             }
+            AppPermissionId.MockLocation -> buildMockLocationShellCommands(packageName)
         }
     }
 
