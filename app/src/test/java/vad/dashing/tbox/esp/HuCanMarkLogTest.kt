@@ -51,6 +51,10 @@ class HuCanMarkLogTest {
             "HVAC_FRONT_OFF",
             map[MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF],
         )
+        assertEquals("DOOR_AUTO_LOCK", map[MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK])
+        assertEquals("LAS_MODE_SELECTION", map[MbCanKnownVehiclePropertyId.LAS_MODE_SELECTION])
+        assertFalse(map.containsValue("SUNROOF_TILT"))
+        assertFalse(map.containsValue("HVAC_FAN_DIRECTION_VHAL_FACE"))
     }
 
     @Test

@@ -6,6 +6,8 @@ import vad.dashing.tbox.esp.HuCanMarkLog
 enum class ExpertRawCanBus {
     Vehicle,
     Audio,
+    /** A10 VHAL id with no mbCAN logical id. A9 Get/Set refuses it. */
+    VhalDirect,
 }
 
 /**
@@ -49,37 +51,139 @@ object ExpertRawCanCatalog {
     private const val LOG_TAG = "EXPERT_CAN"
 
     fun allParams(): List<ExpertRawCanParam> {
-        // Catalog display uses explicit maps only (no firmware JSON / Log probe).
-        // Live Get/Set still goes through resolveRead/WritePropertyId on device.
+        // Catalog display uses explicit maps, then name-matched expert candidates
+        // (no firmware JSON / Log probe).
+        // Live A10 Get/Set uses resolveRead/WritePropertyId, then the same candidates.
         // Names come from uniqueConstNameMap. Id objects use @JvmField (not const)
         // plus ProGuard keep so R8 does not drop the static ints.
-        val vehicle = HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
-            .entries
+        // Direct VHAL rows are a fixed list of inlined const ids (see directVhalParams).
+        // OEM extras first so a production id with the same number wins.
+        val vehicle = (
+            HuCanMarkLog.uniqueConstNameMap(MbCanOemVehiclePropertyId::class.java) +
+                HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
+            ).entries
             .map { (id, name) ->
                 ExpertRawCanParam(
                     name = name,
                     mbCanId = id,
                     bus = ExpertRawCanBus.Vehicle,
-                    vhalReadId = FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(id),
-                    vhalWriteId = FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(id),
+                    vhalReadId = explicitOrCandidateRead(ExpertRawCanBus.Vehicle, id),
+                    vhalWriteId = explicitOrCandidateWrite(ExpertRawCanBus.Vehicle, id),
                 )
             }
-        val audio = HuCanMarkLog.uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
-            .entries
+        val audio = (
+            HuCanMarkLog.uniqueConstNameMap(MbCanOemAudioPropertyId::class.java) +
+                HuCanMarkLog.uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
+            ).entries
             .map { (id, name) ->
                 ExpertRawCanParam(
                     name = name,
                     mbCanId = id,
                     bus = ExpertRawCanBus.Audio,
-                    vhalReadId = FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(id),
-                    vhalWriteId = FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(id),
+                    vhalReadId = explicitOrCandidateRead(ExpertRawCanBus.Audio, id),
+                    vhalWriteId = explicitOrCandidateWrite(ExpertRawCanBus.Audio, id),
                 )
             }
-        return (vehicle + audio).sortedWith(
+        return (vehicle + audio + directVhalParams()).sortedWith(
             compareBy<ExpertRawCanParam> { it.bus.ordinal }
                 .thenBy { it.name },
         )
     }
+
+    /**
+     * Decoded A10 VHAL ids that are not already the numeric explicit id of a
+     * logical row (windows, shade, roof). The deprecated speed alias is omitted.
+     * Names are the [FirmwareVehicleJsonMapper] const names. `const val` is inlined
+     * here so R8 cannot drop the ids.
+     */
+    private fun directVhalParams(): List<ExpertRawCanParam> =
+        directVhalIds.map { (name, id) ->
+            ExpertRawCanParam(
+                name = name,
+                mbCanId = id,
+                bus = ExpertRawCanBus.VhalDirect,
+                vhalReadId = id,
+                vhalWriteId = id,
+            )
+        }
+
+    private val directVhalIds: List<Pair<String, Int>> = listOf(
+        "VHAL_ENGINE_RPM_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID,
+        "VHAL_ENGINE_TEMPERATURE_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_ENGINE_TEMPERATURE_PROPERTY_ID,
+        "VHAL_CAR_SPEED_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID,
+        "VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID,
+        "VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_STEERING_WHEEL_ANGLE_PROPERTY_ID,
+        "VHAL_GEAR_SELECTION_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_GEAR_SELECTION_PROPERTY_ID,
+        "VHAL_CURRENT_GEAR_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_CURRENT_GEAR_PROPERTY_ID,
+        "VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_REVERSE_GEAR_SWITCH_PROPERTY_ID,
+        "VHAL_HAZARD_LIGHT_SW_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_HAZARD_LIGHT_SW_PROPERTY_ID,
+        "VHAL_LH_TURN_LIGHT_STS_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_LH_TURN_LIGHT_STS_PROPERTY_ID,
+        "VHAL_RH_TURN_LIGHT_STS_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_RH_TURN_LIGHT_STS_PROPERTY_ID,
+        "VHAL_DIRECTION_IND_LEFT_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_DIRECTION_IND_LEFT_PROPERTY_ID,
+        "VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID,
+        "VHAL_FUEL_LEVEL_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_FUEL_LEVEL_PROPERTY_ID,
+        "VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID,
+        "VHAL_LHF_PULSE_COUNTER_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_LHF_PULSE_COUNTER_PROPERTY_ID,
+        "VHAL_RHF_PULSE_COUNTER_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_RHF_PULSE_COUNTER_PROPERTY_ID,
+        "VHAL_LHR_PULSE_COUNTER_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_LHR_PULSE_COUNTER_PROPERTY_ID,
+        "VHAL_RHR_PULSE_COUNTER_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_RHR_PULSE_COUNTER_PROPERTY_ID,
+        "VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID,
+        "VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_AVERAGE_FUEL_CONSUME_PROPERTY_ID,
+        "VHAL_MAINTENANCE_TIPS_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_MAINTENANCE_TIPS_PROPERTY_ID,
+        "VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_DISTANCE_TO_EMPTY_KM_PROPERTY_ID,
+        "VHAL_PM25_INDENSITY_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_PM25_INDENSITY_PROPERTY_ID,
+        "VHAL_PM25_OUTDENSITY_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_PM25_OUTDENSITY_PROPERTY_ID,
+        "VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID" to FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID,
+        "VHAL_LF_TYRE_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_LF_TYRE_PRESSURE,
+        "VHAL_RF_TYRE_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_RF_TYRE_PRESSURE,
+        "VHAL_LR_TYRE_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_LR_TYRE_PRESSURE,
+        "VHAL_RR_TYRE_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_RR_TYRE_PRESSURE,
+        "VHAL_LF_TYRE_TEMPERATURE" to FirmwareVehicleJsonMapper.VHAL_LF_TYRE_TEMPERATURE,
+        "VHAL_RF_TYRE_TEMPERATURE" to FirmwareVehicleJsonMapper.VHAL_RF_TYRE_TEMPERATURE,
+        "VHAL_LR_TYRE_TEMPERATURE" to FirmwareVehicleJsonMapper.VHAL_LR_TYRE_TEMPERATURE,
+        "VHAL_RR_TYRE_TEMPERATURE" to FirmwareVehicleJsonMapper.VHAL_RR_TYRE_TEMPERATURE,
+        "VHAL_SLA_SPEED_LIMIT_RAW" to FirmwareVehicleJsonMapper.VHAL_SLA_SPEED_LIMIT_RAW,
+        "VHAL_SLA_ON_OFF_STATUS" to FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_STATUS,
+        "VHAL_SLA_STATE" to FirmwareVehicleJsonMapper.VHAL_SLA_STATE,
+        "VHAL_SLA_ON_OFF_REQ" to FirmwareVehicleJsonMapper.VHAL_SLA_ON_OFF_REQ,
+        "VHAL_FRM_ACC_MODE" to FirmwareVehicleJsonMapper.VHAL_FRM_ACC_MODE,
+        "VHAL_FRM_V_SET_DIS" to FirmwareVehicleJsonMapper.VHAL_FRM_V_SET_DIS,
+        "VHAL_FRM_DX_TAR_OBJ" to FirmwareVehicleJsonMapper.VHAL_FRM_DX_TAR_OBJ,
+        "VHAL_FRM_OBJ_VALID" to FirmwareVehicleJsonMapper.VHAL_FRM_OBJ_VALID,
+        "VHAL_EMS_CRUISE_CONTROL_STATUS" to FirmwareVehicleJsonMapper.VHAL_EMS_CRUISE_CONTROL_STATUS,
+        "VHAL_EMS_GAS_PEDAL_POSITION" to FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION,
+        "VHAL_EMS_GAS_PEDAL_POSITION_INVALID" to FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION_INVALID,
+        "VHAL_CEM_BRAKE_PEDAL_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_BRAKE_PEDAL_STS,
+        "VHAL_CEM_WIPER_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS,
+        "VHAL_CEM_RAIN_DETECTED" to FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED,
+        "VHAL_CEM_HIGH_BEAM_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS,
+        "VHAL_ICM_EPB_WARNING_LAMP_STS" to FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS,
+        "VHAL_ICM_ENGINE_OIL_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_ICM_ENGINE_OIL_PRESSURE,
+        "VHAL_ICM_BRAKE_FLUID_LEVEL" to FirmwareVehicleJsonMapper.VHAL_ICM_BRAKE_FLUID_LEVEL,
+        "VHAL_GSM_GEAR_SHIFT_POS" to FirmwareVehicleJsonMapper.VHAL_GSM_GEAR_SHIFT_POS,
+        "VHAL_EMS_TARGET_GEAR_POSITION" to FirmwareVehicleJsonMapper.VHAL_EMS_TARGET_GEAR_POSITION,
+        "VHAL_CEM2_DRIVER_DOOR_STS" to FirmwareVehicleJsonMapper.VHAL_CEM2_DRIVER_DOOR_STS,
+        "VHAL_CEM2_PSNGR_DOOR_STS" to FirmwareVehicleJsonMapper.VHAL_CEM2_PSNGR_DOOR_STS,
+        "VHAL_CEM2_LHR_DOOR_STS" to FirmwareVehicleJsonMapper.VHAL_CEM2_LHR_DOOR_STS,
+        "VHAL_CEM2_RHR_DOOR_STS" to FirmwareVehicleJsonMapper.VHAL_CEM2_RHR_DOOR_STS,
+        "VHAL_CEM2_HOOD_STS" to FirmwareVehicleJsonMapper.VHAL_CEM2_HOOD_STS,
+        "VHAL_ICM1_DRIVER_SEAT_BELT_WARNING" to FirmwareVehicleJsonMapper.VHAL_ICM1_DRIVER_SEAT_BELT_WARNING,
+        "VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING" to FirmwareVehicleJsonMapper.VHAL_ICM1_PASSENGER_SEAT_BELT_WARNING,
+        "VHAL_MFS_CRUISE_CONTROL" to FirmwareVehicleJsonMapper.VHAL_MFS_CRUISE_CONTROL,
+        "VHAL_MFS_CANCEL" to FirmwareVehicleJsonMapper.VHAL_MFS_CANCEL,
+        "VHAL_MFS_RES_PLUS" to FirmwareVehicleJsonMapper.VHAL_MFS_RES_PLUS,
+        "VHAL_MFS_SET_MINUS" to FirmwareVehicleJsonMapper.VHAL_MFS_SET_MINUS,
+    )
+
+    /** Production explicit map wins. Name-matched candidates fill the rest for this window only. */
+    private fun explicitOrCandidateRead(bus: ExpertRawCanBus, mbCanId: Int): Int? =
+        FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(mbCanId)
+            ?: ExpertRawVhalCandidates.readId(bus, mbCanId)
+
+    /** Production explicit map wins. Name-matched candidates fill the rest for this window only. */
+    private fun explicitOrCandidateWrite(bus: ExpertRawCanBus, mbCanId: Int): Int? =
+        FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(mbCanId)
+            ?: ExpertRawVhalCandidates.writeId(bus, mbCanId)
 
     /** Empty [query] returns [params] unchanged (no HU-mode filtering). */
     fun filterParams(params: List<ExpertRawCanParam>, query: String): List<ExpertRawCanParam> {
@@ -94,6 +198,12 @@ object ExpertRawCanCatalog {
     }
 
     fun formatIdsSummary(param: ExpertRawCanParam, mode: HeadUnitCanModeLabel): String {
+        if (param.bus == ExpertRawCanBus.VhalDirect) {
+            return when (mode) {
+                HeadUnitCanModeLabel.Android9MbCan -> "vhal=${param.mbCanId} (A10 only)"
+                HeadUnitCanModeLabel.Android10Vhal -> "vhal=${param.mbCanId}"
+            }
+        }
         return when (mode) {
             HeadUnitCanModeLabel.Android9MbCan ->
                 "mbCAN ${param.bus.name.lowercase()} id=${param.mbCanId}"
@@ -181,6 +291,7 @@ object ExpertRawCanCatalog {
         when (param.bus) {
             ExpertRawCanBus.Vehicle -> HuCanMarkLog.vehicleProp(param.mbCanId)
             ExpertRawCanBus.Audio -> HuCanMarkLog.audioProp(param.mbCanId)
+            ExpertRawCanBus.VhalDirect -> "${param.name}(${param.mbCanId})"
         }
 }
 

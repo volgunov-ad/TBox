@@ -1492,7 +1492,7 @@
     <string name="key_press_diagnostics_copied">Log copied</string>
     <string name="expert_raw_get_set_open">Raw mbCAN/VHAL Get/Set</string>
     <string name="expert_raw_get_set_title">Raw mbCAN/VHAL parameter Get/Set</string>
-    <string name="expert_raw_get_set_desc">Pick a parameter from the known catalog (vehicle/audio). Get reads the raw value; Set sends an integer as-is (bypasses command policies). On A10, separate read/write ids are shown when they differ. Enable write only deliberately.</string>
+    <string name="expert_raw_get_set_desc">Pick a parameter from the OEM mbCAN catalog (vehicle/audio) or a direct VHAL telemetry id. Direct VHAL ids are read and written on Android 10 only. Some Android 10 ids are name matches from the VHAL reference and are not yet checked on a head unit. Get reads the raw value; Set sends an integer as-is (bypasses command policies). On A10, separate read/write ids are shown when they differ. Enable write only deliberately.</string>
     <string name="expert_raw_get_set_mode">HU mode: %1$s</string>
     <string name="expert_raw_get_set_filter">Filter by name or id</string>
     <string name="expert_raw_get_set_param">Parameter</string>

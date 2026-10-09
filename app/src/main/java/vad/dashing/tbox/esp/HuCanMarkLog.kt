@@ -5,6 +5,8 @@ import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanOemAudioPropertyId
+import vad.dashing.tbox.mbcan.MbCanOemVehiclePropertyId
 import java.lang.reflect.Modifier
 
 /**
@@ -61,11 +63,13 @@ object HuCanMarkLog {
     fun shouldMarkVhalPush(propertyId: Int): Boolean = propertyId !in highRateVhalPropertyIds
 
     private val vehicleNames: Map<Int, String> by lazy {
-        uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
+        uniqueConstNameMap(MbCanOemVehiclePropertyId::class.java) +
+            uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
     }
 
     private val audioNames: Map<Int, String> by lazy {
-        uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
+        uniqueConstNameMap(MbCanOemAudioPropertyId::class.java) +
+            uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
     }
 
     private val highRateVhalPropertyIds: Set<Int> = setOf(
@@ -98,6 +102,8 @@ object HuCanMarkLog {
             if (!Modifier.isStatic(field.modifiers)) continue
             if (field.type != Int::class.javaPrimitiveType) continue
             val name = field.name
+            // Kotlin stability marker (`$stable`) is a static int, not a property id.
+            if (name.startsWith("$")) continue
             if (isValueAliasConstName(name)) continue
             field.isAccessible = true
             val id = field.getInt(null)
@@ -113,11 +119,15 @@ object HuCanMarkLog {
 
     private fun isValueAliasConstName(name: String): Boolean {
         // Value enums / write payloads — not property ids (e.g. LIGHTCONTROL_OFF, LAS_MODE_LDW).
+        // LAS_MODE_SELECTION is a property id; only the 1/2/3 payloads are aliases.
         if (name.endsWith("_VALUE") || name.contains("_VALUE_")) return true
         if (name.startsWith("LIGHTCONTROL_")) return true
-        if (name.startsWith("LAS_MODE_")) return true
+        if (name.startsWith("LAS_MODE_") && name != "LAS_MODE_SELECTION") return true
         if (name.startsWith("HVAC_CUSTOM_")) return true
         if (name.startsWith("HVAC_AIR_RECIRCULATION_VALUE")) return true
+        if (name.startsWith("HVAC_FAN_DIRECTION_")) return true
+        if (name.startsWith("WINDOW_A10_")) return true
+        if (name == "SUNROOF_TILT") return true
         return false
     }
 }

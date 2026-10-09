@@ -48,3 +48,9 @@
 -keep class vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId {
     public static <fields>;
 }
+-keep class vad.dashing.tbox.mbcan.MbCanOemVehiclePropertyId {
+    public static <fields>;
+}
+-keep class vad.dashing.tbox.mbcan.MbCanOemAudioPropertyId {
+    public static <fields>;
+}

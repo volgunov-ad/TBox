@@ -1,0 +1,528 @@
+package vad.dashing.tbox.mbcan
+
+/**
+ * OEM [com.mengbo.mbCan.defines.MBVehicleProperty] ids that production widgets do not use.
+ * The expert raw Get/Set catalog lists them so Android 9 can read and write the ordinal.
+ * `@JvmField` keeps the ints visible to [vad.dashing.tbox.esp.HuCanMarkLog.uniqueConstNameMap] after R8.
+ */
+object MbCanOemVehiclePropertyId {
+    /** `eVEHICLE_PROPERTY_MIRROR_REVERSE_TURN`. */
+    @JvmField val MIRROR_REVERSE_TURN = 5
+    /** `eVEHICLE_PROPERTY_EMERGENCY_STOP_LIGHTS`. */
+    @JvmField val EMERGENCY_STOP_LIGHTS = 9
+    /** `eVEHICLE_PROPERTY_NFC`. */
+    @JvmField val NFC = 10
+    /** `eVEHICLE_PROPERTY_LASER`. */
+    @JvmField val LASER = 11
+    /** `eVEHICLE_PROPERTY_KEYMODE`. */
+    @JvmField val KEYMODE = 12
+    /** `eVEHICLE_PROPERTY_REAR_COLLISION_WARNING`. */
+    @JvmField val REAR_COLLISION_WARNING = 14
+    /** `eVEHICLE_PROPERTY_CRUISE_ACC_FCW_WARN_SET`. */
+    @JvmField val CRUISE_ACC_FCW_WARN_SET = 21
+    /** `eVEHICLE_PROPERTY_ATMO_LIGHT_BRIGHT`. */
+    @JvmField val ATMO_LIGHT_BRIGHT = 26
+    /** `eVEHICLE_PROPERTY_BRIGHTNESS`. */
+    @JvmField val BRIGHTNESS = 27
+    /** `eVEHICLE_PROPERTY_ATMO_LIGHT_COLOR`. */
+    @JvmField val ATMO_LIGHT_COLOR = 28
+    /** `eVEHICLE_PROPERTY_BREATHING_LAMP`. */
+    @JvmField val BREATHING_LAMP = 29
+    /** `eVEHICLE_PROPERTY_MUSICAL_RHYTHM`. */
+    @JvmField val MUSICAL_RHYTHM = 30
+    /** `eVEHICLE_PROPERTY_ATMO_LIGHT_ASSOCIATE_DRIVING_MODE`. */
+    @JvmField val ATMO_LIGHT_ASSOCIATE_DRIVING_MODE = 31
+    /** `eVEHICLE_PROPERTY_WELCOME_LAMP`. */
+    @JvmField val WELCOME_LAMP = 32
+    /** `eVEHICLE_PROPERTY_HVAC_INOUT_PM25`. */
+    @JvmField val HVAC_INOUT_PM25 = 43
+    /** `eVEHICLE_PROPERTY_HVAC_DISPLAY_REPORT`. */
+    @JvmField val HVAC_DISPLAY_REPORT = 44
+    /** `eVEHICLE_PROPERTY_BREATHING_UNLOCK`. */
+    @JvmField val BREATHING_UNLOCK = 48
+    /** `eVEHICLE_PROPERTY_BREATHING_LOCK`. */
+    @JvmField val BREATHING_LOCK = 49
+    /** `eVEHICLE_PROPERTY_LIGHT_SHOW`. */
+    @JvmField val LIGHT_SHOW = 50
+    /** `eVEHICLE_PROPERTY_DVR_SNAP_SHOOT`. */
+    @JvmField val DVR_SNAP_SHOOT = 54
+    /** `eAVM_DISPLAY_SWITCH`. */
+    @JvmField val DISPLAY_SWITCH = 59
+    /** `eAVM_INTERIOR_FILL_LIGHT_SWITCH`. */
+    @JvmField val INTERIOR_FILL_LIGHT_SWITCH = 60
+    /** `eAVM_LEGACY_WARNING_SWITCH`. */
+    @JvmField val LEGACY_WARNING_SWITCH = 61
+    /** `eCFG_WIFI_NAME`. */
+    @JvmField val WIFI_NAME = 62
+    /** `eCFG_WIFI_PASSWORD`. */
+    @JvmField val WIFI_PASSWORD = 63
+    /** `eCFG_BLUETOOCH_ADRESS`. */
+    @JvmField val BLUETOOCH_ADRESS = 64
+    /** `eAVM_CALLING_STATUS`. */
+    @JvmField val CALLING_STATUS = 65
+    /** `eAVM_MONITER_TOUNCH_STATUS`. */
+    @JvmField val MONITER_TOUNCH_STATUS = 66
+    /** `eAVM_RGEAR_STATUS`. */
+    @JvmField val RGEAR_STATUS = 67
+    /** `eAVM_RVC_STATUS`. */
+    @JvmField val RVC_STATUS = 68
+    /** `eLCD_BRIGHTNESS`. */
+    @JvmField val LCD_BRIGHTNESS = 69
+    /** `eCFG_RESET`. */
+    @JvmField val RESET = 70
+    /** `eSCREEN_SAVE`. */
+    @JvmField val SCREEN_SAVE = 71
+    /** `eSCREEN_BACKLIGHT_SWITCH`. */
+    @JvmField val SCREEN_BACKLIGHT_SWITCH = 72
+    /** `eDVD_AIDTURNINGLLLUMINATION`. */
+    @JvmField val AIDTURNINGLLLUMINATION = 75
+    /** `eDVD_HOUR_MODE`. */
+    @JvmField val HOUR_MODE = 76
+    /** `eDVD_WASH_CAR`. */
+    @JvmField val WASH_CAR = 77
+    /** `eDVD_POLLING`. */
+    @JvmField val POLLING = 78
+    /** `eDVD_CALIBRATION`. */
+    @JvmField val CALIBRATION = 79
+    /** `eDVD_STREERINGWHEEL`. */
+    @JvmField val STREERINGWHEEL = 81
+    /** `eAVM_SET_LANG`. */
+    @JvmField val SET_LANG = 82
+    /** `eDVD_RADARWARING`. */
+    @JvmField val RADARWARING = 83
+    /** `eDVD_DEFDISPMODE`. */
+    @JvmField val DEFDISPMODE = 84
+    /** `eDVD_OP_TP_X`. */
+    @JvmField val OP_TP_X = 85
+    /** `eDVD_OP_TP_Y`. */
+    @JvmField val OP_TP_Y = 86
+    /** `eAVM_WORK_MODESTS`. */
+    @JvmField val WORK_MODESTS = 87
+    /** `eDVD_SCREEN_OPERATION`. */
+    @JvmField val SCREEN_OPERATION = 88
+    /** `eDEFAULT`. */
+    @JvmField val DEFAULT = 89
+    /** `eTEMPKNOBROLLINGCOUNTERREQ`. */
+    @JvmField val TEMPKNOBROLLINGCOUNTERREQ = 91
+    /** `eCONTROL_MODE_REQ`. */
+    @JvmField val CONTROL_MODE_REQ = 92
+    /** `eENGINECONTROLEDREQ`. */
+    @JvmField val ENGINECONTROLEDREQ = 93
+    /** `eTIMEGAPLASTSETREQ`. */
+    @JvmField val TIMEGAPLASTSETREQ = 98
+    /** `eLOGSAVE`. */
+    @JvmField val LOGSAVE = 99
+    /** `eRRM_LANGULAGE`. */
+    @JvmField val RRM_LANGULAGE = 100
+    /** `eRRM_RESOLUTATION_X`. */
+    @JvmField val RRM_RESOLUTATION_X = 101
+    /** `eRRM_RESOLUTATION_Y`. */
+    @JvmField val RRM_RESOLUTATION_Y = 102
+    /** `eNAVI_SPEEDLIMIT`. */
+    @JvmField val NAVI_SPEEDLIMIT = 103
+    /** `eNAVI_ROADTYPE`. */
+    @JvmField val NAVI_ROADTYPE = 104
+    /** `eUART_TEST`. */
+    @JvmField val UART_TEST = 105
+    /** `eNAVI_SPEEDLIMIT_STATUS`. */
+    @JvmField val NAVI_SPEEDLIMIT_STATUS = 106
+    /** `eNAVI_SPEEDLIMIT_UNITS`. */
+    @JvmField val NAVI_SPEEDLIMIT_UNITS = 107
+    /** `eOLDMODE_SWITCH`. */
+    @JvmField val OLDMODE_SWITCH = 108
+    /** `eDTC_INFO`. */
+    @JvmField val DTC_INFO = 109
+    /** `eVEHICLE_VIN`. */
+    @JvmField val VIN = 112
+    /** `eSOFTWARE_CONFIG`. */
+    @JvmField val SOFTWARE_CONFIG = 113
+    /** `eMUSIC_KEY`. */
+    @JvmField val MUSIC_KEY = 114
+    /** `eDVR_SWITCH`. */
+    @JvmField val DVR_SWITCH = 115
+    /** `eCFG_WIFI_ADRESS`. */
+    @JvmField val WIFI_ADRESS = 116
+    /** `eAPA_DISPLAY_SWITCH`. */
+    @JvmField val APA_DISPLAY_SWITCH = 117
+    /** `eVIDEO_LIMIT`. */
+    @JvmField val VIDEO_LIMIT = 118
+    /** `eCFG_REMOTETRUNKONLY`. */
+    @JvmField val REMOTETRUNKONLY = 119
+    /** `eLAMP_CONTROL`. */
+    @JvmField val LAMP_CONTROL = 120
+    /** `eCFG_BLANKCHANGINGLANE`. */
+    @JvmField val BLANKCHANGINGLANE = 121
+    /** `eHVAC_DEFROSTER_FRONT`. */
+    @JvmField val DEFROSTER_FRONT = 122
+    /** `eTRAFFIC_DIRECTION`. */
+    @JvmField val TRAFFIC_DIRECTION = 123
+    /** `eAVM_DATE_TP_STS`. */
+    @JvmField val DATE_TP_STS = 124
+    /** `eACC_IGN_GET`. */
+    @JvmField val ACC_IGN_GET = 125
+    /** `eMANUFACTURE`. */
+    @JvmField val MANUFACTURE = 126
+    /** `eRRM_THEME`. */
+    @JvmField val RRM_THEME = 128
+    /** `eVEHICLE_SMART_HIGHBEAM_SWITCH`. */
+    @JvmField val SMART_HIGHBEAM_SWITCH = 130
+    /** `eVEHICLE_DOORKONB_TIME`. */
+    @JvmField val DOORKONB_TIME = 132
+    /** `eVEHICLE_DOORKONB_SWITCH`. */
+    @JvmField val DOORKONB_SWITCH = 133
+    /** `eVEHICLE_TUNNEL_LAMP`. */
+    @JvmField val TUNNEL_LAMP = 137
+    /** `eVEHICLE_REFUEL`. */
+    @JvmField val REFUEL = 146
+    /** `eVEHICLE_ISS_SWITCH`. */
+    @JvmField val ISS_SWITCH = 148
+    /** `eVEHICLE_ECOMODESWSTS`. */
+    @JvmField val ECOMODESWSTS = 150
+    /** `eVEHICLE_LIGHT_SHOW_MODE`. */
+    @JvmField val LIGHT_SHOW_MODE = 151
+    /** `eVEHICLE_EXTERNAL_LIGHT_WELCOME_LAMP_MODE`. */
+    @JvmField val EXTERNAL_LIGHT_WELCOME_LAMP_MODE = 152
+    /** `eVEHICLE_SET_ROLLO_CONTROL`. */
+    @JvmField val ROLLO_CONTROL = 153
+    /** `eVEHICLE_SET_RADIO_FREQUANCE_MODE`. */
+    @JvmField val RADIO_FREQUANCE_MODE = 154
+    /** `eVEHICLE_SET_RADIO_RESEARCH_STS`. */
+    @JvmField val RADIO_RESEARCH_STS = 155
+    /** `eVEHICLE_SET_RADIO_SOURCE_STATION_MODE`. */
+    @JvmField val RADIO_SOURCE_STATION_MODE = 156
+    /** `eVEHICLE_SET_RRM_ONSTS`. */
+    @JvmField val RRM_ONSTS = 157
+    /** `eVEHICLE_FMRADIO_FREQUANCE_VALUE`. */
+    @JvmField val FMRADIO_FREQUANCE_NUMBER = 158
+    /** `eVEHICLE_AMRADIO_FREQUANCE_VALUE`. */
+    @JvmField val AMRADIO_FREQUANCE_NUMBER = 159
+    /** `eVEHICLE_KNOB_STS`. */
+    @JvmField val KNOB_STS = 160
+    /** `eVEHICLE_SET_FREQUENCY_STS`. */
+    @JvmField val FREQUENCY_STS = 161
+    /** `eVEHICLE_BT_PHONE_STATUS_SET`. */
+    @JvmField val BT_PHONE_STATUS_SET = 162
+    /** `eVEHICLE_SET_PM25_MONITORING`. */
+    @JvmField val PM25_MONITORING = 166
+    /** `eVEHICLE_SET_DMS_MONITORING`. */
+    @JvmField val DMS_MONITORING = 167
+    /** `eVEHICLE_SET_SET_64COLOUR`. */
+    @JvmField val SET_64COLOUR = 168
+    /** `eVEHICLE_SET_STATIC_EFFECT`. */
+    @JvmField val STATIC_EFFECT = 169
+    /** `eVEHICLE_SET_AMBIENTLIGHT_SCENEMODE`. */
+    @JvmField val AMBIENTLIGHT_SCENEMODE = 170
+    /** `eVEHICLE_SET_CSTFUNCTIONSTS`. */
+    @JvmField val CSTFUNCTIONSTS = 171
+    /** `eVEHICLE_SET_BRAKE_MODE`. */
+    @JvmField val BRAKE_MODE = 172
+    /** `eVEHICLE_SET_DRIVER_SEAT_BACK_FR`. */
+    @JvmField val DRIVER_SEAT_BACK_FR = 173
+    /** `eVEHICLE_SET_DRIVER_SEAT_FR`. */
+    @JvmField val DRIVER_SEAT_FR = 174
+    /** `eVEHICLE_SET_DRIVER_SEAT_FRONTENDUD`. */
+    @JvmField val DRIVER_SEAT_FRONTENDUD = 175
+    /** `eVEHICLE_SET_DRIVER_SEAT_REARENDUD`. */
+    @JvmField val DRIVER_SEAT_REARENDUD = 176
+    /** `eVEHICLE_SET_DRIVER_LUMBART_FR`. */
+    @JvmField val DRIVER_LUMBART_FR = 177
+    /** `eVEHICLE_SET_DRIVER_LUMBART_UD`. */
+    @JvmField val DRIVER_LUMBART_UD = 178
+    /** `eVEHICLE_SET_PASSENGER_SEAT_BACK_FR`. */
+    @JvmField val PASSENGER_SEAT_BACK_FR = 179
+    /** `eVEHICLE_SET_PASSENGER_SEAT_FR`. */
+    @JvmField val PASSENGER_SEAT_FR = 180
+    /** `eVEHICLE_SET_PASSENGER_SEAT_LEG_UD`. */
+    @JvmField val PASSENGER_SEAT_LEG_UD = 181
+    /** `eVEHICLE_SET_PASSENGER_MASSAGE_SWITCH`. */
+    @JvmField val PASSENGER_MASSAGE_SWITCH = 182
+    /** `eVEHICLE_SET_PASSENGER_MASSAGE_STRENGTH`. */
+    @JvmField val PASSENGER_MASSAGE_STRENGTH = 183
+    /** `eVEHICLE_SET_PASSENGER_MASSAGE_MODE`. */
+    @JvmField val PASSENGER_MASSAGE_MODE = 184
+    /** `eVEHICLE_SET_UNDER_VOLTAGE_TIP_SWITCH`. */
+    @JvmField val UNDER_VOLTAGE_TIP_SWITCH = 187
+    /** `eVEHICLE_SET_MFS_SHAKE_SWITCH`. */
+    @JvmField val MFS_SHAKE_SWITCH = 189
+    /** `eVEHICLE_SET_WELCOME_SEAT`. */
+    @JvmField val WELCOME_SEAT = 190
+    /** `eVEHICLE_WELCOME_SOUND_DEVICE_SWITCH`. */
+    @JvmField val WELCOME_SOUND_DEVICE_SWITCH = 192
+    /** `eVEHICLE_WELCOME_SOUND_OPTIONS_SIGNAL`. */
+    @JvmField val WELCOME_SOUND_OPTIONS_SIGNAL = 193
+    /** `eVEHICLE_R_SEAT_BELT_BUCKLE_SWITCH`. */
+    @JvmField val R_SEAT_BELT_BUCKLE_SWITCH = 194
+    /** `eVEHICLE_SET_RRM_SPEECH_CONTROL`. */
+    @JvmField val RRM_SPEECH_CONTROL = 195
+    /** `eVEHICLE_MIRROR_SET_LEFT_MIRROR_CTRL`. */
+    @JvmField val MIRROR_SET_LEFT_MIRROR_CTRL = 196
+    /** `eVEHICLE_MIRROR_SET_RIGHT_MIRROR_CTRL`. */
+    @JvmField val MIRROR_SET_RIGHT_MIRROR_CTRL = 197
+    /** `eVEHICLE_MIRROR_SET_DRIVER_MIRROR_LOCATION`. */
+    @JvmField val MIRROR_SET_DRIVER_MIRROR_LOCATION = 198
+    /** `eVEHICLE_MIRROR_SET_PASSENGER_MIRROR_LOCATION`. */
+    @JvmField val MIRROR_SET_PASSENGER_MIRROR_LOCATION = 199
+    /** `eVEHICLE_MIRROR_SET_LMIRROR_LR_LOCATON`. */
+    @JvmField val MIRROR_SET_LMIRROR_LR_LOCATON = 200
+    /** `eVEHICLE_MIRROR_SET_LMIRROR_UD_LOCATON`. */
+    @JvmField val MIRROR_SET_LMIRROR_UD_LOCATON = 201
+    /** `eVEHICLE_MIRROR_SET_RMIRROR_LR_LOCATON`. */
+    @JvmField val MIRROR_SET_RMIRROR_LR_LOCATON = 202
+    /** `eVEHICLE_MIRROR_SET_RMIRROR_UD_LOCATON`. */
+    @JvmField val MIRROR_SET_RMIRROR_UD_LOCATON = 203
+    /** `eVEHICLE_SMART_SCENE_MODE`. */
+    @JvmField val SMART_SCENE_MODE = 204
+    /** `eVEHICLE_FATIGUE_DRIVING`. */
+    @JvmField val FATIGUE_DRIVING = 205
+    /** `eVEHICLE_UNLOCK_ANIMATION`. */
+    @JvmField val UNLOCK_ANIMATION = 206
+    /** `eVEHICLE_LOCK_ANIMATION`. */
+    @JvmField val LOCK_ANIMATION = 207
+    /** `eVEHICLE_MFS_SEEPD_LIMIT`. */
+    @JvmField val MFS_SEEPD_LIMIT = 211
+    /** `eVEHICLE_RESERVED_MFS_SHIFT_UP`. */
+    @JvmField val RESERVED_MFS_SHIFT_UP = 215
+    /** `eVEHICLE_RESERVED_MFS_SHIFT_DOWN`. */
+    @JvmField val RESERVED_MFS_SHIFT_DOWN = 216
+    /** `eVEHICLE_MFS_TIME_GAP`. */
+    @JvmField val MFS_TIME_GAP = 217
+    /** `eVEHICLE_SET_RRM_DVD_RCTA_SWITCH`. */
+    @JvmField val RRM_DVD_RCTA_SWITCH = 219
+    /** `eVEHICLE_SET_NAVIGATI_ONDISPLAY`. */
+    @JvmField val NAVIGATI_ONDISPLAY = 224
+    /** `eVEHICLE_SET_ADAS_DISPLAY`. */
+    @JvmField val ADAS_DISPLAY = 225
+    /** `eVEHICLE_SET_BLUETOOTH_WECHART_DISPLAY`. */
+    @JvmField val BLUETOOTH_WECHART_DISPLAY = 226
+    /** `eVEHICLE_PROPERTY_DRIVER_BRIGHTNESS`. */
+    @JvmField val DRIVER_BRIGHTNESS = 229
+    /** `eVEHICLE_SET_DWMCON_SWITCH`. */
+    @JvmField val DWMCON_SWITCH = 231
+    /** `eVEHICLE_SET_MIRROR_REVERSE_TURN_LOC`. */
+    @JvmField val MIRROR_REVERSE_TURN_LOC = 232
+    /** `eVEHICLE_EPB_APPLYREQ`. */
+    @JvmField val EPB_APPLYREQ = 233
+    /** `eVEHICLE_LDW_WARNINGSOUND_SWITCH`. */
+    @JvmField val LDW_WARNINGSOUND_SWITCH = 234
+    /** `eVEHICLE_TSR_SWITCH`. */
+    @JvmField val TSR_SWITCH = 235
+    /** `eVEHICLE_PSNGAIRBAG_SWITCH`. */
+    @JvmField val PSNGAIRBAG_SWITCH = 236
+    /** `eVEHICLE_PDC_SWITCH`. */
+    @JvmField val PDC_SWITCH = 237
+    /** `eVEHICLE_DRL_SWITCH`. */
+    @JvmField val DRL_SWITCH = 238
+    /** `eVEHICLE_COMFORTMODESET`. */
+    @JvmField val COMFORTMODESET = 239
+    /** `eVEHICLE_MIRROR_FOLDREQ`. */
+    @JvmField val MIRROR_FOLDREQ = 240
+    /** `eVEHICLE_EMERGENCYPOWEROFF_CONFIRM`. */
+    @JvmField val EMERGENCYPOWEROFF_CONFIRM = 241
+    /** `eVEHICLE_LIGHT_DECORATIVE_SWITCH`. */
+    @JvmField val LIGHT_DECORATIVE_SWITCH = 242
+    /** `eVEHICLE_WINDOW_AUTOCLOSE_SWITCH`. */
+    @JvmField val WINDOW_AUTOCLOSE_SWITCH = 243
+    /** `eVEHICLE_LIGHT_DOME_SWITCH`. */
+    @JvmField val LIGHT_DOME_SWITCH = 244
+    /** `eVEHICLE_LIGHT_DOME_DOORCTRL_SWITCH`. */
+    @JvmField val LIGHT_DOME_DOORCTRL_SWITCH = 245
+    /** `eVEHICLE_CESC_SWITCH`. */
+    @JvmField val CESC_SWITCH = 246
+    /** `eVEHICLE_EHAC_SWITCH`. */
+    @JvmField val EHAC_SWITCH = 247
+    /** `eVEHICLE_EAVH_TIMESET`. */
+    @JvmField val EAVH_TIMESET = 248
+    /** `eVEHICLE_EAVH_REVERSE_DISABLE_SWITCH`. */
+    @JvmField val EAVH_REVERSE_DISABLE_SWITCH = 249
+    /** `eVEHICLE_INVERTER_CONFIRMSTS`. */
+    @JvmField val INVERTER_CONFIRMSTS = 250
+    /** `eVEHICLE_INVERTER_SWITCH`. */
+    @JvmField val INVERTER_SWITCH = 251
+    /** `eVEHICLE_REGENERATION_LEVELSET`. */
+    @JvmField val REGENERATION_LEVELSET = 255
+    /** `eVEHICLE_OUTPUT_LIMITSOCSET`. */
+    @JvmField val OUTPUT_LIMITSOCSET = 256
+    /** `eVEHICLE_SHIFT_VOICEREMIND_SWITCH`. */
+    @JvmField val SHIFT_VOICEREMIND_SWITCH = 257
+    /** `eVEHICLE_SHIFT_ERRORACTION_REMIND_SWITCH`. */
+    @JvmField val SHIFT_ERRORACTION_REMIND_SWITCH = 258
+    /** `eVEHICLE_HVAC_PTC_SWITCH`. */
+    @JvmField val HVAC_PTC_SWITCH = 259
+    /** `eVEHICLE_HVAC_CIRCULATION_SWITCH`. */
+    @JvmField val HVAC_CIRCULATION_SWITCH = 260
+    /** `eVEHICLE_HVAC_AUTOCLEAN_SWITCH`. */
+    @JvmField val HVAC_AUTOCLEAN_SWITCH = 261
+    /** `eVEHICLE_HVAC_MEMORYMODE_SWITCH`. */
+    @JvmField val HVAC_MEMORYMODE_SWITCH = 262
+    /** `eVEHICLE_MIRROR_REVERSEPOSITION_STOREREQ`. */
+    @JvmField val MIRROR_REVERSEPOSITION_STOREREQ = 263
+    /** `eVEHICLE_AVAS_VOLUMESET`. */
+    @JvmField val AVAS_VOLUMESET = 265
+    /** `eVEHICLE_AVAS_AUDIOSOURCESET`. */
+    @JvmField val AVAS_AUDIOSOURCESET = 266
+    /** `eVEHICLE_SEAT_FOLDREQ`. */
+    @JvmField val SEAT_FOLDREQ = 267
+    /** `eVEHICLE_SEAT_RELEASEREQ`. */
+    @JvmField val SEAT_RELEASEREQ = 268
+    /** `eVEHICLE_AVAS_SWITCH`. */
+    @JvmField val AVAS_SWITCH = 269
+    /** `eVEHICLE_SEAT_POSITION_STOREREQ`. */
+    @JvmField val SEAT_POSITION_STOREREQ = 270
+    /** `eVEHICLE_SEAT_POSITION_CALLOUTREQ`. */
+    @JvmField val SEAT_POSITION_CALLOUTREQ = 271
+    /** `eVEHICLE_FACEREC_SEAT_SWITCH`. */
+    @JvmField val FACEREC_SEAT_SWITCH = 272
+    /** `eVEHICLE_FACEREC_MIRRORINCLINE_SWITCH`. */
+    @JvmField val FACEREC_MIRRORINCLINE_SWITCH = 273
+    /** `eVEHICLE_FACEREC_AUTHENTICATION_RESULT`. */
+    @JvmField val FACEREC_AUTHENTICATION_RESULT = 274
+    /** `eVEHICLE_ACCOUNT_DELETEREQ`. */
+    @JvmField val ACCOUNT_DELETEREQ = 275
+    /** `eVEHICLE_ENTRYEXITSEAT_CTRL_SWITCH`. */
+    @JvmField val ENTRYEXITSEAT_CTRL_SWITCH = 276
+    /** `eVEHICLE_ICM_THEMESET`. */
+    @JvmField val ICM_THEMESET = 277
+    /** `eVEHICLE_ICM_SCREENREQ`. */
+    @JvmField val ICM_SCREENREQ = 278
+    /** `eVEHICLE_ICM_MENU_OK_BUTTONSTS`. */
+    @JvmField val ICM_MENU_OK_BUTTONSTS = 279
+    /** `eVEHICLE_ICM_MODE_BUTTONSTS`. */
+    @JvmField val ICM_MODE_BUTTONSTS = 280
+    /** `eVEHICLE_ICM_UP_BUTTONSTS`. */
+    @JvmField val ICM_UP_BUTTONSTS = 281
+    /** `eVEHICLE_ICM_DOWN_BUTTONSTS`. */
+    @JvmField val ICM_DOWN_BUTTONSTS = 282
+    /** `eVEHICLE_ICM_LEFT_BUTTONSTS`. */
+    @JvmField val ICM_LEFT_BUTTONSTS = 283
+    /** `eVEHICLE_ICM_RIGHT_BUTTONSTS`. */
+    @JvmField val ICM_RIGHT_BUTTONSTS = 284
+    /** `eVEHICLE_ICM_BRIGHTNESS_ADJUSTSET`. */
+    @JvmField val ICM_BRIGHTNESS_ADJUSTSET = 285
+    /** `eVEHICLE_ICM_FATIGUREDRIVING_TIMESET`. */
+    @JvmField val ICM_FATIGUREDRIVING_TIMESET = 286
+    /** `eVEHICLE_BSD_WARNINGSOUND_SWITCH`. */
+    @JvmField val BSD_WARNINGSOUND_SWITCH = 287
+    /** `eVEHICLE_CHG_SOC_LIMITPOINTSET`. */
+    @JvmField val CHG_SOC_LIMITPOINTSET = 288
+    /** `eVEHICLE_CHG_MODESET`. */
+    @JvmField val CHG_MODESET = 289
+    /** `eVEHICLE_CHG_BOOK_STARTTIME_HOUR`. */
+    @JvmField val CHG_BOOK_STARTTIME_HOUR = 290
+    /** `eVEHICLE_CHG_BOOK_STARTTIME_MINUTE`. */
+    @JvmField val CHG_BOOK_STARTTIME_MINUTE = 291
+    /** `eVEHICLE_CHG_BOOK_STOPTIME_HOUR`. */
+    @JvmField val CHG_BOOK_STOPTIME_HOUR = 292
+    /** `eVEHICLE_CHG_BOOK_STOPTIME_MINUTE`. */
+    @JvmField val CHG_BOOK_STOPTIME_MINUTE = 293
+    /** `eVEHICLE_CST_SENSITIVITYREQ`. */
+    @JvmField val CST_SENSITIVITYREQ = 294
+    /** `eVEHICLE_IPB_ASSOCIATE_DRIVE_MODE`. */
+    @JvmField val IPB_ASSOCIATE_DRIVE_MODE = 295
+    /** `eVEHICLE_FATIGUEDRIVINGREMINDER_SET`. */
+    @JvmField val FATIGUEDRIVINGREMINDER_SET = 297
+    /** `eVEHICLE_TRIP_RESET`. */
+    @JvmField val TRIP_RESET = 298
+    /** `eVEHICLE_GPS_TIMESWSTS`. */
+    @JvmField val GPS_TIMESWSTS = 299
+    /** `eVEHICLE_SET_SOC_MANAGE`. */
+    @JvmField val SOC_MANAGE = 301
+    /** `eVEHICLE_REGENERATE_LEVEL_CTRL`. */
+    @JvmField val REGENERATE_LEVEL_CTRL = 302
+    /** `eVEHICLE_SET_SOC_VALUE`. */
+    @JvmField val SOC_NUMBER = 303
+    /** `eVHEICEL_VOICE_WAKE`. */
+    @JvmField val VOICE_WAKE = 304
+    /** `eVHEICEL_SET_CHRGN_FCT_MEM`. */
+    @JvmField val SET_CHRGN_FCT_MEM = 305
+    /** `eVHEICEL_ECAVERHISCLEAR`. */
+    @JvmField val ECAVERHISCLEAR = 306
+    /** `eVHEICEL_PTREADY`. */
+    @JvmField val PTREADY = 307
+    /** `eVHEICEL_POWERTRAINFAULT`. */
+    @JvmField val POWERTRAINFAULT = 308
+    /** `eVHEICEL_NAVI_STATUS`. */
+    @JvmField val NAVI_STATUS = 309
+    /** `eVHEICEL_NAVI_TURNTYPE`. */
+    @JvmField val NAVI_TURNTYPE = 310
+    /** `eVHEICEL_NAVI_DISTANCE`. */
+    @JvmField val NAVI_DISTANCE = 311
+    /** `eVHEICEL_NAVI_TRAFFICSTS`. */
+    @JvmField val NAVI_TRAFFICSTS = 312
+    /** `eVHEICEL_NAVI_NEXTTRAFFICSTS`. */
+    @JvmField val NAVI_NEXTTRAFFICSTS = 313
+    /** `eVHEICEL_NAVI_ASSOCIATE_LIGHT_ATMO`. */
+    @JvmField val NAVI_ASSOCIATE_LIGHT_ATMO = 314
+    /** `eVHEICEL_DYNAMIC_RESIDUAL_ODOMETER_SWITCH`. */
+    @JvmField val DYNAMIC_RESIDUAL_ODOMETER_SWITCH = 315
+    /** `eVHEICEL_HVAL_COOLANTFILL`. */
+    @JvmField val HVAL_COOLANTFILL = 317
+    /** `eVHEICEL_SEAT_QUEENOPENSTS`. */
+    @JvmField val SEAT_QUEENOPENSTS = 320
+    /** `eVHEICEL_SEAT_QUEENCLOSESTS`. */
+    @JvmField val SEAT_QUEENCLOSESTS = 321
+    /** `eVHEICEL_HVREADY`. */
+    @JvmField val HVREADY = 322
+    /** `eVHEICEL_DOOR_WINDOWCTRL_SWITCH`. */
+    @JvmField val DOOR_WINDOWCTRL_SWITCH = 323
+    /** `eTBOX_REMOTEPOWER_ONOFFREQ`. */
+    @JvmField val TBOX_REMOTEPOWER_ONOFFREQ = 324
+}
+
+/**
+ * OEM [com.mengbo.mbCan.defines.MBAudioProperty] ids absent from [MbCanKnownAudioPropertyId].
+ * Expert raw Get/Set only; production audio commands stay on [MbCanKnownAudioPropertyId].
+ */
+object MbCanOemAudioPropertyId {
+    /** `eAUDIO_PROPERTY_SOURCE`. */
+    @JvmField val SOURCE = 1
+    /** `eAUDIO_PROPERTY_SOFTMUTE`. */
+    @JvmField val SOFTMUTE = 8
+    /** `eAUDIO_PROPERTY_AMPMUTE`. */
+    @JvmField val AMPMUTE = 9
+    /** `eAUDIO_PROPERTY_VOLUME_INSTRCUMENT`. */
+    @JvmField val VOLUME_INSTRCUMENT = 12
+    /** `eAUDIO_PROPERTY_MIX`. */
+    @JvmField val MIX = 14
+    /** `eVEHICLE_PROPERTY_XFMIC_MODE`. */
+    @JvmField val XFMIC_MODE = 15
+    /** `eAUDIO_PROPERTY_LOUNDNESS_MODE`. */
+    @JvmField val LOUNDNESS_MODE = 16
+    /** `eAUDIO_PROPERTY_VOLUME_PHONE`. */
+    @JvmField val VOLUME_PHONE = 18
+    /** `eAUDIO_PROPERTY_VOLUME_NAVI`. */
+    @JvmField val VOLUME_NAVI = 19
+    /** `eAUDIO_PROPERTY_VOLUME_VOICE`. */
+    @JvmField val VOLUME_VOICE = 20
+    /** `eAUDIO_PROPERTY_ACOUSTIC_FIELD_MODE`. */
+    @JvmField val ACOUSTIC_FIELD_MODE = 21
+    /** `eAUDIO_PROPERTY_SOUNDWAVE_MODE`. */
+    @JvmField val SOUNDWAVE_MODE = 22
+    /** `eAUDIO_PROPERTY_SURROUND`. */
+    @JvmField val SURROUND = 23
+    /** `eAUDIO_PROPERTY_ACOUSTIC_MODE`. */
+    @JvmField val ACOUSTIC_MODE = 24
+    /** `eAUDIO_PROPERTY_LOUDNESS`. */
+    @JvmField val LOUDNESS = 25
+    /** `eAUDIO_PROPERTY_RESET`. */
+    @JvmField val RESET = 26
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_120HZ`. */
+    @JvmField val MUSICLOUDNESS_120HZ = 27
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_250HZ`. */
+    @JvmField val MUSICLOUDNESS_250HZ = 28
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_500HZ`. */
+    @JvmField val MUSICLOUDNESS_500HZ = 29
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_1000HZ`. */
+    @JvmField val MUSICLOUDNESS_1000HZ = 30
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_2000HZ`. */
+    @JvmField val MUSICLOUDNESS_2000HZ = 31
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_6000HZ`. */
+    @JvmField val MUSICLOUDNESS_6000HZ = 32
+    /** `eAUDIO_PROPERTY_MUSICLOUDNESS_1500HZ`. */
+    @JvmField val MUSICLOUDNESS_1500HZ = 33
+    /** `eAUDIO_PROPERTY_DEFAULT_MAX_VOLUME`. */
+    @JvmField val DEFAULT_MAX_VOLUME = 34
+    /** `eAUDIO_PROPERTY_FACTORY`. */
+    @JvmField val FACTORY = 35
+    /** `eAUDIO_PROPERTY_VOLUME_BCALL`. */
+    @JvmField val VOLUME_BCALL = 36
+}

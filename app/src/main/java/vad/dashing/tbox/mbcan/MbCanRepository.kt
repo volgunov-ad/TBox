@@ -2127,6 +2127,9 @@ object MbCanRepository {
      */
     suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult =
         withContext(stateApplyDispatcher) {
+            if (bus == ExpertRawCanBus.VhalDirect) {
+                return@withContext a10OnlyVhalGet(propertyId)
+            }
             ensureMbCanReadyIfNeeded()
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawGetResult(false, message = "mbCAN unavailable")
@@ -2134,6 +2137,7 @@ object MbCanRepository {
             val raw = when (bus) {
                 ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
                 ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
+                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalGet(propertyId)
             }
             if (raw == null) {
                 ExpertRawGetResult(
@@ -2156,6 +2160,9 @@ object MbCanRepository {
      */
     suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult =
         withContext(stateApplyDispatcher) {
+            if (bus == ExpertRawCanBus.VhalDirect) {
+                return@withContext a10OnlyVhalSet(propertyId)
+            }
             ensureMbCanReadyIfNeeded()
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawSetResult(false, message = "mbCAN unavailable")
@@ -2163,6 +2170,7 @@ object MbCanRepository {
             val setResult = when (bus) {
                 ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canSetVehicleParam(propertyId, value)
                 ExpertRawCanBus.Audio -> MbCanEngineFacade.canSetAudioParam(propertyId, value)
+                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalSet(propertyId)
             } ?: return@withContext ExpertRawSetResult(
                 success = false,
                 effectivePropertyId = propertyId,
@@ -2174,6 +2182,20 @@ object MbCanRepository {
                 message = "Set result: $setResult",
             )
         }
+
+    private fun a10OnlyVhalGet(propertyId: Int): ExpertRawGetResult =
+        ExpertRawGetResult(
+            success = false,
+            effectivePropertyId = propertyId,
+            message = "A10-only VHAL id",
+        )
+
+    private fun a10OnlyVhalSet(propertyId: Int): ExpertRawSetResult =
+        ExpertRawSetResult(
+            success = false,
+            effectivePropertyId = propertyId,
+            message = "A10-only VHAL id",
+        )
 
     private suspend fun executeToggleViaRegistry(propertyId: Int): MbCanCommandResult {
         MbCanDiagnostics.log("DEBUG", "executeToggleProperty propertyId=$propertyId")
