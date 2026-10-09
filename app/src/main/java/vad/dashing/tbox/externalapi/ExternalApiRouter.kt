@@ -167,7 +167,7 @@ class ExternalApiRouter(
             val stateOptions = JSONArray()
             descriptor.stateOptions.forEach { stateOptions.put(it) }
             val sources = JSONArray()
-            descriptor.sources.forEach { sources.put(it.storageKey) }
+            AutomationSignalCatalog.sourcesForUi(descriptor.id).forEach { sources.put(it.storageKey) }
             signals.put(
                 JSONObject()
                     .put("id", descriptor.id.storageKey)

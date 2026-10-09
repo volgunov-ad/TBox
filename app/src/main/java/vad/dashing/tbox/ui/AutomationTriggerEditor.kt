@@ -424,12 +424,10 @@ private fun NumericTriggerFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 trigger.copy(
                     signal = signal,
-                    source = trigger.source.takeIf { it in sources }
-                        ?: AutomationSignalCatalog.preferredSource(sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, trigger.source),
                     mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
                         trigger.mac.ifBlank {
                             EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
@@ -452,7 +450,7 @@ private fun NumericTriggerFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = trigger.source,
+            value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
             options = AutomationSignalCatalog.sourcesForUi(trigger.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
@@ -549,8 +547,7 @@ private fun StateTriggerFields(
             onChange(
                 trigger.copy(
                     signal = signal,
-                    source = trigger.source.takeIf { it in descriptor.sources }
-                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, trigger.source),
                     expectedState = automationExpectedStateForSignal(
                         signal,
                         trigger.expectedState,
@@ -566,8 +563,8 @@ private fun StateTriggerFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = trigger.source,
-            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
+            value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),

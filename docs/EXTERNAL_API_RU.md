@@ -264,7 +264,10 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 
 Требует Bearer. Машиночитаемое описание возможностей:
 
-- сигналы: `id`, `valueType` (`number`\|`state`\|`position`), `sources`, `unit`, `label`,
+- сигналы: `id`, `valueType` (`number`\|`state`\|`position`), `sources` (с учётом backend ГУ:
+  на Android 9 у `engine_temperature` и `target_gear`, на Android 10 у `steering_speed` только
+  `tbox`; первым идёт источник по умолчанию; `GET /v1/signals?source=head_unit` для них
+  отвечает значением TBox), `unit`, `label`,
   `stateOptions` / `namedValues`, `typicalRange`, **`voiceAliasesRu`** (массив RU-фраз
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),

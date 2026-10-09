@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
@@ -82,7 +83,7 @@ object AutomationSignalCatalog {
             "Температура двигателя",
             "°C",
             bothSources,
-            typicalRange = "Значения в °C",
+            typicalRange = "Значения в °C. На Android 9 только TBox: mbCAN всегда отдаёт 0",
         ),
         number(
             AutomationSignalId.OUTSIDE_TEMPERATURE,
@@ -152,7 +153,7 @@ object AutomationSignalCatalog {
             "Скорость вращения руля",
             "°/с",
             bothSources,
-            typicalRange = "Значения в °/с; на ГУ Android 10 часто недоступна",
+            typicalRange = "Значения в °/с. На Android 10 только TBox: в VHAL её нет",
         ),
         number(
             AutomationSignalId.CRUISE_SET_SPEED,
@@ -216,7 +217,7 @@ object AutomationSignalCatalog {
             "",
             bothSources,
             typicalRange = "Подготовленная / целевая передача. " +
-                "A10 VHAL EMS_TargetGearPosition; на A9 mbCAN обычно нет (null). TBox gearBoxPreparedGear.",
+                "A10 VHAL EMS_TargetGearPosition; на Android 9 только TBox gearBoxPreparedGear (в mbCAN нет).",
         ),
         number(
             AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
@@ -999,10 +1000,47 @@ object AutomationSignalCatalog {
 
     private val byId = entries.associateBy { it.id }
 
+    /** Mirrors [vad.dashing.tbox.mbcan.UniversalCanRepository.mode]; kept here so the catalog has no Android deps. */
+    @Volatile
+    var headUnitMode: HeadUnitCanMode = HeadUnitCanMode.Android9MbCan
+        private set
+
+    fun setHeadUnitMode(mode: HeadUnitCanMode) {
+        headUnitMode = mode
+    }
+
     fun get(id: AutomationSignalId): AutomationSignalDescriptor = requireNotNull(byId[id])
 
+    /**
+     * HU backends that answer for a signal but never carry it: A9 mbCAN coolant is always 0.0,
+     * A9 has no target gear, A10 VHAL has no steering speed. TBox has all three.
+     */
+    fun headUnitUnsupported(id: AutomationSignalId, mode: HeadUnitCanMode): Boolean = when (mode) {
+        HeadUnitCanMode.Android9MbCan ->
+            id == AutomationSignalId.ENGINE_TEMPERATURE || id == AutomationSignalId.TARGET_GEAR
+        HeadUnitCanMode.Android10Vhal -> id == AutomationSignalId.STEERING_SPEED
+    }
+
+    /** Sources that give real values on [mode]. [AutomationSignalDescriptor.sources] is the union over platforms. */
+    fun sources(id: AutomationSignalId, mode: HeadUnitCanMode = headUnitMode): Set<AutomationSignalSource> {
+        val all = get(id).sources
+        if (!headUnitUnsupported(id, mode)) return all
+        val usable = all - AutomationSignalSource.HEAD_UNIT
+        return usable.ifEmpty { all }
+    }
+
+    /** Saved rules and API clients may still name the HU for these signals; read them from what works. */
+    fun resolveSource(
+        id: AutomationSignalId,
+        requested: AutomationSignalSource,
+        mode: HeadUnitCanMode = headUnitMode,
+    ): AutomationSignalSource {
+        val usable = sources(id, mode)
+        return if (requested in usable) requested else preferredSource(usable)
+    }
+
     fun preferredSource(id: AutomationSignalId): AutomationSignalSource =
-        preferredSource(get(id).sources)
+        preferredSource(sources(id))
 
     fun preferredSource(sources: Set<AutomationSignalSource>): AutomationSignalSource {
         require(sources.isNotEmpty()) { "signal sources must not be empty" }
@@ -1010,7 +1048,7 @@ object AutomationSignalCatalog {
     }
 
     fun sourcesForUi(id: AutomationSignalId): List<AutomationSignalSource> =
-        sourcesForUi(get(id).sources)
+        sourcesForUi(sources(id))
 
     fun sourcesForUi(sources: Set<AutomationSignalSource>): List<AutomationSignalSource> {
         val ordered = SOURCE_UI_ORDER.filter { it in sources }
