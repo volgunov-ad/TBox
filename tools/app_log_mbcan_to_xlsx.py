@@ -6,7 +6,7 @@ Parses lines tagged ``MBCAN_TMP.``, ``CANDIAG_MBCAN.``, ``CANDIAG_VHAL.``,
 ``CANDIAG_MARK.``, ``EXPERT_CAN.`` and optionally ``TripFuel.`` into a timeline
 sheet, a summary of distinct cfg / property IDs, and a Marks sheet: for each
 journal mark, the signals whose value changed within ±3 seconds.
-property IDs marked known vs unknown against the app catalog
+Property IDs are marked known vs unknown against the app catalog
 (``MbCanKnownVehiclePropertyId`` / ``MbCanKnownAudioPropertyId`` in
 ``MbCanCatalog.kt``).
 

@@ -2145,22 +2145,28 @@ object MbCanRepository {
     /**
      * Expert snapshot: one readiness check, then every row in order with [pacingMs]
      * between JNI reads so the shared `mbcan-state-apply` thread keeps serving pushes.
+     * [onProgress] runs on the caller dispatcher (Compose main), not on the JNI thread.
      */
     suspend fun readRawBatch(
         params: List<ExpertRawCanParam>,
         pacingMs: Long,
         onProgress: (done: Int, total: Int) -> Unit,
-    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> = withContext(stateApplyDispatcher) {
-        ensureMbCanReadyIfNeeded()
-        if (availability.value !is MbCanAvailability.Available) {
-            val fail = ExpertRawGetResult(false, message = "mbCAN unavailable")
-            return@withContext params.map { it to fail }
+    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> {
+        val unavailable = withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            availability.value !is MbCanAvailability.Available
         }
-        params.mapIndexed { index, param ->
-            val result = if (param.bus == ExpertRawCanBus.VhalDirect) {
-                a10OnlyVhalGet(param.mbCanId)
-            } else {
-                readRawReady(param.bus, param.mbCanId)
+        if (unavailable) {
+            val fail = ExpertRawGetResult(false, message = "mbCAN unavailable")
+            return params.map { it to fail }
+        }
+        return params.mapIndexed { index, param ->
+            val result = withContext(stateApplyDispatcher) {
+                if (param.bus == ExpertRawCanBus.VhalDirect) {
+                    a10OnlyVhalGet(param.mbCanId)
+                } else {
+                    readRawReady(param.bus, param.mbCanId)
+                }
             }
             onProgress(index + 1, params.size)
             delay(pacingMs)
@@ -4153,9 +4159,6 @@ object MbCanRepository {
     }
 
     /**
-     * OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on.
-     */
-    /**
      * One full read when deep mode starts (objects, every vehicle/audio int, and vehicle
      * byte arrays that carry more than that int), then a 30 s poll of the object types
      * OEM does not push. Both run on [stateApplyDispatcher]; [delay] lets pushes in.
@@ -4231,6 +4234,7 @@ object MbCanRepository {
         }
     }
 
+    /** OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on. */
     private fun startSeatBeltDeepPoll() {
         seatBeltDeepPollJob?.cancel()
         val scope = boundScope ?: return

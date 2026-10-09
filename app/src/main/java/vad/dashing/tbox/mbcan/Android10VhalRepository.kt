@@ -3683,101 +3683,107 @@ object Android10VhalRepository {
 
     /**
      * Expert raw Get: resolve A10 read id for the logical mbCAN id, then
-     * [CarPropertyBridge.getIntProperty]. Bypasses command registry; no decode.
+     * [CarPropertyBridge.getPropertyValue]. Bypasses command registry; no decode.
+     * Binder reads run on [stateApplyDispatcher], same as deep-diagnostics baseline.
      */
     suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
         if (bus == ExpertRawCanBus.MbCanObject) {
             return ExpertRawGetResult(false, effectivePropertyId = propertyId, message = "A9-only mbCAN object")
         }
-        val connection = ensureConnected()
-        if (connection !is MbCanAvailability.Available) {
-            return ExpertRawGetResult(false, message = currentUnavailableReason())
-        }
-        val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
-            propertyId
-        } else {
-            FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId)
-                ?: ExpertRawVhalCandidates.readId(bus, propertyId)
-                ?: propertyId
-        }
-        permissionDeniedReasonForProperty(effectiveId)?.let {
-            return ExpertRawGetResult(
-                success = false,
-                effectivePropertyId = effectiveId,
-                message = it,
-            )
-        }
-        val value = bridge?.getPropertyValue(effectiveId)
-        if (value == null) {
-            return ExpertRawGetResult(
-                success = false,
-                effectivePropertyId = effectiveId,
-                message = "Get returned null (bus=$bus)",
-            )
-        }
-        val intValue = (value as? Number)?.takeIf { value is Int || value is Short || value is Byte }?.toInt()
-        return if (intValue != null && value !is Float && value !is Double) {
-            ExpertRawGetResult(
-                success = true,
-                rawValue = intValue,
-                effectivePropertyId = effectiveId,
-                message = "ok",
-            )
-        } else {
-            ExpertRawGetResult(
-                success = true,
-                effectivePropertyId = effectiveId,
-                message = "ok ${value.javaClass.simpleName}",
-                fields = MbCanObjectDump.flatten(value),
-            )
+        return withContext(stateApplyDispatcher) {
+            val connection = ensureConnected()
+            if (connection !is MbCanAvailability.Available) {
+                return@withContext ExpertRawGetResult(false, message = currentUnavailableReason())
+            }
+            val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+                propertyId
+            } else {
+                FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId)
+                    ?: ExpertRawVhalCandidates.readId(bus, propertyId)
+                    ?: propertyId
+            }
+            permissionDeniedReasonForProperty(effectiveId)?.let {
+                return@withContext ExpertRawGetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = it,
+                )
+            }
+            val value = bridge?.getPropertyValue(effectiveId)
+            if (value == null) {
+                return@withContext ExpertRawGetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = "Get returned null (bus=$bus)",
+                )
+            }
+            val intValue = (value as? Number)?.takeIf { value is Int || value is Short || value is Byte }?.toInt()
+            if (intValue != null && value !is Float && value !is Double) {
+                ExpertRawGetResult(
+                    success = true,
+                    rawValue = intValue,
+                    effectivePropertyId = effectiveId,
+                    message = "ok",
+                )
+            } else {
+                ExpertRawGetResult(
+                    success = true,
+                    effectivePropertyId = effectiveId,
+                    message = "ok ${value.javaClass.simpleName}",
+                    fields = MbCanObjectDump.flatten(value),
+                )
+            }
         }
     }
 
     /**
      * Expert raw Set: resolve A10 write id and send [value] as-is (no VHAL encode /
      * registry policy). Multi-pane window logical ids are rejected — pick a pane id.
+     * Binder writes run on [stateApplyDispatcher].
      */
     suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
         if (bus == ExpertRawCanBus.MbCanObject) {
             return ExpertRawSetResult(false, propertyId, "A9-only mbCAN object")
         }
-        val connection = ensureConnected()
-        if (connection !is MbCanAvailability.Available) {
-            return ExpertRawSetResult(false, message = currentUnavailableReason())
-        }
-        val windowIds = if (bus == ExpertRawCanBus.VhalDirect) {
-            null
-        } else {
-            FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
-        }
-        if (windowIds != null && windowIds.size > 1) {
-            return ExpertRawSetResult(
-                success = false,
-                message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
-            )
-        }
-        val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
-            propertyId
-        } else {
-            windowIds?.singleOrNull()
-                ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
-                ?: ExpertRawVhalCandidates.writeId(bus, propertyId)
-                ?: propertyId
-        }
-        permissionDeniedReasonForProperty(effectiveId)?.let {
-            return ExpertRawSetResult(
-                success = false,
+        return withContext(stateApplyDispatcher) {
+            val connection = ensureConnected()
+            if (connection !is MbCanAvailability.Available) {
+                return@withContext ExpertRawSetResult(false, message = currentUnavailableReason())
+            }
+            val windowIds = if (bus == ExpertRawCanBus.VhalDirect) {
+                null
+            } else {
+                FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
+            }
+            if (windowIds != null && windowIds.size > 1) {
+                return@withContext ExpertRawSetResult(
+                    success = false,
+                    message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
+                )
+            }
+            val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+                propertyId
+            } else {
+                windowIds?.singleOrNull()
+                    ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
+                    ?: ExpertRawVhalCandidates.writeId(bus, propertyId)
+                    ?: propertyId
+            }
+            permissionDeniedReasonForProperty(effectiveId)?.let {
+                return@withContext ExpertRawSetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = it,
+                )
+            }
+            val ok = bridge?.setIntProperty(effectiveId, value) == true
+            logDebug("expertSetRaw bus=$bus logical=$propertyId effective=$effectiveId value=$value ok=$ok")
+            ExpertRawSetResult(
+                success = ok,
                 effectivePropertyId = effectiveId,
-                message = it,
+                message = if (ok) "Set ok" else "Set failed",
             )
         }
-        val ok = bridge?.setIntProperty(effectiveId, value) == true
-        logDebug("expertSetRaw bus=$bus logical=$propertyId effective=$effectiveId value=$value ok=$ok")
-        return ExpertRawSetResult(
-            success = ok,
-            effectivePropertyId = effectiveId,
-            message = if (ok) "Set ok" else "Set failed",
-        )
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {
