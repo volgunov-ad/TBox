@@ -9,6 +9,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
+import vad.dashing.tbox.automation.AutomationHardKeyStatus
+import vad.dashing.tbox.automation.AutomationTriggerEspGpioBtnEventBus
 import vad.dashing.tbox.ui.HARD_KEY_PICKER_CODES
 import vad.dashing.tbox.ui.WidgetButtonBindingSource
 import vad.dashing.tbox.ui.hardKeyCodeLabel
@@ -119,5 +125,49 @@ class WidgetButtonBindingTest {
         assertEquals(1, doubles)
         WidgetButtonBindingRegistry.unregister(id)
         assertEquals(0, WidgetButtonBindingRegistry.sizeForTests())
+    }
+
+    @Test
+    fun registry_failingTargetDoesNotBreakOtherTiles() {
+        WidgetButtonBindingRegistry.clearForTests()
+        val binding = WidgetButtonBinding.HardKey(115)
+        WidgetButtonBindingRegistry.register(
+            binding = binding,
+            onSingle = { throw IllegalStateException("boom") },
+            onDouble = {},
+        )
+        var singles = 0
+        val healthyId = WidgetButtonBindingRegistry.register(
+            binding = binding,
+            onSingle = { singles++ },
+            onDouble = {},
+        )
+        WidgetButtonBindingRegistry.dispatch(binding, WidgetButtonBindingTap.SINGLE)
+        assertEquals(1, singles)
+        WidgetButtonBindingRegistry.unregister(healthyId)
+        WidgetButtonBindingRegistry.clearForTests()
+    }
+
+    @Test
+    fun coordinator_routesGpioGestureToTileTap() = runBlocking {
+        WidgetButtonBindingRegistry.clearForTests()
+        var singles = 0
+        val id = WidgetButtonBindingRegistry.register(
+            binding = WidgetButtonBinding.EspGpio(channel = 2),
+            onSingle = { singles++ },
+            onDouble = {},
+        )
+        val coordinator = WidgetButtonBindingCoordinator(
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+            dispatchContext = Dispatchers.Unconfined,
+        )
+        coordinator.start()
+        AutomationTriggerEspGpioBtnEventBus.publish(2, AutomationHardKeyStatus.SINGLE)
+        AutomationTriggerEspGpioBtnEventBus.publish(2, AutomationHardKeyStatus.LONG)
+        AutomationTriggerEspGpioBtnEventBus.publish(3, AutomationHardKeyStatus.SINGLE)
+        coordinator.stop()
+        WidgetButtonBindingRegistry.unregister(id)
+        assertEquals(1, singles)
+        WidgetButtonBindingRegistry.clearForTests()
     }
 }
