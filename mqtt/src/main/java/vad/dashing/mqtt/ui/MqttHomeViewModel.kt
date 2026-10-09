@@ -24,6 +24,7 @@ import vad.dashing.mqtt.service.BridgeStatusStore
 import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
+import vad.dashing.mqtt.settings.connectionChanged
 
 data class MqttHomeState(
     val tab: Int = 0,
@@ -83,6 +84,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             connectionDraft = current.connectionDraft.copy(
                 apiPort = next.apiPort,
                 brokerEnabled = next.brokerEnabled,
+                autostart = next.autostart,
                 accessToken = next.accessToken,
                 deviceName = next.deviceName,
                 discoveryEnabled = next.discoveryEnabled,
@@ -252,6 +254,16 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             settings.copy(selectedObjectIds = next)
         }
     }
+
+    fun setEntities(objectIds: Collection<String>, enabled: Boolean) {
+        update { settings ->
+            val next = settings.selectedObjectIds.toMutableSet()
+            if (enabled) next += objectIds else next -= objectIds.toSet()
+            settings.copy(selectedObjectIds = next)
+        }
+    }
+
+    fun connectionDirty(): Boolean = connectionChanged(_state.value.settings, _state.value.connectionDraft)
 
     fun refreshEntities() {
         val settings = _state.value.settings

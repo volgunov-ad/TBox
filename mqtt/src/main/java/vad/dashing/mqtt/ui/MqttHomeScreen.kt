@@ -8,12 +8,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -116,6 +120,7 @@ private fun ConnectionTab(
 ) {
     val settings = state.settings
     val connection = state.connectionDraft
+    LinkSummary(state)
     SectionTitle("Monitor")
     NumberField("Порт API", settings.apiPort.toString()) {
         viewModel.update { current -> current.copy(apiPort = it.toIntOrNull() ?: current.apiPort) }
@@ -183,44 +188,51 @@ private fun ConnectionTab(
             modifier = Modifier.padding(top = 8.dp),
         )
     }
-    Button(
-        onClick = {
-            viewModel.saveConnection()
-            onSettingsSaved()
-        },
+    val dirty = viewModel.connectionDirty()
+    Row(
         modifier = Modifier.padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Сохранить", style = MaterialTheme.typography.tboxButton)
+        Button(
+            onClick = {
+                viewModel.saveConnection()
+                onSettingsSaved()
+            },
+        ) {
+            Text("Сохранить", style = MaterialTheme.typography.tboxButton)
+        }
+        OutlinedButton(
+            onClick = viewModel::checkBroker,
+            enabled = !state.brokerBusy,
+        ) {
+            Text("Проверить", style = MaterialTheme.typography.tboxButton)
+        }
     }
-    if (state.connectionMessage.isNotBlank()) {
+    if (dirty) {
         Text(
-            state.connectionMessage,
+            "Есть несохранённые изменения",
             style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(top = 8.dp),
         )
     }
-    OutlinedButton(
-        onClick = viewModel::checkBroker,
-        enabled = !state.brokerBusy,
-        modifier = Modifier.padding(top = 12.dp),
-    ) {
-        Text("Проверить", style = MaterialTheme.typography.tboxButton)
-    }
-    if (state.brokerMessage.isNotBlank()) {
-        Text(
-            state.brokerMessage,
-            style = MaterialTheme.typography.tboxBody,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
+    listOf(state.connectionMessage, state.brokerMessage)
+        .filter { it.isNotBlank() }
+        .forEach { message ->
+            Text(
+                message,
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     SettingSwitch(
-        checked = connection.autostart,
+        checked = settings.autostart,
         title = "Автозапуск",
         description = "Поднимать мост после включения головного устройства",
         onChecked = { enabled ->
-            viewModel.editConnection { current -> current.copy(autostart = enabled) }
+            viewModel.update { current -> current.copy(autostart = enabled) }
         },
     )
     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
@@ -287,28 +299,34 @@ private fun WireguardBlock(connection: MqttSettings, viewModel: MqttHomeViewMode
             else -> viewModel.importWireguard(displayName(context, uri), text)
         }
     }
+    val hasFile = connection.wireguardConf.isNotBlank()
+    var open by rememberSaveable { mutableStateOf(false) }
+    val fileName = connection.wireguardFileName.ifBlank { "wireguard.conf" }
     HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-    SectionTitle("WireGuard")
     SettingSwitch(
         checked = connection.wireguardEnabled,
-        title = "Через WireGuard",
-        description = "К брокеру ходит только эта программа. Остальные приложения головного устройства туннель не видят",
+        title = if (hasFile) "Через WireGuard: $fileName" else "Через WireGuard",
+        description = if (hasFile) {
+            "К брокеру ходит только эта программа. Остальные приложения головного устройства туннель не видят"
+        } else {
+            "Сначала выберите файл .conf"
+        },
         onChecked = viewModel::setWireguardEnabled,
     )
+    if (hasFile) {
+        OutlinedButton(onClick = { open = !open }) {
+            Text(if (open) "Скрыть файл WireGuard" else "Файл WireGuard", style = MaterialTheme.typography.tboxButton)
+        }
+    }
+    if (hasFile && !open) return
     OutlinedButton(
         onClick = { picker.launch(arrayOf("*/*")) },
         modifier = Modifier.padding(top = 8.dp),
     ) {
-        Text("Выбрать файл .conf", style = MaterialTheme.typography.tboxButton)
+        Text(if (hasFile) "Выбрать другой файл .conf" else "Выбрать файл .conf", style = MaterialTheme.typography.tboxButton)
     }
-    if (connection.wireguardConf.isNotBlank()) {
+    if (hasFile) {
         val parsed = parseWgConf(connection.wireguardConf)
-        Text(
-            connection.wireguardFileName.ifBlank { "wireguard.conf" },
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(top = 8.dp),
-        )
         Text(
             parsed.fold(
                 onSuccess = { it.summary() },
@@ -398,13 +416,68 @@ private fun StatusTab(state: MqttHomeState) {
     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
     StatusLine("Home Assistant видит", bridge.availability)
     StatusLine("Опубликовано сущностей", bridge.publishedCount.toString())
+    StatusLine(
+        "Последняя отправка в брокер",
+        if (bridge.lastPublishAtMs > 0L) clockText(bridge.lastPublishAtMs) else "ещё не было",
+    )
     if (bridge.lastError.isNotBlank()) {
         Text(
             bridge.lastError,
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
         )
+    }
+    if (bridge.events.isEmpty()) return
+    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+    SectionTitle("Журнал связи")
+    bridge.events.forEach { event ->
+        StatusLine(
+            "${clockText(event.atMs)}  ${event.link}",
+            if (event.up) "на связи" else "нет связи",
+            ok = event.up,
+            detail = event.detail,
+        )
+    }
+}
+
+@Composable
+private fun LinkSummary(state: MqttHomeState) {
+    val bridge = state.bridge
+    val links = buildList {
+        if (!state.settings.brokerEnabled) {
+            add("Мост выключен" to false)
+        } else {
+            add("Monitor" to bridge.monitorUp)
+            add("Брокер" to bridge.brokerUp)
+            if (bridge.wireguardEnabled) add("WireGuard" to bridge.brokerUp)
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        links.forEach { (title, up) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .background(
+                            if (up) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            CircleShape,
+                        ),
+                )
+                Text(
+                    title,
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        }
     }
 }
 
@@ -415,6 +488,7 @@ private fun EntitiesTab(
     onSettingsSaved: () -> Unit,
 ) {
     var filterText by rememberSaveable { mutableStateOf("") }
+    var onlySelected by rememberSaveable { mutableStateOf(false) }
     if (state.settings.accessToken.isBlank()) {
         Text(
             "Сначала подключитесь к Monitor",
@@ -451,15 +525,40 @@ private fun EntitiesTab(
     }
     if (state.entities.isEmpty()) return
     EntityFilterField(filterText) { filterText = it }
+    SettingSwitch(
+        checked = onlySelected,
+        title = "Только отмеченные",
+        description = "Отмечено ${state.entities.count { it.objectId in settings.selectedObjectIds }} из ${state.entities.size}",
+        onChecked = { onlySelected = it },
+    )
     var any = false
     EntityGroup.entries.forEach { group ->
-        val rows = state.entities.filter { entity ->
-            entity.group == group &&
+        val inGroup = state.entities.filter { it.group == group }
+        val rows = inGroup.filter { entity ->
+            (!onlySelected || entity.objectId in settings.selectedObjectIds) &&
                 entityMatchesFilter(entity.label, entity.description, entity.objectId, group.title, filterText)
         }
         if (rows.isEmpty()) return@forEach
         any = true
-        SectionTitle(group.title)
+        val picked = inGroup.count { it.objectId in settings.selectedObjectIds }
+        val allRowsPicked = rows.all { it.objectId in settings.selectedObjectIds }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                SectionTitle("${group.title} $picked/${inGroup.size}")
+            }
+            OutlinedButton(
+                onClick = {
+                    viewModel.setEntities(rows.map { it.objectId }, enabled = !allRowsPicked)
+                    onSettingsSaved()
+                },
+                modifier = Modifier.padding(top = 12.dp),
+            ) {
+                Text(if (allRowsPicked) "Снять все" else "Отметить все", style = MaterialTheme.typography.tboxButton)
+            }
+        }
         rows.forEach { entity ->
             SettingSwitch(
                 checked = entity.objectId in settings.selectedObjectIds,
@@ -559,11 +658,13 @@ private fun StatusLine(title: String, value: String, ok: Boolean? = null, detail
 
 private val ClockFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
+internal fun clockText(ms: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+    Instant.ofEpochMilli(ms).atZone(zone).format(ClockFormat)
+
 internal fun linkText(up: Boolean, sinceMs: Long, zone: ZoneId = ZoneId.systemDefault()): String {
     val state = if (up) "на связи" else "нет связи"
     if (sinceMs <= 0L) return state
-    val clock = Instant.ofEpochMilli(sinceMs).atZone(zone).format(ClockFormat)
-    return "$state с $clock"
+    return "$state с ${clockText(sinceMs, zone)}"
 }
 
 @Composable

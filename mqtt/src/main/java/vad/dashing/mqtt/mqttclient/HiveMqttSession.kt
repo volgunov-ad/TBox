@@ -39,6 +39,10 @@ class HiveMqttSession {
     var lastFailure: String = ""
         private set
 
+    @Volatile
+    var lastPublishAtMs: Long = 0L
+        private set
+
     fun ensureConnected(
         settings: MqttSettings,
         statusTopic: String,
@@ -133,6 +137,7 @@ class HiveMqttSession {
             .retain(retain)
             .send()
             .get(8, TimeUnit.SECONDS)
+        lastPublishAtMs = System.currentTimeMillis()
     }
 
     /** Clean session drops broker subscriptions. The next replace sends them again. */

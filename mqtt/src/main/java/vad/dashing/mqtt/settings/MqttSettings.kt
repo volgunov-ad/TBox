@@ -61,7 +61,6 @@ data class MqttSettings(
         discoveryPrefix = from.discoveryPrefix,
         deviceId = from.deviceId,
         mqttClientId = from.mqttClientId,
-        autostart = from.autostart,
         pollSeconds = from.pollSeconds,
         repeatMinutes = from.repeatMinutes,
         fastPublishSeconds = from.fastPublishSeconds,
@@ -89,6 +88,10 @@ data class MqttSettings(
         sha256(wireguardConf),
     ).joinToString("|")
 }
+
+/** True when the draft holds a broker field that only «Сохранить» applies. */
+fun connectionChanged(saved: MqttSettings, draft: MqttSettings): Boolean =
+    saved.applyingConnection(draft).normalized() != saved.normalized()
 
 private fun sha256(text: String): String {
     if (text.isEmpty()) return ""

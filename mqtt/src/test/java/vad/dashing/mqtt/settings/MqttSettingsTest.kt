@@ -65,6 +65,16 @@ class MqttSettingsTest {
     }
 
     @Test
+    fun draftIsDirtyOnlyForFieldsThatWaitForSave() {
+        val saved = MqttSettings(accessToken = "token", brokerHost = "192.168.1.10").normalized()
+        assertFalse(connectionChanged(saved, saved))
+        assertFalse(connectionChanged(saved, saved.copy(brokerHost = " 192.168.1.10 ")))
+        assertFalse(connectionChanged(saved, saved.copy(accessToken = "", deviceName = "другое")))
+        assertTrue(connectionChanged(saved, saved.copy(brokerPort = 8883)))
+        assertTrue(connectionChanged(saved, saved.copy(wireguardConf = "[Interface]")))
+    }
+
+    @Test
     fun savingBrokerFieldsKeepsTheSwitch() {
         val saved = MqttSettings(accessToken = "token", brokerHost = "a", brokerEnabled = false)
         val draft = saved.copy(brokerHost = "b", brokerEnabled = true)

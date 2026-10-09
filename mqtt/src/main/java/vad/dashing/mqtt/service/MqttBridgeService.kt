@@ -80,6 +80,7 @@ class MqttBridgeService : Service() {
     private var reportedMonitorUp: Boolean? = null
     private var brokerSinceMs = 0L
     private var monitorSinceMs = 0L
+    private val journal = LinkJournal()
     private var running = false
     @Volatile
     private var lastStartId = 0
@@ -572,14 +573,6 @@ class MqttBridgeService : Service() {
         val brokerUp = session.connected
         val monitorOk = monitorUp && !unauthorized
         val now = System.currentTimeMillis()
-        if (reportedBrokerUp != brokerUp) {
-            if (reportedBrokerUp != null) brokerSinceMs = now
-            reportedBrokerUp = brokerUp
-        }
-        if (reportedMonitorUp != monitorOk) {
-            if (reportedMonitorUp != null) monitorSinceMs = now
-            reportedMonitorUp = monitorOk
-        }
         val brokerError = when {
             brokerUp -> ""
             brokerCycleError.isNotEmpty() -> brokerCycleError
@@ -590,6 +583,21 @@ class MqttBridgeService : Service() {
             tunnelRouteError.isNotEmpty() -> tunnelRouteError
             brokerUp -> ""
             else -> WgTunnel.lastDialError()
+        }
+        if (reportedBrokerUp != brokerUp) {
+            if (reportedBrokerUp != null || brokerUp) {
+                brokerSinceMs = now
+                val detail = listOf(brokerError, tunnelError).filter { it.isNotEmpty() }.joinToString(". ")
+                journal.add(LinkEvent(now, "Брокер", brokerUp, detail))
+            }
+            reportedBrokerUp = brokerUp
+        }
+        if (reportedMonitorUp != monitorOk) {
+            if (reportedMonitorUp != null || monitorOk) {
+                monitorSinceMs = now
+                journal.add(LinkEvent(now, "Monitor", monitorOk, if (monitorOk) "" else monitorError))
+            }
+            reportedMonitorUp = monitorOk
         }
         BridgeStatusStore.state.value = BridgeStatus(
             monitorUp = monitorOk,
@@ -603,6 +611,8 @@ class MqttBridgeService : Service() {
             tunnelError = tunnelError,
             brokerSinceMs = brokerSinceMs,
             monitorSinceMs = monitorSinceMs,
+            lastPublishAtMs = session.lastPublishAtMs,
+            events = journal.snapshot(),
         )
         val text = notificationText(monitorOk, brokerUp)
         if (text == notifiedText) return
