@@ -89,7 +89,7 @@ fun PermissionsDialog(
     }
 
     val items = remember(refreshTick) { AppPermissions.snapshot(context) }
-    val anyMissing = items.any { !it.granted }
+    val anyMissing = items.any { !it.granted && it.id != AppPermissionId.MockLocation }
     val copiedToast = stringResource(R.string.permissions_adb_copied)
     val openFailedToast = stringResource(R.string.permissions_open_settings_failed)
     val autoGrantOk = stringResource(R.string.permissions_write_secure_auto_ok)

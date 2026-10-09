@@ -53,10 +53,8 @@ class PermissionsAutoGrantTest {
         assertTrue(commands.any { it.contains("READ_EXTERNAL_STORAGE") })
         assertTrue(commands.any { it.contains("ACCESS_FINE_LOCATION") })
         assertTrue(commands.none { it.contains("ACCESS_BACKGROUND_LOCATION") })
-        assertTrue(commands.any { it == "appops set vad.dashing.tbox MOCK_LOCATION allow" })
-        assertTrue(
-            commands.any { it == "settings put secure mock_location vad.dashing.tbox" },
-        )
+        assertTrue(commands.none { it.contains("MOCK_LOCATION") })
+        assertTrue(commands.none { it.contains("mock_location") })
         assertTrue(commands.any { it.startsWith("settings get secure enabled_notification_listeners") })
         assertTrue(
             commands.any {
@@ -137,6 +135,48 @@ class PermissionsAutoGrantTest {
         assertEquals(PermissionsAutoGrant.Outcome.AlreadyAllGranted, outcome)
         assertTrue(gateway.setTcpCalls.isEmpty())
         assertTrue(gateway.shellCommands.isEmpty())
+    }
+
+    @Test
+    fun grantMissingWith_mockLocationOnly_skipsTcpAndShell() = runBlocking {
+        val gateway = FakeGateway(missing = listOf(AppPermissionId.MockLocation))
+        val outcome = PermissionsAutoGrant.grantMissingWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            packageName = "vad.dashing.tbox",
+            sdkInt = 28,
+        )
+        assertEquals(PermissionsAutoGrant.Outcome.AlreadyAllGranted, outcome)
+        assertTrue(gateway.setTcpCalls.isEmpty())
+        assertTrue(gateway.shellCommands.isEmpty())
+    }
+
+    @Test
+    fun grantMissingWith_doesNotTreatMockLocationAsStillMissing() = runBlocking {
+        val gateway = FakeGateway(
+            missing = listOf(AppPermissionId.Overlay, AppPermissionId.MockLocation),
+            tcpEnabled = true,
+            portOpen = true,
+        )
+        gateway.afterShell = {
+            gateway.missing = listOf(AppPermissionId.MockLocation)
+        }
+
+        val outcome = PermissionsAutoGrant.grantMissingWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            packageName = "vad.dashing.tbox",
+            sdkInt = 28,
+        )
+
+        assertEquals(
+            PermissionsAutoGrant.Outcome.Success(listOf(AppPermissionId.Overlay)),
+            outcome,
+        )
+        assertTrue(gateway.shellCommands.any { it.contains("SYSTEM_ALERT_WINDOW") })
+        assertTrue(gateway.shellCommands.none { it.contains("MOCK_LOCATION") || it.contains("mock_location") })
     }
 
     @Test

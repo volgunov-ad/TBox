@@ -663,7 +663,7 @@
     <string name="permissions_dialog_intro">Grant the accesses you need for the features you use. Status refreshes after you return from Android settings. Optional items can be skipped; open this list later from Settings.</string>
     <string name="permissions_auto_grant_all">Grant all automatically</string>
     <string name="permissions_auto_grant_all_running">Granting all…</string>
-    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener / mock location). If :5555 is not listening yet, briefly enables ADB TCP and restores it only when this session turned it on; an already-open port is left alone. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener). Mock location is not granted by this button. If :5555 is not listening yet, briefly enables ADB TCP and restores it only when this session turned it on; an already-open port is left alone. On first use, accept «Allow USB debugging» on the head unit.</string>
     <string name="permissions_auto_grant_all_ok">All permissions granted (%1$d)</string>
     <string name="permissions_auto_grant_all_already">All permissions already granted</string>
     <string name="permissions_auto_grant_all_partial">Granted %1$d, still missing: %2$d</string>
