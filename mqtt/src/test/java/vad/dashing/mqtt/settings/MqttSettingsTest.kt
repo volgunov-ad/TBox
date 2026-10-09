@@ -55,6 +55,15 @@ class MqttSettingsTest {
     }
 
     @Test
+    fun fastPublishDefaultIsTenSeconds() {
+        assertEquals(10, MqttSettings().fastPublishSeconds)
+        assertEquals(10 to true, fastPublishSecondsOnLoad(stored = null, alreadyMigrated = false))
+        assertEquals(10 to true, fastPublishSecondsOnLoad(stored = 5, alreadyMigrated = false))
+        assertEquals(3 to true, fastPublishSecondsOnLoad(stored = 3, alreadyMigrated = false))
+        assertEquals(5 to false, fastPublishSecondsOnLoad(stored = 5, alreadyMigrated = true))
+    }
+
+    @Test
     fun brokerSwitchStopsTheBridgeButKeepsItConfigured() {
         val configured = MqttSettings(accessToken = "token", brokerHost = "192.168.1.10")
         assertTrue(configured.active)
