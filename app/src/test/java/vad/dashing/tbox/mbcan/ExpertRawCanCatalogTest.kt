@@ -3,8 +3,10 @@ package vad.dashing.tbox.mbcan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.esp.HuCanMarkLog
 
 class ExpertRawCanCatalogTest {
 
@@ -79,6 +81,70 @@ class ExpertRawCanCatalogTest {
         assertEquals(
             "vhal=${rpm.mbCanId}",
             ExpertRawCanCatalog.formatIdsSummary(rpm, HeadUnitCanModeLabel.Android10Vhal),
+        )
+    }
+
+    @Test
+    fun allParams_includesEveryOemVehicleAndAudioId() {
+        val params = ExpertRawCanCatalog.allParams()
+        val vehicle = params.filter { it.bus == ExpertRawCanBus.Vehicle }
+        val audio = params.filter { it.bus == ExpertRawCanBus.Audio }
+        assertEquals(326, vehicle.size)
+        assertEquals(vehicle.size, vehicle.map { it.mbCanId }.toSet().size)
+        for (id in 1..324) {
+            assertTrue("missing vehicle id $id", vehicle.any { it.mbCanId == id })
+        }
+        assertTrue(vehicle.any { it.mbCanId == MbCanKnownVehiclePropertyId.TRUNK_STATUS })
+        assertTrue(vehicle.any { it.mbCanId == MbCanKnownVehiclePropertyId.TRUNK_REAR_DOOR_MOVE_DIR })
+        assertEquals(37, audio.size)
+        for (id in 1..37) {
+            assertTrue("missing audio id $id", audio.any { it.mbCanId == id })
+        }
+        assertTrue(vehicle.any { it.name == "MIRROR_REVERSE_TURN" && it.mbCanId == 5 })
+        assertTrue(vehicle.any { it.name == "KEYMODE" && it.mbCanId == 12 })
+        assertEquals("KEYMODE(12)", HuCanMarkLog.vehicleProp(12))
+    }
+
+    @Test
+    fun allParams_nameMatchedVhalCandidatesStayOutOfProductionMaps() {
+        val params = ExpertRawCanCatalog.allParams()
+        val wash = params.first { it.name == "VEHICLE_VEHWASH_MODESET" }
+        assertEquals(289412171, wash.vhalReadId)
+        assertEquals(289412663, wash.vhalWriteId)
+        assertNull(FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(wash.mbCanId))
+        assertNull(FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(wash.mbCanId))
+
+        val pm25 = params.first { it.name == "VEHICLE_PM25_DISPLAY_TOGGLE" }
+        assertEquals(289412215, pm25.vhalReadId)
+        assertEquals(289415348, pm25.vhalWriteId)
+
+        val fold = params.first { it.name == "MIRROR_FOLD_SWITCH" }
+        assertEquals(289412195, fold.vhalReadId)
+        assertEquals(289412705, fold.vhalWriteId)
+        assertEquals(289412705, FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(fold.mbCanId))
+
+        val welcome = params.first { it.bus == ExpertRawCanBus.Vehicle && it.name == "WELCOME_LAMP" }
+        val loudness = params.first { it.bus == ExpertRawCanBus.Audio && it.name == "MUSICLOUDNESS_6000HZ" }
+        assertEquals(32, welcome.mbCanId)
+        assertEquals(32, loudness.mbCanId)
+        assertEquals(289412618, welcome.vhalWriteId)
+        assertEquals(289415077, loudness.vhalWriteId)
+
+        val fragrance = params.first { it.name == "FRAGRANCE_SWITCH" }
+        assertNull(fragrance.vhalReadId)
+        assertNull(fragrance.vhalWriteId)
+        val limiter = params.first { it.name == "VEHICLE_SPEEDLIMIT_SWITCH" }
+        assertNull(limiter.vhalReadId)
+        assertNull(limiter.vhalWriteId)
+        val wifi = params.first { it.name == "WIFI_PASSWORD" }
+        assertEquals(63, wifi.mbCanId)
+        assertNull(wifi.vhalReadId)
+        assertNull(wifi.vhalWriteId)
+
+        val hvac = params.first { it.name == "HVAC_POWER" }
+        assertEquals(
+            FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(hvac.mbCanId),
+            hvac.vhalReadId,
         )
     }
 

@@ -3581,7 +3581,9 @@ object Android10VhalRepository {
         val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
             propertyId
         } else {
-            FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId) ?: propertyId
+            FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId)
+                ?: ExpertRawVhalCandidates.readId(bus, propertyId)
+                ?: propertyId
         }
         permissionDeniedReasonForProperty(effectiveId)?.let {
             return ExpertRawGetResult(
@@ -3632,6 +3634,7 @@ object Android10VhalRepository {
         } else {
             windowIds?.singleOrNull()
                 ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
+                ?: ExpertRawVhalCandidates.writeId(bus, propertyId)
                 ?: propertyId
         }
         permissionDeniedReasonForProperty(effectiveId)?.let {

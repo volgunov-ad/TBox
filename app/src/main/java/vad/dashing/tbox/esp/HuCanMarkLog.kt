@@ -5,6 +5,8 @@ import vad.dashing.tbox.mbcan.MbCanCommand
 import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.mbcan.MbCanOemAudioPropertyId
+import vad.dashing.tbox.mbcan.MbCanOemVehiclePropertyId
 import java.lang.reflect.Modifier
 
 /**
@@ -61,11 +63,13 @@ object HuCanMarkLog {
     fun shouldMarkVhalPush(propertyId: Int): Boolean = propertyId !in highRateVhalPropertyIds
 
     private val vehicleNames: Map<Int, String> by lazy {
-        uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
+        uniqueConstNameMap(MbCanOemVehiclePropertyId::class.java) +
+            uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
     }
 
     private val audioNames: Map<Int, String> by lazy {
-        uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
+        uniqueConstNameMap(MbCanOemAudioPropertyId::class.java) +
+            uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
     }
 
     private val highRateVhalPropertyIds: Set<Int> = setOf(

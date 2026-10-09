@@ -51,31 +51,37 @@ object ExpertRawCanCatalog {
     private const val LOG_TAG = "EXPERT_CAN"
 
     fun allParams(): List<ExpertRawCanParam> {
-        // Catalog display uses explicit maps only (no firmware JSON / Log probe).
-        // Live Get/Set still goes through resolveRead/WritePropertyId on device.
+        // Catalog display uses explicit maps, then name-matched expert candidates
+        // (no firmware JSON / Log probe).
+        // Live A10 Get/Set uses resolveRead/WritePropertyId, then the same candidates.
         // Names come from uniqueConstNameMap. Id objects use @JvmField (not const)
         // plus ProGuard keep so R8 does not drop the static ints.
         // Direct VHAL rows are a fixed list of inlined const ids (see directVhalParams).
-        val vehicle = HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
-            .entries
+        // OEM extras first so a production id with the same number wins.
+        val vehicle = (
+            HuCanMarkLog.uniqueConstNameMap(MbCanOemVehiclePropertyId::class.java) +
+                HuCanMarkLog.uniqueConstNameMap(MbCanKnownVehiclePropertyId::class.java)
+            ).entries
             .map { (id, name) ->
                 ExpertRawCanParam(
                     name = name,
                     mbCanId = id,
                     bus = ExpertRawCanBus.Vehicle,
-                    vhalReadId = FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(id),
-                    vhalWriteId = FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(id),
+                    vhalReadId = explicitOrCandidateRead(ExpertRawCanBus.Vehicle, id),
+                    vhalWriteId = explicitOrCandidateWrite(ExpertRawCanBus.Vehicle, id),
                 )
             }
-        val audio = HuCanMarkLog.uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
-            .entries
+        val audio = (
+            HuCanMarkLog.uniqueConstNameMap(MbCanOemAudioPropertyId::class.java) +
+                HuCanMarkLog.uniqueConstNameMap(MbCanKnownAudioPropertyId::class.java)
+            ).entries
             .map { (id, name) ->
                 ExpertRawCanParam(
                     name = name,
                     mbCanId = id,
                     bus = ExpertRawCanBus.Audio,
-                    vhalReadId = FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(id),
-                    vhalWriteId = FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(id),
+                    vhalReadId = explicitOrCandidateRead(ExpertRawCanBus.Audio, id),
+                    vhalWriteId = explicitOrCandidateWrite(ExpertRawCanBus.Audio, id),
                 )
             }
         return (vehicle + audio + directVhalParams()).sortedWith(
@@ -168,6 +174,16 @@ object ExpertRawCanCatalog {
         "VHAL_MFS_RES_PLUS" to FirmwareVehicleJsonMapper.VHAL_MFS_RES_PLUS,
         "VHAL_MFS_SET_MINUS" to FirmwareVehicleJsonMapper.VHAL_MFS_SET_MINUS,
     )
+
+    /** Production explicit map wins. Name-matched candidates fill the rest for this window only. */
+    private fun explicitOrCandidateRead(bus: ExpertRawCanBus, mbCanId: Int): Int? =
+        FirmwareVehicleJsonMapper.peekExplicitReadPropertyId(mbCanId)
+            ?: ExpertRawVhalCandidates.readId(bus, mbCanId)
+
+    /** Production explicit map wins. Name-matched candidates fill the rest for this window only. */
+    private fun explicitOrCandidateWrite(bus: ExpertRawCanBus, mbCanId: Int): Int? =
+        FirmwareVehicleJsonMapper.peekExplicitWritePropertyId(mbCanId)
+            ?: ExpertRawVhalCandidates.writeId(bus, mbCanId)
 
     /** Empty [query] returns [params] unchanged (no HU-mode filtering). */
     fun filterParams(params: List<ExpertRawCanParam>, query: String): List<ExpertRawCanParam> {
