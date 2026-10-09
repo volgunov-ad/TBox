@@ -22,7 +22,7 @@ data class MqttSettings(
     val autostart: Boolean = true,
     val pollSeconds: Int = 3,
     val repeatMinutes: Int = 5,
-    val fastPublishSeconds: Int = 5,
+    val fastPublishSeconds: Int = FAST_PUBLISH_DEFAULT_SECONDS,
     val accessToken: String = "",
     val selectedObjectIds: Set<String> = emptySet(),
     val wireguardEnabled: Boolean = false,
@@ -92,6 +92,24 @@ data class MqttSettings(
 /** True when the draft holds a broker field that only «Сохранить» applies. */
 fun connectionChanged(saved: MqttSettings, draft: MqttSettings): Boolean =
     saved.applyingConnection(draft).normalized() != saved.normalized()
+
+internal const val FAST_PUBLISH_DEFAULT_SECONDS = 10
+
+/** Previous shipped default. A stored 5 is lifted to [FAST_PUBLISH_DEFAULT_SECONDS] once. */
+internal const val FAST_PUBLISH_PREVIOUS_DEFAULT_SECONDS = 5
+
+/**
+ * @return seconds to use, and whether this is the first load after the default change
+ * (the caller then stores the new value so a later manual 5 is kept).
+ */
+internal fun fastPublishSecondsOnLoad(stored: Int?, alreadyMigrated: Boolean): Pair<Int, Boolean> {
+    if (alreadyMigrated) return (stored ?: FAST_PUBLISH_DEFAULT_SECONDS) to false
+    val seconds = when (stored) {
+        null, FAST_PUBLISH_PREVIOUS_DEFAULT_SECONDS -> FAST_PUBLISH_DEFAULT_SECONDS
+        else -> stored
+    }
+    return seconds to true
+}
 
 private fun sha256(text: String): String {
     if (text.isEmpty()) return ""
