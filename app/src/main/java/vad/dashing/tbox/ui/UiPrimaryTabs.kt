@@ -1269,15 +1269,6 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
-        Button(
-            onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
-            modifier = Modifier.padding(bottom = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.expert_raw_get_set_open),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
         SettingSwitch(
             isExpertModeEnabled,
             { enabled ->
@@ -1321,6 +1312,15 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_deep_diagnostics_desc),
                 true
             )
+            Button(
+                onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
+                modifier = Modifier.padding(vertical = 8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.expert_raw_get_set_open),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
             SettingSwitch(
                 huAdbState.usbEnabled,
                 { enabled ->
@@ -1651,7 +1651,7 @@ fun SettingsTabContent(
             onDismiss = { showKeyPressDiagnosticsDialog = false },
         )
         ExpertRawGetSetDialog(
-            visible = showExpertRawGetSetDialog,
+            visible = showExpertRawGetSetDialog && isExpertModeEnabled,
             mode = headUnitCanMode,
             onDismiss = { showExpertRawGetSetDialog = false },
         )
