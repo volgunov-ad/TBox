@@ -54,9 +54,17 @@ object WidgetButtonBindingRegistry {
             entries.values.filter { it.binding == normalized }
         }
         for (target in targets) {
-            when (tap) {
-                WidgetButtonBindingTap.SINGLE -> target.onSingle()
-                WidgetButtonBindingTap.DOUBLE -> target.onDouble()
+            try {
+                when (tap) {
+                    WidgetButtonBindingTap.SINGLE -> target.onSingle()
+                    WidgetButtonBindingTap.DOUBLE -> target.onDouble()
+                }
+            } catch (e: Exception) {
+                TboxRepository.addLog(
+                    "ERROR",
+                    "WidgetBtnBind",
+                    "Tile tap dispatch failed ($normalized): ${e.message}",
+                )
             }
         }
     }

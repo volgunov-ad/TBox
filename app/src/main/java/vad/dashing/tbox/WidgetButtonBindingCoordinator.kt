@@ -1,8 +1,11 @@
 package vad.dashing.tbox
 
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.automation.AutomationEspBleBtnAction
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
 import vad.dashing.tbox.automation.AutomationTriggerEspBleBtnEventBus
@@ -15,9 +18,13 @@ import vad.dashing.tbox.automation.AutomationTriggerHardKeyEventBus
  * Mapping:
  * - Hard key / ESP GPIO: [SINGLE]→single, [DOUBLE]→double
  * - Shelly BLE: [PRESS]→single, [DOUBLE]→double
+ *
+ * Tile taps run on [dispatchContext] (main by default): the tile click
+ * lambdas may touch main-thread-only UI APIs (Toast, dialogs).
  */
 class WidgetButtonBindingCoordinator(
     private val scope: CoroutineScope,
+    private val dispatchContext: CoroutineContext = Dispatchers.Main.immediate,
 ) {
     private var job: Job? = null
 
@@ -31,9 +38,9 @@ class WidgetButtonBindingCoordinator(
                         AutomationHardKeyStatus.DOUBLE -> WidgetButtonBindingTap.DOUBLE
                         else -> return@collect
                     }
-                    WidgetButtonBindingRegistry.dispatch(
-                        WidgetButtonBinding.HardKey(event.keyCode),
-                        tap,
+                    dispatch(
+                        binding = WidgetButtonBinding.HardKey(event.keyCode),
+                        tap = tap,
                     )
                 }
             }
@@ -45,9 +52,9 @@ class WidgetButtonBindingCoordinator(
                         AutomationEspBleBtnAction.DOUBLE -> WidgetButtonBindingTap.DOUBLE
                         else -> return@collect
                     }
-                    WidgetButtonBindingRegistry.dispatch(
-                        WidgetButtonBinding.EspBle(mac = event.mac, btn = event.btn),
-                        tap,
+                    dispatch(
+                        binding = WidgetButtonBinding.EspBle(mac = event.mac, btn = event.btn),
+                        tap = tap,
                     )
                 }
             }
@@ -58,9 +65,9 @@ class WidgetButtonBindingCoordinator(
                         AutomationHardKeyStatus.DOUBLE -> WidgetButtonBindingTap.DOUBLE
                         else -> return@collect
                     }
-                    WidgetButtonBindingRegistry.dispatch(
-                        WidgetButtonBinding.EspGpio(event.channel),
-                        tap,
+                    dispatch(
+                        binding = WidgetButtonBinding.EspGpio(event.channel),
+                        tap = tap,
                     )
                 }
             }
@@ -70,5 +77,11 @@ class WidgetButtonBindingCoordinator(
     fun stop() {
         job?.cancel()
         job = null
+    }
+
+    private suspend fun dispatch(binding: WidgetButtonBinding, tap: WidgetButtonBindingTap) {
+        withContext(dispatchContext) {
+            WidgetButtonBindingRegistry.dispatch(binding, tap)
+        }
     }
 }
