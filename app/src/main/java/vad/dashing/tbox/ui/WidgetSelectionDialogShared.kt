@@ -133,6 +133,8 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
+import vad.dashing.tbox.normalizeWidgetButtonBinding
+import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetTypeSectionId
 import vad.dashing.tbox.WidgetTypeSections
@@ -670,6 +672,13 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+    var buttonBinding by mutableStateOf(
+        if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
+            normalizeWidgetButtonBinding(initialConfig.buttonBinding)
+        } else {
+            null
+        },
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -907,6 +916,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
+        }
+        if (!supportsWidgetButtonBinding(key)) {
+            buttonBinding = null
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -1306,6 +1318,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 DEFAULT_MAPS_CAM_RADAR_HOLD_M
             },
+            buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
+                normalizeWidgetButtonBinding(buttonBinding)
+            } else {
+                null
+            },
         )
     }
 
@@ -1512,6 +1529,11 @@ internal class WidgetSelectionDialogState(
             normalizeAutomationTriggerId(cfg.automationTriggerId)
         } else {
             ""
+        }
+        buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
+            normalizeWidgetButtonBinding(cfg.buttonBinding)
+        } else {
+            null
         }
         tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
             TileBackgroundImageStorage.isAllowedStoredRelPath(it)
@@ -2577,6 +2599,10 @@ internal fun WidgetSelectionDialogForm(
                     AutomationTriggerWidgetSettingsSection(
                         state = state,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    WidgetButtonBindingSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                     )
                     SettingSwitch(
                         state.showTitle,

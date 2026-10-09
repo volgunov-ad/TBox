@@ -14,6 +14,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -22,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.WidgetButtonBindingRegistry
+import vad.dashing.tbox.normalizeWidgetButtonBinding
 
 @Composable
 fun DashboardWidgetScaffold(
@@ -68,6 +71,19 @@ fun DashboardWidgetScaffold(
         }
     } else {
         null
+    }
+    val bindingHost = LocalWidgetButtonBindingHost.current
+    val binding = normalizeWidgetButtonBinding(bindingHost.binding)
+    DisposableEffect(binding, bindingHost.active, useCardClickable, hasDoubleClick) {
+        if (binding == null || !bindingHost.active || !useCardClickable) {
+            return@DisposableEffect onDispose { }
+        }
+        val id = WidgetButtonBindingRegistry.register(
+            binding = binding,
+            onSingle = wrappedOnClick,
+            onDouble = wrappedOnDouble ?: {},
+        )
+        onDispose { WidgetButtonBindingRegistry.unregister(id) }
     }
     val cardInteractionSource = remember { MutableInteractionSource() }
     val cardIndication = LocalIndication.current

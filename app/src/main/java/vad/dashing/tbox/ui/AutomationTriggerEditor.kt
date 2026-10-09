@@ -108,6 +108,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.WidgetPressed -> WidgetPressedTriggerFields(trigger, onChange)
                 is AutomationTrigger.HardKey -> HardKeyTriggerFields(trigger, onChange)
                 is AutomationTrigger.EspBleBtn -> EspBleBtnTriggerFields(trigger, onChange)
+                is AutomationTrigger.EspGpioBtn -> EspGpioBtnTriggerFields(trigger, onChange)
                 is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
@@ -288,6 +289,49 @@ private fun EspBleBtnTriggerFields(
         text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
             "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4. " +
             "MAC обязателен; забытый пульт остаётся в правиле, пока не выберете другой.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun EspGpioBtnTriggerFields(
+    trigger: AutomationTrigger.EspGpioBtn,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationDropdown(
+        label = "ESP-вход",
+        value = trigger.channel,
+        options = (0..3).toList(),
+        optionLabel = { "Вход $it" },
+        onValueChange = { onChange(trigger.copy(channel = it)) },
+    )
+    val pressedLabel = stringResource(R.string.automation_hard_key_status_pressed)
+    val releasedLabel = stringResource(R.string.automation_hard_key_status_released)
+    val singleLabel = stringResource(R.string.automation_hard_key_status_single)
+    val doubleLabel = stringResource(R.string.automation_hard_key_status_double)
+    val longLabel = stringResource(R.string.automation_hard_key_status_long)
+    AutomationDropdown(
+        label = "Событие",
+        value = trigger.status,
+        options = AutomationHardKeyStatus.entries,
+        optionLabel = { status ->
+            when (status) {
+                AutomationHardKeyStatus.PRESSED -> pressedLabel
+                AutomationHardKeyStatus.RELEASED -> releasedLabel
+                AutomationHardKeyStatus.SINGLE -> singleLabel
+                AutomationHardKeyStatus.DOUBLE -> doubleLabel
+                AutomationHardKeyStatus.LONG -> longLabel
+            }
+        },
+        onValueChange = { onChange(trigger.copy(status = it)) },
+    )
+    Text(
+        text = "Входы компаньона ESP32 (активный уровень — замкнуто/нажато). " +
+            "«Нажал» / «Отпустил» — сырые фронты. «Одиночное» / «Двойное» / «Долгое» — " +
+            "как у кнопок руля (двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, " +
+            "долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс).",
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -773,6 +817,7 @@ private enum class TriggerUiKind {
     WIDGET_PRESS,
     HARD_KEY,
     ESP_BLE_BTN,
+    ESP_GPIO_BTN,
     INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
@@ -785,6 +830,7 @@ private enum class TriggerUiKind {
         WIDGET_PRESS -> "Нажатие виджета-триггера"
         HARD_KEY -> "Кнопка на руле / двери (A9)"
         ESP_BLE_BTN -> "Кнопка Shelly Blu (компаньон)"
+        ESP_GPIO_BTN -> "ESP-вход (компаньон)"
         INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
@@ -799,6 +845,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.WidgetPressed -> TriggerUiKind.WIDGET_PRESS
     is AutomationTrigger.HardKey -> TriggerUiKind.HARD_KEY
     is AutomationTrigger.EspBleBtn -> TriggerUiKind.ESP_BLE_BTN
+    is AutomationTrigger.EspGpioBtn -> TriggerUiKind.ESP_GPIO_BTN
     is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
@@ -828,6 +875,12 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
         mac = EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty(),
         btn = 1,
         act = AutomationEspBleBtnAction.PRESS,
+    )
+
+    TriggerUiKind.ESP_GPIO_BTN -> AutomationTrigger.EspGpioBtn(
+        id = id,
+        channel = 0,
+        status = AutomationHardKeyStatus.SINGLE,
     )
 
     TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
@@ -872,6 +925,7 @@ private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this
     is AutomationTrigger.WidgetPressed -> copy(id = id)
     is AutomationTrigger.HardKey -> copy(id = id)
     is AutomationTrigger.EspBleBtn -> copy(id = id)
+    is AutomationTrigger.EspGpioBtn -> copy(id = id)
     is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)

@@ -43,6 +43,10 @@ class AutomationEngine(
             val btn: Int,
             val act: AutomationEspBleBtnAction,
         ) : EngineEvent
+        data class EspGpioBtn(
+            val channel: Int,
+            val status: AutomationHardKeyStatus,
+        ) : EngineEvent
         data class Definitions(val snapshot: AutomationStoreSnapshot) : EngineEvent
         data class RunFinished(val automationId: String, val runId: String) : EngineEvent
         data class RunNow(val automationId: String) : EngineEvent
@@ -73,6 +77,12 @@ class AutomationEngine(
         scope = scope,
         publish = { keyCode, status ->
             AutomationTriggerHardKeyEventBus.publish(AutomationHardKeyEvent(keyCode, status))
+        },
+    )
+    private val espGpioGestures = AutomationHardKeyGestureRecognizer(
+        scope = scope,
+        publish = { channel, status ->
+            AutomationTriggerEspGpioBtnEventBus.publish(channel, status)
         },
     )
     private val widgetPressGestures = AutomationWidgetPressGestureRecognizer(
@@ -143,6 +153,20 @@ class AutomationEngine(
                 events.send(EngineEvent.EspBleBtn(event.mac, event.btn, act))
             }
         }
+        scope.launch {
+            AutomationTriggerEspGpioBtnEventBus.events.collect { event ->
+                events.send(EngineEvent.EspGpioBtn(event.channel, event.status))
+                when (event.status) {
+                    AutomationHardKeyStatus.PRESSED,
+                    AutomationHardKeyStatus.RELEASED,
+                    -> espGpioGestures.onRaw(event.channel, event.status)
+                    AutomationHardKeyStatus.SINGLE,
+                    AutomationHardKeyStatus.DOUBLE,
+                    AutomationHardKeyStatus.LONG,
+                    -> Unit
+                }
+            }
+        }
         if (initial.loadError != null) {
             TboxRepository.addLog("ERROR", LOG_TAG, "Configuration: ${initial.loadError}")
         }
@@ -195,6 +219,7 @@ class AutomationEngine(
             engineJob.join()
             signalProvider.stop()
             hardKeyGestures.clear()
+            espGpioGestures.clear()
             widgetPressGestures.clear()
             AutomationHardKeyTracking.setInterestRequired(false)
             AutomationUiSnapshot.setServiceRunning(false)
@@ -258,6 +283,7 @@ class AutomationEngine(
                     is EngineEvent.WidgetPress -> handleWidgetPress(event.triggerId, event.pressKind)
                     is EngineEvent.HardKey -> handleHardKey(event.keyCode, event.keyStatus)
                     is EngineEvent.EspBleBtn -> handleEspBleBtn(event.mac, event.btn, event.act)
+                    is EngineEvent.EspGpioBtn -> handleEspGpioBtn(event.channel, event.status)
                     is EngineEvent.Definitions -> handleDefinitionUpdate(event.snapshot)
                     is EngineEvent.RunFinished -> handleRunFinished(event.automationId, event.runId)
                     is EngineEvent.RunNow -> handleRunNow(event.automationId)
@@ -321,6 +347,14 @@ class AutomationEngine(
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
             val fire = evaluator.onEspBleBtn(mac, btn, act) ?: return@forEach
+            dispatch(definition, evaluator, fire)
+        }
+    }
+
+    private suspend fun handleEspGpioBtn(channel: Int, status: AutomationHardKeyStatus) {
+        definitions.values.forEach { definition ->
+            val evaluator = evaluators[definition.id] ?: return@forEach
+            val fire = evaluator.onEspGpioBtn(channel, status) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -694,6 +728,7 @@ private fun AutomationDefinition.signalInterests(): Set<AutomationSignalKey> = b
             is AutomationTrigger.WidgetPressed -> Unit
             is AutomationTrigger.HardKey -> Unit
             is AutomationTrigger.EspBleBtn -> Unit
+            is AutomationTrigger.EspGpioBtn -> Unit
             is AutomationTrigger.Interval -> Unit
             is AutomationTrigger.NumericThreshold ->
                 add(

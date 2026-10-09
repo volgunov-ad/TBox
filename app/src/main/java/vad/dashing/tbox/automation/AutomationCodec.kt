@@ -158,6 +158,12 @@ object AutomationCodec {
                 .put("btn", trigger.btn)
                 .put("act", trigger.act.storageKey)
 
+            is AutomationTrigger.EspGpioBtn -> JSONObject()
+                .put(KEY_TYPE, "esp_gpio_btn")
+                .put("id", trigger.id)
+                .put("channel", trigger.channel)
+                .put("status", trigger.status.storageKey)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -258,6 +264,14 @@ object AutomationCodec {
                 act = AutomationEspBleBtnAction.fromStorageKey(
                     json.requireNonBlankString("act"),
                 ) ?: throw IllegalArgumentException("Unknown esp ble btn act"),
+            )
+
+            "esp_gpio_btn" -> AutomationTrigger.EspGpioBtn(
+                id = json.requireNonBlankString("id"),
+                channel = json.requireInt("channel"),
+                status = AutomationHardKeyStatus.fromStorageKey(
+                    json.requireNonBlankString("status"),
+                ) ?: throw IllegalArgumentException("Unknown esp gpio btn status"),
             )
 
             "interval" -> AutomationTrigger.Interval(

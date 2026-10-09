@@ -364,6 +364,12 @@ data class FloatingDashboardWidgetConfig(
      * Default [DEFAULT_MAPS_CAM_RADAR_HOLD_M].
      */
     val mapsCamRadarHoldDistanceM: Int = DEFAULT_MAPS_CAM_RADAR_HOLD_M,
+    /**
+     * Optional physical button that duplicates single/double taps on this tile
+     * while it is on screen (main-screen or floating panels only).
+     * Unsupported for multi-zone tiles — see [supportsWidgetButtonBinding].
+     */
+    val buttonBinding: WidgetButtonBinding? = null,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
