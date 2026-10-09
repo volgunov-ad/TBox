@@ -47,6 +47,7 @@ import vad.dashing.tbox.AppPermissionStatus
 import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.R
 import vad.dashing.tbox.adb.AdbIoErrors
+import vad.dashing.tbox.adb.MockLocationAutoGrant
 import vad.dashing.tbox.adb.PermissionsAutoGrant
 import vad.dashing.tbox.adb.WriteSecureSettingsAutoGrant
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -98,6 +99,10 @@ fun PermissionsDialog(
     val failAdb = stringResource(R.string.permissions_write_secure_auto_fail_adb)
     val failGrant = stringResource(R.string.permissions_write_secure_auto_fail_grant)
     val failMissing = stringResource(R.string.permissions_write_secure_auto_fail_missing)
+    val mockGrantOk = stringResource(R.string.permissions_mock_location_auto_ok)
+    val mockGrantAlready = stringResource(R.string.permissions_mock_location_auto_already)
+    val mockFailGrant = stringResource(R.string.permissions_mock_location_auto_fail_grant)
+    val mockFailMissing = stringResource(R.string.permissions_mock_location_auto_fail_missing)
     val grantAllOkTemplate = stringResource(R.string.permissions_auto_grant_all_ok)
     val grantAllAlready = stringResource(R.string.permissions_auto_grant_all_already)
     val grantAllPartialTemplate = stringResource(R.string.permissions_auto_grant_all_partial)
@@ -186,6 +191,52 @@ fun PermissionsDialog(
             refreshTick++
             val message = messageForWriteSecure(outcome)
             if (outcome is WriteSecureSettingsAutoGrant.Outcome.Failed &&
+                AdbIoErrors.shouldSuppressUserFacingFailure(
+                    outcome.detail,
+                    context,
+                )
+            ) {
+                return@launch
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun messageForMockLocation(outcome: MockLocationAutoGrant.Outcome): String {
+        return when (outcome) {
+            MockLocationAutoGrant.Outcome.AlreadyGranted -> mockGrantAlready
+            MockLocationAutoGrant.Outcome.Success -> mockGrantOk
+            is MockLocationAutoGrant.Outcome.Failed -> {
+                val base = when (outcome.reason) {
+                    MockLocationAutoGrant.Reason.TcpEnableFailed -> failTcpEnable
+                    MockLocationAutoGrant.Reason.TcpNotReady -> failTcpReady
+                    MockLocationAutoGrant.Reason.AdbConnectFailed -> failAdb
+                    MockLocationAutoGrant.Reason.GrantCommandFailed -> mockFailGrant
+                    MockLocationAutoGrant.Reason.StillMissingAfterGrant -> mockFailMissing
+                }
+                if (outcome.detail.isBlank()) base else "$base: ${outcome.detail}"
+            }
+        }
+    }
+
+    fun runAutoGrantMockLocation() {
+        if (autoGrantRunning) return
+        autoGrantRunning = true
+        scope.launch {
+            val outcome = try {
+                MockLocationAutoGrant.grant(context)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                MockLocationAutoGrant.Outcome.Failed(
+                    MockLocationAutoGrant.Reason.AdbConnectFailed,
+                    error.message ?: error.javaClass.simpleName,
+                )
+            }
+            autoGrantRunning = false
+            refreshTick++
+            val message = messageForMockLocation(outcome)
+            if (outcome is MockLocationAutoGrant.Outcome.Failed &&
                 AdbIoErrors.shouldSuppressUserFacingFailure(
                     outcome.detail,
                     context,
@@ -292,7 +343,13 @@ fun PermissionsDialog(
                             }
                             Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                         },
-                        onAutoGrantClick = ::runAutoGrantWriteSecure,
+                        onAutoGrantClick = {
+                            when (item.id) {
+                                AppPermissionId.WriteSecureSettings -> runAutoGrantWriteSecure()
+                                AppPermissionId.MockLocation -> runAutoGrantMockLocation()
+                                else -> Unit
+                            }
+                        },
                     )
                 }
             }
@@ -377,9 +434,16 @@ private fun PermissionRow(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    if (item.id == AppPermissionId.WriteSecureSettings) {
+                    val autoHintRes = when (item.id) {
+                        AppPermissionId.WriteSecureSettings ->
+                            R.string.permissions_write_secure_auto_hint
+                        AppPermissionId.MockLocation ->
+                            R.string.permissions_mock_location_auto_hint
+                        else -> null
+                    }
+                    if (autoHintRes != null) {
                         Text(
-                            text = stringResource(R.string.permissions_write_secure_auto_hint),
+                            text = stringResource(autoHintRes),
                             style = MaterialTheme.typography.tboxCaption,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 4.dp),

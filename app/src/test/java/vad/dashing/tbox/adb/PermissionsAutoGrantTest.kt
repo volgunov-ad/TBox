@@ -37,6 +37,7 @@ class PermissionsAutoGrantTest {
                 AppPermissionId.InstallPackages,
                 AppPermissionId.Storage,
                 AppPermissionId.Location,
+                AppPermissionId.MockLocation,
             ),
             packageName = "vad.dashing.tbox",
             sdkInt = 28,
@@ -52,6 +53,10 @@ class PermissionsAutoGrantTest {
         assertTrue(commands.any { it.contains("READ_EXTERNAL_STORAGE") })
         assertTrue(commands.any { it.contains("ACCESS_FINE_LOCATION") })
         assertTrue(commands.none { it.contains("ACCESS_BACKGROUND_LOCATION") })
+        assertTrue(commands.any { it == "appops set vad.dashing.tbox MOCK_LOCATION allow" })
+        assertTrue(
+            commands.any { it == "settings put secure mock_location vad.dashing.tbox" },
+        )
         assertTrue(commands.any { it.startsWith("settings get secure enabled_notification_listeners") })
         assertTrue(
             commands.any {

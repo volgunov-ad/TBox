@@ -663,7 +663,7 @@
     <string name="permissions_dialog_intro">Grant the accesses you need for the features you use. Status refreshes after you return from Android settings. Optional items can be skipped; open this list later from Settings.</string>
     <string name="permissions_auto_grant_all">Grant all automatically</string>
     <string name="permissions_auto_grant_all_running">Granting all…</string>
-    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener). If :5555 is not listening yet, briefly enables ADB TCP and restores it only when this session turned it on; an already-open port is left alone. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_auto_grant_all_hint">One localhost ADB session grants every missing item in the list (appops / pm grant / notification listener / mock location). If :5555 is not listening yet, briefly enables ADB TCP and restores it only when this session turned it on; an already-open port is left alone. On first use, accept «Allow USB debugging» on the head unit.</string>
     <string name="permissions_auto_grant_all_ok">All permissions granted (%1$d)</string>
     <string name="permissions_auto_grant_all_already">All permissions already granted</string>
     <string name="permissions_auto_grant_all_partial">Granted %1$d, still missing: %2$d</string>
@@ -699,6 +699,13 @@
     <string name="permissions_storage_desc">Export backups and logs, save files, pick main-screen wallpapers.</string>
     <string name="permissions_location_title">Location</string>
     <string name="permissions_location_desc">System location access (including HU-related location features). GPS data from TBox over UDP is separate and not controlled by this permission.</string>
+    <string name="permissions_mock_location_title">Mock location (ADB)</string>
+    <string name="permissions_mock_location_desc">Selects TBox Monitor as the mock location app. Required to inject system coordinates. Android settings will not grant this by itself. Location permission and developer options are still required. Commands:</string>
+    <string name="permissions_mock_location_auto_hint">If :5555 is not listening yet, briefly enables ADB TCP, connects to localhost, runs appops and settings put, then restores TCP only if this session turned it on. Does not disable an already-open port. On first use, accept «Allow USB debugging» on the head unit.</string>
+    <string name="permissions_mock_location_auto_ok">Mock location granted</string>
+    <string name="permissions_mock_location_auto_already">This app is already the mock location provider</string>
+    <string name="permissions_mock_location_auto_fail_grant">Mock location grant command failed</string>
+    <string name="permissions_mock_location_auto_fail_missing">This app is still not selected as the mock location provider</string>
     <string name="settings_hu_type_title">HU type and CAN stack</string>
     <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
     <string name="settings_hu_type_android9">HU with Android 9</string>

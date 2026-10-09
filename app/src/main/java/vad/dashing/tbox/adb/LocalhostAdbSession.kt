@@ -20,7 +20,8 @@ import vad.dashing.tbox.TboxRepository
  * (longer after `adbd` restart), run shell commands, disconnect, then optionally
  * restore previous TCP state — but only when this session actually turned TCP on.
  *
- * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [VirtualDisplayAdb],
+ * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [MockLocationAutoGrant],
+ * [VirtualDisplayAdb],
  * [AdbAutomationActions], and [PackageAdbActions]. Always runs blocking socket work on
  * [Dispatchers.IO]. Production shell I/O goes through [AdbRepository.withTcpShellSession]:
  * reuses a live ADB-tab TCP client when present, otherwise opens an ephemeral socket so
