@@ -24,6 +24,7 @@ import vad.dashing.mqtt.service.BridgeStatusStore
 import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
+import vad.dashing.mqtt.settings.connectionChanged
 
 data class MqttHomeState(
     val tab: Int = 0,
@@ -60,8 +61,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
                 _state.update { current ->
-                    val rejected = status.lastError == TOKEN_REJECTED &&
-                        current.bridge.lastError != TOKEN_REJECTED
+                    val rejected = status.monitorError == TOKEN_REJECTED &&
+                        current.bridge.monitorError != TOKEN_REJECTED
                     current.copy(bridge = status, tab = if (rejected) 0 else current.tab)
                 }
             }
@@ -82,6 +83,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             settings = next,
             connectionDraft = current.connectionDraft.copy(
                 apiPort = next.apiPort,
+                brokerEnabled = next.brokerEnabled,
+                autostart = next.autostart,
                 accessToken = next.accessToken,
                 deviceName = next.deviceName,
                 discoveryEnabled = next.discoveryEnabled,
@@ -89,6 +92,16 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 selectedObjectIds = next.selectedObjectIds,
             ),
         )
+    }
+
+    /** Applies at once, unlike the broker fields: the switch is the quick way to pause the bridge. */
+    fun setBrokerEnabled(enabled: Boolean) {
+        update { it.copy(brokerEnabled = enabled) }
+        if (enabled) {
+            startBridgeIfReady()
+        } else {
+            MqttBridgeService.stop(getApplication())
+        }
     }
 
     fun reportConnection(message: String) {
@@ -242,6 +255,16 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setEntities(objectIds: Collection<String>, enabled: Boolean) {
+        update { settings ->
+            val next = settings.selectedObjectIds.toMutableSet()
+            if (enabled) next += objectIds else next -= objectIds.toSet()
+            settings.copy(selectedObjectIds = next)
+        }
+    }
+
+    fun connectionDirty(): Boolean = connectionChanged(_state.value.settings, _state.value.connectionDraft)
+
     fun refreshEntities() {
         val settings = _state.value.settings
         if (settings.accessToken.isBlank()) {
@@ -274,7 +297,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun startBridgeIfReady() {
-        if (_state.value.settings.normalized().ready) MqttBridgeService.start(getApplication())
+        if (_state.value.settings.normalized().active) MqttBridgeService.start(getApplication())
     }
 
     private fun updateUi(transform: (MqttHomeState) -> MqttHomeState) {

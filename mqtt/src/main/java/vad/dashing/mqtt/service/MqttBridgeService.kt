@@ -47,6 +47,7 @@ import vad.dashing.mqtt.mqttclient.HiveMqttSession
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.wireguard.WgRouteException
+import vad.dashing.mqtt.wireguard.WgTunnel
 import java.time.Instant
 
 class MqttBridgeService : Service() {
@@ -71,6 +72,15 @@ class MqttBridgeService : Service() {
     private var monitorUp = false
     private var unauthorized = false
     private var lastError = ""
+    private var monitorError = ""
+    private var brokerCycleError = ""
+    private var tunnelRouteError = ""
+    private var wireguardOn = false
+    private var reportedBrokerUp: Boolean? = null
+    private var reportedMonitorUp: Boolean? = null
+    private var brokerSinceMs = 0L
+    private var monitorSinceMs = 0L
+    private val journal = LinkJournal()
     private var running = false
     @Volatile
     private var lastStartId = 0
@@ -160,29 +170,32 @@ class MqttBridgeService : Service() {
             reschedule(MqttSettings().pollSeconds)
             return
         }
-        if (!settings.ready) {
+        wireguardOn = settings.wireguardEnabled
+        if (!settings.active) {
             monitorUp = false
             lastError = ""
+            monitorError = ""
+            brokerCycleError = ""
+            tunnelRouteError = ""
             runCatching { publishOffline() }
             session.disconnect()
             // By start id: a start that raced in with fresh settings keeps the service alive.
             stopSelf(lastStartId)
         } else {
-            var tunnelError: String? = null
+            brokerCycleError = ""
+            tunnelRouteError = ""
             try {
                 connectBroker(settings)
             } catch (error: WgRouteException) {
-                tunnelError = error.message ?: "Туннель WireGuard не поднялся"
-                lastError = tunnelError
+                tunnelRouteError = error.message ?: "Туннель WireGuard не поднялся"
             } catch (error: Exception) {
-                lastError = error.message ?: "Нет связи с брокером"
+                brokerCycleError = error.message ?: "Нет связи с брокером"
             }
             try {
                 refreshMonitor(settings)
             } catch (error: Exception) {
                 lastError = error.message ?: "Ошибка моста"
             }
-            if (tunnelError != null) lastError = tunnelError
         }
         runCatching { publishStatus(settings) }
         reschedule(settings.pollSeconds)
@@ -241,6 +254,7 @@ class MqttBridgeService : Service() {
         unauthorized = false
         monitorUp = true
         if (!wasUp) publishAvailability(settings, "online")
+        monitorError = ""
         maybeRepeat(settings)
         syncSubscriptions(settings)
         lastError = ""
@@ -248,7 +262,7 @@ class MqttBridgeService : Service() {
 
     private fun markMonitorDown(settings: MqttSettings, wasUp: Boolean, reason: String) {
         monitorUp = false
-        lastError = reason
+        monitorError = reason
         if (wasUp) {
             publishOffline()
             syncSubscriptions(settings)
@@ -557,15 +571,50 @@ class MqttBridgeService : Service() {
 
     private fun publishStatus(settings: MqttSettings) {
         val brokerUp = session.connected
-        val availability = if (monitorUp && brokerUp) "online" else "offline"
+        val monitorOk = monitorUp && !unauthorized
+        val now = System.currentTimeMillis()
+        val brokerError = when {
+            brokerUp -> ""
+            brokerCycleError.isNotEmpty() -> brokerCycleError
+            else -> session.lastFailure
+        }
+        val tunnelError = when {
+            !wireguardOn -> ""
+            tunnelRouteError.isNotEmpty() -> tunnelRouteError
+            brokerUp -> ""
+            else -> WgTunnel.lastDialError()
+        }
+        if (reportedBrokerUp != brokerUp) {
+            if (reportedBrokerUp != null || brokerUp) {
+                brokerSinceMs = now
+                val detail = listOf(brokerError, tunnelError).filter { it.isNotEmpty() }.joinToString(". ")
+                journal.add(LinkEvent(now, "Брокер", brokerUp, detail))
+            }
+            reportedBrokerUp = brokerUp
+        }
+        if (reportedMonitorUp != monitorOk) {
+            if (reportedMonitorUp != null || monitorOk) {
+                monitorSinceMs = now
+                journal.add(LinkEvent(now, "Monitor", monitorOk, if (monitorOk) "" else monitorError))
+            }
+            reportedMonitorUp = monitorOk
+        }
         BridgeStatusStore.state.value = BridgeStatus(
-            monitorUp = monitorUp && !unauthorized,
+            monitorUp = monitorOk,
             brokerUp = brokerUp,
-            availability = availability,
+            availability = if (monitorUp && brokerUp) "online" else "offline",
             publishedCount = entities.size,
             lastError = lastError,
+            monitorError = if (monitorOk) "" else monitorError,
+            brokerError = brokerError,
+            wireguardEnabled = wireguardOn,
+            tunnelError = tunnelError,
+            brokerSinceMs = brokerSinceMs,
+            monitorSinceMs = monitorSinceMs,
+            lastPublishAtMs = session.lastPublishAtMs,
+            events = journal.snapshot(),
         )
-        val text = notificationText(monitorUp && !unauthorized, brokerUp)
+        val text = notificationText(monitorOk, brokerUp)
         if (text == notifiedText) return
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
@@ -621,7 +670,9 @@ class MqttBridgeService : Service() {
 
     private fun notificationText(monitorUp: Boolean, brokerUp: Boolean): String = when {
         monitorUp && brokerUp -> "Monitor и брокер на связи"
+        !monitorUp && !brokerUp -> "Нет связи с Monitor и брокером"
         !monitorUp -> "Нет связи с Monitor"
+        wireguardOn -> "Нет связи с брокером через WireGuard"
         else -> "Нет связи с брокером"
     }
 
@@ -634,6 +685,11 @@ class MqttBridgeService : Service() {
         fun start(context: Context) {
             val intent = Intent(context, MqttBridgeService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
+
+        /** onDestroy still sends offline and closes the session before the thread quits. */
+        fun stop(context: Context) {
+            context.stopService(Intent(context, MqttBridgeService::class.java))
         }
     }
 }

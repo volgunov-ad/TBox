@@ -74,6 +74,17 @@ object WgTunnel {
         synchronized(lock) { stopLocked() }
     }
 
+    /**
+     * Last failed dial from the local port into the tunnel. The native side never clears it,
+     * so it is only meaningful while the broker is unreachable.
+     */
+    fun lastDialError(): String {
+        synchronized(lock) {
+            if (runningKey == null) return ""
+            return WgNative.lastError()
+        }
+    }
+
     private fun stopLocked() {
         runningKey = null
         runningPort = 0
@@ -128,6 +139,11 @@ private object WgNative {
     fun stop() {
         if (!WgTunnel.libraryLoaded()) return
         runCatching { wgstack.Wgstack.stop() }
+    }
+
+    fun lastError(): String {
+        if (!WgTunnel.libraryLoaded()) return ""
+        return runCatching { wgstack.Wgstack.lastError().orEmpty().trim() }.getOrDefault("")
     }
 }
 

@@ -12,6 +12,7 @@ class MqttSettingsStore private constructor(context: Context) {
 
     fun load(): MqttSettings = MqttSettings(
         apiPort = prefs.getInt(KEY_API_PORT, 8765),
+        brokerEnabled = prefs.getBoolean(KEY_BROKER_ENABLED, true),
         brokerHost = prefs.getString(KEY_HOST, "").orEmpty(),
         brokerPort = prefs.getInt(KEY_PORT, 1883),
         username = prefs.getString(KEY_USER, "").orEmpty(),
@@ -39,6 +40,7 @@ class MqttSettingsStore private constructor(context: Context) {
     fun save(normalized: MqttSettings) {
         prefs.edit()
             .putInt(KEY_API_PORT, normalized.apiPort)
+            .putBoolean(KEY_BROKER_ENABLED, normalized.brokerEnabled)
             .putString(KEY_HOST, normalized.brokerHost)
             .putInt(KEY_PORT, normalized.brokerPort)
             .putString(KEY_USER, normalized.username)
@@ -100,6 +102,7 @@ class MqttSettingsStore private constructor(context: Context) {
                 instance ?: MqttSettingsStore(context.applicationContext).also { instance = it }
             }
         private const val KEY_API_PORT = "api_port"
+        private const val KEY_BROKER_ENABLED = "broker_enabled"
         private const val KEY_HOST = "broker_host"
         private const val KEY_PORT = "broker_port"
         private const val KEY_USER = "broker_user"

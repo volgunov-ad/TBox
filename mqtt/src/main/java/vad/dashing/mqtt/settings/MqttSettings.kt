@@ -5,6 +5,7 @@ import java.security.MessageDigest
 
 data class MqttSettings(
     val apiPort: Int = 8765,
+    val brokerEnabled: Boolean = true,
     val brokerHost: String = "",
     val brokerPort: Int = 1883,
     val username: String = "",
@@ -60,7 +61,6 @@ data class MqttSettings(
         discoveryPrefix = from.discoveryPrefix,
         deviceId = from.deviceId,
         mqttClientId = from.mqttClientId,
-        autostart = from.autostart,
         pollSeconds = from.pollSeconds,
         repeatMinutes = from.repeatMinutes,
         fastPublishSeconds = from.fastPublishSeconds,
@@ -71,6 +71,10 @@ data class MqttSettings(
 
     val ready: Boolean
         get() = accessToken.isNotBlank() && brokerHost.isNotBlank()
+
+    /** The bridge has nothing to do without the broker, so the switch stops the whole service. */
+    val active: Boolean
+        get() = ready && brokerEnabled
 
     fun connectionKey(): String = listOf(
         brokerHost,
@@ -84,6 +88,10 @@ data class MqttSettings(
         sha256(wireguardConf),
     ).joinToString("|")
 }
+
+/** True when the draft holds a broker field that only «Сохранить» applies. */
+fun connectionChanged(saved: MqttSettings, draft: MqttSettings): Boolean =
+    saved.applyingConnection(draft).normalized() != saved.normalized()
 
 private fun sha256(text: String): String {
     if (text.isEmpty()) return ""
