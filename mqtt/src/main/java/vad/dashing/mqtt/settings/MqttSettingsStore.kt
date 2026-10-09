@@ -29,7 +29,7 @@ class MqttSettingsStore private constructor(context: Context) {
         autostart = prefs.getBoolean(KEY_AUTOSTART, true),
         pollSeconds = prefs.getInt(KEY_POLL, 3),
         repeatMinutes = prefs.getInt(KEY_REPEAT, 5),
-        fastPublishSeconds = prefs.getInt(KEY_FAST, 5),
+        fastPublishSeconds = loadFastPublishSeconds(),
         accessToken = prefs.getString(KEY_TOKEN, "").orEmpty(),
         selectedObjectIds = decodeIds(prefs.getString(KEY_SELECTED, "[]").orEmpty()),
         wireguardEnabled = prefs.getBoolean(KEY_WG_ENABLED, false),
@@ -64,6 +64,26 @@ class MqttSettingsStore private constructor(context: Context) {
             .putString(KEY_WG_CONF, normalized.wireguardConf)
             .putString(KEY_WG_FILE, normalized.wireguardFileName)
             .apply()
+    }
+
+    /** Old default 5 becomes 10 once. A 5 saved after that stays 5. */
+    private fun loadFastPublishSeconds(): Int {
+        val stored = if (prefs.contains(KEY_FAST)) {
+            prefs.getInt(KEY_FAST, FAST_PUBLISH_DEFAULT_SECONDS)
+        } else {
+            null
+        }
+        val (seconds, write) = fastPublishSecondsOnLoad(
+            stored,
+            prefs.getBoolean(KEY_FAST_MIGRATED, false),
+        )
+        if (write) {
+            prefs.edit()
+                .putInt(KEY_FAST, seconds)
+                .putBoolean(KEY_FAST_MIGRATED, true)
+                .apply()
+        }
+        return seconds
     }
 
     fun pairClientId(): String {
@@ -120,6 +140,7 @@ class MqttSettingsStore private constructor(context: Context) {
         private const val KEY_POLL = "poll_seconds"
         private const val KEY_REPEAT = "repeat_minutes"
         private const val KEY_FAST = "fast_publish_seconds"
+        private const val KEY_FAST_MIGRATED = "fast_publish_default_10"
         private const val KEY_TOKEN = "access_token"
         private const val KEY_SELECTED = "selected_ids"
         private const val KEY_PAIR_ID = "pair_client_id"
