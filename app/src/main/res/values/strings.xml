@@ -104,6 +104,15 @@
     <string name="adb_script_done_stopped">Скрипт остановлен (%1$d ок, %2$d с ошибкой из %3$d)</string>
     <string name="adb_script_done_aborted">Скрипт прерван (%1$d ок, %2$d с ошибкой из %3$d)</string>
     <string name="adb_script_done_cancelled">Скрипт отменён (%1$d ок, %2$d с ошибкой из %3$d)</string>
+    <string name="adb_logcat_title">Запись logcat</string>
+    <string name="adb_logcat_start">Старт</string>
+    <string name="adb_logcat_stop">Стоп</string>
+    <string name="adb_logcat_clear_buffer">Очистить буфер перед записью</string>
+    <string name="adb_logcat_clear_buffer_desc">Перед стартом выполнить logcat -c (история в буфере будет потеряна)</string>
+    <string name="adb_logcat_recording">Запись… %1$s</string>
+    <string name="adb_logcat_idle_hint">Полный logcat (-v threadtime) в файл Downloads (tbox_logcat_…). Нужно активное подключение ADB.</string>
+    <string name="adb_logcat_saved">Logcat сохранён: %1$s</string>
+    <string name="adb_logcat_error">Ошибка logcat: %1$s</string>
     <string name="adb_console">Консоль</string>
     <string name="adb_clear_log">Очистить консоль</string>
     <string name="adb_authorization_hint">Подтвердите RSA-ключ на подключаемом устройстве, если появится запрос.</string>

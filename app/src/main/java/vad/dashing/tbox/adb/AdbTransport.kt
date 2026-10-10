@@ -22,6 +22,9 @@ interface AdbTransport : Closeable {
     fun writePacket(packet: ByteArray) {
         write(packet)
     }
+
+    /** Adjusts blocking read timeout when supported (TCP / USB bulk). */
+    fun setReadTimeoutMs(timeoutMs: Int) {}
 }
 
 class AdbTcpTransport private constructor(
@@ -38,6 +41,10 @@ class AdbTcpTransport private constructor(
     override fun write(buffer: ByteArray, offset: Int, length: Int) {
         output.write(buffer, offset, length)
         output.flush()
+    }
+
+    override fun setReadTimeoutMs(timeoutMs: Int) {
+        socket.soTimeout = timeoutMs.coerceAtLeast(1)
     }
 
     override fun close() {
@@ -68,7 +75,7 @@ class AdbUsbTransport private constructor(
     private val inputEndpoint: UsbEndpoint,
     private val outputEndpoint: UsbEndpoint,
     override val description: String,
-    private val timeoutMs: Int,
+    @Volatile private var timeoutMs: Int,
     private val deviceId: Int,
     private val sharesNetworkWithHost: Boolean,
 ) : AdbTransport {
@@ -82,6 +89,10 @@ class AdbUsbTransport private constructor(
         }.getOrElse { throw IOException("USB read failed: ${it.message}", it) }
         if (count < 0) throw SocketTimeoutException("USB read timed out")
         return count
+    }
+
+    override fun setReadTimeoutMs(timeoutMs: Int) {
+        this.timeoutMs = timeoutMs.coerceAtLeast(1)
     }
 
     override fun write(buffer: ByteArray, offset: Int, length: Int) {

@@ -24,6 +24,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -79,6 +80,7 @@ fun AdbTabContent(
     val usbCandidates by AdbRepository.usbCandidates.collectAsStateWithLifecycle()
     val logLines by AdbRepository.consoleLog.collectAsStateWithLifecycle()
     val scriptRun by AdbRepository.scriptRun.collectAsStateWithLifecycle()
+    val logcatCapture by AdbRepository.logcatCapture.collectAsStateWithLifecycle()
     val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
     val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     var host by rememberSaveable(savedHost) { mutableStateOf(savedHost) }
@@ -86,12 +88,14 @@ fun AdbTabContent(
     var mode by rememberSaveable(savedMode) { mutableStateOf(savedMode) }
     var selectedUsbDeviceId by rememberSaveable { mutableIntStateOf(-1) }
     var command by rememberSaveable { mutableStateOf("") }
+    var logcatClearBuffer by rememberSaveable { mutableStateOf(false) }
     var pendingConfirmCommands by remember { mutableStateOf<List<String>?>(null) }
     val logState = rememberLazyListState()
     val isBusy = state.phase == AdbRepository.Phase.CONNECTING
     val isConnected = state.phase == AdbRepository.Phase.CONNECTED
     val scriptActive = scriptRun.active
-    val shellEnabled = isConnected && !scriptActive
+    val logcatActive = logcatCapture.active
+    val shellEnabled = isConnected && !scriptActive && !logcatActive
 
     val readErrorToast = stringResource(R.string.adb_script_read_error)
     val emptyToast = stringResource(R.string.adb_script_empty)
@@ -198,6 +202,30 @@ fun AdbTabContent(
         AdbRepository.acknowledgeScriptFinished()
     }
 
+    // Toast path saved when capture ends. Repository never sets lastError for benign
+    // transport-closed (#401/#402), so those must not surface here.
+    var previousLogcatActive by remember { mutableStateOf(false) }
+    LaunchedEffect(logcatCapture.active, logcatCapture.filePath, logcatCapture.lastError) {
+        val wasActive = previousLogcatActive
+        previousLogcatActive = logcatCapture.active
+        if (!wasActive || logcatCapture.active) return@LaunchedEffect
+        val error = logcatCapture.lastError
+        if (error != null) {
+            Toast.makeText(
+                context,
+                resources.getString(R.string.adb_logcat_error, error),
+                Toast.LENGTH_LONG,
+            ).show()
+            return@LaunchedEffect
+        }
+        val path = logcatCapture.filePath ?: return@LaunchedEffect
+        Toast.makeText(
+            context,
+            resources.getString(R.string.adb_logcat_saved, path),
+            Toast.LENGTH_LONG,
+        ).show()
+    }
+
     pendingConfirmCommands?.let { commands ->
         AlertDialog(
             onDismissRequest = { pendingConfirmCommands = null },
@@ -270,7 +298,7 @@ fun AdbTabContent(
             ModeButton(
                 text = stringResource(R.string.adb_mode_tcp),
                 isSelected = mode == "tcp",
-                enabled = !isConnected && !isBusy && !scriptActive,
+                enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
                 onClick = {
                     mode = "tcp"
                     settingsViewModel.saveAdbModeSetting(mode)
@@ -281,7 +309,7 @@ fun AdbTabContent(
             ModeButton(
                 text = stringResource(R.string.adb_mode_usb),
                 isSelected = mode == "usb",
-                enabled = !isConnected && !isBusy && !scriptActive,
+                enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
                 onClick = {
                     mode = "usb"
                     settingsViewModel.saveAdbModeSetting(mode)
@@ -535,6 +563,79 @@ fun AdbTabContent(
             }
         }
 
+        Text(
+            text = stringResource(R.string.adb_logcat_title),
+            style = MaterialTheme.typography.tboxTitle,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(enabled = !logcatActive) {
+                    logcatClearBuffer = !logcatClearBuffer
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = logcatClearBuffer,
+                onCheckedChange = { logcatClearBuffer = it },
+                enabled = !logcatActive,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.adb_logcat_clear_buffer),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.adb_logcat_clear_buffer_desc),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (logcatActive) {
+                Button(onClick = AdbRepository::stopLogcatCapture) {
+                    Text(
+                        text = stringResource(R.string.adb_logcat_stop),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+                Text(
+                    text = stringResource(
+                        R.string.adb_logcat_recording,
+                        logcatCapture.filePath?.substringAfterLast('/').orEmpty(),
+                    ),
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Button(
+                    onClick = { AdbRepository.startLogcatCapture(logcatClearBuffer) },
+                    enabled = isConnected && !scriptActive && !isBusy,
+                ) {
+                    Text(
+                        text = stringResource(R.string.adb_logcat_start),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.adb_logcat_idle_hint),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -547,7 +648,7 @@ fun AdbTabContent(
             )
             TextButton(
                 onClick = AdbRepository::clearLog,
-                enabled = logLines.isNotEmpty() && !scriptActive,
+                enabled = logLines.isNotEmpty() && !scriptActive && !logcatActive,
             ) {
                 Text(
                     text = stringResource(R.string.adb_clear_log),
