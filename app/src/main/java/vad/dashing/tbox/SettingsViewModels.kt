@@ -2473,10 +2473,6 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun openVehicleFeatureSetupDialog() {
-        _showVehicleFeatureSetupDialog.value = true
-    }
-
     /**
      * Persists cruise/climate types (defaults when the user dismisses without choosing)
      * and closes the setup dialog.

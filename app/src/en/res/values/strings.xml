@@ -735,7 +735,6 @@
     <string name="settings_vehicle_feature_setup_connect_tbox">Connect to TBox</string>
     <string name="settings_vehicle_feature_setup_connect_tbox_desc">UDP and tbox-proxy for TBox data. Off = head-unit bus only (mbCAN/VHAL).</string>
     <string name="settings_vehicle_feature_setup_done">Done</string>
-    <string name="settings_vehicle_feature_setup_reopen">Configure cruise and climate type…</string>
     <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
@@ -1858,6 +1857,9 @@
     <string name="location_geo_debug_log_idle">Not recording</string>
 
     <string name="info_tbox_section">TBox information</string>
+    <string name="info_tbox_connection">Connection</string>
+    <string name="info_tbox_connected_since">connected at %1$s</string>
+    <string name="info_tbox_disconnected_since">disconnected at %1$s</string>
     <string name="info_mqtt_section">TBox MQTT</string>
     <string name="info_mqtt_service">Service running</string>
     <string name="info_mqtt_broker">Broker connected</string>

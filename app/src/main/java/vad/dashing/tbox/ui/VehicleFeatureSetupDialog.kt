@@ -30,7 +30,8 @@ import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 
 /**
- * First-run / re-open setup: HU type, TBox connect, cruise type, climate type.
+ * First-run setup: HU type, TBox connect, cruise type, climate type.
+ * Shown on startup only when cruise and climate types are not saved yet.
  * Dismiss persists the current (defaulted) choices.
  */
 @Composable
