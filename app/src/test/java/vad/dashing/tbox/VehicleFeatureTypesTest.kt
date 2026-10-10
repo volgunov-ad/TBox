@@ -4,6 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCodec
@@ -17,6 +20,8 @@ import vad.dashing.tbox.automation.AutomationSystemEvent
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.AutomationValidator
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class VehicleFeatureTypesTest {
 
     @Test
