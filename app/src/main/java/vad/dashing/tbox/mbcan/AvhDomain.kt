@@ -1,27 +1,21 @@
 package vad.dashing.tbox.mbcan
 
 /**
- * Auto Hold cfg **142** while the function stays enabled.
+ * Auto Hold cfg **142** on Android 9.
  *
- * The user left Auto Hold on for the whole 2026-10-10 afternoon session
- * (`tbox_app_log_20261010_162750`). Raw **2** is the value while moving and while
- * already parked at the start of the log. Raw **1** appeared about a second after a
- * stop into P (16:29:49, 16:31:59) and cleared to **2** just before driving off
- * (16:30:40). That is the hold engaging until movement starts.
+ * Journal `tbox_app_log_20261010_214807`: mark «выключаю автохолд» landed on raw **1**
+ * (21:48:44), mark «включаю автохолд» landed on raw **2** (21:49:44). The later mark
+ * «держу на автохолд» left cfg 142 at **2**. Stopping with the function off did not
+ * produce another code. So **2** is the function on (including while the car is held)
+ * and **1** is the function off. Write policy is the same pair.
  *
- * Both values stay "feature on" in [MbCanSignalStateEngine.decodeAvhHdcStatusRaw].
- * The write command is still **2** on / **1** off and is a different use of the same id.
+ * The widget and the settings switch both follow [decodeEnabled] via `avhState`.
+ * A10 `R_0400_ESP_3_AVHSts` still uses [MbCanSignalStateEngine.decodeAvhHdcStatusRaw].
  */
-enum class AvhHoldPhase {
-    Holding,
-    Standby,
-}
-
 object AvhDomain {
-    /** **1** holding the car / **2** function on, not holding. */
-    fun decodeHoldPhase(raw: Int): AvhHoldPhase? = when (raw) {
-        1 -> AvhHoldPhase.Holding
-        2 -> AvhHoldPhase.Standby
-        else -> null
+    /** **2** function on / **1** function off. Other raw values are off for the widget. */
+    fun decodeEnabled(raw: Int): MbCanBinaryState = when (raw) {
+        2 -> MbCanBinaryState.On
+        else -> MbCanBinaryState.Off
     }
 }

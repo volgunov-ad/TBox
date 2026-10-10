@@ -24,12 +24,10 @@ class JournalDecoderValuesTest {
     }
 
     @Test
-    fun avh_holdPhaseWhileFunctionStaysOn() {
-        assertEquals(AvhHoldPhase.Holding, AvhDomain.decodeHoldPhase(1))
-        assertEquals(AvhHoldPhase.Standby, AvhDomain.decodeHoldPhase(2))
-        assertNull(AvhDomain.decodeHoldPhase(0))
-        assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeAvhHdcStatusRaw(1))
-        assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeAvhHdcStatusRaw(2))
+    fun avh_markedOffIsRawOne_onIsRawTwo() {
+        assertEquals(MbCanBinaryState.Off, AvhDomain.decodeEnabled(1))
+        assertEquals(MbCanBinaryState.On, AvhDomain.decodeEnabled(2))
+        assertEquals(MbCanBinaryState.Off, AvhDomain.decodeEnabled(0))
     }
 
     @Test

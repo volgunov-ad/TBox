@@ -1049,9 +1049,7 @@ object MbCanRepository {
                             MbCanSignalStateEngine.decodeRearFogMbCanRaw(raw)
                         )
                     MbCanKnownVehiclePropertyId.AVH_SWITCH ->
-                        stateEngine.applyAvhCandidate(
-                            MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
-                        )
+                        stateEngine.applyAvhCandidate(AvhDomain.decodeEnabled(raw))
                     MbCanKnownVehiclePropertyId.HDC_SWITCH ->
                         stateEngine.applyHdcCandidate(
                             MbCanSignalStateEngine.decodeHdcSwitchRaw(raw)
@@ -2767,7 +2765,7 @@ object MbCanRepository {
             val decoded = if (raw == null) {
                 MbCanBinaryState.Unknown
             } else {
-                MbCanSignalStateEngine.decodeAvhHdcStatusRaw(raw)
+                AvhDomain.decodeEnabled(raw)
             }
             stateEngine.applyAvhCandidate(decoded)
             MbCanDiagnostics.log(
