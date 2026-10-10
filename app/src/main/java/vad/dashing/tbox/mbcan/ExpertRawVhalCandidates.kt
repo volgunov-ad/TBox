@@ -13,13 +13,13 @@ internal object ExpertRawVhalCandidates {
     fun readId(bus: ExpertRawCanBus, mbCanPropertyId: Int): Int? = when (bus) {
         ExpertRawCanBus.Vehicle -> vehicleReadIds[mbCanPropertyId]
         ExpertRawCanBus.Audio -> audioReadIds[mbCanPropertyId]
-        ExpertRawCanBus.VhalDirect -> null
+        ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> null
     }
 
     fun writeId(bus: ExpertRawCanBus, mbCanPropertyId: Int): Int? = when (bus) {
         ExpertRawCanBus.Vehicle -> vehicleWriteIds[mbCanPropertyId]
         ExpertRawCanBus.Audio -> audioWriteIds[mbCanPropertyId]
-        ExpertRawCanBus.VhalDirect -> null
+        ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> null
     }
 
     private val audioReadIds: Map<Int, Int> = emptyMap()

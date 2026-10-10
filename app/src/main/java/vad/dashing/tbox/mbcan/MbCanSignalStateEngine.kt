@@ -734,6 +734,8 @@ internal class MbCanSignalStateEngine(
         /**
          * Stock CarSettings [ConvertValue.converBoolValue] for AVH/HDC status:
          * ON when raw == 1 || 2 (active / standby), otherwise Off.
+         * On Dashing, [AvhDomain.decodeHoldPhase] splits those two ON values:
+         * **1** holding, **2** standby.
          */
         fun decodeAvhHdcStatusRaw(raw: Int): MbCanBinaryState =
             if (raw == 1 || raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off

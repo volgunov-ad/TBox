@@ -571,6 +571,8 @@
 
     <string name="logs_filter_label">Text filter (minimum 3 characters)</string>
     <string name="logs_filter_placeholder">Enter text to search…</string>
+    <string name="logs_mark_label">Mark</string>
+    <string name="logs_mark_button">Mark</string>
     <string name="logs_continuous_record_title">Continuous journal recording</string>
     <string name="logs_continuous_record_desc">Every new journal line is written to a Downloads file (tbox_app_log_…). Up to 20 MB per file, then a new one. Independent of the on-screen buffer of the last N lines.</string>
     <string name="logs_continuous_record_start">Start recording</string>
@@ -1525,7 +1527,7 @@
     <string name="key_press_diagnostics_copied">Log copied</string>
     <string name="expert_raw_get_set_open">Raw mbCAN/VHAL Get/Set</string>
     <string name="expert_raw_get_set_title">Raw mbCAN/VHAL parameter Get/Set</string>
-    <string name="expert_raw_get_set_desc">Pick a parameter from the OEM mbCAN catalog (vehicle/audio) or a direct VHAL telemetry id. Direct VHAL ids are read and written on Android 10 only. Some Android 10 ids are name matches from the VHAL reference and are not yet checked on a head unit. Get reads the raw value; Set sends an integer as-is (bypasses command policies). On A10, separate read/write ids are shown when they differ. Enable write only deliberately.</string>
+    <string name="expert_raw_get_set_desc">The list follows the head-unit mode. Android 9: mbCAN vehicle/audio and getMbCanData objects, without direct VHAL rows. Android 10: mapped parameters use the firmware name and id (R_ for read and T_ for write when known), plus the remaining R_* rows and separate T_* rows for write checks; mbCAN rows with no VHAL id and mbCAN objects are hidden. Some pairs are name matches from the VHAL reference and are not yet checked on a head unit. Get reads the raw value; Set sends an integer as-is (bypasses command policies). Snapshot reads the parameters available in the current mode and skips write-only T_* rows. Change something in the car and press Compare to see only the values that changed (also written to the journal, tag EXPERT_CAN). Enable write only deliberately.</string>
     <string name="expert_raw_get_set_mode">HU mode: %1$s</string>
     <string name="expert_raw_get_set_filter">Filter by name or id</string>
     <string name="expert_raw_get_set_param">Parameter</string>
@@ -1536,6 +1538,12 @@
     <string name="expert_raw_get_set_rw_differ">A10: read id %1$s ≠ write id %2$s</string>
     <string name="expert_raw_get_set_confirm_title">Confirm write</string>
     <string name="expert_raw_get_set_confirm_message">Write value %2$s to parameter %1$s?</string>
+    <string name="expert_raw_get_set_snapshot">Snapshot</string>
+    <string name="expert_raw_get_set_compare">Compare</string>
+    <string name="expert_raw_get_set_snapshot_progress">Reading %1$d/%2$d…</string>
+    <string name="expert_raw_get_set_snapshot_done">Snapshot ready: %1$d rows, %2$d values read. Change a setting in the car and press Compare.</string>
+    <string name="expert_raw_get_set_compare_none">No changes (%1$d values read)</string>
+    <string name="expert_raw_get_set_compare_header">Changed values: %1$d</string>
     <string name="settings_update_title">Updates</string>
     <string name="settings_update_check_enabled_title">Check for updates</string>
     <string name="settings_update_check_enabled_desc">Automatic check on app startup. Manual check with the button below remains available.</string>

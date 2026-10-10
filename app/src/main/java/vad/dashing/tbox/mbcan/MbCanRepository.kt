@@ -649,7 +649,10 @@ object MbCanRepository {
     val bcmDoorsState: StateFlow<BcmDoorSnapshot?> = _bcmDoorsState.asStateFlow()
 
     private var seatBeltDeepPollJob: Job? = null
+    private var deepObjectPollJob: Job? = null
     private const val SEAT_BELT_DEEP_POLL_MS = 2_000L
+    private const val DEEP_OBJECT_POLL_MS = 30_000L
+    private const val DEEP_BASELINE_PACE_MS = 15L
     private val _sunshadePositionState = MutableStateFlow<ShadeRoofPosition?>(null)
     val sunshadePositionState: StateFlow<ShadeRoofPosition?> = _sunshadePositionState.asStateFlow()
     private val _sunroofPositionState = MutableStateFlow<ShadeRoofPosition?>(null)
@@ -932,6 +935,8 @@ object MbCanRepository {
             MbCanEngineFacade.stopDeepCmdListeners()
             seatBeltDeepPollJob?.cancel()
             seatBeltDeepPollJob = null
+            deepObjectPollJob?.cancel()
+            deepObjectPollJob = null
             MbCanEngineFacade.syncVehicleCfgCmdListener(false)
             MbCanEngineFacade.syncAudioCfgCmdListener(false)
             MbCanEngineFacade.unregisterSettingsTelemetryBridge()
@@ -2134,26 +2139,86 @@ object MbCanRepository {
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawGetResult(false, message = "mbCAN unavailable")
             }
-            val raw = when (bus) {
-                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
-                ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
-                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalGet(propertyId)
+            readRawReady(bus, propertyId)
+        }
+
+    /**
+     * Expert snapshot: one readiness check, then every row in order with [pacingMs]
+     * between JNI reads so the shared `mbcan-state-apply` thread keeps serving pushes.
+     * [onProgress] runs on the caller dispatcher (Compose main), not on the JNI thread.
+     */
+    suspend fun readRawBatch(
+        params: List<ExpertRawCanParam>,
+        pacingMs: Long,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> {
+        val unavailable = withContext(stateApplyDispatcher) {
+            ensureMbCanReadyIfNeeded()
+            availability.value !is MbCanAvailability.Available
+        }
+        if (unavailable) {
+            val fail = ExpertRawGetResult(false, message = "mbCAN unavailable")
+            return params.map { it to fail }
+        }
+        return params.mapIndexed { index, param ->
+            val result = withContext(stateApplyDispatcher) {
+                if (param.bus == ExpertRawCanBus.VhalDirect) {
+                    a10OnlyVhalGet(param.mbCanId)
+                } else {
+                    readRawReady(param.bus, param.mbCanId)
+                }
             }
-            if (raw == null) {
-                ExpertRawGetResult(
+            onProgress(index + 1, params.size)
+            delay(pacingMs)
+            param to result
+        }
+    }
+
+    private fun readRawReady(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            val obj = MbCanEngineFacade.readMbCanDataObject(propertyId)
+                ?: return ExpertRawGetResult(
                     success = false,
                     effectivePropertyId = propertyId,
-                    message = "Get returned null",
+                    message = "getMbCanData returned null",
                 )
-            } else {
-                ExpertRawGetResult(
-                    success = true,
-                    rawValue = raw,
-                    effectivePropertyId = propertyId,
-                    message = "ok",
-                )
-            }
+            return ExpertRawGetResult(
+                success = true,
+                effectivePropertyId = propertyId,
+                message = "ok ${obj.javaClass.simpleName}",
+                fields = MbCanObjectDump.flatten(obj),
+            )
         }
+        val bytes = if (bus == ExpertRawCanBus.Vehicle) {
+            MbCanEngineFacade.canGetVehicleValueBytes(propertyId)
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(::formatUnsignedBytes)
+        } else {
+            null
+        }
+        val raw = when (bus) {
+            ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(propertyId)
+            ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(propertyId)
+            ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> return a10OnlyVhalGet(propertyId)
+        }
+        if (raw == null && bytes == null) {
+            return ExpertRawGetResult(
+                success = false,
+                effectivePropertyId = propertyId,
+                message = "Get returned null",
+            )
+        }
+        return ExpertRawGetResult(
+            success = true,
+            rawValue = raw,
+            effectivePropertyId = propertyId,
+            message = if (raw == null) "int null, bytes ok" else "ok",
+            fields = bytes?.let { listOf("bytes" to it) },
+        )
+    }
+
+    private fun formatUnsignedBytes(bytes: ByteArray): String =
+        bytes.joinToString(",", "[", "]") { (it.toInt() and 0xFF).toString() }
 
     /**
      * Expert raw Set: direct facade set with the given integer (bypasses registry / encoding).
@@ -2163,6 +2228,9 @@ object MbCanRepository {
             if (bus == ExpertRawCanBus.VhalDirect) {
                 return@withContext a10OnlyVhalSet(propertyId)
             }
+            if (bus == ExpertRawCanBus.MbCanObject) {
+                return@withContext ExpertRawSetResult(false, propertyId, "mbCAN object rows are read-only")
+            }
             ensureMbCanReadyIfNeeded()
             if (availability.value !is MbCanAvailability.Available) {
                 return@withContext ExpertRawSetResult(false, message = "mbCAN unavailable")
@@ -2170,7 +2238,8 @@ object MbCanRepository {
             val setResult = when (bus) {
                 ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canSetVehicleParam(propertyId, value)
                 ExpertRawCanBus.Audio -> MbCanEngineFacade.canSetAudioParam(propertyId, value)
-                ExpertRawCanBus.VhalDirect -> return@withContext a10OnlyVhalSet(propertyId)
+                ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject ->
+                    return@withContext a10OnlyVhalSet(propertyId)
             } ?: return@withContext ExpertRawSetResult(
                 success = false,
                 effectivePropertyId = propertyId,
@@ -4053,6 +4122,8 @@ object MbCanRepository {
         if (!active) {
             seatBeltDeepPollJob?.cancel()
             seatBeltDeepPollJob = null
+            deepObjectPollJob?.cancel()
+            deepObjectPollJob = null
             MbCanEngineFacade.setCfgCmdDeepDiagnosticListener(null)
             MbCanEngineFacade.stopDeepCmdListeners()
             MbCanJobManager.setDeepTypes(false, emptySet())
@@ -4073,20 +4144,97 @@ object MbCanRepository {
         reapplyAllInterests()
         val listenerResults = MbCanEngineFacade.startDeepCmdListeners(resolved.toSet())
         val typedResults = MbCanEngineFacade.startDeepTypedObjectListeners()
+        val extraResults = MbCanEngineFacade.startDeepExtraListeners()
         val listenerCount = listenerResults.count { it.second } + typedResults.count { it.second }
         startSeatBeltDeepPoll()
+        startDeepBaselineAndPoll()
         val summary =
             "deepDiag mbcan types=${resolved.size}/${requested.size} " +
                 "cmdListeners=${listenerResults.count { it.second }} " +
                 "typed=${typedResults.joinToString { "${it.first}=${it.second}" }} " +
+                "extra=${extraResults.joinToString { "${it.first}=${it.second}" }} " +
                 "missing=${missing.joinToString()}"
         DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, summary)
         summary
     }
 
     /**
-     * OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on.
+     * One full read when deep mode starts (objects, every vehicle/audio int, and vehicle
+     * byte arrays that carry more than that int), then a 30 s poll of the object types
+     * OEM does not push. Both run on [stateApplyDispatcher]; [delay] lets pushes in.
      */
+    private fun startDeepBaselineAndPoll() {
+        deepObjectPollJob?.cancel()
+        val scope = boundScope ?: return
+        deepObjectPollJob = scope.launch(stateApplyDispatcher) {
+            readDeepBaseline()
+            while (MbCanDiagnostics.deepEnabled.value) {
+                delay(DEEP_OBJECT_POLL_MS)
+                if (!MbCanDiagnostics.deepEnabled.value) break
+                pollDeepObjects()
+            }
+        }
+    }
+
+    private suspend fun readDeepBaseline() {
+        DeepCanDiagnostics.report(DeepCanDiagnostics.MBCAN_TAG, "deepDiag baseline start")
+        var objects = 0
+        var params = 0
+        var wideBytes = 0
+        for ((name, type) in DeepDiagnosticsCatalog.mbcanObjectDataTypes) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val obj = MbCanEngineFacade.readMbCanDataObject(type)
+            if (obj != null) {
+                DeepCanDiagnostics.recordMbCanObjectFields(name, MbCanObjectDump.flatten(obj))
+                objects++
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+        val rows = ExpertRawCanCatalog.allParams().filter {
+            it.bus == ExpertRawCanBus.Vehicle || it.bus == ExpertRawCanBus.Audio
+        }
+        for (row in rows) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val raw = when (row.bus) {
+                ExpertRawCanBus.Vehicle -> MbCanEngineFacade.canGetVehicleParam(row.mbCanId)
+                ExpertRawCanBus.Audio -> MbCanEngineFacade.canGetAudioParam(row.mbCanId)
+                ExpertRawCanBus.VhalDirect, ExpertRawCanBus.MbCanObject -> null
+            }
+            if (raw != null) {
+                val dataType = if (row.bus == ExpertRawCanBus.Vehicle) "baseline.vehicle" else "baseline.audio"
+                DeepCanDiagnostics.recordMbCanCmdChanged(dataType, 0, 0, row.mbCanId, raw)
+                params++
+            }
+            if (row.bus == ExpertRawCanBus.Vehicle) {
+                val bytes = MbCanEngineFacade.canGetVehicleValueBytes(row.mbCanId)
+                if (bytes != null && bytes.size > 1) {
+                    DeepCanDiagnostics.recordMbCanObjectFields(
+                        "baseline.vehicleBytes",
+                        listOf("id${row.mbCanId}" to formatUnsignedBytes(bytes)),
+                    )
+                    wideBytes++
+                }
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+        DeepCanDiagnostics.report(
+            DeepCanDiagnostics.MBCAN_TAG,
+            "deepDiag baseline done objects=$objects params=$params wideBytes=$wideBytes",
+        )
+    }
+
+    private suspend fun pollDeepObjects() {
+        for ((name, type) in DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes) {
+            if (!MbCanDiagnostics.deepEnabled.value) return
+            val obj = MbCanEngineFacade.readMbCanDataObject(type)
+            if (obj != null) {
+                DeepCanDiagnostics.recordMbCanObjectFields(name, MbCanObjectDump.flatten(obj))
+            }
+            delay(DEEP_BASELINE_PACE_MS)
+        }
+    }
+
+    /** OEM seat-belt push Runnable is empty — poll [getMbCanData] type 15 while deep is on. */
     private fun startSeatBeltDeepPoll() {
         seatBeltDeepPollJob?.cancel()
         val scope = boundScope ?: return
@@ -4136,26 +4284,24 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
                 mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
                 mergedSignals.contains(MbCanSignal.TrunkDoor)
-            MbCanEngineFacade.syncVehicleCfgCmdListener(
-                needsCfgVehicleListener || MbCanDiagnostics.deepEnabled.value
-            )
-            MbCanEngineFacade.syncAudioCfgCmdListener(
-                needsCfgAudioListener || MbCanDiagnostics.deepEnabled.value
-            )
-            if (needsSettingsTelemetry) {
+            // Deep mode keeps every OEM push bridge alive so payloads are mirrored to the journal.
+            val deep = MbCanDiagnostics.deepEnabled.value
+            MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener || deep)
+            MbCanEngineFacade.syncAudioCfgCmdListener(needsCfgAudioListener || deep)
+            if (needsSettingsTelemetry || deep) {
                 MbCanEngineFacade.registerSettingsTelemetryBridge()
             } else {
                 MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             }
             val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
-            MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener)
+            MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener || deep)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.FrmTargetDistance) ||
                 mergedSignals.contains(MbCanSignal.AccTimeGap)
-            MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener)
+            MbCanEngineFacade.syncFrmDectInfoListener(needsFrmAccListener || deep)
             val needsGaspedCcsListener = mergedSignals.contains(MbCanSignal.AccCruise) ||
                 mergedSignals.contains(MbCanSignal.GasPedal)
-            MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener)
+            MbCanEngineFacade.syncGaspedStatusListener(needsGaspedCcsListener || deep)
             val needsSteeringListener = mergedSignals.contains(MbCanSignal.SteeringAngle)
             val needsTurnSignalsListener = mergedSignals.contains(MbCanSignal.TurnSignals)
             val needsWheelPulseListener = mergedSignals.contains(MbCanSignal.WheelPulse)
@@ -4163,6 +4309,7 @@ object MbCanRepository {
                 needSteer = needsSteeringListener,
                 needTurnLights = needsTurnSignalsListener,
                 needWheelPulse = needsWheelPulseListener,
+                keepForDeepDiagnostics = deep,
             )
             // Listener bridges above may ensureInitialized() as a side effect; make sure
             // JobManager types (incl. STEERING_ANGLE / TURNLIGHT / WHEEL for A9 push) are actually subscribed.

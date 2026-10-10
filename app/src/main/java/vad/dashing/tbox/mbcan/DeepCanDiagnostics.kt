@@ -70,6 +70,8 @@ object DeepCanDiagnostics {
         "eMBCAN_ICM_TRIP_INFO",
         "eMBCAN_VEHICLE_CONSUMPTION",
         "eMBCAN_VEHICLE_EBS_SOC",
+        "eMBCAN_VEHICLE_GASPED_STATUS",
+        "eMBCAN_VEHICLE_FRM_INFO",
     )
 
     /** Injectable so unit tests can capture lines without the Tbox journal. */
@@ -139,6 +141,24 @@ object DeepCanDiagnostics {
         val line = "mbcan dt=$dataType object=$valueText"
         val continuous = dataType in CONTINUOUS_MBCAN_DATA_TYPES
         emit(key = key, tag = MBCAN_TAG, line = line, valueText = valueText, continuous = continuous)
+    }
+
+    /**
+     * Field-level mirror of an OEM push object ([MbCanObjectDump] paths): each field is
+     * its own delta key, so one BCM push logs only the fields that changed.
+     */
+    fun recordMbCanObjectFields(dataType: String, fields: List<Pair<String, String>>) {
+        val continuous = dataType in CONTINUOUS_MBCAN_DATA_TYPES
+        fields.forEach { (field, value) ->
+            val valueText = sanitize(value)
+            emit(
+                key = "mf/$dataType/$field",
+                tag = MBCAN_TAG,
+                line = "mbcan dt=$dataType field=$field value=$valueText",
+                valueText = valueText,
+                continuous = continuous,
+            )
+        }
     }
 
     /** Direct journal line bypassing coalescing (subscription reports, session markers). */
