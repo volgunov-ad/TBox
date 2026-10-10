@@ -113,6 +113,16 @@ object VhalBinaryToggleCodec {
         onValue: Int,
     ): Int? {
         if (!isVhalBinaryToggleProperty(propertyId)) return null
+        // mbCAN 2 = climate running, 1 = climate stopped. targetOn for this id means
+        // "front section off", so the usual onValue→targetOn mapping would invert the write.
+        if (propertyId == MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF) {
+            val frontOffSelected = when (mbCanValue) {
+                1 -> true
+                2 -> false
+                else -> return null
+            }
+            return encodeWriteValue(propertyId, frontOffSelected)
+        }
         val targetOn = when (mbCanValue) {
             onValue -> true
             offValue -> false

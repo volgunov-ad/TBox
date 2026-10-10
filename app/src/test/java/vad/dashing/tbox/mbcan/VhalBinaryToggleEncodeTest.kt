@@ -153,6 +153,19 @@ class VhalBinaryToggleEncodeTest {
     }
 
     @Test
+    fun frontOff_mbCanClimateOnWritesVhalClimateOn() {
+        val id = MbCanKnownVehiclePropertyId.HVAC_FRONT_OFF
+        assertEquals(
+            2,
+            VhalBinaryToggleCodec.encodeMbCanToggleSetValue(id, mbCanValue = 2, offValue = 1, onValue = 2),
+        )
+        assertEquals(
+            1,
+            VhalBinaryToggleCodec.encodeMbCanToggleSetValue(id, mbCanValue = 1, offValue = 1, onValue = 2),
+        )
+    }
+
+    @Test
     fun encode_unmappedProperty_returnsNull() {
         assertNull(VhalBinaryToggleCodec.encodeWriteValue(MbCanKnownVehiclePropertyId.SYSTEM_REBOOT, true))
         assertNull(

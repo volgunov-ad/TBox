@@ -260,7 +260,7 @@
       var AUTO = 110;
       var SYNC = 94;
       var RECIRC = 39;
-      var FRONT = 90;
+      var FRONT_POWER = 90;
       var AC = 36;
       var BLOW = 40;
       var HVAC_MODE = 140;
@@ -1342,7 +1342,7 @@
       function toggleAc() { toggleNamed("ac", AC); }
 
       /* state.front is "on" while the front section is running. The car signal is the inverse. */
-      function toggleFront() { toggleNamed("front", FRONT); }
+      function toggleFront() { toggleNamed("front", FRONT_POWER); }
 
       function toggleNamed(field, propertyId) {
         var next = state[field] === "on" ? "off" : "on";
