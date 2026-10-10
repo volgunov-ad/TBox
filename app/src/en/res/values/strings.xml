@@ -104,6 +104,15 @@
     <string name="adb_script_done_stopped">Script stopped (%1$d ok, %2$d failed of %3$d)</string>
     <string name="adb_script_done_aborted">Script aborted (%1$d ok, %2$d failed of %3$d)</string>
     <string name="adb_script_done_cancelled">Script cancelled (%1$d ok, %2$d failed of %3$d)</string>
+    <string name="adb_logcat_title">Logcat capture</string>
+    <string name="adb_logcat_start">Start</string>
+    <string name="adb_logcat_stop">Stop</string>
+    <string name="adb_logcat_clear_buffer">Clear buffer before recording</string>
+    <string name="adb_logcat_clear_buffer_desc">Run logcat -c before start (discards buffered history)</string>
+    <string name="adb_logcat_recording">Recording… %1$s</string>
+    <string name="adb_logcat_idle_hint">Full logcat (-v threadtime) to a Downloads file (tbox_logcat_…). Requires an active ADB connection.</string>
+    <string name="adb_logcat_saved">Logcat saved: %1$s</string>
+    <string name="adb_logcat_error">Logcat error: %1$s</string>
     <string name="adb_console">Console</string>
     <string name="adb_clear_log">Clear console</string>
     <string name="adb_authorization_hint">Approve this RSA key on the target device if prompted.</string>
