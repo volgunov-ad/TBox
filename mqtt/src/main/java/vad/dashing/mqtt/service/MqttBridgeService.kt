@@ -82,6 +82,9 @@ class MqttBridgeService : Service() {
     private var monitorSinceMs = 0L
     private val journal = LinkJournal()
     private var running = false
+    private val statusHttp = MqttStatusHttpServer {
+        MqttLocalStatus.encode(BridgeStatusStore.state.value, serviceRunning = true)
+    }
     @Volatile
     private var lastStartId = 0
     @Volatile
@@ -114,6 +117,8 @@ class MqttBridgeService : Service() {
             registerReceiver(shutdownReceiver, shutdown)
         }
         running = true
+        runCatching { statusHttp.start() }
+            .onFailure { lastError = it.message ?: "status HTTP" }
         handler.post(loop)
     }
 
@@ -137,6 +142,7 @@ class MqttBridgeService : Service() {
 
     override fun onDestroy() {
         running = false
+        statusHttp.stop()
         runCatching { unregisterReceiver(shutdownReceiver) }
         if (::handler.isInitialized) {
             handler.removeCallbacksAndMessages(null)

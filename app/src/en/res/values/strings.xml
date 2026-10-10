@@ -104,6 +104,15 @@
     <string name="adb_script_done_stopped">Script stopped (%1$d ok, %2$d failed of %3$d)</string>
     <string name="adb_script_done_aborted">Script aborted (%1$d ok, %2$d failed of %3$d)</string>
     <string name="adb_script_done_cancelled">Script cancelled (%1$d ok, %2$d failed of %3$d)</string>
+    <string name="adb_logcat_title">Logcat capture</string>
+    <string name="adb_logcat_start">Start</string>
+    <string name="adb_logcat_stop">Stop</string>
+    <string name="adb_logcat_clear_buffer">Clear buffer before recording</string>
+    <string name="adb_logcat_clear_buffer_desc">Run logcat -c before start (discards buffered history)</string>
+    <string name="adb_logcat_recording">Recording… %1$s</string>
+    <string name="adb_logcat_idle_hint">Full logcat (-v threadtime) to a Downloads file (tbox_logcat_…). Requires an active ADB connection.</string>
+    <string name="adb_logcat_saved">Logcat saved: %1$s</string>
+    <string name="adb_logcat_error">Logcat error: %1$s</string>
     <string name="adb_console">Console</string>
     <string name="adb_clear_log">Clear console</string>
     <string name="adb_authorization_hint">Approve this RSA key on the target device if prompted.</string>
@@ -712,6 +721,21 @@
     <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
     <string name="settings_hu_type_android9">HU with Android 9</string>
     <string name="settings_hu_type_android10">HU with Android 10</string>
+    <string name="settings_cruise_type_title">Cruise control type</string>
+    <string name="settings_cruise_type_desc">Ordinary (CCS) or adaptive (ACC). Applies to all cruise widgets and cruise actions.</string>
+    <string name="settings_cruise_type_ccs">Ordinary (CCS)</string>
+    <string name="settings_cruise_type_acc">Adaptive (ACC)</string>
+    <string name="settings_climate_type_title">Climate control type</string>
+    <string name="settings_climate_type_desc">Ordinary AC, single-zone, or dual-zone. Affects tiles, web panel, and phone.</string>
+    <string name="settings_climate_type_ordinary">Ordinary AC</string>
+    <string name="settings_climate_type_single">Single-zone</string>
+    <string name="settings_climate_type_dual">Dual-zone</string>
+    <string name="settings_vehicle_feature_setup_title">Vehicle type</string>
+    <string name="settings_vehicle_feature_setup_intro">Choose HU type, TBox connection, cruise type, and climate type. You can dismiss with defaults (ACC and dual-zone climate).</string>
+    <string name="settings_vehicle_feature_setup_connect_tbox">Connect to TBox</string>
+    <string name="settings_vehicle_feature_setup_connect_tbox_desc">UDP and tbox-proxy for TBox data. Off = head-unit bus only (mbCAN/VHAL).</string>
+    <string name="settings_vehicle_feature_setup_done">Done</string>
+    <string name="settings_vehicle_feature_setup_reopen">Configure cruise and climate type…</string>
     <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
@@ -1834,6 +1858,15 @@
     <string name="location_geo_debug_log_idle">Not recording</string>
 
     <string name="info_tbox_section">TBox information</string>
+    <string name="info_mqtt_section">TBox MQTT</string>
+    <string name="info_mqtt_service">Service running</string>
+    <string name="info_mqtt_broker">Broker connected</string>
+    <string name="info_mqtt_monitor_link">Link to TBox Monitor</string>
+    <string name="info_mqtt_wireguard">WireGuard bridge</string>
+    <string name="info_mqtt_wg_off">off</string>
+    <string name="info_mqtt_wg_up">on, tunnel up</string>
+    <string name="info_mqtt_wg_error">on, error</string>
+    <string name="info_mqtt_service_down">bridge service not running</string>
     <string name="info_hu_networks">Head unit networks</string>
     <string name="info_hu_networks_none">none</string>
     <string name="info_hu_network_internet_yes">internet OK</string>

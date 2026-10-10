@@ -2387,11 +2387,17 @@ internal fun WidgetSelectionDialogForm(
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
+    val cruiseControlTypeSetting by settingsViewModel.cruiseControlType.collectAsStateWithLifecycle()
     LaunchedEffect(noTboxConnect) {
         state.preferUseMbCanVhalDefault = noTboxConnect
     }
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
-    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect)
+    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(
+        noTboxConnect = noTboxConnect,
+        climateType = climateControlType,
+        cruiseType = cruiseControlTypeSetting,
+    )
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
         .map { key ->
             key to WidgetsRepository.getTitleUnitForDataKey(context, key)
@@ -2982,34 +2988,6 @@ internal fun WidgetSelectionDialogForm(
                             maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
                             enabled = state.togglesEnabled,
                             step = 1,
-                        )
-                    }
-                    if (isCruiseWidgetDataKey(state.selectedDataKey)) {
-                        val cruiseTypeEntries = listOf(
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.AUTO,
-                                stringResource(R.string.widget_cruise_control_type_auto),
-                            ),
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.ACC,
-                                stringResource(R.string.widget_cruise_control_type_acc),
-                            ),
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.CCS,
-                                stringResource(R.string.widget_cruise_control_type_ccs),
-                            ),
-                        )
-                        val selectedCruiseType = cruiseTypeEntries.find {
-                            it.type == state.cruiseControlType
-                        } ?: cruiseTypeEntries.first { it.type == CruiseControlType.DEFAULT }
-                        SettingDropdownGeneric(
-                            selectedValue = selectedCruiseType,
-                            onValueChange = { state.cruiseControlType = it.type },
-                            text = stringResource(R.string.widget_cruise_control_type_title),
-                            description = stringResource(R.string.widget_cruise_control_type_desc),
-                            enabled = state.togglesEnabled,
-                            options = cruiseTypeEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
                     if (isAccCruiseWidgetDataKey(state.selectedDataKey)) {

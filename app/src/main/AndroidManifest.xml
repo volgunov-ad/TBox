@@ -112,6 +112,11 @@
         tools:ignore="ScopedStorage"
         android:minSdkVersion="30" />
 
+    <!-- Info tab: detect TBox MQTT APK (package visibility on API 30+ / targetSdk 36). -->
+    <queries>
+        <package android:name="vad.dashing.mqtt" />
+    </queries>
+
     <application
         android:name="vad.dashing.tbox.TboxApplication"
         android:allowBackup="true"

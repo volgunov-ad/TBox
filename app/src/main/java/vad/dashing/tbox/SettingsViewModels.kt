@@ -251,6 +251,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     private val _showPermissionsDialog = MutableStateFlow(false)
     val showPermissionsDialog: StateFlow<Boolean> = _showPermissionsDialog.asStateFlow()
 
+    private val _showVehicleFeatureSetupDialog = MutableStateFlow(false)
+    val showVehicleFeatureSetupDialog: StateFlow<Boolean> =
+        _showVehicleFeatureSetupDialog.asStateFlow()
+
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
             scope = viewModelScope,
@@ -1478,6 +1482,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = HeadUnitCanMode.Android9MbCan
         )
 
+    val cruiseControlType = settingsManager.cruiseControlTypeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = GlobalCruiseControlType.DEFAULT,
+        )
+
+    val climateControlType = settingsManager.climateControlTypeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ClimateControlType.DEFAULT,
+        )
+
+    val vehicleFeatureTypesConfigured = settingsManager.vehicleFeatureTypesConfiguredFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     val launchMainInStockAppWindow = settingsManager.launchMainInStockAppWindowFlow
         .stateIn(
             scope = viewModelScope,
@@ -1491,6 +1516,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             if (!settingsManager.permissionsIntroSeenFlow.first()) {
                 _showPermissionsDialog.value = true
+            } else if (!settingsManager.vehicleFeatureTypesConfiguredFlow.first()) {
+                _showVehicleFeatureSetupDialog.value = true
             }
         }
         // Users who enabled «Не подключаться к TBox» before Modem stayed available may still
@@ -2440,6 +2467,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         _showPermissionsDialog.value = false
         viewModelScope.launch {
             settingsManager.savePermissionsIntroSeen(true)
+            if (!settingsManager.vehicleFeatureTypesConfiguredFlow.first()) {
+                _showVehicleFeatureSetupDialog.value = true
+            }
+        }
+    }
+
+    fun openVehicleFeatureSetupDialog() {
+        _showVehicleFeatureSetupDialog.value = true
+    }
+
+    /**
+     * Persists cruise/climate types (defaults when the user dismisses without choosing)
+     * and closes the setup dialog.
+     */
+    fun dismissVehicleFeatureSetupDialog(
+        cruise: GlobalCruiseControlType = GlobalCruiseControlType.DEFAULT,
+        climate: ClimateControlType = ClimateControlType.DEFAULT,
+    ) {
+        _showVehicleFeatureSetupDialog.value = false
+        viewModelScope.launch {
+            settingsManager.saveVehicleFeatureTypes(cruise, climate)
         }
     }
 
@@ -3550,6 +3598,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHeadUnitCanMode(mode: HeadUnitCanMode) {
         viewModelScope.launch {
             settingsManager.saveHeadUnitCanModeByUser(mode)
+        }
+    }
+
+    fun saveCruiseControlType(type: GlobalCruiseControlType) {
+        viewModelScope.launch {
+            settingsManager.saveCruiseControlType(type)
+        }
+    }
+
+    fun saveClimateControlType(type: ClimateControlType) {
+        viewModelScope.launch {
+            settingsManager.saveClimateControlType(type)
         }
     }
 

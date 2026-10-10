@@ -166,7 +166,7 @@ scopes), не plaintext токена в логах.
 
 | Endpoint | Без Bearer |
 |----------|------------|
-| `GET /v1/health` | допускается урезанный ответ (alive / версия API / pairingActive / webPanelEnabled), **без** секретов и телеметрии |
+| `GET /v1/health` | допускается урезанный ответ (alive / версия API / pairingActive / webPanelEnabled / climateControlType), **без** секретов и телеметрии |
 | `POST /v1/pair/request` | только при активном pairing |
 | `GET /` и `GET /panel` | только если в Настройки → API включена **простая веб-панель**: HTML управления автомобилем, без телеметрии. Пять страниц с нижним меню: Подключение, Климат-контроль, Сиденья, Музыка, «Окна, люк и шторка» (окна по одному и все сразу, люк 0/20/50/80/100 % и «Откинуть», шторка 0/20/50/80/100 %). Сверху статус и температура на улице и в салоне. Последняя страница запоминается в браузере; без токена открывается «Подключение». Каждая страница читает только свои сигналы. Язык страницы — язык сборки (`ru` / `en`). Кнопка на странице вызывает тот же `POST /v1/pair/request` и поллит `GET /v1/pair/status`. Дальше команды идут в `/v1` с полученным Bearer |
 | Остальные | `401` |
@@ -223,13 +223,17 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   "apiVersion": 1,
   "catalogVersion": 4,
   "serverEnabled": true,
+  "webPanelEnabled": true,
   "pairingActive": false,
   "appVersion": "1.0.0",
-  "headUnit": "android9"
+  "headUnit": "android9",
+  "climateControlType": "dual_zone"
 }
 ```
 
 `headUnit` — `android9` (mbCAN) или `android10` (VHAL). От него зависит набор команд стёкол: на A9 — `close` / `vent` (20 %) / `comfort_open` (80 %) / `open`, на A10 — `close` / `vent` / `open`.
+
+`climateControlType` — глобальный вид климата из Настроек (`ordinary_ac` / `single_zone` / `dual_zone`); веб-панель скрывает Auto / SYNC / пассажирскую зону соответственно.
 
 ### 7.2. `POST /v1/pair/request`
 

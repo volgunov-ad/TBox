@@ -106,6 +106,8 @@ fun TboxApp(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
+    val showVehicleFeatureSetupDialog by
+        settingsViewModel.showVehicleFeatureSetupDialog.collectAsStateWithLifecycle()
     val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -170,6 +172,14 @@ fun TboxApp(
         if (showPermissionsDialog) {
             PermissionsDialog(
                 onDismiss = { settingsViewModel.dismissPermissionsDialog() },
+            )
+        }
+        if (showVehicleFeatureSetupDialog && !showPermissionsDialog) {
+            VehicleFeatureSetupDialog(
+                settingsViewModel = settingsViewModel,
+                onDismiss = { cruise, climate ->
+                    settingsViewModel.dismissVehicleFeatureSetupDialog(cruise, climate)
+                },
             )
         }
         if (showAppListDialog) {

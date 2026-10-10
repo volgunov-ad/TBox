@@ -1064,9 +1064,26 @@ object AutomationSignalCatalog {
             .sortedByAutomationLabel { it.label }
             .map { it.id }
 
-    /** Trigger/condition pickers: hides speed-limiter signals while [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN]. */
+    /**
+     * Trigger/condition pickers: hides speed-limiter signals while
+     * [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN], and the cruise-state signal that does not
+     * match the global [vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType].
+     */
     fun pickerSignalsOfType(valueType: AutomationSignalValueType): List<AutomationSignalId> =
-        signalsOfType(valueType).filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
+        signalsOfType(valueType)
+            .filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
+            .filterNot { isCruiseSignalHiddenFromAutomationPicker(it) }
+
+    private fun isCruiseSignalHiddenFromAutomationPicker(id: AutomationSignalId): Boolean {
+        val global = vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType
+        return when (id) {
+            AutomationSignalId.ACC_CRUISE_STATE ->
+                global != vad.dashing.tbox.GlobalCruiseControlType.ACC
+            AutomationSignalId.CCS_CRUISE_STATE ->
+                global != vad.dashing.tbox.GlobalCruiseControlType.CCS
+            else -> false
+        }
+    }
 
     fun stateOptionLabel(raw: String): String = AutomationSignalStateEncoding.stateOptionLabel(raw)
 

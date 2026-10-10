@@ -167,7 +167,7 @@ UI ограничителя (раздел автонастроек «Огран�
 
 Виджет `accCruiseWidget` (**Уставка круиз-контроля**): single — Off/Standby → enable+SET− затем converge к уставке; Active и не на уставке → только converge; Active и уже на уставке → **212** (пауза). Double — **210** (полное Off), если не Off/Fault. После converge — пауза **1 с**, проверка уставки и догон при ±1; abort converge при уходе из Active (тормоз→Standby или Off). Мигает только нажатая плитка. Ключ данных не менялся.
 
-Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active/Override → **212**; Fault → no-op. Иконка: Active — `activeContent`, Override — зелёная (`#4CAF50`), Fault — оранжевая, Standby — тусклая. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active/Override**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active/Override. Тот же `cruiseControlType` (**Авто** / **ACC** / **CCS**); **Авто**: живой ненулевой `ACCMode` или сессионный флаг «ACC уже был» → ACC; если CCS engaged при `ACCMode=0` или канал CCS уже отдавал статус (в т.ч. 0), а ACC так и не «проявился» → CCS; иначе FRM-feedback без канала CCS → ACC. На машинах только с обычным круизом FRM часто пушит `ACCMode=0` — этого недостаточно для выбора ACC.
+Виджет `cruiseStatusWidget`: показывает **текущую** уставку ACC (`VSetDis`) или **запомненную** уставку CCS (сессия процесса). Single — Off → **210** + **SET−** (текущая); Standby → **RES+**, если уставка есть, иначе **SET−**; Active/Override → **212**; Fault → no-op. Иконка: Active — `activeContent`, Override — зелёная (`#4CAF50`), Fault — оранжевая, Standby — тусклая. **Standby**: свайп вниз → **SET−**, вверх → **RES+**. **Active/Override**: свайп вверх → **RES+** (+1), вниз → **SET−** (−1). Double — **210** из Standby/Active/Override. Путь ACC/CCS — из глобальной настройки «Вид круиз-контроля» (не из плитки).
 
 ### ACC (адаптивный)
 
@@ -212,7 +212,7 @@ UI ограничителя (раздел автонастроек «Огран�
 | **Android 9** — Cruise / Cancel / RES+ / SET− | — | — | mbCAN **210** / **212** / **213** / **214** | импульс **1** (`SetExact`) | Write-only pulse; HAL/шина сбрасывает |
 | **Android 10** — Cruise / Cancel / RES+ / SET− | — | — | VHAL **289415956** / **289415954** / **289415953** / **289415960** | импульс **1** | то же (`reset: true` в send.json) |
 
-Настройки плитки `accCruiseWidget`: `cruiseControlType` (auto/acc/ccs), `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS). Плитка `cruiseStatusWidget`: только `cruiseControlType`.
+Глобальный вид круиза (Настройки → Автомобиль → «Вид круиз-контроля», ключ DataStore `vad.dashing.tbox.cruise_control_type`: `acc` / `ccs`, по умолчанию **ACC**) задаёт путь ACC/CCS для всех плиток круиза и Builtin `cruise_*`. Поле `cruiseControlType` в JSON плитки ещё читается/пишется для совместимости бэкапов, но UI выбора на плитке убран; рантайм всегда берёт глобальный тип. Настройки плитки `accCruiseWidget`: `accCruiseTargetKmh` (30…150), `accCruiseIncreaseIntervalMs` / `accCruiseDecreaseIntervalMs` (50…1500). Step-loop: `AccCruiseController` (ACC / CCS).
 
 ---
 

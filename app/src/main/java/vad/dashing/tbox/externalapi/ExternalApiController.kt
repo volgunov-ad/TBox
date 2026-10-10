@@ -19,6 +19,7 @@ import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationActionExecutor
 import vad.dashing.tbox.automation.AutomationActionResult
@@ -119,6 +120,7 @@ class ExternalApiController(
         pageLanguage = { appContext.getString(R.string.web_panel_language) },
         onAuthenticated = ::noteTokenUsed,
         headUnitPlatform = { headUnitPlatform() },
+        climateControlType = { VehicleFeatureSettings.climateControlType.storageKey },
     )
 
     private fun headUnitPlatform(): String = when (UniversalCanRepository.mode.value) {

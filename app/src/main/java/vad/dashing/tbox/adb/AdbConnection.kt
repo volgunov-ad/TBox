@@ -2,6 +2,7 @@ package vad.dashing.tbox.adb
 
 import java.io.EOFException
 import java.io.IOException
+import java.net.SocketTimeoutException
 import java.security.KeyPair
 
 class AdbDeviceInfo(
@@ -16,6 +17,12 @@ class AdbShellResult(
     val exitCode: Int?,
     val shellV2: Boolean,
 )
+
+/** How a long-running [AdbConnection.streamShell] ended. */
+sealed class AdbShellStreamEnd {
+    data class Completed(val exitCode: Int?, val shellV2: Boolean) : AdbShellStreamEnd()
+    data object Stopped : AdbShellStreamEnd()
+}
 
 private class AdbMessage(
     val header: AdbMessageHeader,
@@ -33,6 +40,8 @@ class AdbConnection(
     private var peerMaxPayload = AdbProtocol.MAX_PAYLOAD
     private var useChecksum = true
     private var nextLocalId = 1
+    /** When set, [readFully] retries idle timeouts so [streamShell] can honor [shouldStop]. */
+    @Volatile private var streamStopCheck: (() -> Boolean)? = null
 
     @Synchronized
     fun connect(): AdbDeviceInfo {
@@ -91,9 +100,46 @@ class AdbConnection(
         return executeLegacy(command)
     }
 
+    /**
+     * Streams a long-running shell command (e.g. `logcat`) until the peer closes the
+     * stream, [shouldStop] returns true, or I/O fails.
+     *
+     * While streaming, the transport read timeout is shortened so Stop can close the
+     * shell with CLSE without waiting for the default 10 s idle timeout.
+     */
+    @Synchronized
+    fun streamShell(
+        command: String,
+        shouldStop: () -> Boolean,
+        onStdout: (ByteArray) -> Unit,
+        onStderr: (ByteArray) -> Unit = {},
+        readTimeoutMs: Int = STREAM_READ_TIMEOUT_MS,
+    ): AdbShellStreamEnd {
+        check(connected) { "ADB connection is not established" }
+        require(command.isNotBlank()) { "command is blank" }
+        val previousTimeout = STREAM_DEFAULT_TIMEOUT_MS
+        transport.setReadTimeoutMs(readTimeoutMs.coerceAtLeast(1))
+        streamStopCheck = shouldStop
+        try {
+            if ("shell_v2" in peerFeatures) {
+                val end = streamV2(command, shouldStop, onStdout, onStderr)
+                if (end != null) return end
+            }
+            return streamLegacy(command, shouldStop, onStdout)
+        } finally {
+            streamStopCheck = null
+            transport.setReadTimeoutMs(previousTimeout)
+        }
+    }
+
     override fun close() {
         connected = false
         transport.close()
+    }
+
+    companion object {
+        private const val STREAM_READ_TIMEOUT_MS = 500
+        private const val STREAM_DEFAULT_TIMEOUT_MS = 10_000
     }
 
     /** Physical USB DETACH: never touch the native USB handle (OEM crash risk). */
@@ -177,6 +223,117 @@ class AdbConnection(
         }
     }
 
+    private fun streamV2(
+        command: String,
+        shouldStop: () -> Boolean,
+        onStdout: (ByteArray) -> Unit,
+        onStderr: (ByteArray) -> Unit,
+    ): AdbShellStreamEnd? {
+        val ids = open(AdbShellV2.service(command)) ?: return null
+        val parser = AdbShellV2Parser()
+        var exitCode: Int? = null
+        var stopRequested = false
+        while (true) {
+            if (!stopRequested && shouldStop()) {
+                stopRequested = true
+                // Further idle timeouts only retry receive (wait for peer CLSE).
+                streamStopCheck = null
+                send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+            }
+            val message = try {
+                receive()
+            } catch (_: AdbStreamStopRequested) {
+                if (!stopRequested) {
+                    stopRequested = true
+                    streamStopCheck = null
+                    send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+                }
+                continue
+            }
+            if (!belongsToStream(message, ids)) {
+                drainStale(message)
+                continue
+            }
+            when (message.header.command) {
+                AdbProtocol.CMD_WRTE -> {
+                    for (chunk in parser.feed(message.payload)) {
+                        when (chunk.id) {
+                            AdbShellV2.CHUNK_STDOUT -> if (chunk.data.isNotEmpty()) onStdout(chunk.data)
+                            AdbShellV2.CHUNK_STDERR -> if (chunk.data.isNotEmpty()) onStderr(chunk.data)
+                            AdbShellV2.CHUNK_EXIT -> if (chunk.data.isNotEmpty()) {
+                                exitCode = chunk.data[0].toInt() and 0xFF
+                            }
+                        }
+                    }
+                    send(AdbProtocol.CMD_OKAY, ids.local, ids.remote)
+                }
+                AdbProtocol.CMD_CLSE -> {
+                    send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+                    return if (stopRequested) {
+                        AdbShellStreamEnd.Stopped
+                    } else {
+                        AdbShellStreamEnd.Completed(exitCode, shellV2 = true)
+                    }
+                }
+                AdbProtocol.CMD_OKAY -> Unit
+                else -> throw IOException(
+                    "Unexpected shell message ${AdbProtocol.commandName(message.header.command)}",
+                )
+            }
+        }
+    }
+
+    private fun streamLegacy(
+        command: String,
+        shouldStop: () -> Boolean,
+        onStdout: (ByteArray) -> Unit,
+    ): AdbShellStreamEnd {
+        val ids = open(AdbShellV2.legacyService(command))
+            ?: throw IOException("ADB shell service rejected")
+        var stopRequested = false
+        while (true) {
+            if (!stopRequested && shouldStop()) {
+                stopRequested = true
+                streamStopCheck = null
+                send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+            }
+            val message = try {
+                receive()
+            } catch (_: AdbStreamStopRequested) {
+                if (!stopRequested) {
+                    stopRequested = true
+                    streamStopCheck = null
+                    send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+                }
+                continue
+            }
+            if (!belongsToStream(message, ids)) {
+                drainStale(message)
+                continue
+            }
+            when (message.header.command) {
+                AdbProtocol.CMD_WRTE -> {
+                    if (message.payload.isNotEmpty()) onStdout(message.payload)
+                    send(AdbProtocol.CMD_OKAY, ids.local, ids.remote)
+                }
+                AdbProtocol.CMD_CLSE -> {
+                    send(AdbProtocol.CMD_CLSE, ids.local, ids.remote)
+                    return if (stopRequested) {
+                        AdbShellStreamEnd.Stopped
+                    } else {
+                        AdbShellStreamEnd.Completed(exitCode = null, shellV2 = false)
+                    }
+                }
+                AdbProtocol.CMD_OKAY -> Unit
+                else -> throw IOException(
+                    "Unexpected shell message ${AdbProtocol.commandName(message.header.command)}",
+                )
+            }
+        }
+    }
+
+    private class AdbStreamStopRequested : IOException("ADB shell stream stop requested")
+
     /**
      * Opens a stream and waits for OKAY/CLSE addressed to [localId].
      *
@@ -258,7 +415,16 @@ class AdbConnection(
     private fun readFully(buffer: ByteArray) {
         var offset = 0
         while (offset < buffer.size) {
-            val count = transport.read(buffer, offset, buffer.size - offset)
+            val count = try {
+                transport.read(buffer, offset, buffer.size - offset)
+            } catch (e: SocketTimeoutException) {
+                // Idle timeout with no bytes of this frame yet: honor stream stop, else retry.
+                if (offset == 0) {
+                    if (streamStopCheck?.invoke() == true) throw AdbStreamStopRequested()
+                    continue
+                }
+                throw e
+            }
             if (count < 0) throw EOFException("ADB transport closed")
             if (count == 0) throw IOException("ADB transport returned no data")
             offset += count
