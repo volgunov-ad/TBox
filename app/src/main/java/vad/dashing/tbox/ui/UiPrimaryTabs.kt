@@ -3503,6 +3503,7 @@ fun InfoTabContent(
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { HuSystemNetworksSection() }
+            item { MqttStatusInfoSection() }
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SettingsTitle(stringResource(R.string.info_tbox_section))

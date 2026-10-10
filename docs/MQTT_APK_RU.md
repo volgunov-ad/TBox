@@ -152,6 +152,7 @@ BOOT_COMPLETED или кнопка в UI
         → HTTP Bearer 127.0.0.1  →  TBox Monitor /v1
         → MQTT 3.1.1             →  брокер пользователя
                                       → Home Assistant MQTT Discovery
+        → localhost GET /status  ←  TBox Monitor (вкладка «Информация»)
 ```
 
 | Слой | Выбор |
@@ -160,6 +161,39 @@ BOOT_COMPLETED или кнопка в UI
 | MQTT | HiveMQ MQTT Client, API MQTT 3.1.1 (`Mqtt3AsyncClient`). Paho Android service не используем |
 | UI | Compose, тема и вёрстка как «Настройки» Monitor. См. §6 |
 | SDK | `minSdk` 28, `targetSdk` как у `:voice` |
+
+### Localhost status для Monitor
+
+Пока работает `MqttBridgeService`, на **`127.0.0.1:8766`** слушает крошечный HTTP-сервер
+(только loopback, без auth). Порт зафиксирован и **не** совпадает с External API Monitor
+(по умолчанию `8765`). Константы: `:mqtt` `MqttLocalStatus.PORT`, `:app` `MqttApkStatus.PORT`.
+
+| | |
+|--|--|
+| URL | `GET http://127.0.0.1:8766/status` |
+| Когда есть listener | Только пока FGS/мост запущен |
+| Connection refused | Пакет `vad.dashing.mqtt` может быть установлен, но сервис не запущен |
+| Тело | JSON полей `BridgeStatus` + `serviceRunning` |
+
+Пример ответа:
+
+```json
+{
+  "serviceRunning": true,
+  "monitorUp": true,
+  "brokerUp": false,
+  "wireguardEnabled": true,
+  "tunnelError": "",
+  "brokerError": "timeout",
+  "monitorError": "",
+  "lastError": "",
+  "availability": "offline"
+}
+```
+
+TBox Monitor на вкладке **«Информация»** показывает блок «TBox MQTT» **только если**
+установлен пакет `vad.dashing.mqtt`. Опрос — раз в ~2 с, только пока вкладка (блок) видна:
+сервис / брокер / связь с Monitor / WireGuard (выкл · вкл+туннель · вкл+ошибка).
 
 Пока Monitor не отвечает на `/v1/health`, сервис повторяет попытки. Соединение с брокером
 при этом может жить: в топик доступности уходит `offline`. Команды из брокера в этом
