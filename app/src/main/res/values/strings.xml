@@ -738,7 +738,6 @@
     <string name="settings_vehicle_feature_setup_connect_tbox">Подключаться к TBox</string>
     <string name="settings_vehicle_feature_setup_connect_tbox_desc">UDP и tbox-proxy для данных TBox. Выкл. — только шина ГУ (mbCAN/VHAL).</string>
     <string name="settings_vehicle_feature_setup_done">Готово</string>
-    <string name="settings_vehicle_feature_setup_reopen">Настроить тип круиза и климата…</string>
     <string name="settings_launch_main_in_stock_app_window_title">Запускать TBox Monitor в окне приложений</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Открывать главный экран в штатном окне лаунчера Adayo (ActivityView), как Media или Настройки. Автозапуск, плавающие панели, возврат из плеера и другие программные запуски. Выкл. — на весь экран.</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
@@ -1869,6 +1868,9 @@
     <string name="location_geo_debug_log_idle">Запись не идёт</string>
 
     <string name="info_tbox_section">Информация TBox</string>
+    <string name="info_tbox_connection">Подключение</string>
+    <string name="info_tbox_connected_since">подключен в %1$s</string>
+    <string name="info_tbox_disconnected_since">отключен в %1$s</string>
     <string name="info_mqtt_section">TBox MQTT</string>
     <string name="info_mqtt_service">Сервис запущен</string>
     <string name="info_mqtt_broker">Брокер подключён</string>

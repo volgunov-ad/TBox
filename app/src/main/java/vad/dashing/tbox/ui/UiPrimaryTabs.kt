@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -1034,19 +1035,31 @@ fun SettingsTabContent(
                 modifier = Modifier.weight(1f),
             )
         }
-        Button(
-            onClick = rememberWrappedOnClick {
-                settingsViewModel.openVehicleFeatureSetupDialog()
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
+        SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_vehicle_feature_setup_reopen),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
+            isGetCanFrameEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCanFrameSetting(enabled)
+            },
+            stringResource(R.string.settings_get_can_data_title),
+            "",
+            !noTboxConnect
+        )
+        if (!noTboxConnect) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(
@@ -1138,31 +1151,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_auto_prevent_restart_swd_desc),
             !noTboxConnect
         )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
-        SettingSwitch(
-            noTboxConnect,
-            { enabled ->
-                if (enabled) {
-                    showNoTboxConnectCanDialog = true
-                } else {
-                    settingsViewModel.saveNoTboxConnectSetting(false)
-                }
-            },
-            stringResource(R.string.settings_no_tbox_connect_title),
-            stringResource(R.string.settings_no_tbox_connect_desc),
-            true
-        )
-        SettingSwitch(
-            isGetCanFrameEnabled,
-            { enabled ->
-                settingsViewModel.saveGetCanFrameSetting(enabled)
-            },
-            stringResource(R.string.settings_get_can_data_title),
-            "",
-            !noTboxConnect
-        )
+        }
                 }
 
                 SettingsSection.INTERFACE -> {
@@ -3556,6 +3545,12 @@ fun InfoTabContent(
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
+    val connectionTimeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val connectionTime = remember(tboxConnectionTime) {
+        connectionTimeFormat.format(tboxConnectionTime)
+    }
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
     val tboxMdcSuspended by viewModel.tboxMdcSuspended.collectAsStateWithLifecycle()
@@ -3591,9 +3586,24 @@ fun InfoTabContent(
         LazyColumn(modifier = Modifier.weight(1f)) {
             item { HuSystemNetworksSection() }
             item { MqttStatusInfoSection() }
+            if (!noTboxConnect) {
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SettingsTitle(stringResource(R.string.info_tbox_section))
+            }
+            item {
+                StatusRow(
+                    label = stringResource(R.string.info_tbox_connection),
+                    value = stringResource(
+                        if (tboxConnected) {
+                            R.string.info_tbox_connected_since
+                        } else {
+                            R.string.info_tbox_disconnected_since
+                        },
+                        connectionTime,
+                    ),
+                    color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                )
             }
             item {
                 StatusRow(
@@ -3695,8 +3705,9 @@ fun InfoTabContent(
                     }
                 }
             }
+            }
         }
-        if (isExpertModeEnabled) {
+        if (isExpertModeEnabled && !noTboxConnect) {
             UdaDtcDialog(
                 visible = udaDtcDialogVisible,
                 tboxConnected = tboxConnected,
