@@ -35,6 +35,8 @@ import vad.dashing.tbox.esp.HuCanMarkLog
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 object UniversalCanRepository {
+    /** Gap between expert snapshot reads: ~400–500 rows stay a one-shot burst of a few seconds. */
+    private const val EXPERT_SNAPSHOT_PACING_MS = 15L
     private const val AUTO_BIND_ATTEMPTS_PER_MODE = 3
     private const val AUTO_BIND_ATTEMPT_TIMEOUT_MS = 3_500L
     private const val AUTO_BIND_ATTEMPT_PAUSE_MS = 1_200L
@@ -1210,6 +1212,22 @@ object UniversalCanRepository {
             MbCanRepository.getRawProperty(bus, propertyId)
         } else {
             Android10VhalRepository.getRawProperty(bus, propertyId)
+        }
+    }
+
+    /** Expert snapshot: reads [params] in order, paced, via the active HU backend. */
+    suspend fun readRawSnapshot(
+        params: List<ExpertRawCanParam>,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> {
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            return MbCanRepository.readRawBatch(params, EXPERT_SNAPSHOT_PACING_MS, onProgress)
+        }
+        return params.mapIndexed { index, param ->
+            val result = Android10VhalRepository.getRawProperty(param.bus, param.mbCanId)
+            onProgress(index + 1, params.size)
+            delay(EXPERT_SNAPSHOT_PACING_MS)
+            param to result
         }
     }
 

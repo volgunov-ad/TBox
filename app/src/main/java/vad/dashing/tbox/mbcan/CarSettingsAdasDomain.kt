@@ -17,6 +17,11 @@ enum class LdwSensitivity {
  * Cluster `FRM_3_TimeGapSet_ICM` (and A10 DVD echo) uses the same names at **0 / 1 / 2**;
  * **3** is no icon. Stock launcher and TTG draw **0** as two bars (medium), **1** as three
  * bars (far), **2** as one bar (near).
+ *
+ * Journal `tbox_app_log_20261010_115553`: the user changed the gap with ACC active.
+ * Request **1 / 2 / 3** landed on status **0 / 1 / 2**. Cfg **95** read **4** together
+ * with status **3** while ACC was not showing the gap (ACCMode 0 at 11:57:38, and
+ * again at 12:01:13 as ACC left). **4** stays "not a gap".
  */
 enum class AccTimeGap {
     /** tauGap_2 — closest. Status **2**, request **3**. */

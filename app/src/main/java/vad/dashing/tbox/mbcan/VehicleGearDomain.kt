@@ -19,13 +19,15 @@ object VehicleGearDomain {
     /**
      * CEM reverse gear switch (`getReverseGearSwitch` / `R_0400_CEM_2_ReverseGearSwitch`).
      *
-     * On Jetour Dashing HU the CEM polarity is inverted vs stock AAOS docs:
-     * raw **1** = not reverse, raw **0** = reverse engaged.
-     * (Geo log 2026-08-05: constant `true` on D/P with old 1→true decode; in R the
-     * property often goes null — PRND `R` still covers that via [isReverseEngaged].)
+     * Jetour Dashing: raw **0** and **2** = reverse engaged, raw **1** = not reverse.
+     * **0** stays from the earlier CEM observation (geo log 2026-08-05: the old
+     * 1→true decode stayed true on D/P). **2** is the value seen in R on 2026-10-10
+     * (`tbox_app_log_20261010_115553`, `tbox_app_log_20261010_162750`): raw 2 while
+     * `nGear=2`, raw 1 otherwise. Until 2 was engaged, [isReverseEngaged] saw a
+     * missing switch exactly in reverse when HU PRND was absent.
      */
     fun decodeReverseGearSwitch(raw: Int): Boolean? = when (raw) {
-        0 -> true
+        0, 2 -> true
         1 -> false
         else -> null
     }

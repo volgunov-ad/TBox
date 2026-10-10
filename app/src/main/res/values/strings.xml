@@ -574,6 +574,8 @@
 
     <string name="logs_filter_label">Фильтр по тексту (минимум 3 символа)</string>
     <string name="logs_filter_placeholder">Введите текст для поиска…</string>
+    <string name="logs_mark_label">Метка</string>
+    <string name="logs_mark_button">Метка</string>
     <string name="logs_continuous_record_title">Непрерывная запись журнала</string>
     <string name="logs_continuous_record_desc">Каждая новая строка журнала пишется в файл «Загрузки» (tbox_app_log_…). До 20 МБ на файл, дальше новый. Не зависит от экранного буфера последних строк.</string>
     <string name="logs_continuous_record_start">Начать запись</string>
@@ -1533,7 +1535,7 @@
     <string name="key_press_diagnostics_copied">Журнал скопирован</string>
     <string name="expert_raw_get_set_open">Сырой Get/Set mbCAN/VHAL</string>
     <string name="expert_raw_get_set_title">Сырой Get/Set параметра mbCAN/VHAL</string>
-    <string name="expert_raw_get_set_desc">Выберите параметр из каталога OEM mbCAN (vehicle/audio) или прямой VHAL-телеметрии. Прямые VHAL id читаются и пишутся только на Android 10. Часть Android 10 id сопоставлена по имени справочника и ещё не проверена на головном устройстве. Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). На A10 показаны отдельные read/write id, если они различаются. Включайте разрешение записи только осознанно.</string>
+    <string name="expert_raw_get_set_desc">Список зависит от режима головного устройства. Android 9: vehicle/audio mbCAN и объекты getMbCanData, без прямых VHAL-строк. Android 10: сопоставленные параметры по имени и id прошивки (R_ для чтения и T_ для записи, если они известны), остальные R_* и отдельные T_* для проверки записи; строки mbCAN без VHAL id и объекты mbCAN скрыты. Часть пар собрана по имени справочника и ещё не проверена на головном устройстве. Получить читает raw; Задать отправляет целое значение как есть (без реестра политик). Снимок читает доступные параметры текущего режима и пропускает write-only T_*. Переключите что-нибудь в машине и нажмите Сравнить — останутся только изменившиеся значения (они же пишутся в журнал, тег EXPERT_CAN). Включайте разрешение записи только осознанно.</string>
     <string name="expert_raw_get_set_mode">Режим ГУ: %1$s</string>
     <string name="expert_raw_get_set_filter">Фильтр по имени или id</string>
     <string name="expert_raw_get_set_param">Параметр</string>
@@ -1544,6 +1546,12 @@
     <string name="expert_raw_get_set_rw_differ">A10: read id %1$s ≠ write id %2$s</string>
     <string name="expert_raw_get_set_confirm_title">Подтверждение записи</string>
     <string name="expert_raw_get_set_confirm_message">Записать значение %2$s в параметр %1$s?</string>
+    <string name="expert_raw_get_set_snapshot">Снимок</string>
+    <string name="expert_raw_get_set_compare">Сравнить</string>
+    <string name="expert_raw_get_set_snapshot_progress">Чтение %1$d/%2$d…</string>
+    <string name="expert_raw_get_set_snapshot_done">Снимок готов: строк %1$d, прочитано значений %2$d. Переключите параметр в машине и нажмите «Сравнить».</string>
+    <string name="expert_raw_get_set_compare_none">Изменений нет (прочитано значений %1$d)</string>
+    <string name="expert_raw_get_set_compare_header">Изменилось значений: %1$d</string>
     <string name="settings_update_title">Обновление</string>
     <string name="settings_update_check_enabled_title">Проверять обновления</string>
     <string name="settings_update_check_enabled_desc">Автоматическая проверка при запуске приложения. Ручная проверка кнопкой ниже остаётся доступной.</string>

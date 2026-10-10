@@ -283,6 +283,12 @@ object TboxRepository {
         return entryLevel.priority >= threshold.priority
     }
 
+    /** User mark in the journal: a timestamped line the log tool correlates with nearby CAN changes. */
+    fun addJournalMark(text: String) {
+        val clean = text.trim().replace(Regex("\\s+"), " ").take(160)
+        addLog("INFO", "CANDIAG_MARK", if (clean.isEmpty()) "MARK" else "MARK $clean")
+    }
+
     fun addLog(level: String, tag: String, message: String) {
         if (!shouldPersistLogEntry(level)) {
             return

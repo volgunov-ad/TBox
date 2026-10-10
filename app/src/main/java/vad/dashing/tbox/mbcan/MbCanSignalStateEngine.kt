@@ -732,8 +732,9 @@ internal class MbCanSignalStateEngine(
         }
 
         /**
-         * Stock CarSettings [ConvertValue.converBoolValue] for AVH/HDC status:
-         * ON when raw == 1 || 2 (active / standby), otherwise Off.
+         * Stock CarSettings [ConvertValue.converBoolValue] for A10 AVH/HDC status reads
+         * (`R_0400_ESP_3_AVHSts` / HDC): ON when raw == 1 || 2, otherwise Off.
+         * A9 Auto Hold cfg 142 is [AvhDomain.decodeEnabled]: **2** on / **1** off.
          */
         fun decodeAvhHdcStatusRaw(raw: Int): MbCanBinaryState =
             if (raw == 1 || raw == 2) MbCanBinaryState.On else MbCanBinaryState.Off

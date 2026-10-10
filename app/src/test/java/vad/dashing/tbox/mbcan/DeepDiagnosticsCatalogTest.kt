@@ -54,6 +54,55 @@ class DeepDiagnosticsCatalogTest {
     }
 
     @Test
+    fun `vhal catalog subscribes every firmware R_ read id`() {
+        val ids = DeepDiagnosticsCatalog.vhalPropertyIds.toSet()
+        assertEquals(374, VhalFirmwareReadIds.all.size)
+        VhalFirmwareReadIds.all.forEach { (name, id) -> assertTrue(name, id in ids) }
+        assertTrue(VhalFirmwareReadIds.all.all { it.first.startsWith("R_") })
+    }
+
+    @Test
+    fun `firmware names annotate ids, short app names win`() {
+        val (lowBeamName, lowBeamId) = VhalFirmwareReadIds.all.first { it.first.endsWith("_LowBeamSts") }
+        assertEquals(289_412_250, lowBeamId)
+        assertEquals("LowBeamSts", DeepDiagnosticsCatalog.annotateVhalPropertyId(lowBeamId))
+        val fogFront = VhalFirmwareReadIds.all.first { it.first.contains("FrontFog") }
+        assertNotNull(DeepDiagnosticsCatalog.annotateVhalPropertyId(fogFront.second))
+        assertTrue(lowBeamName.startsWith("R_"))
+    }
+
+    @Test
+    fun `callback methods map to data types with cb fallback`() {
+        assertEquals("eMBCAN_VEHICLE_BCM_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onVehicleBcmStatusChange"))
+        assertEquals("eMBCAN_VEHICLE_WHEEL", DeepDiagnosticsCatalog.mbcanCallbackDataType("onPull"))
+        assertEquals("cb.onSomethingNew", DeepDiagnosticsCatalog.mbcanCallbackDataType("onSomethingNew"))
+        assertEquals("eMBCAN_AVM_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onAvmStatusChange"))
+        assertEquals("eMBCAN_SEAT_STATUS", DeepDiagnosticsCatalog.mbcanCallbackDataType("onVehicleSeatStatusChange"))
+        assertEquals("eMBCAN_PM25INFO", DeepDiagnosticsCatalog.mbcanCallbackDataType("onPMChanged"))
+    }
+
+    @Test
+    fun `poll-only types are the ones OEM does not push`() {
+        val names = DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes.map { it.first }
+        assertTrue("eMBCAN_VEHICLE_ICM_DRIVE_INFO" in names)
+        assertTrue("eMBCAN_VEHICLE_EPB_STATUS" in names)
+        assertFalse("eMBCAN_VEHICLE_SPEED" in names)
+        assertFalse("eMBCAN_VEHICLE_BCM_STATUS" in names)
+        assertEquals(44, DeepDiagnosticsCatalog.mbcanPollOnlyDataTypes.toMap()["eMBCAN_VEHICLE_ICM_DRIVE_INFO"])
+    }
+
+    @Test
+    fun `object data types skip cfg and service channels`() {
+        val names = DeepDiagnosticsCatalog.mbcanObjectDataTypes.map { it.first }
+        assertTrue("eMBCAN_VEHICLE_BCM_STATUS" in names)
+        assertTrue("eMBCAN_VEHICLE_EPB_STATUS" in names)
+        assertFalse("eMBCAN_CFG_VEHICLE" in names)
+        assertFalse("eMBCAN_UART_TEST_RESULT" in names)
+        assertEquals(names.size, names.toSet().size)
+        assertEquals(21, DeepDiagnosticsCatalog.mbcanObjectDataTypes.toMap()["eMBCAN_VEHICLE_BCM_STATUS"])
+    }
+
+    @Test
     fun `vhal annotations cover experimental ids`() {
         assertEquals("WasherFluidLevel", DeepDiagnosticsCatalog.annotateVhalPropertyId(289_412_346))
         assertEquals("RadarCh8", DeepDiagnosticsCatalog.annotateVhalPropertyId(289_411_336))
@@ -170,6 +219,17 @@ class DeepCanDiagnosticsTest {
         assertEquals(DeepCanDiagnostics.MBCAN_TAG, tag)
         assertTrue(line.contains("dt=eMBCAN_VEHICLE_DOOR"))
         assertTrue(line.contains("object=FL=2"))
+    }
+
+    @Test
+    fun `recordMbCanObjectFields emits each field as its own delta key`() {
+        val dt = "eMBCAN_VEHICLE_BCM_STATUS"
+        DeepCanDiagnostics.recordMbCanObjectFields(dt, listOf("stLightSts.nHighBeamSts" to "1", "nWiperSts" to "0"))
+        assertEquals(2, lines.size)
+        assertEquals(DeepCanDiagnostics.MBCAN_TAG, lines[0].first)
+        assertEquals("mbcan dt=$dt field=stLightSts.nHighBeamSts value=1", lines[0].second)
+        DeepCanDiagnostics.recordMbCanObjectFields(dt, listOf("stLightSts.nHighBeamSts" to "1", "nWiperSts" to "0"))
+        assertEquals(2, lines.size)
     }
 
     @Test
