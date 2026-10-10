@@ -52,8 +52,8 @@ import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
 
-/** Floor for the parameter list. Chrome scrolls with the dialog so this block can stay tall. */
-private val ExpertRawParamListMinHeight = 320.dp
+/** Floor for the parameter list. Half of the previous 320 dp so Get/Set stays within a short scroll. */
+private val ExpertRawParamListMinHeight = 160.dp
 
 /** Diff lines shown on screen; the journal gets all of them. */
 private const val ExpertRawSnapshotDisplayLimit = 300
@@ -192,9 +192,9 @@ fun ExpertRawGetSetDialog(
                     .fillMaxSize()
                     .padding(24.dp),
             ) {
-                // The list keeps a tall viewport. Title, filter and Get/Set sit in the
-                // same scroll, so a short window can move them off and show more rows.
-                val listHeight = maxOf(ExpertRawParamListMinHeight, maxHeight * 0.72f)
+                // Half of the previous 72% viewport. Title, filter and Get/Set share
+                // this scroll, so a shorter list keeps the buttons closer.
+                val listHeight = maxOf(ExpertRawParamListMinHeight, maxHeight * 0.36f)
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
