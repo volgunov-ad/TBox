@@ -719,6 +719,21 @@
     <string name="settings_hu_type_desc">Android 9 uses mbCAN. Android 10 switches CAN controls to the new firmware stack (without mbCAN).</string>
     <string name="settings_hu_type_android9">HU with Android 9</string>
     <string name="settings_hu_type_android10">HU with Android 10</string>
+    <string name="settings_cruise_type_title">Cruise control type</string>
+    <string name="settings_cruise_type_desc">Ordinary (CCS) or adaptive (ACC). Applies to all cruise widgets and cruise actions.</string>
+    <string name="settings_cruise_type_ccs">Ordinary (CCS)</string>
+    <string name="settings_cruise_type_acc">Adaptive (ACC)</string>
+    <string name="settings_climate_type_title">Climate control type</string>
+    <string name="settings_climate_type_desc">Ordinary AC, single-zone, or dual-zone. Affects tiles, web panel, and phone.</string>
+    <string name="settings_climate_type_ordinary">Ordinary AC</string>
+    <string name="settings_climate_type_single">Single-zone</string>
+    <string name="settings_climate_type_dual">Dual-zone</string>
+    <string name="settings_vehicle_feature_setup_title">Vehicle type</string>
+    <string name="settings_vehicle_feature_setup_intro">Choose HU type, TBox connection, cruise type, and climate type. You can dismiss with defaults (ACC and dual-zone climate).</string>
+    <string name="settings_vehicle_feature_setup_connect_tbox">Connect to TBox</string>
+    <string name="settings_vehicle_feature_setup_connect_tbox_desc">UDP and tbox-proxy for TBox data. Off = head-unit bus only (mbCAN/VHAL).</string>
+    <string name="settings_vehicle_feature_setup_done">Done</string>
+    <string name="settings_vehicle_feature_setup_reopen">Configure cruise and climate type…</string>
     <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>

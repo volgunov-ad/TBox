@@ -53,6 +53,8 @@ import kotlinx.coroutines.delay
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.ClimateControlType
+import vad.dashing.tbox.GlobalCruiseControlType
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
@@ -786,6 +788,8 @@ fun SettingsTabContent(
     val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
     val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val cruiseControlType by settingsViewModel.cruiseControlType.collectAsStateWithLifecycle()
+    val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
@@ -958,6 +962,89 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_launch_main_in_stock_app_window_title),
                 stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
                 true,
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_cruise_type_title))
+        Text(
+            text = stringResource(R.string.settings_cruise_type_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_cruise_type_ccs),
+                isSelected = cruiseControlType == GlobalCruiseControlType.CCS,
+                onClick = { settingsViewModel.saveCruiseControlType(GlobalCruiseControlType.CCS) },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_cruise_type_acc),
+                isSelected = cruiseControlType == GlobalCruiseControlType.ACC,
+                onClick = { settingsViewModel.saveCruiseControlType(GlobalCruiseControlType.ACC) },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        SettingsTitle(stringResource(R.string.settings_climate_type_title))
+        Text(
+            text = stringResource(R.string.settings_climate_type_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_ordinary),
+                isSelected = climateControlType == ClimateControlType.ORDINARY_AC,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.ORDINARY_AC)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_single),
+                isSelected = climateControlType == ClimateControlType.SINGLE_ZONE,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.SINGLE_ZONE)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_dual),
+                isSelected = climateControlType == ClimateControlType.DUAL_ZONE,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.DUAL_ZONE)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Button(
+            onClick = rememberWrappedOnClick {
+                settingsViewModel.openVehicleFeatureSetupDialog()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_vehicle_feature_setup_reopen),
+                style = MaterialTheme.typography.tboxButton,
             )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

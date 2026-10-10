@@ -968,9 +968,15 @@ object WidgetsRepository {
         return (dataKeyTitles + dataKeyTitlesWidgets).keys.toList()
     }
 
-    fun getAvailableDataKeysWidgets(noTboxConnect: Boolean = false): List<String> {
+    fun getAvailableDataKeysWidgets(
+        noTboxConnect: Boolean = false,
+        climateType: ClimateControlType = VehicleFeatureSettings.climateControlType,
+        cruiseType: GlobalCruiseControlType = VehicleFeatureSettings.cruiseControlType,
+    ): List<String> {
         val keys = dataKeyTitlesWidgets.keys.toList()
             .filterNot { isSpeedLimiterHiddenFromWidgetPicker(it) }
+            .filterNot { isClimateWidgetHiddenFromPicker(it, climateType) }
+            .filterNot { isCruiseWidgetHiddenFromPicker(it, cruiseType) }
         if (!noTboxConnect) return keys
         return keys.filter { isWidgetOfferedWhenNoTbox(it) }
     }

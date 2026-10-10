@@ -534,6 +534,8 @@
         sunshade: null
       };
       var android10 = false;
+      /** ordinary_ac | single_zone | dual_zone — from GET /v1/health */
+      var climateControlType = "dual_zone";
       var chain = Promise.resolve();
       var pendingWrites = 0;
       var timer = null;
@@ -651,6 +653,12 @@
           if (next !== android10) {
             android10 = next;
             renderBody();
+          }
+          var nextClimate = (body && body.climateControlType) || "dual_zone";
+          if (nextClimate !== climateControlType) {
+            climateControlType = nextClimate;
+            renderClimate();
+            renderTemps();
           }
         }).catch(function () {});
       }
@@ -889,19 +897,31 @@
 
       function renderClimate() {
         var root = document.getElementById("climate");
+        root.innerHTML = "";
+        var showPassenger = climateControlType === "dual_zone";
+        var showAuto = climateControlType !== "ordinary_ac";
+        var showSync = climateControlType === "dual_zone";
         heading(root, lang.climate);
         root.appendChild(stepperRow(lang.driver, "left-readout", function () { bumpTemp("left", false); }, function () { bumpTemp("left", true); }));
-        root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
+        if (showPassenger) {
+          root.appendChild(stepperRow(lang.passenger, "right-readout", function () { bumpTemp("right", false); }, function () { bumpTemp("right", true); }));
+        }
         root.appendChild(stepperRow(lang.fan, "fan-readout", function () { bumpFan(false); }, function () { bumpFan(true); }));
-        var toggles = document.createElement("div");
-        toggles.className = "pair";
-        var autoButton = button(lang.auto, toggleAuto);
-        autoButton.setAttribute("data-auto", "1");
-        var syncButton = button("SYNC", toggleSync);
-        syncButton.setAttribute("data-sync", "1");
-        toggles.appendChild(autoButton);
-        toggles.appendChild(syncButton);
-        root.appendChild(toggles);
+        if (showAuto || showSync) {
+          var toggles = document.createElement("div");
+          toggles.className = "pair";
+          if (showAuto) {
+            var autoButton = button(lang.auto, toggleAuto);
+            autoButton.setAttribute("data-auto", "1");
+            toggles.appendChild(autoButton);
+          }
+          if (showSync) {
+            var syncButton = button("SYNC", toggleSync);
+            syncButton.setAttribute("data-sync", "1");
+            toggles.appendChild(syncButton);
+          }
+          root.appendChild(toggles);
+        }
         var switches = document.createElement("div");
         switches.className = "grid cols-3 switches";
         var recircButton = button(lang.recirc, toggleRecirc);

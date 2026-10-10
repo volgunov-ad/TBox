@@ -482,16 +482,23 @@ private fun ConnectPage(linked: Boolean, pairRequest: PairRequest, onPair: () ->
 
 @Composable
 private fun ClimatePage(snap: PhoneBleCodec.Snapshot, send: (Int, Int, Int) -> Unit) {
+    // Missing layout (legacy firmware) → dual-zone (full UI).
+    val layout = snap.climateLayout ?: PhoneBleCodec.CLIMATE_LAYOUT_DUAL
+    val showPassenger = layout == PhoneBleCodec.CLIMATE_LAYOUT_DUAL
+    val showAuto = layout != PhoneBleCodec.CLIMATE_LAYOUT_ORDINARY
+    val showSync = layout == PhoneBleCodec.CLIMATE_LAYOUT_DUAL
     Card {
         SectionTitle(stringResource(R.string.climate_title))
         Stepper(stringResource(R.string.driver), formatTenths(snap.leftTenths)) {
             val next = PhoneBleCodec.stepTemp(snap.leftTenths, it) ?: return@Stepper
             send(PhoneBleCodec.OP_TEMP_LEFT, 0, next)
         }
-        Divider()
-        Stepper(stringResource(R.string.passenger), formatTenths(snap.rightTenths)) {
-            val next = PhoneBleCodec.stepTemp(snap.rightTenths, it) ?: return@Stepper
-            send(PhoneBleCodec.OP_TEMP_RIGHT, 0, next)
+        if (showPassenger) {
+            Divider()
+            Stepper(stringResource(R.string.passenger), formatTenths(snap.rightTenths)) {
+                val next = PhoneBleCodec.stepTemp(snap.rightTenths, it) ?: return@Stepper
+                send(PhoneBleCodec.OP_TEMP_RIGHT, 0, next)
+            }
         }
         Divider()
         Stepper(stringResource(R.string.fan), snap.fan?.toString() ?: "—") { up ->
@@ -499,18 +506,24 @@ private fun ClimatePage(snap: PhoneBleCodec.Snapshot, send: (Int, Int, Int) -> U
             val next = (current + if (up) 1 else -1).coerceIn(0, 7)
             send(PhoneBleCodec.OP_FAN, 0, next)
         }
-        Divider()
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ModeButton(
-                text = stringResource(R.string.auto),
-                selected = snap.auto == 1,
-                modifier = Modifier.weight(1f),
-            ) { send(PhoneBleCodec.OP_AUTO, 0, if (snap.auto == 1) 0 else 1) }
-            ModeButton(
-                text = stringResource(R.string.sync),
-                selected = snap.sync == 1,
-                modifier = Modifier.weight(1f),
-            ) { send(PhoneBleCodec.OP_SYNC, 0, if (snap.sync == 1) 0 else 1) }
+        if (showAuto || showSync) {
+            Divider()
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (showAuto) {
+                    ModeButton(
+                        text = stringResource(R.string.auto),
+                        selected = snap.auto == 1,
+                        modifier = Modifier.weight(1f),
+                    ) { send(PhoneBleCodec.OP_AUTO, 0, if (snap.auto == 1) 0 else 1) }
+                }
+                if (showSync) {
+                    ModeButton(
+                        text = stringResource(R.string.sync),
+                        selected = snap.sync == 1,
+                        modifier = Modifier.weight(1f),
+                    ) { send(PhoneBleCodec.OP_SYNC, 0, if (snap.sync == 1) 0 else 1) }
+                }
+            }
         }
         Divider()
         ButtonRows(
