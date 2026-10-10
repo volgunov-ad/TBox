@@ -29,6 +29,16 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            settingsManager.cruiseControlTypeFlow.collectLatest { type ->
+                VehicleFeatureSettings.updateCruise(type)
+            }
+        }
+        applicationScope.launch {
+            settingsManager.climateControlTypeFlow.collectLatest { type ->
+                VehicleFeatureSettings.updateClimate(type)
+            }
+        }
+        applicationScope.launch {
             settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
                 LaunchMainInStockAppWindowSetting.update(enabled)
             }

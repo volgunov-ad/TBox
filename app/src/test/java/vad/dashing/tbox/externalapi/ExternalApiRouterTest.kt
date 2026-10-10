@@ -295,6 +295,7 @@ class ExternalApiRouterTest {
         assertEquals(404, response.status)
         val health = JSONObject(router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "").body)
         assertEquals(false, health.getBoolean("webPanelEnabled"))
+        assertEquals("dual_zone", health.getString("climateControlType"))
     }
 
     @Test

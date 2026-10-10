@@ -1,7 +1,6 @@
 package vad.dashing.tbox.automation
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -11,6 +10,8 @@ import org.robolectric.annotation.Config
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.CruiseControlType
+import vad.dashing.tbox.GlobalCruiseControlType
+import vad.dashing.tbox.VehicleFeatureSettings
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -27,6 +28,7 @@ class AutomationCruiseActionsTest {
 
     @Test
     fun parseEngageParams_normalizesTargetAndOptionalIntervals() {
+        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.ACC)
         val defaults = AutomationCruiseActions.parseEngageParams(
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
@@ -34,12 +36,12 @@ class AutomationCruiseActionsTest {
                 stringValue = "acc",
             ),
         )
-        assertNotNull(defaults)
-        assertEquals(CruiseControlType.ACC, defaults!!.cruiseControlType)
+        assertEquals(CruiseControlType.ACC, defaults.cruiseControlType)
         assertEquals(ACC_CRUISE_TARGET_KMH_DEFAULT, defaults.targetKmh)
         assertEquals(ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT, defaults.increaseIntervalMs)
         assertEquals(ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT, defaults.decreaseIntervalMs)
 
+        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.CCS)
         val custom = AutomationCruiseActions.parseEngageParams(
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
@@ -47,8 +49,7 @@ class AutomationCruiseActionsTest {
                 stringValue = "ccs:200:100",
             ),
         )
-        assertNotNull(custom)
-        assertEquals(CruiseControlType.CCS, custom!!.cruiseControlType)
+        assertEquals(CruiseControlType.CCS, custom.cruiseControlType)
         assertEquals(120, custom.targetKmh)
         assertEquals(200, custom.increaseIntervalMs)
         assertEquals(100, custom.decreaseIntervalMs)
@@ -57,10 +58,12 @@ class AutomationCruiseActionsTest {
             AutomationAction.Builtin(
                 type = AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,
                 intValue = 999,
-                stringValue = "acc",
+                stringValue = "",
             ),
         )
-        assertEquals(150, clamped!!.targetKmh)
+        assertEquals(150, clamped.targetKmh)
+        assertEquals(CruiseControlType.CCS, clamped.cruiseControlType)
+        VehicleFeatureSettings.updateCruise(GlobalCruiseControlType.DEFAULT)
     }
 
     @Test

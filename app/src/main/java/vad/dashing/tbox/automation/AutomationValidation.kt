@@ -771,10 +771,16 @@ object AutomationValidator {
             }
 
             AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
-                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                // Mode prefix optional (legacy acc/ccs still accepted); runtime uses global type.
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
                     issues += AutomationValidationIssue(
                         "$path.stringValue",
-                        "Круиз: режим ACC или CCS (acc / ccs)",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
                     )
                 }
                 val target = action.intValue
@@ -823,18 +829,30 @@ object AutomationValidator {
             AutomationBuiltinActionType.CRUISE_FULL_OFF,
             AutomationBuiltinActionType.CRUISE_RESUME,
             AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
-            -> if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
-                issues += AutomationValidationIssue(
-                    "$path.stringValue",
-                    "Круиз: режим ACC или CCS (acc / ccs)",
-                )
+            -> {
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
+                    )
+                }
             }
 
             AutomationBuiltinActionType.CRUISE_NUDGE -> {
-                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
                     issues += AutomationValidationIssue(
                         "$path.stringValue",
-                        "Круиз: режим ACC или CCS (acc / ccs)",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
                     )
                 }
                 if (action.intValue != 1 && action.intValue != -1) {

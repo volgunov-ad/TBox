@@ -3,6 +3,8 @@ package vad.dashing.tbox.automation
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.CruiseControlType
+import vad.dashing.tbox.GlobalCruiseControlType
+import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.mbcan.AccCruiseController
 import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
@@ -11,9 +13,10 @@ import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 /**
  * Parses Builtin cruise parameters and dispatches to [AccCruiseController].
  *
- * Mode is always forced ACC or CCS (`stringValue`); Auto/DEFAULT is rejected.
- * Optional step intervals for engage: `acc:150:200` / `ccs:150:200`
- * (`mode:increaseMs:decreaseMs`); bare `acc` / `ccs` uses widget defaults.
+ * Runtime path always follows the global [VehicleFeatureSettings.cruiseControlType].
+ * Stored `stringValue` may still carry a legacy `acc`/`ccs` prefix (codec migration);
+ * optional step intervals for engage: `acc:150:200` / `ccs:150:200` /
+ * `:150:200` (`mode:increaseMs:decreaseMs`). Bare / empty mode uses the global type.
  */
 object AutomationCruiseActions {
     const val MODE_ACC = "acc"
@@ -28,6 +31,7 @@ object AutomationCruiseActions {
         val decreaseIntervalMs: Int,
     )
 
+    /** Legacy decode: returns ACC/CCS when the prefix is present; null when absent/invalid. */
     fun parseForcedMode(stringValue: String): CruiseControlType? {
         val modePart = stringValue.trim().lowercase().substringBefore(':').substringBefore(',')
         return when (modePart) {
@@ -37,8 +41,17 @@ object AutomationCruiseActions {
         }
     }
 
-    fun parseEngageParams(action: AutomationAction.Builtin): EngageParams? {
-        val mode = parseForcedMode(action.stringValue) ?: return null
+    /**
+     * Runtime cruise path: always the global setting (legacy stringValue mode is ignored).
+     */
+    fun resolveRuntimeMode(
+        global: GlobalCruiseControlType = VehicleFeatureSettings.cruiseControlType,
+    ): CruiseControlType = global.toCruiseControlType()
+
+    fun parseEngageParams(
+        action: AutomationAction.Builtin,
+        global: GlobalCruiseControlType = VehicleFeatureSettings.cruiseControlType,
+    ): EngageParams {
         val target = normalizeAccCruiseTargetKmh(
             if (action.intValue == 0) ACC_CRUISE_TARGET_KMH_DEFAULT else action.intValue,
         )
@@ -50,7 +63,7 @@ object AutomationCruiseActions {
             ?.let(::normalizeAccCruiseStepIntervalMs)
             ?: ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
         return EngageParams(
-            cruiseControlType = mode,
+            cruiseControlType = resolveRuntimeMode(global),
             targetKmh = target,
             increaseIntervalMs = increase,
             decreaseIntervalMs = decrease,
@@ -91,12 +104,10 @@ object AutomationCruiseActions {
     }
 
     suspend fun execute(action: AutomationAction.Builtin): AutomationActionResult {
-        val mode = parseForcedMode(action.stringValue)
-            ?: return AutomationActionResult.failure("Круиз: режим ACC или CCS")
+        val mode = resolveRuntimeMode()
         val result: MbCanCommandResult = when (action.type) {
             AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
                 val params = parseEngageParams(action)
-                    ?: return AutomationActionResult.failure("Круиз: режим ACC или CCS")
                 AccCruiseController.engageToTargetAwaiting(
                     targetKmh = params.targetKmh,
                     increaseIntervalMs = params.increaseIntervalMs,

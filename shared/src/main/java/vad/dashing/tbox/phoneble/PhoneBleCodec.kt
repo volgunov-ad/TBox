@@ -33,8 +33,9 @@ import javax.crypto.spec.SecretKeySpec
  *   GROUP_HEADER alone asks for page 6 only.
  * SNAP body: page u8, gen u8, data[9]
  *   page 0: left i16le, right i16le, fan u8. Missing temp 0x7FFF, fan 0xFF
- *   page 1: mode, auto, blow, sync, recirculation, front climate, A/C.
- *           The last three are 1 on / 0 off (front climate 1 = section running). Missing 0xFF
+ *   page 1: mode, auto, blow, sync, recirculation, front climate, A/C,
+ *           climateLayout (body[9]: 0 ordinary AC / 1 single-zone / 2 dual-zone, missing 0xFF).
+ *           Bytes 2–8: 1 on / 0 off where applicable (front climate 1 = section running). Missing 0xFF
  *   page 2: four seats. Missing 0xFF
  *   page 3: media volume. Missing 0xFF. 0 is mute
  *   page 4: playing u8 (1/0, missing 0xFF), position s u16le, duration s u16le
@@ -104,6 +105,13 @@ object PhoneBleCodec {
     const val GROUP_HEADER: Int = 16
     private const val GROUP_MASK: Int = GROUP_ALL or GROUP_HEADER
 
+    /** Ordinary AC: no Auto / Sync / passenger temp. */
+    const val CLIMATE_LAYOUT_ORDINARY: Int = 0
+    /** Single-zone: Auto yes; no Sync / passenger temp. */
+    const val CLIMATE_LAYOUT_SINGLE: Int = 1
+    /** Dual-zone: Auto, Sync, passenger temp. */
+    const val CLIMATE_LAYOUT_DUAL: Int = 2
+
     const val WINDOW_ALL: Int = 4
     const val WINDOW_CMD_CLOSE: Int = 0
     /** 20 % on Android 9, vent command on Android 10. */
@@ -171,6 +179,11 @@ object PhoneBleCodec {
         val front: Int? = null,
         /** 1 = A/C compressor on. */
         val ac: Int? = null,
+        /**
+         * Climate layout from Monitor settings:
+         * [CLIMATE_LAYOUT_ORDINARY] / [CLIMATE_LAYOUT_SINGLE] / [CLIMATE_LAYOUT_DUAL].
+         */
+        val climateLayout: Int? = null,
         val seats: List<Int?> = listOf(null, null, null, null),
         val volume: Int? = null,
         val playing: Int? = null,
@@ -332,6 +345,7 @@ object PhoneBleCodec {
                     body[6] = (snap.recirc ?: MISSING_U8).toByte()
                     body[7] = (snap.front ?: MISSING_U8).toByte()
                     body[8] = (snap.ac ?: MISSING_U8).toByte()
+                    body[9] = (snap.climateLayout ?: MISSING_U8).toByte()
                 }
                 2 -> {
                     repeat(4) { seat ->
@@ -485,6 +499,12 @@ object PhoneBleCodec {
                 recirc = optionalU8(body.getOrNull(6)?.toInt()?.and(0xFF) ?: MISSING_U8),
                 front = optionalU8(body.getOrNull(7)?.toInt()?.and(0xFF) ?: MISSING_U8),
                 ac = optionalU8(body.getOrNull(8)?.toInt()?.and(0xFF) ?: MISSING_U8),
+                climateLayout = optionalU8(body.getOrNull(9)?.toInt()?.and(0xFF) ?: MISSING_U8)
+                    ?.takeIf {
+                        it == CLIMATE_LAYOUT_ORDINARY ||
+                            it == CLIMATE_LAYOUT_SINGLE ||
+                            it == CLIMATE_LAYOUT_DUAL
+                    },
             )
             2 -> base.copy(
                 gen = gen,

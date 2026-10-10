@@ -671,13 +671,14 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_HEADREST_SPEAKER -> "assist"
                         type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ->
                             peerAutomations.firstOrNull()?.id.orEmpty()
+                        // Cruise mode comes from the global Settings → Car type; no UI kind.
                         type == AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ||
                             type == AutomationBuiltinActionType.CRUISE_PAUSE ||
                             type == AutomationBuiltinActionType.CRUISE_FULL_OFF ||
                             type == AutomationBuiltinActionType.CRUISE_RESUME ||
                             type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
                             type == AutomationBuiltinActionType.CRUISE_NUDGE ->
-                            AutomationCruiseActions.MODE_ACC
+                            ""
                         else -> ""
                     },
                 ),
@@ -1031,7 +1032,6 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CruiseModeDropdown(action, onChange)
             AutomationIntField(
                 label = "Уставка, км/ч (30–150)",
                 value = action.intValue
@@ -1047,7 +1047,7 @@ private fun BuiltinActionFields(
             Text(
                 text = "Как виджет «Уставка круиз-контроля»: включение и доведение до цели " +
                     "(интервалы шагов — как у виджета по умолчанию). Уже на уставке → пауза (212). " +
-                    "Действие ждёт окончания converge.",
+                    "Действие ждёт окончания converge. Путь ACC/CCS — из Настройки → Автомобиль.",
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1060,17 +1060,16 @@ private fun BuiltinActionFields(
         -> Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CruiseModeDropdown(action, onChange)
             Text(
                 text = when (action.type) {
                     AutomationBuiltinActionType.CRUISE_PAUSE ->
-                        "Пауза Active/Override (Cancel 212), как статус-плитка."
+                        "Пауза Active/Override (Cancel 212), как статус-плитка. Путь ACC/CCS — из Настройки → Автомобиль."
                     AutomationBuiltinActionType.CRUISE_FULL_OFF ->
-                        "Полное выключение (210), как двойное нажатие виджета."
+                        "Полное выключение (210), как двойное нажатие виджета. Путь ACC/CCS — из Настройки → Автомобиль."
                     AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
-                        "Активация на текущей скорости (SET−), как свайп вниз на статус-плитке в Standby; из Off — enable+SET−."
+                        "Активация на текущей скорости (SET−), как свайп вниз на статус-плитке в Standby; из Off — enable+SET−. Путь ACC/CCS — из Настройки → Автомобиль."
                     else ->
-                        "Возобновление из Standby (RES+), как свайп вверх на статус-плитке."
+                        "Возобновление из Standby (RES+), как свайп вверх на статус-плитке. Путь ACC/CCS — из Настройки → Автомобиль."
                 },
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1080,7 +1079,6 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.CRUISE_NUDGE -> Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CruiseModeDropdown(action, onChange)
             AutomationDropdown(
                 label = "Шаг уставки",
                 value = if (action.intValue == -1) -1 else 1,
@@ -1089,7 +1087,7 @@ private fun BuiltinActionFields(
                 onValueChange = { onChange(action.copy(intValue = it)) },
             )
             Text(
-                text = "Только в Active/Override; как свайпы статус-плитки.",
+                text = "Только в Active/Override; как свайпы статус-плитки. Путь ACC/CCS — из Настройки → Автомобиль.",
                 style = MaterialTheme.typography.tboxCaption,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1097,34 +1095,6 @@ private fun BuiltinActionFields(
 
         else -> Unit
     }
-}
-
-@Composable
-private fun CruiseModeDropdown(
-    action: AutomationAction.Builtin,
-    onChange: (AutomationAction) -> Unit,
-) {
-    val modeKey = AutomationCruiseActions.parseForcedMode(action.stringValue)
-        ?.let { if (it == vad.dashing.tbox.CruiseControlType.CCS) {
-            AutomationCruiseActions.MODE_CCS
-        } else {
-            AutomationCruiseActions.MODE_ACC
-        } }
-        ?: AutomationCruiseActions.MODE_ACC
-    AutomationDropdown(
-        label = "Режим круиза",
-        value = modeKey,
-        options = AutomationCruiseActions.MODE_OPTIONS,
-        optionLabel = AutomationCruiseActions::modeLabel,
-        onValueChange = { key ->
-            onChange(action.copy(stringValue = AutomationCruiseActions.encodeMode(
-                when (key) {
-                    AutomationCruiseActions.MODE_CCS -> vad.dashing.tbox.CruiseControlType.CCS
-                    else -> vad.dashing.tbox.CruiseControlType.ACC
-                },
-            )))
-        },
-    )
 }
 
 @Composable

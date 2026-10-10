@@ -31,6 +31,11 @@ class ExternalApiRouter(
     private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
     /** `android9` / `android10`: which window commands the head unit accepts. */
     private val headUnitPlatform: () -> String = { "" },
+    /**
+     * Climate layout storage key for the web panel:
+     * `ordinary_ac` / `single_zone` / `dual_zone`.
+     */
+    private val climateControlType: () -> String = { "dual_zone" },
 ) {
     fun handle(
         method: String,
@@ -91,7 +96,8 @@ class ExternalApiRouter(
                 .put("webPanelEnabled", webPanelEnabled())
                 .put("pairingActive", pairingSession.isPairingActive())
                 .put("appVersion", appVersion)
-                .put("headUnit", headUnitPlatform()),
+                .put("headUnit", headUnitPlatform())
+                .put("climateControlType", climateControlType()),
         )
 
     private fun handleWebPanel(method: String): ExternalApiHttpResponse {

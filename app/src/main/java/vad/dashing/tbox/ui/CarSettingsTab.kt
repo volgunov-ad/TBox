@@ -45,6 +45,8 @@ import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN
+import vad.dashing.tbox.VehicleFeatureSettings
+import vad.dashing.tbox.uiCapabilities
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
@@ -1103,6 +1105,8 @@ private fun CarSettingsClimateExtraSection(
     onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
 ) {
+    val climateType by VehicleFeatureSettings.climateControlTypeFlow.collectAsStateWithLifecycle()
+    val climateCaps = climateType.uiCapabilities()
     val customMode by HvacClimateCanRepository.hvacCustomMode.collectAsStateWithLifecycle()
     val acMax by UniversalCanRepository.hvacAcMaxState.collectAsStateWithLifecycle()
     val acPower by UniversalCanRepository.hvacAcPowerState.collectAsStateWithLifecycle()
@@ -1151,13 +1155,15 @@ private fun CarSettingsClimateExtraSection(
         description = stringResource(R.string.car_settings_hvac_ac_desc),
         enabled = mbCanOk,
     )
-    SettingSwitch(
-        isChecked = autoState is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) },
-        text = stringResource(R.string.car_settings_hvac_auto_title),
-        description = stringResource(R.string.car_settings_hvac_auto_desc),
-        enabled = mbCanOk,
-    )
+    if (climateCaps.showAuto) {
+        SettingSwitch(
+            isChecked = autoState is MbCanBinaryState.On,
+            onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) },
+            text = stringResource(R.string.car_settings_hvac_auto_title),
+            description = stringResource(R.string.car_settings_hvac_auto_desc),
+            enabled = mbCanOk,
+        )
+    }
     SettingSwitch(
         isChecked = anionPurify is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AQS) },
@@ -1193,13 +1199,15 @@ private fun CarSettingsClimateExtraSection(
         description = stringResource(R.string.car_settings_hvac_recirc_desc),
         enabled = mbCanOk,
     )
-    SettingSwitch(
-        isChecked = sync is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) },
-        text = stringResource(R.string.car_settings_hvac_sync_title),
-        description = stringResource(R.string.car_settings_hvac_sync_desc),
-        enabled = mbCanOk,
-    )
+    if (climateCaps.showSync) {
+        SettingSwitch(
+            isChecked = sync is MbCanBinaryState.On,
+            onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) },
+            text = stringResource(R.string.car_settings_hvac_sync_title),
+            description = stringResource(R.string.car_settings_hvac_sync_desc),
+            enabled = mbCanOk,
+        )
+    }
     SettingSwitch(
         isChecked = rearDefrost is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH) },

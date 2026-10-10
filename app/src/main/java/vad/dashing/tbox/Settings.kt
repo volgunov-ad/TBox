@@ -1064,6 +1064,19 @@ class SettingsManager(private val context: Context) {
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
         /**
+         * Global cruise type: [GlobalCruiseControlType] storage (`acc` / `ccs`).
+         * Absent → unset (first-run dialog); runtime default [GlobalCruiseControlType.DEFAULT].
+         */
+        private val CRUISE_CONTROL_TYPE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}cruise_control_type")
+        /**
+         * Global climate layout: [ClimateControlType] storage
+         * (`ordinary_ac` / `single_zone` / `dual_zone`).
+         * Absent → unset (first-run dialog); runtime default [ClimateControlType.DEFAULT].
+         */
+        private val CLIMATE_CONTROL_TYPE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}climate_control_type")
+        /**
          * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
          * Default true when key absent.
          */
@@ -2127,6 +2140,42 @@ class SettingsManager(private val context: Context) {
     val headUnitCanModeFlow: Flow<HeadUnitCanMode> = context.settingsDataStore.data
         .map { preferences ->
             HeadUnitCanMode.fromStorageValue(preferences[HEAD_UNIT_CAN_MODE_KEY])
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Global cruise type. When the key is absent, returns [GlobalCruiseControlType.DEFAULT]
+     * for runtime; use [cruiseControlTypeConfiguredFlow] for first-run gating.
+     */
+    val cruiseControlTypeFlow: Flow<GlobalCruiseControlType> = context.settingsDataStore.data
+        .map { preferences ->
+            GlobalCruiseControlType.fromStorageKey(preferences[CRUISE_CONTROL_TYPE_KEY])
+        }
+        .distinctUntilChanged()
+
+    val cruiseControlTypeConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences.contains(CRUISE_CONTROL_TYPE_KEY) }
+        .distinctUntilChanged()
+
+    /**
+     * Global climate layout. When the key is absent, returns [ClimateControlType.DEFAULT]
+     * for runtime; use [climateControlTypeConfiguredFlow] for first-run gating.
+     */
+    val climateControlTypeFlow: Flow<ClimateControlType> = context.settingsDataStore.data
+        .map { preferences ->
+            ClimateControlType.fromStorageKey(preferences[CLIMATE_CONTROL_TYPE_KEY])
+        }
+        .distinctUntilChanged()
+
+    val climateControlTypeConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences.contains(CLIMATE_CONTROL_TYPE_KEY) }
+        .distinctUntilChanged()
+
+    /** True when both cruise and climate type keys are present in DataStore. */
+    val vehicleFeatureTypesConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences.contains(CRUISE_CONTROL_TYPE_KEY) &&
+                preferences.contains(CLIMATE_CONTROL_TYPE_KEY)
         }
         .distinctUntilChanged()
 
@@ -4793,6 +4842,36 @@ class SettingsManager(private val context: Context) {
             preferences[CAN_AUTO_BIND_LAST_RESULT_KEY] =
                 "${CanAutoBindPolicy.USER_RESULT_PREFIX}${mode.storageValue}"
         }
+    }
+
+    suspend fun saveCruiseControlType(type: GlobalCruiseControlType) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CRUISE_CONTROL_TYPE_KEY] = type.storageKey
+        }
+        VehicleFeatureSettings.updateCruise(type)
+    }
+
+    suspend fun saveClimateControlType(type: ClimateControlType) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CLIMATE_CONTROL_TYPE_KEY] = type.storageKey
+        }
+        VehicleFeatureSettings.updateClimate(type)
+    }
+
+    /**
+     * Writes cruise + climate types (defaults if the caller passes the runtime defaults)
+     * so first-run setup is considered complete.
+     */
+    suspend fun saveVehicleFeatureTypes(
+        cruise: GlobalCruiseControlType,
+        climate: ClimateControlType,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CRUISE_CONTROL_TYPE_KEY] = cruise.storageKey
+            preferences[CLIMATE_CONTROL_TYPE_KEY] = climate.storageKey
+        }
+        VehicleFeatureSettings.updateCruise(cruise)
+        VehicleFeatureSettings.updateClimate(climate)
     }
 
     suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {

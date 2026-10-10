@@ -390,7 +390,7 @@ SSID выбирается из **сохранённых** сетей ГУ.
 пункты: AEB, safe distance, wireless charge, pulse складывания зеркал, все стёкла разом,
 PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source station.
 
-Состояние круиза доступно двумя отдельными сигналами ГУ: `acc_cruise_state` (адаптивный ACC: `off`/`standby`/`active`/`override`/`fault`) и `ccs_cruise_state` (обычный CCS: `off`/`standby`/`active`). Их не следует путать с `acc_status` (ключ зажигания). Уставка ACC — `cruise_set_speed` (VSetDis на ГУ). Управление круизом в действиях — только через Builtin `cruise_*` (см. ниже), не через CAN-команды MFS.
+Состояние круиза доступно двумя отдельными сигналами ГУ: `acc_cruise_state` (адаптивный ACC: `off`/`standby`/`active`/`override`/`fault`) и `ccs_cruise_state` (обычный CCS: `off`/`standby`/`active`). Их не следует путать с `acc_status` (ключ зажигания). Уставка ACC — `cruise_set_speed` (VSetDis на ГУ). В пикере триггеров/условий показывается только сигнал, совпадающий с глобальным «Вид круиз-контроля» (Настройки → Автомобиль). Управление круизом в действиях — только через Builtin `cruise_*` (см. ниже), не через CAN-команды MFS.
 
 Условия верхнего уровня объединяются через `И`. Один параметр **«Ждать условие, с»**
 относится ко всей этой группе, не к каждому условию отдельно: `0` — если на момент
@@ -431,8 +431,9 @@ PM2.5, UV, sterilize, brake feel, car wash, system mode, power mode, source stat
   (`am force-stop` выбранного пакета, та же семантика TCP),
   **круиз ACC/CCS** через виджетные Builtin (`cruise_engage_to_target` / `cruise_pause` /
   `cruise_full_off` / `cruise_resume` / `cruise_activate_at_current_speed` / `cruise_nudge` →
-  `AccCruiseController`; режим только
-  ACC или CCS, без «Авто»; сырые MFS-импульсы по-прежнему не в CAN-каталоге),
+  `AccCruiseController`; путь ACC/CCS берётся из глобальной настройки автомобиля, UI выбора
+  режима в редакторе действий убран; legacy `stringValue` `acc`/`ccs` в JSON по-прежнему
+  декодируется; сырые MFS-импульсы по-прежнему не в CAN-каталоге),
   mock location, geo log);
 - медиакоманды и громкость (виджет музыки не нужен; Play / Play-Pause при отсутствии
   MediaSession запускают выбранный плеер и шлют play, как виджет, но **без возврата**

@@ -1,6 +1,7 @@
 package vad.dashing.tbox.phoneble
 
 import org.json.JSONObject
+import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanBus
@@ -8,6 +9,7 @@ import vad.dashing.tbox.automation.AutomationCanOperation
 import vad.dashing.tbox.automation.AutomationCanValueCodec
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
+import vad.dashing.tbox.toBleWire
 import kotlin.math.roundToInt
 
 /**
@@ -162,6 +164,7 @@ object PhoneCompanionHost {
             // Signal "on" means FRONT_OFF is active, so the front section is stopped.
             front = onOff(hu["hvac_front_off"])?.let { if (it == 1) 0 else 1 },
             ac = onOff(hu["hvac_power"]),
+            climateLayout = VehicleFeatureSettings.climateControlType.toBleWire(),
             seats = listOf(
                 seatValue(hu["front_left_seat_mode"]),
                 seatValue(hu["front_right_seat_mode"]),
