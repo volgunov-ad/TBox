@@ -1835,6 +1835,15 @@
     <string name="location_geo_debug_log_idle">Not recording</string>
 
     <string name="info_tbox_section">TBox information</string>
+    <string name="info_mqtt_section">TBox MQTT</string>
+    <string name="info_mqtt_service">Service running</string>
+    <string name="info_mqtt_broker">Broker connected</string>
+    <string name="info_mqtt_monitor_link">Link to TBox Monitor</string>
+    <string name="info_mqtt_wireguard">WireGuard bridge</string>
+    <string name="info_mqtt_wg_off">off</string>
+    <string name="info_mqtt_wg_up">on, tunnel up</string>
+    <string name="info_mqtt_wg_error">on, error</string>
+    <string name="info_mqtt_service_down">bridge service not running</string>
     <string name="info_hu_networks">Head unit networks</string>
     <string name="info_hu_networks_none">none</string>
     <string name="info_hu_network_internet_yes">internet OK</string>

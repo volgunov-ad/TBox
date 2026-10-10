@@ -1846,6 +1846,15 @@
     <string name="location_geo_debug_log_idle">Запись не идёт</string>
 
     <string name="info_tbox_section">Информация TBox</string>
+    <string name="info_mqtt_section">TBox MQTT</string>
+    <string name="info_mqtt_service">Сервис запущен</string>
+    <string name="info_mqtt_broker">Брокер подключён</string>
+    <string name="info_mqtt_monitor_link">Связь с TBox Monitor</string>
+    <string name="info_mqtt_wireguard">Мост WireGuard</string>
+    <string name="info_mqtt_wg_off">выкл</string>
+    <string name="info_mqtt_wg_up">вкл, туннель есть</string>
+    <string name="info_mqtt_wg_error">вкл, ошибка</string>
+    <string name="info_mqtt_service_down">сервис моста не запущен</string>
     <string name="info_hu_networks">Сети ГУ</string>
     <string name="info_hu_networks_none">нет</string>
     <string name="info_hu_network_internet_yes">интернет есть</string>
