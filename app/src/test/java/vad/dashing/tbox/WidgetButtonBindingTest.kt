@@ -1,5 +1,7 @@
 package vad.dashing.tbox
 
+import android.app.Application
+import androidx.test.core.app.ApplicationProvider
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,12 +58,22 @@ class WidgetButtonBindingTest {
 
     @Test
     fun hardKeyPicker_coversKnownWheelAndDoorCodes() {
+        val resources = ApplicationProvider.getApplicationContext<Application>().resources
         assertTrue(115 in HARD_KEY_PICKER_CODES)
         assertTrue(216 in HARD_KEY_PICKER_CODES)
         assertTrue(316 in HARD_KEY_PICKER_CODES)
-        assertTrue(hardKeyCodeLabel(115).contains("WHEEL_RIGHT_JOY_UP"))
-        assertTrue(hardKeyCodeLabel(216).contains("WHEEL_LEFT_BTN_TOP"))
-        assertTrue(hardKeyCodeLabel(999).contains("не из справочника"))
+        assertTrue(
+            hardKeyCodeLabel(resources, 115)
+                .contains(resources.getString(R.string.hard_key_label_wheel_right_joy_up)),
+        )
+        assertTrue(
+            hardKeyCodeLabel(resources, 216)
+                .contains(resources.getString(R.string.hard_key_label_wheel_left_btn_top)),
+        )
+        assertEquals(
+            resources.getString(R.string.hard_key_code_unknown, 999),
+            hardKeyCodeLabel(resources, 999),
+        )
     }
 
     @Test

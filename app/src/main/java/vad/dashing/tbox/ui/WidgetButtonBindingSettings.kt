@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.R
@@ -101,6 +102,7 @@ internal fun WidgetButtonBindingSettingsSection(
         )
         when (val current = draft) {
             is WidgetButtonBinding.HardKey -> {
+                val resources = LocalContext.current.resources
                 val keyOptions = remember(current.keyCode) {
                     if (current.keyCode in HARD_KEY_PICKER_CODES) {
                         HARD_KEY_PICKER_CODES
@@ -112,7 +114,7 @@ internal fun WidgetButtonBindingSettingsSection(
                     label = stringResource(R.string.widget_button_binding_key_picker_label),
                     value = current.keyCode,
                     options = keyOptions,
-                    optionLabel = ::hardKeyCodeLabel,
+                    optionLabel = { hardKeyCodeLabel(resources, it) },
                     onValueChange = {
                         state.buttonBinding = WidgetButtonBinding.HardKey(keyCode = it)
                     },
