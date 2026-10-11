@@ -69,6 +69,7 @@ object DeepDiagnosticsCatalog {
         FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS to "CemWiperSts",
         FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED to "CemRainDetected",
         FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS to "CemHighBeamSts",
+        FirmwareVehicleJsonMapper.VHAL_CEM_DRL_STS to "CemDrlSts",
         FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS to "IcmEpbWarningLampSts",
         FirmwareVehicleJsonMapper.VHAL_ICM_ENGINE_OIL_PRESSURE to "IcmEngineOilPressure",
         FirmwareVehicleJsonMapper.VHAL_ICM_BRAKE_FLUID_LEVEL to "IcmBrakeFluidLevel",

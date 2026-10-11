@@ -4,8 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 class AutomationSignalCatalogTest {
     @Test
@@ -68,6 +69,21 @@ class AutomationSignalCatalogTest {
             listOf(AutomationSignalSource.APP),
             AutomationSignalCatalog.sourcesForUi(AutomationSignalId.WIFI_ENABLED),
         )
+    }
+
+    @Test
+    fun hazardAndDrl_areHeadUnitBinary() {
+        listOf(AutomationSignalId.HAZARD, AutomationSignalId.DRL).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertEquals(listOf("off", "on"), descriptor.stateOptions)
+            assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+            assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+            assertTrue(descriptor.valueHint().isNotBlank())
+        }
+        assertEquals("Аварийка", AutomationParameterLabels.signalLabel(AutomationSignalId.HAZARD))
+        assertEquals("ДХО", AutomationParameterLabels.signalLabel(AutomationSignalId.DRL))
+        assertEquals(MbCanSignal.Hazard, huInterestForSignal(AutomationSignalId.HAZARD))
+        assertEquals(MbCanSignal.Drl, huInterestForSignal(AutomationSignalId.DRL))
     }
 
     @Test

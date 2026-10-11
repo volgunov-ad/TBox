@@ -323,6 +323,26 @@ object AutomationSignalCatalog {
                 "Не режим LIGHTCONTROL 1…4.",
         ),
         state(
+            AutomationSignalId.HAZARD,
+            "Аварийка",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включена/выключена. " +
+                "A9 BCM nTurnSts+nDirectionLightSts: 3+1 включена (кнопка и открытый багажник), " +
+                "0+0 / 2+2 / 1+1 выключена. Не мигающий объект поворотников и не nHazardLightSts. " +
+                "A10 R_0400_CEM_1_HazardLightSW (CEM 1-bit).",
+        ),
+        state(
+            AutomationSignalId.DRL,
+            "ДХО",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включены/выключены. " +
+                "A9 BCM stLightSts.nDRLSts: 2 включены / 1 выключены " +
+                "(журнал: гаснут при аварийке и при открытом багажнике). " +
+                "A10 R_0404_CEM_2_DRLSts — CEM 1-bit, шкала на этой машине не подтверждена.",
+        ),
+        state(
             AutomationSignalId.EPB_PARK_LAMP,
             "Лампа EPB (паркинг)",
             headUnitOnly,

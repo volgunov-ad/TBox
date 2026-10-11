@@ -339,7 +339,8 @@ fun groupFor(id: String): EntityGroup {
         key.startsWith("window_") || key.startsWith("door_") || key.startsWith("sun") ||
             key.contains("trunk") || key.contains("seat") || key.contains("wiper") ||
             key.contains("mirror") || key.contains("light") || key.contains("fog") ||
-            key.contains("headlight") || key == "steering_wheel_heat" || key.startsWith("hud") ||
+            key.contains("headlight") || key == "hazard" || key == "drl" ||
+            key == "steering_wheel_heat" || key.startsWith("hud") ||
             key.startsWith("parking") ->
             EntityGroup.BODY
         key.contains("speed") || key.contains("rpm") || key.contains("gear") ||
