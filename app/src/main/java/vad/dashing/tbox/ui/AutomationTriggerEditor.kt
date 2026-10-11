@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,15 +40,15 @@ import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.AutomationWidgetPressKind
-import vad.dashing.tbox.automation.automationWidgetDoubleTapTimeoutMillis
-import vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat
-import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
+import vad.dashing.tbox.automation.automationWidgetDoubleTapTimeoutMillis
 import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoCoordinateParse
+import vad.dashing.tbox.mbcan.MbCanHardKeyUiLabels
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 
@@ -178,20 +180,15 @@ internal val HARD_KEY_PICKER_CODES = listOf(
     210, 211, 212,
 )
 
-internal fun hardKeyCodeLabel(keyCode: Int): String {
-    val name = KeyPressDiagnosticFormat.mbCanKeyName(keyCode)
-    return if (name == "UNKNOWN") {
-        "$keyCode (не из справочника)"
-    } else {
-        "$keyCode · $name"
-    }
-}
+internal fun hardKeyCodeLabel(resources: Resources, keyCode: Int): String =
+    MbCanHardKeyUiLabels.formatLabel(resources, keyCode)
 
 @Composable
 private fun HardKeyTriggerFields(
     trigger: AutomationTrigger.HardKey,
     onChange: (AutomationTrigger) -> Unit,
 ) {
+    val resources = LocalContext.current.resources
     val options = remember(trigger.keyCode) {
         if (trigger.keyCode in HARD_KEY_PICKER_CODES) {
             HARD_KEY_PICKER_CODES
@@ -203,7 +200,7 @@ private fun HardKeyTriggerFields(
         label = "Кнопка",
         value = trigger.keyCode,
         options = options,
-        optionLabel = ::hardKeyCodeLabel,
+        optionLabel = { hardKeyCodeLabel(resources, it) },
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
     )
     AutomationIntField(
