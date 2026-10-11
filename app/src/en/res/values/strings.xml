@@ -2571,7 +2571,7 @@
     <string name="widget_button_binding_source_esp_ble">Shelly Blu (companion)</string>
     <string name="widget_button_binding_source_esp_gpio">ESP input (companion)</string>
     <string name="widget_button_binding_key_picker_label">Button</string>
-    <string name="widget_button_binding_key_code_label">Key code manually (top-left wheel button depends on trim)</string>
+    <string name="widget_button_binding_key_code_label">Key code manually</string>
     <string name="widget_button_binding_ble_device_label">Device</string>
     <string name="widget_button_binding_ble_btn_label">Remote button</string>
     <string name="widget_button_binding_ble_btn_option">Button %1$d</string>

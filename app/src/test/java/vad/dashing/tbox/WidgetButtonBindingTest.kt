@@ -57,8 +57,10 @@ class WidgetButtonBindingTest {
     @Test
     fun hardKeyPicker_coversKnownWheelAndDoorCodes() {
         assertTrue(115 in HARD_KEY_PICKER_CODES)
+        assertTrue(216 in HARD_KEY_PICKER_CODES)
         assertTrue(316 in HARD_KEY_PICKER_CODES)
         assertTrue(hardKeyCodeLabel(115).contains("WHEEL_RIGHT_JOY_UP"))
+        assertTrue(hardKeyCodeLabel(216).contains("WHEEL_LEFT_BTN_TOP"))
         assertTrue(hardKeyCodeLabel(999).contains("не из справочника"))
     }
 

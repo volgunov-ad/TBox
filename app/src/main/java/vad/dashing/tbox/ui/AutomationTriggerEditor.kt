@@ -173,7 +173,7 @@ private fun WidgetPressedTriggerFields(
 
 /** Verified A9 mbCAN key codes (docs/MBCAN_VHAL_PARAMETERS_RU.md). */
 internal val HARD_KEY_PICKER_CODES = listOf(
-    29, 30, 31, 32, 33, 316,
+    29, 30, 31, 32, 33, 216, 316,
     115, 114, 163, 165, 28, 158, 582,
     210, 211, 212,
 )
@@ -207,7 +207,7 @@ private fun HardKeyTriggerFields(
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
     )
     AutomationIntField(
-        label = "Код кнопки вручную (верхняя левая кнопка руля зависит от комплектации)",
+        label = "Код кнопки вручную",
         value = trigger.keyCode,
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
         modifier = Modifier.fillMaxWidth(),
