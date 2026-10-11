@@ -69,10 +69,11 @@ class ExpertRawCanCatalogTest {
                     !it.name.startsWith("R_") &&
                     !it.name.startsWith("T_")
             }
-        assertEquals(65, direct.size)
+        assertEquals(66, direct.size)
         assertTrue(direct.all { it.vhalReadId == it.mbCanId && it.vhalWriteId == it.mbCanId })
         assertTrue(direct.any { it.name == "VHAL_ENGINE_RPM_PROPERTY_ID" && it.mbCanId == FirmwareVehicleJsonMapper.VHAL_ENGINE_RPM_PROPERTY_ID })
         assertTrue(direct.any { it.name == "VHAL_CAR_SPEED_PROPERTY_ID" })
+        assertTrue(direct.any { it.name == "VHAL_CEM_DRL_STS" && it.mbCanId == FirmwareVehicleJsonMapper.VHAL_CEM_DRL_STS })
         assertTrue(direct.any { it.name == "VHAL_CEM2_DRIVER_DOOR_STS" })
         assertFalse(direct.any { it.name == "VHAL_MCU_REPLY_SPEED_PROPERTY_ID" })
         assertFalse(direct.any { it.mbCanId == FirmwareVehicleJsonMapper.VHAL_FL_WIN_POSITION })
