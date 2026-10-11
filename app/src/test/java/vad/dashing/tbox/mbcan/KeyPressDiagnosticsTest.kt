@@ -35,6 +35,7 @@ class KeyPressDiagnosticsTest {
         assertTrue(KeyPressDiagnosticFormat.mbCan(31, 0, 0).contains("name=WHEEL_LEFT_JOY_LEFT"))
         assertTrue(KeyPressDiagnosticFormat.mbCan(32, 0, 0).contains("name=WHEEL_LEFT_JOY_RIGHT"))
         assertTrue(KeyPressDiagnosticFormat.mbCan(33, 0, 0).contains("name=WHEEL_LEFT_JOY_PRESS"))
+        assertTrue(KeyPressDiagnosticFormat.mbCan(216, 0, 0).contains("name=WHEEL_LEFT_BTN_TOP"))
         assertTrue(KeyPressDiagnosticFormat.mbCan(316, 1, 0).contains("name=WHEEL_LEFT_BTN_BOTTOM"))
         assertTrue(KeyPressDiagnosticFormat.mbCan(114, 0, 0).contains("name=WHEEL_RIGHT_JOY_DOWN"))
         assertTrue(KeyPressDiagnosticFormat.mbCan(163, 0, 0).contains("name=WHEEL_RIGHT_JOY_LEFT"))

@@ -20,13 +20,14 @@ internal data class KeyPressDiagnosticLog(
 }
 
 internal object KeyPressDiagnosticFormat {
-    /** Verified on Jetour Dashing (A9 mbCAN). Код верхней левой кнопки руля зависит от модификации. */
+    /** Verified on Jetour Dashing (A9 mbCAN). Upper-left wheel button confirmed as keyCode 216. */
     fun mbCanKeyName(keyCode: Int): String = when (keyCode) {
         29 -> "WHEEL_LEFT_JOY_UP"
         30 -> "WHEEL_LEFT_JOY_DOWN"
         31 -> "WHEEL_LEFT_JOY_LEFT"
         32 -> "WHEEL_LEFT_JOY_RIGHT"
         33 -> "WHEEL_LEFT_JOY_PRESS"
+        216 -> "WHEEL_LEFT_BTN_TOP"
         316 -> "WHEEL_LEFT_BTN_BOTTOM"
         115 -> "WHEEL_RIGHT_JOY_UP"
         114 -> "WHEEL_RIGHT_JOY_DOWN"
