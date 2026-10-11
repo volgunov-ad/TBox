@@ -108,6 +108,11 @@ object FirmwareVehicleJsonMapper {
     /** CEM high beam status 1-bit (1 on / 0 off). */
     const val VHAL_CEM_HIGH_BEAM_STS = 289_412_252 // R_0404_CEM_2_HighBeamSts
     /**
+     * CEM DRL status. A10 scale is assumed CEM 1-bit (1 on / 0 off), same family as
+     * [VHAL_CEM_HIGH_BEAM_STS]. Not confirmed on this car: DRL journals are A9 (2 on / 1 off).
+     */
+    const val VHAL_CEM_DRL_STS = 289_412_249 // R_0404_CEM_2_DRLSts
+    /**
      * ICM EPB warning lamp status — best-effort A10 proxy for A9 BCM EPB park lamp.
      * Scale assumed CEM 1-bit (1 on / 0 off); confirm on car.
      */

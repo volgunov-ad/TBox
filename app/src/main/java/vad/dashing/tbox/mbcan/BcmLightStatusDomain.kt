@@ -1,13 +1,17 @@
 package vad.dashing.tbox.mbcan
 
 /**
- * BCM light bytes from the 2026-10-10 journals (`tbox_app_log_20261010_115553`, `162750`).
+ * BCM light bytes from the 2026-10-10 and 2026-10-11 journals.
  *
- * DRL (`nDRLSts`) sat at **2** while driving. When the trunk opened, the user said the
- * running lights go out and the hazard lamps flash: DRL went to **1**, and the BCM pair
- * `nTurnSts=3` + `nDirectionLightSts=1` came up. The turn-light object showed both sides
- * **2** in that window, which [TurnSignalsDomain] already treats as hazard.
- * `nHazardLightSts` stayed **0** through that flash.
+ * DRL (`nDRLSts`) sat at **2** while driving. It went to **1** when the trunk opened
+ * (afternoon `162750`) and again while the hazard button was held
+ * (`tbox_app_log_20261011_132614`, 13:26:54–13:27:03), then back to **2**.
+ *
+ * The hazard button and the trunk-open flash share the BCM pair `nTurnSts=3` +
+ * `nDirectionLightSts=1`. Clear is **0+0**. Journal 132614 held **3+1** for the whole
+ * flash. The turn-light object blinked both sides **2↔1** in that window, so it is
+ * not the stable hazard source. `nHazardLightSts` stayed **0**.
+ * Pairs **2+2** and **1+1** are not this flash.
  *
  * A high-beam flash at 16:29:10 pulsed `nHighBeamSts` and `nLowBeamSts` together
  * **1→2→1** for one second. The gesture was the high-beam flash ([HighBeamDomain]);
@@ -18,7 +22,7 @@ package vad.dashing.tbox.mbcan
  * drove off. The lamp was not identified.
  */
 object BcmLightStatusDomain {
-    /** `nDRLSts`: **2** lit / **1** out (trunk open). */
+    /** `nDRLSts`: **2** lit / **1** out. Other raw values are unknown. */
     fun decodeDrlOn(raw: Int): Boolean? = when (raw) {
         2 -> true
         1 -> false
@@ -33,6 +37,20 @@ object BcmLightStatusDomain {
     fun decodeTrunkOpenHazard(turnSts: Int, directionLightSts: Int): Boolean? = when {
         turnSts == 3 && directionLightSts == 1 -> true
         turnSts == 0 && directionLightSts == 0 -> false
+        else -> null
+    }
+
+    /**
+     * Hazard for the live automation signal.
+     * **3 + 1** stays on for the whole flash (hazard button and trunk-open).
+     * Observed non-flash pairs **0+0**, **2+2** and **1+1** are off, so a turn
+     * does not read as hazard. Any other pair is unknown.
+     */
+    fun decodeHazardActive(turnSts: Int, directionLightSts: Int): Boolean? = when {
+        turnSts == 3 && directionLightSts == 1 -> true
+        (turnSts == 0 && directionLightSts == 0) ||
+            (turnSts == 2 && directionLightSts == 2) ||
+            (turnSts == 1 && directionLightSts == 1) -> false
         else -> null
     }
 }

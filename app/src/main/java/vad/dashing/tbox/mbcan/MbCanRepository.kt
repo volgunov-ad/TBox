@@ -137,6 +137,17 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     HighBeam(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
     /**
+     * Hazard on from BCM `getTurnSts` + `getDirectionLightSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Stable pair **3+1**, not the blinking turn-light object.
+     * Also kept alive via settings telemetry bridge (same as [HighBeam]).
+     */
+    Hazard(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
+     * DRL on from BCM `stLightSts.nDRLSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
+     * Also kept alive via settings telemetry bridge (same as [HighBeam]).
+     */
+    Drl(setOf("eMBCAN_VEHICLE_BCM_STATUS")),
+    /**
      * EPB park lamp from BCM `getEPBParkLampSts` (`eMBCAN_VEHICLE_BCM_STATUS`).
      * Also kept alive via settings telemetry bridge (same as [HighBeam]).
      */
@@ -444,6 +455,14 @@ object MbCanRepository {
     @Volatile private var pendingHighBeam: Boolean? = null
     private var pendingHighBeamFlushScheduled = false
     private val flushHighBeamPushRunnable = Runnable { flushPendingHighBeamPush() }
+    private val pendingHazardPush = Any()
+    @Volatile private var pendingHazardActive: Boolean? = null
+    private var pendingHazardFlushScheduled = false
+    private val flushHazardPushRunnable = Runnable { flushPendingHazardPush() }
+    private val pendingDrlPush = Any()
+    @Volatile private var pendingDrlOn: Boolean? = null
+    private var pendingDrlFlushScheduled = false
+    private val flushDrlPushRunnable = Runnable { flushPendingDrlPush() }
     private val pendingEpbParkLampPush = Any()
     @Volatile private var pendingEpbParkLamp: Boolean? = null
     private var pendingEpbParkLampFlushScheduled = false
@@ -631,6 +650,10 @@ object MbCanRepository {
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
+    private val _hazardActiveState = MutableStateFlow<Boolean?>(null)
+    val hazardActiveState: StateFlow<Boolean?> = _hazardActiveState.asStateFlow()
+    private val _drlOnState = MutableStateFlow<Boolean?>(null)
+    val drlOnState: StateFlow<Boolean?> = _drlOnState.asStateFlow()
     private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
     val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
     private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
@@ -842,6 +865,8 @@ object MbCanRepository {
             cfgPushHandler.removeCallbacks(flushWiperStsPushRunnable)
             cfgPushHandler.removeCallbacks(flushRainDetectedPushRunnable)
             cfgPushHandler.removeCallbacks(flushHighBeamPushRunnable)
+            cfgPushHandler.removeCallbacks(flushHazardPushRunnable)
+            cfgPushHandler.removeCallbacks(flushDrlPushRunnable)
             cfgPushHandler.removeCallbacks(flushEpbParkLampPushRunnable)
             cfgPushHandler.removeCallbacks(flushCurrentGearNumberPushRunnable)
             cfgPushHandler.removeCallbacks(flushBodyComfortPushRunnable)
@@ -905,6 +930,14 @@ object MbCanRepository {
             synchronized(pendingHighBeamPush) {
                 pendingHighBeam = null
                 pendingHighBeamFlushScheduled = false
+            }
+            synchronized(pendingHazardPush) {
+                pendingHazardActive = null
+                pendingHazardFlushScheduled = false
+            }
+            synchronized(pendingDrlPush) {
+                pendingDrlOn = null
+                pendingDrlFlushScheduled = false
             }
             synchronized(pendingEpbParkLampPush) {
                 pendingEpbParkLamp = null
@@ -1372,6 +1405,41 @@ object MbCanRepository {
             }
         }
         recordPushDebugEvent("telemetry/high_beam", "raw=$raw on=$on")
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getTurnSts` + `getDirectionLightSts`).
+     */
+    fun scheduleHazardPush(turnSts: Int, directionLightSts: Int) {
+        val active = BcmLightStatusDomain.decodeHazardActive(turnSts, directionLightSts)
+        synchronized(pendingHazardPush) {
+            pendingHazardActive = active
+            if (!pendingHazardFlushScheduled) {
+                pendingHazardFlushScheduled = true
+                cfgPushHandler.postDelayed(flushHazardPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent(
+            "telemetry/hazard",
+            "turn=$turnSts direction=$directionLightSts active=$active",
+        )
+    }
+
+    /**
+     * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] BCM callback
+     * (`getLightStatus().getDRLSts`).
+     */
+    fun scheduleDrlPush(raw: Int?) {
+        val on = raw?.let(BcmLightStatusDomain::decodeDrlOn)
+        synchronized(pendingDrlPush) {
+            pendingDrlOn = on
+            if (!pendingDrlFlushScheduled) {
+                pendingDrlFlushScheduled = true
+                cfgPushHandler.postDelayed(flushDrlPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/drl", "raw=$raw on=$on")
     }
 
     /**
@@ -1985,6 +2053,28 @@ object MbCanRepository {
         }
     }
 
+    private fun flushPendingHazardPush() {
+        val active = synchronized(pendingHazardPush) {
+            pendingHazardFlushScheduled = false
+            pendingHazardActive.also { pendingHazardActive = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _hazardActiveState.value = active
+        }
+    }
+
+    private fun flushPendingDrlPush() {
+        val on = synchronized(pendingDrlPush) {
+            pendingDrlFlushScheduled = false
+            pendingDrlOn.also { pendingDrlOn = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _drlOnState.value = on
+        }
+    }
+
     private fun flushPendingEpbParkLampPush() {
         val on = synchronized(pendingEpbParkLampPush) {
             pendingEpbParkLampFlushScheduled = false
@@ -2585,6 +2675,8 @@ object MbCanRepository {
             MbCanSignal.WiperSts -> refreshWiperSts()
             MbCanSignal.RainDetected -> refreshRainDetected()
             MbCanSignal.HighBeam -> refreshHighBeam()
+            MbCanSignal.Hazard -> refreshHazard()
+            MbCanSignal.Drl -> refreshDrl()
             MbCanSignal.EpbParkLamp -> refreshEpbParkLamp()
             MbCanSignal.EngineOilPressure,
             MbCanSignal.BrakeFluid -> refreshIcmDriverWarningLamps()
@@ -3648,6 +3740,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshHazard() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _hazardActiveState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _hazardActiveState.value = null
+                return@withContext
+            }
+            _hazardActiveState.value = MbCanEngineFacade.readHazardActive()
+        }
+    }
+
+    private suspend fun refreshDrl() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _drlOnState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _drlOnState.value = null
+                return@withContext
+            }
+            _drlOnState.value = MbCanEngineFacade.readDrlOn()
+        }
+    }
+
     private suspend fun refreshEpbParkLamp() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -4271,6 +4397,8 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.WiperSts) ||
                 mergedSignals.contains(MbCanSignal.RainDetected) ||
                 mergedSignals.contains(MbCanSignal.HighBeam) ||
+                mergedSignals.contains(MbCanSignal.Hazard) ||
+                mergedSignals.contains(MbCanSignal.Drl) ||
                 mergedSignals.contains(MbCanSignal.EpbParkLamp) ||
                 mergedSignals.contains(MbCanSignal.GearNumbers) ||
                 mergedSignals.contains(MbCanSignal.BodyComfort) ||

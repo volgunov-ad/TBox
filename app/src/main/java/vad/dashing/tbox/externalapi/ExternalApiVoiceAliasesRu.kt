@@ -179,6 +179,14 @@ object ExternalApiVoiceAliasesRu {
             "кондиционер",
             "климат",
         ),
+        AutomationSignalId.HAZARD to listOf(
+            "аварийная сигнализация",
+            "аварийные огни",
+        ),
+        AutomationSignalId.DRL to listOf(
+            "дневные ходовые огни",
+            "ходовые огни",
+        ),
     )
 
     private val BUILTIN_LABELS: Map<AutomationBuiltinActionType, String> = mapOf(

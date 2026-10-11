@@ -17,6 +17,15 @@ class JournalDecoderValuesTest {
     }
 
     @Test
+    fun hazardButton_holdsThreePlusOne() {
+        assertEquals(true, BcmLightStatusDomain.decodeHazardActive(3, 1))
+        assertEquals(false, BcmLightStatusDomain.decodeHazardActive(0, 0))
+        assertEquals(false, BcmLightStatusDomain.decodeHazardActive(2, 2))
+        assertEquals(false, BcmLightStatusDomain.decodeHazardActive(1, 1))
+        assertNull(BcmLightStatusDomain.decodeHazardActive(3, 0))
+    }
+
+    @Test
     fun rcta_rightWarningIsRawTwo() {
         assertEquals(false, RctaAlarmDomain.decodeWarning(1))
         assertEquals(true, RctaAlarmDomain.decodeWarning(2))

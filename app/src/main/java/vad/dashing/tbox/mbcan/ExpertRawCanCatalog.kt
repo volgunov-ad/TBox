@@ -251,6 +251,7 @@ object ExpertRawCanCatalog {
         "VHAL_CEM_WIPER_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_WIPER_STS,
         "VHAL_CEM_RAIN_DETECTED" to FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED,
         "VHAL_CEM_HIGH_BEAM_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS,
+        "VHAL_CEM_DRL_STS" to FirmwareVehicleJsonMapper.VHAL_CEM_DRL_STS,
         "VHAL_ICM_EPB_WARNING_LAMP_STS" to FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS,
         "VHAL_ICM_ENGINE_OIL_PRESSURE" to FirmwareVehicleJsonMapper.VHAL_ICM_ENGINE_OIL_PRESSURE,
         "VHAL_ICM_BRAKE_FLUID_LEVEL" to FirmwareVehicleJsonMapper.VHAL_ICM_BRAKE_FLUID_LEVEL,

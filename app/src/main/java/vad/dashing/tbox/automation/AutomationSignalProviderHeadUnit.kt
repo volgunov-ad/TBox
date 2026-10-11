@@ -75,6 +75,14 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.HAZARD -> UniversalCanRepository.hazardActiveState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.DRL -> UniversalCanRepository.drlOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.EPB_PARK_LAMP -> UniversalCanRepository.epbParkLampOnState.map {
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
@@ -329,6 +337,8 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
     AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
+    AutomationSignalId.HAZARD -> vad.dashing.tbox.mbcan.MbCanSignal.Hazard
+    AutomationSignalId.DRL -> vad.dashing.tbox.mbcan.MbCanSignal.Drl
     AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp
     AutomationSignalId.ENGINE_OIL_PRESSURE -> vad.dashing.tbox.mbcan.MbCanSignal.EngineOilPressure
     AutomationSignalId.BRAKE_FLUID -> vad.dashing.tbox.mbcan.MbCanSignal.BrakeFluid
