@@ -108,6 +108,8 @@ enum class AutomationSignalId(
     WIPER_STS("wiper_sts", AutomationSignalValueType.STATE),
     RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     HIGH_BEAM("high_beam", AutomationSignalValueType.STATE),
+    HAZARD("hazard", AutomationSignalValueType.STATE),
+    DRL("drl", AutomationSignalValueType.STATE),
     EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
     ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
     BRAKE_FLUID("brake_fluid", AutomationSignalValueType.STATE),

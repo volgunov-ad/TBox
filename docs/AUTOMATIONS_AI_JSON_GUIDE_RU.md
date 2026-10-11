@@ -845,7 +845,7 @@ TCP :5555 включают только если порт ещё не слуша
 
 | Источник | `signal` |
 |---|---|
-| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
+| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
 | `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только

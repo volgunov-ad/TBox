@@ -676,6 +676,8 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED
     private val VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS
+    private val VHAL_CEM_DRL_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_DRL_STS
     private val VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS
     private val VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID =
@@ -921,6 +923,10 @@ object Android10VhalRepository {
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
+    private val _hazardActiveState = MutableStateFlow<Boolean?>(null)
+    val hazardActiveState: StateFlow<Boolean?> = _hazardActiveState.asStateFlow()
+    private val _drlOnState = MutableStateFlow<Boolean?>(null)
+    val drlOnState: StateFlow<Boolean?> = _drlOnState.asStateFlow()
     private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
     val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
     private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
@@ -1787,6 +1793,8 @@ object Android10VhalRepository {
             MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
             MbCanSignal.RainDetected -> setOf(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID)
             MbCanSignal.HighBeam -> setOf(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID)
+            MbCanSignal.Hazard -> setOf(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID)
+            MbCanSignal.Drl -> setOf(VHAL_CEM_DRL_STS_PROPERTY_ID)
             MbCanSignal.EpbParkLamp -> setOf(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID)
             MbCanSignal.EngineOilPressure -> setOf(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID)
             MbCanSignal.BrakeFluid -> setOf(
@@ -2641,6 +2649,8 @@ object Android10VhalRepository {
                 _rainDetectedState.value = decodeRainDetected(rawValue)
             VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID ->
                 _highBeamOnState.value = decodeCemBinaryActive(rawValue)
+            VHAL_CEM_DRL_STS_PROPERTY_ID ->
+                _drlOnState.value = decodeCemBinaryActive(rawValue)
             VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID ->
                 _epbParkLampOnState.value = decodeCemBinaryActive(rawValue)
             VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID ->
@@ -2677,8 +2687,11 @@ object Android10VhalRepository {
                 applyTurnSignalsPatch(leftActive = decodeCemBinaryActive(rawValue))
             VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID ->
                 applyTurnSignalsPatch(rightActive = decodeCemBinaryActive(rawValue))
-            VHAL_HAZARD_LIGHT_SW_PROPERTY_ID ->
-                applyTurnSignalsPatch(hazardActive = decodeCemBinaryActive(rawValue))
+            VHAL_HAZARD_LIGHT_SW_PROPERTY_ID -> {
+                val active = decodeCemBinaryActive(rawValue)
+                _hazardActiveState.value = active
+                applyTurnSignalsPatch(hazardActive = active)
+            }
             VHAL_FUEL_LEVEL_PROPERTY_ID ->
                 _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
             VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
@@ -2882,6 +2895,8 @@ object Android10VhalRepository {
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.Hazard -> _hazardActiveState.value = null
+                MbCanSignal.Drl -> _drlOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
                 MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
                 MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
@@ -3027,6 +3042,8 @@ object Android10VhalRepository {
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.Hazard -> _hazardActiveState.value = null
+                MbCanSignal.Drl -> _drlOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
                 MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
                 MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
@@ -3492,6 +3509,14 @@ object Android10VhalRepository {
                 _highBeamOnState.value =
                     decodeCemBinaryActive(bridge?.getIntProperty(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID))
             }
+            MbCanSignal.Hazard -> {
+                _hazardActiveState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID))
+            }
+            MbCanSignal.Drl -> {
+                _drlOnState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_CEM_DRL_STS_PROPERTY_ID))
+            }
             MbCanSignal.EpbParkLamp -> {
                 _epbParkLampOnState.value =
                     decodeCemBinaryActive(bridge?.getIntProperty(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID))
@@ -3609,6 +3634,7 @@ object Android10VhalRepository {
                 val left = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_LEFT_PROPERTY_ID))
                 val right = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID))
                 val hazard = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID))
+                _hazardActiveState.value = hazard
                 _turnSignalsState.value = TurnSignalsState(
                     leftActive = left,
                     rightActive = right,

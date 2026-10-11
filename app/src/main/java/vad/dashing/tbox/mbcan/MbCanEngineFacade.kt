@@ -519,6 +519,24 @@ object MbCanEngineFacade {
                         if (highBeamRaw != null) {
                             MbCanRepository.scheduleHighBeamPush(highBeamRaw)
                         }
+                        val drlRaw = runCatching {
+                            val light = bcm.javaClass.getMethod("getLightStatus").invoke(bcm)
+                                ?: return@runCatching null
+                            val drlGetter = light.javaClass.getMethod("getDRLSts")
+                            (drlGetter.invoke(light) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (drlRaw != null) {
+                            MbCanRepository.scheduleDrlPush(drlRaw)
+                        }
+                        val turnSts = runCatching {
+                            (bcm.javaClass.getMethod("getTurnSts").invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        val directionLightSts = runCatching {
+                            (bcm.javaClass.getMethod("getDirectionLightSts").invoke(bcm) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (turnSts != null && directionLightSts != null) {
+                            MbCanRepository.scheduleHazardPush(turnSts, directionLightSts)
+                        }
                         val epbParkLampRaw = runCatching {
                             val getter = bcm.javaClass.getMethod("getEPBParkLampSts")
                             (getter.invoke(bcm) as? Number)?.toInt()
@@ -1242,6 +1260,43 @@ object MbCanEngineFacade {
             val light = bcmCls.getMethod("getLightStatus").invoke(bcmObj) ?: return null
             val raw = (light.javaClass.getMethod("getHighBeamSts").invoke(light) as? Number)?.toInt() ?: return null
             HighBeamDomain.decodeOn(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * DRL on from [com.mengbo.mbCan.entity.MBCanLightStatus.getDRLSts]
+     * of BCM status. Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`).
+     */
+    fun readDrlOn(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = nativeGetMbCanData(getMbCanData, inst, 21, bcmCls) ?: return null
+            val light = bcmCls.getMethod("getLightStatus").invoke(bcmObj) ?: return null
+            val raw = (light.javaClass.getMethod("getDRLSts").invoke(light) as? Number)?.toInt() ?: return null
+            BcmLightStatusDomain.decodeDrlOn(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Hazard on from [MBCanVehicleBcmStatus.getTurnSts] and [MBCanVehicleBcmStatus.getDirectionLightSts].
+     * Data type **21** (`eMBCAN_VEHICLE_BCM_STATUS`). The pair stays **3+1** for the whole flash.
+     */
+    fun readHazardActive(): Boolean? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val bcmCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleBcmStatus")
+            val bcmObj = nativeGetMbCanData(getMbCanData, inst, 21, bcmCls) ?: return null
+            val turnSts = (bcmCls.getMethod("getTurnSts").invoke(bcmObj) as? Number)?.toInt() ?: return null
+            val direction = (bcmCls.getMethod("getDirectionLightSts").invoke(bcmObj) as? Number)?.toInt()
+                ?: return null
+            BcmLightStatusDomain.decodeHazardActive(turnSts, direction)
         }.getOrNull()
     }
 
