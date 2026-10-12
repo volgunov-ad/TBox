@@ -20,6 +20,7 @@ import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import android.util.Log
 import vad.dashing.tbox.phoneble.PhoneBleCodec
+import vad.dashing.tbox.phoneble.PhoneBleLinkPolicy
 import java.util.ArrayDeque
 import java.util.UUID
 
@@ -46,6 +47,10 @@ class PhoneRadio(
     private var strangerDrop = false
     /** elapsedRealtime when the current scan or connect attempt began. */
     private var attemptAt = 0L
+    /** elapsedRealtime of the last accepted sealed snapshot (0 = none on this link). */
+    private var lastSnapAt = 0L
+    /** elapsedRealtime when [writing] became true. */
+    private var writeAt = 0L
     private val assembler = PhoneBleCodec.SnapshotAssembler()
 
     /** Sent in REFRESH so the companion skips text pages the phone already shows. */
@@ -126,7 +131,9 @@ class PhoneRadio(
                 if (descriptor.uuid != CCCD) return@post
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     linkUp = true
-                    main.removeCallbacks(watchdog)
+                    lastSnapAt = 0L
+                    attemptAt = SystemClock.elapsedRealtime()
+                    scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)
                     pump()
                 } else {
                     dropLink()
@@ -143,6 +150,8 @@ class PhoneRadio(
             main.post {
                 if (gatt != this@PhoneRadio.gatt) return@post
                 writing = false
+                writeAt = 0L
+                if (linkUp) scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)
                 pump()
             }
         }
@@ -178,18 +187,28 @@ class PhoneRadio(
     }
 
     /**
-     * After a long background/doze pause the OS may leave a dead GATT handle or a scan
-     * that never fires [ScanCallback.onScanFailed]. Force a clean search without touching
-     * pairing material in [PhoneStore]. Skips a fresh in-flight scan/connect.
+     * After a long background/doze pause the OS may leave a dead GATT handle, a scan
+     * that never fires [ScanCallback.onScanFailed], or a zombie link that stays up
+     * without snapshots. Force a clean search without touching pairing material in
+     * [PhoneStore]. Skips a fresh in-flight scan/connect; reopens a stale linked GATT.
      */
     fun kickSearch() {
-        if (!running || !bluetoothOn || linkUp) return
-        val age = SystemClock.elapsedRealtime() - attemptAt
-        if (age < CONNECT_STALE_MS && (scanning || gatt != null)) return
-        Log.i(TAG, "kickSearch: drop stale attempt and rescan")
+        if (!running || !bluetoothOn) return
+        val now = SystemClock.elapsedRealtime()
+        val snapAge = if (lastSnapAt != 0L) now - lastSnapAt else now - attemptAt
+        if (!PhoneBleLinkPolicy.resumeShouldKick(
+                linkUp = linkUp,
+                scanningOrConnecting = scanning || gatt != null,
+                attemptAgeMs = now - attemptAt,
+                snapAgeMs = snapAge,
+            )
+        ) {
+            return
+        }
+        Log.i(TAG, "kickSearch: drop stale attempt/link and rescan linkUp=$linkUp")
         main.removeCallbacks(watchdog)
         stopScan()
-        dropLink()
+        dropLink(peerRejected = false)
         startScan()
     }
 
@@ -202,6 +221,8 @@ class PhoneRadio(
         inbox = null
         linkUp = false
         writing = false
+        writeAt = 0L
+        lastSnapAt = 0L
         pending.clear()
     }
 
@@ -221,7 +242,7 @@ class PhoneRadio(
         val filters = listOf(ScanFilter.Builder().setServiceUuid(serviceUuid).build())
         attemptAt = SystemClock.elapsedRealtime()
         scanning = guarded("startScan") { scanner.startScan(filters, settings, scanCallback) }
-        if (scanning) scheduleWatchdog(SCAN_STALE_MS)
+        if (scanning) scheduleWatchdog(PhoneBleLinkPolicy.SCAN_STALE_MS)
     }
 
     private fun stopScan() {
@@ -243,7 +264,7 @@ class PhoneRadio(
         if (gatt == null) {
             rescanLater()
         } else {
-            scheduleWatchdog(CONNECT_STALE_MS)
+            scheduleWatchdog(PhoneBleLinkPolicy.CONNECT_STALE_MS)
         }
     }
 
@@ -260,29 +281,48 @@ class PhoneRadio(
     private val watchdog = Runnable { recoverIfStale(force = true) }
 
     /**
-     * Clears a hung scan (scanning=true, no results) or a hung connectGatt that never
-     * reaches [linkUp]. Without this, [startScan] bails because gatt/scanning stay set
-     * and the UI sits on "Looking for the companion" until the process is killed.
+     * Clears a hung scan (scanning=true, no results), a hung connectGatt that never
+     * reaches [linkUp], a zombie link that stays up without snapshots (doze/USB),
+     * or a write that never gets a callback. Without this, [startScan] bails because
+     * gatt/scanning stay set and the UI sits on "Looking for the companion" (or a
+     * stale "Connected") until the process is killed.
      */
     private fun recoverIfStale(force: Boolean = false) {
-        if (!running || linkUp) return
-        val age = SystemClock.elapsedRealtime() - attemptAt
-        val hungScan = scanning && gatt == null && (force || age >= SCAN_STALE_MS)
-        val hungConnect = gatt != null && (force || age >= CONNECT_STALE_MS)
-        if (!hungScan && !hungConnect) return
-        Log.w(TAG, "stale BLE attempt scan=$scanning gatt=${gatt != null} age=${age}ms")
+        if (!running) return
+        val now = SystemClock.elapsedRealtime()
+        val attemptAge = now - attemptAt
+        val snapAge = if (lastSnapAt != 0L) now - lastSnapAt else attemptAge
+        val writeAge = if (writing) now - writeAt else 0L
+        val hungScan = PhoneBleLinkPolicy.hungScan(scanning, gatt != null, attemptAge, force)
+        val hungConnect = PhoneBleLinkPolicy.hungConnect(linkUp, gatt != null, attemptAge, force)
+        val staleLink = PhoneBleLinkPolicy.staleLinked(linkUp, snapAge, force = false)
+        val hungWrite = PhoneBleLinkPolicy.hungWrite(writing, writeAge, force = false)
+        if (!hungScan && !hungConnect && !staleLink && !hungWrite) return
+        Log.w(
+            TAG,
+            "stale BLE attempt scan=$scanning gatt=${gatt != null} linkUp=$linkUp " +
+                "writing=$writing attemptAge=${attemptAge}ms snapAge=${snapAge}ms",
+        )
         stopScan()
-        dropLink()
+        // Local stale recovery (USB down, doze zombie) is not a companion stranger reject.
+        dropLink(peerRejected = false)
         rescanLater()
     }
 
-    private fun dropLink() {
-        strangerDrop = linkUp && !snapOnLink
+    /**
+     * @param peerRejected when true, a link that never got a sealed snap is treated as a
+     *   stranger (companion idle-drop) and rescans after [STRANGER_RESCAN_MS]. Local
+     *   watchdogs pass false so a missing HU/USB snapshot does not add that backoff.
+     */
+    private fun dropLink(peerRejected: Boolean = true) {
+        strangerDrop = peerRejected && linkUp && !snapOnLink
         gatt?.close()
         gatt = null
         inbox = null
         linkUp = false
         writing = false
+        writeAt = 0L
+        lastSnapAt = 0L
         pending.clear()
     }
 
@@ -292,9 +332,12 @@ class PhoneRadio(
         if (!linkUp || writing || pending.isEmpty()) return
         val payload = pending.removeFirst()
         writing = true
+        writeAt = SystemClock.elapsedRealtime()
+        scheduleWatchdog(PhoneBleLinkPolicy.WRITE_STALE_MS)
         val ok = writeInbox(radio, chr, payload)
         if (!ok) {
             writing = false
+            writeAt = 0L
             pending.addFirst(payload)
             main.postDelayed({ pump() }, 200)
         }
@@ -305,6 +348,8 @@ class PhoneRadio(
         if (!PhoneBleCodec.isSnapType(open.type)) return
         if (open.counter != waitingCounter) return
         snapOnLink = true
+        lastSnapAt = SystemClock.elapsedRealtime()
+        scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)
         onSnap(assembler.accept(open.type, open.body))
     }
 
@@ -390,10 +435,6 @@ class PhoneRadio(
         const val RESCAN_MS = 800L
         /** The companion drops a phone it does not know and refuses it for a minute. */
         const val STRANGER_RESCAN_MS = 10_000L
-        /** OS sometimes stops LE scan without [ScanCallback.onScanFailed]. */
-        const val SCAN_STALE_MS = 12_000L
-        /** connectGatt can hang with a non-null handle and never reach [linkUp]. */
-        const val CONNECT_STALE_MS = 15_000L
         val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

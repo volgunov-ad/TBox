@@ -234,8 +234,9 @@ private fun PhoneScreen() {
         if (!ready) return@DisposableEffect onDispose { }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                // Long idle / doze often leaves a hung scan or dead GATT; kill+relaunch
-                // used to clear it — resume kick does the same without dropping pairing.
+                // Long idle / doze often leaves a hung scan, dead GATT, or zombie linkUp
+                // without snaps; kill+relaunch used to clear it — resume kick does the
+                // same without dropping pairing.
                 radio.kickSearch()
             }
         }
