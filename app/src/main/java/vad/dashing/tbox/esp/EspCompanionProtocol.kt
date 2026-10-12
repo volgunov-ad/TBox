@@ -275,6 +275,7 @@ object EspCompanionProtocol {
         snap.recirc?.let { extras["recirc"] = it }
         snap.front?.let { extras["front"] = it }
         snap.ac?.let { extras["ac"] = it }
+        snap.climateLayout?.let { extras["layout"] = it }
         snap.seats.forEachIndexed { index, value ->
             if (value != null) extras["s$index"] = value
         }
