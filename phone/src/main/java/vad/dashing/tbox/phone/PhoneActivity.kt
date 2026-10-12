@@ -66,6 +66,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import vad.dashing.tbox.phoneble.PhoneBleCodec
@@ -226,6 +228,19 @@ private fun PhoneScreen() {
         radio.storeKey = store.key
         if (ready) radio.start()
         onDispose { radio.stop() }
+    }
+    val activity = context as ComponentActivity
+    DisposableEffect(activity, ready) {
+        if (!ready) return@DisposableEffect onDispose { }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                // Long idle / doze often leaves a hung scan or dead GATT; kill+relaunch
+                // used to clear it — resume kick does the same without dropping pairing.
+                radio.kickSearch()
+            }
+        }
+        activity.lifecycle.addObserver(observer)
+        onDispose { activity.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(Unit) {
         launcher.launch(permissions)

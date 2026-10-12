@@ -73,6 +73,7 @@ class PhoneBleCodecTest {
             recirc = 1,
             front = 1,
             ac = 0,
+            climateLayout = PhoneBleCodec.CLIMATE_LAYOUT_DUAL,
             seats = listOf(2, 1, 1, 1),
             volume = 10,
             gen = 4,
@@ -91,9 +92,28 @@ class PhoneBleCodecTest {
         assertEquals(1, merged.recirc)
         assertEquals(1, merged.front)
         assertEquals(0, merged.ac)
+        assertEquals(PhoneBleCodec.CLIMATE_LAYOUT_DUAL, merged.climateLayout)
         assertEquals(listOf(2, 1, 1, 1), merged.seats)
         assertEquals(10, merged.volume)
         assertEquals(4, merged.gen)
+    }
+
+    @Test
+    fun page1_climateLayout_missingIsNull_zeroIsOrdinary() {
+        val dual = PhoneBleCodec.Snapshot(climateLayout = PhoneBleCodec.CLIMATE_LAYOUT_DUAL, gen = 1)
+        val page1 = PhoneBleCodec.snapshotBodies(1, dual).first { it[0].toInt() == 1 }
+        assertEquals(PhoneBleCodec.CLIMATE_LAYOUT_DUAL, page1[9].toInt() and 0xFF)
+
+        val missingBody = page1.copyOf()
+        missingBody[9] = PhoneBleCodec.MISSING_U8.toByte()
+        assertNull(PhoneBleCodec.overlaySnapshot(PhoneBleCodec.Snapshot(), missingBody).climateLayout)
+
+        val ordinaryBody = page1.copyOf()
+        ordinaryBody[9] = PhoneBleCodec.CLIMATE_LAYOUT_ORDINARY.toByte()
+        assertEquals(
+            PhoneBleCodec.CLIMATE_LAYOUT_ORDINARY,
+            PhoneBleCodec.overlaySnapshot(PhoneBleCodec.Snapshot(), ordinaryBody).climateLayout,
+        )
     }
 
     @Test
@@ -353,6 +373,8 @@ class PhoneBleCodecTest {
         assertEquals(1, snap.recirc)
         assertEquals(0, snap.front)
         assertEquals(0, snap.ac)
+        // Runtime default ClimateControlType.DUAL_ZONE → BLE wire 2.
+        assertEquals(PhoneBleCodec.CLIMATE_LAYOUT_DUAL, snap.climateLayout)
         assertEquals(2, snap.seats[0])
         assertEquals(11, snap.volume)
         assertEquals(1, snap.playing)
@@ -366,11 +388,13 @@ class PhoneBleCodecTest {
         assertTrue(line.contains("\"recirc\":1"))
         assertTrue(line.contains("\"front\":0"))
         assertTrue(line.contains("\"ac\":0"))
+        assertTrue(line.contains("\"layout\":2"))
         assertTrue(line.contains("\"play\":1"))
         assertTrue(line.contains("\"pos\":12345"))
         assertTrue(line.contains("\"dur\":200000"))
         assertEquals("Song \"1\"/2", JSONObject(line).getString("title"))
         assertEquals("Band", JSONObject(line).getString("artist"))
+        assertEquals(2, JSONObject(line).getInt("layout"))
         assertFalse(line.contains("key"))
         val action = PhoneCompanionHost.toAction(PhoneBleCodec.OP_VOLUME, 0, 0)
         val builtin = action as AutomationAction.Builtin
