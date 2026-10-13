@@ -48,6 +48,10 @@ data class RoadEdge(
     val ref: String? = null,
     /** Source OSM way id; several pack edges may share one way after junction splits. */
     val wayId: Long? = null,
+    /**
+     * OSM tunnel (`yes` / `building_passage`). Missing field in old packs → `false`.
+     */
+    val tunnel: Boolean = false,
 ) {
     val pointCount: Int get() = coords.size / 2
 
@@ -344,6 +348,7 @@ data class RoadGraph(
             var maxspeedBackward: Int? = null
             var ref: String? = null
             var wayId: Long? = null
+            var tunnel = false
             var coords: DoubleArray? = null
             json.beginObject()
             while (json.hasNext()) {
@@ -359,6 +364,7 @@ data class RoadGraph(
                     "maxspeedBackward" -> maxspeedBackward = readOptionalSpeedKmh(json)
                     "ref" -> ref = readOptionalString(json)
                     "wayId" -> wayId = readOptionalLong(json)
+                    "tunnel" -> tunnel = readOptionalBoolean(json)
                     "coords" -> coords = readCoords(json)
                     else -> json.skipValue()
                 }
@@ -379,7 +385,27 @@ data class RoadGraph(
                 maxspeedBackward = maxspeedBackward,
                 ref = ref,
                 wayId = wayId,
+                tunnel = tunnel,
             )
+        }
+
+        private fun readOptionalBoolean(json: JsonReader): Boolean {
+            return when (json.peek()) {
+                JsonToken.NULL -> {
+                    json.nextNull()
+                    false
+                }
+                JsonToken.BOOLEAN -> json.nextBoolean()
+                JsonToken.NUMBER -> json.nextInt() != 0
+                JsonToken.STRING -> {
+                    val s = json.nextString().trim().lowercase()
+                    s == "true" || s == "yes" || s == "1"
+                }
+                else -> {
+                    json.skipValue()
+                    false
+                }
+            }
         }
 
         private fun readOptionalSpeedKmh(json: JsonReader): Int? {

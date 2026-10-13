@@ -61,6 +61,157 @@ class ParseMaxspeedTest(unittest.TestCase):
         self.assertEqual(s({}, highway="motorway_link"), (None, None, None))
         self.assertEqual(s({}, highway="trunk"), (None, None, None))
 
+    def test_zone_maxspeed_ru_urban_without_posted_number(self) -> None:
+        s = self.m.speed_fields_from_tags
+        self.assertEqual(s({"zone:maxspeed": "RU:urban"}, highway="residential"), (60, None, None))
+        self.assertEqual(s({"source:maxspeed": "RU:urban"}, highway="primary"), (60, None, None))
+        # Explicit posted number wins over zone tag.
+        self.assertEqual(
+            s({"maxspeed": "40", "zone:maxspeed": "RU:urban"}, highway="residential"),
+            (40, None, None),
+        )
+
+
+class TunnelTagTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.m = load_tool()
+
+    def test_tunnel_yes_and_building_passage(self) -> None:
+        t = self.m.tunnel_from_tags
+        self.assertTrue(t({"tunnel": "yes"}))
+        self.assertTrue(t({"tunnel": "YES"}))
+        self.assertTrue(t({"tunnel": "building_passage"}))
+        self.assertTrue(t({"tunnel": "1"}))
+        self.assertFalse(t({"tunnel": "no"}))
+        self.assertFalse(t({"tunnel": "culvert"}))
+        self.assertFalse(t({}))
+        self.assertFalse(t(None))
+
+    def test_overpass_writes_tunnel_only_when_true(self) -> None:
+        payload = {
+            "elements": [
+                {
+                    "type": "way",
+                    "id": 1,
+                    "nodes": [1, 2],
+                    "tags": {"highway": "primary", "tunnel": "yes"},
+                    "geometry": [
+                        {"lat": 55.0, "lon": 37.0},
+                        {"lat": 55.0, "lon": 37.1},
+                    ],
+                },
+                {
+                    "type": "way",
+                    "id": 2,
+                    "nodes": [3, 4],
+                    "tags": {"highway": "residential"},
+                    "geometry": [
+                        {"lat": 55.1, "lon": 37.0},
+                        {"lat": 55.1, "lon": 37.1},
+                    ],
+                },
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "overpass.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            edges = self.m.edges_from_overpass_json(path, self.m.DEFAULT_HIGHWAY_CLASSES)
+        by_id = {e["wayId"]: e for e in edges}
+        self.assertTrue(by_id[1].get("tunnel") is True)
+        self.assertNotIn("tunnel", by_id[2])
+
+
+class UrbanFallbackTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.m = load_tool()
+
+    def test_point_in_ring(self) -> None:
+        ring = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0], [0.0, 0.0]]
+        self.assertTrue(self.m._point_in_ring(1.0, 1.0, ring))
+        self.assertFalse(self.m._point_in_ring(3.0, 1.0, ring))
+
+    def test_geojson_urban_polygon_sets_60_but_not_trunk(self) -> None:
+        fc = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "residential"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 1.0], [1.2, 1.0]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "trunk"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 1.1], [1.2, 1.1]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "primary", "maxspeed": "80"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 0.9], [1.2, 0.9]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"place": "town"},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [[0.0, 0.0], [3.0, 0.0], [3.0, 3.0], [0.0, 3.0], [0.0, 0.0]]
+                        ],
+                    },
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "urban.geojson"
+            path.write_text(json.dumps(fc), encoding="utf-8")
+            edges = self.m.edges_from_geojson(path, self.m.DEFAULT_HIGHWAY_CLASSES)
+        by_class = {e["class"]: e for e in edges}
+        self.assertEqual(by_class["residential"].get("maxspeed"), 60)
+        self.assertNotIn("maxspeed", by_class["trunk"])
+        self.assertEqual(by_class["primary"].get("maxspeed"), 80)
+
+    def test_outside_polygon_stays_untagged(self) -> None:
+        fc = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "residential"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[10.0, 10.0], [10.1, 10.0]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"zone:maxspeed": "RU:urban"},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]
+                        ],
+                    },
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "rural.geojson"
+            path.write_text(json.dumps(fc), encoding="utf-8")
+            edges = self.m.edges_from_geojson(path, self.m.DEFAULT_HIGHWAY_CLASSES)
+        self.assertEqual(len(edges), 1)
+        self.assertNotIn("maxspeed", edges[0])
+
 
 class JunctionSplitTest(unittest.TestCase):
     @classmethod
