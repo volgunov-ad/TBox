@@ -16,6 +16,7 @@ object AutomationRoadMatchSignals {
     val INTEREST_IDS: Set<AutomationSignalId> = setOf(
         AutomationSignalId.ROAD_HIGHWAY_CLASS,
         AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+        AutomationSignalId.ROAD_TUNNEL,
     )
 
     /** Common OSM highway classes present in `.tboxroads` packs (picker options). */
@@ -53,6 +54,11 @@ object AutomationRoadMatchSignals {
         return AutomationSignalValue.Number(limit.toDouble())
     }
 
+    fun tunnelValue(anchor: RoadMatchAnchorState): AutomationSignalValue {
+        if (anchor.edgeId == null) return AutomationSignalValue.Unavailable
+        return AutomationSignalValue.State(if (anchor.tunnel == true) "on" else "off")
+    }
+
     fun flowFor(signal: AutomationSignalId): Flow<AutomationSignalValue>? = when (signal) {
         AutomationSignalId.ROAD_HIGHWAY_CLASS ->
             RoadMatchAnchorRepository.state
@@ -61,6 +67,10 @@ object AutomationRoadMatchSignals {
         AutomationSignalId.ROAD_SPEED_LIMIT_KMH ->
             RoadMatchAnchorRepository.state
                 .map(::speedLimitKmhValue)
+                .distinctUntilChanged()
+        AutomationSignalId.ROAD_TUNNEL ->
+            RoadMatchAnchorRepository.state
+                .map(::tunnelValue)
                 .distinctUntilChanged()
         else -> null
     }

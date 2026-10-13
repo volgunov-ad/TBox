@@ -84,6 +84,11 @@ object ExternalApiVoiceAliasesRu {
             "ограничение скорости по карте",
             "осм лимит",
         ),
+        AutomationSignalId.ROAD_TUNNEL to listOf(
+            "тоннель",
+            "в тоннеле",
+            "туннель",
+        ),
         AutomationSignalId.ENGINE_RPM to listOf(
             "обороты",
             "обороты мотора",
