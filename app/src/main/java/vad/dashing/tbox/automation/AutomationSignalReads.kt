@@ -152,6 +152,9 @@ internal object AutomationSignalReads {
                 AutomationSignalId.MEDIA_DURATION_MS -> mediaPlaybackNumberFlow { state, _ ->
                     state.durationMs.toDouble()
                 }
+                AutomationSignalId.ROAD_HIGHWAY_CLASS,
+                AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+                -> AutomationRoadMatchSignals.flowFor(key.signal)
                 else -> null
             }
         }

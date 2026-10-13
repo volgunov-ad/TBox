@@ -267,7 +267,17 @@ enum class AutomationSignalId(
     /** Predicted playback position in milliseconds at the moment the signal is read. */
     MEDIA_POSITION_MS("media_position_ms"),
     /** Media session duration in milliseconds. Zero when the session does not report one. */
-    MEDIA_DURATION_MS("media_duration_ms");
+    MEDIA_DURATION_MS("media_duration_ms"),
+    /**
+     * OSM highway class of the matched road edge ([vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState.highwayClass]).
+     * APP-only; Unavailable without a match. Raises road-match demand without pose correction.
+     */
+    ROAD_HIGHWAY_CLASS("road_highway_class", AutomationSignalValueType.STATE),
+    /**
+     * Posted OSM maxspeed (km/h) on the matched edge ([RoadMatchAnchorState.currentLimitKmh]).
+     * APP-only OSM match — not SpeedCam radar fallback and not SLA CAN. Unavailable without match/limit.
+     */
+    ROAD_SPEED_LIMIT_KMH("road_speed_limit_kmh");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

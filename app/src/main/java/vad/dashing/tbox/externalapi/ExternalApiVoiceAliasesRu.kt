@@ -74,6 +74,16 @@ object ExternalApiVoiceAliasesRu {
             "какая скорость",
             "сколько едем",
         ),
+        AutomationSignalId.ROAD_HIGHWAY_CLASS to listOf(
+            "класс дороги",
+            "тип дороги",
+            "какая дорога",
+        ),
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH to listOf(
+            "лимит по карте",
+            "ограничение скорости по карте",
+            "осм лимит",
+        ),
         AutomationSignalId.ENGINE_RPM to listOf(
             "обороты",
             "обороты мотора",

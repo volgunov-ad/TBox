@@ -9,8 +9,9 @@ import vad.dashing.tbox.location.MockCanSpeedMode
 import vad.dashing.tbox.location.MockPowerState
 
 /**
- * Who wants the shared [RoadMatchRuntime]: pose correction (Geoposition toggle) and/or
- * a dashboard widget that reads match state (OSM speed limit or road-match map tile).
+ * Who wants the shared [RoadMatchRuntime]: pose correction (Geoposition toggle),
+ * a dashboard widget that reads match state (OSM speed limit or road-match map tile),
+ * and/or runnable automations that use road-match APP signals (class / OSM limit).
  * Pose is only nudged when [correctPose] is true.
  * [mode] selects Ordinary softCorrect vs Rails vs experimental FreeTurns; default Ordinary keeps legacy behaviour.
  */
@@ -31,11 +32,12 @@ data class RoadMatchDemand(
             power: MockPowerState,
             canMode: MockCanSpeedMode,
             widgetPresent: Boolean,
+            automationRoadInterest: Boolean = false,
             mode: RoadMatchMode = RoadMatchMode.ORDINARY,
         ): RoadMatchDemand {
             val correctPose = toggleOn && RoadMatchAvailability.isToggleEnabled(power, canMode)
             return RoadMatchDemand(
-                matchNeeded = correctPose || widgetPresent,
+                matchNeeded = correctPose || widgetPresent || automationRoadInterest,
                 correctPose = correctPose,
                 mode = mode,
             )
