@@ -222,6 +222,7 @@ class AutomationEngine(
             espGpioGestures.clear()
             widgetPressGestures.clear()
             AutomationHardKeyTracking.setInterestRequired(false)
+            AutomationRoadMatchTracking.setInterestRequired(false)
             AutomationUiSnapshot.setServiceRunning(false)
             dispatchGuard.retain(emptySet())
             loopGuard.clear()
@@ -242,6 +243,7 @@ class AutomationEngine(
     fun releaseInterests() {
         signalProvider.stop()
         AutomationHardKeyTracking.setInterestRequired(false)
+        AutomationRoadMatchTracking.setInterestRequired(false)
     }
 
     private fun refreshPeriodicTickNeeded() {
@@ -254,6 +256,14 @@ class AutomationEngine(
                 definition.triggers.any { it is AutomationTrigger.HardKey }
         }
         AutomationHardKeyTracking.setInterestRequired(required)
+    }
+
+    private fun refreshRoadMatchInterest() {
+        val required = definitions.values.any { definition ->
+            AutomationValidator.isRunnable(definition) &&
+                definition.signalInterests().any { AutomationRoadMatchSignals.isRoadMatchSignal(it.signal) }
+        }
+        AutomationRoadMatchTracking.setInterestRequired(required)
     }
 
     private fun installInitialDefinitions(snapshot: AutomationStoreSnapshot) {
@@ -272,6 +282,7 @@ class AutomationEngine(
         dispatchGuard.retain(definitions.keys)
         refreshPeriodicTickNeeded()
         refreshHardKeyInterest()
+        refreshRoadMatchInterest()
     }
 
     private suspend fun eventLoop() {
@@ -447,6 +458,7 @@ class AutomationEngine(
             signalProvider.replaceInterests(interests)
         }
         refreshHardKeyInterest()
+        refreshRoadMatchInterest()
     }
 
     private suspend fun dispatch(

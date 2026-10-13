@@ -282,5 +282,7 @@ object AutomationParameterLabels {
         AutomationSignalId.MEDIA_PLAYING -> "Медиа: воспроизведение"
         AutomationSignalId.MEDIA_POSITION_MS -> "Медиа: позиция"
         AutomationSignalId.MEDIA_DURATION_MS -> "Медиа: длительность"
+        AutomationSignalId.ROAD_HIGHWAY_CLASS -> "Дорога: класс (OSM)"
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> "Дорога: лимит по карте (OSM), км/ч"
     }
 }

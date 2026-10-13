@@ -39,6 +39,45 @@ class RoadMatchDemandTest {
     }
 
     @Test
+    fun automationRoadInterestOnly_matchesWithoutCorrectingPose() {
+        val demand = RoadMatchDemand.resolve(
+            toggleOn = false,
+            power = MockPowerState.OFF,
+            canMode = MockCanSpeedMode.NONE,
+            widgetPresent = false,
+            automationRoadInterest = true,
+        )
+        assertTrue(demand.matchNeeded)
+        assertFalse(demand.correctPose)
+    }
+
+    @Test
+    fun automationRoadInterest_orsWithWidget_stillNoPose() {
+        val demand = RoadMatchDemand.resolve(
+            toggleOn = false,
+            power = MockPowerState.OFF,
+            canMode = MockCanSpeedMode.NONE,
+            widgetPresent = true,
+            automationRoadInterest = true,
+        )
+        assertTrue(demand.matchNeeded)
+        assertFalse(demand.correctPose)
+    }
+
+    @Test
+    fun automationRoadInterest_doesNotForcePoseWhenToggleOff() {
+        val demand = RoadMatchDemand.resolve(
+            toggleOn = false,
+            power = MockPowerState.ALWAYS_ON,
+            canMode = MockCanSpeedMode.CONSTANT,
+            widgetPresent = false,
+            automationRoadInterest = true,
+        )
+        assertTrue(demand.matchNeeded)
+        assertFalse(demand.correctPose)
+    }
+
+    @Test
     fun toggleOnDirectMode_doesNotCorrectPose() {
         val demand = RoadMatchDemand.resolve(
             toggleOn = true,

@@ -362,7 +362,7 @@ object AutomationSignalStateEncoding {
         "sand" -> "SAND"
         "mud" -> "MUD"
         "snow_mode" -> "SNOW"
-        else -> raw
+        else -> AutomationRoadMatchSignals.highwayClassOptionLabel(raw) ?: raw
     }
 
     private fun legacyStateFromNumeric(signal: AutomationSignalId, raw: Double): String? {

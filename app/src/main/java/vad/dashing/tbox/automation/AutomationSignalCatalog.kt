@@ -1016,6 +1016,25 @@ object AutomationSignalCatalog {
             appOnly,
             typicalRange = "Длительность трека в миллисекундах. 0 — сессия длительность не сообщила.",
         ),
+        state(
+            AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_HIGHWAY_CLASS),
+            appOnly,
+            AutomationRoadMatchSignals.HIGHWAY_CLASS_OPTIONS,
+            typicalRange = "Класс OSM-ребра после привязки к карте (motorway, primary, residential, …). " +
+                "Без match / без ребра — сигнала нет. Поднимает matcher без коррекции позы; " +
+                "не SpeedCam и не SLA с шины.",
+        ),
+        number(
+            AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_SPEED_LIMIT_KMH),
+            "км/ч",
+            appOnly,
+            typicalRange = "Текущий posted OSM maxspeed на matched-ребре (км/ч). " +
+                "Без match или без maxspeed в паке — сигнала нет. Только OSM match, " +
+                "не fallback с радара SpeedCam и не slaSpeedLimitWidget. " +
+                "Смена лимита: NumericThreshold с выключенным rearm (каждое новое число).",
+        ),
     )
 
     private val byId = entries.associateBy { it.id }

@@ -110,6 +110,7 @@ import vad.dashing.tbox.automation.AutomationEngine
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
+import vad.dashing.tbox.automation.AutomationRoadMatchTracking
 import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
@@ -1019,7 +1020,8 @@ class BackgroundService : Service() {
             combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                 Triple(dash, floating, main)
             },
-        ) { toggleMode, powerCan, widgets ->
+            AutomationRoadMatchTracking.interestRequired,
+        ) { toggleMode, powerCan, widgets, automationRoadInterest ->
             val (toggleOn, mode) = toggleMode
             val (power, canMode) = powerCan
             val (dash, floating, main) = widgets
@@ -1028,6 +1030,7 @@ class BackgroundService : Service() {
                 power = power,
                 canMode = canMode,
                 widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+                automationRoadInterest = automationRoadInterest,
                 mode = mode,
             )
         }.stateIn(scope, eager, RoadMatchDemand.NONE)
