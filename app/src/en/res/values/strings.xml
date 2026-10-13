@@ -749,6 +749,12 @@
     <string name="settings_ca_certs_error_adb">No localhost ADB connection (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">No root (su) on the HU</string>
     <string name="settings_ca_certs_error_failed">Certificate install failed (%1$s)</string>
+    <string name="settings_hu_time_zone_title">HU time zone</string>
+    <string name="settings_hu_time_zone_desc">The stock Adayo service keeps its own time zone (factory PRC, China) and re-applies it on every boot and MCU clock sync, so changing the zone in Android settings does not stick. This writes the zone into the service itself via localhost ADB; root is not required.</string>
+    <string name="settings_hu_time_zone_current">HU service time zone: %1$s</string>
+    <string name="settings_hu_time_zone_apply">Apply time zone</string>
+    <string name="settings_hu_time_zone_busy">Please wait…</string>
+    <string name="settings_hu_time_zone_error_service">Adayo settings service did not respond</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
@@ -1660,6 +1666,9 @@
     <string name="settings_mock_location_requirements_link">Tap to view requirements for mock locations</string>
     <string name="button_reboot_tbox">Reboot TBox</string>
     <string name="button_reboot_hu">Reboot HU</string>
+    <string name="hu_reboot_error_title">HU reboot</string>
+    <string name="hu_reboot_error_nosu">No su on the head unit — reboot via ADB is unavailable.</string>
+    <string name="hu_reboot_error_failed">Failed to send the reboot command via local ADB (%1$s).</string>
     <string name="button_restart_background_service">Restart background service</string>
 
     <string name="dialog_mock_location_requirements_title">Mock location requirements (Developer options)</string>

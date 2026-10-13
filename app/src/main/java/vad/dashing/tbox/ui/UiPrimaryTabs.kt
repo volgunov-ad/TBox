@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -51,6 +52,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataRepository
@@ -79,6 +81,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.adb.HuAdbControl
+import vad.dashing.tbox.adb.HuRebootAdb
+import vad.dashing.tbox.adb.HuRebootResult
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -858,6 +862,10 @@ fun SettingsTabContent(
     var backgroundServiceRestartButtonEnabled by remember { mutableStateOf(true) }
 
     var huRebootButtonEnabled by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
+    val huRebootErrorTitle = stringResource(R.string.hu_reboot_error_title)
+    val huRebootErrorNoSu = stringResource(R.string.hu_reboot_error_nosu)
+    val huRebootErrorFailed = stringResource(R.string.hu_reboot_error_failed)
     val mbCanAvailability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
@@ -964,10 +972,6 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_launch_main_in_stock_app_window_title),
                 stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
                 true,
-            )
-            HuCaCertsSettingsCard(
-                autoInstall = huCaCertsAutoInstall,
-                onAutoInstallChange = { enabled -> settingsViewModel.saveHuCaCertsAutoInstall(enabled) },
             )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -1402,6 +1406,13 @@ fun SettingsTabContent(
                     style = MaterialTheme.typography.tboxButton,
                 )
             }
+            if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+                HuCaCertsSettingsCard(
+                    autoInstall = huCaCertsAutoInstall,
+                    onAutoInstallChange = { enabled -> settingsViewModel.saveHuCaCertsAutoInstall(enabled) },
+                )
+                HuTimeZoneSettingsCard()
+            }
             SettingSwitch(
                 huAdbState.usbEnabled,
                 { enabled ->
@@ -1572,16 +1583,30 @@ fun SettingsTabContent(
                 onClick = rememberWrappedOnClick {
                     if (huRebootButtonEnabled) {
                         huRebootButtonEnabled = false
-                        sendSetMbCanProperty(
-                            context,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
-                        )
+                        when (headUnitCanMode) {
+                            HeadUnitCanMode.Android9MbCan -> sendSetMbCanProperty(
+                                context,
+                                MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                                MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                            )
+                            HeadUnitCanMode.Android10Vhal -> coroutineScope.launch {
+                                val message = when (val result = HuRebootAdb.reboot(context)) {
+                                    HuRebootResult.Sent -> null
+                                    HuRebootResult.NoSu -> huRebootErrorNoSu
+                                    is HuRebootResult.Failed -> huRebootErrorFailed.format(result.detail)
+                                }
+                                if (message != null) {
+                                    huRebootButtonEnabled = true
+                                    showAlertDialog(huRebootErrorTitle, message, context)
+                                }
+                            }
+                        }
                     }
                 },
-                enabled = huRebootButtonEnabled &&
-                    mbCanAvailable &&
-                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                enabled = huRebootButtonEnabled && when (headUnitCanMode) {
+                    HeadUnitCanMode.Android9MbCan -> mbCanAvailable
+                    HeadUnitCanMode.Android10Vhal -> true
+                },
                 modifier = Modifier.weight(1f),
             ) {
                 Text(

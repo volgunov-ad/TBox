@@ -752,6 +752,12 @@
     <string name="settings_ca_certs_error_adb">Нет подключения к localhost ADB (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">На ГУ нет root (su)</string>
     <string name="settings_ca_certs_error_failed">Не удалось установить сертификаты (%1$s)</string>
+    <string name="settings_hu_time_zone_title">Часовой пояс ГУ</string>
+    <string name="settings_hu_time_zone_desc">Штатная служба Adayo хранит свой часовой пояс (с завода — PRC, Китай) и навязывает его при каждой загрузке и синхронизации с часами MCU, поэтому смена пояса в настройках Android не сохраняется. Здесь пояс записывается в саму службу через localhost ADB, root не нужен.</string>
+    <string name="settings_hu_time_zone_current">Пояс службы ГУ: %1$s</string>
+    <string name="settings_hu_time_zone_apply">Применить часовой пояс</string>
+    <string name="settings_hu_time_zone_busy">Подождите…</string>
+    <string name="settings_hu_time_zone_error_service">Служба настроек Adayo не ответила</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
@@ -1671,6 +1677,9 @@
     <string name="widget_mock_location_mode_when_no_fix_short">НФ</string>
     <string name="button_reboot_tbox">Перезагрузить TBox</string>
     <string name="button_reboot_hu">Перезагрузить ГУ</string>
+    <string name="hu_reboot_error_title">Перезагрузка ГУ</string>
+    <string name="hu_reboot_error_nosu">На ГУ нет su — перезагрузка через ADB недоступна.</string>
+    <string name="hu_reboot_error_failed">Не удалось отправить команду перезагрузки через локальный ADB (%1$s).</string>
     <string name="button_restart_background_service">Перезапустить фоновую службу</string>
 
     <string name="dialog_mock_location_requirements_title">Требования для mock-локации (Настройки разработчика)</string>

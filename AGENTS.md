@@ -16,6 +16,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.1.0). Th
 | **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md), [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md) |
 | **Stock A9 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID9_MBCAN_RU.md](docs/STOCK_APPS_ANDROID9_MBCAN_RU.md) |
 | **Stock A10 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID10_VHAL_RU.md](docs/STOCK_APPS_ANDROID10_VHAL_RU.md) |
+| **HU devices (A9/A10)** | `adb/HuRebootAdb`, `cacerts/`, `adb/LocalhostAdbSession` | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) — profiles, root, boot, CPU load, eMMC/GPT layout, HU reboot |
 | **Raw decode formulas** | `CanFramesProcess`, `BackgroundService.ans*`, `Android10VhalRepository`, `HvacClimateDomain` | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) |
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
