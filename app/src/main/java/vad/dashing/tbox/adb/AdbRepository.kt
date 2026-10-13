@@ -163,10 +163,18 @@ object AdbRepository {
                     }
                     ACTION_USB_PERMISSION -> {
                         val device = extraUsbDevice(intent)
-                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        val grantedExtra =
+                            intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        // Adayo A10 SystemUI auto-grants (CBen_grantUsbPermissions) and closes the
+                        // dialog, but the result broadcast still carries granted=false.
+                        val granted = grantedExtra || (device != null &&
+                            runCatching { usbManager.hasPermission(device) }.getOrDefault(false))
                         refreshUsbDevices()
                         if (device != null && device.deviceId == pendingUsbDeviceId) {
                             pendingUsbDeviceId = null
+                            if (granted && !grantedExtra) {
+                                appendLog("USB permission result says denied, but hasPermission=true; connecting")
+                            }
                             if (granted) {
                                 connectUsb(device.deviceId)
                             } else {

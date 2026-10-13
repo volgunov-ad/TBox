@@ -25,12 +25,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.CanDataViewModel
@@ -49,6 +53,8 @@ import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
+private const val FLOATING_TILE_EDIT_UNFOCUSED_FALLBACK_MS = 1500L
+private const val FLOATING_TILE_EDIT_SETTLE_MS = 400L
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -144,11 +150,31 @@ fun MainScreen(
     var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
         .collectAsStateWithLifecycle()
-    LaunchedEffect(pendingFloatingTileEdit) {
-        pendingFloatingTileEdit?.let { req ->
-            floatingOverlayEditRequest = req
-            FloatingDashboardTileEditRequestBus.clear()
+    // A10 stock app window (ActivityView): right after LAUNCH_APP the activity window token may not
+    // be registered in WMS yet (or the task is being reparented to a new virtual display), and
+    // Dialog.show() then throws BadTokenException. Keep the request in the bus until the host
+    // window is resumed and focused, so a live MainActivity instance picks it up.
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val hostResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    val hostWindowFocused = LocalWindowInfo.current.isWindowFocused
+    var hostResumedLongEnough by remember { mutableStateOf(false) }
+    LaunchedEffect(hostResumed) {
+        hostResumedLongEnough = false
+        if (hostResumed) {
+            delay(FLOATING_TILE_EDIT_UNFOCUSED_FALLBACK_MS)
+            hostResumedLongEnough = true
         }
+    }
+    val canHostTileEditDialog =
+        windowMode || (hostResumed && (hostWindowFocused || hostResumedLongEnough))
+    LaunchedEffect(pendingFloatingTileEdit, canHostTileEditDialog) {
+        if (!canHostTileEditDialog) return@LaunchedEffect
+        val req = pendingFloatingTileEdit ?: return@LaunchedEffect
+        // LAUNCH_APP may move an already running MainActivity task to a fresh ActivityView display;
+        // the client still adds the dialog to the old display until the move/relaunch lands.
+        if (!windowMode) delay(FLOATING_TILE_EDIT_SETTLE_MS)
+        floatingOverlayEditRequest = req
+        FloatingDashboardTileEditRequestBus.clear()
     }
 
     BoxWithConstraints(

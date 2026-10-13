@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
+import android.view.Display
 import android.view.ViewTreeObserver
 import android.provider.Settings
 import android.util.Log
@@ -33,7 +35,9 @@ import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,6 +47,9 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+
+        @Volatile
+        private var lastExternalRedirectAtMs = 0L
     }
 
     private val finishForWindowModeReceiver = object : BroadcastReceiver() {
@@ -153,6 +160,8 @@ class MainActivity : ComponentActivity() {
         consumeThemeOpenIntent(intent)
         MainActivityLoadTimings.mark("main_after_intent")
 
+        if (redirectExternalLaunchToStockAppWindow(savedInstanceState)) return
+
         MainActivityLoadTimings.mark("main_before_setContent")
         setContent {
             AppLauncherPickerIconCacheHostEffect(Unit)
@@ -238,6 +247,48 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
         }
+    }
+
+    /**
+     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; on A10 with
+     * the stock-window setting on, hand them to the Adayo launcher ActivityView. Pending
+     * tile-edit / theme requests are already on their buses for the relaunched instance.
+     */
+    private fun redirectExternalLaunchToStockAppWindow(savedInstanceState: Bundle?): Boolean {
+        @Suppress("DEPRECATION")
+        val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
+        if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) return false
+        if (!AdayoStockAppWindow.isAvailable(this)) return false
+        // Application-level caches may still hold defaults on a cold start.
+        val (settingEnabled, canMode) = runCatching {
+            runBlocking {
+                settingsManager.launchMainInStockAppWindowFlow.first() to
+                    settingsManager.headUnitCanModeFlow.first()
+            }
+        }.getOrElse { return false }
+        val now = SystemClock.elapsedRealtime()
+        val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
+            freshInstance = true,
+            displayId = displayId,
+            nowMs = now,
+            lastRedirectAtMs = lastExternalRedirectAtMs,
+            settingEnabled = settingEnabled,
+            headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal,
+            adayoLauncherAvailable = true,
+        )
+        if (!redirect) return false
+        val launched = AdayoStockAppWindow.launchInAppWindow(
+            context = this,
+            packageName = packageName,
+            activityClass = MainActivity::class.java.name,
+        )
+        if (!launched) return false
+        lastExternalRedirectAtMs = now
+        Log.i(TAG, "External launch on default display redirected to stock app window")
+        finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+        return true
     }
 
     private fun consumeThemeOpenIntent(intent: Intent?) {
