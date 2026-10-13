@@ -222,7 +222,42 @@ class RoadGraphTest {
         assertEquals(null, legacy.maxspeedBackward)
         assertEquals(null, legacy.ref)
         assertEquals(null, legacy.wayId)
+        assertEquals(false, legacy.tunnel)
         assertEquals(null, legacy.speedLimitKmh(false))
+    }
+
+    @Test
+    fun loadTunnelFieldDefaultsToFalseWhenAbsent() {
+        val json = """
+            {
+              "format": 1,
+              "regionId": "tunnel-load",
+              "graphVersion": 5,
+              "bbox": [37.0, 55.0, 38.0, 56.0],
+              "edges": [
+                {
+                  "id": 1,
+                  "class": "primary",
+                  "lengthM": 100.0,
+                  "from": 0,
+                  "to": 1,
+                  "tunnel": true,
+                  "coords": [[37.60, 55.75], [37.61, 55.75]]
+                },
+                {
+                  "id": 2,
+                  "class": "residential",
+                  "lengthM": 100.0,
+                  "from": 2,
+                  "to": 3,
+                  "coords": [[37.60, 55.76], [37.61, 55.76]]
+                }
+              ]
+            }
+        """.trimIndent()
+        val graph = RoadGraph.load(packBytes(json))
+        assertEquals(true, graph.edges[0].tunnel)
+        assertEquals(false, graph.edges[1].tunnel)
     }
 
     @Test

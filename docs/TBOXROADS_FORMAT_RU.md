@@ -70,7 +70,8 @@ tiles/0000_0001.tboxroads
       "maxspeedForward": 80,
       "maxspeedBackward": 60,
       "ref": "A-108",
-      "wayId": 4242
+      "wayId": 4242,
+      "tunnel": true
     }
   ]
 }
@@ -97,9 +98,18 @@ tiles/0000_0001.tboxroads
 | `maxspeedForward` / `maxspeedBackward` | int (опц.) | OSM `maxspeed:forward` / `maxspeed:backward` вдоль / против `coords` |
 | `ref` | string (опц.) | Номер дороги (`M-7`, `А-108`). Без `name` |
 | `wayId` | long (опц.) | OSM way id; после нарезки на перекрёстках несколько рёбер могут делить один `wayId` |
+| `tunnel` | bool (опц.) | `true` — OSM `tunnel=yes` / `true` / `1` / `building_passage`. Нет поля или `false` — не тоннель. Старые паки без поля читаются как «не тоннель» |
 | `coords` | `[[lon, lat], …]` | Polyline ≥ 2 точек, WGS84 |
 
-Tool режет OSM way только в **узлах-перекрёстках** (узел входит в ≥2 way). Точки излома одной дороги (`degree = 2`) не режутся. Явное число на way (`maxspeed=90`) всегда важнее зоны и дефолта класса. Старые пакеты без новых полей валидны: загрузчик пропускает неизвестные ключи, лимит = неизвестен. `format` остаётся `1`. Нужна пересборка `.tboxroads`, чтобы `RU:urban` / неразмеченный `motorway` стали числами.
+Tool режет OSM way только в **узлах-перекрёстках** (узел входит в ≥2 way). Точки излома одной дороги (`degree = 2`) не режутся. Явное число на way (`maxspeed=90`) всегда важнее зоны и дефолта класса. Старые пакеты без новых полей валидны: загрузчик пропускает неизвестные ключи, лимит = неизвестен, `tunnel` = false. `format` остаётся `1`. Нужна пересборка `.tboxroads`, чтобы `RU:urban` / неразмеченный `motorway` / `tunnel` / urban-fallback 60 стали числами/флагами.
+
+### Urban fallback 60 (только при сборке)
+
+Если у ребра **нет** `maxspeed` / `maxspeedForward` / `maxspeedBackward`, tool может выставить `maxspeed: 60` (ПДД РФ в населённом пункте):
+
+1. **Тег на way:** `zone:maxspeed=RU:urban` или `source:maxspeed=RU:urban` (уже на самой дороге) → 60, в том числе для trunk, если так размечено.
+2. **Полигон НП / зоны:** midpoint ребра внутри полигона с `place=city|town|village|suburb|hamlet`, либо `zone:maxspeed` / `source:maxspeed=RU:urban` на area/multipolygon / admin boundary с `place=city|town|village`. Overpass-запросы (`--fetch-overpass*`) тянут эти объекты вместе с highway; GeoJSON — Polygon/MultiPolygon с теми же properties.
+3. **Исключения полигонного fallback:** не ставим 60 на `motorway`, `motorway_link`, `trunk`, `trunk_link` (даже если полигон покрывает). Существующий OSM maxspeed **не перетираем**. Неразмеченный `motorway` по-прежнему получает 110 (класс), не 60.
 
 Узлы как отдельный массив в v1 **не обязательны**: связность через `from`/`to`
 (одинаковый индекс = общая вершина). Tool квантует концы polyline (~1 м) и
@@ -130,7 +140,7 @@ Tool режет OSM way только в **узлах-перекрёстках** 
 - Монолитные корневые `*.tboxroads` **не поддерживаются**: runtime их не загружает, скачивание принимает только ZIP-bundle.
 - Если на диске остался старый монолит (с предыдущей версии), при `ensureLoaded` файл **удаляется без парсинга в RAM**, запись убирается из манифеста — регион снова «не установлен» (без краша/OOM).
 - Внутренний формат тайла остаётся `TBOXRDS1`; bundle имеет отдельный `index.json`.
-- Новые поля ребра (`maxspeed`, `maxspeedForward`, `maxspeedBackward`, `ref`, `wayId`) опциональны. Старый загрузчик их пропускает (`skipValue`); матчер на обновлённых пакетах продолжает работать. Новый загрузчик на старых пакетах даёт `null` лимит.
+- Новые поля ребра (`maxspeed`, `maxspeedForward`, `maxspeedBackward`, `ref`, `wayId`, `tunnel`) опциональны. Старый загрузчик их пропускает (`skipValue`); матчер на обновлённых пакетах продолжает работать. Новый загрузчик на старых пакетах даёт `null` лимит и `tunnel=false`.
 
 ### Lookahead лимита (виджет OSM)
 
