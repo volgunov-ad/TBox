@@ -1082,6 +1082,9 @@ class SettingsManager(private val context: Context) {
          */
         private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
             booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
+        /** A10 only: re-apply the extra root CA overlay on app start. Default false. */
+        private val HU_CA_CERTS_AUTO_INSTALL_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_ca_certs_auto_install")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -2185,6 +2188,10 @@ class SettingsManager(private val context: Context) {
      */
     val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val huCaCertsAutoInstallFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] ?: false }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -4879,6 +4886,12 @@ class SettingsManager(private val context: Context) {
             preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
         }
         LaunchMainInStockAppWindowSetting.update(enabled)
+    }
+
+    suspend fun saveHuCaCertsAutoInstall(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] = enabled
+        }
     }
 
     suspend fun saveCanAutoBindEnabled(enabled: Boolean) {

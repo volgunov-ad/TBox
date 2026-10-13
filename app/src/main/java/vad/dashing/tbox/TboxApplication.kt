@@ -6,7 +6,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.cacerts.HuCaCertsClient
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.AppIconCache
 import vad.dashing.tbox.ui.LaunchableAppsCatalog
@@ -42,6 +45,16 @@ class TboxApplication : Application() {
             settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
                 LaunchMainInStockAppWindowSetting.update(enabled)
             }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huCaCertsAutoInstallFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, mode -> enabled && mode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { shouldInstall ->
+                    if (shouldInstall) HuCaCertsClient.ensureInstalled(this@TboxApplication)
+                }
         }
         applicationScope.launch {
             try {

@@ -793,6 +793,7 @@ fun SettingsTabContent(
     val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
+    val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -963,6 +964,10 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_launch_main_in_stock_app_window_title),
                 stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
                 true,
+            )
+            HuCaCertsSettingsCard(
+                autoInstall = huCaCertsAutoInstall,
+                onAutoInstallChange = { enabled -> settingsViewModel.saveHuCaCertsAutoInstall(enabled) },
             )
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

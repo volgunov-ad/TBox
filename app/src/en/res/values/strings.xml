@@ -737,6 +737,18 @@
     <string name="settings_vehicle_feature_setup_done">Done</string>
     <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
+    <string name="settings_ca_certs_title">Root certificates</string>
+    <string name="settings_ca_certs_desc">Adds HARICA TLS Root CA 2021 (RSA and ECC) and Russian Trusted Root CA to the system store; without them RuStore and some sites fail with «Unacceptable certificate». Requires root (su) and localhost ADB. The system partition is not modified: certificates stay until the HU reboots, then press the button again or enable auto-install. Restart apps that are already running.</string>
+    <string name="settings_ca_certs_auto_title">Install automatically</string>
+    <string name="settings_ca_certs_auto_desc">On TBox Monitor start (including after an HU reboot) the certificates are installed if missing. If ADB is not ready yet, up to 3 attempts 30 s apart. The result is written to the log.</string>
+    <string name="settings_ca_certs_status_installed">Certificates installed</string>
+    <string name="settings_ca_certs_status_missing">Certificates installed: %1$d of %2$d</string>
+    <string name="settings_ca_certs_install">Install certificates</string>
+    <string name="settings_ca_certs_installing">Installing…</string>
+    <string name="settings_ca_certs_done">Done. Restart apps that were missing the certificates.</string>
+    <string name="settings_ca_certs_error_adb">No localhost ADB connection (%1$s)</string>
+    <string name="settings_ca_certs_error_nosu">No root (su) on the HU</string>
+    <string name="settings_ca_certs_error_failed">Certificate install failed (%1$s)</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>
