@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
@@ -126,6 +127,7 @@ object MainActivityIntentHelper {
         widgetIndex: Int,
     ): Boolean {
         if (panelId.isBlank() || widgetIndex < 0) return false
+        if (WindowModeUiGuard.blockEditingIfActive(context)) return false
         FloatingDashboardTileEditRequestBus.post(panelId, widgetIndex)
         ioScope.launch {
             runCatching {

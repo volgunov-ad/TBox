@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,6 +49,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS = 300L
 
         @Volatile
         private var lastExternalRedirectAtMs = 0L
@@ -259,14 +262,24 @@ class MainActivity : ComponentActivity() {
         val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
         if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) return false
         if (!AdayoStockAppWindow.isAvailable(this)) return false
-        // Application-level caches may still hold defaults on a cold start.
-        val (settingEnabled, canMode) = runCatching {
+        // Application-level caches may still hold defaults on a cold start, so read DataStore, but
+        // never stall the first frame on it: on timeout fall back to the caches (worst case the
+        // launch simply stays fullscreen).
+        val readStartMs = SystemClock.elapsedRealtime()
+        val stored = runCatching {
             runBlocking {
-                settingsManager.launchMainInStockAppWindowFlow.first() to
-                    settingsManager.headUnitCanModeFlow.first()
+                withTimeoutOrNull(EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS) {
+                    settingsManager.launchMainInStockAppWindowFlow.first() to
+                        settingsManager.headUnitCanModeFlow.first()
+                }
             }
-        }.getOrElse { return false }
+        }.getOrNull()
         val now = SystemClock.elapsedRealtime()
+        if (stored == null) {
+            Log.w(TAG, "Stock-window redirect: settings read timed out after ${now - readStartMs} ms, using cache")
+        }
+        val (settingEnabled, canMode) = stored
+            ?: (LaunchMainInStockAppWindowSetting.enabled to UniversalCanRepository.mode.value)
         val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
             freshInstance = true,
             displayId = displayId,

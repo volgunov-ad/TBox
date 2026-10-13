@@ -33,7 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -86,7 +86,7 @@ fun ExpertRawGetSetDialog(
     var busy by remember { mutableStateOf(false) }
     var showSetConfirm by remember { mutableStateOf(false) }
     var snapshot by remember { mutableStateOf<Map<String, String>?>(null) }
-    val context = LocalContext.current
+    val resources = LocalResources.current
 
     val filtered = remember(filterText, catalog, modeLabel) {
         ExpertRawCanCatalog.filterParams(
@@ -129,7 +129,7 @@ fun ExpertRawGetSetDialog(
         scope.launch {
             val rows = catalog.filter { ExpertRawCanCatalog.isReadable(it, modeLabel) }
             val results = UniversalCanRepository.readRawSnapshot(rows) { done, total ->
-                statusText = context.getString(R.string.expert_raw_get_set_snapshot_progress, done, total)
+                statusText = resources.getString(R.string.expert_raw_get_set_snapshot_progress, done, total)
             }
             val current = ExpertRawSnapshot.toMap(results)
             ExpertRawCanCatalog.logSnapshot(current, modeStorage)
@@ -138,10 +138,10 @@ fun ExpertRawGetSetDialog(
                 val changes = ExpertRawSnapshot.diff(before, current)
                 ExpertRawCanCatalog.logSnapshotDiff(changes, modeStorage)
                 if (changes.isEmpty()) {
-                    context.getString(R.string.expert_raw_get_set_compare_none, okCount)
+                    resources.getString(R.string.expert_raw_get_set_compare_none, okCount)
                 } else {
                     buildString {
-                        append(context.getString(R.string.expert_raw_get_set_compare_header, changes.size))
+                        append(resources.getString(R.string.expert_raw_get_set_compare_header, changes.size))
                         changes.take(ExpertRawSnapshotDisplayLimit).forEach {
                             append("\n").append(ExpertRawSnapshot.formatChange(it))
                         }
@@ -149,7 +149,7 @@ fun ExpertRawGetSetDialog(
                     }
                 }
             } else {
-                context.getString(R.string.expert_raw_get_set_snapshot_done, rows.size, okCount)
+                resources.getString(R.string.expert_raw_get_set_snapshot_done, rows.size, okCount)
             }
             snapshot = current
             busy = false
