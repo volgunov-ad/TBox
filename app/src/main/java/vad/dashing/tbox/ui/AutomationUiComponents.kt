@@ -558,7 +558,7 @@ private fun StateConditionFields(
                     label = "Состояние",
                     value = condition.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
-                    optionLabel = ::automationStateLabel,
+                    optionLabel = { automationStateLabel(condition.signal, it) },
                     onValueChange = { onChange(condition.copy(expectedState = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -947,6 +947,9 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
 
 internal fun automationStateLabel(value: String): String =
     AutomationSignalCatalog.stateOptionLabel(value)
+
+internal fun automationStateLabel(signal: AutomationSignalId, value: String): String =
+    AutomationSignalCatalog.stateOptionLabel(signal, value)
 
 @Composable
 private fun GeofenceConditionFields(

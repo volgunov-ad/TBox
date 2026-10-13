@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Raises shared road-match demand ([vad.dashing.tbox.location.roadmatch.RoadMatchDemand])
  * only while at least one runnable automation uses road APP signals
- * ([AutomationSignalId.ROAD_HIGHWAY_CLASS], [AutomationSignalId.ROAD_SPEED_LIMIT_KMH]).
+ * ([AutomationSignalId.ROAD_HIGHWAY_CLASS], [AutomationSignalId.ROAD_SPEED_LIMIT_KMH],
+ * [AutomationSignalId.ROAD_TUNNEL]).
  *
  * Same lifecycle pattern as [AutomationHardKeyTracking]: interest is set from
  * [AutomationEngine] when definitions change; [correctPose] stays off for this source.

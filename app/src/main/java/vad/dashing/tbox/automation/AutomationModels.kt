@@ -277,7 +277,13 @@ enum class AutomationSignalId(
      * Posted OSM maxspeed (km/h) on the matched edge ([RoadMatchAnchorState.currentLimitKmh]).
      * APP-only OSM match — not SpeedCam radar fallback and not SLA CAN. Unavailable without match/limit.
      */
-    ROAD_SPEED_LIMIT_KMH("road_speed_limit_kmh");
+    ROAD_SPEED_LIMIT_KMH("road_speed_limit_kmh"),
+    /**
+     * Whether the matched road edge is an OSM tunnel ([RoadMatchAnchorState.tunnel]).
+     * APP-only; Unavailable without a match. STATE `on` = inside tunnel, `off` = outside.
+     * Raises road-match demand without pose correction; does not start SpeedCam.
+     */
+    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

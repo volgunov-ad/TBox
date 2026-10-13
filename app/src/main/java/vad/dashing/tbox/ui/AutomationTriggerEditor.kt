@@ -572,7 +572,7 @@ private fun StateTriggerFields(
                     label = "Состояние",
                     value = trigger.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
-                    optionLabel = ::automationStateLabel,
+                    optionLabel = { automationStateLabel(trigger.signal, it) },
                     onValueChange = { onChange(trigger.copy(expectedState = it)) },
                     modifier = Modifier.weight(1f),
                 )

@@ -1035,6 +1035,19 @@ object AutomationSignalCatalog {
                 "не fallback с радара SpeedCam и не slaSpeedLimitWidget. " +
                 "Смена лимита: NumericThreshold с выключенным rearm (каждое новое число).",
         ),
+        state(
+            AutomationSignalId.ROAD_TUNNEL,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_TUNNEL),
+            appOnly,
+            binaryStates,
+            typicalRange = "Тоннель / Tunnel (OSM на matched-ребре). " +
+                "on — в тоннеле (въезд / enter), off — вне тоннеля (выезд / exit). " +
+                "Без match — сигнала нет. Поднимает matcher без коррекции позы; не SpeedCam.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("off", "Вне тоннеля / Outside"),
+                AutomationSignalNamedValue("on", "В тоннеле / Inside"),
+            ),
+        ),
     )
 
     private val byId = entries.associateBy { it.id }
@@ -1148,14 +1161,24 @@ object AutomationSignalCatalog {
         sources: Set<AutomationSignalSource>,
         options: List<String> = emptyList(),
         typicalRange: String = "",
+        namedValues: List<AutomationSignalNamedValue>? = null,
     ) = AutomationSignalDescriptor(
         id = id,
         label = label,
         sources = sources,
         stateOptions = options,
-        namedValues = options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
+        namedValues = namedValues
+            ?: options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
         typicalRange = typicalRange,
     )
+
+    /** UI label for a state option; prefers catalog [AutomationSignalDescriptor.namedValues]. */
+    fun stateOptionLabel(signal: AutomationSignalId, raw: String): String {
+        val named = get(signal).namedValues.firstOrNull {
+            it.value.equals(raw.trim(), ignoreCase = true)
+        }?.label
+        return named?.takeIf { it.isNotBlank() } ?: stateOptionLabel(raw)
+    }
 }
 
 private fun formatNamedValues(values: List<AutomationSignalNamedValue>): String =
