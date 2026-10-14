@@ -6,7 +6,7 @@ package vad.dashing.tbox.adb
  * Treats loopback aliases (`127.0.0.1`, `localhost`, `::1`) as the same host so the
  * ADB tab and [LocalhostAdbSession] agree on «same adbd».
  */
-internal object AdbEndpoints {
+object AdbEndpoints {
     fun format(host: String, port: Int): String = "${host.trim()}:$port"
 
     fun matches(endpoint: String, host: String, port: Int): Boolean {

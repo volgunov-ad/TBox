@@ -25,4 +25,5 @@ include(":app")
 include(":voice")
 include(":phone")
 include(":mqtt")
+include(":adbcore")
  

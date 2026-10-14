@@ -4,7 +4,7 @@ package vad.dashing.tbox.adb
  * Shared interpretation of [AdbShellResult] for localhost automation
  * (permission grants, virtual-display launch, etc.).
  */
-internal object AdbShellResults {
+object AdbShellResults {
     /**
      * Non-null detail when the shell command should be treated as failed:
      * non-zero exit code, or legacy shell output containing Error:/Exception.
