@@ -1028,6 +1028,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
         private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
+        private val FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_above_system_bars")
         private val FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_show_on_service_start_delay_seconds")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
@@ -2029,6 +2031,10 @@ class SettingsManager(private val context: Context) {
 
     val floatingPanelsAllowBeyondScreenFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val floatingPanelsAboveSystemBarsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY] ?: false }
         .distinctUntilChanged()
 
     /** Seconds to wait after periodic-job start before the first floating-panel ensure. */
@@ -4663,6 +4669,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFloatingPanelsAboveSystemBars(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY] = enabled
         }
     }
 

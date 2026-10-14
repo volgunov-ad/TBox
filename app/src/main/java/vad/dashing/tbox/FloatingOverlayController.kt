@@ -19,6 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -195,7 +198,30 @@ internal class FloatingOverlayController(
     @Volatile
     private var allowBeyondScreen = false
 
+    /**
+     * Main-thread only. Non-null while panels are hosted as [WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY]
+     * (above SystemUI bars) via [OverlayAccessibilityService].
+     */
+    private var accessibilityWindowManager: WindowManager? = null
+
     init {
+        overlayScope.launch {
+            combine(
+                settingsManager.floatingPanelsAboveSystemBarsFlow,
+                OverlayAccessibilityService.windowManager,
+            ) { enabled, a11yWm -> if (enabled) a11yWm else null }
+                .distinctUntilChanged()
+                .collect { a11yWm ->
+                    withContext(Dispatchers.Main) { switchPanelHost(a11yWm) }
+                }
+        }
+        overlayScope.launch {
+            settingsManager.floatingPanelsAboveSystemBarsFlow
+                .filter { it }
+                .collect {
+                    withContext(Dispatchers.IO) { OverlayAccessibilityEnabler.apply(service, true) }
+                }
+        }
         overlayScope.launch {
             settingsManager.floatingPanelsAllowBeyondScreenFlow.collect { enabled ->
                 val previous = allowBeyondScreen
@@ -589,11 +615,49 @@ internal class FloatingOverlayController(
     private fun ensureWindowManager() {
         if (windowManager != null) return
         try {
-            windowManager = service.getSystemService(WindowManager::class.java)
+            windowManager = accessibilityWindowManager
+                ?: service.getSystemService(WindowManager::class.java)
         } catch (e: Exception) {
             Log.e(TAG, "Error creating Window manager", e)
             TboxRepository.addLog("ERROR", TAG, "Error creating Window manager: ${e.message}")
         }
+    }
+
+    private fun panelWindowType(): Int =
+        if (accessibilityWindowManager != null) {
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        } else {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        }
+
+    /** Re-attaches mounted panels to the accessibility (above bars) or regular overlay layer. */
+    private fun switchPanelHost(a11yWm: WindowManager?) {
+        if (a11yWm === accessibilityWindowManager) return
+        val oldWm = windowManager
+        accessibilityWindowManager = a11yWm
+        windowManager = null
+        ensureWindowManager()
+        val newWm = windowManager ?: return
+        finishClosingOverlays()
+        val type = panelWindowType()
+        for ((panelId, view) in overlayViews.toList()) {
+            val params = overlayParams[panelId] ?: continue
+            try {
+                if (view.isAttachedToWindow) {
+                    oldWm?.removeViewImmediate(view)
+                }
+                params.type = type
+                newWm.addView(view, params)
+            } catch (e: Exception) {
+                Log.w(TAG, "switchPanelHost failed for $panelId", e)
+                closeOverlay(panelId, immediate = true)
+            }
+        }
+        TboxRepository.addLog(
+            "INFO",
+            TAG,
+            "Panel layer: ${if (a11yWm != null) "accessibility overlay" else "application overlay"}",
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -946,7 +1010,7 @@ internal class FloatingOverlayController(
         }
         finishClosingOverlays(config.id)
 
-        if (!Settings.canDrawOverlays(service)) {
+        if (accessibilityWindowManager == null && !Settings.canDrawOverlays(service)) {
             TboxRepository.addLog("ERROR", TAG, "Cannot draw overlay")
             return
         }
@@ -963,7 +1027,7 @@ internal class FloatingOverlayController(
         val layoutParams = WindowManager.LayoutParams(
             bounds.width,
             bounds.height,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            panelWindowType(),
             floatingOverlayWindowFlags(allowBeyondScreen),
             PixelFormat.TRANSLUCENT
         ).apply {

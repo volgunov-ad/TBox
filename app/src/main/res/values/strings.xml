@@ -421,6 +421,13 @@
     <string name="settings_panel_layout_snap_desc">Общая привязка перемещения и изменения размера всех панелей этого типа к сетке (1–50 dp). Действует только в режиме редактирования жестами; в темы не входит</string>
     <string name="settings_floating_allow_beyond_screen_title">Перемещать за пределы экрана</string>
     <string name="settings_floating_allow_beyond_screen_desc">В режиме редактирования панели можно смещать за края экрана. По умолчанию выключено; в темы не входит</string>
+    <string name="settings_floating_above_system_bars_title">Панели поверх штатных баров</string>
+    <string name="settings_floating_above_system_bars_desc">Панели над верхним и нижним барами ГУ принимают нажатия. Включает вспомогательную службу специальных возможностей TBox (нужно WRITE_SECURE_SETTINGS, выдаётся автоматически). Панели также окажутся над клавиатурой</string>
+    <string name="settings_floating_above_system_bars_connected">Служба специальных возможностей подключена — панели над барами</string>
+    <string name="settings_floating_above_system_bars_not_connected">Служба специальных возможностей не подключена — панели в обычном слое (под барами). Проверьте WRITE_SECURE_SETTINGS или включите службу «TBox: панели поверх баров» в настройках Android</string>
+    <string name="settings_floating_above_system_bars_failed">Не удалось включить службу специальных возможностей</string>
+    <string name="overlay_accessibility_service_label">TBox: панели поверх баров</string>
+    <string name="overlay_accessibility_service_desc">Нужна только для показа плавающих панелей TBox поверх штатных баров. Содержимое экрана и события не читаются.</string>
     <string name="settings_floating_show_on_service_start_delay_title">Задержка показа плавающих панелей, сек</string>
     <string name="settings_floating_show_on_service_start_delay_desc">После запуска фоновой службы панели не показываются это число секунд (0–60; по умолчанию 3). Действует и на обычный показ, и на Usage Stats</string>
     <string name="settings_main_screen_layout_snap_step_title">Шаг сетки: %1$d dp</string>
@@ -695,7 +702,7 @@
     <string name="permissions_write_settings_title">Изменение системных настроек</string>
     <string name="permissions_write_settings_desc">Для виджетов «Тема день/ночь» и «Регулировка зеркал» (запись штатных ключей ГУ). Включайте вместе с WRITE_SECURE_SETTINGS по ADB.</string>
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
-    <string name="permissions_write_secure_desc">Защищённое разрешение: через настройки Android не выдаётся. Нужно для тех же виджетов день/ночь и зеркал. Можно выдать автоматически с ГУ (кнопка ниже) или выполнить команду на ПК:</string>
+    <string name="permissions_write_secure_desc">Защищённое разрешение: через настройки Android не выдаётся. Нужно для тех же виджетов день/ночь и зеркал, а также для опции «Панели поверх штатных баров». Можно выдать автоматически с ГУ (кнопка ниже) или выполнить команду на ПК:</string>
     <string name="permissions_write_secure_auto_grant">Выдать автоматически</string>
     <string name="permissions_write_secure_auto_grant_running">Выдача…</string>
     <string name="permissions_write_secure_auto_hint">Если :5555 ещё не слушает — кратко включит ADB TCP, подключится к localhost, выполнит pm grant и вернёт TCP только если включала эта сессия. Уже открытый порт не выключает. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>

@@ -781,6 +781,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
         )
 
+    val floatingPanelsAboveSystemBars = settingsManager.floatingPanelsAboveSystemBarsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
     val floatingPanelsAllowBeyondScreen = settingsManager.floatingPanelsAllowBeyondScreenFlow
         .stateIn(
             scope = viewModelScope,
@@ -3301,6 +3308,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveFloatingPanelsAllowBeyondScreen(enabled)
+        }
+    }
+
+    fun saveFloatingPanelsAboveSystemBars(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsAboveSystemBars(enabled)
         }
     }
 

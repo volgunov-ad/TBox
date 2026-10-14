@@ -421,6 +421,13 @@
     <string name="settings_panel_layout_snap_desc">Shared snap for move and resize of all panels of this type (1–50 dp). Applies only in gesture edit mode; not included in themes</string>
     <string name="settings_floating_allow_beyond_screen_title">Move beyond screen edges</string>
     <string name="settings_floating_allow_beyond_screen_desc">In edit mode, panels can be moved past the screen edges. Off by default; not included in themes</string>
+    <string name="settings_floating_above_system_bars_title">Panels above stock bars</string>
+    <string name="settings_floating_above_system_bars_desc">Panels over the head unit top and bottom bars receive touches. Enables the TBox helper accessibility service (needs WRITE_SECURE_SETTINGS, granted automatically). Panels will also be above the keyboard</string>
+    <string name="settings_floating_above_system_bars_connected">Accessibility service connected — panels are above the bars</string>
+    <string name="settings_floating_above_system_bars_not_connected">Accessibility service not connected — panels use the regular layer (below the bars). Check WRITE_SECURE_SETTINGS or enable «TBox: panels above bars» in Android accessibility settings</string>
+    <string name="settings_floating_above_system_bars_failed">Could not enable the accessibility service</string>
+    <string name="overlay_accessibility_service_label">TBox: panels above bars</string>
+    <string name="overlay_accessibility_service_desc">Only used to show TBox floating panels above the stock bars. Screen content and events are not read.</string>
     <string name="settings_floating_show_on_service_start_delay_title">Floating panels show delay, sec</string>
     <string name="settings_floating_show_on_service_start_delay_desc">After the background service starts, panels stay hidden for this many seconds (0–60; default 3). Applies to normal show and Usage Stats</string>
     <string name="settings_main_screen_layout_snap_step_title">Grid step: %1$d dp</string>
@@ -692,7 +699,7 @@
     <string name="permissions_write_settings_title">Modify system settings</string>
     <string name="permissions_write_settings_desc">For the Day/Night theme and Mirror adjust widgets (writing stock HU keys). Enable together with WRITE_SECURE_SETTINGS via ADB.</string>
     <string name="permissions_write_secure_title">WRITE_SECURE_SETTINGS (ADB)</string>
-    <string name="permissions_write_secure_desc">Protected permission: cannot be granted from Android settings. Needed for the same Day/Night and mirror widgets. Grant automatically on the head unit (button below) or run this on a PC:</string>
+    <string name="permissions_write_secure_desc">Protected permission: cannot be granted from Android settings. Needed for the same Day/Night and mirror widgets and for the «Panels above stock bars» option. Grant automatically on the head unit (button below) or run this on a PC:</string>
     <string name="permissions_write_secure_auto_grant">Grant automatically</string>
     <string name="permissions_write_secure_auto_grant_running">Granting…</string>
     <string name="permissions_write_secure_auto_hint">If :5555 is not listening yet, briefly enables ADB TCP, connects to localhost, runs pm grant, then restores TCP only if this session turned it on. Does not disable an already-open port. On first use, accept «Allow USB debugging» on the head unit.</string>

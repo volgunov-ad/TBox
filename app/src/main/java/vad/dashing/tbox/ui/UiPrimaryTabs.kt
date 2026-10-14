@@ -51,9 +51,14 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.OverlayAccessibilityEnabler
+import vad.dashing.tbox.OverlayAccessibilityService
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataRepository
 import vad.dashing.tbox.ClimateControlType
@@ -1801,6 +1806,13 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val floatingPanelsAllowBeyondScreen by
         settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val floatingPanelsAboveSystemBars by
+        settingsViewModel.floatingPanelsAboveSystemBars.collectAsStateWithLifecycle()
+    val overlayAccessibilityWindowManager by
+        OverlayAccessibilityService.windowManager.collectAsStateWithLifecycle()
+    val overlayAccessibilityConnected = overlayAccessibilityWindowManager != null
+    var floatingPanelsAboveSystemBarsBusy by remember { mutableStateOf(false) }
+    val floatingPanelsScope = rememberCoroutineScope()
     val floatingPanelsShowOnServiceStartDelaySeconds by
         settingsViewModel.floatingPanelsShowOnServiceStartDelaySeconds.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -2051,6 +2063,47 @@ fun FloatingPanelsSettingsTabContent(
             stringResource(R.string.settings_floating_allow_beyond_screen_desc),
             true,
         )
+        val aboveSystemBarsFailedText =
+            stringResource(R.string.settings_floating_above_system_bars_failed)
+        SettingSwitch(
+            floatingPanelsAboveSystemBars,
+            { enabled ->
+                floatingPanelsAboveSystemBarsBusy = true
+                floatingPanelsScope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        OverlayAccessibilityEnabler.apply(context, enabled)
+                    }
+                    if (ok || !enabled) {
+                        settingsViewModel.saveFloatingPanelsAboveSystemBars(enabled)
+                    }
+                    if (!ok) {
+                        Toast.makeText(context, aboveSystemBarsFailedText, Toast.LENGTH_LONG).show()
+                    }
+                    floatingPanelsAboveSystemBarsBusy = false
+                }
+            },
+            stringResource(R.string.settings_floating_above_system_bars_title),
+            stringResource(R.string.settings_floating_above_system_bars_desc),
+            !floatingPanelsAboveSystemBarsBusy,
+        )
+        if (floatingPanelsAboveSystemBars) {
+            Text(
+                text = stringResource(
+                    if (overlayAccessibilityConnected) {
+                        R.string.settings_floating_above_system_bars_connected
+                    } else {
+                        R.string.settings_floating_above_system_bars_not_connected
+                    },
+                ),
+                style = MaterialTheme.typography.tboxBody,
+                color = if (overlayAccessibilityConnected) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+            )
+        }
         var floatingShowDelayDraft by remember {
             mutableStateOf(floatingPanelsShowOnServiceStartDelaySeconds.toString())
         }
