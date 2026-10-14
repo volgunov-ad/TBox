@@ -25,8 +25,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import vad.dashing.tbox.TboxRepository
@@ -106,7 +106,7 @@ object AdbRepository {
     private const val MAX_LOG_LINES = 500
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+    private val timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.US)
     private val _state = MutableStateFlow(State())
     private val _usbCandidates = MutableStateFlow<List<UsbCandidate>>(emptyList())
     private val _consoleLog = MutableStateFlow<List<String>>(emptyList())
@@ -1041,7 +1041,7 @@ object AdbRepository {
     }
 
     private fun appendLog(message: String) {
-        val time = synchronized(timeFormat) { timeFormat.format(Date()) }
+        val time = timeFormat.format(LocalTime.now())
         _consoleLog.value = (_consoleLog.value + "[$time] $message").takeLast(MAX_LOG_LINES)
     }
 

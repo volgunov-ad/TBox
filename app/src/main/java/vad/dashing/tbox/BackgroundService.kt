@@ -8,9 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
@@ -3431,7 +3429,7 @@ class BackgroundService : Service() {
     }
 
     private fun showRefuelToast(message: CharSequence) {
-        Handler(Looper.getMainLooper()).post {
+        scope.launch(Dispatchers.Main) {
             Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
         }
     }
@@ -5388,7 +5386,9 @@ class BackgroundService : Service() {
                     }
                     val workingBaud = EspCompanionRepository.deviceInfo.value.um980Baud.takeIf { it > 0 } ?: 115_200
                     val transport = EspUm980BinaryTransport(mgr)
-                    Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    withContext(Dispatchers.IO) {
+                        Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    }
                 }
                 else -> {
                     val session = usbNmeaLocationSource?.currentSessionOrNull()
@@ -5400,7 +5400,9 @@ class BackgroundService : Service() {
                         ?: usbGnssBaud.value.takeIf { it > 0 }
                         ?: 115_200
                     val transport = UsbUm980BinaryTransport(session)
-                    Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    withContext(Dispatchers.IO) {
+                        Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    }
                 }
             }
         } catch (e: Exception) {
