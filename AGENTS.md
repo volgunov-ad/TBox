@@ -86,6 +86,18 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 ./gradlew :mqtt:testDebugUnitTest
 ./gradlew :mqtt:assembleDebug
 ```
+### Data Resize APK (`:dataresize`) and `:adbcore`
+
+Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.
+
+`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app` and `:dataresize`.
+
+```
+./gradlew :adbcore:testDebugUnitTest
+./gradlew :dataresize:testDebugUnitTest
+./gradlew :dataresize:assembleDebug
+```
+
 ### Git branches
 
 Use **`preRelease`** for pre-release integration; merge to **`master`** when ready to ship. Feature branches branch off `preRelease`, not `master`. See [docs/BRANCHING.md](docs/BRANCHING.md).
