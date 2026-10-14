@@ -752,6 +752,15 @@
     <string name="settings_ca_certs_error_adb">Нет подключения к localhost ADB (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">На ГУ нет root (su)</string>
     <string name="settings_ca_certs_error_failed">Не удалось установить сертификаты (%1$s)</string>
+    <string name="settings_hu_app_network_title">Интернет для приложений</string>
+    <string name="settings_hu_app_network_desc">Штатный CarService ГУ при загрузке включает файрвол (iptables), который пускает в сеть только системные службы, а установленным приложениям (браузер, RuStore, TBox и др.) режет весь трафик через Wi‑Fi и модем. Кнопка добавляет правило, разрешающее приложениям выход. Нужны root (su) и localhost ADB. Правило действует до перезагрузки ГУ, после неё нажмите снова или включите автоприменение.</string>
+    <string name="settings_hu_app_network_apply">Открыть доступ в интернет</string>
+    <string name="settings_hu_app_network_busy">Подождите…</string>
+    <string name="settings_hu_app_network_done">Доступ открыт. Приложения, которые висели без сети, может понадобиться перезапустить.</string>
+    <string name="settings_hu_app_network_no_firewall">Файрвол Adayo не найден, менять нечего</string>
+    <string name="settings_hu_app_network_error">Не удалось изменить правила (%1$s)</string>
+    <string name="settings_hu_app_network_auto_title">Применять автоматически</string>
+    <string name="settings_hu_app_network_auto_desc">При запуске TBox Monitor (в том числе после перезагрузки ГУ) правило добавляется само и перепроверяется: CarService может пересоздать файрвол уже после старта TBox. Сначала через 30 с, 1, 2 и 5 мин, затем раз в 30 мин.</string>
     <string name="settings_hu_time_zone_title">Часовой пояс ГУ</string>
     <string name="settings_hu_time_zone_desc">Штатная служба Adayo хранит свой часовой пояс (с завода — PRC, Китай) и навязывает его при каждой загрузке и синхронизации с часами MCU, поэтому смена пояса в настройках Android не сохраняется. Здесь пояс записывается в саму службу через localhost ADB, root не нужен.</string>
     <string name="settings_hu_time_zone_current">Пояс службы ГУ: %1$s</string>

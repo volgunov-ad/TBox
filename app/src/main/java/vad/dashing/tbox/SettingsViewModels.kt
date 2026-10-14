@@ -1517,6 +1517,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val huAppNetworkAutoOpen = settingsManager.huAppNetworkAutoOpenFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     init {
         settingsManager.preThemeActivationFlush = preThemeActivationFlushHook
         ThemeActivationCoordinator.markMainScreenUiReady()
@@ -3625,6 +3632,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHuCaCertsAutoInstall(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveHuCaCertsAutoInstall(enabled)
+        }
+    }
+
+    fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuAppNetworkAutoOpen(enabled)
         }
     }
 

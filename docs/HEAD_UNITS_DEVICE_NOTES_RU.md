@@ -104,6 +104,30 @@ adb shell service call adayo.setting.v2.0 15 s16 Europe/Moscow    # setTimeZone,
 
 Номера транзакций взяты из `ISettingsServiceInterfaceAIDL$Stub` в `CarSetting.apk` (`TRANSACTION_setTimeZone = 15`, `TRANSACTION_getTimeZone = 49`); перед записью сверять чтением (49). В TBox Monitor — карточка **«Часовой пояс ГУ»** в блоке «Эксперт» (только A10 + экспертный режим): читает пояс службы при открытии, список поясов РФ и Минска, кнопка «Применить» (`hutimezone/HuTimeZoneCodec`, `HuTimeZoneClient`, журнал `HU_TIME_ZONE`). Применено на A10 14.10.2026: после перезагрузки `persist.sys.timezone=Europe/Moscow`, сверка с MCU — «MCU time = System time».
 
+### 5.2. Файрвол Adayo: у приложений нет интернета (A10)
+
+Симптом: браузер, RuStore и другие установленные приложения не открывают ни одного сайта, TCP висит в `SYN_SENT`, а системные службы (uid < 10000) сеть видят.
+
+Причина — iptables-цепочки Adayo:
+
+- netd создаёт цепочки по `/system/etc/adayo/firewall/AdayoFirewallDef.json`: `OUTPUT → adayo_output → adayo_output_wifi` (`wlan+`, `eth+`, `ra+`, `tiwlan+`) и `adayo_output_mobile` (`usb+`, `tbox+`, `rmnet+`, `ppp+` …);
+- `CarService.apk` → `com.android.car.network.CarNetworkService` (лог `CAR.Firewall_NET`) на старте и по `android.intent.action.ADAYO_BOOT_COMPLETED` читает белый список `/system/etc/adayo/firewall/AdayoFirewallAppDef.json` и вызывает `INetworkManagementService.setFirewallAllRules(66/67, …)` → netd `firewallReplaceAllChain` в режиме whitelist: `RETURN` для uid 0–9999, без владельца, `esp`, `lo`, TCP RST, в конце **`DROP`**;
+- на Jetour белый список пуст (`ConfigBean{APPs=[], Hosts=[]}`), поэтому режется трафик всех приложений, включая TBox;
+- флаги `isFirewallEnabled: false` (`dumpsys car_service`), `ALL Firewall enabled: false` (`dumpsys network_management`), `persist.adayo.firewall.enable=0` на содержимое цепочек не влияют; `ndc firewall all_firewall_disable` правила не снимает.
+
+Почему раньше интернет был: цепочки заполняются асинхронно при загрузке и, по-видимому, не всегда успевают или могут не заполниться (гонка с netd); после перезагрузки 14.10.2026 01:28 `DROP` стоял стабильно.
+
+Исправление (root, до перезагрузки ГУ):
+
+```
+su 0 iptables -w -I adayo_output_wifi 1 -m owner --uid-owner 10000-99999 -j RETURN
+su 0 iptables -w -I adayo_output_mobile 1 -m owner --uid-owner 10000-99999 -j RETURN
+```
+
+IPv6-цепочек Adayo нет. Проверено на A10 14.10.2026: под uid Яндекс Браузера (10047) соединение с `ya.ru:80/443` и ping проходят. Штатный `ICarNetwork.setFirewallUidRule` (без проверки прав в CarService) — альтернатива без root, не используется.
+
+В TBox Monitor — карточка **«Интернет для приложений»** в блоке «Эксперт» (только A10 + экспертный режим): кнопка добавляет правило (идемпотентно, `iptables -C` перед `-I`), переключатель «Применять автоматически» (по умолчанию выкл.) держит правило с перепроверкой через 30 с, 1, 2, 5 мин, затем раз в 30 мин, потому что CarService пересоздаёт цепочки по `ADAYO_BOOT_COMPLETED` (`hufirewall/HuAppNetworkCodec`, `HuAppNetworkClient`, журнал `HU_APP_NETWORK`).
+
 ## 6. Разметка eMMC на A10 и нехватка места под приложения
 
 eMMC 64 ГБ (124 993 536 секторов), разметка прошита под 32 ГБ:
@@ -138,7 +162,31 @@ fstab:
 1. **Перенос с сохранением данных.** Отформатировать ext4 в хвосте (loop-устройство со смещением на `mmcblk0`), при остановленном фреймворке (`stop`) скопировать `/data` (`cp -a`, затем `restorecon`; `dalvik-cache` можно не копировать), поправить first/last LBA записи 39 в **основной и резервной** таблицах, пересчитать CRC массива записей и CRC обоих заголовков, перезагрузиться. Старая область остаётся для отката.
 2. **Чистый `/data`.** Только перенаправить запись 39 в хвост — `fs_mgr` с `autoformat` сам создаст пустую ФС. Проще и безопаснее по GPT, но это сброс приложений и данных.
 
-Риск обоих — «кирпич» при ошибке в GPT (загрузчик ищет по ней `kernel`/`dtb`). Восстановление — только прошивальщиком Autochips с полной прошивкой. Перед любой записью: полный дамп обеих копий GPT (LBA 0–33 и последние 33 сектора) и данных на ПК. Встраивать в TBox Monitor — только в экспертном режиме и только после ручной отработки на стенде; сам TBox при остановке фреймворка тоже останавливается, поэтому сценарий должен идти отдельным root-процессом (`setsid su 0 sh …`).
+Риск обоих — ошибка в GPT (загрузчик ищет по ней `lk`, `kernel`, `dtb`, `misc`, `metazone`). Перед любой записью: полный дамп обеих копий GPT (LBA 0–33 и последние 33 сектора) и данных на ПК. Встраивать в TBox Monitor — только в экспертном режиме и только после ручной отработки на стенде; сам TBox при остановке фреймворка тоже останавливается, поэтому сценарий должен идти отдельным root-процессом (`setsid su 0 sh …`).
+
+#### 6.1. Что можно восстановить без программатора (проверено по образам A10, 14.10.2026)
+
+Цепочка загрузки и где в ней GPT:
+
+| Звено | Где лежит | Зависимость от GPT | UART |
+|---|---|---|---|
+| preloader | аппаратные boot-разделы eMMC `mmcblk0boot0/1` (заголовок `PRELOADER!!`), **вне** основной области | ищет `lk`/`metazone` по GPT: сначала основная, при ошибке CRC — **резервная** («Parsing Primary GPT… Parsing Secondary GPT…») | только лог |
+| LK (`lk_a/_b`, аппаратная защита от записи) | основная область | сверяет обе копии («pgpt is consistent with sgpt»); если основная битая, а резервная цела — **сам переписывает основную из резервной** | лог; встроенная консоль LK (`emmc l/w`, `mmc_test`, `md`, fastboot) есть в коде, но штатного способа войти в неё с UART не найдено — не рассчитывать |
+| ядро + init Android | `kernel`, `system` (`root=PARTUUID=…`) | по GPT | **консоль `console:/ $` стартует по `ro.debuggable=1` сразу при запуске init, до монтирования `/data`**; `su` есть в `/system/xbin` |
+| recovery (`recovery_a/_b`) | основная область | по GPT | консоль **сразу от root** (`user root` в `init.recovery.ac8x.rc`); в ramdisk есть `toybox` (`dd`, `md5sum`), `sgdisk`, `mke2fs_static`, `blkid`; `/cache` монтируется |
+
+Прочее:
+
+- LK при каждой загрузке ищет на USB-флешке `atc.upd` и при наличии шьёт разделы и GPT по `scatter.mmcboot.ext4.xml` («LK upg»). Пакета в этом формате нет.
+- В `/cache/fota/update_os.zip` (1,46 ГБ, даты файлов ложные) — **полный A/B OTA текущей сборки** (`post-build=…Jenkins09051534`, без `pre-build`): `preloader`, `lk`, `hsm`, `trustzone`, `viss`, `kernel`, `dtb`, `dtbo`, `recovery`, `vdec`, `vendor`, `system`, `product`, `logo`. Распаковывается `payload-dumper` на ПК. Перед любыми работами с разметкой — скопировать на ПК. GPT, `metazone`, `*Config`, `misc` в нём нет — их брать из собственного дампа.
+
+Вывод: при ошибке **только в записи `userdata`** (или если не смонтировался `/data`) ГУ доходит до init, и через UART есть root-консоль (Android или recovery) для отката GPT из заранее сохранённой копии. Если испорчена одна копия GPT — preloader и LK переживут это сами по второй. Без программатора **не восстанавливается** только случай, когда обе копии GPT корректны по CRC, но ломают записи `lk`/`kernel`/`misc`/`metazone`, или обе копии битые: тогда остаётся только USB-режим BROM с прошивальщиком Autochips и DA (у нас их нет). Поэтому меняются только поля start/end записи 39, остальные 42 записи сверяются побайтно.
+
+#### 6.2. Рекомендуемая процедура (вариант 1 через recovery)
+
+1. В Android по ADB (без записи на eMMC): дамп обеих GPT и копия `update_os.zip` на ПК; на ПК скриптом собрать новые основную и резервную GPT (меняется только запись 39: начало — первый выровненный сектор хвоста, конец — последний usable LBA), проверить CRC заголовков и массива, отсутствие пересечений, побайтное совпадение остальных записей. Положить в `/cache/gptfix/`: новые и старые GPT, `move.sh`, `rollback.sh` с контрольными суммами.
+2. `adb reboot recovery`, дальше по UART в root-консоли recovery: `/data` там не смонтирован, поэтому копия консистентна. `move.sh`: `dd` старого `userdata` (2 ГиБ) в хвост, сверка `md5sum`, запись обеих GPT, чтение обратно и сверка, `sync`, перезагрузка.
+3. В Android: `/data` — та же ФС в новом месте; онлайн-расширение `resize2fs /dev/block/userdata` (от root). Старая область p39 не трогается — откат `rollback.sh` (старые GPT) из консоли UART Android или recovery.
 
 Безопасное освобождение места без переразметки: удалить `/cache/fota` (1,8 ГБ, раздел `cache`, на `/data` не влияет).
 
@@ -165,11 +213,12 @@ if command -v su >/dev/null 2>&1; then setsid su 0 sh -c 'sleep 1; svc power reb
 
 - **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`InWindowAlertDialog`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 - **USB-разрешения.** Доработанный `UsbPermissionActivity` Adayo сам выдаёт разрешение (`CBen_grantUsbPermissions`) и закрывается, но в ответе приходит `granted=false`. Приложение перепроверяет `UsbManager.hasPermission()`.
-- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты и перезагрузка (`adb/LocalhostAdbSession`).
+- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`).
 
 ## 10. Открытые вопросы
 
-- Включать ли по умолчанию `main_screen_open_on_boot` и автоустановку сертификатов на A10.
+- Включать ли по умолчанию `main_screen_open_on_boot`, автоустановку сертификатов и открытие файрвола на A10.
+- Почему в некоторых загрузках `DROP` в цепочках Adayo не появлялся.
 - Отключение ключевой фразы iFlytek для снижения нагрузки.
-- Переразметка `/data` (§6): выбор варианта, наличие прошивальщика Autochips и полной прошивки.
-- Удаление `/cache/fota`.
+- Переразметка `/data` (§6): рекомендован вариант 1 через recovery (§6.2), ждёт решения владельца. Прошивальщика Autochips (BROM/DA) нет.
+- Удаление `/cache/fota`: только после копирования `update_os.zip` на ПК — это единственная полная прошивка (§6.1).

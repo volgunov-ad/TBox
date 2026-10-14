@@ -798,6 +798,7 @@ fun SettingsTabContent(
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
+    val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -1410,6 +1411,10 @@ fun SettingsTabContent(
                 HuCaCertsSettingsCard(
                     autoInstall = huCaCertsAutoInstall,
                     onAutoInstallChange = { enabled -> settingsViewModel.saveHuCaCertsAutoInstall(enabled) },
+                )
+                HuAppNetworkSettingsCard(
+                    autoOpen = huAppNetworkAutoOpen,
+                    onAutoOpenChange = { enabled -> settingsViewModel.saveHuAppNetworkAutoOpen(enabled) },
                 )
                 HuTimeZoneSettingsCard()
             }

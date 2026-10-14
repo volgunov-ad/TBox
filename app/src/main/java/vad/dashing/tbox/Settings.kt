@@ -1085,6 +1085,9 @@ class SettingsManager(private val context: Context) {
         /** A10 only: re-apply the extra root CA overlay on app start. Default false. */
         private val HU_CA_CERTS_AUTO_INSTALL_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_ca_certs_auto_install")
+        /** A10 only: keep app uids allowed through the stock Adayo iptables whitelist. Default false. */
+        private val HU_APP_NETWORK_AUTO_OPEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_app_network_auto_open")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -2192,6 +2195,10 @@ class SettingsManager(private val context: Context) {
 
     val huCaCertsAutoInstallFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huAppNetworkAutoOpenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] ?: false }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -4891,6 +4898,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveHuCaCertsAutoInstall(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] = enabled
         }
     }
 

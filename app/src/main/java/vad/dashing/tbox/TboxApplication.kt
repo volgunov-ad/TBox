@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.cacerts.HuCaCertsClient
+import vad.dashing.tbox.hufirewall.HuAppNetworkClient
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.AppIconCache
 import vad.dashing.tbox.ui.LaunchableAppsCatalog
@@ -54,6 +55,16 @@ class TboxApplication : Application() {
                 .distinctUntilChanged()
                 .collectLatest { shouldInstall ->
                     if (shouldInstall) HuCaCertsClient.ensureInstalled(this@TboxApplication)
+                }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huAppNetworkAutoOpenFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, mode -> enabled && mode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { shouldOpen ->
+                    if (shouldOpen) HuAppNetworkClient.keepOpen(this@TboxApplication)
                 }
         }
         applicationScope.launch {

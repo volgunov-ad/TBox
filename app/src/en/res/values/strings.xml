@@ -749,6 +749,15 @@
     <string name="settings_ca_certs_error_adb">No localhost ADB connection (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">No root (su) on the HU</string>
     <string name="settings_ca_certs_error_failed">Certificate install failed (%1$s)</string>
+    <string name="settings_hu_app_network_title">Internet for apps</string>
+    <string name="settings_hu_app_network_desc">On boot the stock HU CarService enables an iptables firewall that lets only system services online and drops all Wi‑Fi and modem traffic of installed apps (browser, RuStore, TBox, etc.). The button adds a rule that lets apps through. Requires root (su) and localhost ADB. The rule lasts until HU reboot; press again afterwards or enable auto-apply.</string>
+    <string name="settings_hu_app_network_apply">Open internet access</string>
+    <string name="settings_hu_app_network_busy">Please wait…</string>
+    <string name="settings_hu_app_network_done">Access opened. Apps that were stuck without network may need a restart.</string>
+    <string name="settings_hu_app_network_no_firewall">Adayo firewall not found, nothing to change</string>
+    <string name="settings_hu_app_network_error">Could not change firewall rules (%1$s)</string>
+    <string name="settings_hu_app_network_auto_title">Apply automatically</string>
+    <string name="settings_hu_app_network_auto_desc">On TBox Monitor start (including after HU reboot) the rule is added and re-checked, since CarService may rebuild the firewall after TBox starts: after 30 s, 1, 2 and 5 min, then every 30 min.</string>
     <string name="settings_hu_time_zone_title">HU time zone</string>
     <string name="settings_hu_time_zone_desc">The stock Adayo service keeps its own time zone (factory PRC, China) and re-applies it on every boot and MCU clock sync, so changing the zone in Android settings does not stick. This writes the zone into the service itself via localhost ADB; root is not required.</string>
     <string name="settings_hu_time_zone_current">HU service time zone: %1$s</string>
