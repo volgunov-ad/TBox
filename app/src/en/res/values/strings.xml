@@ -767,6 +767,8 @@
     <string name="settings_hu_time_zone_apply">Apply time zone</string>
     <string name="settings_hu_time_zone_busy">Please wait…</string>
     <string name="settings_hu_time_zone_error_service">Adayo settings service did not respond</string>
+    <string name="hu_special_options_open">A10 head unit special options</string>
+    <string name="hu_special_options_title">A10 head unit special options</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>

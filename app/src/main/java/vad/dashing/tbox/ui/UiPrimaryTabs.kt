@@ -878,6 +878,7 @@ fun SettingsTabContent(
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
     var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
     var showExpertRawGetSetDialog by remember { mutableStateOf(false) }
+    var showHuSpecialOptionsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -1408,15 +1409,15 @@ fun SettingsTabContent(
                 )
             }
             if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
-                HuCaCertsSettingsCard(
-                    autoInstall = huCaCertsAutoInstall,
-                    onAutoInstallChange = { enabled -> settingsViewModel.saveHuCaCertsAutoInstall(enabled) },
-                )
-                HuAppNetworkSettingsCard(
-                    autoOpen = huAppNetworkAutoOpen,
-                    onAutoOpenChange = { enabled -> settingsViewModel.saveHuAppNetworkAutoOpen(enabled) },
-                )
-                HuTimeZoneSettingsCard()
+                Button(
+                    onClick = rememberWrappedOnClick { showHuSpecialOptionsDialog = true },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.hu_special_options_open),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
             }
             SettingSwitch(
                 huAdbState.usbEnabled,
@@ -1765,6 +1766,20 @@ fun SettingsTabContent(
             visible = showExpertRawGetSetDialog && isExpertModeEnabled,
             mode = headUnitCanMode,
             onDismiss = { showExpertRawGetSetDialog = false },
+        )
+        HuSpecialOptionsDialog(
+            visible = showHuSpecialOptionsDialog &&
+                isExpertModeEnabled &&
+                headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+            onDismiss = { showHuSpecialOptionsDialog = false },
+            huCaCertsAutoInstall = huCaCertsAutoInstall,
+            onHuCaCertsAutoInstallChange = { enabled ->
+                settingsViewModel.saveHuCaCertsAutoInstall(enabled)
+            },
+            huAppNetworkAutoOpen = huAppNetworkAutoOpen,
+            onHuAppNetworkAutoOpenChange = { enabled ->
+                settingsViewModel.saveHuAppNetworkAutoOpen(enabled)
+            },
         )
 }
 

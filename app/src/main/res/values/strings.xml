@@ -770,6 +770,8 @@
     <string name="settings_hu_time_zone_apply">Применить часовой пояс</string>
     <string name="settings_hu_time_zone_busy">Подождите…</string>
     <string name="settings_hu_time_zone_error_service">Служба настроек Adayo не ответила</string>
+    <string name="hu_special_options_open">Специальные опции для ГУ A10</string>
+    <string name="hu_special_options_title">Специальные опции для ГУ A10</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>
