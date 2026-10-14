@@ -2,6 +2,8 @@
 
 Документ описывает, как приложение **TBox Monitor** на головном устройстве (ГУ) обменивается данными с блоком **TBox** Jetour Dashing. Транспорт — **UDP** через библиотеку **[tbox-proxy](https://github.com/jsparrow2006/tbox-proxy)** (зависимость `com.github.jsparrow2006:tbox-proxy`).
 
+> **Временно — форк.** До выхода 3.0.0 у автора ([PR #11](https://github.com/jsparrow2006/tbox-proxy/pull/11)) приложение использует форк [volgunov-ad/tbox-proxy](https://github.com/volgunov-ad/tbox-proxy), версия `3.0.0-fork.1` с JitPack: привязка UDP к сети TBox (`usb0`, исправляет A10 с включённым Wi-Fi), протокол v3 и совместимость с 1.x/2.x. Возврат на оригинал — в `gradle/libs.versions.toml`: `group = "com.github.jsparrow2006"` и версия автора (например, `v3.0.0`). Для проверки локальной сборки библиотеки: `-PtboxProxyLocalAar=<путь к core-release.aar>`.
+
 Пользовательские сценарии (модем, перезагрузки, настройки) — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md). CAN с шины ГУ (mbCAN / VHAL) — отдельный путь, см. [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 
 ---
@@ -375,7 +377,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 | Состояние | `TboxRepository.kt`, `CanDataRepository.kt` |
 | Декод CAN | `utils/CanFramesProcess.kt` |
 | Формулы raw→физ. | [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) |
-| Зависимость | `gradle/libs.versions.toml` → `tboxProxy` |
+| Зависимость | `gradle/libs.versions.toml` → `tboxProxy`, `tbox-proxy` (сейчас форк `volgunov-ad`) |
 | Broadcast | `TboxBroadcastSender.kt`, `TBoxBroadcastReceiver.kt` |
 | Boot | `BootCompleteReceiver.kt` |
 

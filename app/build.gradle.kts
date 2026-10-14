@@ -165,7 +165,12 @@ dependencies {
     if (mapkitEnabled) {
         implementation(libs.yandex.mapkit.lite)
     }
-    implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
+    val tboxProxyLocalAar = providers.gradleProperty("tboxProxyLocalAar").orNull
+    if (tboxProxyLocalAar != null) {
+        implementation(files(tboxProxyLocalAar))
+    } else {
+        implementation(libs.tbox.proxy)
+    }
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

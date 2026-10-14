@@ -19,6 +19,9 @@ import androidx.core.content.ContextCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import dashingineering.jetour.tboxcore.types.TBoxStatus
+import dashingineering.jetour.tboxcore.types.TBoxStatusType
+import dashingineering.jetour.tboxcore.util.TBoxReceivedMessage
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
@@ -2528,7 +2531,8 @@ class BackgroundService : Service() {
             return
         }
         val callback = object : TBoxClientCallback {
-            override fun onDataReceived(data: ByteArray) {
+            override fun onDataReceived(message: TBoxReceivedMessage) {
+                val data = message.getRawData()
                 lastPacketAtMs = System.currentTimeMillis()
                 scope.launch(packetProcessingDispatcher) {
                     try {
@@ -2548,6 +2552,22 @@ class BackgroundService : Service() {
                 when (type) {
                     LogType.ERROR -> TboxRepository.addLog("ERROR", "TBox Proxy/$tag", message)
                     LogType.WARN -> TboxRepository.addLog("WARN", "TBox Proxy/$tag", message)
+                    else -> Unit
+                }
+            }
+
+            override fun onStatusChanged(status: TBoxStatus) {
+                when (status.type) {
+                    TBoxStatusType.NETWORK_BOUND,
+                    TBoxStatusType.NETWORK_UNBOUND,
+                    TBoxStatusType.TBOX_RESPONDING,
+                    TBoxStatusType.SERVICE_STARTED ->
+                        TboxRepository.addLog("INFO", "TBox Proxy", "${status.type}: ${status.message}")
+                    TBoxStatusType.LEGACY_HOST,
+                    TBoxStatusType.TBOX_SILENT,
+                    TBoxStatusType.UDP_BIND_FAILED,
+                    TBoxStatusType.TCP_SERVER_ERROR ->
+                        TboxRepository.addLog("WARN", "TBox Proxy", "${status.type}: ${status.message}")
                     else -> Unit
                 }
             }

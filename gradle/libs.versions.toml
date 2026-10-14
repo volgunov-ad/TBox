@@ -24,7 +24,7 @@ lifecycleViewmodelKtx = "2.10.0"
 savedstate = "1.4.0"
 lifecycleRuntime = "2.10.0"
 lifecycleViewmodelSavedstate = "2.10.0"
-tboxProxy = "1.0.4"
+tboxProxy = "3.0.0-fork.1"
 profileinstaller = "1.4.1"
 robolectric = "4.14.1"
 okhttp = "4.12.0"
@@ -68,6 +68,8 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 snakeyaml-engine = { group = "org.snakeyaml", name = "snakeyaml-engine", version.ref = "snakeyamlEngine" }
 yandex-mapkit-lite = { group = "com.yandex.android", name = "maps.mobile", version.ref = "yandexMapkit" }
 zxing = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+# Fork volgunov-ad/tbox-proxy until jsparrow2006/tbox-proxy#11 is released upstream.
+tbox-proxy = { group = "com.github.volgunov-ad", name = "tbox-proxy", version.ref = "tboxProxy" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
