@@ -2,6 +2,7 @@ package vad.dashing.tbox.ui
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,12 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -89,6 +94,8 @@ fun AdbTabContent(
     var selectedUsbDeviceId by rememberSaveable { mutableIntStateOf(-1) }
     var command by rememberSaveable { mutableStateOf("") }
     var logcatClearBuffer by rememberSaveable { mutableStateOf(false) }
+    var consoleExpanded by rememberSaveable { mutableStateOf(false) }
+    var extrasExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingConfirmCommands by remember { mutableStateOf<List<String>?>(null) }
     val logState = rememberLazyListState()
     val isBusy = state.phase == AdbRepository.Phase.CONNECTING
@@ -96,6 +103,9 @@ fun AdbTabContent(
     val scriptActive = scriptRun.active
     val logcatActive = logcatCapture.active
     val shellEnabled = isConnected && !scriptActive && !logcatActive
+    val extrasOpen = !consoleExpanded && (extrasExpanded || scriptActive || logcatActive)
+    val showScriptRow = extrasOpen || (consoleExpanded && scriptActive)
+    val showLogcatRow = extrasOpen || (consoleExpanded && logcatActive)
 
     val readErrorToast = stringResource(R.string.adb_script_read_error)
     val emptyToast = stringResource(R.string.adb_script_empty)
@@ -169,6 +179,8 @@ fun AdbTabContent(
             selectedUsbDeviceId = usbCandidates.firstOrNull()?.deviceId ?: -1
         }
     }
+
+    BackHandler(enabled = consoleExpanded) { consoleExpanded = false }
 
     LaunchedEffect(logLines.size) {
         if (logLines.isNotEmpty()) logState.animateScrollToItem(logLines.lastIndex)
@@ -288,195 +300,197 @@ fun AdbTabContent(
             .padding(top = 18.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = stringResource(R.string.tab_adb),
-            style = MaterialTheme.typography.tboxHeadline,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            ModeButton(
-                text = stringResource(R.string.adb_mode_tcp),
-                isSelected = mode == "tcp",
-                enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
-                onClick = {
-                    mode = "tcp"
-                    settingsViewModel.saveAdbModeSetting(mode)
-                },
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            ModeButton(
-                text = stringResource(R.string.adb_mode_usb),
-                isSelected = mode == "usb",
-                enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
-                onClick = {
-                    mode = "usb"
-                    settingsViewModel.saveAdbModeSetting(mode)
-                    AdbRepository.refreshUsbDevices()
-                },
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        if (mode == "tcp") {
-            SettingSwitch(
-                huAdbState.tcpEnabled,
-                { enabled -> settingsViewModel.setHuAdbTcpEnabled(enabled) },
-                stringResource(R.string.settings_adb_tcp_title),
-                stringResource(R.string.settings_adb_tcp_desc),
-                !huAdbState.readFailed,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                OutlinedTextField(
-                    value = host,
-                    onValueChange = { host = it },
-                    label = { Text(stringResource(R.string.adb_host)) },
-                    singleLine = true,
-                    enabled = !isConnected && !isBusy && !scriptActive,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedTextField(
-                    value = port,
-                    onValueChange = { value -> port = value.filter(Char::isDigit).take(5) },
-                    label = { Text(stringResource(R.string.adb_port)) },
-                    singleLine = true,
-                    enabled = !isConnected && !isBusy && !scriptActive,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(0.4f),
-                )
-            }
-        } else {
+        if (!consoleExpanded) {
             Text(
-                text = stringResource(R.string.adb_usb_device),
-                style = MaterialTheme.typography.tboxTitle,
+                text = stringResource(R.string.tab_adb),
+                style = MaterialTheme.typography.tboxHeadline,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            if (usbCandidates.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.adb_no_usb_devices),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                ModeButton(
+                    text = stringResource(R.string.adb_mode_tcp),
+                    isSelected = mode == "tcp",
+                    enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
+                    onClick = {
+                        mode = "tcp"
+                        settingsViewModel.saveAdbModeSetting(mode)
+                    },
+                    modifier = Modifier.weight(1f),
                 )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 140.dp),
+                Spacer(modifier = Modifier.width(8.dp))
+                ModeButton(
+                    text = stringResource(R.string.adb_mode_usb),
+                    isSelected = mode == "usb",
+                    enabled = !isConnected && !isBusy && !scriptActive && !logcatActive,
+                    onClick = {
+                        mode = "usb"
+                        settingsViewModel.saveAdbModeSetting(mode)
+                        AdbRepository.refreshUsbDevices()
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            if (mode == "tcp") {
+                SettingSwitch(
+                    huAdbState.tcpEnabled,
+                    { enabled -> settingsViewModel.setHuAdbTcpEnabled(enabled) },
+                    stringResource(R.string.settings_adb_tcp_title),
+                    stringResource(R.string.settings_adb_tcp_desc),
+                    !huAdbState.readFailed,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    usbCandidates.forEach { candidate ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !isConnected && !isBusy && !scriptActive) {
-                                    selectedUsbDeviceId = candidate.deviceId
-                                }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = candidate.deviceId == selectedUsbDeviceId,
-                                onClick = { selectedUsbDeviceId = candidate.deviceId },
-                                enabled = !isConnected && !isBusy && !scriptActive,
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "${candidate.name} (${hexId(candidate.vendorId)}:${hexId(candidate.productId)})",
-                                    style = MaterialTheme.typography.tboxBody,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                    OutlinedTextField(
+                        value = host,
+                        onValueChange = { host = it },
+                        label = { Text(stringResource(R.string.adb_host)) },
+                        singleLine = true,
+                        enabled = !isConnected && !isBusy && !scriptActive,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = port,
+                        onValueChange = { value -> port = value.filter(Char::isDigit).take(5) },
+                        label = { Text(stringResource(R.string.adb_port)) },
+                        singleLine = true,
+                        enabled = !isConnected && !isBusy && !scriptActive,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(0.4f),
+                    )
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.adb_usb_device),
+                    style = MaterialTheme.typography.tboxTitle,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (usbCandidates.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.adb_no_usb_devices),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 140.dp),
+                    ) {
+                        usbCandidates.forEach { candidate ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isConnected && !isBusy && !scriptActive) {
+                                        selectedUsbDeviceId = candidate.deviceId
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = candidate.deviceId == selectedUsbDeviceId,
+                                    onClick = { selectedUsbDeviceId = candidate.deviceId },
+                                    enabled = !isConnected && !isBusy && !scriptActive,
                                 )
-                                if (candidate.sharesNetworkWithHost) {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = stringResource(R.string.adb_usb_network_device_label),
-                                        style = MaterialTheme.typography.tboxCaption,
-                                        color = MaterialTheme.colorScheme.error,
+                                        text = "${candidate.name} (${hexId(candidate.vendorId)}:${hexId(candidate.productId)})",
+                                        style = MaterialTheme.typography.tboxBody,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
+                                    if (candidate.sharesNetworkWithHost) {
+                                        Text(
+                                            text = stringResource(R.string.adb_usb_network_device_label),
+                                            style = MaterialTheme.typography.tboxCaption,
+                                            color = MaterialTheme.colorScheme.error,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            val selectedSharesNetwork = usbCandidates
-                .firstOrNull { it.deviceId == selectedUsbDeviceId }
-                ?.sharesNetworkWithHost == true
-            if (selectedSharesNetwork) {
+                val selectedSharesNetwork = usbCandidates
+                    .firstOrNull { it.deviceId == selectedUsbDeviceId }
+                    ?.sharesNetworkWithHost == true
+                if (selectedSharesNetwork) {
+                    Text(
+                        text = stringResource(R.string.adb_usb_tbox_rndis_warning),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 Text(
-                    text = stringResource(R.string.adb_usb_tbox_rndis_warning),
+                    text = stringResource(R.string.adb_authorization_hint),
                     style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = stringResource(R.string.adb_authorization_hint),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Button(
-                onClick = {
-                    if (isConnected || isBusy) {
-                        AdbRepository.disconnect()
-                    } else if (mode == "tcp") {
-                        val portNumber = port.toIntOrNull() ?: return@Button
-                        settingsViewModel.saveAdbLastHostSetting(host)
-                        settingsViewModel.saveAdbLastPortSetting(portNumber)
-                        settingsViewModel.saveAdbModeSetting("tcp")
-                        AdbRepository.connectTcp(host.trim(), portNumber)
-                    } else {
-                        settingsViewModel.saveAdbModeSetting("usb")
-                        AdbRepository.requestUsbPermission(selectedUsbDeviceId)
-                    }
-                },
-                enabled = isConnected || isBusy ||
-                    (mode == "tcp" && host.isNotBlank() && port.toIntOrNull() in 1..65535) ||
-                    (mode == "usb" && selectedUsbDeviceId >= 0),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = if (isConnected || isBusy) {
-                        stringResource(R.string.adb_disconnect)
-                    } else {
-                        stringResource(R.string.adb_connect)
+                Button(
+                    onClick = {
+                        if (isConnected || isBusy) {
+                            AdbRepository.disconnect()
+                        } else if (mode == "tcp") {
+                            val portNumber = port.toIntOrNull() ?: return@Button
+                            settingsViewModel.saveAdbLastHostSetting(host)
+                            settingsViewModel.saveAdbLastPortSetting(portNumber)
+                            settingsViewModel.saveAdbModeSetting("tcp")
+                            AdbRepository.connectTcp(host.trim(), portNumber)
+                        } else {
+                            settingsViewModel.saveAdbModeSetting("usb")
+                            AdbRepository.requestUsbPermission(selectedUsbDeviceId)
+                        }
                     },
-                    style = MaterialTheme.typography.tboxButton,
+                    enabled = isConnected || isBusy ||
+                        (mode == "tcp" && host.isNotBlank() && port.toIntOrNull() in 1..65535) ||
+                        (mode == "usb" && selectedUsbDeviceId >= 0),
+                ) {
+                    Text(
+                        text = if (isConnected || isBusy) {
+                            stringResource(R.string.adb_disconnect)
+                        } else {
+                            stringResource(R.string.adb_connect)
+                        },
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+                Text(
+                    text = when (state.phase) {
+                        AdbRepository.Phase.DISCONNECTED -> stringResource(R.string.adb_status_disconnected)
+                        AdbRepository.Phase.CONNECTING -> stringResource(R.string.adb_connecting)
+                        AdbRepository.Phase.CONNECTED -> stringResource(
+                            R.string.adb_status_connected,
+                            state.endpoint,
+                        )
+                        AdbRepository.Phase.ERROR -> stringResource(
+                            R.string.adb_status_error,
+                            state.error.orEmpty(),
+                        )
+                    },
+                    style = MaterialTheme.typography.tboxBody,
+                    color = if (state.phase == AdbRepository.Phase.ERROR) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
             }
-            Text(
-                text = when (state.phase) {
-                    AdbRepository.Phase.DISCONNECTED -> stringResource(R.string.adb_status_disconnected)
-                    AdbRepository.Phase.CONNECTING -> stringResource(R.string.adb_connecting)
-                    AdbRepository.Phase.CONNECTED -> stringResource(
-                        R.string.adb_status_connected,
-                        state.endpoint,
-                    )
-                    AdbRepository.Phase.ERROR -> stringResource(
-                        R.string.adb_status_error,
-                        state.error.orEmpty(),
-                    )
-                },
-                style = MaterialTheme.typography.tboxBody,
-                color = if (state.phase == AdbRepository.Phase.ERROR) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-            )
-        }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -516,136 +530,180 @@ fun AdbTabContent(
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Button(
-                onClick = {
-                    scriptFileLauncher.launch(
-                        arrayOf("text/plain", "text/*", "*/*"),
-                    )
-                },
-                enabled = shellEnabled,
+        if (!consoleExpanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !scriptActive && !logcatActive) {
+                        extrasExpanded = !extrasExpanded
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.adb_run_from_file),
-                    style = MaterialTheme.typography.tboxButton,
-                )
-            }
-            if (scriptActive) {
-                Text(
-                    text = stringResource(
-                        R.string.adb_script_progress,
-                        scriptRun.currentIndex.coerceAtLeast(0),
-                        scriptRun.total,
-                    ),
-                    style = MaterialTheme.typography.tboxBody,
+                    text = stringResource(R.string.adb_extras_title),
+                    style = MaterialTheme.typography.tboxTitle,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                Button(
-                    onClick = AdbRepository::stopScript,
-                ) {
-                    Text(
-                        text = stringResource(R.string.adb_script_stop),
-                        style = MaterialTheme.typography.tboxButton,
-                    )
-                }
-            } else {
-                Text(
-                    text = stringResource(R.string.adb_run_from_file_hint),
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
+                Icon(
+                    imageVector = if (extrasOpen) {
+                        Icons.Filled.KeyboardArrowUp
+                    } else {
+                        Icons.Filled.KeyboardArrowDown
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        Text(
-            text = stringResource(R.string.adb_logcat_title),
-            style = MaterialTheme.typography.tboxTitle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = !logcatActive) {
-                    logcatClearBuffer = !logcatClearBuffer
-                },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(
-                checked = logcatClearBuffer,
-                onCheckedChange = { logcatClearBuffer = it },
-                enabled = !logcatActive,
+        if (showScriptRow) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = {
+                        scriptFileLauncher.launch(
+                            arrayOf("text/plain", "text/*", "*/*"),
+                        )
+                    },
+                    enabled = shellEnabled,
+                ) {
+                    Text(
+                        text = stringResource(R.string.adb_run_from_file),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+                if (scriptActive) {
+                    Text(
+                        text = stringResource(
+                            R.string.adb_script_progress,
+                            scriptRun.currentIndex.coerceAtLeast(0),
+                            scriptRun.total,
+                        ),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = AdbRepository::stopScript,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.adb_script_stop),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.adb_run_from_file_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        if (extrasOpen) {
+            Text(
+                text = stringResource(R.string.adb_logcat_title),
+                style = MaterialTheme.typography.tboxTitle,
+                color = MaterialTheme.colorScheme.onSurface,
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.adb_logcat_clear_buffer),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurface,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = !logcatActive) {
+                        logcatClearBuffer = !logcatClearBuffer
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(
+                    checked = logcatClearBuffer,
+                    onCheckedChange = { logcatClearBuffer = it },
+                    enabled = !logcatActive,
                 )
-                Text(
-                    text = stringResource(R.string.adb_logcat_clear_buffer_desc),
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.adb_logcat_clear_buffer),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = stringResource(R.string.adb_logcat_clear_buffer_desc),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (logcatActive) {
-                Button(onClick = AdbRepository::stopLogcatCapture) {
+        if (showLogcatRow) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (logcatActive) {
+                    Button(onClick = AdbRepository::stopLogcatCapture) {
+                        Text(
+                            text = stringResource(R.string.adb_logcat_stop),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
                     Text(
-                        text = stringResource(R.string.adb_logcat_stop),
-                        style = MaterialTheme.typography.tboxButton,
+                        text = stringResource(
+                            R.string.adb_logcat_recording,
+                            logcatCapture.filePath?.substringAfterLast('/').orEmpty(),
+                        ),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else {
+                    Button(
+                        onClick = { AdbRepository.startLogcatCapture(logcatClearBuffer) },
+                        enabled = isConnected && !scriptActive && !isBusy,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.adb_logcat_start),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.adb_logcat_idle_hint),
+                        style = MaterialTheme.typography.tboxCaption,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                Text(
-                    text = stringResource(
-                        R.string.adb_logcat_recording,
-                        logcatCapture.filePath?.substringAfterLast('/').orEmpty(),
-                    ),
-                    style = MaterialTheme.typography.tboxBody,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            } else {
-                Button(
-                    onClick = { AdbRepository.startLogcatCapture(logcatClearBuffer) },
-                    enabled = isConnected && !scriptActive && !isBusy,
-                ) {
-                    Text(
-                        text = stringResource(R.string.adb_logcat_start),
-                        style = MaterialTheme.typography.tboxButton,
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.adb_logcat_idle_hint),
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
             }
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = stringResource(R.string.adb_console),
                 style = MaterialTheme.typography.tboxTitle,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
             )
+            TextButton(onClick = { consoleExpanded = !consoleExpanded }) {
+                Text(
+                    text = if (consoleExpanded) {
+                        stringResource(R.string.adb_console_collapse)
+                    } else {
+                        stringResource(R.string.adb_console_expand)
+                    },
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
             TextButton(
                 onClick = AdbRepository::clearLog,
                 enabled = logLines.isNotEmpty() && !scriptActive && !logcatActive,
