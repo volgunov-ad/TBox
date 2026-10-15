@@ -27,6 +27,10 @@ fun HuSpecialOptionsDialog(
     onHuCaCertsAutoInstallChange: (Boolean) -> Unit,
     huAppNetworkAutoOpen: Boolean,
     onHuAppNetworkAutoOpenChange: (Boolean) -> Unit,
+    huDspMode: Int,
+    onHuDspModeChange: (Int) -> Unit,
+    huDspAutoApply: Boolean,
+    onHuDspAutoApplyChange: (Boolean) -> Unit,
 ) {
     if (!visible) return
     Dialog(
@@ -59,6 +63,12 @@ fun HuSpecialOptionsDialog(
                     HuAppNetworkSettingsCard(
                         autoOpen = huAppNetworkAutoOpen,
                         onAutoOpenChange = onHuAppNetworkAutoOpenChange,
+                    )
+                    HuDspSettingsCard(
+                        mode = huDspMode,
+                        onModeChange = onHuDspModeChange,
+                        autoApply = huDspAutoApply,
+                        onAutoApplyChange = onHuDspAutoApplyChange,
                     )
                     HuTimeZoneSettingsCard()
                 }

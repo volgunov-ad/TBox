@@ -776,6 +776,17 @@
     <string name="settings_hu_time_zone_error_service">Adayo settings service did not respond</string>
     <string name="hu_special_options_open">A10 head unit special options</string>
     <string name="hu_special_options_title">A10 head unit special options</string>
+    <string name="settings_hu_dsp_title">DSP mode</string>
+    <string name="settings_hu_dsp_desc">All modes from the stock factory menu. Your choice is saved in TBox Monitor; the button sends it to the Adayo service via localhost ADB without root. Unknown modes retain their factory IDs. Listing SONY does not guarantee that your HU supports the profile. This shows the saved selection, not a DSP state readback.</string>
+    <string name="settings_hu_dsp_adayo">Adayo (1)</string>
+    <string name="settings_hu_dsp_sony">SONY (2)</string>
+    <string name="settings_hu_dsp_default">Built-in DSP default effect (250)</string>
+    <string name="settings_hu_dsp_unknown">Unknown effect (%1$d)</string>
+    <string name="settings_hu_dsp_apply">Apply DSP mode</string>
+    <string name="settings_hu_dsp_accepted">Service accepted mode: %1$s. Actual sound profile activation has not been verified.</string>
+    <string name="settings_hu_dsp_error">Adayo service rejected the DSP command or did not respond (code: %1$s)</string>
+    <string name="settings_hu_dsp_auto_title">Set DSP mode on startup</string>
+    <string name="settings_hu_dsp_auto_desc">A10 HUs only: apply the saved choice when TBox Monitor starts and repeat at 10, 30, 60 and 120 seconds from the beginning of application, in case the stock service initializes late or resets the mode. Repeats then stop. Enabling this option or changing the selection while enabled restarts application. Disabled by default.</string>
     <string name="settings_auto_modem_restart_title">Automatic modem restart</string>
     <string name="settings_auto_modem_restart_desc">Automatically restart the modem when network connection is lost. The check runs every 10 seconds at first and every 5 minutes later (timer resets to 10 seconds when network reconnects).</string>
     <string name="settings_auto_tbox_reboot_title">Automatic TBox reboot</string>

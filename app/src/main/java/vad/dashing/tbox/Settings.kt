@@ -1090,6 +1090,8 @@ class SettingsManager(private val context: Context) {
         /** A10 only: keep app uids allowed through the stock Adayo iptables whitelist. Default false. */
         private val HU_APP_NETWORK_AUTO_OPEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_app_network_auto_open")
+        private val HU_DSP_MODE_KEY = intPreferencesKey("${KEY_PREFIX}hu_dsp_mode")
+        private val HU_DSP_AUTO_APPLY_KEY = booleanPreferencesKey("${KEY_PREFIX}hu_dsp_auto_apply")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -2205,6 +2207,14 @@ class SettingsManager(private val context: Context) {
 
     val huAppNetworkAutoOpenFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huDspModeFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> HuDspMode.normalize(preferences[HU_DSP_MODE_KEY]) }
+        .distinctUntilChanged()
+
+    val huDspAutoApplyFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_DSP_AUTO_APPLY_KEY] ?: false }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -4916,6 +4926,19 @@ class SettingsManager(private val context: Context) {
     suspend fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuDspMode(mode: Int) {
+        require(mode in HuDspMode.MODES)
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_DSP_MODE_KEY] = mode
+        }
+    }
+
+    suspend fun saveHuDspAutoApply(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_DSP_AUTO_APPLY_KEY] = enabled
         }
     }
 

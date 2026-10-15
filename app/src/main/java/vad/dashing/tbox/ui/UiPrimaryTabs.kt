@@ -804,6 +804,8 @@ fun SettingsTabContent(
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
     val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
     val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
+    val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
+    val huDspAutoApply by settingsViewModel.huDspAutoApply.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -1785,6 +1787,10 @@ fun SettingsTabContent(
             onHuAppNetworkAutoOpenChange = { enabled ->
                 settingsViewModel.saveHuAppNetworkAutoOpen(enabled)
             },
+            huDspMode = huDspMode,
+            onHuDspModeChange = settingsViewModel::saveHuDspMode,
+            huDspAutoApply = huDspAutoApply,
+            onHuDspAutoApplyChange = settingsViewModel::saveHuDspAutoApply,
         )
 }
 

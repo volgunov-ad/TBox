@@ -779,6 +779,17 @@
     <string name="settings_hu_time_zone_error_service">Служба настроек Adayo не ответила</string>
     <string name="hu_special_options_open">Специальные опции для ГУ A10</string>
     <string name="hu_special_options_title">Специальные опции для ГУ A10</string>
+    <string name="settings_hu_dsp_title">Режим DSP</string>
+    <string name="settings_hu_dsp_desc">Все режимы штатного заводского меню. Выбор сохраняется в TBox Monitor; кнопка отправляет его в службу Adayo через localhost ADB без root. Неизвестные режимы оставлены с заводскими номерами. Наличие SONY в списке не гарантирует поддержку профиля вашим ГУ. Здесь показан сохранённый выбор, а не прочитанное состояние DSP.</string>
+    <string name="settings_hu_dsp_adayo">Adayo (1)</string>
+    <string name="settings_hu_dsp_sony">SONY (2)</string>
+    <string name="settings_hu_dsp_default">Стандартный эффект встроенного DSP (250)</string>
+    <string name="settings_hu_dsp_unknown">Неизвестный эффект (%1$d)</string>
+    <string name="settings_hu_dsp_apply">Применить режим DSP</string>
+    <string name="settings_hu_dsp_accepted">Служба приняла режим: %1$s. Реальное применение звукового профиля не проверено.</string>
+    <string name="settings_hu_dsp_error">Служба Adayo не приняла команду DSP или не ответила (код: %1$s)</string>
+    <string name="settings_hu_dsp_auto_title">Выставлять режим DSP при запуске</string>
+    <string name="settings_hu_dsp_auto_desc">Только для ГУ A10: применять сохранённый выбор при запуске TBox Monitor и повторно через 10, 30, 60 и 120 секунд от старта применения — на случай поздней инициализации или сброса штатной службой. Затем повторы прекращаются. Включение опции и смена выбора при включённой опции запускают применение заново. По умолчанию выключено.</string>
     <string name="settings_auto_modem_restart_title">Автоматический перезапуск модема</string>
     <string name="settings_auto_modem_restart_desc">Автоматически перезапускать модем при потере подключения к сети. Проверка происходит с периодичностью 10 секунд в первый раз и 5 минут в последующие разы (сброс таймера до 10 секунд происходит при подключении сети)</string>
     <string name="settings_auto_tbox_reboot_title">Автоматическая перезагрузка TBox</string>

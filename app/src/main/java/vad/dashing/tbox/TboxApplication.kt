@@ -68,6 +68,17 @@ class TboxApplication : Application() {
                 }
         }
         applicationScope.launch {
+            combine(
+                settingsManager.huDspAutoApplyFlow,
+                settingsManager.headUnitCanModeFlow,
+                settingsManager.huDspModeFlow,
+            ) { enabled, headUnitMode, mode -> HuDspMode.startupMode(enabled, headUnitMode, mode) }
+                .distinctUntilChanged()
+                .collectLatest { mode ->
+                    if (mode != null) HuDspClient.applyAtStartup(this@TboxApplication, mode)
+                }
+        }
+        applicationScope.launch {
             try {
                 settingsManager.reconcileSelectedTabWithMenuLayoutIfNeeded()
             } catch (_: Exception) {

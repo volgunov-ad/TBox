@@ -1524,6 +1524,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val huDspMode = settingsManager.huDspModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HuDspMode.DEFAULT_MODE)
+
+    val huDspAutoApply = settingsManager.huDspAutoApplyFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val huAppNetworkAutoOpen = settingsManager.huAppNetworkAutoOpenFlow
         .stateIn(
             scope = viewModelScope,
@@ -3651,6 +3657,18 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveHuAppNetworkAutoOpen(enabled)
+        }
+    }
+
+    fun saveHuDspMode(mode: Int) {
+        viewModelScope.launch {
+            settingsManager.saveHuDspMode(mode)
+        }
+    }
+
+    fun saveHuDspAutoApply(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuDspAutoApply(enabled)
         }
     }
 
