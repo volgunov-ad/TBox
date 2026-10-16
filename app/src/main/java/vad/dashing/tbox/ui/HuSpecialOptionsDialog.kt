@@ -19,6 +19,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import vad.dashing.tbox.R
 
+/** The roots (RuStore / Sber / gosuslugi TLS) are rarely needed once the Adayo firewall is open:
+ *  the card is hidden, the cacerts code and the auto-install hook stay functional. */
+private const val SHOW_CA_CERTS_CARD = false
+
 @Composable
 fun HuSpecialOptionsDialog(
     visible: Boolean,
@@ -58,10 +62,12 @@ fun HuSpecialOptionsDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    HuCaCertsSettingsCard(
-                        autoInstall = huCaCertsAutoInstall,
-                        onAutoInstallChange = onHuCaCertsAutoInstallChange,
-                    )
+                    if (SHOW_CA_CERTS_CARD) {
+                        HuCaCertsSettingsCard(
+                            autoInstall = huCaCertsAutoInstall,
+                            onAutoInstallChange = onHuCaCertsAutoInstallChange,
+                        )
+                    }
                     HuAppNetworkSettingsCard(
                         autoOpen = huAppNetworkAutoOpen,
                         onAutoOpenChange = onHuAppNetworkAutoOpenChange,
