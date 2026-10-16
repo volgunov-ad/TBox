@@ -43,6 +43,10 @@ import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
+import vad.dashing.tbox.FUEL_LEVEL_LITERS_WIDGET_DATA_KEY
+import vad.dashing.tbox.FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
+import vad.dashing.tbox.normalizeFuelLitersDisplayMode
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
@@ -437,6 +441,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                fuelLitersDisplayMode = widgetConfig.fuelLitersDisplayMode,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -1925,6 +1930,42 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        FUEL_LEVEL_LITERS_WIDGET_DATA_KEY, FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY -> {
+            val toFull = normalizeFuelLitersDisplayMode(widgetConfig.fuelLitersDisplayMode) ==
+                FUEL_LITERS_DISPLAY_TO_FULL
+            val remappedKey = when {
+                toFull && widget.dataKey == FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY ->
+                    FUEL_LEVEL_LITERS_ACTUAL_TO_FULL_FLOW_KEY
+                toFull -> FUEL_LEVEL_LITERS_TO_FULL_FLOW_KEY
+                else -> widget.dataKey
+            }
+            val literUnit = if (toFull) {
+                stringResource(R.string.unit_liter_to_full)
+            } else {
+                widget.unit
+            }
+            val litersTitleOverride = when {
+                titleOverride.isNotBlank() -> titleOverride
+                toFull -> stringResource(R.string.data_title_fuel_to_full)
+                else -> titleOverride
+            }
+            DashboardWidgetItem(
+                widget = widget.copy(dataKey = remappedKey, unit = literUnit),
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = litersTitleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor

@@ -20,11 +20,13 @@ import vad.dashing.tbox.CPU_USAGE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.FREE_RAM_PERCENT_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
+import vad.dashing.tbox.fuelLitersForDisplay
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.seatModeToString
@@ -72,6 +74,10 @@ const val CURRENT_FUEL_CONSUMPTION_CAN_FLOW_KEY = "currentFuelConsumption_can"
 const val AVERAGE_FUEL_CONSUMPTION_CAN_FLOW_KEY = "averageFuelConsumption_can"
 const val AVERAGE_FUEL_CONSUMPTION_CURRENT_TRIP_FLOW_KEY = "averageFuelConsumption_currentTrip"
 const val AVERAGE_FUEL_CONSUMPTION_DAILY_TRIP_FLOW_KEY = "averageFuelConsumption_dailyTrip"
+/** Calibrated liters to fill: [fuelLitersForDisplay] with [FUEL_LITERS_DISPLAY_TO_FULL]. */
+const val FUEL_LEVEL_LITERS_TO_FULL_FLOW_KEY = "fuelLevelLiters_toFull"
+/** Temperature-corrected liters to fill. */
+const val FUEL_LEVEL_LITERS_ACTUAL_TO_FULL_FLOW_KEY = "fuelLevelLitersActual_toFull"
 const val DISTANCE_TO_NEXT_MAINTENANCE_CAN_FLOW_KEY = "distanceToNextMaintenance_can"
 const val DISTANCE_TO_FUEL_EMPTY_CAN_FLOW_KEY = "distanceToFuelEmpty_can"
 const val INSIDE_AIR_QUALITY_CAN_FLOW_KEY = "insideAirQuality_can"
@@ -250,6 +256,32 @@ class TboxDataProvider(
             "fuelLevelLitersActual" -> canViewModel.fuelLevelCalibratedLitersActual.mapState {
                 valueToString(it, eff(1))
             }
+            FUEL_LEVEL_LITERS_TO_FULL_FLOW_KEY -> combine(
+                canViewModel.fuelLevelCalibratedLiters,
+                settingsViewModel.fuelTankLiters,
+            ) { liters, tank ->
+                valueToString(
+                    fuelLitersForDisplay(liters, tank, FUEL_LITERS_DISPLAY_TO_FULL),
+                    eff(1),
+                )
+            }.distinctUntilChanged().stateIn(
+                scope = viewModel.viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = "",
+            )
+            FUEL_LEVEL_LITERS_ACTUAL_TO_FULL_FLOW_KEY -> combine(
+                canViewModel.fuelLevelCalibratedLitersActual,
+                settingsViewModel.fuelTankLiters,
+            ) { liters, tank ->
+                valueToString(
+                    fuelLitersForDisplay(liters, tank, FUEL_LITERS_DISPLAY_TO_FULL),
+                    eff(1),
+                )
+            }.distinctUntilChanged().stateIn(
+                scope = viewModel.viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = "",
+            )
             "currentFuelConsumption" -> canViewModel.currentFuelConsumption.mapState {
                 valueToString(it, eff(1))
             }
