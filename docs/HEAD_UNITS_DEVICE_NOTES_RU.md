@@ -2,6 +2,8 @@
 
 Сводка того, что выяснено на живых ГУ (октябрь 2026): платформа, root, загрузка TBox Monitor, нагрузка CPU, разметка диска, сеть, сертификаты, перезагрузка. Логику CAN-бэкендов см. в [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), параметры mbCAN/VHAL — в [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), штатные приложения — в [STOCK_APPS_ANDROID9_MBCAN_RU.md](STOCK_APPS_ANDROID9_MBCAN_RU.md) и [STOCK_APPS_ANDROID10_VHAL_RU.md](STOCK_APPS_ANDROID10_VHAL_RU.md).
 
+Исследование взаимозаменяемости A9/A10, таблицы CAN MCU и ограничения переноса этих карт на поток TBox: [HEAD_UNITS_CAN_COMPATIBILITY_RU.md](HEAD_UNITS_CAN_COMPATIBILITY_RU.md). Полная взаимозаменяемость конкретных экземпляров пока не подтверждена.
+
 ## 1. Профили устройств
 
 | | **A9** (mbCAN) | **A10** (Adayo / VHAL) |
