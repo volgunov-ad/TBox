@@ -27,4 +27,5 @@ include(":phone")
 include(":mqtt")
 include(":adbcore")
 include(":dataresize")
+include(":usbaudio")
  

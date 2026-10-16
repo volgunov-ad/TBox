@@ -1092,6 +1092,9 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}hu_app_network_auto_open")
         private val HU_DSP_MODE_KEY = intPreferencesKey("${KEY_PREFIX}hu_dsp_mode")
         private val HU_DSP_AUTO_APPLY_KEY = booleanPreferencesKey("${KEY_PREFIX}hu_dsp_auto_apply")
+        /** A10 only: re-apply the temporary USB audio bind overlay at app startup. Default false. */
+        private val HU_USB_AUDIO_AUTO_APPLY_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_usb_audio_auto_apply")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -2215,6 +2218,10 @@ class SettingsManager(private val context: Context) {
 
     val huDspAutoApplyFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[HU_DSP_AUTO_APPLY_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huUsbAudioAutoApplyFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_USB_AUDIO_AUTO_APPLY_KEY] ?: false }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -4939,6 +4946,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveHuDspAutoApply(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[HU_DSP_AUTO_APPLY_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuUsbAudioAutoApply(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_USB_AUDIO_AUTO_APPLY_KEY] = enabled
         }
     }
 

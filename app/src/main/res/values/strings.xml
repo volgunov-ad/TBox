@@ -762,6 +762,25 @@
     <string name="settings_ca_certs_error_adb">Нет подключения к localhost ADB (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">На ГУ нет root (su)</string>
     <string name="settings_ca_certs_error_failed">Не удалось установить сертификаты (%1$s)</string>
+
+    <string name="settings_usb_audio_title">USB-аудио (звук на USB-карту)</string>
+    <string name="settings_usb_audio_desc">Включает на ГУ A10 политику USB-аудио (только выход, 44100/48000 Гц): ГУ начинает видеть USB-звуковую карту и выводит в неё медиа и Bluetooth-музыку. Здесь — безопасный временный вариант: конфиг накладывается поверх штатного в памяти ГУ (bind) и держится до перезагрузки; переключатель ниже включает автоприменение при старте приложения. Постоянная запись (конфиг в /system со снятием защиты eMMC) — отдельное приложение «USB-аудио ГУ», как «Расширение /data». Нужны root (su) и localhost ADB. Карту подключайте через USB 2.0-хаб: напрямую ГУ не опрашивает full-speed устройства. На время применения audioserver перезапускается, звук пропадает на несколько секунд.</string>
+    <string name="settings_usb_audio_status_permanent">USB-аудио включён постоянно (конфиг в /system) — управляется приложением «USB-аудио ГУ»</string>
+    <string name="settings_usb_audio_status_temporary">USB-аудио включён (наложение активно, до перезагрузки ГУ)</string>
+    <string name="settings_usb_audio_status_off">USB-аудио выключен (штатная конфигурация)</string>
+    <string name="settings_usb_audio_status_unknown">Состояние неизвестно (конфигурация не читается)</string>
+    <string name="settings_usb_audio_install">Включить USB-аудио (до перезагрузки)</string>
+    <string name="settings_usb_audio_installing">Применение…</string>
+    <string name="settings_usb_audio_restore">Выключить (снять наложение)</string>
+    <string name="settings_usb_audio_done">Готово: наложение применено, audioserver перезапущен. Включите музыку — звук пойдёт через карту.</string>
+    <string name="settings_usb_audio_restored_done">Наложение снято, audioserver перезапущен — штатный звук.</string>
+    <string name="settings_usb_audio_auto_title">Автовключение при старте</string>
+    <string name="settings_usb_audio_auto_desc">После загрузки ГУ приложение само наложит конфиг и включит звук на USB-карту (если он ещё не включён постоянно)</string>
+    <string name="settings_usb_audio_error_adb">Нет подключения к localhost ADB (%1$s)</string>
+    <string name="settings_usb_audio_error_nosu">На ГУ нет root (su)</string>
+    <string name="settings_usb_audio_error_nosource">На ГУ не найден штатный аудиоконфиг (/vendor и /system)</string>
+    <string name="settings_usb_audio_error_layout">Неожиданный формат аудиоконфига ГУ (нет секции usb)</string>
+    <string name="settings_usb_audio_error_failed">Не удалось изменить политику USB-аудио (%1$s)</string>
     <string name="settings_hu_app_network_title">Интернет для приложений</string>
     <string name="settings_hu_app_network_desc">Штатный CarService ГУ при загрузке включает файрвол (iptables), который пускает в сеть только системные службы, а установленным приложениям (браузер, RuStore, TBox и др.) режет весь трафик через Wi‑Fi и модем. Кнопка добавляет правило, разрешающее приложениям выход. Нужны root (su) и localhost ADB. Правило действует до перезагрузки ГУ, после неё нажмите снова или включите автоприменение.</string>
     <string name="settings_hu_app_network_apply">Открыть доступ в интернет</string>

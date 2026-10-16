@@ -31,6 +31,8 @@ fun HuSpecialOptionsDialog(
     onHuDspModeChange: (Int) -> Unit,
     huDspAutoApply: Boolean,
     onHuDspAutoApplyChange: (Boolean) -> Unit,
+    huUsbAudioAutoApply: Boolean,
+    onHuUsbAudioAutoApplyChange: (Boolean) -> Unit,
 ) {
     if (!visible) return
     Dialog(
@@ -69,6 +71,10 @@ fun HuSpecialOptionsDialog(
                         onModeChange = onHuDspModeChange,
                         autoApply = huDspAutoApply,
                         onAutoApplyChange = onHuDspAutoApplyChange,
+                    )
+                    HuUsbAudioSettingsCard(
+                        autoApply = huUsbAudioAutoApply,
+                        onAutoApplyChange = onHuUsbAudioAutoApplyChange,
                     )
                     HuTimeZoneSettingsCard()
                 }

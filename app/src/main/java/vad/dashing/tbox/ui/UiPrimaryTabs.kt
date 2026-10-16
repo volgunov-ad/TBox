@@ -806,6 +806,7 @@ fun SettingsTabContent(
     val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
     val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
     val huDspAutoApply by settingsViewModel.huDspAutoApply.collectAsStateWithLifecycle()
+    val huUsbAudioAutoApply by settingsViewModel.huUsbAudioAutoApply.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -1791,8 +1792,10 @@ fun SettingsTabContent(
             onHuDspModeChange = settingsViewModel::saveHuDspMode,
             huDspAutoApply = huDspAutoApply,
             onHuDspAutoApplyChange = settingsViewModel::saveHuDspAutoApply,
+            huUsbAudioAutoApply = huUsbAudioAutoApply,
+            onHuUsbAudioAutoApplyChange = settingsViewModel::saveHuUsbAudioAutoApply,
         )
-}
+    }
 
 @Composable
 fun FloatingPanelsSettingsTabContent(

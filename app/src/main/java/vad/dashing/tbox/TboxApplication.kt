@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.cacerts.HuCaCertsClient
+import vad.dashing.tbox.huaudio.HuUsbAudioPolicyClient
 import vad.dashing.tbox.hufirewall.HuAppNetworkClient
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.ui.AppIconCache
@@ -76,6 +77,16 @@ class TboxApplication : Application() {
                 .distinctUntilChanged()
                 .collectLatest { mode ->
                     if (mode != null) HuDspClient.applyAtStartup(this@TboxApplication, mode)
+                }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huUsbAudioAutoApplyFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, headUnitMode -> enabled && headUnitMode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { enabled ->
+                    if (enabled) HuUsbAudioPolicyClient.applyAtStartup(this@TboxApplication)
                 }
         }
         applicationScope.launch {

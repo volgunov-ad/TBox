@@ -17,6 +17,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.1.0). Th
 | **Stock A9 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID9_MBCAN_RU.md](docs/STOCK_APPS_ANDROID9_MBCAN_RU.md) |
 | **Stock A10 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID10_VHAL_RU.md](docs/STOCK_APPS_ANDROID10_VHAL_RU.md) |
 | **HU devices (A9/A10)** | `adb/HuRebootAdb`, `cacerts/`, `adb/LocalhostAdbSession` | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) — profiles, root, boot, CPU load, eMMC/GPT layout, HU reboot |
+| **HU USB audio (A10)** | `huaudio/` (`HuUsbAudioPolicyCodec`, `HuUsbAudioPolicyClient`), `ui/HuUsbAudioSettingsCard.kt`; permanent one-shot app `:usbaudio` | [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md) — hub workaround for kernel FS-enum bug; TBox Monitor keeps the temporary bind-overlay variant with boot auto-apply; the permanent `/system` write with the eMMC write-protect dance (vendor file name removed, fallback config) lives in `:usbaudio`, mirroring `:dataresize` |
 | **Raw decode formulas** | `CanFramesProcess`, `BackgroundService.ans*`, `Android10VhalRepository`, `HvacClimateDomain` | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) |
 | **TBox / network** | `TboxRepository`, `BackgroundService`, `TboxProtocol` | [docs/TBOX_PROXY_RU.md](docs/TBOX_PROXY_RU.md), [docs/USER_GUIDE_RU.md](docs/USER_GUIDE_RU.md) |
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
@@ -90,12 +91,21 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.
 
-`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app` and `:dataresize`.
+`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, and `:usbaudio`.
 
 ```
 ./gradlew :adbcore:testDebugUnitTest
 ./gradlew :dataresize:testDebugUnitTest
 ./gradlew :dataresize:assembleDebug
+```
+
+### USB Audio APK (`:usbaudio`)
+
+Separate app **USB-аудио ГУ** (`vad.dashing.usbaudio`) for A10 HUs: the permanent one-shot USB audio enablement (config with inline usb module written to `/system/etc/audio_policy_configuration.xml` with the eMMC write-protect dance from `:dataresize`, vendor file name removed). TBox Monitor keeps only the temporary bind-overlay variant with boot auto-apply. Design and history: [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md).
+
+```
+./gradlew :usbaudio:testDebugUnitTest
+./gradlew :usbaudio:assembleDebug
 ```
 
 ### Git branches

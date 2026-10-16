@@ -759,6 +759,25 @@
     <string name="settings_ca_certs_error_adb">No localhost ADB connection (%1$s)</string>
     <string name="settings_ca_certs_error_nosu">No root (su) on the HU</string>
     <string name="settings_ca_certs_error_failed">Certificate install failed (%1$s)</string>
+
+    <string name="settings_usb_audio_title">USB audio (sound to a USB card)</string>
+    <string name="settings_usb_audio_desc">Enables a USB audio policy (output-only, 44100/48000 Hz) on the A10 head unit: the HU starts seeing a USB sound card and routes media and Bluetooth music to it. This is the safe temporary variant: the config is bind-mounted over the stock one in the HU memory and lasts until reboot; the switch below re-applies it at app startup. The permanent write (config in /system with the eMMC write-protect dance) lives in the separate USB Audio app, like Data Resize. Requires root (su) and localhost ADB. Connect the card through a USB 2.0 hub: the HU cannot enumerate full-speed devices directly. audioserver restarts while applying, so sound drops for a few seconds.</string>
+    <string name="settings_usb_audio_status_permanent">USB audio enabled permanently (config in /system) — managed by the USB Audio app</string>
+    <string name="settings_usb_audio_status_temporary">USB audio enabled (overlay active, until HU reboot)</string>
+    <string name="settings_usb_audio_status_off">USB audio disabled (stock configuration)</string>
+    <string name="settings_usb_audio_status_unknown">State unknown (config unreadable)</string>
+    <string name="settings_usb_audio_install">Enable USB audio (until reboot)</string>
+    <string name="settings_usb_audio_installing">Applying…</string>
+    <string name="settings_usb_audio_restore">Disable (drop the overlay)</string>
+    <string name="settings_usb_audio_done">Done: overlay applied, audioserver restarted. Start music — sound goes through the card.</string>
+    <string name="settings_usb_audio_restored_done">Overlay dropped, audioserver restarted — stock sound.</string>
+    <string name="settings_usb_audio_auto_title">Auto-enable at startup</string>
+    <string name="settings_usb_audio_auto_desc">After HU boot the app re-applies the overlay and routes sound to the USB card (unless already enabled permanently)</string>
+    <string name="settings_usb_audio_error_adb">No localhost ADB connection (%1$s)</string>
+    <string name="settings_usb_audio_error_nosu">No root (su) on the head unit</string>
+    <string name="settings_usb_audio_error_nosource">Stock audio config not found on the head unit (/vendor and /system)</string>
+    <string name="settings_usb_audio_error_layout">Unexpected head unit audio config layout (no usb section)</string>
+    <string name="settings_usb_audio_error_failed">Failed to change USB audio policy (%1$s)</string>
     <string name="settings_hu_app_network_title">Internet for apps</string>
     <string name="settings_hu_app_network_desc">On boot the stock HU CarService enables an iptables firewall that lets only system services online and drops all Wi‑Fi and modem traffic of installed apps (browser, RuStore, TBox, etc.). The button adds a rule that lets apps through. Requires root (su) and localhost ADB. The rule lasts until HU reboot; press again afterwards or enable auto-apply.</string>
     <string name="settings_hu_app_network_apply">Open internet access</string>
