@@ -260,6 +260,13 @@ data class FloatingDashboardWidgetConfig(
      */
     val avgFuelConsumptionSource: Int = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
     /**
+     * Liters line for fuel widgets that show volume:
+     * [FUEL_LITERS_DISPLAY_REMAINING] (default) or [FUEL_LITERS_DISPLAY_TO_FULL].
+     * Applies to [FUEL_LEVEL_LITERS_WIDGET_DATA_KEY], [FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY],
+     * and the liters part of [FUEL_LEVEL_WIDGET_DATA_KEY]. Percent-only tiles ignore this.
+     */
+    val fuelLitersDisplayMode: Int = FUEL_LITERS_DISPLAY_REMAINING,
+    /**
      * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
      */

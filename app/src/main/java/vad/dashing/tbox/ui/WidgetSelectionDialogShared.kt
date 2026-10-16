@@ -100,6 +100,10 @@ import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+import vad.dashing.tbox.isFuelLitersDisplayModeWidgetDataKey
+import vad.dashing.tbox.normalizeFuelLitersDisplayMode
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
@@ -276,6 +280,13 @@ data class TripMetricFieldDropdownEntry(
 
 internal data class AvgFuelConsumptionSourceDropdownEntry(
     val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class FuelLitersDisplayModeDropdownEntry(
+    val mode: Int,
     val display: String,
 ) {
     override fun toString(): String = display
@@ -719,6 +730,13 @@ internal class WidgetSelectionDialogState(
             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
         },
     )
+    var fuelLitersDisplayMode by mutableIntStateOf(
+        if (isFuelLitersDisplayModeWidgetDataKey(initialConfig.dataKey)) {
+            normalizeFuelLitersDisplayMode(initialConfig.fuelLitersDisplayMode)
+        } else {
+            FUEL_LITERS_DISPLAY_REMAINING
+        },
+    )
     var espRelayMode by mutableStateOf(
         if (isEspRelayWidgetDataKey(initialConfig.dataKey)) {
             initialConfig.espRelayMode
@@ -904,6 +922,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!isAverageFuelConsumptionWidgetDataKey(key)) {
             avgFuelConsumptionSource = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
+        if (!isFuelLitersDisplayModeWidgetDataKey(key)) {
+            fuelLitersDisplayMode = FUEL_LITERS_DISPLAY_REMAINING
         }
         if (!isTripMetricWidgetDataKey(key)) {
             tripMetricFieldId = ActiveTripCustomWidgetField.DISTANCE.id
@@ -1222,6 +1243,11 @@ internal class WidgetSelectionDialogState(
                 normalizeAvgFuelConsumptionSource(avgFuelConsumptionSource)
             } else {
                 AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+            },
+            fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(selectedDataKey)) {
+                normalizeFuelLitersDisplayMode(fuelLitersDisplayMode)
+            } else {
+                FUEL_LITERS_DISPLAY_REMAINING
             },
             espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
                 espRelayMode
@@ -1567,6 +1593,11 @@ internal class WidgetSelectionDialogState(
             normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
         } else {
             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
+        fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(selectedDataKey)) {
+            normalizeFuelLitersDisplayMode(cfg.fuelLitersDisplayMode)
+        } else {
+            FUEL_LITERS_DISPLAY_REMAINING
         }
         espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
             cfg.espRelayMode
@@ -2794,6 +2825,30 @@ internal fun WidgetSelectionDialogForm(
                             description = "",
                             enabled = state.togglesEnabled,
                             options = avgFuelSourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isFuelLitersDisplayModeWidgetDataKey(state.selectedDataKey)) {
+                        val fuelLitersDisplayOptions = listOf(
+                            FuelLitersDisplayModeDropdownEntry(
+                                FUEL_LITERS_DISPLAY_REMAINING,
+                                stringResource(R.string.widget_fuel_liters_display_remaining),
+                            ),
+                            FuelLitersDisplayModeDropdownEntry(
+                                FUEL_LITERS_DISPLAY_TO_FULL,
+                                stringResource(R.string.widget_fuel_liters_display_to_full),
+                            ),
+                        )
+                        val selectedFuelLitersDisplay = fuelLitersDisplayOptions.firstOrNull {
+                            it.mode == normalizeFuelLitersDisplayMode(state.fuelLitersDisplayMode)
+                        } ?: fuelLitersDisplayOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedFuelLitersDisplay,
+                            onValueChange = { state.fuelLitersDisplayMode = it.mode },
+                            text = stringResource(R.string.widget_fuel_liters_display_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = fuelLitersDisplayOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }

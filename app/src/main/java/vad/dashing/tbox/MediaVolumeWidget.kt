@@ -10,6 +10,9 @@ const val GEAR_BOX_CURRENT_GEAR_WIDGET_DATA_KEY = "gearBoxCurrentGear"
 const val GEAR_BOX_PREPARED_GEAR_WIDGET_DATA_KEY = "gearBoxPreparedGear"
 const val ODOMETER_WIDGET_DATA_KEY = "odometer"
 const val FUEL_LEVEL_PERCENTAGE_WIDGET_DATA_KEY = "fuelLevelPercentage"
+const val FUEL_LEVEL_LITERS_WIDGET_DATA_KEY = "fuelLevelLiters"
+const val FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY = "fuelLevelLitersActual"
+const val FUEL_LEVEL_WIDGET_DATA_KEY = "fuelLevelWidget"
 const val OUTSIDE_TEMPERATURE_WIDGET_DATA_KEY = "outsideTemperature"
 const val WHEELS_PRESSURE_WIDGET_DATA_KEY = "wheelsPressureWidget"
 const val WHEELS_PRESSURE_TEMPERATURE_WIDGET_DATA_KEY = "wheelsPressureTemperatureWidget"
@@ -42,6 +45,48 @@ fun normalizeAvgFuelConsumptionSource(raw: Int): Int =
 
 fun isAverageFuelConsumptionWidgetDataKey(dataKey: String): Boolean {
     return dataKey == AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
+}
+
+/** [FloatingDashboardWidgetConfig.fuelLitersDisplayMode]: remaining fuel in the tank (default). */
+const val FUEL_LITERS_DISPLAY_REMAINING = 0
+
+/**
+ * [FloatingDashboardWidgetConfig.fuelLitersDisplayMode]: liters to fill the tank
+ * (`max(0, tankLiters − currentLiters)`).
+ */
+const val FUEL_LITERS_DISPLAY_TO_FULL = 1
+
+fun normalizeFuelLitersDisplayMode(raw: Int): Int =
+    if (raw == FUEL_LITERS_DISPLAY_TO_FULL) {
+        FUEL_LITERS_DISPLAY_TO_FULL
+    } else {
+        FUEL_LITERS_DISPLAY_REMAINING
+    }
+
+/** Widgets that show calibrated liters and support remaining / to-full display. */
+fun isFuelLitersDisplayModeWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == FUEL_LEVEL_LITERS_WIDGET_DATA_KEY ||
+        dataKey == FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY ||
+        dataKey == FUEL_LEVEL_WIDGET_DATA_KEY
+}
+
+/**
+ * Liters value shown on fuel widgets.
+ * `null` current stays `null` (empty tile). To-full uses [tankLiters] from settings.
+ */
+fun fuelLitersForDisplay(
+    currentLiters: Float?,
+    tankLiters: Int,
+    displayMode: Int,
+): Float? {
+    if (currentLiters == null) {
+        return null
+    }
+    return when (normalizeFuelLitersDisplayMode(displayMode)) {
+        FUEL_LITERS_DISPLAY_TO_FULL ->
+            maxOf(0f, tankLiters.coerceAtLeast(0).toFloat() - currentLiters)
+        else -> currentLiters
+    }
 }
 
 const val DISTANCE_TO_NEXT_MAINTENANCE_WIDGET_DATA_KEY = "distanceToNextMaintenance"
