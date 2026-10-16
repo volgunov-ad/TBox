@@ -3,7 +3,7 @@ package vad.dashing.tbox
 import vad.dashing.tbox.hutimezone.HuTimeZoneCodec
 
 internal object HuDspMode {
-    val MODES: List<Int> = (0..10).toList() + 250
+    val MODES: List<Int> = (0..8).toList() + 250
     const val DEFAULT_MODE = 1
 
     fun normalize(mode: Int?): Int = mode?.takeIf { it in MODES } ?: DEFAULT_MODE

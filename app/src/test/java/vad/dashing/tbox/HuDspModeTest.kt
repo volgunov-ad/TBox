@@ -9,8 +9,8 @@ import org.junit.Test
 
 class HuDspModeTest {
     @Test
-    fun containsExactlyTheFactoryModes() {
-        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 250), HuDspMode.MODES)
+    fun containsExactlyTheSupportedModes() {
+        assertEquals(listOf(0, 1, 2, 3, 4, 5, 6, 7, 8, 250), HuDspMode.MODES)
         HuDspMode.MODES.forEach { mode ->
             assertEquals("service call adayo.setting.v2.0 86 i32 $mode", HuDspMode.writeCommand(mode))
             assertEquals(mode, HuDspMode.normalize(mode))
@@ -19,7 +19,7 @@ class HuDspModeTest {
 
     @Test
     fun invalidValuesAreNeverSent() {
-        listOf(-1, 11, 249, 251, Int.MAX_VALUE).forEach { mode ->
+        listOf(-1, 9, 10, 11, 249, 251, Int.MAX_VALUE).forEach { mode ->
             assertTrue(runCatching { HuDspMode.writeCommand(mode) }.isFailure)
             assertEquals(1, HuDspMode.normalize(mode))
         }
@@ -49,6 +49,8 @@ class HuDspModeTest {
     fun startupRequiresExplicitOptInAndA10() {
         assertNull(HuDspMode.startupMode(false, HeadUnitCanMode.Android10Vhal, 2))
         assertNull(HuDspMode.startupMode(true, HeadUnitCanMode.Android9MbCan, 2))
+        assertNull(HuDspMode.startupMode(true, HeadUnitCanMode.Android10Vhal, 9))
+        assertNull(HuDspMode.startupMode(true, HeadUnitCanMode.Android10Vhal, 10))
         assertNull(HuDspMode.startupMode(true, HeadUnitCanMode.Android10Vhal, 11))
         HuDspMode.MODES.forEach { mode ->
             assertEquals(mode, HuDspMode.startupMode(true, HeadUnitCanMode.Android10Vhal, mode))
