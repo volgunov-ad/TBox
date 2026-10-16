@@ -2154,6 +2154,11 @@
     <string name="trips_widget_source_persistent">Daily trip</string>
     <string name="trips_metric_field_title">Trip parameter</string>
     <string name="widget_avg_fuel_source_mbcan_vhal">mbCAN/VHAL</string>
+    <string name="widget_fuel_liters_display_title">Liters display</string>
+    <string name="widget_fuel_liters_display_remaining">Fuel remaining</string>
+    <string name="widget_fuel_liters_display_to_full">To full tank</string>
+    <string name="data_title_fuel_to_full">To full tank</string>
+    <string name="unit_liter_to_full">L to full</string>
     <string name="trips_last_trip_widget_title">Last trip</string>
     <string name="trips_start_time">Start</string>
     <string name="trips_end_time">End</string>
@@ -2464,8 +2469,8 @@
     <string name="widget_desc_distance_to_fuel_empty">Estimated driving range with the remaining fuel.</string>
     <string name="widget_desc_fuel_level_percentage">Fuel level as a percentage.</string>
     <string name="widget_desc_fuel_level_percentage_filtered">Smoothed fuel level that reduces tank fluctuation.</string>
-    <string name="widget_desc_fuel_level_liters">Estimated fuel volume from the calibration table.</string>
-    <string name="widget_desc_fuel_level_liters_actual">Fuel volume corrected for temperature.</string>
+    <string name="widget_desc_fuel_level_liters">Estimated fuel volume from the calibration table. In Advanced you can show remaining fuel or liters to a full tank.</string>
+    <string name="widget_desc_fuel_level_liters_actual">Fuel volume corrected for temperature. In Advanced you can show remaining fuel or liters to a full tank.</string>
     <string name="widget_desc_current_fuel_consumption">Current fuel consumption.</string>
     <string name="widget_desc_average_fuel_consumption">Average fuel consumption. Source in Additional: instrument cluster (mbCAN/VHAL), current trip, or daily trip.</string>
     <string name="widget_desc_breaking_force">Current braking force.</string>
@@ -2520,7 +2525,7 @@
     <string name="widget_desc_wheels_pressure">Pressure in all four wheels.</string>
     <string name="widget_desc_wheels_pressure_temperature">Pressure and temperature of all four wheels.</string>
     <string name="widget_desc_temp_in_out">Temperature outside and inside the vehicle.</string>
-    <string name="widget_desc_fuel_level">Fuel level as both a percentage and liters.</string>
+    <string name="widget_desc_fuel_level">Fuel level as both a percentage and liters. In Advanced the liters line can show remaining fuel or liters to a full tank.</string>
     <string name="widget_desc_air_quality">Air quality outside and inside the vehicle.</string>
     <string name="widget_desc_steering_wheel_heat">Steering wheel heating status.</string>
     <string name="widget_desc_wiper_maintenance">Wiper maintenance position status. The icon shows the live wipe mode: off / INT (1 bar) / Low (2) / High (3).</string>
