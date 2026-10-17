@@ -91,7 +91,7 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.
 
-`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, and `:usbaudio`.
+`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, `:usbaudio`, and `:fwunlock`.
 
 ```
 ./gradlew :adbcore:testDebugUnitTest
@@ -106,6 +106,15 @@ Separate app **USB-аудио ГУ** (`vad.dashing.usbaudio`) for A10 HUs: the p
 ```
 ./gradlew :usbaudio:testDebugUnitTest
 ./gradlew :usbaudio:assembleDebug
+```
+
+### Firewall Unlock APK (`:fwunlock`)
+
+Separate app **Файрвол ГУ** (`vad.dashing.fwunlock`) for A10 HUs: permanent Adayo firewall unlock — rewrites `/system/etc/adayo/firewall/AdayoFirewallAppDef.json` (Gson whitelist `{"packageName": ...}` consumed by stock `CarNetworkService`; no wildcard support) with all third-party packages, via localhost ADB + su and the eMMC write-protect dance from `:dataresize`; restarts `com.android.car` to apply without reboot. TBox Monitor keeps the runtime iptables fix (`hufirewall/`) as the safety net for apps installed later. Design: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2.
+
+```
+./gradlew :fwunlock:testDebugUnitTest
+./gradlew :fwunlock:assembleDebug
 ```
 
 ### Git branches

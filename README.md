@@ -103,6 +103,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.8 | «Расширение /data» (`:dataresize`): перенос `userdata` в свободный хвост eMMC на A10 |
 | [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md) | Звук через USB-карту на A10: хаб-обход бага ядра, защита eMMC, постоянное включение (`:usbaudio`) и временный bind в TBox Monitor |
 | [docs/USB_AUDIO_A10_SIMPLE_RU.md](docs/USB_AUDIO_A10_SIMPLE_RU.md) | То же самое простыми словами: Блокнот + копировать/вставить, без диагностики |
+| [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2 | «Файрвол ГУ» (`:fwunlock`): постоянный белый список сети для приложений на A10 (файрвол Adayo), рантайм-фикс в TBox Monitor — страховка |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
