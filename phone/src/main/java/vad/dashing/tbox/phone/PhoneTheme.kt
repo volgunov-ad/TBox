@@ -23,7 +23,8 @@ enum class Accent(val container: Color?, val content: Color) {
     VENT(Color(0xFF3DBEFF), Color(0xFF082028)),
     ECO(Color(0xFF00A400), Color.White),
     COMFORT(Color(0xFF2180F3), Color.White),
-    STRONG(Color(0xFFFF0000), Color.White),
+    /** Same orange as HU seat/steering heat (`WidgetActiveColors.Secondary`). */
+    STRONG(Color(0xFFF3A721), Color(0xFF1A1200)),
 }
 
 object PhoneColors {
