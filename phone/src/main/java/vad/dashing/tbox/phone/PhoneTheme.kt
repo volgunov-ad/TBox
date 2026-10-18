@@ -22,8 +22,8 @@ enum class Accent(val container: Color?, val content: Color) {
     HEAT(Color(0xFFE85D4C), Color.White),
     VENT(Color(0xFF3DBEFF), Color(0xFF082028)),
     ECO(Color(0xFF00A400), Color.White),
-    COMFORT(Color(0xFF00C8FF), Color(0xFF082028)),
-    STRONG(Color(0xFFF3A721), Color(0xFF1A1200)),
+    COMFORT(Color(0xFF2180F3), Color.White),
+    STRONG(Color(0xFFFF0000), Color.White),
 }
 
 object PhoneColors {

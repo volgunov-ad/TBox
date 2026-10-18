@@ -44,10 +44,11 @@ import vad.dashing.tbox.mbcan.launchHvacClimateCommand
 import vad.dashing.tbox.mbcan.setHvacBlowMode
 import vad.dashing.tbox.mbcan.setHvacCustomMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
-import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
+/** Match drive-mode Eco / Normal / Sport accents (same RGB + 0xD9 alpha as Eco/SPT widgets). */
 private val HvacCustomEcoColor = Color(0xD900A400)
-private val HvacCustomComfortColor = Color(0xD900C8FF)
+private val HvacCustomComfortColor = Color(0xD92180F3)
+private val HvacCustomStrongColor = Color(0xD9FF0000)
 
 private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
     HvacBlowMode.Face -> R.drawable.ic_widget_hvac_blow_face
@@ -532,7 +533,7 @@ private fun hvacCustomModeIconRes(mode: HvacCustomMode): Int = when (mode) {
 private fun HvacCustomMode.activeColor(): Color = when (this) {
     HvacCustomMode.Eco -> HvacCustomEcoColor
     HvacCustomMode.Comfort -> HvacCustomComfortColor
-    HvacCustomMode.Strong -> WidgetActiveColors.Secondary
+    HvacCustomMode.Strong -> HvacCustomStrongColor
 }
 
 @Composable
