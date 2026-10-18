@@ -347,6 +347,12 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("avgFuelConsumptionSource", source)
             }
         }
+        if (isFuelLitersDisplayModeWidgetDataKey(config.dataKey)) {
+            val mode = normalizeFuelLitersDisplayMode(config.fuelLitersDisplayMode)
+            if (mode != FUEL_LITERS_DISPLAY_REMAINING) {
+                obj.put("fuelLitersDisplayMode", mode)
+            }
+        }
         if (isEspRelayWidgetDataKey(config.dataKey) &&
             config.espRelayMode != EspRelayWidgetMode.DEFAULT
         ) {
@@ -797,6 +803,16 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+                        },
+                        fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(dataKey)) {
+                            normalizeFuelLitersDisplayMode(
+                                item.optInt(
+                                    "fuelLitersDisplayMode",
+                                    FUEL_LITERS_DISPLAY_REMAINING,
+                                ),
+                            )
+                        } else {
+                            FUEL_LITERS_DISPLAY_REMAINING
                         },
                         espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
                             EspRelayWidgetMode.fromStorageKey(
