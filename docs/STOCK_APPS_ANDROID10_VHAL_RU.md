@@ -144,3 +144,7 @@ ISO в той же папке (для ориентира версии образ
 
 - `CarSetting` / `AirConditioning` / `SystemSettings` / `Launcher` / `MediaService` / `SpeechHMI`  
 - уже сведено в [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md) и [STOCK_PUSH_SUBSCRIPTIONS_RU.md](STOCK_PUSH_SUBSCRIPTIONS_RU.md)
+
+Механика окна лаунчера (ActivityView 1327×865/1920×1080, интенты `LAUNCH_APP` / `SourceType` /
+`com.adayo.launcher.FULLSCREEN`) и диагностика AA/CarPlay в окне — отдельная дока:
+[LAUNCHER_WINDOW_AA_CARPLAY_RU.md](LAUNCHER_WINDOW_AA_CARPLAY_RU.md).

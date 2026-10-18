@@ -6,6 +6,13 @@ Android Auto (`com.adayo.androidauto`) и CarPlay (`com.adayo.carplay` / `com.ad
 запущенные в «окне приложений» лаунчера, теряют тач и скрывают штатные бары.
 Всё ниже — статический анализ dexdump'ов APK c ГУ + проверка на живом устройстве (октябрь 2026).
 
+**Цель (зафиксирована владельцем):** Android Auto и CarPlay запускаются **в окне лаунчера**
+(Display #1, 1327×865) — **штатные бары видимы всю сессию, тач работает** — в обоих
+сценариях: старт ярлыком при живой сессии и старт сессии без открытого окна.
+**Полный экран не нужен:** полноэкранное открытие CP/AA считается провалом решения,
+а не допустимым исходом. Критерий приёмки любой сборки CP/AA — окно + бары + тач,
+иначе сборка не принимается (пример: p4, §7.6.1).
+
 ## 1. Как устроено окно
 
 - Лаунчер держит окно «приложения в окне» на **виртуальном дисплее фреймворка** —
@@ -456,8 +463,83 @@ CarPlay на всю ширину между несокрытыми барами 
 приложения TBox Monitor работает, тач правильный, изображение не растянуто.
 Пользователь согласовал сохранение чёрных полей сверху и снизу; текущую геометрию
 CarPlay p3 оставляем без изменений. Этап Android Auto можно продолжать.
-Повторное подключение телефона и сценарий отсутствия оконной активити пока отдельно
-не проверены.
+Повторное подключение телефона и сценарий отсутствия оконной активити проверены
+отдельной сборкой p4/p5 — §7.6.1.
+
+### 7.6.1. CarPlayView p4/p5: старт сессии без окна (2026-10-18)
+
+Сценарий «старт сессии без оконной активити» закрыт отдельной сборкой **p4**
+(`CarPlayView_p4_signed.apk`, md5 `719289e15bc858241e805060cfe845cd`, 206167 байт,
+установлен в `/system/app/CarPlayView/CarPlayView.apk`). Отличие от p3: в
+редирект-ветке `startInWindow` (нет живой оконной активити) — прямой запуск
+`startActivity` с `NEW_TASK|MULTIPLE_TASK` и
+`ActivityOptions.setLaunchDisplayId` найденного через DisplayManager
+`ActivityViewVirtualDisplay@`, с завершением полноэкранного дубля и защёлкой
+однократного редиректа (`REDIRECTED`).
+
+Проверка без сессии (21:53–21:56): хук не вызывается (`requestCarPlayUI →
+launchCarPlay NONE → session == null`); ручной `LAUNCH_APP` кладёт MainActivity
+fullscreen в Stack #0 (чёрный экран; `p4_acts.txt`, `wp3.png`) — ожидаемое
+поведение p3 без сессии.
+
+Решающий тест с живой USB-сессией (22:04–22:07, `carplay0` LOWER_UP):
+
+- 22:04:56.922 хук сработал в процессе view (19896): `ContextImpl.startActivity:906
+  ← WindowSurface.startInWindow:166 ← CarPlayApplication$1.onVideoStatusChange:89`;
+- 22:04:56.945 AMS принял `START u0 {flg=0x18000000}`; 22:04:57.075
+  `CAR.AM: New top task … taskId=1324, stackId=1` — задача CarPlayView создана
+  **в окне на Display #1**; 22:04:57.183 `ActivityViewVirtualDisplay` → ON
+  (не OFF, как без сессии); 22:04:57.307 `fit16x9=1327x746` — геометрия окна p3;
+  fullscreen-дубль в Stack #0 не появился. ~1.2 с всё работало;
+- 22:04:57.056–059 `SourceMngService` (по `onTaskStackChanged` после старта,
+  `setM_curUIDByActivity packageName=com.adayo.carplay.view`) ответил
+  `checkToStoreUI AppInfo is null or UnStore sourceType=ADAYO_SOURCE_CARPLAY_MEDIA`
+  → откат `curUID=ADAYO_SOURCE_HOME`; лаунчер `onRestart mNeedRestartMainPage=true`;
+  22:04:57.635 старт HOME, 22:04:57.688 перезапуск carsettings в ActivityView;
+  22:04:58.176 SurfaceFlinger уничтожил слой `MainActivity t1324` — окно
+  вернулось к carsettings за ~1.1 с после запуска;
+- конечное состояние 22:07 (`p4_acts3.txt`, `wp4.png`): carplay.view в задачах
+  нет нигде, Display #1 resumed carsettings t4 (1327×865).
+
+Причина подтверждена логом (`p4_log4.txt` — полный буфер 21:56–22:38, 14 МБ):
+прямой `startActivity` в обход лаунчера не регистрирует источник в
+SourceMngService (`AppInfo … UnStore`), тот откатывается на HOME, лаунчер
+возвращает окно к последнему оконному приложению и убивает задачу. Путь ярлыка
+(p3) держит окно именно потому, что лаунчер сам выполняет `launchActivityViewApp`
+и согласует источник.
+
+Хвост 22:08:52–53 (ручной тап по иконке CarPlay при живой защёлке): тап запустил
+MainActivity fullscreen (`cat=LAUNCHER`), VirtualDisplay OFF, хук ответил
+`redirect suppressed`, `startInWindow display=-1` — защёлка `REDIRECTED` от
+22:04:57 не сбросилась и оставила fullscreen-состояние.
+
+**Вердикт: механика p4 корректна** (окно, displayId, геометрия, без fullscreen-дубля),
+**но окно не удерживается stock-логикой лаунчера — p4 не принимается.**
+
+Сборка **p5** (база p3 + заменённая редирект-ветка): при отсутствии живой оконной
+активити патч завершает все живие (fullscreen) активити и отправляет лаунчеру
+`LAUNCH_APP` (`app_pkg`/`app_cls`) — обкатанный путь ярлыка, при котором лаунчер
+сам открывает окно и регистрирует источник; доставку `surfaceId` выполняет
+повторный callback стека через первую ветку `startInWindow` (существующая оконная
+активити, in-place `onNewIntent`). Защёлка `REDIRECTED` обезврежена (оба исхода
+CAS ведут в путь делегирования), ветка `redirect suppressed` недостижима;
+делегированный путь помечается в логе `startInWindow display=-2`. Урок AA p2
+(§7.7 — циклический `LAUNCH_APP` из `onResume`) учтён: реле срабатывает только в
+callback стека при отсутствии живой оконной активити, что разрывает цикл.
+
+`CarPlayView_p5_signed.apk`: platform-подпись подтверждена (`apksigner verify`,
+SHA-256 `c8a2e9bccf597c2fb6dc66bee293fc13f2fc47ec77bc6b2b0d52c11f51192ab8`, как у
+AA p5), md5 `bc5ce29096eef28d8a68709bf90f9dfc`, 206167 байт. Установлен в
+`/system/app/CarPlayView/CarPlayView.apk` поверх p4 (`patch_cpv.sh`:
+`CPVPATCH_OK`, md5 на ГУ `bc5ce29096eef28d8a68709bf90f9dfc`; сток-резерв
+`2718803663e016a969e6d2fa0d2b4c16` не тронут; процесс view остановлен перед
+записью — поднимется стеком на следующей сессии). Поведение p5 проверяется следующей
+живой CarPlay-сессией по цели из шапки: **окно с барами удерживается всю сессию**
+(оба сценария старта), `startInWindow display=-2`, тач работает; до приёмки ассет
+`:winpatch` остаётся на CP p3. Артефакты в
+`Temp\rufp`: `carplayview_p5_dec`, `CarPlayView_p5{,_al,_signed}.apk`,
+`p4_log4.txt`, `p4_acts.txt`/`wp3.png` (без сессии), `p4_acts3.txt`/`wp4.png`
+(живая сессия), `carplayview_p4_dec`.
 
 ### 7.7. Android Auto p1–p5: оконный рендерер и маршрутизация (2026-10-18)
 
