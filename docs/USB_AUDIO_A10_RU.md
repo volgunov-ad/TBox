@@ -193,11 +193,21 @@ dumpsys media.audio_flinger | grep -A8 -i usb            # при играюще
 Модуль `:usbaudio` (`vad.dashing.usbaudio`), отдельный APK по образцу `:dataresize` — опасные одноразовые операции с eMMC живут вне монитора. Ставится на ГУ рядом с TBox Monitor (подпись общая).
 
 - Экран: статус (карта за хабом, наличие конфигов, состояние модуля usb), кнопки «Включить постоянно» и «Вернуть штатную политику».
+- Внизу экрана — живой список всех USB-устройств ГУ (`UsbManager.deviceList`): имя, `VID:PID` (hex), производитель и расшифровка класса (Аудио, HID, Хаб, Накопитель, vendor-specific и т.д., составные — по классам интерфейсов); аудио-устройства выделены. Обновляется опросом раз в 2 с и по `ACTION_USB_DEVICE_ATTACHED/DETACHED` (регистрация в `onStart`). Факт «USB-карта» (по `/proc/asound/cards`) тоже обновляется динамически — т.к. регистрация ALSA отстаёт от перечисления USB, опрос надёжнее одного broadcast.
 - «Включить постоянно» делает ровно то, что описано в §6: WP-танец (`emmc_disable_all_wp` + `trap … EXIT`), запись в `/system/etc/audio_policy_configuration.xml`, md5-сверка после `drop_caches`, удаление vendor-имени с синком, рестарт `audioserver`, пере-перечисление карты. Статус-детект учитывает приоритет: пока имя в `/vendor` существует, audioserver читает именно его — конфиг в `/system` включается только после удаления имени.
 - «Вернуть штатную политику» пишет в `/system` конфиг без модуля usb (инклуд usb возвращается абсолютным путём); имя в `/vendor` не восстанавливается — на битом vendor-ext4 это невозможно, да и не нужно: поведение аудио становится штатным.
 - Связь с ГУ — тот же localhost ADB + `su 0` (RootShell, как в `:dataresize`); конфиг и скрипт доставляются base64-чанками в `/data/local/tmp/usbaudio/`.
 
-Код: `usbaudio/UsbAudioCodec.kt` (трансформация, скрипты, маркеры), `UsbAudioViewModel.kt`, `device/RootShell.kt`, тесты `UsbAudioCodecTest.kt`. Сборка: `./gradlew :usbaudio:assembleDebug`.
+Код: `usbaudio/UsbAudioCodec.kt` (трансформация, скрипты, маркеры), `UsbAudioViewModel.kt`, `UsbDeviceCatalog.kt` (описание USB-устройств), `device/RootShell.kt`, тесты `UsbAudioCodecTest.kt`, `UsbDeviceCatalogTest.kt`. Сборка: `./gradlew :usbaudio:assembleDebug`.
+
+## 8c) Аппаратная громкость USB-карты (tinymix)
+
+Диагноз на реальном ГУ (PCM2902/C-Media, `0x08bb:2902` за хабом): framework-громкость STREAM_MUSIC на `usb_headset` уже 31/31 (ручка ГУ через SettingsSvc дальше не поднимает), а аппаратный контрол карты `Speaker Playback Volume` даёт последний запас. Проверено живым тестом: изменение слышимо.
+
+- Шкала **0–151**, линейная по raw 1/256 дБ: 0 = −28.375 дБ, 151 = −0.0625 дБ, текущее штатное **150** (−0.25 дБ). Значения выше 151 молча клампятся ядром в 151 (exit 0) — прирост «громче» фактически исчерпан (≤0.19 дБ), регулятор нужен для подстройки вниз/баланса.
+- Команды (без кавычек — через `su 0 sh -c '...'`): чтение `su 0 tinymix -D <card>`, запись по индексу контрола `su 0 tinymix -D <card> <idx> <v> <v>` (индекс парсится из списка, у этой карты 5). Номер карты — первая строка `USB-Audio` в `/proc/asound/cards`.
+- UI: карточка «USB-громкость» внизу экрана `:usbaudio` — «Прочитать» (текущее + ≈дБ), слайдер 0–151, «Применить N» через localhost ADB + `su 0` (RootShell), readback после записи. Код: `UsbVolume.kt` (шкала/парсеры), `UsbAudioViewModel.refreshVolume/applyVolume`, тесты `UsbVolumeTest.kt`.
+- Сопутствующие контролы карты: `Speaker Playback Switch` (On), `Mic Playback Volume`, `Auto Gain Control` — в UI не трогаются.
 
 ## 9) Если звук снова пропал — чек-лист
 

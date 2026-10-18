@@ -1,6 +1,8 @@
 package vad.dashing.usbaudio
 
 import android.app.Application
+import android.content.Context
+import android.hardware.usb.UsbManager
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,10 +11,12 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import vad.dashing.usbaudio.device.RootShell
 
@@ -22,11 +26,21 @@ enum class UsbAudioBannerKind { Info, Warning, Success, Error }
 
 data class UsbAudioBanner(val text: String, val kind: UsbAudioBannerKind)
 
+data class UsbVolumePanel(
+    val card: Int? = null,
+    val controlIndex: Int? = null,
+    val value: Int? = null,
+    val busy: Boolean = false,
+    val error: String? = null,
+)
+
 data class UsbAudioState(
     val facts: List<Pair<String, String>> = emptyList(),
     val actions: Set<UsbAudioAction> = emptySet(),
     val busy: Boolean = false,
     val banner: UsbAudioBanner? = null,
+    val devices: List<UsbDeviceInfo> = emptyList(),
+    val volume: UsbVolumePanel = UsbVolumePanel(),
 )
 
 class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
@@ -34,6 +48,13 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UsbAudioState())
     val state: StateFlow<UsbAudioState> = _state.asStateFlow()
     private var job: Job? = null
+    private var pollJob: Job? = null
+    private var volumeJob: Job? = null
+
+    private companion object {
+        const val CARD_FACT = "USB-карта"
+        const val USB_POLL_MS = 2000L
+    }
 
     init {
         refresh()
@@ -44,6 +65,109 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
     fun apply() = launch { runScript(permanent = true) }
 
     fun restore() = launch { runScript(permanent = false) }
+
+    fun startDeviceWatch() {
+        if (pollJob?.isActive == true) return
+        pollJob = viewModelScope.launch {
+            snapshotUsbDevices()
+            while (isActive) {
+                delay(USB_POLL_MS)
+                snapshotUsbDevices()
+            }
+        }
+    }
+
+    fun stopDeviceWatch() {
+        pollJob?.cancel()
+        pollJob = null
+    }
+
+    fun onUsbDeviceEvent() {
+        snapshotUsbDevices()
+    }
+
+    fun refreshVolume() {
+        launchVolume {
+            openShell().use { shell -> readVolume(shell) }
+        }
+    }
+
+    fun applyVolume(value: Int) {
+        launchVolume {
+            val v = value.coerceIn(0, UsbVolume.MAX_VALUE)
+            openShell().use { shell ->
+                val card = usbCardOrThrow()
+                val list = shell.rootText("tinymix -D $card")
+                val (index, _) = UsbVolume.parseControl(list)
+                    ?: throw IOException("контрол громкости USB-карты не найден")
+                shell.rootText("tinymix -D $card $index $v $v")
+                readVolume(shell)
+            }
+        }
+    }
+
+    private fun launchVolume(block: suspend () -> Unit) {
+        volumeJob?.cancel()
+        volumeJob = viewModelScope.launch(Dispatchers.IO) {
+            _state.update { it.copy(volume = it.volume.copy(busy = true, error = null)) }
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(volume = it.volume.copy(busy = false, error = e.message ?: e.javaClass.simpleName))
+                }
+            }
+        }
+    }
+
+    private fun usbCardOrThrow(): Int =
+        UsbVolume.usbCardNumber(runCatching { File("/proc/asound/cards").readText() }.getOrDefault(""))
+            ?: throw IOException("USB-карта не найдена (проверьте хаб/кабель)")
+
+    private fun readVolume(shell: RootShell) {
+        val card = usbCardOrThrow()
+        val list = shell.rootText("tinymix -D $card")
+        val (index, value) = UsbVolume.parseControl(list)
+            ?: throw IOException("контрол громкости USB-карты не найден")
+        _state.update { it.copy(volume = UsbVolumePanel(card = card, controlIndex = index, value = value)) }
+    }
+
+    private fun snapshotUsbDevices() {
+        val devices = runCatching { readUsbDevices() }
+        val card = usbCardVisible()
+        _state.update { state ->
+            state.copy(
+                devices = devices.getOrDefault(state.devices),
+                facts = state.facts.map { if (it.first == CARD_FACT) CARD_FACT to usbCardFactText(card) else it },
+            )
+        }
+    }
+
+    private fun readUsbDevices(): List<UsbDeviceInfo> {
+        val manager = getApplication<Application>().getSystemService(Context.USB_SERVICE) as? UsbManager
+        return manager?.deviceList?.values.orEmpty().map { device ->
+            val interfaces = (0 until device.interfaceCount).map { device.getInterface(it).interfaceClass }
+            UsbDeviceInfo(
+                name = device.productName.orEmpty(),
+                manufacturer = device.manufacturerName,
+                vendorId = device.vendorId,
+                productId = device.productId,
+                classDescription = UsbDeviceCatalog.describe(device.deviceClass, interfaces),
+                isAudio = UsbDeviceCatalog.isAudio(device.deviceClass, interfaces),
+            )
+        }.sortedWith(
+            compareByDescending<UsbDeviceInfo> { it.isAudio }.thenBy { it.vendorId }.thenBy { it.productId },
+        )
+    }
+
+    private fun usbCardVisible(): Boolean = runCatching {
+        File("/proc/asound/cards").readText().lineSequence().any { "USB-Audio" in it }
+    }.getOrDefault(false)
+
+    private fun usbCardFactText(card: Boolean): String =
+        if (card) "видна ядром (ALSA)" else "не видна ядром — проверьте хаб/кабель"
 
     private fun launch(block: suspend () -> Unit) {
         if (job?.isActive == true) return
@@ -77,9 +201,9 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
         val permanent = UsbAudioCodec.effectiveApplied(vendorMain.isFile, vendorContent, systemContent)
         val bind = runCatching { File("/proc/mounts").readText() }.getOrDefault("")
             .let { UsbAudioCodec.isBindMounted(it) }
-        val card = File("/proc/asound/cards").readText().lineSequence().any { "USB-Audio" in it }
+        val card = usbCardVisible()
         val facts = buildList {
-            add("USB-карта" to if (card) "видна (за хабом)" else "не видна — проверьте хаб")
+            add(CARD_FACT to usbCardFactText(card))
             add(
                 "Конфиг /vendor" to if (vendorMain.isFile) "есть" else "имя удалено (fallback на /system)",
             )

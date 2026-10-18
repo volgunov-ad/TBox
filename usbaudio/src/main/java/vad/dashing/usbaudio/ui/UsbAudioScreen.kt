@@ -17,9 +17,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import vad.dashing.usbaudio.UsbAudioAction
 import vad.dashing.usbaudio.UsbAudioBannerKind
 import vad.dashing.usbaudio.UsbAudioState
+import vad.dashing.usbaudio.UsbDeviceCatalog
+import vad.dashing.usbaudio.UsbVolume
 
 @Composable
 fun UsbAudioScreen(
@@ -34,6 +41,8 @@ fun UsbAudioScreen(
     onRefresh: () -> Unit,
     onApply: () -> Unit,
     onRestore: () -> Unit,
+    onRefreshVolume: () -> Unit,
+    onApplyVolume: (Int) -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -136,6 +145,136 @@ fun UsbAudioScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
+            }
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "USB-громкость",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = "Аппаратный регулятор громкости USB-карты (tinymix через root). " +
+                            "Шкала 0–${UsbVolume.MAX_VALUE}: 0 ≈ −28.4 дБ, ${UsbVolume.MAX_VALUE} ≈ 0 дБ. " +
+                            "Не зависит от ручки громкости ГУ, которая и так на максимуме.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val volume = state.volume
+                    volume.error?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    if (volume.value != null) {
+                        var slider by remember(volume.value) { mutableStateOf(volume.value.toFloat()) }
+                        Text(
+                            text = "Текущая: ${volume.value} " +
+                                "(≈${"%.1f".format(UsbVolume.approxDb(volume.value))} дБ)",
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Slider(
+                            value = slider,
+                            onValueChange = { slider = it },
+                            valueRange = 0f..UsbVolume.MAX_VALUE.toFloat(),
+                            steps = UsbVolume.MAX_VALUE - 1,
+                            enabled = !volume.busy,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                onClick = onRefreshVolume,
+                                enabled = !volume.busy,
+                            ) {
+                                Text(text = "Прочитать")
+                            }
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = { onApplyVolume(slider.toInt()) },
+                                enabled = !volume.busy && slider.toInt() != volume.value,
+                            ) {
+                                Text(text = "Применить ${slider.toInt()}")
+                            }
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onRefreshVolume,
+                            enabled = !volume.busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (volume.busy) "Чтение…" else "Прочитать громкость USB-карты",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    if (volume.busy && volume.value != null) {
+                        Text(
+                            text = "Выполняется…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "USB-устройства (${state.devices.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (state.devices.isEmpty()) {
+                        Text(
+                            text = "Нет подключённых USB-устройств",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    state.devices.forEach { device ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = device.name.ifBlank { "Без названия" },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (device.isAudio) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface,
+                                )
+                                if (device.isAudio) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "аудио",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                            Text(
+                                text = listOfNotNull(
+                                    "${UsbDeviceCatalog.formatId(device.vendorId)}:${UsbDeviceCatalog.formatId(device.productId)}",
+                                    device.manufacturer?.takeIf { it.isNotBlank() },
+                                    device.classDescription,
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
