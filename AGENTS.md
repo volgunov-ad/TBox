@@ -16,6 +16,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.1.0). Th
 | **CAN backends** | `mbcan/UniversalCanRepository.kt`, `HeadUnitCanMode.kt` | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md), [docs/MBCAN_VHAL_PARAMETERS_RU.md](docs/MBCAN_VHAL_PARAMETERS_RU.md) |
 | **Stock A9 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID9_MBCAN_RU.md](docs/STOCK_APPS_ANDROID9_MBCAN_RU.md) |
 | **Stock A10 apps** | (firmware reference) | [docs/STOCK_APPS_ANDROID10_VHAL_RU.md](docs/STOCK_APPS_ANDROID10_VHAL_RU.md) |
+| **A10 launcher window (ActivityView), AA/CarPlay in window** | `AdayoStockAppWindow.kt` (TBox side) | [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) — hardcoded 1327×865/1920×1080, `LAUNCH_APP` / `SourceType` / `com.adayo.launcher.FULLSCREEN` intents, AA/CarPlay touch & bars diagnosis, no-patch fullscreen fix, APK patch plan |
 | **HU devices (A9/A10)** | `adb/HuRebootAdb`, `cacerts/`, `adb/LocalhostAdbSession` | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) — profiles, root, boot, CPU load, eMMC/GPT layout, HU reboot |
 | **HU USB audio (A10)** | `huaudio/` (`HuUsbAudioPolicyCodec`, `HuUsbAudioPolicyClient`), `ui/HuUsbAudioSettingsCard.kt`; permanent one-shot app `:usbaudio` | [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md) — hub workaround for kernel FS-enum bug; TBox Monitor keeps the temporary bind-overlay variant with boot auto-apply; the permanent `/system` write with the eMMC write-protect dance (vendor file name removed, fallback config) lives in `:usbaudio`, mirroring `:dataresize` |
 | **Raw decode formulas** | `CanFramesProcess`, `BackgroundService.ans*`, `Android10VhalRepository`, `HvacClimateDomain` | [docs/RAW_VALUE_FORMULAS_RU.md](docs/RAW_VALUE_FORMULAS_RU.md) |
@@ -91,7 +92,7 @@ Separate app **TBox MQTT** (`vad.dashing.mqtt`): External API → user MQTT brok
 
 Separate app **Расширение /data** (`vad.dashing.dataresize`) for A10 HUs: moves `userdata` to the unpartitioned eMMC tail and grows it, with live progress. Root via localhost ADB + `su`. Design and bench results: [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.6–6.8.
 
-`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, `:usbaudio`, and `:fwunlock`.
+`:adbcore` is an Android library with the ADB client (`AdbProtocol`, `AdbConnection`, `AdbAuthKeys`, `AdbTransport`, `AdbEndpoints`, `AdbShellResults`; package `vad.dashing.tbox.adb`), shared by `:app`, `:dataresize`, `:usbaudio`, `:fwunlock`, and `:winpatch`.
 
 ```
 ./gradlew :adbcore:testDebugUnitTest
@@ -115,6 +116,15 @@ Separate app **Файрвол ГУ** (`vad.dashing.fwunlock`) for A10 HUs: perma
 ```
 ./gradlew :fwunlock:testDebugUnitTest
 ./gradlew :fwunlock:assembleDebug
+```
+
+### Window Patch APK (`:winpatch`)
+
+Separate app **AA/CarPlay окна ГУ** (`vad.dashing.winpatch`) for A10 HUs: permanent install/rollback of the patched `AndroidAuto` p5 and `CarPlayView` p3 APKs into `/system/app/...` with the eMMC write-protect dance from `:dataresize`, via localhost ADB + su (`RootShell` over `:adbcore`). Patched APKs are bundled in assets with pinned MD5s; installer checks stock/patched md5, adopts legacy backups from `/data/local/tmp`, refuses to overwrite a non-stock `/system` without a backup (`nobackup_*`), and reports `TBOX_WINPATCH_*` markers. Design: [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8.
+
+```
+./gradlew :winpatch:testDebugUnitTest
+./gradlew :winpatch:assembleDebug
 ```
 
 ### Git branches

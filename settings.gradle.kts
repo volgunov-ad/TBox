@@ -29,4 +29,5 @@ include(":adbcore")
 include(":dataresize")
 include(":usbaudio")
 include(":fwunlock")
+include(":winpatch")
  
