@@ -64,6 +64,23 @@ class ThemeObserver(
         }
     }
 
+    /**
+     * Force a fresh [HeadUnitDayNightRepository.readEffectiveTheme] delivery, bypassing
+     * [lastDeliveredTheme] dedup.
+     *
+     * Needed on A10 cold start: [ThemeObserver] may start while
+     * [vad.dashing.tbox.mbcan.UniversalCanRepository.mode] is still Android9MbCan (API 28
+     * Adayo), so the first read uses A9 `DAY_NIGHT_STATUS` (defaults light). After mode
+     * becomes Android10Vhal — or before the first floating overlay frame — re-read
+     * `adayo_skin` and deliver so transparent floating tiles get the correct palette.
+     * No-op when not following the head unit (manual theme path).
+     */
+    fun resyncFromHeadUnit() {
+        if (!followSystem) return
+        lastDeliveredTheme = null
+        deliverCurrentTheme(immediate = true)
+    }
+
     fun stopObserving() {
         try {
             cancelPendingDelivery()

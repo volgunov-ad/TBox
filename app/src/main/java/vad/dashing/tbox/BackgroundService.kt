@@ -1255,6 +1255,22 @@ class BackgroundService : Service() {
                         }
                     }
             }
+            // A10 cold start: ThemeObserver may have delivered A9-key light before mode
+            // became Android10Vhal; re-read adayo_skin and bypass lastDeliveredTheme dedup.
+            scope.launch {
+                var previousMode: HeadUnitCanMode? = null
+                UniversalCanRepository.mode.collect { mode ->
+                    val prev = previousMode
+                    previousMode = mode
+                    if (prev != null && prev != mode) {
+                        Log.d(
+                            "Theme Service",
+                            "CAN mode $prev → $mode; resync day/night from head unit",
+                        )
+                        themeObserver?.resyncFromHeadUnit()
+                    }
+                }
+            }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
@@ -6184,6 +6200,11 @@ class BackgroundService : Service() {
                 }
                 try {
                     // First show after service-start quiet period (cold start / permission race).
+                    // On A10, force theme resync so overlay Compose does not paint with a stale
+                    // light palette from an early A9-key read before VHAL mode resolved.
+                    if (HeadUnitDayNightMapping.usesAdayoKeys()) {
+                        themeObserver?.resyncFromHeadUnit()
+                    }
                     overlayController.ensureFloatingDashboards(floatingDashboards.value)
                 } catch (e: CancellationException) {
                     throw e
