@@ -3,9 +3,14 @@ package vad.dashing.tbox
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import vad.dashing.tbox.ui.LastMenuSections
 import vad.dashing.tbox.ui.LeftMenuTabField
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28])
 class LastMenuSectionsTest {
 
     @Test
