@@ -807,6 +807,7 @@ fun SettingsTabContent(
     val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
     val huDspAutoApply by settingsViewModel.huDspAutoApply.collectAsStateWithLifecycle()
     val huUsbAudioAutoApply by settingsViewModel.huUsbAudioAutoApply.collectAsStateWithLifecycle()
+    val appDexoptAuto by settingsViewModel.appDexoptAuto.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -1352,6 +1353,11 @@ fun SettingsTabContent(
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp),
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        AppDexoptSettingsCard(
+            autoCompile = appDexoptAuto,
+            onAutoCompileChange = settingsViewModel::saveAppDexoptAuto,
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_expert_section_title))

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.cacerts.HuCaCertsClient
+import vad.dashing.tbox.dexopt.AppDexoptCompiler
 import vad.dashing.tbox.huaudio.HuUsbAudioPolicyClient
 import vad.dashing.tbox.hufirewall.HuAppNetworkClient
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -88,6 +89,11 @@ class TboxApplication : Application() {
                 .collectLatest { enabled ->
                     if (enabled) HuUsbAudioPolicyClient.applyAtStartup(this@TboxApplication)
                 }
+        }
+        applicationScope.launch {
+            settingsManager.appDexoptAutoFlow.collectLatest { enabled ->
+                if (enabled) AppDexoptCompiler.autoCompileAtStartup(this@TboxApplication)
+            }
         }
         applicationScope.launch {
             try {

@@ -28,7 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,6 +57,8 @@ import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.dexopt.AppDexoptCompiler
+import kotlinx.coroutines.flow.first
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
@@ -109,9 +113,16 @@ fun TboxApp(
     val showVehicleFeatureSetupDialog by
         settingsViewModel.showVehicleFeatureSetupDialog.collectAsStateWithLifecycle()
     val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
+    var showAppDexoptHint by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
+    }
+
+    LaunchedEffect(Unit) {
+        showAppDexoptHint = !BuildConfig.DEBUG &&
+            !settingsManager.appDexoptAutoFlow.first() &&
+            AppDexoptCompiler.shouldOfferHint(context)
     }
 
     LaunchedEffect(Unit) {
@@ -188,6 +199,9 @@ fun TboxApp(
                 settingsViewModel = settingsViewModel,
                 onDismiss = { AppListDialogRequestBus.dismiss() },
             )
+        }
+        if (showAppDexoptHint && !showPermissionsDialog && !showVehicleFeatureSetupDialog) {
+            AppDexoptHintDialog(onDismiss = { showAppDexoptHint = false })
         }
         }
         }

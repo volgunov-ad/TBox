@@ -1533,6 +1533,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     val huUsbAudioAutoApply = settingsManager.huUsbAudioAutoApplyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val appDexoptAuto = settingsManager.appDexoptAutoFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     val huAppNetworkAutoOpen = settingsManager.huAppNetworkAutoOpenFlow
         .stateIn(
             scope = viewModelScope,
@@ -3678,6 +3681,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveHuUsbAudioAutoApply(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveHuUsbAudioAutoApply(enabled)
+        }
+    }
+
+    fun saveAppDexoptAuto(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAppDexoptAuto(enabled)
         }
     }
 
