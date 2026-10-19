@@ -19,14 +19,27 @@ import vad.dashing.winpatch.WinPatchCodec.FileState
 import vad.dashing.winpatch.WinPatchCodec.Target
 import vad.dashing.winpatch.device.RootShell
 
-enum class WinPatchAction { Refresh, Apply, Restore, Reboot }
+enum class WinPatchAction { Refresh, Reboot }
 
 enum class WinPatchBannerKind { Info, Warning, Success, Error }
 
 data class WinPatchBanner(val text: String, val kind: WinPatchBannerKind)
 
+/** Per-target (Android Auto / CarPlay) status card; install and restore are independent. */
+data class WinPatchTargetPanel(
+    val id: String,
+    val title: String,
+    val patchLabel: String,
+    val status: String,
+    val backup: String,
+    val kind: WinPatchBannerKind,
+    val canApply: Boolean,
+    val canRestore: Boolean,
+)
+
 data class WinPatchState(
     val facts: List<Pair<String, String>> = emptyList(),
+    val targets: List<WinPatchTargetPanel> = emptyList(),
     val actions: Set<WinPatchAction> = emptySet(),
     val busy: Boolean = false,
     val banner: WinPatchBanner? = null,
@@ -44,9 +57,12 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh() = launch { inspect() }
 
-    fun apply() = launch { runInstall() }
+    fun apply(targetId: String) = launch { runInstall(targetOrThrow(targetId)) }
 
-    fun restore() = launch { runRestore() }
+    fun restore(targetId: String) = launch { runRestore(targetOrThrow(targetId)) }
+
+    private fun targetOrThrow(id: String): Target =
+        WinPatchCodec.targetById(id) ?: throw IOException("неизвестная цель $id")
 
     fun reboot() = launch { runReboot() }
 
@@ -60,8 +76,12 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 val text = e.message ?: e.javaClass.simpleName
-                _state.update {
-                    it.copy(banner = WinPatchBanner(text, WinPatchBannerKind.Error), actions = setOf(WinPatchAction.Refresh))
+                _state.update { s ->
+                    s.copy(
+                        banner = WinPatchBanner(text, WinPatchBannerKind.Error),
+                        actions = setOf(WinPatchAction.Refresh),
+                        targets = s.targets.map { it.copy(canApply = false, canRestore = false) },
+                    )
                 }
             } finally {
                 _state.update { it.copy(busy = false) }
@@ -88,11 +108,11 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
         ?: throw IOException("внешняя память недоступна — некуда распаковать APK")
 
     /** Copies the bundled APKs to the app external files dir (root-readable via sdcardfs) and verifies MD5. */
-    private fun stageAssets(): Map<Target, String> {
+    private fun stageAssets(targets: List<Target>): Map<Target, String> {
         val app = getApplication<Application>()
         val dir = stageDir()
         val stages = mutableMapOf<Target, String>()
-        for (t in WinPatchCodec.TARGETS) {
+        for (t in targets) {
             val out = File(dir, t.assetName)
             val staged = out.isFile && runCatching { md5Of(out) }.getOrNull()?.equals(t.patchedMd5, ignoreCase = true) == true
             if (!staged) {
@@ -130,73 +150,86 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         val configMd5 = md5s[WinPatchCodec.CARPLAY_CONFIG]
-        val facts = buildList {
-            infos.forEach { info ->
-                val t = info.target
-                add(t.title to when (info.system) {
-                    FileState.Stock -> "штатный APK"
-                    FileState.Patched -> "патч ${t.patchLabel} установлен"
-                    FileState.Unknown -> "неизвестный APK (${info.systemMd5?.take(8)}…)"
-                    FileState.Missing -> "нет файла ${t.systemPath}"
-                })
-                add("Резерв ${t.title}" to when {
-                    info.backupOk -> "есть (штатный APK)"
-                    info.legacyOk -> "в /data/local/tmp (переймётся при установке)"
-                    else -> "нет"
-                })
-            }
-            add(
-                "CarPlayManagerConfig.json" to
-                    (configMd5?.let { "не изменяется установщиком (${it.take(8)}…)" } ?: "не найден"),
-            )
-            add("Подключение" to "проводное и беспроводное — как в стоке")
-        }
+        val facts = listOf(
+            "CarPlayManagerConfig.json" to
+                (configMd5?.let { "не изменяется установщиком (${it.take(8)}…)" } ?: "не найден"),
+            "Подключение" to "проводное и беспроводное — как в стоке",
+        )
+        val panels = infos.map(::panelOf)
         val broken = infos.filter { it.system == FileState.Unknown || it.system == FileState.Missing }
-        val backupsReady = infos.isNotEmpty() && infos.all { it.backupOk }
-        val allPatched = infos.isNotEmpty() && infos.all { it.system == FileState.Patched }
         val anyPatched = infos.any { it.system == FileState.Patched }
-        val (banner, actions) = when {
-            broken.isNotEmpty() -> WinPatchBanner(
+        val banner = if (broken.isNotEmpty()) {
+            WinPatchBanner(
                 "На ГУ не найдены штатные ${broken.joinToString { it.target.title }} " +
-                    "(неизвестный или отсутствующий APK) — это должен быть ГУ A10 (Adayo/VHAL) со штатными AndroidAuto и CarPlayView.",
+                    "(неизвестный или отсутствующий APK) — для них установка и откат недоступны. " +
+                    "Это должен быть ГУ A10 (Adayo/VHAL) со штатными AndroidAuto и CarPlayView.",
                 WinPatchBannerKind.Error,
-            ) to setOf(WinPatchAction.Refresh)
-
-            allPatched && backupsReady -> WinPatchBanner(
-                "Патчи установлены: Android Auto ${WinPatchCodec.ANDROID_AUTO.patchLabel} (окно лаунчера со штатными барами) " +
-                    "и CarPlay ${WinPatchCodec.CAR_PLAY.patchLabel}. Процессы перезапущены; если окно не подхватилось — перезагрузите ГУ.",
-                WinPatchBannerKind.Success,
-            ) to setOf(WinPatchAction.Restore, WinPatchAction.Reboot, WinPatchAction.Refresh)
-
-            allPatched -> WinPatchBanner(
-                "Патчи установлены, но штатных резервов в рабочей папке нет — откат недоступен. " +
-                    "«Установить» перенесёт резерв из /data/local/tmp, если он там есть.",
-                WinPatchBannerKind.Warning,
-            ) to setOf(WinPatchAction.Apply, WinPatchAction.Reboot, WinPatchAction.Refresh)
-
-            else -> WinPatchBanner(
-                "«Установить» запишет пропатченные Android Auto (${WinPatchCodec.ANDROID_AUTO.patchLabel}) и CarPlay " +
-                    "(${WinPatchCodec.CAR_PLAY.patchLabel}) в /system: со снятием защиты eMMC, сохранением штатных APK в резерв " +
-                    "и перезапуском процессов. Проводное и беспроводное подключение не затрагиваются.",
+            )
+        } else {
+            WinPatchBanner(
+                "Android Auto и CarPlay ставятся и откатываются отдельно: запись в /system со снятием защиты eMMC, " +
+                    "штатный APK сохраняется в резерв, процесс перезапускается. Проводное и беспроводное подключение " +
+                    "не затрагиваются." +
+                    if (anyPatched) " Если окно не подхватилось после установки — перезагрузите ГУ." else "",
                 WinPatchBannerKind.Info,
-            ) to buildSet {
-                add(WinPatchAction.Apply)
-                if (anyPatched) add(WinPatchAction.Reboot)
-                add(WinPatchAction.Refresh)
-            }
+            )
         }
-        _state.update { it.copy(facts = facts, banner = banner, actions = actions) }
+        val actions = buildSet {
+            if (anyPatched) add(WinPatchAction.Reboot)
+            add(WinPatchAction.Refresh)
+        }
+        _state.update { it.copy(facts = facts, targets = panels, banner = banner, actions = actions) }
     }
 
-    private suspend fun runInstall() {
-        val stages = stageAssets()
+    private fun panelOf(info: TargetInfo): WinPatchTargetPanel {
+        val t = info.target
+        val backup = when {
+            info.backupOk -> "есть (штатный APK)"
+            info.legacyOk -> "в /data/local/tmp (переймётся при установке)"
+            else -> "нет"
+        }
+        val base = WinPatchTargetPanel(
+            id = t.id,
+            title = t.title,
+            patchLabel = t.patchLabel,
+            status = "",
+            backup = backup,
+            kind = WinPatchBannerKind.Info,
+            canApply = false,
+            canRestore = false,
+        )
+        return when (info.system) {
+            FileState.Stock -> base.copy(status = "штатный APK", canApply = true)
+            FileState.Patched -> when {
+                info.backupOk -> base.copy(
+                    status = "патч ${t.patchLabel} установлен",
+                    kind = WinPatchBannerKind.Success,
+                    canRestore = true,
+                )
+                info.legacyOk -> base.copy(
+                    status = "патч ${t.patchLabel} установлен; «Установить» перенесёт резерв для отката",
+                    kind = WinPatchBannerKind.Warning,
+                    canApply = true,
+                )
+                else -> base.copy(
+                    status = "патч ${t.patchLabel} установлен, штатного резерва нет — откат недоступен",
+                    kind = WinPatchBannerKind.Warning,
+                )
+            }
+            FileState.Unknown -> base.copy(
+                status = "неизвестный APK (${info.systemMd5?.take(8)}…)",
+                kind = WinPatchBannerKind.Error,
+            )
+            FileState.Missing -> base.copy(status = "нет файла ${t.systemPath}", kind = WinPatchBannerKind.Error)
+        }
+    }
+
+    private suspend fun runInstall(target: Target) {
+        val stages = stageAssets(listOf(target))
         openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
             shell.rootText("mkdir -p ${WinPatchCodec.WORK_DIR} && chmod 700 ${WinPatchCodec.WORK_DIR}")
-            val script = WinPatchCodec.applyScript(
-                aaStage = stages.getValue(WinPatchCodec.ANDROID_AUTO),
-                cpStage = stages.getValue(WinPatchCodec.CAR_PLAY),
-            )
+            val script = WinPatchCodec.applyScript(stages)
             shell.writeFile(WinPatchCodec.APPLY_SCRIPT, script.toByteArray(Charsets.UTF_8))
             val output = shell.root("sh ${WinPatchCodec.APPLY_SCRIPT}")
             when (val outcome = WinPatchCodec.parseOutcome("${output.stdout}\n${output.stderr}")) {
@@ -207,11 +240,12 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
         inspect()
     }
 
-    private suspend fun runRestore() {
+    private suspend fun runRestore(target: Target) {
         openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
             shell.rootText("mkdir -p ${WinPatchCodec.WORK_DIR} && chmod 700 ${WinPatchCodec.WORK_DIR}")
-            shell.writeFile(WinPatchCodec.RESTORE_SCRIPT, WinPatchCodec.restoreScript().toByteArray(Charsets.UTF_8))
+            val script = WinPatchCodec.restoreScript(listOf(target))
+            shell.writeFile(WinPatchCodec.RESTORE_SCRIPT, script.toByteArray(Charsets.UTF_8))
             val output = shell.root("sh ${WinPatchCodec.RESTORE_SCRIPT}")
             when (val outcome = WinPatchCodec.parseOutcome("${output.stdout}\n${output.stderr}")) {
                 is WinPatchCodec.Outcome.Failed -> throw IOException("скрипт: ${outcome.code}")

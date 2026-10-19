@@ -83,13 +83,17 @@ object WinPatchCodec {
         else -> FileState.Unknown
     }
 
+    fun targetById(id: String): Target? = TARGETS.firstOrNull { it.id == id }
+
+    private val Target.v: String get() = id.uppercase()
+
     /**
      * APKs are written next to the target as `.new`, verified on disk and renamed over it: the
      * running AA/CarPlay keep their mmapped old inode and a short write never truncates /system.
-     * After the remount, a failure (or a signal) restores any target that is neither stock nor
-     * patched from its backup. wp_on is idempotent and also remounts / ro.
+     * After the remount, a failure (or a signal) restores any selected target that is neither
+     * stock nor patched from its backup. wp_on is idempotent and also remounts / ro.
      */
-    private fun scriptPrologue(): String = """
+    private fun scriptPrologue(targets: List<Target>): String = """
         |W=$WORK_DIR
         |P=$WP_PROC
         |D=$DISK
@@ -140,8 +144,7 @@ object WinPatchCodec {
         |  ROLLBACK=0
         |  RBD=0
         |  RC=0
-        |  restore_one ${ANDROID_AUTO.systemPath} ${ANDROID_AUTO.backupPath} ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.patchedMd5} || RC=1
-        |  restore_one ${CAR_PLAY.systemPath} ${CAR_PLAY.backupPath} ${CAR_PLAY.stockMd5} ${CAR_PLAY.patchedMd5} || RC=1
+        |${targets.joinToString("\n") { "  restore_one ${it.systemPath} ${it.backupPath} ${it.stockMd5} ${it.patchedMd5} || RC=1" }}
         |  if [ "${'$'}RC" = 1 ]; then RB=" norollback"; elif [ "${'$'}RBD" = 1 ]; then RB=" rolledback"; fi
         |}
         |fail() { rollback; echo "$ERR_MARKER ${'$'}1${'$'}RB"; exit 1; }
@@ -188,51 +191,49 @@ object WinPatchCodec {
         |
     """.trimMargin()
 
-    /** [aaStage]/[cpStage] are app-writable; the script copies them into root-only [WORK_DIR] first. */
-    private fun applyBody(aaStage: String, cpStage: String): String = """
-        |AA_SRC='$aaStage'
-        |CP_SRC='$cpStage'
-        |AA_STAGE=${ANDROID_AUTO.rootStagePath}
-        |CP_STAGE=${CAR_PLAY.rootStagePath}
-        |stage_in "${'$'}AA_SRC" "${'$'}AA_STAGE" ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
-        |stage_in "${'$'}CP_SRC" "${'$'}CP_STAGE" ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
-        |ensure_backup ${ANDROID_AUTO.systemPath} ${ANDROID_AUTO.backupPath} ${ANDROID_AUTO.legacyBackupPath} ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
-        |ensure_backup ${CAR_PLAY.systemPath} ${CAR_PLAY.backupPath} ${CAR_PLAY.legacyBackupPath} ${CAR_PLAY.stockMd5} ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
-        |
-    """.trimMargin() + wpOff() + """
-        |ROLLBACK=1
-        |write_one ${ANDROID_AUTO.systemPath} "${'$'}AA_STAGE" ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
-        |write_one ${CAR_PLAY.systemPath} "${'$'}CP_STAGE" ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
-        |ROLLBACK=0
-        |rm -f "${'$'}AA_STAGE" "${'$'}CP_STAGE"
-        |
-    """.trimMargin()
+    private fun lines(targets: List<Target>, line: (Target) -> String): String =
+        targets.joinToString("") { line(it) + "\n" }
 
-    private fun restoreBody(): String = """
-        |AA_BAK=${ANDROID_AUTO.backupPath}
-        |CP_BAK=${CAR_PLAY.backupPath}
-        |[ -f "${'$'}AA_BAK" ] || fail nobackup_aa
-        |[ -f "${'$'}CP_BAK" ] || fail nobackup_cp
-        |
-    """.trimMargin() + wpOff() + """
-        |write_one ${ANDROID_AUTO.systemPath} "${'$'}AA_BAK" ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.id}
-        |write_one ${CAR_PLAY.systemPath} "${'$'}CP_BAK" ${CAR_PLAY.stockMd5} ${CAR_PLAY.id}
-        |
-    """.trimMargin()
+    /** Stage paths are app-writable; the script copies them into root-only [WORK_DIR] first. */
+    private fun applyBody(stages: Map<Target, String>): String {
+        val targets = stages.keys.toList()
+        return lines(targets) { "${it.v}_SRC='${stages.getValue(it)}'" } +
+            lines(targets) { "${it.v}_STAGE=${it.rootStagePath}" } +
+            lines(targets) { "stage_in \"\$${it.v}_SRC\" \"\$${it.v}_STAGE\" ${it.patchedMd5} ${it.id}" } +
+            lines(targets) {
+                "ensure_backup ${it.systemPath} ${it.backupPath} ${it.legacyBackupPath} ${it.stockMd5} ${it.patchedMd5} ${it.id}"
+            } +
+            "\n" + wpOff() +
+            "ROLLBACK=1\n" +
+            lines(targets) { "write_one ${it.systemPath} \"\$${it.v}_STAGE\" ${it.patchedMd5} ${it.id}" } +
+            "ROLLBACK=0\n" +
+            "rm -f ${targets.joinToString(" ") { "\"\$${it.v}_STAGE\"" }}\n"
+    }
 
-    private fun scriptTail(): String = """
-        |wp_on
-        |trap - EXIT HUP INT TERM PIPE
-        |kill ${'$'}(pidof ${ANDROID_AUTO.processName}) 2>/dev/null
-        |kill ${'$'}(pidof ${CAR_PLAY.processName}) 2>/dev/null
-        |
-    """.trimMargin()
+    private fun restoreBody(targets: List<Target>): String =
+        lines(targets) { "${it.v}_BAK=${it.backupPath}" } +
+            lines(targets) { "[ -f \"\$${it.v}_BAK\" ] || fail nobackup_${it.id}" } +
+            "\n" + wpOff() +
+            lines(targets) { "write_one ${it.systemPath} \"\$${it.v}_BAK\" ${it.stockMd5} ${it.id}" }
 
-    fun applyScript(aaStage: String, cpStage: String): String =
-        scriptPrologue() + applyBody(aaStage, cpStage) + scriptTail() + "echo \"$APPLIED_MARKER\"\n"
+    private fun scriptTail(targets: List<Target>): String =
+        "\nwp_on\ntrap - EXIT HUP INT TERM PIPE\n" +
+            lines(targets) { "kill \$(pidof ${it.processName}) 2>/dev/null" }
 
-    fun restoreScript(): String =
-        scriptPrologue() + restoreBody() + scriptTail() + "echo \"$RESTORED_MARKER\"\n"
+    /** Patches only the targets in [stages] (target → app-side staged APK path), in [TARGETS] order. */
+    fun applyScript(stages: Map<Target, String>): String {
+        require(stages.isNotEmpty()) { "no targets" }
+        val ordered = TARGETS.filter { it in stages }.associateWith { stages.getValue(it) }
+        val targets = ordered.keys.toList()
+        return scriptPrologue(targets) + applyBody(ordered) + scriptTail(targets) + "echo \"$APPLIED_MARKER\"\n"
+    }
+
+    /** Restores only [targets] from their backups. */
+    fun restoreScript(targets: Collection<Target>): String {
+        val ordered = TARGETS.filter { it in targets }
+        require(ordered.isNotEmpty()) { "no targets" }
+        return scriptPrologue(ordered) + restoreBody(ordered) + scriptTail(ordered) + "echo \"$RESTORED_MARKER\"\n"
+    }
 
     sealed interface Outcome {
         data object Applied : Outcome

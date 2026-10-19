@@ -27,13 +27,14 @@ import androidx.compose.ui.unit.dp
 import vad.dashing.winpatch.WinPatchAction
 import vad.dashing.winpatch.WinPatchBannerKind
 import vad.dashing.winpatch.WinPatchState
+import vad.dashing.winpatch.WinPatchTargetPanel
 
 @Composable
 fun WinPatchScreen(
     state: WinPatchState,
     onRefresh: () -> Unit,
-    onApply: () -> Unit,
-    onRestore: () -> Unit,
+    onApply: (String) -> Unit,
+    onRestore: (String) -> Unit,
     onReboot: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -48,7 +49,8 @@ fun WinPatchScreen(
             Text(
                 text = "Постоянная установка пропатченных Android Auto (${WinPatchLabel.AA}) и CarPlayView " +
                     "(${WinPatchLabel.CP}) в /system ГУ A10 (Adayo/VHAL): Android Auto — окно лаунчера со штатными " +
-                    "барами, CarPlay — без чёрных полос. APK зашиты в приложение, штатные сохраняются в резерв " +
+                    "барами, CarPlay — без чёрных полос. Каждый ставится и откатывается отдельно. " +
+                    "APK зашиты в приложение, штатные сохраняются в резерв " +
                     "в /data/local/tmp, запись идёт со снятием защиты eMMC (как в «Расширение /data»). " +
                     "CarPlayManagerConfig.json не изменяется — проводное и беспроводное подключение остаются штатными.",
                 style = MaterialTheme.typography.bodyLarge,
@@ -102,31 +104,13 @@ fun WinPatchScreen(
                     }
                 }
             }
-            if (WinPatchAction.Apply in state.actions) {
-                Button(
-                    onClick = onApply,
-                    enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "Установить патченные AA и CarPlay (постоянно)",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-            if (WinPatchAction.Restore in state.actions) {
-                OutlinedButton(
-                    onClick = onRestore,
-                    enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = "Вернуть штатные AA и CarPlay",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+            state.targets.forEach { panel ->
+                TargetCard(
+                    panel = panel,
+                    busy = state.busy,
+                    onApply = { onApply(panel.id) },
+                    onRestore = { onRestore(panel.id) },
+                )
             }
             if (WinPatchAction.Reboot in state.actions) {
                 OutlinedButton(
@@ -151,6 +135,61 @@ fun WinPatchScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetCard(
+    panel: WinPatchTargetPanel,
+    busy: Boolean,
+    onApply: () -> Unit,
+    onRestore: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = when (panel.kind) {
+                WinPatchBannerKind.Info -> MaterialTheme.colorScheme.surfaceVariant
+                WinPatchBannerKind.Warning -> MaterialTheme.colorScheme.tertiaryContainer
+                WinPatchBannerKind.Success -> MaterialTheme.colorScheme.primaryContainer
+                WinPatchBannerKind.Error -> MaterialTheme.colorScheme.errorContainer
+            },
+        ),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "${panel.title} (${panel.patchLabel})", style = MaterialTheme.typography.titleLarge)
+            Text(text = "Состояние: ${panel.status}", style = MaterialTheme.typography.bodyLarge)
+            Text(text = "Резерв: ${panel.backup}", style = MaterialTheme.typography.bodyLarge)
+            if (panel.canApply || panel.canRestore) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (panel.canApply) {
+                        Button(onClick = onApply, enabled = !busy, modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Установить патч ${panel.title}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                    if (panel.canRestore) {
+                        OutlinedButton(onClick = onRestore, enabled = !busy, modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Вернуть штатный ${panel.title}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

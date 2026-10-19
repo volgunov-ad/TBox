@@ -2,6 +2,7 @@ package vad.dashing.winpatch
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.winpatch.WinPatchCodec.FileState
@@ -52,7 +53,7 @@ class WinPatchCodecTest {
 
     @Test
     fun applyScriptPreflightsBeforeWriteProtectDance() {
-        val s = WinPatchCodec.applyScript(
+        val s = both(
             "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/AndroidAuto_p5.apk",
             "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/CarPlayView_p3.apk",
         )
@@ -72,7 +73,7 @@ class WinPatchCodecTest {
 
     @Test
     fun applyScriptCopiesStagesIntoRootOnlyWorkDir() {
-        val s = WinPatchCodec.applyScript("/sdcard/aa.apk", "/sdcard/cp.apk")
+        val s = both("/sdcard/aa.apk", "/sdcard/cp.apk")
         assertEquals("/data/local/tmp/winpatch/AndroidAuto_p5.apk", WinPatchCodec.ANDROID_AUTO.rootStagePath)
         assertTrue(s.contains("AA_SRC='/sdcard/aa.apk'"))
         assertTrue(s.contains("AA_STAGE=${WinPatchCodec.ANDROID_AUTO.rootStagePath}"))
@@ -89,7 +90,7 @@ class WinPatchCodecTest {
 
     @Test
     fun backupsAreVerifiedCopiesAndBadBackupIsRemoved() {
-        val s = WinPatchCodec.applyScript("/stage/aa.apk", "/stage/cp.apk")
+        val s = both("/stage/aa.apk", "/stage/cp.apk")
         assertTrue(
             s.contains(
                 "cp \"\$1\" \"\$2.tmp\" && [ \"\$(md5 \"\$2.tmp\")\" = \"\$3\" ] && mv -f \"\$2.tmp\" \"\$2\" && return 0",
@@ -105,7 +106,7 @@ class WinPatchCodecTest {
 
     @Test
     fun scriptsWriteAtomicallyAndRestoreReadOnlyOnEveryExit() {
-        for (s in listOf(WinPatchCodec.applyScript("/stage/aa.apk", "/stage/cp.apk"), WinPatchCodec.restoreScript())) {
+        for (s in listOf(both("/stage/aa.apk", "/stage/cp.apk"), WinPatchCodec.restoreScript(WinPatchCodec.TARGETS))) {
             assertTrue(s.contains("N=\"\$1.new\""))
             assertTrue(s.contains("cat \"\$2\" > \"\$N\""))
             assertTrue(s.contains("chcon u:object_r:system_file:s0 \"\$N\""))
@@ -125,7 +126,7 @@ class WinPatchCodecTest {
 
     @Test
     fun applyFailureRollsCorruptTargetsBackFromBackups() {
-        val s = WinPatchCodec.applyScript("/stage/aa.apk", "/stage/cp.apk")
+        val s = both("/stage/aa.apk", "/stage/cp.apk")
         val aa = WinPatchCodec.ANDROID_AUTO
         val cp = WinPatchCodec.CAR_PLAY
         assertTrue(s.contains("restore_one ${aa.systemPath} ${aa.backupPath} ${aa.stockMd5} ${aa.patchedMd5} || RC=1"))
@@ -134,7 +135,7 @@ class WinPatchCodecTest {
         val armed = s.indexOf("ROLLBACK=1")
         assertTrue(armed > s.indexOf("mount -o remount,rw /") && armed < s.indexOf("write_one ${aa.systemPath}"))
         assertTrue(s.indexOf("ROLLBACK=0\nrm -f") > s.indexOf("write_one ${cp.systemPath}"))
-        assertFalse(WinPatchCodec.restoreScript().contains("ROLLBACK=1"))
+        assertFalse(WinPatchCodec.restoreScript(WinPatchCodec.TARGETS).contains("ROLLBACK=1"))
         assertEquals(
             WinPatchCodec.Outcome.Failed("verify_aa rolledback"),
             WinPatchCodec.parseOutcome("${WinPatchCodec.ERR_MARKER} verify_aa rolledback"),
@@ -143,7 +144,7 @@ class WinPatchCodecTest {
 
     @Test
     fun applyScriptWritesBothTargetsAndRestartsProcesses() {
-        val s = WinPatchCodec.applyScript("/stage/aa.apk", "/stage/cp.apk")
+        val s = both("/stage/aa.apk", "/stage/cp.apk")
         assertTrue(s.contains("echo emmc_enable_all_wp >"))
         assertTrue(s.contains("trap 'wp_on' EXIT"))
         assertTrue(s.contains("mount -o remount,rw / || fail remountsys"))
@@ -168,7 +169,7 @@ class WinPatchCodecTest {
 
     @Test
     fun restoreScriptUsesBackupsOnly() {
-        val s = WinPatchCodec.restoreScript()
+        val s = WinPatchCodec.restoreScript(WinPatchCodec.TARGETS)
         assertTrue(s.contains("fail nobackup_aa"))
         assertTrue(s.contains("fail nobackup_cp"))
         assertTrue(
@@ -183,6 +184,52 @@ class WinPatchCodecTest {
         assertFalse(s.contains("AA_STAGE"))
         assertFalse(s.contains("CP_STAGE"))
     }
+
+    @Test
+    fun singleTargetApplyTouchesOnlyThatTarget() {
+        val aa = WinPatchCodec.ANDROID_AUTO
+        val cp = WinPatchCodec.CAR_PLAY
+        val s = WinPatchCodec.applyScript(mapOf(cp to "/sdcard/cp.apk"))
+        assertTrue(s.contains("CP_SRC='/sdcard/cp.apk'"))
+        assertTrue(s.contains("stage_in \"\$CP_SRC\" \"\$CP_STAGE\" ${cp.patchedMd5} cp"))
+        assertTrue(s.contains("ensure_backup ${cp.systemPath}"))
+        assertTrue(s.contains("write_one ${cp.systemPath} \"\$CP_STAGE\" ${cp.patchedMd5} cp"))
+        assertTrue(s.contains("restore_one ${cp.systemPath}"))
+        assertTrue(s.contains("kill \$(pidof ${cp.processName}) 2>/dev/null"))
+        assertTrue(s.contains("rm -f \"\$CP_STAGE\"\n"))
+        assertFalse(s.contains(aa.systemPath))
+        assertFalse(s.contains(aa.processName))
+        assertFalse(s.contains("AA_"))
+    }
+
+    @Test
+    fun singleTargetRestoreTouchesOnlyThatTarget() {
+        val aa = WinPatchCodec.ANDROID_AUTO
+        val cp = WinPatchCodec.CAR_PLAY
+        val s = WinPatchCodec.restoreScript(listOf(aa))
+        assertTrue(s.contains("[ -f \"\$AA_BAK\" ] || fail nobackup_aa"))
+        assertTrue(s.contains("write_one ${aa.systemPath} \"\$AA_BAK\" ${aa.stockMd5} aa"))
+        assertTrue(s.contains("kill \$(pidof ${aa.processName}) 2>/dev/null"))
+        assertFalse(s.contains(cp.systemPath))
+        assertFalse(s.contains(cp.processName))
+        assertFalse(s.contains("nobackup_cp"))
+    }
+
+    @Test
+    fun scriptsKeepTargetOrderAndRejectEmptySelection() {
+        val s = WinPatchCodec.applyScript(
+            linkedMapOf(WinPatchCodec.CAR_PLAY to "/s/cp.apk", WinPatchCodec.ANDROID_AUTO to "/s/aa.apk"),
+        )
+        assertTrue(s.indexOf("write_one ${WinPatchCodec.ANDROID_AUTO.systemPath}") <
+            s.indexOf("write_one ${WinPatchCodec.CAR_PLAY.systemPath}"))
+        assertEquals(WinPatchCodec.CAR_PLAY, WinPatchCodec.targetById("cp"))
+        assertEquals(null, WinPatchCodec.targetById("x"))
+        assertThrows(IllegalArgumentException::class.java) { WinPatchCodec.applyScript(emptyMap()) }
+        assertThrows(IllegalArgumentException::class.java) { WinPatchCodec.restoreScript(emptyList()) }
+    }
+
+    private fun both(aaStage: String, cpStage: String): String =
+        WinPatchCodec.applyScript(mapOf(WinPatchCodec.ANDROID_AUTO to aaStage, WinPatchCodec.CAR_PLAY to cpStage))
 
     @Test
     fun parsesOutcomeMarkers() {
