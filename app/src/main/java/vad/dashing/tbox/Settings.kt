@@ -1026,6 +1026,12 @@ class SettingsManager(private val context: Context) {
          */
         private val LAST_MENU_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}last_menu_tab")
 
+        /**
+         * JSON map of left-menu tab id → horizontal section enum name
+         * (see [vad.dashing.tbox.ui.LastMenuSections]).
+         */
+        private val LAST_MENU_SECTIONS_KEY = stringPreferencesKey("${KEY_PREFIX}last_menu_sections")
+
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
@@ -1724,6 +1730,16 @@ class SettingsManager(private val context: Context) {
             vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
                 preferences[LAST_MENU_TAB_KEY],
             )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Per left-menu tab: last selected horizontal section key (enum name).
+     * Empty map when unset. Included in full settings backup via DataStore export.
+     */
+    val lastMenuSectionsFlow: Flow<Map<String, String>> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.ui.LastMenuSections.parse(preferences[LAST_MENU_SECTIONS_KEY])
         }
         .distinctUntilChanged()
 
@@ -3495,6 +3511,21 @@ class SettingsManager(private val context: Context) {
             if (tabKey != MAIN_SCREEN_TAB_KEY) {
                 preferences[LAST_MENU_TAB_KEY] = tabKey
             }
+        }
+    }
+
+    /**
+     * Remembers the horizontal section ([sectionKey], typically enum name) for [tabKey]
+     * (a [vad.dashing.tbox.ui.LeftMenuTabField.id]). No-op when unchanged.
+     */
+    suspend fun saveLastMenuSection(tabKey: String, sectionKey: String) {
+        if (tabKey.isBlank() || sectionKey.isBlank()) return
+        val current = lastMenuSectionsFlow.first()
+        if (current[tabKey] == sectionKey) return
+        val merged = current.toMutableMap().apply { put(tabKey, sectionKey) }
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAST_MENU_SECTIONS_KEY] =
+                vad.dashing.tbox.ui.LastMenuSections.serialize(merged)
         }
     }
 
