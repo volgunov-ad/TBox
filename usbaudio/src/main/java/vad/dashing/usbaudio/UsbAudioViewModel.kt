@@ -68,7 +68,7 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startDeviceWatch() {
         if (pollJob?.isActive == true) return
-        pollJob = viewModelScope.launch {
+        pollJob = viewModelScope.launch(Dispatchers.IO) {
             snapshotUsbDevices()
             while (isActive) {
                 delay(USB_POLL_MS)
@@ -83,7 +83,7 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onUsbDeviceEvent() {
-        snapshotUsbDevices()
+        viewModelScope.launch(Dispatchers.IO) { snapshotUsbDevices() }
     }
 
     fun refreshVolume() {
@@ -98,9 +98,9 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
             openShell().use { shell ->
                 val card = usbCardOrThrow()
                 val list = shell.rootText("tinymix -D $card")
-                val (index, _) = UsbVolume.parseControl(list)
+                val control = UsbVolume.parseControl(list)
                     ?: throw IOException("контрол громкости USB-карты не найден")
-                shell.rootText("tinymix -D $card $index $v $v")
+                shell.rootText("tinymix -D $card ${UsbVolume.setArgs(control, v)}")
                 readVolume(shell)
             }
         }
@@ -129,9 +129,11 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
     private fun readVolume(shell: RootShell) {
         val card = usbCardOrThrow()
         val list = shell.rootText("tinymix -D $card")
-        val (index, value) = UsbVolume.parseControl(list)
+        val control = UsbVolume.parseControl(list)
             ?: throw IOException("контрол громкости USB-карты не найден")
-        _state.update { it.copy(volume = UsbVolumePanel(card = card, controlIndex = index, value = value)) }
+        _state.update {
+            it.copy(volume = UsbVolumePanel(card = card, controlIndex = control.index, value = control.value))
+        }
     }
 
     private fun snapshotUsbDevices() {
@@ -198,9 +200,9 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
         if (vendorContent == null && systemContent == null) {
             throw IOException("нет аудиоконфига ни в /vendor, ни в /system")
         }
-        val permanent = UsbAudioCodec.effectiveApplied(vendorMain.isFile, vendorContent, systemContent)
-        val bind = runCatching { File("/proc/mounts").readText() }.getOrDefault("")
-            .let { UsbAudioCodec.isBindMounted(it) }
+        val mounts = readMounts()
+        val permanent = UsbAudioCodec.effectiveApplied(vendorMain.isFile, vendorContent, systemContent, mounts)
+        val bind = UsbAudioCodec.isBindMounted(mounts)
         val card = usbCardVisible()
         val facts = buildList {
             add(CARD_FACT to usbCardFactText(card))
@@ -208,12 +210,24 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
                 "Конфиг /vendor" to if (vendorMain.isFile) "есть" else "имя удалено (fallback на /system)",
             )
             add("Конфиг /system" to if (systemMain.isFile) "есть" else "нет")
-            add("Модуль usb" to if (permanent) "активен" else "выключен (штатно)")
+            add(
+                "Модуль usb" to when (permanent) {
+                    true -> "активен"
+                    false -> "выключен (штатно)"
+                    null -> "неизвестно (под наложением)"
+                },
+            )
             add("Наложение TBox Monitor" to if (bind) "активно (до перезагрузки)" else "нет")
         }
         val (banner, actions) = when {
-            permanent -> UsbAudioBanner("USB-аудио включён постоянно", UsbAudioBannerKind.Success) to
+            permanent == true -> UsbAudioBanner("USB-аудио включён постоянно", UsbAudioBannerKind.Success) to
                 setOf(UsbAudioAction.Restore, UsbAudioAction.Refresh)
+
+            permanent == null -> UsbAudioBanner(
+                "Поверх /system стоит наложение TBox Monitor — постоянное состояние не определить. " +
+                    "«Включить» и «Вернуть» сначала снимут наложение.",
+                UsbAudioBannerKind.Warning,
+            ) to setOf(UsbAudioAction.Apply, UsbAudioAction.Restore, UsbAudioAction.Refresh)
 
             bind -> UsbAudioBanner(
                 "USB-аудио включено наложением TBox Monitor — до перезагрузки ГУ. Чтобы включить навсегда, нажмите «Включить постоянно».",
@@ -228,17 +242,27 @@ class UsbAudioViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(facts = facts, banner = banner, actions = actions) }
     }
 
+    private fun readMounts(): String = runCatching { File("/proc/mounts").readText() }.getOrDefault("")
+
     private suspend fun runScript(permanent: Boolean) {
-        val source = File(UsbAudioCodec.SYSTEM_MAIN).takeIf { it.isFile }?.readText()
-            ?: File(UsbAudioCodec.VENDOR_MAIN).takeIf { it.isFile }?.readText()
-            ?: throw IOException("нет аудиоконфига для трансформации")
-        val config = if (permanent) {
-            UsbAudioCodec.buildApplyConfig(source) ?: throw IOException("неожиданный формат аудиоконфига (нет секции usb)")
-        } else {
-            UsbAudioCodec.buildRestoreConfig(source)
-        }
         openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
+            if (UsbAudioCodec.isBindMounted(readMounts())) {
+                shell.rootText(UsbAudioCodec.UNBIND_COMMAND)
+                if (UsbAudioCodec.isBindMounted(readMounts())) {
+                    throw IOException("не удалось снять наложение TBox Monitor с аудиоконфига (bindactive)")
+                }
+            }
+            val source = UsbAudioCodec.chooseSource(
+                vendorMain = File(UsbAudioCodec.VENDOR_MAIN).takeIf { it.isFile }?.readText(),
+                systemMain = File(UsbAudioCodec.SYSTEM_MAIN).takeIf { it.isFile }?.readText(),
+            ) ?: throw IOException("нет аудиоконфига для трансформации")
+            val config = if (permanent) {
+                UsbAudioCodec.buildApplyConfig(source)
+                    ?: throw IOException("неожиданный формат аудиоконфига (нет секции usb)")
+            } else {
+                UsbAudioCodec.buildRestoreConfig(source)
+            }
             shell.rootText("mkdir -p ${UsbAudioCodec.WORK_DIR} && chmod 700 ${UsbAudioCodec.WORK_DIR}")
             shell.writeFile(UsbAudioCodec.STAGED_CONFIG, config.toByteArray(Charsets.UTF_8))
             val script = if (permanent) UsbAudioCodec.applyScript() else UsbAudioCodec.restoreScript()

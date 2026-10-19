@@ -18,6 +18,7 @@ object FwUnlockCodec {
     const val CONFIG_PATH = "/system/etc/adayo/firewall/AdayoFirewallAppDef.json"
     const val WORK_DIR = "/data/local/tmp/fwunlock"
     const val STAGED_CONFIG = "$WORK_DIR/AdayoFirewallAppDef.tbox.json"
+    const val ORIGINAL_BACKUP = "$WORK_DIR/AdayoFirewallAppDef.orig.json"
     const val APPLY_SCRIPT = "$WORK_DIR/apply.sh"
     const val RESTORE_SCRIPT = "$WORK_DIR/restore.sh"
 
@@ -72,65 +73,96 @@ object FwUnlockCodec {
         return "{\r\n\t\"APPs\":\r\n\t[\r\n$body\r\n\t],\r\n\t\"Hosts\":\r\n\t[\r\n\t]\r\n}\r\n"
     }
 
-    fun applyScript(): String = """
+    /** True for a file in this app's canonical layout, i.e. not an original worth backing up. */
+    fun isGenerated(content: String): Boolean = buildApplyConfig(content, emptyList()) == content
+
+    /**
+     * The new file is written next to the target as `.new`, verified on disk and renamed over it,
+     * so a short write never leaves a truncated config. wp_on is idempotent and also remounts ro.
+     */
+    private fun scriptPrologue(): String = """
         |C='$STAGED_CONFIG'
         |S=$CONFIG_PATH
+        |B='$ORIGINAL_BACKUP'
         |P=$WP_PROC
         |D=$DISK
-        |wp_on() { echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null; }
+        |WP=0
+        |wp_on() {
+        |    [ "${'$'}WP" = 1 ] || return 0
+        |    WP=0
+        |    sync
+        |    mount -o remount,ro / 2>/dev/null
+        |    echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null
+        |}
         |fail() { echo "$ERR_MARKER ${'$'}1"; exit 1; }
-        |[ -f "${'$'}C" ] || fail nostage
-        |grep -q '"packageName"' "${'$'}C" || fail stage
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
-        |trap 'wp_on' EXIT
-        |mount -o remount,rw / || fail remountsys
-        |cp "${'$'}C" "${'$'}S" || fail copysys
-        |chown root:root "${'$'}S" && chmod 644 "${'$'}S"
-        |chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
-        |sync
-        |blockdev --flushbufs "${'$'}D" 2>/dev/null
-        |echo 3 > /proc/sys/vm/drop_caches
-        |H1=$(md5sum "${'$'}C" | cut -d' ' -f1)
-        |H2=$(md5sum "${'$'}S" | cut -d' ' -f1)
-        |[ "${'$'}H1" = "${'$'}H2" ] || fail verify
-        |wp_on
-        |trap - EXIT
-        |kill $(pidof com.android.car) || fail carpid
-        |sleep 12
-        |[ -n "$(pidof com.android.car)" ] || fail carback
-        |echo "$APPLIED_MARKER"
+        |md5() { md5sum "${'$'}1" 2>/dev/null | cut -d' ' -f1; }
+        |free_kb() { set -- ${'$'}(df -k "${'$'}1" 2>/dev/null | tail -n 1); echo "${'$'}4"; }
+        |has_room() {
+        |    F=${'$'}(free_kb "${'$'}1"); Z=${'$'}(stat -c %s "${'$'}2" 2>/dev/null)
+        |    case "${'$'}F" in ''|*[!0-9]*) return 0 ;; esac
+        |    case "${'$'}Z" in ''|*[!0-9]*) return 0 ;; esac
+        |    [ "${'$'}F" -ge ${'$'}((Z / 1024 + 256)) ]
+        |}
+        |put() {
+        |    N="${'$'}1.new"
+        |    rm -f "${'$'}N"
+        |    has_room "${'$'}{1%/*}" "${'$'}2" || { R=nospace; return 1; }
+        |    cat "${'$'}2" > "${'$'}N" || { rm -f "${'$'}N"; R=write; return 1; }
+        |    chown root:root "${'$'}N" && chmod 644 "${'$'}N" || { rm -f "${'$'}N"; R=perms; return 1; }
+        |    chcon u:object_r:system_file:s0 "${'$'}N" 2>/dev/null
+        |    sync
+        |    blockdev --flushbufs "${'$'}D" 2>/dev/null
+        |    echo 3 > /proc/sys/vm/drop_caches
+        |    [ "${'$'}(md5 "${'$'}N")" = "${'$'}3" ] || { rm -f "${'$'}N"; R=verify; return 1; }
+        |    mv -f "${'$'}N" "${'$'}1" || { rm -f "${'$'}N"; R=rename; return 1; }
+        |    sync
+        |    [ "${'$'}(md5 "${'$'}1")" = "${'$'}3" ] || { R=verify; return 1; }
+        |}
         |
     """.trimMargin()
 
-    fun restoreScript(): String = """
-        |C='$STAGED_CONFIG'
-        |S=$CONFIG_PATH
-        |P=$WP_PROC
-        |D=$DISK
-        |wp_on() { echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null; }
-        |fail() { echo "$ERR_MARKER ${'$'}1"; exit 1; }
-        |[ -f "${'$'}C" ] || fail nostage
-        |grep -q '"APPs"' "${'$'}C" || fail stage
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
+    private fun writeAndRestart(marker: String): String = """
         |trap 'wp_on' EXIT
+        |trap 'wp_on; exit 1' HUP INT TERM PIPE
+        |WP=1
+        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
         |mount -o remount,rw / || fail remountsys
-        |cp "${'$'}C" "${'$'}S" || fail copysys
-        |chown root:root "${'$'}S" && chmod 644 "${'$'}S"
-        |chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
-        |sync
-        |blockdev --flushbufs "${'$'}D" 2>/dev/null
-        |echo 3 > /proc/sys/vm/drop_caches
-        |H1=$(md5sum "${'$'}C" | cut -d' ' -f1)
-        |H2=$(md5sum "${'$'}S" | cut -d' ' -f1)
-        |[ "${'$'}H1" = "${'$'}H2" ] || fail verify
+        |put "${'$'}S" "${'$'}SRC" "${'$'}H" || fail "${'$'}R"
         |wp_on
-        |trap - EXIT
+        |trap - EXIT HUP INT TERM PIPE
         |kill $(pidof com.android.car) || fail carpid
         |sleep 12
         |[ -n "$(pidof com.android.car)" ] || fail carback
-        |echo "$RESTORED_MARKER"
+        |echo "$marker"
         |
     """.trimMargin()
+
+    /** [backupOriginal]: the current file is not ours, keep it once as the restore source. */
+    fun applyScript(backupOriginal: Boolean): String = scriptPrologue() + """
+        |SRC="${'$'}C"
+        |[ -f "${'$'}SRC" ] || fail nostage
+        |grep -q '"packageName"' "${'$'}SRC" || fail stage
+        |H=${'$'}(md5 "${'$'}SRC")
+        |[ -n "${'$'}H" ] || fail stage
+        |
+    """.trimMargin() + (if (backupOriginal) """
+        |if [ ! -f "${'$'}B" ] && [ -f "${'$'}S" ]; then
+        |    rm -f "${'$'}B.tmp"
+        |    cp "${'$'}S" "${'$'}B.tmp" && [ "${'$'}(md5 "${'$'}B.tmp")" = "${'$'}(md5 "${'$'}S")" ] && mv -f "${'$'}B.tmp" "${'$'}B" || { rm -f "${'$'}B.tmp"; fail backup; }
+        |fi
+        |
+    """.trimMargin() else "") + writeAndRestart(APPLIED_MARKER)
+
+    /** Writes back the original saved on the first apply, the staged stock file otherwise. */
+    fun restoreScript(): String = scriptPrologue() + """
+        |SRC="${'$'}C"
+        |if [ -f "${'$'}B" ] && grep -q '"APPs"' "${'$'}B"; then SRC="${'$'}B"; fi
+        |[ -f "${'$'}SRC" ] || fail nostage
+        |grep -q '"APPs"' "${'$'}SRC" || fail stage
+        |H=${'$'}(md5 "${'$'}SRC")
+        |[ -n "${'$'}H" ] || fail stage
+        |
+    """.trimMargin() + writeAndRestart(RESTORED_MARKER)
 
     sealed interface Outcome {
         data object Applied : Outcome

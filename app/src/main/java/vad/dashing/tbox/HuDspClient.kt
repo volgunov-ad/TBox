@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -18,11 +19,32 @@ internal sealed interface HuDspResult {
 internal object HuDspClient {
     private val gate = Mutex()
 
+    /**
+     * TCP stays on across the whole retry series and is restored once at the end: toggling it
+     * per attempt would restart adbd up to 10 times during HU boot.
+     */
     suspend fun applyAtStartup(context: Context, mode: Int) {
-        HuDspStartup.run(pause = { delay(it) }, apply = { apply(context, mode) })
+        val enabledTcp = AtomicBoolean(false)
+        try {
+            HuDspStartup.run(pause = { delay(it) }) {
+                applyOnce(context, mode, LocalhostAdbSession.AfterSession.LeaveTcpEnabled) {
+                    enabledTcp.set(true)
+                }
+            }
+        } finally {
+            if (enabledTcp.get()) LocalhostAdbSession.restoreTcpOff(LocalhostAdbSession.AndroidGateway())
+        }
     }
 
-    suspend fun apply(context: Context, mode: Int): HuDspResult = gate.withLock {
+    suspend fun apply(context: Context, mode: Int): HuDspResult =
+        applyOnce(context, mode, LocalhostAdbSession.AfterSession.RestorePreviousTcp) {}
+
+    private suspend fun applyOnce(
+        context: Context,
+        mode: Int,
+        afterSession: LocalhostAdbSession.AfterSession,
+        onTcpEnabled: () -> Unit,
+    ): HuDspResult = gate.withLock {
         currentCoroutineContext().ensureActive()
         val command = HuDspMode.writeCommand(mode)
         val app = context.applicationContext
@@ -30,6 +52,8 @@ internal object HuDspClient {
             gateway = LocalhostAdbSession.AndroidGateway(),
             keysDir = app.filesDir.resolve("adb"),
             clientName = LocalhostAdbSession.defaultClientName(),
+            afterSession = afterSession,
+            onTcpEnabled = onTcpEnabled,
         ) { execute ->
             val reply = execute(command)
             val status = if (AdbShellResults.isFailure(reply)) null else HuDspMode.parseStatus(reply.stdout)

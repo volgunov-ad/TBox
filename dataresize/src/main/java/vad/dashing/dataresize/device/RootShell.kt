@@ -70,8 +70,13 @@ class RootShell private constructor(private val connection: AdbConnection) : Aut
         fun open(keysDir: File, clientName: String): RootShell {
             if (!isPortOpen()) enableTcpAdb()
             val transport = AdbTcpTransport.connect(HOST, PORT, timeoutMs = CONNECT_TIMEOUT_MS)
-            transport.setReadTimeoutMs(SESSION_TIMEOUT_MS)
-            val connection = AdbConnection(transport, AdbAuthKeys.loadOrCreate(keysDir), clientName)
+            val connection = try {
+                transport.setReadTimeoutMs(SESSION_TIMEOUT_MS)
+                AdbConnection(transport, AdbAuthKeys.loadOrCreate(keysDir), clientName)
+            } catch (e: Exception) {
+                runCatching { transport.close() }
+                throw e
+            }
             try {
                 connection.connect()
             } catch (e: Exception) {
@@ -95,7 +100,16 @@ class RootShell private constructor(private val connection: AdbConnection) : Aut
                 listOf("setprop", "service.adb.tcp.port", "$PORT"),
                 listOf("setprop", "ctl.restart", "adbd"),
             )) {
-                runCatching { ProcessBuilder(args).start().waitFor(5, TimeUnit.SECONDS) }
+                runCatching {
+                    val process = ProcessBuilder(args).redirectErrorStream(true).start()
+                    try {
+                        process.outputStream.close()
+                        process.waitFor(5, TimeUnit.SECONDS)
+                    } finally {
+                        process.inputStream.close()
+                        process.destroy()
+                    }
+                }
             }
             repeat(40) {
                 if (isPortOpen()) return

@@ -43,12 +43,37 @@ class UsbVolumeTest {
 
     @Test
     fun `parse control picks speaker not mic`() {
-        assertEquals(5 to 150, UsbVolume.parseControl(tinymixList))
+        assertEquals(UsbVolume.Control(5, 150, 2), UsbVolume.parseControl(tinymixList))
     }
 
     @Test
     fun `parse control clamped max value`() {
-        assertEquals(5 to 151, UsbVolume.parseControl(tinymixList.replace("150 150", "151 151")))
+        assertEquals(UsbVolume.Control(5, 151, 2), UsbVolume.parseControl(tinymixList.replace("150 150", "151 151")))
+    }
+
+    @Test
+    fun `parse control mono speaker`() {
+        val mono = tinymixList.replace("5\tINT\t2\tSpeaker Playback Volume                  150 150", "5\tINT\t1\tSpeaker Playback Volume                  77")
+        val control = UsbVolume.parseControl(mono)
+        assertEquals(UsbVolume.Control(5, 77, 1), control)
+        assertEquals("5 60", UsbVolume.setArgs(control!!, 60))
+    }
+
+    @Test
+    fun `parse control falls back to pcm playback volume`() {
+        val pcm = """
+            0	INT	1	Mic Playback Volume                      0
+            3	INT	2	PCM Playback Volume                      120 121
+        """.trimIndent()
+        val control = UsbVolume.parseControl(pcm)
+        assertEquals(UsbVolume.Control(3, 120, 2), control)
+        assertEquals("3 90 90", UsbVolume.setArgs(control!!, 90))
+    }
+
+    @Test
+    fun `speaker wins over pcm`() {
+        val both = "$tinymixList\n9\tINT\t2\tPCM Playback Volume                      10 10"
+        assertEquals(5, UsbVolume.parseControl(both)?.index)
     }
 
     @Test

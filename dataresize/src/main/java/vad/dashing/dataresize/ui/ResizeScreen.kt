@@ -58,6 +58,7 @@ fun ResizeScreen(
     onMove: () -> Unit,
     onStage2: () -> Unit,
     onRollback: () -> Unit,
+    onFixSecondary: () -> Unit,
 ) {
     var confirm by remember { mutableStateOf<Action?>(null) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -93,6 +94,14 @@ fun ResizeScreen(
                 "всё, что установлено и сохранено после переноса, пропадёт. ГУ перезагрузится.",
             confirmText = "Откатить",
             onConfirm = { confirm = null; onRollback() },
+            onDismiss = { confirm = null },
+        )
+        Action.FixSecondary -> ConfirmDialog(
+            title = "Дописать резервную GPT?",
+            text = "Резервная копия таблицы разделов будет перезаписана по основной, по которой загружается ГУ. " +
+                "Основная копия и данные не меняются, перезагрузка не нужна.",
+            confirmText = "Дописать",
+            onConfirm = { confirm = null; onFixSecondary() },
             onDismiss = { confirm = null },
         )
         else -> Unit
@@ -192,6 +201,9 @@ private fun Actions(state: UiState, onRefresh: () -> Unit, onStage2: () -> Unit,
         }
         if (Action.Rollback in state.actions) {
             OutlinedButton(onClick = { onConfirm(Action.Rollback) }) { Text("Откатить", fontSize = 20.sp) }
+        }
+        if (Action.FixSecondary in state.actions) {
+            Button(onClick = { onConfirm(Action.FixSecondary) }) { Text("Дописать резервную GPT", fontSize = 20.sp) }
         }
         if (Action.Refresh in state.actions) {
             OutlinedButton(onClick = onRefresh) { Text("Проверить заново", fontSize = 20.sp) }

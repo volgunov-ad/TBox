@@ -3,6 +3,7 @@ package vad.dashing.tbox.dexopt
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -10,9 +11,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.adb.LocalhostAdbSession
 
@@ -31,6 +34,8 @@ internal data class AppDexoptState(
     /** Current APK was confirmed compiled earlier (survives process restarts). */
     val markedCompiled: Boolean = false,
     val detail: String = "",
+    /** Another package is being compiled from App List; installd runs one dex2oat at a time. */
+    val externalCompile: Boolean = false,
 )
 
 /**
@@ -68,25 +73,27 @@ internal object AppDexoptCompiler {
     }
 
     /** Syncs [AppDexoptState.markedCompiled] from prefs; no ADB. */
-    fun refreshMarked(context: Context) {
+    suspend fun refreshMarked(context: Context) {
         val app = context.applicationContext
-        val marked = isMarkedCompiled(app)
-        _state.value = _state.value.copy(markedCompiled = marked)
+        val marked = withContext(Dispatchers.IO) { isMarkedCompiled(app) }
+        _state.update { it.copy(markedCompiled = marked) }
     }
 
     /** Once per installed APK, while it was not confirmed compiled. */
-    fun shouldOfferHint(context: Context): Boolean {
+    suspend fun shouldOfferHint(context: Context): Boolean = withContext(Dispatchers.IO) {
         val app = context.applicationContext
-        val updateTime = currentUpdateTime(app) ?: return false
+        val updateTime = currentUpdateTime(app) ?: return@withContext false
         val prefs = prefs(app)
-        return prefs.getLong(KEY_DONE_UPDATE_TIME, 0L) != updateTime &&
+        prefs.getLong(KEY_DONE_UPDATE_TIME, 0L) != updateTime &&
             prefs.getLong(KEY_HINT_UPDATE_TIME, 0L) != updateTime
     }
 
     fun markHintShown(context: Context) {
         val app = context.applicationContext
-        val updateTime = currentUpdateTime(app) ?: return
-        prefs(app).edit { putLong(KEY_HINT_UPDATE_TIME, updateTime) }
+        scope.launch(Dispatchers.IO) {
+            val updateTime = currentUpdateTime(app) ?: return@launch
+            prefs(app).edit { putLong(KEY_HINT_UPDATE_TIME, updateTime) }
+        }
     }
 
     fun checkStatus(context: Context) {
@@ -99,24 +106,35 @@ internal object AppDexoptCompiler {
         scope.launch { runExclusive { runCompile(app) } }
     }
 
+    fun setExternalCompileActive(active: Boolean) {
+        _state.update { it.copy(externalCompile = active) }
+    }
+
     /** Startup hook behind the auto switch. */
     suspend fun autoCompileAtStartup(context: Context) {
         val app = context.applicationContext
-        val updateTime = currentUpdateTime(app) ?: return
-        val prefs = prefs(app)
-        if (prefs.getLong(KEY_DONE_UPDATE_TIME, 0L) == updateTime) return
-        val attempts = if (prefs.getLong(KEY_AUTO_ATTEMPT_UPDATE_TIME, 0L) == updateTime) {
-            prefs.getInt(KEY_AUTO_ATTEMPTS, 0)
-        } else {
-            0
-        }
+        val (updateTime, attempts) = withContext(Dispatchers.IO) {
+            val updateTime = currentUpdateTime(app) ?: return@withContext null
+            val prefs = prefs(app)
+            if (prefs.getLong(KEY_DONE_UPDATE_TIME, 0L) == updateTime) return@withContext null
+            val attempts = if (prefs.getLong(KEY_AUTO_ATTEMPT_UPDATE_TIME, 0L) == updateTime) {
+                prefs.getInt(KEY_AUTO_ATTEMPTS, 0)
+            } else {
+                0
+            }
+            updateTime to attempts
+        } ?: return
         if (attempts >= MAX_AUTO_ATTEMPTS_PER_APK) return
         delay(AUTO_STARTUP_DELAY_MS)
-        prefs.edit {
-            putLong(KEY_AUTO_ATTEMPT_UPDATE_TIME, updateTime)
-            putInt(KEY_AUTO_ATTEMPTS, attempts + 1)
+        // Wait for a manual check/compile instead of silently losing the attempt to tryLock.
+        gate.withLock {
+            if (_state.value.externalCompile) return
+            prefs(app).edit {
+                putLong(KEY_AUTO_ATTEMPT_UPDATE_TIME, updateTime)
+                putInt(KEY_AUTO_ATTEMPTS, attempts + 1)
+            }
+            runCompile(app)
         }
-        compile(app)
     }
 
     private suspend fun runExclusive(block: suspend () -> Unit) {
@@ -128,14 +146,20 @@ internal object AppDexoptCompiler {
         }
     }
 
-    private suspend fun runCheck(app: Context, startCompile: Boolean): Check {
+    private suspend fun runCheck(
+        app: Context,
+        startCompile: Boolean,
+        tcpEnabled: AtomicBoolean? = null,
+    ): Check {
         setPhase(AppDexoptPhase.Checking)
-        val check = queryStatus(app, startCompile)
+        val check = queryStatus(app, startCompile, tcpEnabled)
         when (check) {
             Check.Compiled -> markCompiled(app)
             is Check.NotCompiled -> {
                 prefs(app).edit { remove(KEY_DONE_UPDATE_TIME) }
-                _state.value = AppDexoptState(AppDexoptPhase.NotCompiled, markedCompiled = false)
+                _state.update {
+                    it.copy(phase = AppDexoptPhase.NotCompiled, markedCompiled = false, detail = "")
+                }
             }
             is Check.Failed -> {
                 TboxRepository.addLog("WARN", TAG, "Dexopt status check failed: ${check.detail}")
@@ -146,14 +170,28 @@ internal object AppDexoptCompiler {
     }
 
     private suspend fun runCompile(app: Context) {
-        val first = runCheck(app, startCompile = true)
+        if (_state.value.externalCompile) {
+            TboxRepository.addLog("INFO", TAG, "Skipped: another package is compiling from App List")
+            return
+        }
+        // One TCP enable for the start and every poll: each restore is an adbd restart.
+        val tcpEnabled = AtomicBoolean(false)
+        try {
+            pollCompile(app, tcpEnabled)
+        } finally {
+            if (tcpEnabled.get()) LocalhostAdbSession.restoreTcpOff(LocalhostAdbSession.AndroidGateway())
+        }
+    }
+
+    private suspend fun pollCompile(app: Context, tcpEnabled: AtomicBoolean) {
+        val first = runCheck(app, startCompile = true, tcpEnabled = tcpEnabled)
         if (first !is Check.NotCompiled || !first.compileStarted) return
         TboxRepository.addLog("INFO", TAG, "Started speed compilation")
         setPhase(AppDexoptPhase.Compiling)
         var waited = FIRST_POLL_DELAY_MS
         delay(FIRST_POLL_DELAY_MS)
         while (true) {
-            when (val poll = queryStatus(app, startCompile = false)) {
+            when (val poll = queryStatus(app, startCompile = false, tcpEnabled = tcpEnabled)) {
                 Check.Compiled -> {
                     markCompiled(app)
                     TboxRepository.addLog("INFO", TAG, "App compiled with speed filter")
@@ -171,12 +209,23 @@ internal object AppDexoptCompiler {
         setPhase(AppDexoptPhase.Failed, "timeout")
     }
 
-    private suspend fun queryStatus(app: Context, startCompile: Boolean): Check {
+    /** Tracks whether any session of a compile run turned ADB TCP on. */
+    private class TcpHold {
+        val enabled = AtomicBoolean(false)
+    }
+
+    private suspend fun queryStatus(app: Context, startCompile: Boolean, tcpEnabled: AtomicBoolean?): Check {
         val packageName = app.packageName
         val session = LocalhostAdbSession.run(
             gateway = LocalhostAdbSession.AndroidGateway(),
             keysDir = app.filesDir.resolve("adb"),
             clientName = LocalhostAdbSession.defaultClientName(),
+            afterSession = if (tcpEnabled != null) {
+                LocalhostAdbSession.AfterSession.LeaveTcpEnabled
+            } else {
+                LocalhostAdbSession.AfterSession.RestorePreviousTcp
+            },
+            onTcpEnabled = { tcpEnabled?.set(true) },
         ) { execute ->
             val status = execute(AppDexoptCodec.statusCommand(packageName))
             val output = "${status.stdout}\n${status.stderr}"
@@ -198,11 +247,11 @@ internal object AppDexoptCompiler {
 
     private fun markCompiled(app: Context) {
         currentUpdateTime(app)?.let { time -> prefs(app).edit { putLong(KEY_DONE_UPDATE_TIME, time) } }
-        _state.value = AppDexoptState(AppDexoptPhase.Compiled, markedCompiled = true)
+        _state.update { it.copy(phase = AppDexoptPhase.Compiled, markedCompiled = true, detail = "") }
     }
 
     private fun setPhase(phase: AppDexoptPhase, detail: String = "") {
-        _state.value = _state.value.copy(phase = phase, detail = detail)
+        _state.update { it.copy(phase = phase, detail = detail) }
     }
 
     private fun isMarkedCompiled(app: Context): Boolean {

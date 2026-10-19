@@ -42,6 +42,9 @@ sealed class PartitionState {
     data class Movable(val plan: MovePlan) : PartitionState()
     data class AlreadyMoved(val entry: GptEntry) : PartitionState()
     data class NotPossible(val reason: String) : PartitionState()
+
+    /** The copies are the old and new tables of an interrupted move or rollback; the primary decides. */
+    data class MixedCopies(val primaryNew: Boolean) : PartitionState()
 }
 
 object GptPlanner {
@@ -95,6 +98,7 @@ object GptPlanner {
         if (matches.size != 1) return PartitionState.NotPossible("в GPT ${matches.size} записей «$PART_NAME»")
         val part = matches.single()
         val others = layout.entries - part
+        if (others.isEmpty()) return PartitionState.NotPossible("в GPT нет разделов, кроме «$PART_NAME»")
         val othersEnd = others.maxOf { it.last }
         if (part.first > othersEnd && part.last == layout.header.lastUsable) {
             return PartitionState.AlreadyMoved(part)
@@ -102,6 +106,8 @@ object GptPlanner {
         val newFirst = (othersEnd + 1 + ALIGN_SECTORS - 1) / ALIGN_SECTORS * ALIGN_SECTORS
         val newLast = layout.header.lastUsable
         if (part.first >= newFirst) return PartitionState.NotPossible("«$PART_NAME» уже не на штатном месте")
+        // dd copies forward: an overlapping target overwrites unread source blocks and MD5 still matches.
+        if (newFirst <= part.last) return PartitionState.NotPossible("новое место пересекается с текущим «$PART_NAME»")
         if (newLast - newFirst + 1 <= part.sectors) {
             return PartitionState.NotPossible("за последним разделом нет места больше текущего «$PART_NAME»")
         }
@@ -148,6 +154,7 @@ object GptPlanner {
 
     /** Only the moved entry's first/last LBA and both CRC fields may differ. */
     private fun verify(layout: GptLayout, plan: MovePlan) {
+        check(plan.newFirst > plan.entry.last) { "new range overlaps the old one" }
         val entryOff = (plan.entry.index - 1) * layout.header.entrySize + Gpt.ENTRY_OFF_FIRST
         fun allowed(arrayOff: Int, headerOff: Int): Set<Int> =
             (arrayOff + entryOff until arrayOff + entryOff + 16).toSet() +

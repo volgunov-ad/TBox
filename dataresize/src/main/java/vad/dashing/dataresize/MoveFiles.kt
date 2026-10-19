@@ -33,4 +33,25 @@ object MoveFiles {
         "old_sgpt.bin" to plan.oldSecondary,
         "new_sgpt.bin" to plan.newSecondary,
     )
+
+    /** `KEY=value` pairs separated by spaces or newlines (params file, `status`, `running`). */
+    fun fields(text: String): Map<String, String> = text.trim().split(Regex("\\s+"))
+        .mapNotNull { kv -> kv.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+        .toMap()
+
+    /**
+     * Each GPT copy is exactly one of the tables in [params] but from different ones: true when the
+     * primary is the new table. Null in any other case, including both copies from the same table.
+     */
+    fun mixedPrimaryNew(params: Map<String, String>, primaryMd5: String, secondaryMd5: String): Boolean? {
+        val oldP = params["MD5_OLD_P"] ?: return null
+        val newP = params["MD5_NEW_P"] ?: return null
+        val oldS = params["MD5_OLD_S"] ?: return null
+        val newS = params["MD5_NEW_S"] ?: return null
+        return when {
+            primaryMd5 == oldP && secondaryMd5 == newS -> false
+            primaryMd5 == newP && secondaryMd5 == oldS -> true
+            else -> null
+        }
+    }
 }

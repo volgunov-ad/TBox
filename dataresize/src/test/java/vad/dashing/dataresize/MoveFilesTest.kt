@@ -1,6 +1,7 @@
 package vad.dashing.dataresize
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import vad.dashing.dataresize.gpt.GptImages
 import vad.dashing.dataresize.gpt.GptPlanner
@@ -34,5 +35,33 @@ class MoveFilesTest {
             """.trimIndent() + "\n",
             MoveFiles.params(state.plan),
         )
+    }
+
+    @Test
+    fun mixedCopies_onlyForOneCopyOfEachKnownTable() {
+        val state = GptPlanner.evaluate(
+            GptImages(resource("a10_old_pgpt.bin"), resource("a10_old_sgpt.bin"), 124_993_536L),
+        ) as PartitionState.Movable
+        val params = MoveFiles.fields(MoveFiles.params(state.plan))
+        assertEquals("124993536", params["DISK_SECT"])
+        val oldP = GptPlanner.md5(state.plan.oldPrimary)
+        val newP = GptPlanner.md5(state.plan.newPrimary)
+        val oldS = GptPlanner.md5(state.plan.oldSecondary)
+        val newS = GptPlanner.md5(state.plan.newSecondary)
+        assertEquals(false, MoveFiles.mixedPrimaryNew(params, oldP, newS))
+        assertEquals(true, MoveFiles.mixedPrimaryNew(params, newP, oldS))
+        assertNull(MoveFiles.mixedPrimaryNew(params, oldP, oldS))
+        assertNull(MoveFiles.mixedPrimaryNew(params, newP, newS))
+        assertNull(MoveFiles.mixedPrimaryNew(params, oldP, "0".repeat(32)))
+        assertNull(MoveFiles.mixedPrimaryNew(emptyMap(), oldP, newS))
+    }
+
+    @Test
+    fun statusFields_parsed() {
+        assertEquals(
+            mapOf("RUNNING" to "1", "MODE" to "stage2"),
+            MoveFiles.fields("RUNNING=1 MODE=stage2\n"),
+        )
+        assertEquals(emptyMap<String, String>(), MoveFiles.fields("usage: dataresize.sh status|move"))
     }
 }

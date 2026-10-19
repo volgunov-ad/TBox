@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.adb.AdbAuthKeys
@@ -9,6 +10,7 @@ import vad.dashing.tbox.adb.AdbConnection
 import vad.dashing.tbox.adb.AdbProtocol
 import vad.dashing.tbox.adb.AdbShellV2
 import vad.dashing.tbox.adb.AdbTransport
+import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -225,6 +227,49 @@ class AdbConnectionAuthTest {
         val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
         connection.connect()
         assertEquals("ok", connection.execute("uname").stdout)
+    }
+
+    @Test
+    fun connect_silentPeer_failsAfterIdleLimit() {
+        var nowNs = 0L
+        val transport = object : AdbTransport {
+            override val description: String = "silent"
+            var reads = 0
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                reads++
+                nowNs += 10_000_000_000L
+                throw SocketTimeoutException("idle")
+            }
+            override fun write(buffer: ByteArray, offset: Int, length: Int) = Unit
+            override fun close() = Unit
+        }
+        val connection = AdbConnection(
+            transport,
+            AdbAuthKeys.generateKeyPair(),
+            "tbox@test",
+            maxIdleMs = 30_000L,
+            nanoTime = { nowNs },
+        )
+        assertThrows(SocketTimeoutException::class.java) { connection.connect() }
+        assertEquals(3, transport.reads)
+    }
+
+    @Test
+    fun connect_shortTimeoutsWithinIdleLimit_areRetried() {
+        val cnxn = packet(AdbProtocol.CMD_CNXN, AdbProtocol.VERSION, 4096, "device::features=cmd\u0000".toByteArray())
+        val delegate = FakeTransport(cnxn)
+        var timeoutsLeft = 2
+        val transport = object : AdbTransport by delegate {
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                if (timeoutsLeft > 0) {
+                    timeoutsLeft--
+                    throw SocketTimeoutException("idle")
+                }
+                return delegate.read(buffer, offset, length)
+            }
+        }
+        val connection = AdbConnection(transport, AdbAuthKeys.generateKeyPair(), "tbox@test")
+        assertEquals(4096, connection.connect().maxPayload)
     }
 
     private fun packet(

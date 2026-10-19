@@ -13,7 +13,19 @@ data class StepUi(
 
 data class Operation(val title: String, val steps: List<StepUi>, val error: String? = null)
 
+/** One `dataresize.sh` mode: its journal [file] and steps. */
+data class ScriptRun(val mode: String, val title: String, val file: String, val defs: List<StepDef>) {
+    /** move and rollback end in a reboot and never write a final line. */
+    val endsInReboot: Boolean get() = defs.last().id == "reboot"
+
+    fun finished(lines: List<String>): Boolean =
+        !endsInReboot && lines.any { Journal.payload(it).startsWith("@done") }
+}
+
 object Journal {
+    /** The script writes its first line right after taking the lock; silence means it never started. */
+    const val FIRST_LINE_TIMEOUT_MS = 12_000L
+
     val MOVE = listOf(
         StepDef("check", "Проверка перед переносом"),
         StepDef("stop", "Остановка Android (экран замрёт)"),
@@ -40,6 +52,27 @@ object Journal {
         StepDef("wp_on", "Возврат защиты eMMC"),
         StepDef("reboot", "Перезагрузка"),
     )
+    val FIXSGPT = listOf(
+        StepDef("check", "Проверка"),
+        StepDef("wp_off", "Снятие защиты eMMC"),
+        StepDef("sgpt", "Запись резервной GPT по основной"),
+        StepDef("wp_on", "Возврат защиты eMMC"),
+        StepDef("done", "Готово"),
+    )
+
+    val RUN_MOVE = ScriptRun("move", "Перенос", "move.log", MOVE)
+    val RUN_STAGE2 = ScriptRun("stage2", "Расширение", "stage2.log", STAGE2)
+    val RUN_ROLLBACK = ScriptRun("rollback", "Откат", "rollback.log", ROLLBACK)
+    val RUN_FIXSGPT = ScriptRun("fixsgpt", "Резервная GPT", "fixsgpt.log", FIXSGPT)
+    val RUNS = listOf(RUN_MOVE, RUN_STAGE2, RUN_ROLLBACK, RUN_FIXSGPT)
+
+    /** Failure text when the journal is still empty [elapsedMs] after launch. */
+    fun startFailure(lines: List<String>, elapsedMs: Long): String? =
+        if (lines.isEmpty() && elapsedMs > FIRST_LINE_TIMEOUT_MS) {
+            "скрипт не начал журнал за ${FIRST_LINE_TIMEOUT_MS / 1000} с — не запустился или уже выполняется"
+        } else {
+            null
+        }
 
     /** Strips the `YYYY-MM-DD HH:MM:SS ` prefix written by the script. */
     fun payload(line: String): String {

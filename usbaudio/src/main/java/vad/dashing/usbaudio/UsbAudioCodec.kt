@@ -84,42 +84,114 @@ object UsbAudioCodec {
     fun isApplied(content: String): Boolean =
         content.replace(xmlComment, "").contains("<mixPort name=\"usb_device output\"")
 
-    /** audioserver reads /vendor first; /system matters only when the vendor name is gone. */
-    fun effectiveApplied(vendorMainExists: Boolean, vendorMain: String?, systemMain: String?): Boolean {
-        val content = if (vendorMainExists) vendorMain else systemMain
-        return content != null && isApplied(content)
+    /**
+     * audioserver reads /vendor first; /system matters only when the vendor name is gone.
+     * A bind overlay shows its own content: over /vendor the permanent variant cannot be
+     * active (the vendor name still exists), over /system the real file is unknown (null).
+     */
+    fun effectiveApplied(
+        vendorMainExists: Boolean,
+        vendorMain: String?,
+        systemMain: String?,
+        procMounts: String = "",
+    ): Boolean? {
+        val bound = boundConfigPaths(procMounts)
+        if (vendorMainExists) return VENDOR_MAIN !in bound && vendorMain != null && isApplied(vendorMain)
+        if (SYSTEM_MAIN in bound) return null
+        return systemMain != null && isApplied(systemMain)
     }
 
-    /** True when a bind overlay (TBox Monitor's temporary variant) sits over a config path. */
-    fun isBindMounted(procMounts: String): Boolean = procMounts.lineSequence().any { line ->
-        val fields = line.split(' ')
-        fields.size > 2 && (fields[1] == VENDOR_MAIN || fields[1] == SYSTEM_MAIN)
+    /** Config paths with a bind overlay (TBox Monitor's temporary variant) on top. */
+    fun boundConfigPaths(procMounts: String): Set<String> = procMounts.lineSequence().mapNotNull { line ->
+        line.split(' ').takeIf { it.size > 2 }?.get(1)?.takeIf { it == VENDOR_MAIN || it == SYSTEM_MAIN }
+    }.toSet()
+
+    fun isBindMounted(procMounts: String): Boolean = boundConfigPaths(procMounts).isNotEmpty()
+
+    /** Stock /vendor is the source unless /system already carries the applied config. */
+    fun chooseSource(vendorMain: String?, systemMain: String?): String? = when {
+        systemMain != null && isApplied(systemMain) -> systemMain
+        vendorMain != null -> vendorMain
+        else -> systemMain
     }
 
-    fun applyScript(): String = """
+    /** Drops TBox Monitor's overlays (possibly stacked) so the real files are read and written. */
+    const val UNBIND_COMMAND =
+        "for T in $VENDOR_MAIN $SYSTEM_MAIN; do umount \$T 2>/dev/null; umount \$T 2>/dev/null; done; true"
+
+    /**
+     * The new file is written next to the target as `.new`, verified on disk and renamed over it,
+     * so a short write never leaves a truncated config. wp_on is idempotent and also remounts ro.
+     */
+    private fun scriptPrologue(): String = """
         |C='$STAGED_CONFIG'
         |S=$SYSTEM_MAIN
         |V=$VENDOR_MAIN
         |P=$WP_PROC
         |D=$DISK
-        |wp_on() { echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null; }
+        |WP=0
+        |VRW=0
+        |wp_on() {
+        |    [ "${'$'}WP" = 1 ] || return 0
+        |    WP=0
+        |    sync
+        |    [ "${'$'}VRW" = 1 ] && mount -o remount,ro /vendor 2>/dev/null
+        |    mount -o remount,ro / 2>/dev/null
+        |    echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null
+        |}
         |fail() { echo "$ERR_MARKER ${'$'}1"; exit 1; }
+        |md5() { md5sum "${'$'}1" 2>/dev/null | cut -d' ' -f1; }
+        |free_kb() { set -- ${'$'}(df -k "${'$'}1" 2>/dev/null | tail -n 1); echo "${'$'}4"; }
+        |has_room() {
+        |    F=${'$'}(free_kb "${'$'}1"); Z=${'$'}(stat -c %s "${'$'}2" 2>/dev/null)
+        |    case "${'$'}F" in ''|*[!0-9]*) return 0 ;; esac
+        |    case "${'$'}Z" in ''|*[!0-9]*) return 0 ;; esac
+        |    [ "${'$'}F" -ge ${'$'}((Z / 1024 + 256)) ]
+        |}
+        |put() {
+        |    N="${'$'}1.new"
+        |    rm -f "${'$'}N"
+        |    has_room "${'$'}{1%/*}" "${'$'}2" || { R=nospace; return 1; }
+        |    cat "${'$'}2" > "${'$'}N" || { rm -f "${'$'}N"; R=write; return 1; }
+        |    chown root:root "${'$'}N" && chmod 644 "${'$'}N" || { rm -f "${'$'}N"; R=perms; return 1; }
+        |    chcon u:object_r:system_file:s0 "${'$'}N" 2>/dev/null
+        |    sync
+        |    blockdev --flushbufs "${'$'}D" 2>/dev/null
+        |    echo 3 > /proc/sys/vm/drop_caches
+        |    [ "${'$'}(md5 "${'$'}N")" = "${'$'}3" ] || { rm -f "${'$'}N"; R=verify; return 1; }
+        |    mv -f "${'$'}N" "${'$'}1" || { rm -f "${'$'}N"; R=rename; return 1; }
+        |    sync
+        |    [ "${'$'}(md5 "${'$'}1")" = "${'$'}3" ] || { R=verify; return 1; }
+        |}
+        |unbind() {
+        |    for T in "${'$'}V" "${'$'}S"; do
+        |        if grep -q " ${'$'}T " /proc/mounts; then umount "${'$'}T" 2>/dev/null; umount "${'$'}T" 2>/dev/null; fi
+        |        if grep -q " ${'$'}T " /proc/mounts; then fail bindactive; fi
+        |    done
+        |}
+        |
+    """.trimMargin()
+
+    private fun wpOff(): String = """
+        |trap 'wp_on' EXIT
+        |trap 'wp_on; exit 1' HUP INT TERM PIPE
+        |WP=1
+        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
+        |mount -o remount,rw / || fail remountsys
+        |
+    """.trimMargin()
+
+    fun applyScript(): String = scriptPrologue() + """
         |[ -f "${'$'}C" ] || fail nostage
         |grep -q '<module name="usb" halVersion="2.0">' "${'$'}C" || fail stage
-        |if grep -q " ${'$'}V " /proc/mounts; then umount "${'$'}V" 2>/dev/null; fi
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
-        |trap 'wp_on' EXIT
-        |mount -o remount,rw / || fail remountsys
-        |cp "${'$'}C" "${'$'}S" || fail copysys
-        |chown root:root "${'$'}S" && chmod 644 "${'$'}S"
-        |chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
-        |sync
-        |blockdev --flushbufs "${'$'}D" 2>/dev/null
-        |echo 3 > /proc/sys/vm/drop_caches
-        |H1=$(md5sum "${'$'}C" | cut -d' ' -f1)
-        |H2=$(md5sum "${'$'}S" | cut -d' ' -f1)
-        |[ "${'$'}H1" = "${'$'}H2" ] || fail verify
+        |H=${'$'}(md5 "${'$'}C")
+        |[ -n "${'$'}H" ] || fail stage
+        |unbind
+        |
+    """.trimMargin() + wpOff() + """
+        |put "${'$'}S" "${'$'}C" "${'$'}H" || fail "${'$'}R"
         |if [ -e "${'$'}V" ]; then
+        |    VRW=1
         |    mount -o remount,rw /vendor 2>/dev/null
         |    rm -f "${'$'}V" || fail rmvendor
         |    sync
@@ -128,7 +200,7 @@ object UsbAudioCodec {
         |    [ ! -e "${'$'}V" ] || fail rmvendor
         |fi
         |wp_on
-        |trap - EXIT
+        |trap - EXIT HUP INT TERM PIPE
         |setprop ctl.restart audioserver || fail restart
         |sleep 8
         |CD=""
@@ -153,29 +225,17 @@ object UsbAudioCodec {
         |
     """.trimMargin()
 
-    fun restoreScript(): String = """
-        |C='$STAGED_CONFIG'
-        |S=$SYSTEM_MAIN
-        |P=$WP_PROC
-        |D=$DISK
-        |wp_on() { echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null; }
-        |fail() { echo "$ERR_MARKER ${'$'}1"; exit 1; }
+    fun restoreScript(): String = scriptPrologue() + """
         |[ -f "${'$'}C" ] || fail nostage
         |grep -q 'audioPolicyConfiguration' "${'$'}C" || fail stage
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
-        |trap 'wp_on' EXIT
-        |mount -o remount,rw / || fail remountsys
-        |cp "${'$'}C" "${'$'}S" || fail copysys
-        |chown root:root "${'$'}S" && chmod 644 "${'$'}S"
-        |chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
-        |sync
-        |blockdev --flushbufs "${'$'}D" 2>/dev/null
-        |echo 3 > /proc/sys/vm/drop_caches
-        |H1=$(md5sum "${'$'}C" | cut -d' ' -f1)
-        |H2=$(md5sum "${'$'}S" | cut -d' ' -f1)
-        |[ "${'$'}H1" = "${'$'}H2" ] || fail verify
+        |H=${'$'}(md5 "${'$'}C")
+        |[ -n "${'$'}H" ] || fail stage
+        |unbind
+        |
+    """.trimMargin() + wpOff() + """
+        |put "${'$'}S" "${'$'}C" "${'$'}H" || fail "${'$'}R"
         |wp_on
-        |trap - EXIT
+        |trap - EXIT HUP INT TERM PIPE
         |setprop ctl.restart audioserver || fail restart
         |echo "$RESTORED_MARKER"
         |

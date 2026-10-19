@@ -62,4 +62,46 @@ class GptPlannerTest {
         val plan = benchPlan()
         GptPlanner.evaluate(GptImages(plan.newPrimary, plan.oldSecondary, disk))
     }
+
+    @Test
+    fun alignedTargetInsideOldRange_isNotPossible() {
+        // Without p40..p43 userdata is the last entry; the next 8 MiB boundary after p38 lies inside it.
+        val images = withEntries { it.index <= 39 }
+        val entries = GptPlanner.parse(images).entries
+        val part = entries.single { it.name == GptPlanner.PART_NAME }
+        val othersEnd = (entries - part).maxOf { it.last }
+        val aligned = (othersEnd + GptPlanner.ALIGN_SECTORS) / GptPlanner.ALIGN_SECTORS * GptPlanner.ALIGN_SECTORS
+        assertTrue(aligned > part.first && aligned <= part.last)
+        val state = GptPlanner.evaluate(images)
+        assertTrue(state.toString(), state is PartitionState.NotPossible)
+    }
+
+    @Test
+    fun onlyUserdata_isNotPossible() {
+        val state = GptPlanner.evaluate(withEntries { it.name == GptPlanner.PART_NAME })
+        assertTrue(state.toString(), state is PartitionState.NotPossible)
+    }
+
+    /** Bench tables with the entries not matching [keep] cleared in both copies and the CRCs resealed. */
+    private fun withEntries(keep: (GptEntry) -> Boolean): GptImages {
+        val images = benchImages()
+        val layout = GptPlanner.parse(images)
+        val size = layout.header.entrySize
+        val primary = images.primary.copyOf()
+        val secondary = images.secondary.copyOf()
+        layout.entries.filterNot(keep).forEach { e ->
+            val off = (e.index - 1) * size
+            primary.fill(0, layout.primaryArrayOffset + off, layout.primaryArrayOffset + off + size)
+            secondary.fill(0, layout.secondaryArrayOffset + off, layout.secondaryArrayOffset + off + size)
+        }
+        val crc = Gpt.crc32(primary, layout.primaryArrayOffset, layout.arrayLength)
+        reseal(primary, SECTOR, layout.header.headerSize, crc)
+        reseal(secondary, layout.secondaryHeaderOffset, layout.header.headerSize, crc)
+        return GptImages(primary, secondary, disk)
+    }
+
+    private fun reseal(buf: ByteArray, off: Int, headerSize: Int, arrayCrc: Long) {
+        Gpt.putUInt32(buf, off + Gpt.OFF_ENTRIES_CRC, arrayCrc)
+        Gpt.putUInt32(buf, off + Gpt.OFF_HEADER_CRC, Gpt.headerCrc(buf, off, headerSize))
+    }
 }

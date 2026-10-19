@@ -3,8 +3,10 @@ package vad.dashing.tbox.adb
 import android.content.Context
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.dexopt.AppDexoptCodec
 
@@ -204,10 +206,6 @@ internal object PackageAdbActions {
                 delayMs = delayMs,
             )
         }
-        gateway.refreshHuAdb()
-        val availableBefore =
-            gateway.isTcpEnabled() ||
-                gateway.isTcpPortOpen(host, port, LocalhostAdbSession.TCP_PROBE_TIMEOUT_MS)
         val session = LocalhostAdbSession.run(
             gateway = gateway,
             keysDir = keysDir,
@@ -226,12 +224,12 @@ internal object PackageAdbActions {
                 StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
             is LocalhostAdbSession.Result.Ok -> {
                 sessionActive.set(true)
-                tcpEnabledByUs.set(!availableBefore)
+                tcpEnabledByUs.set(session.tcpEnabledBySession)
                 TboxRepository.addLog(
                     level = "INFO",
                     tag = TAG,
                     message = "App list advanced ADB session started" +
-                        if (!availableBefore) " (TCP enabled by us)" else "",
+                        if (session.tcpEnabledBySession) " (TCP enabled by us)" else "",
                 )
                 StatusLoadOutcome.Success(session.value)
             }
@@ -244,6 +242,11 @@ internal object PackageAdbActions {
     }
 
     internal suspend fun exitAdvancedSessionWith(gateway: LocalhostAdbSession.Gateway) {
+        // Runs from composition teardown; a cancelled caller must not leave persist TCP on.
+        withContext(NonCancellable) { exitAdvancedSessionLocked(gateway) }
+    }
+
+    private suspend fun exitAdvancedSessionLocked(gateway: LocalhostAdbSession.Gateway) {
         sessionMutex.withLock {
             if (!sessionActive.getAndSet(false)) {
                 tcpEnabledByUs.set(false)

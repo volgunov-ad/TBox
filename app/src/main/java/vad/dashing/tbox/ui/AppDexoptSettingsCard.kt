@@ -29,7 +29,9 @@ fun AppDexoptSettingsCard(
 ) {
     val context = LocalContext.current
     val state by AppDexoptCompiler.state.collectAsStateWithLifecycle()
-    val busy = state.phase == AppDexoptPhase.Checking || state.phase == AppDexoptPhase.Compiling
+    val busy = state.phase == AppDexoptPhase.Checking ||
+        state.phase == AppDexoptPhase.Compiling ||
+        state.externalCompile
 
     LaunchedEffect(Unit) {
         AppDexoptCompiler.refreshMarked(context)

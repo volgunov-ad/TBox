@@ -34,7 +34,9 @@ object WinPatchCodec {
         val stockMd5: String,
         val patchedMd5: String,
         val processName: String,
-    )
+    ) {
+        val rootStagePath: String get() = "$WORK_DIR/$assetName"
+    }
 
     val ANDROID_AUTO = Target(
         id = "aa",
@@ -81,48 +83,128 @@ object WinPatchCodec {
         else -> FileState.Unknown
     }
 
+    /**
+     * APKs are written next to the target as `.new`, verified on disk and renamed over it: the
+     * running AA/CarPlay keep their mmapped old inode and a short write never truncates /system.
+     * After the remount, a failure (or a signal) restores any target that is neither stock nor
+     * patched from its backup. wp_on is idempotent and also remounts / ro.
+     */
     private fun scriptPrologue(): String = """
         |W=$WORK_DIR
         |P=$WP_PROC
         |D=$DISK
-        |wp_on() { echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null; }
-        |fail() { echo "$ERR_MARKER ${'$'}1"; exit 1; }
+        |WP=0
+        |ROLLBACK=0
+        |wp_on() {
+        |  [ "${'$'}WP" = 1 ] || return 0
+        |  WP=0
+        |  sync
+        |  mount -o remount,ro / 2>/dev/null
+        |  echo emmc_enable_all_wp > "${'$'}P" 2>/dev/null
+        |}
         |md5() { md5sum "${'$'}1" 2>/dev/null | cut -d' ' -f1; }
+        |free_kb() { set -- ${'$'}(df -k "${'$'}1" 2>/dev/null | tail -n 1); echo "${'$'}4"; }
+        |has_room() {
+        |  F=${'$'}(free_kb "${'$'}1"); Z=${'$'}(stat -c %s "${'$'}2" 2>/dev/null)
+        |  case "${'$'}F" in ''|*[!0-9]*) return 0 ;; esac
+        |  case "${'$'}Z" in ''|*[!0-9]*) return 0 ;; esac
+        |  [ "${'$'}F" -ge ${'$'}((Z / 1024 + 1024)) ]
+        |}
+        |put() {
+        |  N="${'$'}1.new"
+        |  rm -f "${'$'}N"
+        |  has_room "${'$'}{1%/*}" "${'$'}2" || { R=nospace; return 1; }
+        |  cat "${'$'}2" > "${'$'}N" || { rm -f "${'$'}N"; R=write; return 1; }
+        |  chown root:root "${'$'}N" && chmod 644 "${'$'}N" || { rm -f "${'$'}N"; R=perms; return 1; }
+        |  chcon u:object_r:system_file:s0 "${'$'}N" 2>/dev/null
+        |  sync
+        |  blockdev --flushbufs "${'$'}D" 2>/dev/null
+        |  echo 3 > /proc/sys/vm/drop_caches
+        |  [ "${'$'}(md5 "${'$'}N")" = "${'$'}3" ] || { rm -f "${'$'}N"; R=verify; return 1; }
+        |  mv -f "${'$'}N" "${'$'}1" || { rm -f "${'$'}N"; R=rename; return 1; }
+        |  sync
+        |  [ "${'$'}(md5 "${'$'}1")" = "${'$'}3" ] || { R=verify; return 1; }
+        |}
+        |restore_one() {
+        |  [ -f "${'$'}1" ] || return 0
+        |  M=${'$'}(md5 "${'$'}1")
+        |  [ "${'$'}M" = "${'$'}3" ] && return 0
+        |  [ "${'$'}M" = "${'$'}4" ] && return 0
+        |  [ "${'$'}(md5 "${'$'}2")" = "${'$'}3" ] || return 1
+        |  put "${'$'}1" "${'$'}2" "${'$'}3" || return 1
+        |  RBD=1
+        |}
+        |rollback() {
+        |  RB=""
+        |  [ "${'$'}ROLLBACK" = 1 ] || return 0
+        |  ROLLBACK=0
+        |  RBD=0
+        |  RC=0
+        |  restore_one ${ANDROID_AUTO.systemPath} ${ANDROID_AUTO.backupPath} ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.patchedMd5} || RC=1
+        |  restore_one ${CAR_PLAY.systemPath} ${CAR_PLAY.backupPath} ${CAR_PLAY.stockMd5} ${CAR_PLAY.patchedMd5} || RC=1
+        |  if [ "${'$'}RC" = 1 ]; then RB=" norollback"; elif [ "${'$'}RBD" = 1 ]; then RB=" rolledback"; fi
+        |}
+        |fail() { rollback; echo "$ERR_MARKER ${'$'}1${'$'}RB"; exit 1; }
         |write_one() {
         |  S="${'$'}1"; SRC="${'$'}2"; EXPECT="${'$'}3"; NAME="${'$'}4"
         |  [ "${'$'}(md5 "${'$'}SRC")" = "${'$'}EXPECT" ] || fail "src_${'$'}NAME"
         |  [ -f "${'$'}S" ] || fail "nosys_${'$'}NAME"
-        |  cat "${'$'}SRC" > "${'$'}S" || fail "write_${'$'}NAME"
-        |  chown root:root "${'$'}S" && chmod 644 "${'$'}S" || fail "perms_${'$'}NAME"
-        |  chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
-        |  sync
-        |  [ "${'$'}(md5 "${'$'}S")" = "${'$'}EXPECT" ] || fail "verify_${'$'}NAME"
+        |  put "${'$'}S" "${'$'}SRC" "${'$'}EXPECT" || fail "${'$'}{R}_${'$'}NAME"
+        |}
+        |save_copy() {
+        |  rm -f "${'$'}2.tmp"
+        |  cp "${'$'}1" "${'$'}2.tmp" && [ "${'$'}(md5 "${'$'}2.tmp")" = "${'$'}3" ] && mv -f "${'$'}2.tmp" "${'$'}2" && return 0
+        |  rm -f "${'$'}2.tmp"
+        |  return 1
         |}
         |ensure_backup() {
         |  S="${'$'}1"; B="${'$'}2"; L="${'$'}3"; STOCK="${'$'}4"; PATCHED="${'$'}5"; NAME="${'$'}6"
-        |  if [ ! -f "${'$'}B" ] && [ -f "${'$'}L" ]; then cp "${'$'}L" "${'$'}B" || fail "backup_${'$'}NAME"; fi
-        |  if [ ! -f "${'$'}B" ] && [ "${'$'}(md5 "${'$'}S")" = "${'$'}STOCK" ]; then cp "${'$'}S" "${'$'}B" || fail "backup_${'$'}NAME"; fi
+        |  if [ ! -f "${'$'}B" ] && [ -f "${'$'}L" ] && [ "${'$'}(md5 "${'$'}L")" = "${'$'}STOCK" ]; then
+        |    save_copy "${'$'}L" "${'$'}B" "${'$'}STOCK" || fail "backup_${'$'}NAME"
+        |  fi
+        |  if [ ! -f "${'$'}B" ] && [ "${'$'}(md5 "${'$'}S")" = "${'$'}STOCK" ]; then
+        |    save_copy "${'$'}S" "${'$'}B" "${'$'}STOCK" || fail "backup_${'$'}NAME"
+        |  fi
         |  if [ -f "${'$'}B" ]; then
-        |    [ "${'$'}(md5 "${'$'}B")" = "${'$'}STOCK" ] || fail "badbackup_${'$'}NAME"
+        |    [ "${'$'}(md5 "${'$'}B")" = "${'$'}STOCK" ] || { rm -f "${'$'}B"; fail "badbackup_${'$'}NAME"; }
         |  else
         |    [ "${'$'}(md5 "${'$'}S")" = "${'$'}PATCHED" ] || fail "nobackup_${'$'}NAME"
         |  fi
         |}
+        |stage_in() {
+        |  [ -f "${'$'}1" ] || fail "nostage_${'$'}4"
+        |  save_copy "${'$'}1" "${'$'}2" "${'$'}3" || fail "stage_${'$'}4"
+        |  chmod 600 "${'$'}2"
+        |}
         |
     """.trimMargin()
 
+    private fun wpOff(): String = """
+        |trap 'wp_on' EXIT
+        |trap 'rollback; wp_on; exit 1' HUP INT TERM PIPE
+        |WP=1
+        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
+        |mount -o remount,rw / || fail remountsys
+        |
+    """.trimMargin()
+
+    /** [aaStage]/[cpStage] are app-writable; the script copies them into root-only [WORK_DIR] first. */
     private fun applyBody(aaStage: String, cpStage: String): String = """
-        |AA_STAGE='$aaStage'
-        |CP_STAGE='$cpStage'
-        |[ -f "${'$'}AA_STAGE" ] || fail nostage_aa
-        |[ -f "${'$'}CP_STAGE" ] || fail nostage_cp
+        |AA_SRC='$aaStage'
+        |CP_SRC='$cpStage'
+        |AA_STAGE=${ANDROID_AUTO.rootStagePath}
+        |CP_STAGE=${CAR_PLAY.rootStagePath}
+        |stage_in "${'$'}AA_SRC" "${'$'}AA_STAGE" ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
+        |stage_in "${'$'}CP_SRC" "${'$'}CP_STAGE" ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
         |ensure_backup ${ANDROID_AUTO.systemPath} ${ANDROID_AUTO.backupPath} ${ANDROID_AUTO.legacyBackupPath} ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
         |ensure_backup ${CAR_PLAY.systemPath} ${CAR_PLAY.backupPath} ${CAR_PLAY.legacyBackupPath} ${CAR_PLAY.stockMd5} ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
-        |trap 'wp_on' EXIT
-        |mount -o remount,rw / || fail remountsys
+        |
+    """.trimMargin() + wpOff() + """
+        |ROLLBACK=1
         |write_one ${ANDROID_AUTO.systemPath} "${'$'}AA_STAGE" ${ANDROID_AUTO.patchedMd5} ${ANDROID_AUTO.id}
         |write_one ${CAR_PLAY.systemPath} "${'$'}CP_STAGE" ${CAR_PLAY.patchedMd5} ${CAR_PLAY.id}
+        |ROLLBACK=0
+        |rm -f "${'$'}AA_STAGE" "${'$'}CP_STAGE"
         |
     """.trimMargin()
 
@@ -131,21 +213,16 @@ object WinPatchCodec {
         |CP_BAK=${CAR_PLAY.backupPath}
         |[ -f "${'$'}AA_BAK" ] || fail nobackup_aa
         |[ -f "${'$'}CP_BAK" ] || fail nobackup_cp
-        |echo emmc_disable_all_wp > "${'$'}P" 2>/dev/null || fail wpoff
-        |trap 'wp_on' EXIT
-        |mount -o remount,rw / || fail remountsys
+        |
+    """.trimMargin() + wpOff() + """
         |write_one ${ANDROID_AUTO.systemPath} "${'$'}AA_BAK" ${ANDROID_AUTO.stockMd5} ${ANDROID_AUTO.id}
         |write_one ${CAR_PLAY.systemPath} "${'$'}CP_BAK" ${CAR_PLAY.stockMd5} ${CAR_PLAY.id}
         |
     """.trimMargin()
 
     private fun scriptTail(): String = """
-        |sync
-        |blockdev --flushbufs "${'$'}D" 2>/dev/null
-        |echo 3 > /proc/sys/vm/drop_caches
-        |mount -o remount,ro / 2>/dev/null
         |wp_on
-        |trap - EXIT
+        |trap - EXIT HUP INT TERM PIPE
         |kill ${'$'}(pidof ${ANDROID_AUTO.processName}) 2>/dev/null
         |kill ${'$'}(pidof ${CAR_PLAY.processName}) 2>/dev/null
         |

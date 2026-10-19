@@ -66,6 +66,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitCanMode
@@ -320,6 +321,8 @@ internal fun AppListDialog(
     var adbBusy by remember { mutableStateOf(false) }
     /** Package → target filter of the background compile this dialog started. */
     var compiling by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val compilePolls = remember { mutableMapOf<String, Job>() }
+    var apkSizes by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     val selfDexopt by AppDexoptCompiler.state.collectAsStateWithLifecycle()
     val compileBusy = compiling.isNotEmpty() || selfDexopt.phase == AppDexoptPhase.Compiling
     val pm = remember(context) { context.packageManager }
@@ -335,7 +338,16 @@ internal fun AppListDialog(
 
     val apps = if (advancedMode) installedApps else launchableApps
 
-    val rows = remember(apps, hiddenPackages, showHidden, pm, advancedMode, adbStatuses) {
+    LaunchedEffect(advancedMode, installedApps) {
+        if (!advancedMode) return@LaunchedEffect
+        apkSizes = withContext(Dispatchers.IO) {
+            installedApps.mapNotNull { entry ->
+                appApkBytes(pm, entry.packageName)?.let { entry.packageName to it }
+            }.toMap()
+        }
+    }
+
+    val rows = remember(apps, hiddenPackages, showHidden, pm, advancedMode, adbStatuses, apkSizes) {
         apps.map { entry ->
             val hidden = entry.packageName in hiddenPackages
             AppListRow(
@@ -350,7 +362,7 @@ internal fun AppListDialog(
                     true
                 },
                 adbStatus = adbStatuses[entry.packageName],
-                apkBytes = if (advancedMode) appApkBytes(pm, entry.packageName) else null,
+                apkBytes = if (advancedMode) apkSizes[entry.packageName] else null,
             )
         }.filter { showHidden || !it.hidden }
             // Advanced mode keeps ADB-hidden/disabled packages visible even when not launchable.
@@ -405,14 +417,28 @@ internal fun AppListDialog(
         }
     }
 
+    fun stopCompilePolls() {
+        compilePolls.values.forEach { it.cancel() }
+        compilePolls.clear()
+        compiling = emptyMap()
+        AppDexoptCompiler.setExternalCompileActive(false)
+    }
+
     fun trackCompile(packageName: String, filter: String) {
         compiling = compiling + (packageName to filter)
-        scope.launch {
-            val result = awaitDexoptFilter(
-                check = { PackageAdbActions.hasReachedDexoptFilter(context, packageName, filter) },
-                isSessionActive = { PackageAdbActions.isAdvancedSessionActive() },
-            )
-            compiling = compiling - packageName
+        AppDexoptCompiler.setExternalCompileActive(true)
+        compilePolls.remove(packageName)?.cancel()
+        compilePolls[packageName] = scope.launch {
+            val result = try {
+                awaitDexoptFilter(
+                    check = { PackageAdbActions.hasReachedDexoptFilter(context, packageName, filter) },
+                    isSessionActive = { PackageAdbActions.isAdvancedSessionActive() },
+                )
+            } finally {
+                compilePolls.remove(packageName)
+                compiling = compiling - packageName
+                if (compiling.isEmpty()) AppDexoptCompiler.setExternalCompileActive(false)
+            }
             when (result) {
                 DexoptWaitResult.Reached -> Toast.makeText(
                     context,
@@ -469,9 +495,9 @@ internal fun AppListDialog(
             }
             adbBusy = false
         } else if (PackageAdbActions.isAdvancedSessionActive()) {
+            stopCompilePolls()
             PackageAdbActions.exitAdvancedSession(context)
             adbStatuses = emptyMap()
-            compiling = emptyMap()
         }
     }
 

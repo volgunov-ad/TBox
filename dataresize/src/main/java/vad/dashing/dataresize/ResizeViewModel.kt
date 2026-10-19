@@ -20,13 +20,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import vad.dashing.dataresize.device.RootShell
 import vad.dashing.dataresize.gpt.Gpt
+import vad.dashing.dataresize.gpt.GptException
 import vad.dashing.dataresize.gpt.GptImages
 import vad.dashing.dataresize.gpt.GptPlanner
 import vad.dashing.dataresize.gpt.MovePlan
 import vad.dashing.dataresize.gpt.PartitionState
 import vad.dashing.dataresize.gpt.SECTOR
 
-enum class Action { Refresh, Move, Stage2, Rollback }
+enum class Action { Refresh, Move, Stage2, Rollback, FixSecondary }
 
 enum class BannerKind { Info, Warning, Success, Error }
 
@@ -63,6 +64,8 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun rollback() = launch { runRollback() }
 
+    fun fixSecondary() = launch { runFixSecondary() }
+
     private fun launch(block: suspend () -> Unit) {
         if (job?.isActive == true) return
         job = viewModelScope.launch(Dispatchers.IO) {
@@ -95,6 +98,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                 if (sh.rootText("id -u").trim() != "0") throw IOException("su не дал root")
                 Unit to "su 0"
             }
+            runningScript(sh)?.let { run -> if (!attach(sh, run)) return }
             pre("device") { Unit to checkDevice(sh) }
             val gpt = pre("gpt") { readGpt(sh) }
             val data = pre("data") { readDf(sh).let { it to "${bytes(it.first)}, свободно ${bytes(it.second)}" } }
@@ -102,10 +106,61 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             when (gpt) {
                 is PartitionState.Movable -> onMovable(sh, gpt.plan, data)
                 is PartitionState.AlreadyMoved -> onAlreadyMoved(sh, gpt.entry.first)
+                is PartitionState.MixedCopies -> onMixedCopies(gpt.primaryNew)
                 is PartitionState.NotPossible -> _state.update {
                     it.copy(banner = Banner(gpt.reason, BannerKind.Error), actions = setOf(Action.Refresh))
                 }
             }
+        }
+    }
+
+    /** Run of the script that holds its lock right now, if any. */
+    private fun runningScript(sh: RootShell): ScriptRun? {
+        val out = sh.rootText("[ -f ${MoveFiles.SCRIPT} ] && sh ${MoveFiles.SCRIPT} running 2>/dev/null; true")
+        val fields = MoveFiles.fields(out)
+        if (fields["RUNNING"] != "1") return null
+        val mode = fields["MODE"]
+        return Journal.RUNS.firstOrNull { it.mode == mode } ?: throw IOException("скрипт выполняет неизвестный режим: $mode")
+    }
+
+    /**
+     * Follows a run started earlier (e.g. before the app was reopened) instead of starting a second one.
+     * True when it finished successfully and inspection can go on.
+     */
+    private suspend fun attach(sh: RootShell, run: ScriptRun): Boolean {
+        event("${run.title}: скрипт уже работает, программа следит за журналом")
+        _state.update {
+            it.copy(banner = Banner("${run.title}: скрипт уже работает, дождитесь завершения", BannerKind.Warning))
+        }
+        val (_, failure) = try {
+            poll(sh, run, emptyList())
+        } catch (e: IOException) {
+            event("Связь с ГУ потеряна: ${e.message}")
+            _state.update { it.copy(actions = setOf(Action.Refresh)) }
+            return false
+        }
+        if (failure != null) {
+            _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+            return false
+        }
+        return true
+    }
+
+    private fun onMixedCopies(primaryNew: Boolean) {
+        val table = if (primaryNew) "новая" else "старая"
+        _state.update {
+            it.copy(
+                facts = listOf(
+                    "Основная GPT" to "$table (по ней загружается ГУ)",
+                    "Резервная GPT" to if (primaryNew) "старая" else "новая",
+                ),
+                banner = Banner(
+                    "Копии таблицы разделов различаются: ${if (primaryNew) "откат" else "перенос"} прервался между " +
+                        "записями. Резервную копию можно дописать по основной, перезагрузка не нужна.",
+                    BannerKind.Warning,
+                ),
+                actions = setOf(Action.FixSecondary, Action.Refresh),
+            )
         }
     }
 
@@ -136,14 +191,32 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             secondary = sh.readSectors(DEVICE, header.lastUsable + 1, tailSectors),
             diskSectors = disk,
         )
-        val state = GptPlanner.evaluate(images)
+        val state = try {
+            GptPlanner.evaluate(images)
+        } catch (e: GptException) {
+            mixedCopies(sh, images) ?: throw e
+        }
         val detail = when (state) {
             is PartitionState.Movable ->
                 "обе копии в порядке, userdata ${gib(state.plan.entry.sectors)} → ${gib(state.plan.newSectors)}"
             is PartitionState.AlreadyMoved -> "обе копии в порядке, userdata уже в конце диска (${gib(state.entry.sectors)})"
+            is PartitionState.MixedCopies ->
+                "основная копия — ${if (state.primaryNew) "новая" else "старая"} таблица, резервная — другая"
             is PartitionState.NotPossible -> state.reason
         }
         return state to "eMMC ${gib(disk)}; $detail"
+    }
+
+    /** Only when both copies match the tables this program wrote, byte for byte (MD5 from its params). */
+    private fun mixedCopies(sh: RootShell, images: GptImages): PartitionState.MixedCopies? {
+        val params = MoveFiles.fields(sh.rootText("cat ${MoveFiles.PARAMS} 2>/dev/null; true"))
+        if (params["DISK_SECT"] != images.diskSectors.toString()) return null
+        val primaryNew = MoveFiles.mixedPrimaryNew(
+            params,
+            GptPlanner.md5(images.primary),
+            GptPlanner.md5(images.secondary),
+        ) ?: return null
+        return PartitionState.MixedCopies(primaryNew)
     }
 
     /** /data size and free space in bytes. */
@@ -156,9 +229,9 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         plan = movePlan
         val rolledBack = lastResult(sh) == "rolledback"
         val op = if (rolledBack) {
-            journalOp(sh, "Откат", "rollback.log", Journal.ROLLBACK, completed = true)
+            journalOp(sh, Journal.RUN_ROLLBACK, completed = true)
         } else {
-            journalOp(sh, "Перенос", "move.log", Journal.MOVE, completed = false)
+            journalOp(sh, Journal.RUN_MOVE, completed = false)
         }
         _state.update {
             it.copy(
@@ -191,7 +264,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val status = scriptStatus(sh)
-        val ops = listOfNotNull(journalOp(sh, "Перенос", "move.log", Journal.MOVE, completed = status["GPT"] == "new"))
+        val ops = listOfNotNull(journalOp(sh, Journal.RUN_MOVE, completed = status["GPT"] == "new"))
             .toMutableList()
         _state.update { it.copy(operations = ops.toList()) }
         if (status["START"]?.toLongOrNull() != expectedStart) {
@@ -218,17 +291,17 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
-        journalOp(sh, "Расширение", "stage2.log", Journal.STAGE2, completed = true)?.let { ops += it }
+        journalOp(sh, Journal.RUN_STAGE2, completed = true)?.let { ops += it }
         showDone(sh, ops)
     }
 
     private suspend fun runStage2(sh: RootShell) {
         event("Расширение файловой системы")
-        val before = _state.value.operations.filter { it.title != "Расширение" }
-        launchDetached(sh, "stage2")
-        val (op, failure) = poll(sh, "Расширение", "stage2.log", Journal.STAGE2, before) { lines ->
-            lines.any { Journal.payload(it).startsWith("@done") }
-        }
+        val run = Journal.RUN_STAGE2
+        val before = _state.value.operations.filter { it.title != run.title }
+        installScript(sh)
+        launchDetached(sh, run)
+        val (op, failure) = poll(sh, run, before)
         if (failure != null) {
             _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
             return
@@ -277,11 +350,12 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
                     ),
                 )
             }
-            launchDetached(sh, "move")
+            launchDetached(sh, Journal.RUN_MOVE)
             val (op, failure) = try {
-                poll(sh, "Перенос", "move.log", Journal.MOVE, emptyList(), prefix = prepared) { false }
+                poll(sh, Journal.RUN_MOVE, emptyList(), prefix = prepared)
             } catch (e: IOException) {
                 event("Связь с ГУ потеряна: ${e.message}. Перенос продолжается без программы.")
+                _state.update { it.copy(actions = setOf(Action.Refresh)) }
                 return
             }
             if (failure != null) {
@@ -296,15 +370,17 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         openShell().use { sh ->
             val gpt = scriptStatus(sh)["GPT"]
             if (gpt != "new") throw IOException("откат невозможен: GPT сейчас $gpt")
+            installScript(sh)
             pending.set(PendingOp.Rollback)
             event("Откат запущен")
             _state.update { it.copy(banner = Banner("Откат: ГУ перезагрузится само", BannerKind.Warning)) }
-            launchDetached(sh, "rollback")
+            launchDetached(sh, Journal.RUN_ROLLBACK)
             val before = _state.value.operations
             val (_, failure) = try {
-                poll(sh, "Откат", "rollback.log", Journal.ROLLBACK, before) { false }
+                poll(sh, Journal.RUN_ROLLBACK, before)
             } catch (e: IOException) {
                 event("Связь с ГУ потеряна: ${e.message}")
+                _state.update { it.copy(actions = setOf(Action.Refresh)) }
                 return
             }
             if (failure != null) {
@@ -314,22 +390,54 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private suspend fun runFixSecondary() {
+        val run = Journal.RUN_FIXSGPT
+        openShell().use { sh ->
+            // The installed script may predate the fixsgpt mode; params and GPT images stay as they are.
+            installScript(sh)
+            val gpt = scriptStatus(sh)["GPT"]
+            if (gpt != "mixed_old" && gpt != "mixed_new") throw IOException("скрипт видит GPT: $gpt")
+            event("Запись резервной GPT по основной")
+            launchDetached(sh, run)
+            val (_, failure) = try {
+                poll(sh, run, emptyList())
+            } catch (e: IOException) {
+                event("Связь с ГУ потеряна: ${e.message}")
+                _state.update { it.copy(actions = setOf(Action.Refresh)) }
+                return
+            }
+            if (failure != null) {
+                _state.update { it.copy(banner = Banner(failure, BannerKind.Error), actions = setOf(Action.Refresh)) }
+                return
+            }
+        }
+        inspect()
+    }
+
     private fun installFiles(sh: RootShell, movePlan: MovePlan) {
         val dir = MoveFiles.DIR
         sh.rootText("mkdir -p $dir && chmod 700 $dir && rm -f $dir/*.log $dir/state")
-        val script = getApplication<Application>().assets.open(MoveFiles.ASSET_SCRIPT)
-            .use { it.readBytes() }
-            .toString(Charsets.UTF_8)
-            .replace("\r\n", "\n")
-            .toByteArray()
         val files = MoveFiles.binaries(movePlan) +
             ("params" to MoveFiles.params(movePlan).toByteArray()) +
-            ("dataresize.sh" to script)
+            ("dataresize.sh" to scriptBytes())
+        writeVerified(sh, files)
+    }
+
+    private fun installScript(sh: RootShell) = writeVerified(sh, mapOf("dataresize.sh" to scriptBytes()))
+
+    private fun scriptBytes(): ByteArray = getApplication<Application>().assets.open(MoveFiles.ASSET_SCRIPT)
+        .use { it.readBytes() }
+        .toString(Charsets.UTF_8)
+        .replace("\r\n", "\n")
+        .toByteArray()
+
+    private fun writeVerified(sh: RootShell, files: Map<String, ByteArray>) {
+        val dir = MoveFiles.DIR
         for ((name, data) in files) {
             event("Запись $name (${data.size} Б)")
             sh.writeFile("$dir/$name", data)
         }
-        sh.rootText("chmod 600 $dir/*")
+        sh.rootText("cd $dir && chmod 600 ${files.keys.joinToString(" ")}")
         val sums = sh.rootText("cd $dir && md5sum ${files.keys.joinToString(" ")}").lines()
             .mapNotNull { line -> line.trim().split(Regex("\\s+")).takeIf { it.size == 2 }?.let { it[1] to it[0] } }
             .toMap()
@@ -338,25 +446,27 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun launchDetached(sh: RootShell, mode: String) {
-        sh.rootText("setsid sh ${MoveFiles.SCRIPT} $mode </dev/null >/dev/null 2>&1 &")
+    /** Clears [run]'s old journal so a stale `!FAIL` or `@done` is not read as this run's outcome. */
+    private fun launchDetached(sh: RootShell, run: ScriptRun) {
+        runningScript(sh)?.let { throw IOException("скрипт уже выполняется: ${it.title}") }
+        sh.rootText(
+            "rm -f ${MoveFiles.DIR}/${run.file}; setsid sh ${MoveFiles.SCRIPT} ${run.mode} </dev/null >/dev/null 2>&1 &",
+        )
     }
 
     private fun scriptStatus(sh: RootShell): Map<String, String> =
-        sh.rootText("sh ${MoveFiles.SCRIPT} status").trim().split(' ')
-            .mapNotNull { kv -> kv.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
-            .toMap()
+        MoveFiles.fields(sh.rootText("sh ${MoveFiles.SCRIPT} status"))
 
     private fun readJournal(sh: RootShell, file: String): List<String> =
         sh.rootText("cat ${MoveFiles.DIR}/$file 2>/dev/null; true").lines().filter { it.isNotBlank() }
 
     /** Null when the script never wrote [file]. */
-    private fun journalOp(sh: RootShell, title: String, file: String, defs: List<StepDef>, completed: Boolean): Operation? {
-        val lines = readJournal(sh, file)
+    private fun journalOp(sh: RootShell, run: ScriptRun, completed: Boolean): Operation? {
+        val lines = readJournal(sh, run.file)
         if (lines.isEmpty()) return null
-        val (steps, failure) = Journal.steps(defs, lines, completed)
+        val (steps, failure) = Journal.steps(run.defs, lines, completed)
         _state.update { it.copy(journal = lines) }
-        return Operation(title, steps, failure)
+        return Operation(run.title, steps, failure)
     }
 
     /**
@@ -366,24 +476,26 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
     private fun lastResult(sh: RootShell): String =
         sh.rootText("cat ${MoveFiles.DIR}/state 2>/dev/null; true").trim()
 
-    /** Follows [file] until [finished] or `!FAIL`; returns the operation and the failure text. */
+    /**
+     * Follows [run]'s journal until it finishes, `!FAIL` or stays empty too long after launch;
+     * returns the operation and the failure text.
+     */
     private suspend fun poll(
         sh: RootShell,
-        title: String,
-        file: String,
-        defs: List<StepDef>,
+        run: ScriptRun,
         before: List<Operation>,
         prefix: StepUi? = null,
-        finished: (List<String>) -> Boolean,
     ): Pair<Operation, String?> {
-        val deadline = System.currentTimeMillis() + POLL_LIMIT_MS
+        val started = System.currentTimeMillis()
         while (true) {
-            val lines = readJournal(sh, file)
-            val (steps, failure) = Journal.steps(defs, lines)
-            val op = Operation(title, listOfNotNull(prefix) + steps, failure)
+            val lines = readJournal(sh, run.file)
+            val elapsed = System.currentTimeMillis() - started
+            val (steps, logged) = Journal.steps(run.defs, lines)
+            val failure = logged ?: Journal.startFailure(lines, elapsed)
+            val op = Operation(run.title, listOfNotNull(prefix) + steps, failure)
             _state.update { it.copy(operations = before + op, journal = lines) }
-            if (failure != null || finished(lines)) return op to failure
-            if (System.currentTimeMillis() > deadline) throw IOException("скрипт не завершился за ${POLL_LIMIT_MS / 60_000} мин")
+            if (failure != null || run.finished(lines)) return op to failure
+            if (elapsed > POLL_LIMIT_MS) throw IOException("скрипт не завершился за ${POLL_LIMIT_MS / 60_000} мин")
             delay(POLL_INTERVAL_MS)
         }
     }

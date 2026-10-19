@@ -695,12 +695,20 @@ wireless-изоляция не изменялись.
   `821cf2db51435747bd974a81fd52d1bb` / `2718803663e016a969e6d2fa0d2b4c16`.
 - Применение: staging assets → `getExternalFilesDir` (локальная проверка MD5 до
   заливки), затем сгенерированный в приложении скрипт `apply.sh` в рабочей папке
-  `/data/local/tmp/winpatch`. Скрипт: preflight (md5 стейджа и резервов) **до**
-  снятия eMMC WP; `ensure_backup` перенимает легаси-резервы
-  `/data/local/tmp/AndroidAuto_orig_backup.apk` и `CarPlayView_orig_backup.apk`
-  как `*.orig.apk`; запись `cat` + `chown root:root` + `chmod 644` +
-  `chcon u:object_r:system_file:s0` + `sync` + контроль md5 после записи;
-  возврат WP и remount,ro (best effort) всегда, включая аварию (`trap`).
+  `/data/local/tmp/winpatch`. Скрипт: preflight **до** снятия eMMC WP — копия
+  стейджа из мирочитаемого `/sdcard/Android/data/...` в root-only рабочую папку
+  с md5-сверкой (`stage_*`), запись идёт только из этой копии; `ensure_backup`
+  перенимает легаси-резервы `/data/local/tmp/AndroidAuto_orig_backup.apk` и
+  `CarPlayView_orig_backup.apk` (только со стоковым md5) как `*.orig.apk`;
+  резерв создаётся через `*.tmp` + md5 + `mv`, битый резерв удаляется с отказом
+  `badbackup_*` (следующий запуск пересоздаст его со стокового `/system`).
+  Запись атомарная: проверка места (`df -k`), `<apk>.new` в той же папке +
+  `chown root:root` + `chmod 644` + `chcon u:object_r:system_file:s0` + `sync` +
+  `drop_caches` + md5 `.new`, затем `mv` поверх цели (запущенный AA/CarPlay
+  держит старый inode). Если после `remount,rw` что-то упало (или пришёл сигнал),
+  цель с md5 «ни сток, ни патч» восстанавливается из резерва тем же атомарным
+  путём (код `… rolledback` / `… norollback`). Идемпотентный `wp_on` делает
+  `remount,ro /` и возврат WP на любом выходе (`trap … EXIT` + `HUP INT TERM PIPE`).
   При отсутствии резерва и не-стоковом `/system` — отказ `nobackup_*`
   (единственный источник отката не перезаписывается).
 - Откат `restore.sh` — обратная запись из `*.orig.apk` с той же защитой.

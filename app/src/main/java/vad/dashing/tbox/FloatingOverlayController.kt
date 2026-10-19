@@ -647,6 +647,9 @@ internal class FloatingOverlayController(
                     oldWm?.removeViewImmediate(view)
                 }
                 params.type = type
+                // The accessibility WindowManager stamps its service token into params; a
+                // stale token would bind the window to (or fail against) the old host.
+                params.token = null
                 newWm.addView(view, params)
             } catch (e: Exception) {
                 Log.w(TAG, "switchPanelHost failed for $panelId", e)

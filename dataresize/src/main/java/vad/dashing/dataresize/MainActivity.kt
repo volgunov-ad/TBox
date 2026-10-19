@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
                     onMove = viewModel::move,
                     onStage2 = viewModel::stage2,
                     onRollback = viewModel::rollback,
+                    onFixSecondary = viewModel::fixSecondary,
                 )
             }
         }

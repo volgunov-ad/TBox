@@ -1,7 +1,10 @@
 package vad.dashing.dataresize
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class JournalTest {
@@ -47,6 +50,23 @@ class JournalTest {
     fun stage2Done_isComplete() {
         val lines = Journal.STAGE2.map { "2026-10-14 22:42:45 @${it.id} x" }
         assertEquals(List(4) { StepStatus.Ok }, statuses(Journal.steps(Journal.STAGE2, lines).first))
+    }
+
+    @Test
+    fun emptyJournal_failsOnlyAfterStartTimeout() {
+        assertNull(Journal.startFailure(emptyList(), Journal.FIRST_LINE_TIMEOUT_MS))
+        assertNotNull(Journal.startFailure(emptyList(), Journal.FIRST_LINE_TIMEOUT_MS + 1))
+        assertNull(Journal.startFailure(listOf("2026-10-14 22:39:03 @check проверка"), 15 * 60_000L))
+    }
+
+    @Test
+    fun onlyRunsWithoutReboot_finishOnDone() {
+        val done = listOf("2026-10-14 22:42:45 @done x")
+        assertTrue(Journal.RUN_STAGE2.finished(done))
+        assertTrue(Journal.RUN_FIXSGPT.finished(done))
+        assertFalse(Journal.RUN_STAGE2.finished(listOf("2026-10-14 22:42:45 @resize x")))
+        assertFalse(Journal.RUN_MOVE.finished(done))
+        assertFalse(Journal.RUN_ROLLBACK.finished(done))
     }
 
     @Test

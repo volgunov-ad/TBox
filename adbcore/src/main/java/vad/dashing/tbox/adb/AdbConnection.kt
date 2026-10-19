@@ -33,6 +33,13 @@ class AdbConnection(
     private val transport: AdbTransport,
     private val keyPair: KeyPair,
     private val clientName: String,
+    /**
+     * Max time without a single inbound frame before a read fails. Read timeouts shorter than
+     * this are retried (silent shell scripts, the RSA "Allow debugging?" prompt), so a hung
+     * `su` or adbd can no longer block the caller forever.
+     */
+    private val maxIdleMs: Long = DEFAULT_MAX_IDLE_MS,
+    private val nanoTime: () -> Long = System::nanoTime,
 ) : AutoCloseable {
 
     private var connected = false
@@ -117,7 +124,7 @@ class AdbConnection(
     ): AdbShellStreamEnd {
         check(connected) { "ADB connection is not established" }
         require(command.isNotBlank()) { "command is blank" }
-        val previousTimeout = STREAM_DEFAULT_TIMEOUT_MS
+        val previousTimeout = transport.readTimeoutMs() ?: STREAM_DEFAULT_TIMEOUT_MS
         transport.setReadTimeoutMs(readTimeoutMs.coerceAtLeast(1))
         streamStopCheck = shouldStop
         try {
@@ -140,6 +147,7 @@ class AdbConnection(
     companion object {
         private const val STREAM_READ_TIMEOUT_MS = 500
         private const val STREAM_DEFAULT_TIMEOUT_MS = 10_000
+        const val DEFAULT_MAX_IDLE_MS = 300_000L
     }
 
     /** Physical USB DETACH: never touch the native USB handle (OEM crash risk). */
@@ -414,14 +422,17 @@ class AdbConnection(
 
     private fun readFully(buffer: ByteArray) {
         var offset = 0
+        val idleStart = nanoTime()
         while (offset < buffer.size) {
             val count = try {
                 transport.read(buffer, offset, buffer.size - offset)
             } catch (e: SocketTimeoutException) {
-                // Idle timeout with no bytes of this frame yet: honor stream stop, else retry.
+                // Idle timeout with no bytes of this frame yet: honor stream stop, else retry
+                // until the idle budget runs out.
                 if (offset == 0) {
-                    if (streamStopCheck?.invoke() == true) throw AdbStreamStopRequested()
-                    continue
+                    val stopCheck = streamStopCheck
+                    if (stopCheck?.invoke() == true) throw AdbStreamStopRequested()
+                    if (stopCheck != null || (nanoTime() - idleStart) / 1_000_000L < maxIdleMs) continue
                 }
                 throw e
             }

@@ -57,12 +57,77 @@ class UsbAudioCodecTest {
     fun effectiveAppliedPrefersVendorWhenItsNameExists() {
         val applied = UsbAudioCodec.buildApplyConfig(STOCK_MAIN)!!
         // vendor present (stock) wins over /system with the usb module
-        assertFalse(UsbAudioCodec.effectiveApplied(true, STOCK_MAIN, applied))
+        assertEquals(false, UsbAudioCodec.effectiveApplied(true, STOCK_MAIN, applied))
         // vendor name removed -> /system is what audioserver reads
-        assertTrue(UsbAudioCodec.effectiveApplied(false, null, applied))
-        assertTrue(UsbAudioCodec.effectiveApplied(true, applied, null))
-        assertFalse(UsbAudioCodec.effectiveApplied(false, null, STOCK_MAIN))
-        assertFalse(UsbAudioCodec.effectiveApplied(true, STOCK_USB_COMMENTED, null))
+        assertEquals(true, UsbAudioCodec.effectiveApplied(false, null, applied))
+        assertEquals(true, UsbAudioCodec.effectiveApplied(true, applied, null))
+        assertEquals(false, UsbAudioCodec.effectiveApplied(false, null, STOCK_MAIN))
+        assertEquals(false, UsbAudioCodec.effectiveApplied(true, STOCK_USB_COMMENTED, null))
+    }
+
+    @Test
+    fun effectiveAppliedIgnoresBindOverlayContent() {
+        val applied = UsbAudioCodec.buildApplyConfig(STOCK_MAIN)!!
+        val vendorBind = "/data/x.xml ${UsbAudioCodec.VENDOR_MAIN} ext4 rw 0 0"
+        val systemBind = "/data/x.xml ${UsbAudioCodec.SYSTEM_MAIN} ext4 rw 0 0"
+        // overlay over /vendor shows the applied file, but the permanent variant needs the vendor name gone
+        assertEquals(false, UsbAudioCodec.effectiveApplied(true, applied, null, vendorBind))
+        // overlay over /system hides the real file
+        assertNull(UsbAudioCodec.effectiveApplied(false, null, applied, systemBind))
+        assertEquals(true, UsbAudioCodec.effectiveApplied(false, null, applied, vendorBind))
+    }
+
+    @Test
+    fun chooseSourcePrefersVendorUnlessSystemIsApplied() {
+        val applied = UsbAudioCodec.buildApplyConfig(STOCK_MAIN)!!
+        assertEquals(STOCK_MAIN, UsbAudioCodec.chooseSource(STOCK_MAIN, "<audioPolicyConfiguration/>"))
+        assertEquals(applied, UsbAudioCodec.chooseSource(STOCK_MAIN, applied))
+        assertEquals(applied, UsbAudioCodec.chooseSource(null, applied))
+        assertEquals(STOCK_MAIN, UsbAudioCodec.chooseSource(null, STOCK_MAIN))
+        assertNull(UsbAudioCodec.chooseSource(null, null))
+    }
+
+    @Test
+    fun unbindCommandDropsBothOverlaysWithoutSingleQuotes() {
+        val cmd = UsbAudioCodec.UNBIND_COMMAND
+        assertTrue(cmd.contains(UsbAudioCodec.VENDOR_MAIN))
+        assertTrue(cmd.contains(UsbAudioCodec.SYSTEM_MAIN))
+        assertTrue(cmd.contains("umount \$T"))
+        assertFalse(cmd.contains('\''))
+    }
+
+    @Test
+    fun scriptsWriteAtomicallyAndRestoreReadOnlyOnEveryExit() {
+        for (script in listOf(UsbAudioCodec.applyScript(), UsbAudioCodec.restoreScript())) {
+            assertTrue(script.contains("N=\"\$1.new\""))
+            assertTrue(script.contains("cat \"\$2\" > \"\$N\""))
+            assertTrue(script.contains("chcon u:object_r:system_file:s0 \"\$N\""))
+            assertTrue(script.contains("[ \"\$(md5 \"\$N\")\" = \"\$3\" ] || { rm -f \"\$N\"; R=verify; return 1; }"))
+            assertTrue(script.contains("mv -f \"\$N\" \"\$1\""))
+            assertTrue(script.contains("has_room \"\${1%/*}\" \"\$2\" || { R=nospace; return 1; }"))
+            assertTrue(script.contains("df -k"))
+            assertTrue(script.contains("put \"\$S\" \"\$C\" \"\$H\" || fail \"\$R\""))
+            assertFalse(script.contains("cp \"\$C\" \"\$S\""))
+            assertTrue(script.contains("[ \"\$WP\" = 1 ] || return 0"))
+            assertTrue(script.contains("mount -o remount,ro / 2>/dev/null"))
+            assertTrue(script.contains("[ \"\$VRW\" = 1 ] && mount -o remount,ro /vendor"))
+            assertTrue(script.contains("trap 'wp_on' EXIT"))
+            assertTrue(script.contains("trap 'wp_on; exit 1' HUP INT TERM PIPE"))
+            assertTrue(script.contains("trap - EXIT HUP INT TERM PIPE"))
+            val wpOn = script.indexOf("mount -o remount,ro / 2>/dev/null")
+            assertTrue(wpOn < script.indexOf("echo emmc_enable_all_wp"))
+            assertTrue(script.indexOf("trap 'wp_on' EXIT") < script.indexOf("echo emmc_disable_all_wp"))
+        }
+    }
+
+    @Test
+    fun scriptsDropBindOverlaysBeforeWriteProtectDance() {
+        for (script in listOf(UsbAudioCodec.applyScript(), UsbAudioCodec.restoreScript())) {
+            assertTrue(script.contains("for T in \"\$V\" \"\$S\"; do"))
+            assertTrue(script.contains("fail bindactive"))
+            val unbind = script.indexOf("\nunbind\n")
+            assertTrue(unbind >= 0 && unbind < script.indexOf("echo emmc_disable_all_wp"))
+        }
     }
 
     @Test
@@ -85,11 +150,11 @@ class UsbAudioCodecTest {
     fun applyScriptPerformsWriteProtectDanceAndRemovesVendorName() {
         val script = UsbAudioCodec.applyScript()
         assertTrue(script.contains("echo emmc_disable_all_wp >"))
-        assertTrue(script.contains("wp_on() { echo emmc_enable_all_wp >"))
+        assertTrue(script.contains("echo emmc_enable_all_wp >"))
         assertTrue(script.contains("trap 'wp_on' EXIT"))
         assertTrue(script.contains("mount -o remount,rw / || fail remountsys"))
         assertTrue(script.contains("echo 3 > /proc/sys/vm/drop_caches"))
-        assertTrue(script.contains("[ \"${'$'}H1\" = \"${'$'}H2\" ] || fail verify"))
+        assertTrue(script.contains("VRW=1\n    mount -o remount,rw /vendor"))
         assertTrue(script.contains("rm -f \"${'$'}V\" || fail rmvendor"))
         assertTrue(script.contains("[ ! -e \"${'$'}V\" ] || fail rmvendor"))
         assertTrue(script.contains("setprop ctl.restart audioserver"))
@@ -103,7 +168,8 @@ class UsbAudioCodecTest {
         assertTrue(script.contains("S=${UsbAudioCodec.SYSTEM_MAIN}"))
         assertTrue(script.contains("trap 'wp_on' EXIT"))
         assertTrue(script.contains(UsbAudioCodec.RESTORED_MARKER))
-        assertFalse(script.contains("rm -f"))
+        assertFalse(script.contains("rm -f \"${'$'}V\""))
+        assertFalse(script.contains("remount,rw /vendor"))
         assertFalse(script.contains("/authorized"))
         assertFalse(script.contains(UsbAudioCodec.APPLIED_MARKER))
     }

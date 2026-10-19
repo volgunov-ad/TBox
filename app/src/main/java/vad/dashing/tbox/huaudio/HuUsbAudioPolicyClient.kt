@@ -81,12 +81,13 @@ internal object HuUsbAudioPolicyClient {
     }
 
     /**
-     * The overlay source: the current /system config (idempotent re-apply after the permanent
-     * app), otherwise the stock vendor main config.
+     * The overlay source is the config audioserver actually reads: the stock vendor main config,
+     * or /system once the permanent app removed the vendor file name. A stock AOSP
+     * /system/etc copy next to an existing vendor file must not be used.
      */
     private fun readSourceConfig(): String? = try {
-        File(HuUsbAudioPolicyCodec.SYSTEM_MAIN).takeIf { it.isFile }?.readText()
-            ?: File(HuUsbAudioPolicyCodec.VENDOR_MAIN).takeIf { it.isFile }?.readText()
+        File(HuUsbAudioPolicyCodec.VENDOR_MAIN).takeIf { it.isFile }?.readText()
+            ?: File(HuUsbAudioPolicyCodec.SYSTEM_MAIN).takeIf { it.isFile }?.readText()
     } catch (_: IOException) {
         null
     }

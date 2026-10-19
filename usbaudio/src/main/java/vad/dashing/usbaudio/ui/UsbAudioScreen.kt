@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import vad.dashing.usbaudio.UsbAudioAction
 import vad.dashing.usbaudio.UsbAudioBannerKind
 import vad.dashing.usbaudio.UsbAudioState
@@ -199,10 +200,10 @@ fun UsbAudioScreen(
                             }
                             Spacer(modifier = Modifier.weight(1f))
                             Button(
-                                onClick = { onApplyVolume(slider.toInt()) },
-                                enabled = !volume.busy && slider.toInt() != volume.value,
+                                onClick = { onApplyVolume(slider.roundToInt()) },
+                                enabled = !volume.busy && slider.roundToInt() != volume.value,
                             ) {
-                                Text(text = "Применить ${slider.toInt()}")
+                                Text(text = "Применить ${slider.roundToInt()}")
                             }
                         }
                     } else {

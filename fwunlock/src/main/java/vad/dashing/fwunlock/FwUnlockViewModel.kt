@@ -128,7 +128,11 @@ class FwUnlockViewModel(app: Application) : AndroidViewModel(app) {
             }
             shell.rootText("mkdir -p ${FwUnlockCodec.WORK_DIR} && chmod 700 ${FwUnlockCodec.WORK_DIR}")
             shell.writeFile(FwUnlockCodec.STAGED_CONFIG, config.toByteArray(Charsets.UTF_8))
-            val script = if (permanent) FwUnlockCodec.applyScript() else FwUnlockCodec.restoreScript()
+            val script = if (permanent) {
+                FwUnlockCodec.applyScript(backupOriginal = !FwUnlockCodec.isGenerated(current))
+            } else {
+                FwUnlockCodec.restoreScript()
+            }
             val scriptPath = if (permanent) FwUnlockCodec.APPLY_SCRIPT else FwUnlockCodec.RESTORE_SCRIPT
             shell.writeFile(scriptPath, script.toByteArray(Charsets.UTF_8))
             val output = shell.root("sh $scriptPath")
