@@ -144,7 +144,12 @@ fun EspCompanionTabContent(
     val companionLog by CompanionProtocolLogRecorder.uiState.collectAsStateWithLifecycle()
 
     val sections = EspCompanionSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.ESP_COMPANION.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }

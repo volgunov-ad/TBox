@@ -928,6 +928,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = SettingsManager.MAIN_SCREEN_TAB_KEY
         )
 
+    val lastMenuSections = settingsManager.lastMenuSectionsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap(),
+        )
+
     val leftMenuLayout = settingsManager.leftMenuLayoutJsonFlow
         .map { LeftMenuLayout.parse(it) }
         .stateIn(
@@ -2557,6 +2564,16 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSelectedTab(tabKey: String) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabKey)
+        }
+    }
+
+    /** First DataStore emission for the horizontal section of [tabKey] (null if unset). */
+    suspend fun peekLastMenuSection(tabKey: String): String? =
+        settingsManager.lastMenuSectionsFlow.first()[tabKey]
+
+    fun saveLastMenuSection(tabKey: String, sectionKey: String) {
+        viewModelScope.launch {
+            settingsManager.saveLastMenuSection(tabKey, sectionKey)
         }
     }
 

@@ -45,6 +45,7 @@ import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN
+import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.uiCapabilities
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
@@ -334,6 +335,7 @@ internal fun carSettingsTabMbCanSignals(): Set<MbCanSignal> =
 
 @Composable
 fun CarSettingsTab(
+    settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -342,7 +344,12 @@ fun CarSettingsTab(
     val headUnitCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
 
     val sections = carSettingsVisibleSections()
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.CAR_SETTINGS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     LaunchedEffect(Unit) {
