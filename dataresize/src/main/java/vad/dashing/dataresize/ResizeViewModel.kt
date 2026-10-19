@@ -19,7 +19,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import vad.dashing.dataresize.device.RootShell
+import vad.dashing.dataresize.gpt.DiskMap
+import vad.dashing.dataresize.gpt.DiskMapView
 import vad.dashing.dataresize.gpt.Gpt
+import vad.dashing.dataresize.gpt.GptEntry
 import vad.dashing.dataresize.gpt.GptException
 import vad.dashing.dataresize.gpt.GptImages
 import vad.dashing.dataresize.gpt.GptPlanner
@@ -37,6 +40,7 @@ data class UiState(
     val preflight: List<StepUi> = ResizeViewModel.PREFLIGHT.map { StepUi(it.id, it.title) },
     val operations: List<Operation> = emptyList(),
     val facts: List<Pair<String, String>> = emptyList(),
+    val diskMaps: List<DiskMapView> = emptyList(),
     val actions: Set<Action> = emptySet(),
     val busy: Boolean = false,
     val banner: Banner? = null,
@@ -50,6 +54,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
     private var plan: MovePlan? = null
+    private var layout: Pair<Long, List<GptEntry>>? = null
     private var job: Job? = null
 
     init {
@@ -90,6 +95,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun inspect() {
         plan = null
+        layout = null
         _state.update { UiState(busy = true, events = it.events) }
         event("Проверка устройства")
         val shell = pre("adb") { openShell() to "${RootShell.HOST}:${RootShell.PORT}" }
@@ -103,6 +109,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             val gpt = pre("gpt") { readGpt(sh) }
             val data = pre("data") { readDf(sh).let { it to "${bytes(it.first)}, свободно ${bytes(it.second)}" } }
             pending.set(null)
+            showDiskMaps()
             when (gpt) {
                 is PartitionState.Movable -> onMovable(sh, gpt.plan, data)
                 is PartitionState.AlreadyMoved -> onAlreadyMoved(sh, gpt.entry.first)
@@ -196,6 +203,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: GptException) {
             mixedCopies(sh, images) ?: throw e
         }
+        layout = runCatching { disk to GptPlanner.parse(images).entries }.getOrNull()
         val detail = when (state) {
             is PartitionState.Movable ->
                 "обе копии в порядке, userdata ${gib(state.plan.entry.sectors)} → ${gib(state.plan.newSectors)}"
@@ -205,6 +213,27 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             is PartitionState.NotPossible -> state.reason
         }
         return state to "eMMC ${gib(disk)}; $detail"
+    }
+
+    /** «Сейчас» bar, plus [after] (title to the range «userdata» would take) when an operation is possible. */
+    private fun showDiskMaps(after: Pair<String, LongRange>? = null) {
+        val (disk, entries) = layout ?: run {
+            _state.update { it.copy(diskMaps = emptyList()) }
+            return
+        }
+        val maps = listOfNotNull(
+            DiskMap.view("Сейчас", disk, entries),
+            after?.let { (title, range) -> DiskMap.view(title, disk, entries, moveUserdataTo = range) },
+        )
+        _state.update { it.copy(diskMaps = maps) }
+    }
+
+    /** Where a rollback puts «userdata» back, from the params of the move this program made. */
+    private fun rollbackRange(sh: RootShell): LongRange? {
+        val params = MoveFiles.fields(sh.rootText("cat ${MoveFiles.PARAMS} 2>/dev/null; true"))
+        val first = params["OLD_FIRST"]?.toLongOrNull() ?: return null
+        val sectors = params["OLD_SECT"]?.toLongOrNull()?.takeIf { it > 0 } ?: return null
+        return first until first + sectors
     }
 
     /** Only when both copies match the tables this program wrote, byte for byte (MD5 from its params). */
@@ -227,6 +256,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun onMovable(sh: RootShell, movePlan: MovePlan, data: Pair<Long, Long>) {
         plan = movePlan
+        showDiskMaps("После переноса" to movePlan.newFirst..movePlan.newLast)
         val rolledBack = lastResult(sh) == "rolledback"
         val op = if (rolledBack) {
             journalOp(sh, Journal.RUN_ROLLBACK, completed = true)
@@ -263,6 +293,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             }
             return
         }
+        rollbackRange(sh)?.let { showDiskMaps("После отката" to it) }
         val status = scriptStatus(sh)
         val ops = listOfNotNull(journalOp(sh, Journal.RUN_MOVE, completed = status["GPT"] == "new"))
             .toMutableList()

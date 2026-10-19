@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,11 +35,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import vad.dashing.dataresize.Action
 import vad.dashing.dataresize.Banner
 import vad.dashing.dataresize.BannerKind
@@ -45,6 +50,10 @@ import vad.dashing.dataresize.Operation
 import vad.dashing.dataresize.StepStatus
 import vad.dashing.dataresize.StepUi
 import vad.dashing.dataresize.UiState
+import vad.dashing.dataresize.gpt.DiskMapView
+import vad.dashing.dataresize.gpt.DiskSegment
+import vad.dashing.dataresize.gpt.SECTOR
+import vad.dashing.dataresize.gpt.SegmentKind
 
 private val OkColor = Color(0xFF2E9E4F)
 private val RunColor = Color(0xFF0066CC)
@@ -73,6 +82,7 @@ fun ResizeScreen(
             ) {
                 Text("Расширение /data", style = MaterialTheme.typography.headlineSmall)
                 state.banner?.let { BannerCard(it) }
+                if (state.diskMaps.isNotEmpty()) DiskMaps(state.diskMaps)
                 if (state.facts.isNotEmpty()) Facts(state.facts)
                 Actions(state, onRefresh = onRefresh, onStage2 = onStage2, onConfirm = { confirm = it })
                 JournalCard(state.events, state.journal)
@@ -209,6 +219,135 @@ private fun Actions(state: UiState, onRefresh: () -> Unit, onStage2: () -> Unit,
             OutlinedButton(onClick = onRefresh) { Text("Проверить заново", fontSize = 20.sp) }
         }
         if (state.busy) CircularProgressIndicator(modifier = Modifier.size(28.dp))
+    }
+}
+
+private val UserdataColor = Color(0xFF2E9E4F)
+private val FreedColor = Color(0xFFE6A100)
+private val FreeColor = Color(0xFFCFD4DA)
+private val GroupColor = Color(0xFF6B7785)
+private val PartitionPalette = listOf(
+    Color(0xFF1E6FD9),
+    Color(0xFF8E44AD),
+    Color(0xFF00897B),
+    Color(0xFFB5651D),
+    Color(0xFF3949AB),
+    Color(0xFF0097A7),
+    Color(0xFFC2185B),
+)
+
+/** Narrow segments still get this share of the bar so their colour stays visible. */
+private const val MIN_BAR_SHARE = 0.025f
+
+/** Same partition keeps its colour on every bar; neighbours in the table get different ones. */
+private fun partitionColors(maps: List<DiskMapView>): Map<String, Color> =
+    maps.flatMap { it.segments }
+        .filter { it.kind == SegmentKind.Partition }
+        .map { it.label }
+        .distinct()
+        .withIndex()
+        .associate { (i, label) -> label to PartitionPalette[i % PartitionPalette.size] }
+
+private fun segmentColor(segment: DiskSegment, partitions: Map<String, Color>): Color = when (segment.kind) {
+    SegmentKind.Userdata -> UserdataColor
+    SegmentKind.Freed -> FreedColor
+    SegmentKind.Free -> FreeColor
+    SegmentKind.Group -> GroupColor
+    SegmentKind.Partition -> partitions[segment.label] ?: GroupColor
+}
+
+private fun sizeText(sectors: Long): String {
+    val gib = sectors * SECTOR / 1073741824.0
+    return if (gib >= 1) String.format(Locale.forLanguageTag("ru"), "%.1f ГиБ", gib)
+    else String.format(Locale.forLanguageTag("ru"), "%d МиБ", sectors * SECTOR / 1048576)
+}
+
+@Composable
+private fun DiskMaps(maps: List<DiskMapView>) {
+    val colors = remember(maps) { partitionColors(maps) }
+    Panel {
+        Text("Разметка eMMC", style = MaterialTheme.typography.titleLarge)
+        maps.forEach { map ->
+            Spacer(Modifier.size(10.dp))
+            Text(map.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.size(4.dp))
+            DiskBar(map, colors)
+        }
+        Spacer(Modifier.size(10.dp))
+        DiskLegend(maps, colors)
+    }
+}
+
+@Composable
+private fun DiskBar(map: DiskMapView, colors: Map<String, Color>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(6.dp)),
+    ) {
+        map.segments.forEach { segment ->
+            val share = (segment.sectors.toDouble() / map.diskSectors).toFloat().coerceAtLeast(MIN_BAR_SHARE)
+            val color = segmentColor(segment, colors)
+            Box(
+                modifier = Modifier
+                    .weight(share)
+                    .fillMaxHeight()
+                    .padding(end = 1.dp)
+                    .background(color),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    segment.label,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    color = if (segment.kind == SegmentKind.Free) Color(0xFF3C4043) else Color.White,
+                    modifier = Modifier.padding(horizontal = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+/** One row per distinct segment across all bars; sizes differ only for userdata and free space. */
+@Composable
+private fun DiskLegend(maps: List<DiskMapView>, colors: Map<String, Color>) {
+    val items = maps.flatMap { it.segments }.distinctBy { it.kind to it.label }
+    items.chunked(2).forEach { pair ->
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            pair.forEach { segment ->
+                val sizes = maps
+                    .mapNotNull { map -> map.segments.firstOrNull { it.kind == segment.kind && it.label == segment.label } }
+                    .map { sizeText(it.sectors) }
+                    .distinct()
+                LegendItem(segment, segmentColor(segment, colors), sizes, Modifier.weight(1f))
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun LegendItem(segment: DiskSegment, color: Color, sizes: List<String>, modifier: Modifier) {
+    Row(modifier = modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .size(14.dp)
+                .background(color, RoundedCornerShape(3.dp)),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column {
+            Text("${segment.label} — ${sizes.joinToString(" → ")}", fontSize = 16.sp)
+            if (segment.kind == SegmentKind.Group) {
+                Text(
+                    segment.names.joinToString(", "),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
