@@ -6,7 +6,7 @@
 #   move     - stop framework, freeze /data, copy userdata to the tail, write new GPT
 #              (secondary, then primary), reboot
 #   stage2   - after reboot: grow ext4 on the new userdata online
-#   rollback - write old GPT back and reboot
+#   rollback - write old GPT back and reboot (the app rebuilds old_* from the tables on disk first)
 #   fixsgpt  - the copies are from different tables (power loss between the two writes):
 #              write the secondary that matches the primary, no reboot
 # move/rollback must run detached (setsid): the framework and the app stop on the way.
@@ -136,7 +136,8 @@ move() {
 stage2() {
   LOG=$DIR/stage2.log; : > $LOG
   step check "проверка"
-  preflight new
+  # Writes no GPT; "other" is the new table with vendor fields the bootloader rewrote on a later boot.
+  preflight new other
   fstab_check
   step kernel "новый раздел в ядре"
   [ "$(cat $PS/start)" = "$NEW_FIRST" ] && [ "$(cat $PS/size)" = "$NEW_SECT" ] || fail "ядро видит старый userdata, нужна перезагрузка"

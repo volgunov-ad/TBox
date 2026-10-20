@@ -57,6 +57,28 @@ class MoveFilesTest {
     }
 
     @Test
+    fun rollbackParams_swapTablesAndKeepMoveLayout() {
+        val move = GptPlanner.evaluate(
+            GptImages(resource("a10_old_pgpt.bin"), resource("a10_old_sgpt.bin"), 124_993_536L),
+        ) as PartitionState.Movable
+        val moveParams = MoveFiles.fields(MoveFiles.params(move.plan))
+        val rebooted = GptImages(resource("a10_rebooted_pgpt.bin"), resource("a10_rebooted_sgpt.bin"), 124_993_536L)
+        val plan = GptPlanner.relocate(rebooted, 30_445_568L, 30_445_568L + 4_194_304L - 1)
+        val params = MoveFiles.fields(MoveFiles.rollbackParams(moveParams, plan))
+        assertEquals(moveParams.keys.toList(), params.keys.toList())
+        for (key in listOf("DISK_SECT", "OLD_FIRST", "OLD_SECT", "NEW_FIRST", "NEW_SECT", "PGPT_SECT", "SGPT_LBA")) {
+            assertEquals(key, moveParams[key], params[key])
+        }
+        assertEquals(GptPlanner.md5(rebooted.primary), params["MD5_NEW_P"])
+        assertEquals(GptPlanner.md5(rebooted.secondary), params["MD5_NEW_S"])
+        assertEquals(GptPlanner.md5(plan.newPrimary), params["MD5_OLD_P"])
+        assertEquals(GptPlanner.md5(plan.newSecondary), params["MD5_OLD_S"])
+        val files = MoveFiles.rollbackBinaries(plan)
+        assertEquals(params["MD5_NEW_P"], GptPlanner.md5(files.getValue("new_pgpt.bin")))
+        assertEquals(params["MD5_OLD_S"], GptPlanner.md5(files.getValue("old_sgpt.bin")))
+    }
+
+    @Test
     fun statusFields_parsed() {
         assertEquals(
             mapOf("RUNNING" to "1", "MODE" to "stage2"),

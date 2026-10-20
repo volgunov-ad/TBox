@@ -115,6 +115,18 @@ object GptPlanner {
         return PartitionState.Movable(build(images, layout, part, newFirst, newLast))
     }
 
+    /**
+     * The tables in [images] with «userdata» at [first]..[last] and nothing else changed. A rollback is built
+     * from the tables on disk, not from the ones saved at the move: the bootloader rewrites vendor fields of
+     * other entries (preloader attributes, `*_a` extension bytes) on later boots.
+     */
+    fun relocate(images: GptImages, first: Long, last: Long): MovePlan {
+        val layout = parse(images)
+        val matches = layout.entries.filter { it.name == PART_NAME }
+        if (matches.size != 1) throw GptException("в GPT ${matches.size} записей «$PART_NAME»")
+        return build(images, layout, matches.single(), first, last)
+    }
+
     private fun build(images: GptImages, layout: GptLayout, part: GptEntry, newFirst: Long, newLast: Long): MovePlan {
         val h = layout.header
         val entryOff = (part.index - 1) * h.entrySize + Gpt.ENTRY_OFF_FIRST
@@ -154,7 +166,7 @@ object GptPlanner {
 
     /** Only the moved entry's first/last LBA and both CRC fields may differ. */
     private fun verify(layout: GptLayout, plan: MovePlan) {
-        check(plan.newFirst > plan.entry.last) { "new range overlaps the old one" }
+        check(plan.newFirst > plan.entry.last || plan.newLast < plan.entry.first) { "new range overlaps the old one" }
         val entryOff = (plan.entry.index - 1) * layout.header.entrySize + Gpt.ENTRY_OFF_FIRST
         fun allowed(arrayOff: Int, headerOff: Int): Set<Int> =
             (arrayOff + entryOff until arrayOff + entryOff + 16).toSet() +

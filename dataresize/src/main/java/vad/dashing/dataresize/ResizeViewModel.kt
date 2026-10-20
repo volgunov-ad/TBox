@@ -185,7 +185,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         return "платформа $hw, инструменты на месте"
     }
 
-    private fun readGpt(sh: RootShell): Pair<PartitionState, String> {
+    private fun readImages(sh: RootShell): GptImages {
         val disk = sh.rootText("cat /sys/block/mmcblk0/size").trim().toLong()
         val head = sh.readSectors(DEVICE, 0, 2)
         val header = Gpt.parseHeader(head, SECTOR)
@@ -193,11 +193,16 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         if (header.firstUsable !in 34..2048 || tailSectors !in 33..2048) {
             throw IOException("необычная разметка: first ${header.firstUsable}, last ${header.lastUsable}")
         }
-        val images = GptImages(
+        return GptImages(
             primary = sh.readSectors(DEVICE, 0, header.firstUsable),
             secondary = sh.readSectors(DEVICE, header.lastUsable + 1, tailSectors),
             diskSectors = disk,
         )
+    }
+
+    private fun readGpt(sh: RootShell): Pair<PartitionState, String> {
+        val images = readImages(sh)
+        val disk = images.diskSectors
         val state = try {
             GptPlanner.evaluate(images)
         } catch (e: GptException) {
@@ -295,7 +300,7 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
         }
         rollbackRange(sh)?.let { showDiskMaps("После отката" to it) }
         val status = scriptStatus(sh)
-        val ops = listOfNotNull(journalOp(sh, Journal.RUN_MOVE, completed = status["GPT"] == "new"))
+        val ops = listOfNotNull(journalOp(sh, Journal.RUN_MOVE, completed = status["START"] == expectedStart.toString()))
             .toMutableList()
         _state.update { it.copy(operations = ops.toList()) }
         if (status["START"]?.toLongOrNull() != expectedStart) {
@@ -399,9 +404,9 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun runRollback() {
         openShell().use { sh ->
+            installRollbackFiles(sh)
             val gpt = scriptStatus(sh)["GPT"]
             if (gpt != "new") throw IOException("откат невозможен: GPT сейчас $gpt")
-            installScript(sh)
             pending.set(PendingOp.Rollback)
             event("Откат запущен")
             _state.update { it.copy(banner = Banner("Откат: ГУ перезагрузится само", BannerKind.Warning)) }
@@ -452,6 +457,27 @@ class ResizeViewModel(app: Application) : AndroidViewModel(app) {
             ("params" to MoveFiles.params(movePlan).toByteArray()) +
             ("dataresize.sh" to scriptBytes())
         writeVerified(sh, files)
+    }
+
+    /** Rollback tables from the GPT on disk now: «userdata» back to where the move took it from. */
+    private fun installRollbackFiles(sh: RootShell) {
+        val params = MoveFiles.fields(sh.rootText("cat ${MoveFiles.PARAMS} 2>/dev/null; true"))
+        val range = rollbackRange(sh) ?: throw IOException("откат невозможен: нет параметров переноса")
+        val images = readImages(sh)
+        if (params["DISK_SECT"] != images.diskSectors.toString()) throw IOException("откат невозможен: другой размер eMMC")
+        val moved = (GptPlanner.evaluate(images) as? PartitionState.AlreadyMoved)?.entry
+            ?: throw IOException("откат невозможен: userdata не в конце диска")
+        if (moved.first.toString() != params["NEW_FIRST"] || moved.sectors.toString() != params["NEW_SECT"]) {
+            throw IOException("откат невозможен: userdata не там, куда его перенесла программа")
+        }
+        val plan = GptPlanner.relocate(images, range.first, range.last)
+        event("Таблицы отката построены по текущей GPT")
+        writeVerified(
+            sh,
+            MoveFiles.rollbackBinaries(plan) +
+                ("params" to MoveFiles.rollbackParams(params, plan).toByteArray()) +
+                ("dataresize.sh" to scriptBytes()),
+        )
     }
 
     private fun installScript(sh: RootShell) = writeVerified(sh, mapOf("dataresize.sh" to scriptBytes()))

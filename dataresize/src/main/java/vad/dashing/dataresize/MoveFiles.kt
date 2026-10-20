@@ -34,6 +34,31 @@ object MoveFiles {
         "new_sgpt.bin" to plan.newSecondary,
     )
 
+    /**
+     * A rollback is a move back ([plan] from [GptPlanner.relocate] of the tables on disk): the current tables
+     * become «new», the rolled-back ones «old», so the script, mixed-copy detection and fixsgpt stay as they are.
+     * The layout keys of the original move are kept.
+     */
+    fun rollbackParams(moveParams: Map<String, String>, plan: MovePlan): String = (
+        moveParams + listOf(
+            "DISK_SECT" to plan.diskSectors.toString(),
+            "PGPT_SECT" to plan.primarySectors.toString(),
+            "SGPT_LBA" to plan.secondaryLba.toString(),
+            "SGPT_SECT" to plan.secondarySectors.toString(),
+            "MD5_OLD_P" to GptPlanner.md5(plan.newPrimary),
+            "MD5_NEW_P" to GptPlanner.md5(plan.oldPrimary),
+            "MD5_OLD_S" to GptPlanner.md5(plan.newSecondary),
+            "MD5_NEW_S" to GptPlanner.md5(plan.oldSecondary),
+        )
+        ).entries.joinToString("\n", postfix = "\n") { (k, v) -> "$k=$v" }
+
+    fun rollbackBinaries(plan: MovePlan): Map<String, ByteArray> = mapOf(
+        "old_pgpt.bin" to plan.newPrimary,
+        "new_pgpt.bin" to plan.oldPrimary,
+        "old_sgpt.bin" to plan.newSecondary,
+        "new_sgpt.bin" to plan.oldSecondary,
+    )
+
     /** `KEY=value` pairs separated by spaces or newlines (params file, `status`, `running`). */
     fun fields(text: String): Map<String, String> = text.trim().split(Regex("\\s+"))
         .mapNotNull { kv -> kv.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }

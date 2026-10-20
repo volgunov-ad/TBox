@@ -1,6 +1,7 @@
 package vad.dashing.dataresize.gpt
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,6 +44,42 @@ class GptPlannerTest {
         val state = GptPlanner.evaluate(GptImages(plan.newPrimary, plan.newSecondary, disk))
         assertTrue(state is PartitionState.AlreadyMoved)
         assertEquals(60_407_808L, (state as PartitionState.AlreadyMoved).entry.first)
+    }
+
+    /** Bench HU after the move and later reboots: the bootloader rewrote preloader attributes and `*_a` vendor bytes. */
+    private fun rebootedImages() =
+        GptImages(resource("a10_rebooted_pgpt.bin"), resource("a10_rebooted_sgpt.bin"), disk)
+
+    @Test
+    fun rebootedTables_areStillMovedButDifferFromWrittenOnes() {
+        val plan = benchPlan()
+        val images = rebootedImages()
+        val state = GptPlanner.evaluate(images)
+        assertTrue(state.toString(), state is PartitionState.AlreadyMoved)
+        assertEquals(60_407_808L, (state as PartitionState.AlreadyMoved).entry.first)
+        assertNotEquals(GptPlanner.md5(plan.newPrimary), GptPlanner.md5(images.primary))
+        assertNotEquals(GptPlanner.md5(plan.newSecondary), GptPlanner.md5(images.secondary))
+    }
+
+    @Test
+    fun rollback_keepsBootloaderFields() {
+        val images = rebootedImages()
+        val rollback = GptPlanner.relocate(images, 30_445_568L, 30_445_568L + 4_194_304L - 1)
+        assertTrue(rollback.oldPrimary.contentEquals(images.primary))
+        val back = GptPlanner.evaluate(GptImages(rollback.newPrimary, rollback.newSecondary, disk))
+        assertTrue(back.toString(), back is PartitionState.Movable)
+        val again = (back as PartitionState.Movable).plan
+        assertEquals(30_445_568L, again.entry.first)
+        assertEquals(4_194_304L, again.entry.sectors)
+        // Moving forward again restores the rebooted tables byte for byte: only userdata LBAs and CRCs changed.
+        assertTrue(again.newPrimary.contentEquals(images.primary))
+        assertTrue(again.newSecondary.contentEquals(images.secondary))
+        assertNotEquals(GptPlanner.md5(benchPlan().oldPrimary), GptPlanner.md5(rollback.newPrimary))
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun rollbackOverlappingAnotherPartition_isRejected() {
+        GptPlanner.relocate(rebootedImages(), 30_445_568L - 2048, 30_445_568L + 4_194_304L - 1)
     }
 
     @Test(expected = GptException::class)
