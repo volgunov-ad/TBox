@@ -131,6 +131,9 @@ class HuUsbAudioPolicyTest {
         assertTrue(script.contains("*/usb*/*:*"))
         assertTrue(script.contains("echo 0 > "))
         assertTrue(script.contains("echo 1 > "))
+        // a hubless card goes through the root hub only when it is the bus's sole device
+        assertTrue(script.contains("for D in /sys/bus/usb/devices/${'$'}{HUB#usb}-*; do"))
+        assertTrue(script.contains("[ \"${'$'}N\" -eq 1 ] || HUB=$(basename \"${'$'}U\") ;;"))
         // the temporary variant never touches protected partitions
         assertFalse(script.contains("mmc_debug"))
         assertFalse(script.contains("remount"))

@@ -15,7 +15,8 @@ internal sealed interface HuUsbAudioOutcome {
  * `/vendor/etc/audio_policy_configuration.xml`, or `/system/etc/...` when the vendor name was
  * removed by the permanent one-shot app (vad.dashing.usbaudio). audioserver is restarted and
  * the USB card re-enumerated through its parent hub (`authorized`), because UsbHostManager
- * does not re-announce an already known device after a restart.
+ * does not re-announce an already known device after a restart. A card plugged straight into
+ * the HU port re-enumerates through the root hub, but only when it is the bus's sole device.
  *
  * The overlay lives until the HU reboots; enable the auto-apply switch to re-apply it at app
  * startup. The permanent write (eMMC write protect dance, /system config, vendor name removal)
@@ -128,7 +129,13 @@ internal object HuUsbAudioPolicyCodec {
         |if [ -n "${'$'}CD" ]; then
         |    U=$(dirname "${'$'}CD")
         |    HUB=$(basename "$(dirname "${'$'}U")")
-        |    case "${'$'}HUB" in usb*) HUB=$(basename "${'$'}U") ;; esac
+        |    case "${'$'}HUB" in usb*)
+        |        N=0
+        |        for D in /sys/bus/usb/devices/${'$'}{HUB#usb}-*; do
+        |            case "$(basename "${'$'}D")" in *:*) ;; *) [ -e "${'$'}D" ] && N=${'$'}((N + 1)) ;; esac
+        |        done
+        |        [ "${'$'}N" -eq 1 ] || HUB=$(basename "${'$'}U") ;;
+        |    esac
         |    A="/sys/bus/usb/devices/${'$'}HUB/authorized"
         |    if [ -w "${'$'}A" ]; then
         |        echo 0 > "${'$'}A" 2>/dev/null

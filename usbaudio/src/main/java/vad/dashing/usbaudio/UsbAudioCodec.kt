@@ -212,7 +212,13 @@ object UsbAudioCodec {
         |if [ -n "${'$'}CD" ]; then
         |    U=$(dirname "${'$'}CD")
         |    HUB=$(basename "$(dirname "${'$'}U")")
-        |    case "${'$'}HUB" in usb*) HUB=$(basename "${'$'}U") ;; esac
+        |    case "${'$'}HUB" in usb*)
+        |        N=0
+        |        for D in /sys/bus/usb/devices/${'$'}{HUB#usb}-*; do
+        |            case "$(basename "${'$'}D")" in *:*) ;; *) [ -e "${'$'}D" ] && N=${'$'}((N + 1)) ;; esac
+        |        done
+        |        [ "${'$'}N" -eq 1 ] || HUB=$(basename "${'$'}U") ;;
+        |    esac
         |    A="/sys/bus/usb/devices/${'$'}HUB/authorized"
         |    if [ -w "${'$'}A" ]; then
         |        echo 0 > "${'$'}A" 2>/dev/null

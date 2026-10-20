@@ -159,6 +159,8 @@ class UsbAudioCodecTest {
         assertTrue(script.contains("[ ! -e \"${'$'}V\" ] || fail rmvendor"))
         assertTrue(script.contains("setprop ctl.restart audioserver"))
         assertTrue(script.contains("/authorized"))
+        assertTrue(script.contains("for D in /sys/bus/usb/devices/${'$'}{HUB#usb}-*; do"))
+        assertTrue(script.contains("[ \"${'$'}N\" -eq 1 ] || HUB=$(basename \"${'$'}U\") ;;"))
         assertTrue(script.contains(UsbAudioCodec.APPLIED_MARKER))
     }
 

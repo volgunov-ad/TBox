@@ -130,7 +130,13 @@ for SD in /sys/class/sound/card*/device; do
 done
 if [ -n "$C" ]; then
     U=$(dirname "$C"); HUB=$(basename "$(dirname "$U")")
-    case "$HUB" in usb*) HUB=$(basename "$U") ;; esac
+    case "$HUB" in usb*)
+        N=0
+        for D in /sys/bus/usb/devices/${HUB#usb}-*; do
+            case "$(basename "$D")" in *:*) ;; *) [ -e "$D" ] && N=$((N + 1)) ;; esac
+        done
+        [ "$N" -eq 1 ] || HUB=$(basename "$U") ;;
+    esac
     A="/sys/bus/usb/devices/$HUB/authorized"
     if [ -w "$A" ]; then
         echo 0 > "$A" 2>/dev/null; sleep 3
@@ -162,7 +168,7 @@ adb -s 192.168.1.7:5555 shell "su 0 sh /data/local/tmp/apply_usb_audio.sh"
 adb -s 192.168.1.7:5555 shell "su 0 sh -c 'echo 0 > /sys/bus/usb/devices/2-1/authorized; sleep 4; echo 1 > /sys/bus/usb/devices/2-1/authorized'"
 ```
 
-и снова запустите музыку. (Если карта воткнута в ГУ напрямую, без хаба — эта инструкция вообще не про ваш случай: напрямую карта на этих ГУ не работает, см. основной документ §2.)
+и снова запустите музыку. Если карта воткнута в ГУ напрямую, без хаба, вместо команды просто выдерните карту и воткните обратно. Простые full-speed карты (как DEXP) напрямую на этих ГУ не работают — для них хаб обязателен, см. основной документ §2.
 
 ## 10) Вернуть как было (откат)
 
