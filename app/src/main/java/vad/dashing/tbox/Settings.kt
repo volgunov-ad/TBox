@@ -945,6 +945,7 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}external_api_dangerous_enabled")
         private val EXTERNAL_API_WEB_PANEL_ENABLED =
             booleanPreferencesKey("${KEY_PREFIX}external_api_web_panel_enabled")
+        private val PHONE_DIRECT_ENABLED = booleanPreferencesKey("${KEY_PREFIX}phone_direct_enabled")
         private val EXTERNAL_API_CLIENTS_JSON =
             stringPreferencesKey("${KEY_PREFIX}external_api_clients_json")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
@@ -1691,6 +1692,10 @@ class SettingsManager(private val context: Context) {
 
     val externalApiWebPanelEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[EXTERNAL_API_WEB_PANEL_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    val phoneDirectEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[PHONE_DIRECT_ENABLED] ?: false }
         .distinctUntilChanged()
 
     val externalApiClientsJsonFlow: Flow<String> = context.settingsDataStore.data
@@ -3438,6 +3443,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXTERNAL_API_WEB_PANEL_ENABLED] = enabled
+        }
+    }
+
+    suspend fun savePhoneDirectEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_DIRECT_ENABLED] = enabled
         }
     }
 

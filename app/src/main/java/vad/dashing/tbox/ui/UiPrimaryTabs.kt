@@ -1651,6 +1651,8 @@ fun SettingsTabContent(
 
                 SettingsSection.API -> {
                     ExternalApiSettingsSection(settingsViewModel = settingsViewModel)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    PhoneDirectSettingsSection(settingsViewModel = settingsViewModel)
                 }
 
                 SettingsSection.HOTSPOT -> {

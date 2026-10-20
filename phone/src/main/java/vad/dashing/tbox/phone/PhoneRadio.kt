@@ -1,5 +1,6 @@
 package vad.dashing.tbox.phone
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -29,10 +30,12 @@ import java.util.UUID
  * characteristic and receives snapshot pages as notifications.
  * Calls from the UI thread. GATT callbacks hop back to the main thread before touching state.
  */
+@SuppressLint("MissingPermission")
 class PhoneRadio(
     context: Context,
+    private val assembler: PhoneBleCodec.SnapshotAssembler,
     private val onSnap: (PhoneBleCodec.Snapshot) -> Unit,
-) {
+) : PhoneLink {
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
     private val manager = appContext.getSystemService(BluetoothManager::class.java)
@@ -51,16 +54,14 @@ class PhoneRadio(
     private var lastSnapAt = 0L
     /** elapsedRealtime when [writing] became true. */
     private var writeAt = 0L
-    private val assembler = PhoneBleCodec.SnapshotAssembler()
 
-    /** Sent in REFRESH so the companion skips text pages the phone already shows. */
-    val textHash: Int get() = assembler.snapshot.textHash
-
-    @Volatile var linkUp: Boolean = false
+    @Volatile override var linkUp: Boolean = false
         private set
 
-    var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
-    var waitingCounter: Long = -1L
+    override val confirmed: Boolean get() = linkUp && snapOnLink
+
+    override var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
+    override var waitingCounter: Long = -1L
 
     val bluetoothOn: Boolean
         get() = runCatching { manager?.adapter?.isEnabled == true }.getOrDefault(false)
@@ -176,7 +177,7 @@ class PhoneRadio(
         }
     }
 
-    fun start() {
+    override fun start() {
         if (running) {
             recoverIfStale()
             if (gatt == null) startScan()
@@ -192,7 +193,7 @@ class PhoneRadio(
      * without snapshots. Force a clean search without touching pairing material in
      * [PhoneStore]. Skips a fresh in-flight scan/connect; reopens a stale linked GATT.
      */
-    fun kickSearch() {
+    override fun kickSearch() {
         if (!running || !bluetoothOn) return
         val now = SystemClock.elapsedRealtime()
         val snapAge = if (lastSnapAt != 0L) now - lastSnapAt else now - attemptAt
@@ -212,7 +213,7 @@ class PhoneRadio(
         startScan()
     }
 
-    fun stop() {
+    override fun stop() {
         running = false
         main.removeCallbacksAndMessages(null)
         stopScan()
@@ -226,7 +227,7 @@ class PhoneRadio(
         pending.clear()
     }
 
-    fun write(payload: ByteArray) {
+    override fun write(payload: ByteArray) {
         if (!running) return
         if (pending.size >= PENDING_MAX) pending.removeFirst()
         pending.addLast(payload)

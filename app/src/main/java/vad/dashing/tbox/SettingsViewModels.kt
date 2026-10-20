@@ -637,6 +637,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val phoneDirectEnabled = settingsManager.phoneDirectEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
@@ -2381,6 +2388,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveExternalApiWebPanelEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveExternalApiWebPanelEnabled(enabled)
+        }
+    }
+
+    fun savePhoneDirectEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.savePhoneDirectEnabled(enabled)
         }
     }
 

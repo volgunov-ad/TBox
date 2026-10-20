@@ -46,7 +46,7 @@ class PhoneStore(context: Context) {
         return next
     }
 
-    /** Set once the companion answered with a sealed snapshot, i.e. it knows our key. */
+    /** Set once the companion or the head unit answered with a sealed snapshot, i.e. it knows our key. */
     var paired: Boolean
         get() = prefs.getBoolean(KEY_PAIRED, false)
         set(value) {
@@ -60,12 +60,27 @@ class PhoneStore(context: Context) {
             prefs.edit().putString(KEY_PAGE, value).apply()
         }
 
+    var path: PhonePath
+        get() = PhonePath.entries.firstOrNull { it.name == prefs.getString(KEY_PATH, null) } ?: PhonePath.AUTO
+        set(value) {
+            prefs.edit().putString(KEY_PATH, value.name).apply()
+        }
+
+    /** Head unit that last answered over the direct link; tried first next time. */
+    var directAddress: String?
+        get() = prefs.getString(KEY_DIRECT_ADDRESS, null)
+        set(value) {
+            prefs.edit().putString(KEY_DIRECT_ADDRESS, value).apply()
+        }
+
     private companion object {
         const val KEY_ID = "id"
         const val KEY_SECRET = "key"
         const val KEY_COUNTER = "counter"
         const val KEY_PAIRED = "paired"
         const val KEY_PAGE = "page"
+        const val KEY_PATH = "path"
+        const val KEY_DIRECT_ADDRESS = "direct_address"
         const val COUNTER_BLOCK = 64L
     }
 }

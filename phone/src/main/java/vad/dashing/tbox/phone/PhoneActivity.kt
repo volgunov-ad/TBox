@@ -160,6 +160,8 @@ private fun PhoneScreen() {
     var ready by remember { mutableStateOf(false) }
     var bluetoothOn by remember { mutableStateOf(true) }
     var linked by remember { mutableStateOf(false) }
+    var active by remember { mutableStateOf(ActivePath.NONE) }
+    var path by remember { mutableStateOf(store.path) }
     var paired by remember { mutableStateOf(store.paired) }
     var page by remember { mutableStateOf(if (store.paired) storedPage(store) else Page.CONNECT) }
     var reopened by remember { mutableStateOf(false) }
@@ -167,7 +169,7 @@ private fun PhoneScreen() {
     val fallbackName = stringResource(R.string.phone_name)
     val phoneName = remember { Build.MODEL?.trim().orEmpty().ifEmpty { fallbackName } }
     val radio = remember {
-        PhoneRadio(context) { next ->
+        PhoneLinkRouter(context, store) { next ->
             val now = SystemClock.elapsedRealtime()
             if (next.positionMs != snap.positionMs || next.playing != snap.playing) positionAt = now
             snap = next
@@ -257,6 +259,7 @@ private fun PhoneScreen() {
                 reopened = false
             }
             linked = linkUp
+            active = radio.active
             if (bluetoothOn) radio.start()
             val fresh = lastSnapAt != 0L && now - lastSnapAt < 2_000L
             if (linkUp && !fresh && now - refreshAt >= 2_000L) requestSnapshot(now)
@@ -310,11 +313,28 @@ private fun PhoneScreen() {
         pairRequest = PairRequest.SENT
     }
 
+    fun choosePath(next: PhonePath) {
+        if (next == path) return
+        path = next
+        radio.path = next
+        pairRequest = PairRequest.NONE
+        lastSnapAt = 0L
+        linked = false
+        active = ActivePath.NONE
+    }
+
     val status = when {
         !ready -> null
         !bluetoothOn -> stringResource(R.string.bluetooth_off)
-        !linked -> stringResource(R.string.looking)
+        !linked -> stringResource(
+            when (path) {
+                PhonePath.AUTO -> R.string.looking_auto
+                PhonePath.DIRECT -> R.string.looking_direct
+                PhonePath.COMPANION -> R.string.looking
+            },
+        )
         snap.gen == 0 -> stringResource(R.string.waiting)
+        active == ActivePath.DIRECT -> stringResource(R.string.connected_direct)
         else -> stringResource(R.string.connected)
     }
 
@@ -344,7 +364,9 @@ private fun PhoneScreen() {
                 when (page) {
                     Page.CONNECT -> ConnectPage(
                         linked = paired && snap.gen != 0,
+                        path = path,
                         pairRequest = pairRequest,
+                        onPath = ::choosePath,
                         onPair = ::pair,
                     )
                     Page.CLIMATE -> ClimatePage(snap, ::send)
@@ -469,7 +491,13 @@ private fun BottomBar(current: Page, onSelect: (Page) -> Unit) {
 }
 
 @Composable
-private fun ConnectPage(linked: Boolean, pairRequest: PairRequest, onPair: () -> Unit) {
+private fun ConnectPage(
+    linked: Boolean,
+    path: PhonePath,
+    pairRequest: PairRequest,
+    onPath: (PhonePath) -> Unit,
+    onPair: () -> Unit,
+) {
     Card {
         SectionTitle(stringResource(R.string.connection))
         if (linked) {
@@ -479,7 +507,26 @@ private fun ConnectPage(linked: Boolean, pairRequest: PairRequest, onPair: () ->
                 color = PhoneColors.accentText,
             )
         }
-        Label(stringResource(R.string.connection_hint))
+        Label(stringResource(R.string.path_title))
+        ButtonRows(
+            options = listOf(
+                Option(stringResource(R.string.path_auto), path == PhonePath.AUTO) { onPath(PhonePath.AUTO) },
+                Option(stringResource(R.string.path_direct), path == PhonePath.DIRECT) { onPath(PhonePath.DIRECT) },
+                Option(stringResource(R.string.path_companion), path == PhonePath.COMPANION) {
+                    onPath(PhonePath.COMPANION)
+                },
+            ),
+            columns = 3,
+        )
+        Label(
+            stringResource(
+                when (path) {
+                    PhonePath.AUTO -> R.string.connection_hint_auto
+                    PhonePath.DIRECT -> R.string.connection_hint_direct
+                    PhonePath.COMPANION -> R.string.connection_hint
+                },
+            ),
+        )
         Button(
             onClick = onPair,
             modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp),
@@ -490,7 +537,13 @@ private fun ConnectPage(linked: Boolean, pairRequest: PairRequest, onPair: () ->
         val pairText = when (pairRequest) {
             PairRequest.NONE -> null
             PairRequest.SENT -> stringResource(R.string.pair_sent)
-            PairRequest.NO_LINK -> stringResource(R.string.pair_no_link)
+            PairRequest.NO_LINK -> stringResource(
+                when (path) {
+                    PhonePath.AUTO -> R.string.pair_no_link_auto
+                    PhonePath.DIRECT -> R.string.pair_no_link_direct
+                    PhonePath.COMPANION -> R.string.pair_no_link
+                },
+            )
         }
         if (pairText != null) Label(pairText)
     }

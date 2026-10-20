@@ -50,6 +50,7 @@ import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.esp.PhoneUsbEvent
+import vad.dashing.tbox.phoneble.PhoneDirectServer
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.wifimodem.ModemConnectionCheck
@@ -343,6 +344,7 @@ class BackgroundService : Service() {
     private var automationEngine: AutomationEngine? = null
     private var widgetButtonBindingCoordinator: WidgetButtonBindingCoordinator? = null
     private var externalApiController: ExternalApiController? = null
+    private var phoneDirectServer: PhoneDirectServer? = null
     private var packetSilenceChecks: Int = 0
     private var tboxSwdKeepaliveLastMs: Long = 0L
 
@@ -1082,6 +1084,7 @@ class BackgroundService : Service() {
             ExternalApiControllerHolder.register(controller)
         }
         startPhoneCompanionBridge()
+        startPhoneDirectServer()
         SharedMediaControlService.startActiveSessionMonitor(this)
         DriveModeThemeWatcher(this, settingsManager, scope).start()
         scope.launch {
@@ -1311,6 +1314,24 @@ class BackgroundService : Service() {
                     TboxRepository.addLog("ERROR", "Phone BLE", "Phone event failed: ${e.message}")
                     Log.e("Phone BLE", "Phone event failed", e)
                 }
+            }
+        }
+    }
+
+    /** RFCOMM link for the phone app without the companion; same snapshot and commands. */
+    private fun startPhoneDirectServer() {
+        scope.launch {
+            settingsManager.phoneDirectEnabledFlow.collect { enabled ->
+                phoneDirectServer?.stop()
+                phoneDirectServer = null
+                val controller = externalApiController ?: return@collect
+                if (!enabled) return@collect
+                phoneDirectServer = PhoneDirectServer(
+                    context = this@BackgroundService,
+                    scope = scope,
+                    readSnapshot = { controller.readPhoneSnapshot() },
+                    executeCommand = { op, seat, arg -> controller.executePhoneCommand(op, seat, arg) },
+                ).also { it.start() }
             }
         }
     }
@@ -7297,6 +7318,8 @@ class BackgroundService : Service() {
         automationEngine?.releaseInterests()
         automationEngine?.requestStop()
         automationEngine = null
+        phoneDirectServer?.stop()
+        phoneDirectServer = null
         externalApiController?.stop()
         ExternalApiControllerHolder.unregister()
         externalApiController = null
