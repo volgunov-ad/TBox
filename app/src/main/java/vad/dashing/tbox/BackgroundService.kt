@@ -1056,6 +1056,7 @@ class BackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        vad.dashing.tbox.adb.AdbShutdownGate.markAppAlive()
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         timingReset()
         timingMark("onCreate_start")

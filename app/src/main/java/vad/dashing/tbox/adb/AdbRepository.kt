@@ -377,22 +377,23 @@ object AdbRepository {
 
     /**
      * Starts full logcat capture (`logcat -v threadtime`) to Downloads.
-     * Uses the live ADB-tab connection (TCP or USB). Returns false if busy / not connected.
+     * Uses the live ADB-tab connection (TCP or USB).
+     * Returns null when started, otherwise the reason it did not start.
      */
-    fun startLogcatCapture(clearBufferFirst: Boolean): Boolean {
-        if (!initialized) return false
-        if (_logcatCapture.value.active || logcatExclusive.get()) return false
-        if (_scriptRun.value.active) return false
-        if (_state.value.phase != Phase.CONNECTED || connection == null) return false
+    fun startLogcatCapture(clearBufferFirst: Boolean): String? {
+        if (!initialized) return "not initialized"
+        if (_logcatCapture.value.active || logcatExclusive.get()) return "already recording"
+        if (_scriptRun.value.active) return "script is running"
+        if (_state.value.phase != Phase.CONNECTED || connection == null) return "not connected"
         val file = createLogcatFile() ?: run {
             _logcatCapture.value = LogcatCaptureState(
                 active = false,
                 lastError = "cannot create Downloads file",
             )
             appendLog("Logcat: cannot create Downloads file")
-            return false
+            return "cannot create Downloads file"
         }
-        if (!logcatExclusive.compareAndSet(false, true)) return false
+        if (!logcatExclusive.compareAndSet(false, true)) return "already recording"
         logcatStopRequested.set(false)
         _logcatCapture.value = LogcatCaptureState(
             active = true,
@@ -405,7 +406,7 @@ object AdbRepository {
         logcatJob = scope.launch {
             runLogcatCapture(file, clearBufferFirst)
         }
-        return true
+        return null
     }
 
     /** Request stop of an active logcat capture (current stream ends via CLSE). */
@@ -585,11 +586,17 @@ object AdbRepository {
             }
             if (active == null) {
                 appendLog("Logcat: not connected")
+                setLogcatErrorIfNone("not connected")
                 return
             }
             val commands = AdbLogcatCapture.buildCommands(clearBufferFirst)
             for (command in commands) {
-                if (logcatStopRequested.get() || AdbShutdownGate.isAppShuttingDown()) break
+                if (logcatStopRequested.get()) break
+                if (AdbShutdownGate.isAppShuttingDown()) {
+                    appendLog("Logcat: app is shutting down")
+                    setLogcatErrorIfNone("app is shutting down")
+                    break
+                }
                 if (command == AdbLogcatCapture.CLEAR_COMMAND) {
                     appendLog("$ $command")
                     // Short execute still needs exclusive access vs tab shell / scripts.
@@ -648,8 +655,10 @@ object AdbRepository {
                             )
                             AdbShellStreamEnd.Stopped
                         } else if (AdbIoErrors.isBenignDisconnectMessage(message)) {
-                            // Unexpected peer close mid-capture — console only, never Toast (#401/#402).
+                            // Unexpected peer close mid-capture: the file may be cut short, so
+                            // report it instead of the "saved" Toast.
                             appendLog("Logcat: transport closed ($message)")
+                            setLogcatErrorIfNone("ADB connection closed ($message)")
                             AdbShellStreamEnd.Stopped
                         } else {
                             appendLog("Logcat error: $message")
@@ -674,6 +683,7 @@ object AdbRepository {
         } finally {
             flushPending()
             val path = file.absolutePath
+            if (bytesWritten == 0L) setLogcatErrorIfNone("no data received, file is empty")
             appendLog("Logcat: saved $path ($bytesWritten bytes)")
             TboxRepository.addLog(
                 "INFO",
@@ -688,6 +698,13 @@ object AdbRepository {
             logcatExclusive.set(false)
             logcatStopRequested.set(false)
             logcatJob = null
+        }
+    }
+
+    private fun setLogcatErrorIfNone(message: String) {
+        val current = _logcatCapture.value
+        if (current.lastError == null) {
+            _logcatCapture.value = current.copy(lastError = message)
         }
     }
 

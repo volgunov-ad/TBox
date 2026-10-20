@@ -214,8 +214,8 @@ fun AdbTabContent(
         AdbRepository.acknowledgeScriptFinished()
     }
 
-    // Toast path saved when capture ends. Repository never sets lastError for benign
-    // transport-closed (#401/#402), so those must not surface here.
+    // Toast path saved when capture ends. Repository sets lastError for an empty file or an
+    // unexpected mid-capture close, never for intentional / shutdown closes (#401/#402).
     var previousLogcatActive by remember { mutableStateOf(false) }
     LaunchedEffect(logcatCapture.active, logcatCapture.filePath, logcatCapture.lastError) {
         val wasActive = previousLogcatActive
@@ -666,7 +666,15 @@ fun AdbTabContent(
                     )
                 } else {
                     Button(
-                        onClick = { AdbRepository.startLogcatCapture(logcatClearBuffer) },
+                        onClick = {
+                            AdbRepository.startLogcatCapture(logcatClearBuffer)?.let { reason ->
+                                Toast.makeText(
+                                    context,
+                                    resources.getString(R.string.adb_logcat_error, reason),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        },
                         enabled = isConnected && !scriptActive && !isBusy,
                     ) {
                         Text(
