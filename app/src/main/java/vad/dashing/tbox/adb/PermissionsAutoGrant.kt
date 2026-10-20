@@ -184,6 +184,10 @@ object PermissionsAutoGrant {
                     if (put != null) {
                         runChecked(put, requireSuccess = true)
                     }
+                    runChecked(
+                        AppPermissions.buildNotificationListenerAllowCommand(component),
+                        requireSuccess = true,
+                    )
                 }
                 else -> {
                     for (command in AppPermissions.buildAutoGrantShellCommands(id, packageName, sdkInt)) {

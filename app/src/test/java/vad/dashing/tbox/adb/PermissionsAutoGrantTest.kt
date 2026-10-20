@@ -62,6 +62,12 @@ class PermissionsAutoGrantTest {
                     it.contains("MediaControlNotificationListenerService")
             },
         )
+        assertTrue(
+            commands.contains(
+                "cmd notification allow_listener " +
+                    "vad.dashing.tbox/vad.dashing.tbox.MediaControlNotificationListenerService",
+            ),
+        )
     }
 
     @Test
@@ -84,7 +90,7 @@ class PermissionsAutoGrantTest {
     }
 
     @Test
-    fun applyGrants_skipsNotificationPutWhenAlreadyEnabled() {
+    fun applyGrants_settingAlreadyListed_stillAllowsListenerInNms() {
         val component = AppPermissions.notificationListenerComponent("vad.dashing.tbox")
         val commands = mutableListOf<String>()
         PermissionsAutoGrant.applyGrants(
@@ -100,8 +106,13 @@ class PermissionsAutoGrantTest {
                 }
             },
         )
-        assertEquals(1, commands.size)
-        assertTrue(commands[0].startsWith("settings get"))
+        assertEquals(
+            listOf(
+                "settings get secure enabled_notification_listeners",
+                "cmd notification allow_listener $component",
+            ),
+            commands,
+        )
     }
 
     @Test

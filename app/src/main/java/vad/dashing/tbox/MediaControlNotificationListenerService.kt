@@ -15,6 +15,7 @@ class MediaControlNotificationListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         startBackgroundServiceFromListener()
+        SharedMediaControlService.startActiveSessionMonitor(applicationContext)
     }
 
     private fun startBackgroundServiceFromListener() {

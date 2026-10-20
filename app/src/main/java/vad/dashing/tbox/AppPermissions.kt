@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -268,21 +269,18 @@ object AppPermissions {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun hasNotificationListenerAccess(context: Context): Boolean {
-        val expected = ComponentName(
+    /**
+     * `cmd notification allow_listener` — the only grant NotificationManagerService honours on
+     * API 28; `settings put secure enabled_notification_listeners` alone is not picked up on A10.
+     */
+    fun buildNotificationListenerAllowCommand(component: String): String =
+        "cmd notification allow_listener $component"
+
+    fun hasNotificationListenerAccess(context: Context): Boolean =
+        isNotificationListenerAccessGranted(
             context,
-            MediaControlNotificationListenerService::class.java,
+            ComponentName(context, MediaControlNotificationListenerService::class.java),
         )
-        val enabledListeners = Settings.Secure.getString(
-            context.contentResolver,
-            "enabled_notification_listeners",
-        ).orEmpty()
-        if (enabledListeners.isBlank()) return false
-        return enabledListeners
-            .split(':')
-            .mapNotNull { ComponentName.unflattenFromString(it) }
-            .any { it == expected }
-    }
 
     fun hasStorageAccess(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -309,4 +307,18 @@ object AppPermissions {
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED
     }
+}
+
+/**
+ * Asks NotificationManagerService, which is what MediaSessionManager checks. The
+ * `enabled_notification_listeners` secure setting can list the component while NMS has not
+ * approved it (A10), and then `getActiveSessions` throws SecurityException.
+ */
+internal fun isNotificationListenerAccessGranted(
+    context: Context,
+    listenerComponent: ComponentName,
+): Boolean {
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+    return runCatching { manager.isNotificationListenerAccessGranted(listenerComponent) }
+        .getOrDefault(false)
 }

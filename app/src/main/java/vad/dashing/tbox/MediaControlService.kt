@@ -14,7 +14,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
-import android.provider.Settings
 import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -1019,7 +1018,7 @@ object SharedMediaControlService {
         notificationAccessGranted = if (context == null || component == null) {
             false
         } else {
-            hasNotificationListenerAccess(context, component)
+            isNotificationListenerAccessGranted(context, component)
         }
     }
 }
@@ -1164,22 +1163,6 @@ private fun PlaybackState?.extractPositionUpdateTimeMs(): Long {
     val updateTime = this?.lastPositionUpdateTime ?: 0L
     if (updateTime > 0L) return updateTime
     return SystemClock.elapsedRealtime()
-}
-
-private fun hasNotificationListenerAccess(
-    context: Context,
-    listenerComponent: ComponentName
-): Boolean {
-    val enabledListeners = Settings.Secure.getString(
-        context.contentResolver,
-        "enabled_notification_listeners"
-    ).orEmpty()
-    if (enabledListeners.isBlank()) return false
-
-    return enabledListeners
-        .split(':')
-        .mapNotNull { ComponentName.unflattenFromString(it) }
-        .any { it == listenerComponent }
 }
 
 private fun sendMediaPlayKeyEvent(context: Context, packageName: String) {
