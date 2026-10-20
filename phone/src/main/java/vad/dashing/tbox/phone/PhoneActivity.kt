@@ -143,6 +143,9 @@ private fun storedPage(store: PhoneStore): Page =
 /** A paired phone with a live link but no snapshot this long was probably forgotten by the head unit. */
 private const val NO_SNAP_REOPEN_MS = 10_000L
 
+/** Ask again without an answer only after this long: the request or the answer was lost. */
+private const val UNANSWERED_RETRY_MS = 6_000L
+
 /** An old companion answers with pages 0..4 only: a full answer is at least this many pages. */
 private const val OLD_FIRMWARE_PAGES = 8
 
@@ -153,6 +156,7 @@ private fun PhoneScreen() {
     var snap by remember { mutableStateOf(PhoneBleCodec.Snapshot()) }
     var lastSnapAt by remember { mutableLongStateOf(0L) }
     var refreshAt by remember { mutableLongStateOf(0L) }
+    var acceptReset by remember { mutableStateOf(true) }
     var linkedAt by remember { mutableLongStateOf(0L) }
     var lastVolume by remember { mutableIntStateOf(10) }
     var positionAt by remember { mutableLongStateOf(0L) }
@@ -200,11 +204,19 @@ private fun PhoneScreen() {
         ready = granted.values.all { it }
     }
 
-    /** Asks for the pages the current screen shows; a newer request drops answers to the old one. */
-    fun requestSnapshot(now: Long) {
+    /**
+     * Asks for the pages the current screen shows. A late answer to an earlier request for
+     * the same screen still counts; [newState] (page switch, command) drops answers to
+     * everything sent before.
+     */
+    fun requestSnapshot(now: Long, newState: Boolean = false) {
         if (!radio.linkUp) return
         refreshAt = now
         val counter = store.nextCounter()
+        if (newState || acceptReset) {
+            radio.acceptFromCounter = counter
+            acceptReset = false
+        }
         radio.waitingCounter = counter
         radio.write(
             PhoneBleCodec.seal(
@@ -223,7 +235,7 @@ private fun PhoneScreen() {
         if (paired && next != Page.CONNECT) store.page = next.name
         pagesSinceSwitch = 0
         lastSnapAt = 0L
-        requestSnapshot(SystemClock.elapsedRealtime())
+        requestSnapshot(SystemClock.elapsedRealtime(), newState = true)
     }
 
     DisposableEffect(ready) {
@@ -257,12 +269,18 @@ private fun PhoneScreen() {
             if (linkUp && !linked) {
                 linkedAt = now
                 reopened = false
+                refreshAt = 0L
             }
             linked = linkUp
             active = radio.active
             if (bluetoothOn) radio.start()
             val fresh = lastSnapAt != 0L && now - lastSnapAt < 2_000L
-            if (linkUp && !fresh && now - refreshAt >= 2_000L) requestSnapshot(now)
+            // A slow head unit queues requests; wait for the answer before asking again.
+            val answered = lastSnapAt >= refreshAt
+            val waited = now - refreshAt
+            if (linkUp && !fresh && waited >= 2_000L && (answered || waited >= UNANSWERED_RETRY_MS)) {
+                requestSnapshot(now)
+            }
             if (linkUp && snap.gen == 0 && !reopened && now - linkedAt >= NO_SNAP_REOPEN_MS) {
                 reopened = true
                 page = Page.CONNECT
@@ -297,6 +315,7 @@ private fun PhoneScreen() {
         }
         lastSnapAt = 0L
         refreshAt = 0L
+        acceptReset = true
         radio.write(payload)
     }
 

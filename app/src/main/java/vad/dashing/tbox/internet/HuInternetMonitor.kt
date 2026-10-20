@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -36,6 +37,13 @@ class HuInternetMonitor(
     private val mutex = Mutex()
     private var job: Job? = null
     private var snapshot = HuInternetStatusLogic.Snapshot()
+    /**
+     * One client for the monitor's lifetime: a new client per probe leaks its pool, a TLS
+     * connection and an HTTP/2 reader thread for 5 minutes each (19 threads seen on A10).
+     */
+    private val baseClientLazy = lazy { clientFactory() }
+    private val baseClient: OkHttpClient by baseClientLazy
+    @Volatile private var networkClient: Pair<Network, OkHttpClient>? = null
 
     val isRunning: Boolean
         get() = job?.isActive == true
@@ -47,7 +55,7 @@ class HuInternetMonitor(
                 snapshot = HuInternetStatusLogic.Snapshot()
                 val effectiveUrl = HuInternetProbe.normalizeUrl(url)
                 val intervalMs = HuInternetProbe.coerceIntervalSec(intervalSec) * 1000L
-                job = scope.launch {
+                job = scope.launch(Dispatchers.IO) {
                     while (isActive) {
                         probeOnce(effectiveUrl)
                         delay(intervalMs)
@@ -70,6 +78,8 @@ class HuInternetMonitor(
     private fun cancelJobLocked() {
         job?.cancel()
         job = null
+        networkClient = null
+        if (baseClientLazy.isInitialized()) runCatching { baseClient.connectionPool.evictAll() }
     }
 
     private fun probeOnce(url: String) {
@@ -97,15 +107,20 @@ class HuInternetMonitor(
      * "Wi‑Fi without internet" does not silently divert the probe.
      */
     private fun clientForBestNetwork(): OkHttpClient {
-        val base = clientFactory()
+        val base = baseClient
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return base
         val cm = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return base
         val best = pickBestNetwork(cm) ?: return base
+        networkClient?.let { (network, client) -> if (network == best) return client }
+        // Connections of the previous network would only time out.
+        runCatching { base.connectionPool.evictAll() }
         return try {
+            // newBuilder() shares the pool and dispatcher threads with the base client.
             base.newBuilder()
                 .socketFactory(best.socketFactory)
                 .build()
+                .also { networkClient = best to it }
         } catch (_: Throwable) {
             base
         }

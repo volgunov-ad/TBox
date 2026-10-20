@@ -64,6 +64,7 @@ class PhoneDirectLink(
     override val confirmed: Boolean get() = linkUp && lastSnapAt != 0L
 
     override var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
+    override var acceptFromCounter: Long = -1L
     override var waitingCounter: Long = -1L
 
     /** Full passes over the candidates that found no head unit since [start]. */
@@ -79,7 +80,6 @@ class PhoneDirectLink(
         passesWithoutLink = 0
         openProxies()
         val gen = ++generation
-        Log.i(TAG, "start gen=$gen")
         Thread({ loop(gen) }, "phone-direct").apply {
             isDaemon = true
             start()
@@ -92,7 +92,6 @@ class PhoneDirectLink(
         if (!running) return
         running = false
         generation++
-        Log.i(TAG, "stop gen=$generation")
         main.removeCallbacks(watchdog)
         closeSocket()
         closeProxies()
@@ -222,10 +221,7 @@ class PhoneDirectLink(
         } finally {
             connectAt = 0L
         }
-        if (ok) {
-            Log.i(TAG, "connected ${candidate.address} gen=$gen")
-            return attempt
-        }
+        if (ok) return attempt
         runCatching { attempt.close() }
         return null
     }
@@ -260,7 +256,7 @@ class PhoneDirectLink(
         } catch (e: IOException) {
             reason = "io: ${e.message}"
         } finally {
-            Log.i(TAG, "link end gen=$gen current=$generation: $reason")
+            Log.d(TAG, "link closed: $reason")
             runCatching { link.close() }
             if (gen == generation) {
                 linkUp = false
@@ -270,16 +266,9 @@ class PhoneDirectLink(
     }
 
     private fun acceptSnap(value: ByteArray, peer: BluetoothDevice) {
-        val open = PhoneBleCodec.open(storeKey, value)
-        if (open == null) {
-            Log.d(TAG, "snap does not open with our key")
-            return
-        }
+        val open = PhoneBleCodec.open(storeKey, value) ?: return
         if (!PhoneBleCodec.isSnapType(open.type)) return
-        if (open.counter != waitingCounter) {
-            Log.d(TAG, "snap for counter ${open.counter}, waiting $waitingCounter")
-            return
-        }
+        if (open.counter !in acceptFromCounter..waitingCounter) return
         lastSnapAt = SystemClock.elapsedRealtime()
         if (store.directAddress != peer.address) store.directAddress = peer.address
         onSnap(assembler.accept(open.type, open.body))

@@ -61,6 +61,7 @@ class PhoneRadio(
     override val confirmed: Boolean get() = linkUp && snapOnLink
 
     override var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
+    override var acceptFromCounter: Long = -1L
     override var waitingCounter: Long = -1L
 
     val bluetoothOn: Boolean
@@ -347,7 +348,7 @@ class PhoneRadio(
     private fun acceptSnap(value: ByteArray) {
         val open = PhoneBleCodec.open(storeKey, value) ?: return
         if (!PhoneBleCodec.isSnapType(open.type)) return
-        if (open.counter != waitingCounter) return
+        if (open.counter !in acceptFromCounter..waitingCounter) return
         snapOnLink = true
         lastSnapAt = SystemClock.elapsedRealtime()
         scheduleWatchdog(PhoneBleLinkPolicy.LINK_STALE_MS)

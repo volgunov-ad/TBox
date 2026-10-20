@@ -159,7 +159,18 @@ class PhoneDirectServer(
             while (currentCoroutineContext().isActive) {
                 val count = input.read(buffer)
                 if (count < 0) break
-                for (payload in reader.feed(buffer, count)) handle(link, payload)
+                // Requests that queued while a slow snapshot was read: answer only the newest.
+                var refresh: PhoneDirectHost.Result.Refresh? = null
+                for (payload in reader.feed(buffer, count)) {
+                    when (val result = host.onPayload(payload)) {
+                        is PhoneDirectHost.Result.Refresh -> {
+                            bind(link, result.idHex)
+                            refresh = result
+                        }
+                        else -> handle(link, result)
+                    }
+                }
+                refresh?.let { answer(link, it) }
                 if (reader.broken) break
             }
         } catch (e: CancellationException) {
@@ -175,8 +186,8 @@ class PhoneDirectServer(
         }
     }
 
-    private suspend fun handle(link: Link, payload: ByteArray) {
-        when (val result = host.onPayload(payload)) {
+    private suspend fun handle(link: Link, result: PhoneDirectHost.Result) {
+        when (result) {
             is PhoneDirectHost.Result.PairRequest -> {
                 link.lastValidAt = SystemClock.elapsedRealtime()
                 PhoneDirectRepository.setPending(PhoneDirectPhone(result.idHex, result.name))
@@ -196,12 +207,19 @@ class PhoneDirectServer(
             }
             is PhoneDirectHost.Result.Refresh -> {
                 bind(link, result.idHex)
-                val (gen, snap) = snapshot()
-                val pages = host.sealSnapshot(result.idHex, result.counter, gen, snap, result.textHash, result.groups)
-                if (pages.isNotEmpty()) send(link, pages)
+                answer(link, result)
             }
             PhoneDirectHost.Result.Ignored -> Unit
         }
+    }
+
+    private suspend fun answer(link: Link, request: PhoneDirectHost.Result.Refresh) {
+        val started = SystemClock.elapsedRealtime()
+        val (gen, snap) = snapshot()
+        val took = SystemClock.elapsedRealtime() - started
+        if (took >= SLOW_SNAPSHOT_MS) Log.w(TAG, "snapshot for ${link.address} took ${took}ms")
+        val pages = host.sealSnapshot(request.idHex, request.counter, gen, snap, request.textHash, request.groups)
+        if (pages.isNotEmpty()) send(link, pages)
     }
 
     private fun bind(link: Link, idHex: String) {
@@ -300,6 +318,7 @@ class PhoneDirectServer(
         const val RETRY_MS = 5_000L
         const val LEARN_WINDOW_MS = 90_000L
         const val SNAP_FRESH_MS = 2_000L
+        const val SLOW_SNAPSHOT_MS = 1_000L
         /** A link that never sent a valid packet is dropped, as the companion drops strangers. */
         const val STRANGER_IDLE_MS = 20_000L
         /** The phone refreshes about every 2 s while its screen is open. */
