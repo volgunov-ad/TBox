@@ -36,6 +36,10 @@ $ErrorActionPreference = 'Stop'
 $Mmc = '/dev/block/mmcblk0'
 $Work = '/cache/hu_rescue'
 $WifiStore = '/data/misc/wifi/WifiConfigStore.xml'
+# The CarPlay USB port: a dual-role Cadence controller, host by default.
+$Udc = '13010000.cdncusb'
+$DualRole = '/sys/class/dual_role_usb/dual-role-usb20'
+$Gadget = '/config/usb_gadget/g1'
 # Kernel console lines land in the middle of command output; each one ends with its own newline.
 $KernelLine = [regex]'\[\s*\d+\.\d{6}\](?:\[[^\]\r\n]*\])?\s*<\d>[^\n]*\n'
 $Latin1 = [Text.Encoding]::GetEncoding(28591)
@@ -753,10 +757,12 @@ function Show-Header {
 $Stages = @(
     @{ Re = 'HSM Loader Start|preloader build time'; Stage = 'preloader' }
     @{ Re = 'welcome to lk'; Stage = 'LK' }
+    @{ Re = '###Fastboot Boot###'; Stage = 'fastboot LK' }
     @{ Re = 'Booting Linux on physical CPU'; Stage = 'ядро Linux' }
     @{ Re = 'console:/ [$#]'; Stage = 'консоль' }
 )
 $Notable = 'Parsing (Primary|Secondary) GPT|GPT_LK|atc\.upd|load LK finished|get slot|slot invalid|recovery mode|start jump to kernel|' +
+    'pbcb->command:\S|Recovery Boot|enter_fastboot|enter to fastboot|' +
     'Kernel panic|Internal error|Unable to handle|reboot: Restarting|Rebooting|fs_mgr|init: .*(reboot|panic|failed to mount)|userdata|' +
     'error.*gpt'
 
@@ -796,6 +802,9 @@ function Watch-Boot {
                     $hinted = $false
                     Write-Host ("[{0:HH:mm:ss}] == этап: {1} ==" -f (Get-Date), $stage) -ForegroundColor Cyan
                     if ($stage -eq 'консоль') { Write-Host '  Консоль доступна: выйдите (Esc) и выберите нужный пункт.' -ForegroundColor Green }
+                    if ($stage -eq 'fastboot LK') {
+                        Write-Host '  ГУ в fastboot: на ПК «fastboot devices» (VID_0BB4&PID_0C01). Примерно через 4 минуты ГУ само уйдёт в обычную загрузку.' -ForegroundColor Green
+                    }
                 }
             }
             if ($l -match $Notable) {
@@ -1013,14 +1022,70 @@ function Write-PartitionFromUsb {
     else { Write-Host "${name}: чтение обратно НЕ совпало с образом. Не перезагружайте, повторите запись." -ForegroundColor Red }
 }
 
-function Restart-Hu {
-    $a = Read-Host 'Перезагрузить ГУ: [1] обычно, [2] в recovery, [Enter] не сейчас'
+function Find-PcTool([string]$Name) {
+    foreach ($dir in @($PSScriptRoot, (Join-Path $PSScriptRoot 'platform-tools'), 'D:\Tools\platform-tools')) {
+        $p = Join-Path $dir "$Name.exe"
+        if (Test-Path $p) { return $p }
+    }
+    $c = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($c) { return $c.Source }
+    return ''
+}
+
+function Enable-UsbAdb {
+    $a = Read-Host 'USB-порт ГУ (тот, что для CarPlay): [1] режим устройства — ADB по USB, [2] вернуть режим хоста, [Enter] отмена'
     if ($a -ne '1' -and $a -ne '2') { return }
     Initialize-HuConsole
+    if ($script:Env['mode'] -ne 'android') { throw 'только в Android: recovery через 61 с сбрасывает микроконтроллер (§2.2)' }
+    if ($a -eq '2') {
+        $r = Invoke-Hu "echo host > $DualRole/data_role; sleep 1; cat $DualRole/mode" -AllowFail
+        Write-Host "  режим порта: $($r.Text.Trim())"
+        return
+    }
+    $r = Invoke-Hu ("echo device > $DualRole/data_role; sleep 1; [ -n `"`$(cat $Gadget/UDC)`" ] || echo $Udc > $Gadget/UDC; sleep 1; " +
+        "echo `"mode=`$(cat $DualRole/mode)`"; echo `"state=`$(cat /sys/class/udc/$Udc/state)`"; echo `"usb=`$(getprop sys.usb.state)`"") -AllowFail
+    $f = Get-Fields $r.Lines
+    Write-Host ("  режим порта: {0}, контроллер: {1}, функции: {2}" -f $f['mode'], $f['state'], $f['usb'])
+    if ($f['mode'] -ne 'ufp') { throw 'порт не перешёл в режим устройства' }
+    $adb = Find-PcTool 'adb'
+    if (-not $adb) { Write-Host 'adb.exe на ПК не найден: проверьте вручную «adb devices» (серийный номер 0x123456789EF).' -ForegroundColor Yellow; return }
+    Write-Host 'Жду ГУ в «adb devices» (до 30 с; кабель ПК — USB-порт ГУ для CarPlay)...'
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        $l = @(& $adb devices 2>$null | Where-Object { $_ -match '^0x123456789EF\s+device' })
+        if ($l) { Write-Host "ADB по USB: `"$adb`" -s 0x123456789EF shell (su работает)" -ForegroundColor Green; return }
+        Start-Sleep 2
+    }
+    Write-Host 'ГУ не появилось. Если state=configured, проверьте драйвер в Диспетчере устройств; если not attached — кабель или порт.' -ForegroundColor Yellow
+}
+
+function Set-FastbootFlag {
+    $null = Invoke-Hu '[ -b /dev/block/misc ]'
+    if ($script:Env['wp'] -ne '1') { throw 'нет /proc/mmc_debug — защиту eMMC не снять' }
+    if ($DryRun) { Write-Host '  -DryRun: запись boot-fastboot в misc пропущена' -ForegroundColor Cyan; return $false }
+    $null = Invoke-Hu 'echo emmc_disable_all_wp > /proc/mmc_debug'
+    try {
+        # Only the 2048-byte boot message at offset 0; A/B slot metadata at 0x1000 stays untouched.
+        $r = Invoke-Hu ("dd if=/dev/zero of=/dev/block/misc bs=2048 count=1 2>/dev/null && printf 'boot-fastboot' | dd of=/dev/block/misc bs=1 2>/dev/null; sync; " +
+            'blockdev --flushbufs /dev/block/misc; echo 3 > /proc/sys/vm/drop_caches; echo "cmd=$(dd if=/dev/block/misc bs=13 count=1 2>/dev/null)"') -AllowFail
+    } finally {
+        $null = Invoke-Hu 'echo emmc_enable_all_wp > /proc/mmc_debug' -AllowFail
+    }
+    if ((Get-Fields $r.Lines)['cmd'] -ne 'boot-fastboot') { throw 'boot-fastboot в misc не записался' }
+    return $true
+}
+
+function Restart-Hu {
+    $a = Read-Host 'Перезагрузить ГУ: [1] обычно, [2] в fastboot (USB), [Enter] не сейчас'
+    if ($a -ne '1' -and $a -ne '2') { return }
+    Initialize-HuConsole
+    if ($a -eq '2') {
+        if (-not (Set-FastbootFlag)) { return }
+        Write-Host 'В misc записано boot-fastboot. LK сотрёт его сам при входе, поэтому сброс питания вернёт обычную загрузку.' -ForegroundColor Green
+    }
     Restore-Printk
     $script:PrintkSaved = ''
-    if ($a -eq '2') { $cmd = 'reboot recovery' } else { $cmd = 'reboot' }
-    Send-Uart "sync; $cmd`r"
+    Send-Uart "sync; reboot`r"
     $script:Fast = $false
     Watch-Boot
 }
@@ -1095,7 +1160,8 @@ try {
         Write-Host ' 6  GPT: восстановить одну копию по другой'
         Write-Host ' 7  GPT: записать таблицы из дампа'
         Write-Host ' 8  Записать раздел из файла на USB-флешке'
-        Write-Host ' 9  Перезагрузить ГУ (обычно / в recovery)'
+        Write-Host ' 9  Перезагрузить ГУ (обычно / в fastboot по USB)'
+        Write-Host ' U  ADB по USB (порт ГУ для CarPlay в режим устройства)'
         Write-Host ' T  Терминал (ручной ввод)'
         Write-Host ' Q  Выход'
         $choice = (Read-Host 'Пункт').Trim().ToUpper()
@@ -1110,6 +1176,7 @@ try {
                 '7' { Restore-GptFromDump }
                 '8' { Write-PartitionFromUsb }
                 '9' { Restart-Hu }
+                'U' { Enable-UsbAdb }
                 'T' { Start-Terminal }
                 'Q' { Restore-Printk; return }
                 default { }
