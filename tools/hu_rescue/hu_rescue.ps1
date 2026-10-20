@@ -976,10 +976,13 @@ function Write-PartitionFromUsb {
     Write-Host 'MD5 файла на ПК...'
     $md5 = (Get-FileHash $local -Algorithm MD5).Hash.ToLower()
     $fname = Split-Path $local -Leaf
-    $part = Invoke-Hu ('for u in /sys/block/mmcblk0/mmcblk0p*/uevent; do grep -q "^PARTNAME=' + $name + '$" $u && echo "${u%/uevent}"; done; true')
+    # Partition dirs in sysfs and nodes in /dev/block are named after the partition (DEVNAME), not mmcblk0pN.
+    $part = Invoke-Hu ('for u in /sys/block/mmcblk0/*/uevent; do grep -q "^PARTNAME=' + $name + '$" $u && echo "${u%/uevent} $(grep ^DEVNAME= $u | cut -d= -f2)"; done; true')
     $sys = @($part.Lines | Where-Object { $_ })
     if ($sys.Count -ne 1) { throw "раздел «$name» не найден (или найден не один)" }
-    $dev = '/dev/block/' + (Split-Path $sys[0] -Leaf)
+    $sysDir, $devName = $sys[0].Split(' ')
+    $sys = @($sysDir)
+    $dev = '/dev/block/' + $devName
     $info = Get-Fields (Invoke-Hu ('echo "size=$(cat ' + $sys[0] + '/size)"; [ -b ' + $dev + ' ] && echo blk=1; for d in /udisk* /mnt/media_rw/* /storage/*; do [ -f "$d/' + $fname + '" ] && echo "file=$d/' + $fname + '"; done; true')).Lines
     if ($info['blk'] -ne '1') { throw "нет блочного устройства $dev" }
     $partBytes = [long]$info['size'] * 512
