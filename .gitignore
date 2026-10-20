@@ -46,3 +46,5 @@ tools/out/
 # Voice TTS / STT models (downloaded by Gradle fetch*Model tasks, not committed)
 voice/src/main/assets/vits-piper-*/
 voice/src/main/assets/vosk-model-*/
+
+hu_perf_results/
