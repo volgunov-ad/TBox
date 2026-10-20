@@ -1723,7 +1723,7 @@
     <string name="settings_adb_tcp_title">Включить ADB TCP на ГУ</string>
     <string name="settings_adb_tcp_desc">Порт 5555; после изменения перезапускается adbd</string>
     <string name="settings_adb_usb_title">Включить ADB USB на ГУ</string>
-    <string name="settings_adb_usb_desc">Переключает USB-порт ГУ в режим периферии или хоста</string>
+    <string name="settings_adb_usb_desc">Переключает USB-порт ГУ в режим периферии или хоста. На Android 10 это порт CarPlay: пока ADB USB включён, CarPlay и флешки на нём не работают; после перезагрузки ГУ порт снова в режиме хоста</string>
     <string name="settings_adb_apply_error_title">Ошибка настройки ADB</string>
     <string name="settings_mock_location_title">Подмена системной геопозиции</string>
     <string name="settings_mock_power_off_short">Откл.</string>

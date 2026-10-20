@@ -1712,7 +1712,7 @@
     <string name="settings_adb_tcp_title">Enable ADB TCP on HU</string>
     <string name="settings_adb_tcp_desc">Port 5555; adbd restarts after changing the setting</string>
     <string name="settings_adb_usb_title">Enable ADB USB on HU</string>
-    <string name="settings_adb_usb_desc">Switches the HU USB port between peripheral and host mode</string>
+    <string name="settings_adb_usb_desc">Switches the HU USB port between peripheral and host mode. On Android 10 this is the CarPlay port: while ADB USB is on, CarPlay and USB drives do not work on it; after an HU reboot the port is back in host mode</string>
     <string name="settings_adb_apply_error_title">ADB configuration error</string>
     <string name="settings_mock_location_title">System location mock</string>
     <string name="settings_mock_power_off_short">Off</string>

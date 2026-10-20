@@ -43,6 +43,18 @@ class HuAdbControlTest {
     }
 
     @Test
+    fun usbPortRoleCommand_switchesDualRoleAsRootAndPrintsMode() {
+        val on = HuAdbControl.usbPortRoleCommand(true)
+        assertTrue(on.startsWith("su 0 sh -c '"))
+        assertTrue("echo device > /sys/class/dual_role_usb/dual-role-usb20/data_role" in on)
+        assertTrue("echo 13010000.cdncusb > /config/usb_gadget/g1/UDC" in on)
+        assertTrue(on.endsWith("cat /sys/class/dual_role_usb/dual-role-usb20/mode'"))
+        val off = HuAdbControl.usbPortRoleCommand(false)
+        assertTrue("echo host > /sys/class/dual_role_usb/dual-role-usb20/data_role" in off)
+        assertFalse("UDC" in off)
+    }
+
+    @Test
     fun stateParsers_acceptWhitespaceAndFallbackToServicePort() {
         assertTrue(HuAdbControl.isTcpPortPropEnabled(" 5555 ", "0"))
         assertTrue(HuAdbControl.isTcpPortPropEnabled("", "5555"))

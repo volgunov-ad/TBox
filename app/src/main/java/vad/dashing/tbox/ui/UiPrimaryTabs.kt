@@ -1446,7 +1446,7 @@ fun SettingsTabContent(
             SettingSwitch(
                 huAdbState.usbEnabled,
                 { enabled ->
-                    settingsViewModel.setHuAdbUsbEnabled(enabled)
+                    settingsViewModel.setHuAdbUsbEnabled(context, enabled)
                 },
                 stringResource(R.string.settings_adb_usb_title),
                 stringResource(R.string.settings_adb_usb_desc),

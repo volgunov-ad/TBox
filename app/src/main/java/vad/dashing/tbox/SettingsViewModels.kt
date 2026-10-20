@@ -2396,9 +2396,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun setHuAdbUsbEnabled(enabled: Boolean) {
+    fun setHuAdbUsbEnabled(context: Context, enabled: Boolean) {
         viewModelScope.launch {
-            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(enabled)
+            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(context, enabled)
         }
     }
 
