@@ -9,6 +9,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+class ExternalApiHttpException(
+    val httpStatus: Int,
+    message: String,
+) : IllegalStateException(message)
+
 class ExternalApiClient(
     private val client: OkHttpClient = defaultClient(),
 ) {
@@ -111,7 +116,7 @@ class ExternalApiClient(
             // RunNow returns 202 Accepted.
             if (!response.isSuccessful && response.code != 202) {
                 val message = errorMessage(body) ?: "HTTP ${response.code}: ${body.take(200)}"
-                error(message)
+                throw ExternalApiHttpException(response.code, message)
             }
             return body
         }

@@ -209,12 +209,13 @@ def run_gradle(project_dir: Path, tasks: tuple[str, ...], jvm_args: str) -> None
     subprocess.run(command, cwd=project_dir, check=True)
 
 
-def expected_apk_path(project_dir: Path, flavor: str, build_type: str) -> Path:
-    return project_dir / "app/build/outputs/apk" / flavor / build_type / f"app-{flavor}-{build_type}.apk"
+def expected_apk_path(project_dir: Path, flavor: str, build_type: str, version_name: str) -> Path:
+    file_name = f"tbox-monitor-{version_name}-{flavor}-{build_type}.apk"
+    return project_dir / "app/build/outputs/apk" / flavor / build_type / file_name
 
 
-def find_apk(project_dir: Path, flavor: str, build_type: str) -> Path:
-    expected = expected_apk_path(project_dir, flavor, build_type)
+def find_apk(project_dir: Path, flavor: str, build_type: str, version_name: str) -> Path:
+    expected = expected_apk_path(project_dir, flavor, build_type, version_name)
     if expected.is_file():
         return expected
 
@@ -243,7 +244,7 @@ def build_apk_metadata(
     build_type: str,
     version_name: str,
 ) -> BuiltApk:
-    source = find_apk(project_dir, flavor, build_type)
+    source = find_apk(project_dir, flavor, build_type, version_name)
     file_name = ota_apk_file_name(version_name, flavor)
     return BuiltApk(
         flavor=flavor,

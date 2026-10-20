@@ -1584,6 +1584,7 @@
     <string name="settings_api_pairing_deny">Deny</string>
     <string name="settings_api_pairing_dialog_title">Allow connection?</string>
     <string name="settings_api_pairing_dialog_message">Allow \"%1$s\" to access the API?</string>
+    <string name="settings_api_local_dialog_message">\"%1$s\" (%2$s) on this head unit asks for access to the TBox Monitor API. Once allowed, it will connect on its own without asking again. To revoke: Settings → API → \"Trusted clients\".</string>
     <string name="settings_api_clients_title">Trusted clients</string>
     <string name="settings_api_clients_empty">No paired apps</string>
     <string name="settings_api_client_revoke">Revoke</string>

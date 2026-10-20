@@ -9,6 +9,9 @@ data class ExternalApiPairedClient(
     val tokenHash: String,
     val createdAtEpochMs: Long,
     val lastUsedAtEpochMs: Long = createdAtEpochMs,
+    /** Set for a companion confirmed through the local ContentProvider. */
+    val packageName: String? = null,
+    val certSha256: String? = null,
 ) {
     fun toJson(): JSONObject =
         JSONObject()
@@ -17,6 +20,10 @@ data class ExternalApiPairedClient(
             .put("tokenHash", tokenHash)
             .put("createdAtEpochMs", createdAtEpochMs)
             .put("lastUsedAtEpochMs", lastUsedAtEpochMs)
+            .apply {
+                packageName?.let { put("packageName", it) }
+                certSha256?.let { put("certSha256", it) }
+            }
 
     companion object {
         fun fromJson(json: JSONObject): ExternalApiPairedClient {
@@ -27,6 +34,8 @@ data class ExternalApiPairedClient(
                 tokenHash = json.getString("tokenHash"),
                 createdAtEpochMs = createdAtEpochMs,
                 lastUsedAtEpochMs = json.optLong("lastUsedAtEpochMs", createdAtEpochMs),
+                packageName = json.optString("packageName").takeIf { it.isNotEmpty() },
+                certSha256 = json.optString("certSha256").takeIf { it.isNotEmpty() },
             )
         }
 

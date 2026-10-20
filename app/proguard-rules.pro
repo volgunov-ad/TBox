@@ -12,13 +12,9 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Line numbers for user crash logs; retrace them with the mapping.txt copied next to the APK.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
 # mbCAN JNI glue resolves Java symbols by exact names/signatures.
 # Keep the full vendor package unobfuscated in release builds.

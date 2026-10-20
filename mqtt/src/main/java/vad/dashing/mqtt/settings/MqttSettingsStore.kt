@@ -66,6 +66,17 @@ class MqttSettingsStore private constructor(context: Context) {
             .apply()
     }
 
+    /**
+     * Token and port from Monitor's local provider. Written on their own: the bridge service
+     * renews the token, and a full [save] from a stale copy would bring the old one back.
+     */
+    fun saveMonitorAccess(accessToken: String? = null, apiPort: Int? = null) {
+        val editor = prefs.edit()
+        if (accessToken != null) editor.putString(KEY_TOKEN, accessToken.trim())
+        if (apiPort != null) editor.putInt(KEY_API_PORT, apiPort)
+        editor.apply()
+    }
+
     /** Old default 5 becomes 10 once. A 5 saved after that stays 5. */
     private fun loadFastPublishSeconds(): Int {
         val stored = if (prefs.contains(KEY_FAST)) {

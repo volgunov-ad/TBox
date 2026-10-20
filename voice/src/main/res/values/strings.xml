@@ -9,6 +9,7 @@
     <string name="settings_token_hint">Токен или «Bearer …» из Настройки → API</string>
     <string name="phrase_label">Фраза</string>
     <string name="action_save">Сохранить</string>
+    <string name="action_request_access">Получить доступ у TBox Monitor</string>
     <string name="action_check_health">Проверить связь</string>
     <string name="action_refresh_catalog">Обновить каталог</string>
     <string name="action_run_phrase">Выполнить фразу</string>

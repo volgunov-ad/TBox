@@ -1,8 +1,10 @@
 package vad.dashing.tbox.externalapi
 
 import android.content.Context
+import android.content.Intent
 import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,11 +31,13 @@ import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationTriggerContext
+import vad.dashing.tbox.localaccess.LocalAccessContract
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneCompanionHost
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import java.util.concurrent.ConcurrentHashMap
 
 data class ExternalApiStatus(
     val enabled: Boolean = false,
@@ -78,6 +82,10 @@ class ExternalApiController(
 
     private val _pendingPairRequests = MutableStateFlow<List<ExternalApiPairRequest>>(emptyList())
     val pendingPairRequests: StateFlow<List<ExternalApiPairRequest>> = _pendingPairRequests.asStateFlow()
+
+    private val _localConsent = MutableStateFlow<ExternalApiLocalConsent?>(null)
+    val localConsent: StateFlow<ExternalApiLocalConsent?> = _localConsent.asStateFlow()
+    private val deniedLocalPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     private val clientsLock = Any()
     private val persistMutex = Mutex()
@@ -228,6 +236,108 @@ class ExternalApiController(
         TboxRepository.addLog("INFO", "ExternalApi", "Pair denied: $requestId")
         _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
     }
+
+    /**
+     * Called from the local provider with a caller package verified by Binder.
+     * A confirmed caller gets a fresh token every time; its previous token stops working.
+     */
+    fun localAccess(packageName: String, certSha256: String, interactive: Boolean): ExternalApiLocalAnswer {
+        val clientName = ExternalApiLocalClients.nameOf(packageName)
+            ?: return ExternalApiLocalAnswer(LocalAccessContract.STATUS_UNKNOWN_CLIENT)
+        val clientId = ExternalApiLocalClients.clientId(packageName)
+        val token = synchronized(clientsLock) {
+            if (!ExternalApiAuth.isLocalClientTrusted(pairedClients, clientId, packageName, certSha256)) {
+                null
+            } else {
+                val token = ExternalApiAuth.generateToken()
+                val now = System.currentTimeMillis()
+                pairedClients = ExternalApiAuth.registerApprovedClient(
+                    clients = pairedClients,
+                    clientId = clientId,
+                    clientName = clientName,
+                    accessToken = token,
+                    createdAtEpochMs = now,
+                    packageName = packageName,
+                    certSha256 = certSha256,
+                )
+                lastPersistedUseAt[clientId] = now
+                token
+            }
+        }
+        if (token != null) {
+            persistClients()
+            publishStatus()
+            return localAnswer(LocalAccessContract.STATUS_GRANTED, token)
+        }
+        val consent = ExternalApiLocalConsent(packageName, clientName, certSha256)
+        val status = when {
+            interactive -> {
+                deniedLocalPackages.remove(packageName)
+                _localConsent.value = consent
+                scope.launch(Dispatchers.Main) {
+                    appContext.startActivity(
+                        Intent(appContext, ExternalApiLocalConsentActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                LocalAccessContract.STATUS_PENDING
+            }
+            _localConsent.value == consent -> LocalAccessContract.STATUS_PENDING
+            packageName in deniedLocalPackages -> LocalAccessContract.STATUS_DENIED
+            else -> LocalAccessContract.STATUS_CONSENT_REQUIRED
+        }
+        return localAnswer(status)
+    }
+
+    fun localStatus(packageName: String): ExternalApiLocalAnswer =
+        if (ExternalApiLocalClients.nameOf(packageName) == null) {
+            ExternalApiLocalAnswer(LocalAccessContract.STATUS_UNKNOWN_CLIENT)
+        } else {
+            localAnswer(LocalAccessContract.STATUS_OK)
+        }
+
+    fun approveLocalConsent() {
+        val consent = _localConsent.value ?: return
+        _localConsent.value = null
+        deniedLocalPackages.remove(consent.packageName)
+        val clientId = ExternalApiLocalClients.clientId(consent.packageName)
+        val now = System.currentTimeMillis()
+        synchronized(clientsLock) {
+            // The token itself is never handed out: the client takes a fresh one on its next call.
+            pairedClients = ExternalApiAuth.registerApprovedClient(
+                clients = pairedClients,
+                clientId = clientId,
+                clientName = consent.clientName,
+                accessToken = ExternalApiAuth.generateToken(),
+                createdAtEpochMs = now,
+                packageName = consent.packageName,
+                certSha256 = consent.certSha256,
+            )
+            lastPersistedUseAt[clientId] = now
+        }
+        persistClients()
+        publishStatus()
+        TboxRepository.addLog("INFO", "ExternalApi", "Local access approved: ${consent.packageName}")
+    }
+
+    fun denyLocalConsent() {
+        val consent = _localConsent.value ?: return
+        _localConsent.value = null
+        deniedLocalPackages.add(consent.packageName)
+        TboxRepository.addLog("INFO", "ExternalApi", "Local access denied: ${consent.packageName}")
+    }
+
+    /** The dialog was closed without an answer; the client may ask again. */
+    fun dismissLocalConsent() {
+        _localConsent.value = null
+    }
+
+    private fun localAnswer(status: String, token: String? = null) = ExternalApiLocalAnswer(
+        status = status,
+        accessToken = token,
+        port = port,
+        serverEnabled = enabled,
+    )
 
     fun revokeClient(clientId: String) {
         synchronized(clientsLock) {

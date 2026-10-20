@@ -246,6 +246,20 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="vad.dashing.tbox.externalapi.ExternalApiLocalConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Callers are checked by Binder uid in code; a permission would not help with a public signing key. -->
+        <provider
+            android:name="vad.dashing.tbox.externalapi.ExternalApiLocalAccessProvider"
+            android:authorities="vad.dashing.tbox.localaccess"
+            android:exported="true" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

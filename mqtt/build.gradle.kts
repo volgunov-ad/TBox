@@ -1,3 +1,5 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -40,6 +42,13 @@ android {
         }
     }
 
+    applicationVariants.all {
+        outputs.all {
+            (this as BaseVariantOutputImpl).outputFileName =
+                "tbox-mqtt-${versionName}-${buildType.name}.apk"
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -53,6 +62,9 @@ android {
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+    sourceSets.named("main") {
+        java.srcDir("../shared/localaccess/java")
     }
     packaging {
         jniLibs {

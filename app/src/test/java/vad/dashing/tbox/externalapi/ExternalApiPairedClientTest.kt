@@ -48,6 +48,22 @@ class ExternalApiPairedClientTest {
     }
 
     @Test
+    fun jsonRoundtrip_preservesLocalCompanion() {
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "local:vad.dashing.mqtt",
+                clientName = "TBox MQTT",
+                tokenHash = "abc123",
+                createdAtEpochMs = 1_700_000_000_000L,
+                packageName = "vad.dashing.mqtt",
+                certSha256 = "50b797",
+            ),
+        )
+        val decoded = ExternalApiPairedClient.decodeList(ExternalApiPairedClient.encodeList(clients))
+        assertEquals(clients, decoded)
+    }
+
+    @Test
     fun decodeList_emptyAndBlank() {
         assertTrue(ExternalApiPairedClient.decodeList("").isEmpty())
         assertTrue(ExternalApiPairedClient.decodeList("[]").isEmpty())

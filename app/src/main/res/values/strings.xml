@@ -1592,6 +1592,7 @@
     <string name="settings_api_pairing_deny">Отклонить</string>
     <string name="settings_api_pairing_dialog_title">Разрешить подключение?</string>
     <string name="settings_api_pairing_dialog_message">Разрешить «%1$s» доступ к API?</string>
+    <string name="settings_api_local_dialog_message">Приложение «%1$s» (%2$s) на этом ГУ просит доступ к API TBox Monitor. После разрешения оно будет подключаться само, без повторного вопроса. Отозвать доступ: Настройки → API → «Доверенные клиенты».</string>
     <string name="settings_api_clients_title">Доверенные клиенты</string>
     <string name="settings_api_clients_empty">Нет сопряжённых приложений</string>
     <string name="settings_api_client_revoke">Отозвать</string>

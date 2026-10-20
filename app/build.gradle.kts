@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -105,6 +106,21 @@ android {
             isShrinkResources = false
         }
     }
+    applicationVariants.all {
+        val apkBaseName = "tbox-monitor-$versionName-${buildType.name}"
+        outputs.all {
+            (this as BaseVariantOutputImpl).outputFileName = "$apkBaseName.apk"
+        }
+        if (buildType.isMinifyEnabled) {
+            val mappingName = "$apkBaseName-mapping.txt"
+            val copyMapping = tasks.register<Copy>("copy${name.replaceFirstChar { it.uppercase() }}Mapping") {
+                from(mappingFileProvider)
+                into(layout.buildDirectory.dir("outputs/release-mapping"))
+                rename { mappingName }
+            }
+            assembleProvider.configure { finalizedBy(copyMapping) }
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -130,6 +146,7 @@ android {
                 if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
             )
             java.srcDir("../shared/src/main/java")
+            java.srcDir("../shared/localaccess/java")
         }
     }
 }

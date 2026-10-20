@@ -25,6 +25,8 @@ import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.settings.connectionChanged
+import vad.dashing.tbox.localaccess.LocalAccessClient
+import vad.dashing.tbox.localaccess.LocalAccessContract
 
 data class MqttHomeState(
     val tab: Int = 0,
@@ -67,7 +69,11 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        if (settings.accessToken.isNotBlank()) refreshEntities()
+        if (settings.accessToken.isNotBlank()) {
+            refreshEntities()
+        } else {
+            requestAccess(httpFallback = false)
+        }
     }
 
     fun selectTab(index: Int) {
@@ -77,7 +83,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun update(transform: (MqttSettings) -> MqttSettings) {
         val current = _state.value
-        val next = transform(current.settings)
+        val next = transform(withStoredAccess(current.settings))
         store.save(next)
         _state.value = current.copy(
             settings = next,
@@ -146,7 +152,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveConnection() {
         val current = _state.value
-        val merged = current.settings.applyingConnection(current.connectionDraft).normalized()
+        val merged = withStoredAccess(current.settings).applyingConnection(current.connectionDraft).normalized()
         store.save(merged)
         _state.value = current.copy(
             settings = merged,
@@ -180,56 +186,119 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         refreshEntities()
     }
 
-    fun sendPairRequest() {
+    fun sendPairRequest() = requestAccess(httpFallback = true)
+
+    /**
+     * Monitor confirms this app in its own dialog once and then hands out tokens by itself.
+     * The HTTP pairing stays for a Monitor without the local provider.
+     */
+    private fun requestAccess(httpFallback: Boolean) {
         if (_state.value.pairBusy) return
         pairJob?.cancel()
         pairJob = viewModelScope.launch(Dispatchers.IO) {
-            val settings = _state.value.settings
-            updateUi { it.copy(pairBusy = true, pairMessage = "Отправка запроса") }
-            try {
-                val request = api.pairRequest(
-                    port = settings.apiPort,
-                    clientId = store.pairClientId(),
-                    clientName = "TBox MQTT",
-                )
-                updateUi { it.copy(pairMessage = "Ожидание подтверждения в Monitor") }
-                val deadline = System.currentTimeMillis() + 120_000L
-                while (System.currentTimeMillis() < deadline) {
-                    delay(1_000L)
-                    val status = api.pairStatus(settings.apiPort, request.requestId)
-                    when (status.status) {
-                        "approved" -> {
-                            val token = status.accessToken.orEmpty()
-                            if (token.isBlank()) {
-                                updateUi { it.copy(pairBusy = false, pairMessage = "Monitor не вернул токен") }
-                            } else {
-                                withContext(Dispatchers.Main) {
-                                    update { it.copy(accessToken = token) }
-                                    updateUi { it.copy(pairBusy = false, pairMessage = "Доступ разрешён") }
-                                    startBridgeIfReady()
-                                    refreshEntities()
-                                }
+            updateUi { it.copy(pairBusy = true, pairMessage = "Запрос доступа у TBox Monitor") }
+            val result = LocalAccessClient.awaitAccess(getApplication()) {
+                updateUi { it.copy(pairMessage = "Подтвердите доступ в окне TBox Monitor") }
+            }
+            if (result.granted) {
+                withContext(Dispatchers.Main) {
+                    store.saveMonitorAccess(accessToken = result.accessToken, apiPort = result.port)
+                    reloadMonitorAccess()
+                    val message = if (result.serverEnabled == false) {
+                        "Доступ разрешён. Включите API в TBox Monitor: Настройки → API"
+                    } else {
+                        "Доступ разрешён"
+                    }
+                    updateUi { it.copy(pairBusy = false, pairMessage = message) }
+                    startBridgeIfReady()
+                    refreshEntities()
+                }
+                return@launch
+            }
+            if (httpFallback && result.status == LocalAccessContract.STATUS_NOT_SUPPORTED) {
+                pairOverHttp()
+                return@launch
+            }
+            updateUi { it.copy(pairBusy = false, pairMessage = localAccessMessage(result.status)) }
+        }
+    }
+
+    private suspend fun pairOverHttp() {
+        val settings = _state.value.settings
+        updateUi { it.copy(pairMessage = "Отправка запроса") }
+        try {
+            val request = api.pairRequest(
+                port = settings.apiPort,
+                clientId = store.pairClientId(),
+                clientName = "TBox MQTT",
+            )
+            updateUi { it.copy(pairMessage = "Ожидание подтверждения в Monitor") }
+            val deadline = System.currentTimeMillis() + 120_000L
+            while (System.currentTimeMillis() < deadline) {
+                delay(1_000L)
+                val status = api.pairStatus(settings.apiPort, request.requestId)
+                when (status.status) {
+                    "approved" -> {
+                        val token = status.accessToken.orEmpty()
+                        if (token.isBlank()) {
+                            updateUi { it.copy(pairBusy = false, pairMessage = "Monitor не вернул токен") }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                update { it.copy(accessToken = token) }
+                                updateUi { it.copy(pairBusy = false, pairMessage = "Доступ разрешён") }
+                                startBridgeIfReady()
+                                refreshEntities()
                             }
-                            return@launch
                         }
-                        "denied" -> {
-                            updateUi { it.copy(pairBusy = false, pairMessage = "Запрос отклонён") }
-                            return@launch
-                        }
+                        return
+                    }
+                    "denied" -> {
+                        updateUi { it.copy(pairBusy = false, pairMessage = "Запрос отклонён") }
+                        return
                     }
                 }
-                updateUi { it.copy(pairBusy = false, pairMessage = "Время ожидания вышло") }
-            } catch (error: ApiCallException) {
-                val message = when {
-                    error.code == "pairing_inactive" || error.httpStatus == 403 ->
-                        "Сначала нажмите «Подключить приложение» в Monitor"
-                    error.httpStatus == 404 -> "Запрос пропал"
-                    else -> error.message ?: "Не удалось отправить запрос"
-                }
-                updateUi { it.copy(pairBusy = false, pairMessage = message) }
-            } catch (error: Exception) {
-                updateUi { it.copy(pairBusy = false, pairMessage = error.message ?: "Не удалось отправить запрос") }
             }
+            updateUi { it.copy(pairBusy = false, pairMessage = "Время ожидания вышло") }
+        } catch (error: ApiCallException) {
+            val message = when {
+                error.code == "pairing_inactive" || error.httpStatus == 403 ->
+                    "Сначала нажмите «Подключить приложение» в Monitor"
+                error.httpStatus == 404 -> "Запрос пропал"
+                else -> error.message ?: "Не удалось отправить запрос"
+            }
+            updateUi { it.copy(pairBusy = false, pairMessage = message) }
+        } catch (error: Exception) {
+            updateUi { it.copy(pairBusy = false, pairMessage = error.message ?: "Не удалось отправить запрос") }
+        }
+    }
+
+    private fun localAccessMessage(status: String): String = when (status) {
+        LocalAccessContract.STATUS_DENIED -> "Доступ отклонён в TBox Monitor"
+        LocalAccessContract.STATUS_PENDING -> "Время ожидания вышло"
+        LocalAccessContract.STATUS_CONSENT_REQUIRED -> "Окно TBox Monitor закрыто без ответа"
+        LocalAccessContract.STATUS_UNAVAILABLE -> "TBox Monitor не запущен"
+        LocalAccessContract.STATUS_UNKNOWN_CLIENT -> "TBox Monitor не узнал приложение"
+        LocalAccessContract.STATUS_NOT_SUPPORTED ->
+            "TBox Monitor не найден или старой версии. Подключитесь кнопкой «Отправить запрос»"
+        else -> "TBox Monitor ответил: $status"
+    }
+
+    /** The bridge service may have renewed the token or port since this screen loaded. */
+    private fun withStoredAccess(settings: MqttSettings): MqttSettings {
+        val stored = store.load()
+        return settings.copy(accessToken = stored.accessToken, apiPort = stored.apiPort)
+    }
+
+    private fun reloadMonitorAccess() {
+        _state.update { current ->
+            val settings = withStoredAccess(current.settings)
+            current.copy(
+                settings = settings,
+                connectionDraft = current.connectionDraft.copy(
+                    accessToken = settings.accessToken,
+                    apiPort = settings.apiPort,
+                ),
+            )
         }
     }
 
@@ -266,7 +335,7 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     fun connectionDirty(): Boolean = connectionChanged(_state.value.settings, _state.value.connectionDraft)
 
     fun refreshEntities() {
-        val settings = _state.value.settings
+        val settings = withStoredAccess(_state.value.settings)
         if (settings.accessToken.isBlank()) {
             _state.value = _state.value.copy(
                 entities = emptyList(),

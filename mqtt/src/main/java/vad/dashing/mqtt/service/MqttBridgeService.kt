@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import vad.dashing.mqtt.BuildConfig
 import vad.dashing.mqtt.MainActivity
@@ -48,6 +49,8 @@ import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.wireguard.WgRouteException
 import vad.dashing.mqtt.wireguard.WgTunnel
+import vad.dashing.tbox.localaccess.LocalAccessClient
+import vad.dashing.tbox.localaccess.LocalAccessContract
 import java.time.Instant
 
 class MqttBridgeService : Service() {
@@ -71,6 +74,7 @@ class MqttBridgeService : Service() {
     private var lastRepeatAtMs: Long = 0L
     private var monitorUp = false
     private var unauthorized = false
+    private var lastRenewAtMs = -RENEW_PERIOD_MS
     private var lastError = ""
     private var monitorError = ""
     private var brokerCycleError = ""
@@ -240,7 +244,7 @@ class MqttBridgeService : Service() {
         val health = try {
             api.health(settings.apiPort)
         } catch (error: ApiCallException) {
-            markMonitorDown(settings, wasUp, "Нет связи с Monitor")
+            markMonitorDown(settings, wasUp, monitorDownReason(settings))
             return
         }
         val catalogChanged = health.catalogVersion != catalogVersion
@@ -251,6 +255,10 @@ class MqttBridgeService : Service() {
         } catch (error: ApiCallException) {
             if (error.httpStatus == 401 || error.code == "unauthorized") {
                 unauthorized = true
+                if (renewToken()) {
+                    expedite = true
+                    return
+                }
                 markMonitorDown(settings, wasUp, "Monitor не принимает токен")
                 return
             }
@@ -264,6 +272,35 @@ class MqttBridgeService : Service() {
         maybeRepeat(settings)
         syncSubscriptions(settings)
         lastError = ""
+    }
+
+    /**
+     * A token dropped by Monitor (reset, idle sweep) is replaced without the user while this
+     * app stays confirmed there. A revoked app is not confirmed any more and gets nothing.
+     */
+    private fun renewToken(): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastRenewAtMs < RENEW_PERIOD_MS) return false
+        lastRenewAtMs = now
+        val result = LocalAccessClient.getAccess(this, interactive = false)
+        if (!result.granted) return false
+        store.saveMonitorAccess(accessToken = result.accessToken, apiPort = result.port)
+        return true
+    }
+
+    private fun monitorDownReason(settings: MqttSettings): String {
+        val local = LocalAccessClient.getStatus(this)
+        val port = local.port
+        return when {
+            local.status == LocalAccessContract.STATUS_UNAVAILABLE -> "TBox Monitor не запущен"
+            local.serverEnabled == false -> "API выключен в TBox Monitor: Настройки → API"
+            port != null && port != settings.apiPort -> {
+                store.saveMonitorAccess(apiPort = port)
+                expedite = true
+                "Порт API в Monitor изменён на $port"
+            }
+            else -> "Нет связи с Monitor"
+        }
     }
 
     private fun markMonitorDown(settings: MqttSettings, wasUp: Boolean, reason: String) {
@@ -687,6 +724,9 @@ class MqttBridgeService : Service() {
         private const val NOTIFICATION_ID = 42
         private const val CATALOG_PERIOD_MS = 10L * 60L * 1000L
         private const val START_SETTLE_MS = 700L
+
+        /** Each renewal rotates the token, so a token Monitor keeps rejecting must not spin. */
+        private const val RENEW_PERIOD_MS = 30_000L
 
         fun start(context: Context) {
             val intent = Intent(context, MqttBridgeService::class.java)

@@ -1,8 +1,10 @@
 package vad.dashing.tbox.externalapi
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.ZoneId
@@ -29,6 +31,45 @@ class ExternalApiAuthTest {
         )
         assertNotNull(ExternalApiAuth.findClientByToken(clients, token))
         assertNull(ExternalApiAuth.findClientByToken(clients, "wrong"))
+    }
+
+    @Test
+    fun isLocalClientTrusted_needsSamePackageAndCertificate() {
+        val clients = ExternalApiAuth.registerApprovedClient(
+            clients = emptyList(),
+            clientId = "local:vad.dashing.mqtt",
+            clientName = "TBox MQTT",
+            accessToken = "token",
+            createdAtEpochMs = 0L,
+            packageName = "vad.dashing.mqtt",
+            certSha256 = "aa11",
+        )
+        val id = "local:vad.dashing.mqtt"
+        assertTrue(ExternalApiAuth.isLocalClientTrusted(clients, id, "vad.dashing.mqtt", "AA11"))
+        assertFalse(ExternalApiAuth.isLocalClientTrusted(clients, id, "vad.dashing.mqtt", "bb22"))
+        assertFalse(ExternalApiAuth.isLocalClientTrusted(clients, id, "vad.dashing.voice", "aa11"))
+        assertFalse(
+            ExternalApiAuth.isLocalClientTrusted(
+                ExternalApiAuth.revokeClient(clients, id),
+                id,
+                "vad.dashing.mqtt",
+                "aa11",
+            ),
+        )
+    }
+
+    @Test
+    fun isLocalClientTrusted_ignoresHttpPairedClientWithSameId() {
+        val clients = ExternalApiAuth.registerApprovedClient(
+            clients = emptyList(),
+            clientId = "local:vad.dashing.mqtt",
+            clientName = "Spoofed",
+            accessToken = "token",
+            createdAtEpochMs = 0L,
+        )
+        assertFalse(
+            ExternalApiAuth.isLocalClientTrusted(clients, "local:vad.dashing.mqtt", "vad.dashing.mqtt", "aa11"),
+        )
     }
 
     @Test

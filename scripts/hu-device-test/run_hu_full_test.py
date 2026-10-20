@@ -63,15 +63,10 @@ def find_adb(explicit: str | None) -> str:
 
 def default_apk() -> Path | None:
     outputs = REPO_ROOT / "app" / "build" / "outputs" / "apk"
-    names = (
-        "ru/debug/app-ru-debug.apk",
-        "ru/release/app-ru-release.apk",
-        "en/debug/app-en-debug.apk",
-    )
-    for rel in names:
-        path = outputs / rel
-        if path.is_file():
-            return path
+    for rel in ("ru/debug", "ru/release", "en/debug"):
+        found = sorted((outputs / rel).glob("*.apk"))
+        if found:
+            return found[-1]
     found = sorted(outputs.rglob("*.apk")) if outputs.is_dir() else []
     return found[0] if found else None
 
