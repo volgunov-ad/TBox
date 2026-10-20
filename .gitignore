@@ -48,3 +48,6 @@ voice/src/main/assets/vits-piper-*/
 voice/src/main/assets/vosk-model-*/
 
 hu_perf_results/
+
+# R8 mapping.txt of published APKs (tools/build_ota_release.py), ~100 MB each
+release-mapping/

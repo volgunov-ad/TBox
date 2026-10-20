@@ -12,9 +12,10 @@
 #   public *;
 #}
 
-# Line numbers for user crash logs; retrace them with the mapping.txt copied next to the APK.
+# Sources are public, so renaming hides nothing and only makes user crash logs unreadable.
+# R8 still shrinks and inlines; inlined frames are resolved with the archived mapping.txt.
+-dontobfuscate
 -keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile
 
 # mbCAN JNI glue resolves Java symbols by exact names/signatures.
 # Keep the full vendor package unobfuscated in release builds.
