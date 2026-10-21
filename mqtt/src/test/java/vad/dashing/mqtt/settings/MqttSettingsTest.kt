@@ -2,6 +2,7 @@ package vad.dashing.mqtt.settings
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -81,6 +82,22 @@ class MqttSettingsTest {
         assertFalse(connectionChanged(saved, saved.copy(accessToken = "", deviceName = "другое")))
         assertTrue(connectionChanged(saved, saved.copy(brokerPort = 8883)))
         assertTrue(connectionChanged(saved, saved.copy(wireguardConf = "[Interface]")))
+    }
+
+    @Test
+    fun idleReasonExplainsWhyTheBridgeIsNotRunning() {
+        val configured = MqttSettings(accessToken = "token", brokerHost = "192.168.1.10")
+        assertNull(configured.idleReason)
+        assertEquals("выключен", configured.copy(brokerEnabled = false).idleReason)
+        assertEquals(
+            "не запущен: укажите адрес брокера и нажмите «Сохранить»",
+            configured.copy(brokerHost = " ").idleReason,
+        )
+        assertEquals("не запущен: нет сопряжения с TBox Monitor", configured.copy(accessToken = "").idleReason)
+        assertEquals(
+            "не запущен: нет сопряжения с TBox Monitor и не указан адрес брокера",
+            MqttSettings().idleReason,
+        )
     }
 
     @Test

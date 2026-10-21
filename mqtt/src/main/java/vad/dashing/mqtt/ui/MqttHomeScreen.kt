@@ -398,6 +398,11 @@ private fun StatusTab(state: MqttHomeState) {
         StatusLine("Мост", "выключен: «Подключаться к MQTT брокеру» на вкладке «Подключение»", ok = false)
         return
     }
+    val idle = state.settings.idleReason
+    if (idle != null) {
+        StatusLine("Мост", idle, ok = false)
+        return
+    }
     StatusLine(
         "Monitor",
         linkText(bridge.monitorUp, bridge.monitorSinceMs),
@@ -453,9 +458,10 @@ private fun StatusTab(state: MqttHomeState) {
 @Composable
 private fun LinkSummary(state: MqttHomeState) {
     val bridge = state.bridge
+    val idle = state.settings.idleReason
     val links = buildList {
-        if (!state.settings.brokerEnabled) {
-            add("Мост выключен" to false)
+        if (idle != null) {
+            add("Мост $idle" to false)
         } else {
             add("Monitor" to bridge.monitorUp)
             add("Брокер" to bridge.brokerUp)

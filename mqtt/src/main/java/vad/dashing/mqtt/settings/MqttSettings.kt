@@ -76,6 +76,23 @@ data class MqttSettings(
     val active: Boolean
         get() = ready && brokerEnabled
 
+    /**
+     * Bridge state after the word «Мост» when the service is not running, or null when [active].
+     * Link dots stay at their defaults while the service is down, so they are meaningless then.
+     */
+    val idleReason: String?
+        get() {
+            val host = brokerHost.trim()
+            return when {
+                !brokerEnabled -> "выключен"
+                accessToken.isBlank() && host.isEmpty() ->
+                    "не запущен: нет сопряжения с TBox Monitor и не указан адрес брокера"
+                accessToken.isBlank() -> "не запущен: нет сопряжения с TBox Monitor"
+                host.isEmpty() -> "не запущен: укажите адрес брокера и нажмите «Сохранить»"
+                else -> null
+            }
+        }
+
     fun connectionKey(): String = listOf(
         brokerHost,
         brokerPort.toString(),
