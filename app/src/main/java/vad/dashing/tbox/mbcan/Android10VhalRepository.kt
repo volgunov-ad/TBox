@@ -664,6 +664,8 @@ object Android10VhalRepository {
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID
+    private val VHAL_CEM_KEY_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_KEY_STS
     private val VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION
     private val VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID =
@@ -913,6 +915,10 @@ object Android10VhalRepository {
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _accStatusState = MutableStateFlow<String?>(null)
     val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _ignitionKeyState = MutableStateFlow<String?>(null)
+    val ignitionKeyState: StateFlow<String?> = _ignitionKeyState.asStateFlow()
+    private val _huSystemModeState = MutableStateFlow<String?>(null)
+    val huSystemModeState: StateFlow<String?> = _huSystemModeState.asStateFlow()
     private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
     val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
     private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
@@ -1785,6 +1791,8 @@ object Android10VhalRepository {
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
             MbCanSignal.AccStatus -> setOf(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID)
+            MbCanSignal.IgnitionKey -> setOf(VHAL_CEM_KEY_STS_PROPERTY_ID)
+            MbCanSignal.HuSystemMode -> emptySet()
             MbCanSignal.GasPedal -> setOf(
                 VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID,
                 VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID,
@@ -1920,6 +1928,11 @@ object Android10VhalRepository {
     private fun decodeVehicleGear(raw: Any?): String? {
         val value = (raw as? Number)?.toInt() ?: return null
         return VehicleGearDomain.decodePrndBitmask(value)
+    }
+
+    private fun decodeIgnitionKey(raw: Any?): String? {
+        val value = (raw as? Number)?.toInt() ?: return null
+        return IgnitionKeyDomain.decode(value)
     }
 
     private fun decodeAccStatus(raw: Any?): String? {
@@ -2639,6 +2652,8 @@ object Android10VhalRepository {
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
             VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID ->
                 _accStatusState.value = decodeAccStatus(rawValue)
+            VHAL_CEM_KEY_STS_PROPERTY_ID ->
+                _ignitionKeyState.value = decodeIgnitionKey(rawValue)
             VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID -> applyGasPedalPosition(rawValue)
             VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID -> applyGasPedalInvalid(rawValue)
             VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID ->
@@ -2890,6 +2905,8 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.IgnitionKey -> _ignitionKeyState.value = null
+                MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
@@ -3037,6 +3054,8 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.IgnitionKey -> _ignitionKeyState.value = null
+                MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
@@ -3489,6 +3508,11 @@ object Android10VhalRepository {
                 _accStatusState.value =
                     decodeAccStatus(bridge?.getIntProperty(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID))
             }
+            MbCanSignal.IgnitionKey -> {
+                _ignitionKeyState.value =
+                    decodeIgnitionKey(bridge?.getIntProperty(VHAL_CEM_KEY_STS_PROPERTY_ID))
+            }
+            MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
             MbCanSignal.GasPedal -> {
                 applyGasPedalPosition(readNumericProperty(VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID))
                 applyGasPedalInvalid(bridge?.getIntProperty(VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID))

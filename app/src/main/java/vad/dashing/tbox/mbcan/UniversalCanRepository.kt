@@ -654,6 +654,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val ignitionKeyState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.ignitionKeyState
+            } else {
+                Android10VhalRepository.ignitionKeyState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val huSystemModeState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.huSystemModeState
+            } else {
+                Android10VhalRepository.huSystemModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val accStatusState: StateFlow<String?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {

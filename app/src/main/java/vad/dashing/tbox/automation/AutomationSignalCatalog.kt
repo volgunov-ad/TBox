@@ -6,6 +6,8 @@ import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
+import vad.dashing.tbox.mbcan.HuSystemModeDomain
+import vad.dashing.tbox.mbcan.IgnitionKeyDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
@@ -170,6 +172,37 @@ object AutomationSignalCatalog {
             AccStatusDomain.STATE_OPTIONS,
             typicalRange = "Android 9: AccStatus 4=ACC ON, 5=ON, 0…3=выкл. " +
                 "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
+        ),
+        state(
+            AutomationSignalId.IGNITION_KEY,
+            "Положение ключа",
+            headUnitOnly,
+            IgnitionKeyDomain.OPTIONS,
+            typicalRange = "Положение ключа CEM_2_KeySts / getIgnSts: " +
+                "0=выключено (off), 1=ACC (acc), 2=зажигание (on), 3=стартер (crank). " +
+                "Android 9 и Android 10 одна шкала. Это не «Статус ACC (ключ)».",
+            namedValues = listOf(
+                AutomationSignalNamedValue("off", "Выключено"),
+                AutomationSignalNamedValue("acc", "ACC"),
+                AutomationSignalNamedValue("on", "Зажигание"),
+                AutomationSignalNamedValue("crank", "Стартер"),
+            ),
+        ),
+        state(
+            AutomationSignalId.HU_SYSTEM_MODE,
+            "Режим головного устройства",
+            headUnitOnly,
+            HuSystemModeDomain.OPTIONS,
+            typicalRange = "Только Android 9, eMBCAN_SYSTEMMODE. " +
+                "1=ожидание (standby), 2=работа (active), " +
+                "6=15 минут работы ГУ после снятия ACC/зажигания (hold_15m), 7=сон (sleep). " +
+                "hold_15m — не дистанционный запуск. На Android 10 значения нет.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("standby", "Ожидание"),
+                AutomationSignalNamedValue("active", "Работа"),
+                AutomationSignalNamedValue("hold_15m", "15 минут работы ГУ"),
+                AutomationSignalNamedValue("sleep", "Сон"),
+            ),
         ),
         state(
             AutomationSignalId.ACC_CRUISE_STATE,
@@ -1065,12 +1098,14 @@ object AutomationSignalCatalog {
 
     /**
      * HU backends that answer for a signal but never carry it: A9 mbCAN coolant is always 0.0,
-     * A9 has no target gear, A10 VHAL has no steering speed. TBox has all three.
+     * A9 has no target gear, A10 VHAL has no steering speed and no HU system mode.
+     * TBox covers coolant, target gear, and steering speed. System mode stays head-unit only.
      */
     fun headUnitUnsupported(id: AutomationSignalId, mode: HeadUnitCanMode): Boolean = when (mode) {
         HeadUnitCanMode.Android9MbCan ->
             id == AutomationSignalId.ENGINE_TEMPERATURE || id == AutomationSignalId.TARGET_GEAR
-        HeadUnitCanMode.Android10Vhal -> id == AutomationSignalId.STEERING_SPEED
+        HeadUnitCanMode.Android10Vhal ->
+            id == AutomationSignalId.STEERING_SPEED || id == AutomationSignalId.HU_SYSTEM_MODE
     }
 
     /** Sources that give real values on [mode]. [AutomationSignalDescriptor.sources] is the union over platforms. */

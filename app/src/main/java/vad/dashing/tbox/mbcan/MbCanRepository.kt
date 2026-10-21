@@ -111,6 +111,16 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      */
     AccStatus(setOf("eMBCAN_VEHICLE_ACCSTATUS")),
     /**
+     * Key position from `MBCanVehicleAccStatus.getIgnSts()` (same type 6 object as [AccStatus]).
+     */
+    IgnitionKey(setOf("eMBCAN_VEHICLE_ACCSTATUS")),
+    /**
+     * HU power mode from `eMBCAN_SYSTEMMODE` (type 8). Push arrives only on
+     * `mbCanVehicleAccStatusCallback.onVehicleSystemModeChange` — the field is set
+     * without [MBCanEngine.registACCListener], which would also subscribe BCM.
+     */
+    HuSystemMode(setOf("eMBCAN_SYSTEMMODE")),
+    /**
      * Accelerator pedal percent from Gasped (`eMBCAN_VEHICLE_GASPED_STATUS`, type 36).
      * No JobManager subscribe types: OEM subscribe is owned by
      * [MbCanEngineFacade.syncGaspedStatusListener] (same single-slot race as [AccCruise]).
@@ -439,6 +449,14 @@ object MbCanRepository {
     @Volatile private var pendingAccStatus: String? = null
     private var pendingAccStatusFlushScheduled = false
     private val flushAccStatusPushRunnable = Runnable { flushPendingAccStatusPush() }
+    private val pendingIgnitionKeyPush = Any()
+    @Volatile private var pendingIgnitionKey: String? = null
+    private var pendingIgnitionKeyFlushScheduled = false
+    private val flushIgnitionKeyPushRunnable = Runnable { flushPendingIgnitionKeyPush() }
+    private val pendingSystemModePush = Any()
+    @Volatile private var pendingSystemMode: String? = null
+    private var pendingSystemModeFlushScheduled = false
+    private val flushSystemModePushRunnable = Runnable { flushPendingSystemModePush() }
     private val pendingBrakePedalPush = Any()
     @Volatile private var pendingBrakePedalPressed: Boolean? = null
     private var pendingBrakePedalFlushScheduled = false
@@ -640,6 +658,10 @@ object MbCanRepository {
     val reverseGearSwitchState: StateFlow<Boolean?> = _reverseGearSwitchState.asStateFlow()
     private val _accStatusState = MutableStateFlow<String?>(null)
     val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _ignitionKeyState = MutableStateFlow<String?>(null)
+    val ignitionKeyState: StateFlow<String?> = _ignitionKeyState.asStateFlow()
+    private val _huSystemModeState = MutableStateFlow<String?>(null)
+    val huSystemModeState: StateFlow<String?> = _huSystemModeState.asStateFlow()
     private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
     val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
     private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
@@ -893,6 +915,14 @@ object MbCanRepository {
             synchronized(pendingAccStatusPush) {
                 pendingAccStatus = null
                 pendingAccStatusFlushScheduled = false
+            }
+            synchronized(pendingIgnitionKeyPush) {
+                pendingIgnitionKey = null
+                pendingIgnitionKeyFlushScheduled = false
+            }
+            synchronized(pendingSystemModePush) {
+                pendingSystemMode = null
+                pendingSystemModeFlushScheduled = false
             }
             synchronized(pendingBrakePedalPush) {
                 pendingBrakePedalPressed = null
@@ -1589,6 +1619,32 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/acc_status", "raw=$raw state=$state")
     }
 
+    /** Key position from the same AccStatus settings push (`getIgnSts`). */
+    fun scheduleIgnitionKeyPush(raw: Int?) {
+        val state = raw?.let(IgnitionKeyDomain::decode)
+        synchronized(pendingIgnitionKeyPush) {
+            pendingIgnitionKey = state
+            if (!pendingIgnitionKeyFlushScheduled) {
+                pendingIgnitionKeyFlushScheduled = true
+                cfgPushHandler.postDelayed(flushIgnitionKeyPushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/ignition_key", "raw=$raw state=$state")
+    }
+
+    /** HU power mode from `onVehicleSystemModeChange`. */
+    fun scheduleSystemModePush(raw: Int?) {
+        val state = raw?.let(HuSystemModeDomain::decode)
+        synchronized(pendingSystemModePush) {
+            pendingSystemMode = state
+            if (!pendingSystemModeFlushScheduled) {
+                pendingSystemModeFlushScheduled = true
+                cfgPushHandler.postDelayed(flushSystemModePushRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/system_mode", "raw=$raw state=$state")
+    }
+
     /**
      * Called from [MbCanEngineFacade] [IMBVehicleListener.onVehicleTurnLightChange]
      * (left/right raw bytes from `eMBCAN_VEHICLE_TURNLIGHT`).
@@ -1949,6 +2005,28 @@ object MbCanRepository {
         val scope = boundScope ?: return
         scope.launch(stateApplyDispatcher) {
             _accStatusState.value = state
+        }
+    }
+
+    private fun flushPendingIgnitionKeyPush() {
+        val state = synchronized(pendingIgnitionKeyPush) {
+            pendingIgnitionKeyFlushScheduled = false
+            pendingIgnitionKey.also { pendingIgnitionKey = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _ignitionKeyState.value = state
+        }
+    }
+
+    private fun flushPendingSystemModePush() {
+        val state = synchronized(pendingSystemModePush) {
+            pendingSystemModeFlushScheduled = false
+            pendingSystemMode.also { pendingSystemMode = null }
+        }
+        val scope = boundScope ?: return
+        scope.launch(stateApplyDispatcher) {
+            _huSystemModeState.value = state
         }
     }
 
@@ -2649,6 +2727,8 @@ object MbCanRepository {
             MbCanSignal.CarSpeed -> refreshCarSpeed()
             MbCanSignal.VehicleGear -> refreshVehicleGear()
             MbCanSignal.AccStatus -> refreshAccStatus()
+            MbCanSignal.IgnitionKey -> refreshIgnitionKey()
+            MbCanSignal.HuSystemMode -> refreshHuSystemMode()
             MbCanSignal.GasPedal -> refreshGasPedal()
             MbCanSignal.BrakePedal -> refreshBrakePedal()
             MbCanSignal.WiperSts -> refreshWiperSts()
@@ -3634,6 +3714,40 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshIgnitionKey() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _ignitionKeyState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _ignitionKeyState.value = null
+                return@withContext
+            }
+            _ignitionKeyState.value = MbCanEngineFacade.readIgnitionKey()
+        }
+    }
+
+    private suspend fun refreshHuSystemMode() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _huSystemModeState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _huSystemModeState.value = null
+                return@withContext
+            }
+            _huSystemModeState.value = MbCanEngineFacade.readHuSystemMode()
+        }
+    }
+
     private suspend fun refreshGasPedal() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -4372,6 +4486,7 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.CarSpeed) ||
                 mergedSignals.contains(MbCanSignal.VehicleGear) ||
                 mergedSignals.contains(MbCanSignal.AccStatus) ||
+                mergedSignals.contains(MbCanSignal.IgnitionKey) ||
                 mergedSignals.contains(MbCanSignal.BrakePedal) ||
                 mergedSignals.contains(MbCanSignal.WiperSts) ||
                 mergedSignals.contains(MbCanSignal.RainDetected) ||
@@ -4398,6 +4513,8 @@ object MbCanRepository {
             } else {
                 MbCanEngineFacade.unregisterSettingsTelemetryBridge()
             }
+            val needsSystemModeListener = mergedSignals.contains(MbCanSignal.HuSystemMode)
+            MbCanEngineFacade.syncSystemModeFieldListener(needsSystemModeListener || deep)
             val needsLkaSlaListener = mergedSignals.contains(MbCanSignal.SlaSpeedLimit)
             MbCanEngineFacade.syncLkaSlaStatusListener(needsLkaSlaListener || deep)
             val needsFrmAccListener = mergedSignals.contains(MbCanSignal.AccCruise) ||

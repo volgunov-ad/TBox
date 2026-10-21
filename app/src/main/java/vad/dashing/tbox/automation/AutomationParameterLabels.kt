@@ -128,6 +128,8 @@ object AutomationParameterLabels {
         AutomationSignalId.CRUISE_SET_SPEED -> "Уставка круиза"
         AutomationSignalId.GEAR_MODE -> "Режим КПП"
         AutomationSignalId.ACC_STATUS -> "Статус ACC (ключ)"
+        AutomationSignalId.IGNITION_KEY -> "Положение ключа"
+        AutomationSignalId.HU_SYSTEM_MODE -> "Режим головного устройства"
         AutomationSignalId.ACC_CRUISE_STATE -> "Состояние ACC (круиз)"
         AutomationSignalId.CCS_CRUISE_STATE -> "Состояние CCS (круиз)"
         AutomationSignalId.GAS_PEDAL -> "Педаль газа"

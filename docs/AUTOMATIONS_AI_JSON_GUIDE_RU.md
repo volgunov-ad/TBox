@@ -28,8 +28,8 @@
    - модель ГУ A9/mbCAN или A10/VHAL только если без семантики нельзя (для бинарных
      предпочитай `"on"`/`"off"`, для стёкол — `"close"`/`"open"`/`"vent"`);
    - `keyCode` для триггера `hard_key`, если пользователь не назвал кнопку из таблицы
-     верифицированных кодов (docs/MBCAN_VHAL_PARAMETERS_RU.md); верхняя левая кнопка
-     руля — **216** (`WHEEL_LEFT_BTN_TOP`); на A10 `hard_key` не работает — предложи виджет-триггер;
+     в разделе «Кнопка на руле / двери»; верхняя левая кнопка руля — **216**;
+     на Android 10 `hard_key` не работает — предложи виджет-триггер;
    - страницу главного экрана, если пользователь не указал её и выбор важен.
 3. Если пользователь не выбрал источник сигнала, используй `head_unit`, когда он разрешён;
    иначе используй единственный разрешённый источник. Между `head_unit` и `tbox`
@@ -150,8 +150,8 @@
 - `triggerId`: непустой, до 32 символов, регистр важен;
 - `pressKind`: `single` (одиночное) или `double` (двойное); если поле отсутствует — считается `single` (совместимость со старыми правилами);
 - одиночное и двойное — **разные** триггеры одной плитки (можно слушать оба в разных автоматизациях или как OR в одном правиле);
-- распознавание исключительное: окно двойного = системный `ViewConfiguration.getDoubleTapTimeout()` (то же, что у `combinedClickable` других виджетов панели); одиночное эмитится только после паузы без второго тапа; при двойном одиночное не срабатывает;
-- срабатывает при тапе по плитке «Триггер автоматизации» (`automationTriggerWidget`) с тем же ID в настройках плитки;
+- распознавание исключительное: окно двойного касания — системное окно Android (обычно 300 мс), то же, что у остальных плиток панели; одиночное срабатывает только после паузы без второго тапа; при двойном одиночное не срабатывает;
+- срабатывает при тапе по плитке «Триггер автоматизации» с тем же ID в настройках плитки;
 - срабатывает независимо от активного/неактивного состояния плитки; в режиме редактирования тап по плитке открывает настройки и не срабатывает;
 - нажатия, случившиеся до полного запуска фоновой службы, теряются.
 
@@ -161,18 +161,33 @@
 {"type":"hard_key","id":"1","keyCode":115,"keyStatus":"pressed"}
 ```
 
-- `keyCode`: `0..1023`; верифицированные коды кнопок Jetour Dashing — в таблице
-  «Верифицированные коды кнопок» (docs/MBCAN_VHAL_PARAMETERS_RU.md); верхняя левая кнопка
-  руля — **216** (`WHEEL_LEFT_BTN_TOP`);
+- `keyCode`: `0..1023`. Бери код только из таблицы ниже. Верхняя левая кнопка руля — **216**;
 - `keyStatus`: `pressed` (0 — «Нажал», сразу при нажатии) или `released` (1 — «Отпустил»,
-  сразу при отпускании) — сырые события OEM; либо синтетические жесты `single` /
-  `double` / `long` («Одиночное» / «Двойное» / «Долгое»; вычисляются в приложении по таймингу
-  press→release: окно двойного **400 мс**, долгое — удержание ≥ **500 мс** без отпускания);
+  сразу при отпускании) — сырые события кнопок; либо синтетические жесты `single` /
+  `double` / `long` («Одиночное» / «Двойное» / «Долгое»; приложение считает их по таймингу
+  нажатие→отпускание: окно двойного **400 мс**, долгое — удержание ≥ **500 мс** без отпускания);
   «Одиночное» (короткое нажатие после паузы) срабатывает с задержкой окна двойного, чтобы
   отличить от двойного; после «Долгого» одиночное/двойное на этот цикл не эмитятся;
-- работает только на головных устройствах Android 9 (mbCAN): подписка `IMBHardKeyListener`
+- работает только на головных устройствах Android 9 (mbCAN): прослушивание кнопок
   включается автоматически, пока хотя бы одно включённое правило использует этот триггер;
   на Android 10 (VHAL) события кнопок не приходят — правило не сработает;
+
+Коды кнопок Jetour Dashing (Android 9). На Android 10 этот триггер не используй.
+
+| Кнопка | keyCode | Кнопка | keyCode |
+|---|---:|---|---:|
+| Руль слева, джойстик вверх | 29 | Руль справа, джойстик вверх | 115 |
+| Руль слева, джойстик вниз | 30 | Руль справа, джойстик вниз | 114 |
+| Руль слева, джойстик влево | 31 | Руль справа, джойстик влево | 163 |
+| Руль слева, джойстик вправо | 32 | Руль справа, джойстик вправо | 165 |
+| Руль слева, нажатие джойстика | 33 | Руль справа, нажатие джойстика | 28 |
+| Руль слева, кнопка сверху | 216 | Руль справа, кнопка сверху | 158 |
+| Руль слева, кнопка снизу | 316 | Руль справа, кнопка снизу | 582 |
+| Дверь пассажира | 210 | Дверь сзади справа | 211 |
+| Дверь сзади слева | 212 | | |
+
+Код 28 на этом головном устройстве — нажатие правого джойстика руля. Прочие известные коды, не руль и не двери: 103 вверх, 105 влево, 106 вправо, 108 вниз, 116 питание, 587 домой.
+
 - повторные события той же кнопки и того же статуса в течение 120 мс подавляются (антидребезг);
 - срабатывание — только по факту события кнопки (после перезапуска службы «уже нажатое»
   состояние не воспроизводится); условия/cooldown/`runMode` действуют как обычно;
@@ -189,7 +204,7 @@
 - `btn`: `1..4` (Button 1 всегда 1; RC Button 4 — 1…4);
 - `act`: `press` / `double` / `triple` / `long` / `hold`;
 - события доходят только при подключённом компаньоне, включённом BLE-сканере и MAC в allowlist;
-- срабатывание только по событию `bleBtn` (не по состоянию).
+- срабатывание только по событию нажатия кнопки пульта, не по текущему уровню.
 
 ### ESP-вход (компаньон)
 
@@ -200,7 +215,7 @@
 - `channel`: `0..3` (логические входы компаньона; нажато/замкнуто = level 1);
 - `status`: как у `hard_key` — сырые `pressed` / `released` или синтетические
   `single` / `double` / `long` (те же окна 400 мс / 500 мс);
-- фронты публикуются из `gpioEvent` только после полного снимка `gpio` на линке;
+- фронт учитывается только после того, как компаньон прислал полный снимок всех входов;
 - срабатывание только по событию (не по уровню сигнала `esp_gpio_in_*`).
 
 ### Периодически
@@ -544,7 +559,7 @@
 - при `toggle` поле `value` всё равно обязательно; ставь `0`;
 - для **бинарных** `set` предпочитай семантику `"on"` / `"off"` (portable A9+A10). Legacy
   int по шкале A9/mbCAN (`1` выкл / `2` вкл у большинства; рециркуляция — наоборот) по-прежнему
-  принимается; на A10 приложение само перекодирует через `VhalBinaryToggleCodec`;
+  принимается; на Android 10 приложение само переводит эту шкалу в значения головки;
 - для **стёкол** предпочитай `"close"` / `"open"` / `"vent"` (или `"comfort_open"` = A9 80%).
   Legacy A9 `0/20/80/100` и A10 `1/2/3` при выполнении ремапятся под текущий backend;
 - прочие небинарные значения по-прежнему в шкале A9/mbCAN с преобразованиями A10 ниже;
@@ -670,7 +685,7 @@
 | Отключиться от текущей Wi-Fi-сети | `wifi_disconnect` | значения по умолчанию; радио остаётся включённым |
 | Wi‑Fi модем: данные | `wifi_modem_set_data` | `boolValue`: включить/выключить mobile data; нужен источник модема Wi‑Fi HTTP |
 | Wi‑Fi модем: перезагрузка | `wifi_modem_reboot` | значения по умолчанию; нужен источник модема Wi‑Fi HTTP |
-| ADB TCP | `adb_set_tcp` | `boolValue`: включить/выключить ADB TCP на порту 5555 (`HuAdbControl`; перезапуск adbd) |
+| ADB TCP | `adb_set_tcp` | `boolValue`: включить/выключить ADB TCP на порту 5555 (перезапуск adbd) |
 | ADB shell | `adb_shell` | `stringValue`: непустая shell-команда до 4000 символов. Краткоживущая localhost-сессия `127.0.0.1:5555`: включает TCP только если порт ещё не слушает; после команды **возвращает TCP только если эта сессия его включала** (как auto-grant). Тот же уровень доступа, что shell во вкладке ADB |
 | ADB force-stop | `adb_force_stop` | `stringValue`: имя пакета. Выполняет `am force-stop <package>` через localhost ADB с той же семантикой восстановления TCP, что `adb_shell`. Гарантии остановки нет |
 | Яркость экрана ГУ | `set_hu_screen_brightness` | `intValue`: `1..10` (как Car Settings → Экраны; не HUD/ICM) |
@@ -683,19 +698,21 @@
 | Круиз: пауза (Cancel) | `cruise_pause` | `stringValue`: `acc` / `ccs`. Active/Override → MFS Cancel **212**; иначе no-op |
 | Круиз: полностью выключить | `cruise_full_off` | `stringValue`: `acc` / `ccs`. Standby/Active/Override → MFS **210** |
 | Круиз: возобновить (RES+) | `cruise_resume` | `stringValue`: `acc` / `ccs`. Только Standby → RES+ |
-| Круиз: активировать на текущей скорости (SET−) | `cruise_activate_at_current_speed` | `stringValue`: `acc` / `ccs`. Standby → SET− (как свайп вниз статус-плитки); Off → enable+SET−. Через `AccCruiseController.activateAtCurrentSpeed`, не сырой MFS 214 |
+| Круиз: активировать на текущей скорости (SET−) | `cruise_activate_at_current_speed` | `stringValue`: `acc` / `ccs`. Standby → SET− (как свайп вниз статус-плитки); Off → включить и SET−. Это действие круиза, не сырой импульс кнопки 214 |
 | Круиз: уставка ±1 | `cruise_nudge` | `stringValue`: `acc` / `ccs`; `intValue`: `1` (RES+) или `-1` (SET−). Только Active/Override |
 
 Пустой `stringValue` у медиакоманд (в редакторе — «Активный плеер») отправляет команду в сессию, которая сейчас играет. Если ничего не играет, команда уходит открытой сессии последнего игравшего плеера, иначе первой открытой. Если открытых сессий нет, `media_play_pause` и `media_play` запускают последний игравший плеер и включают воспроизведение так же, как кнопка виджета музыки. Последний игравший плеер программа запоминает и после перезагрузки. Так же работают кнопки воспроизведения в веб-панели и в приложении телефона. Виджет музыки не нужен. Нужен доступ к уведомлениям.
 
 Не используй `esp_relay_set`: это устаревшее и отклоняемое действие. Для медиакоманд нужен
 доступ TBox Monitor к уведомлениям. Для `show_alert` нужно разрешение «Поверх других окон».
-Круизные Builtin вызывают `AccCruiseController` (те же пути, что виджеты); сырые MFS cruise
-pulses в `AutomationCanCatalog` не публикуются. Режим только **ACC** или **CCS** — без Auto.
-Wi-Fi-команды работают с клиентским Wi-Fi ГУ. Если активна SoftAP/раздача ГУ, переключение
-радио сначала пытается её выключить. При `WRITE_SECURE_SETTINGS` дополнительно пишется
-`Settings.Global.WIFI_ON`. На «чистом» API 29+ с targetSdk ≥ 29 `setWifiEnabled` обычно
-недоступен обычному приложению; на ГУ с API 28 (в т.ч. Adayo «Android 10») — да.
+Круизные встроенные действия идут тем же путём, что кнопки виджетов круиза. Сырые импульсы
+кнопок круиза на руле в каталог CAN-команд не входят: для круиза используй эти встроенные
+действия. Режим только **ACC** или **CCS** — без Auto.
+Wi-Fi-команды работают с клиентским Wi-Fi головного устройства. Если активна раздача Wi-Fi
+с головки, переключение радио сначала пытается её выключить. Если у приложения есть право
+менять системные настройки, дополнительно включается системный флаг Wi-Fi. На обычном
+Android 10 и новее стороннее приложение обычно не может само включить Wi-Fi; на головном
+устройстве с API 28 (в том числе Adayo с надписью «Android 10») — может.
 
 `adb_shell` — произвольная shell-команда через localhost ADB (тот же уровень, что вкладка ADB).
 TCP :5555 включают только если порт ещё не слушает; после команды возвращают только если
@@ -731,7 +748,9 @@ TCP :5555 включают только если порт ещё не слуша
 | `steering_speed` | `head_unit`, `tbox` | °/с; на некоторых A10 недоступно |
 | `cruise_set_speed` | `head_unit`, `tbox` | км/ч |
 | `gas_pedal` | `head_unit` | %, 0..100 |
-| `current_gear` | `tbox` | обычно 1..8 в D |
+| `current_gear` | `head_unit`, `tbox` | номер передачи в D, обычно 1..8; вне D часто 0. И головное устройство, и TBox |
+| `target_gear` | `head_unit`, `tbox` | целевая / подготовленная передача. На Android 10 её отдаёт и головка, и TBox; на Android 9 только TBox |
+| `frm_dx_tar_obj` | `head_unit` | сырое расстояние до цели переднего радара, пока цель достоверна; иначе значения нет |
 | `front_left_wheel_pressure` | `head_unit`, `tbox` | бар |
 | `front_right_wheel_pressure` | `head_unit`, `tbox` | бар |
 | `rear_left_wheel_pressure` | `head_unit`, `tbox` | бар |
@@ -773,6 +792,9 @@ TCP :5555 включают только если порт ещё не слуша
 | `active_trip_duration_s` | `app` | с, движение+простой+стоянка |
 | `active_trip_motor_hours` | `app` | ч, моточасы активной поездки |
 | `motor_hours` | `app` | ч, накопленные моточасы приложения |
+| `media_position_ms` | `app` | позиция, мс, на момент чтения (между событиями плеера дорисовывается по скорости, как у виджета музыки) |
+| `media_duration_ms` | `app` | длительность, мс; `0` если плеер её не сообщил |
+| `road_speed_limit_kmh` | `app` | км/ч, лимит OSM на привязанном ребре; без привязки или без maxspeed в пакете значения нет |
 
 ### Сигналы состояния
 
@@ -782,7 +804,9 @@ TCP :5555 включают только если порт ещё не слуша
 | `signal` | Источники | Разрешённые значения |
 |---|---|---|
 | `gear_mode` | `head_unit`, `tbox` | `P`, `R`, `N`, `D` |
-| `acc_status` | `head_unit` | `off`, `acc`, `ign` |
+| `acc_status` | `head_unit` | `off`, `acc`, `ign`. Свёрнутый статус ключа, отдельно от `ignition_key`. Android 9: `off` = коды 0…3, `acc` = ACC включён, `ign` = зажигание включено. Android 10: `acc` = доступен или короткий переход, `off` = недоступен; отдельного «зажигание включено» на Android 10 у этого сигнала нет |
+| `ignition_key` | `head_unit` | `off` (выключено), `acc` (ACC), `on` (зажигание), `crank` (стартер). Android 9 и Android 10, одна шкала 0/1/2/3. Это положение ключа, отдельно от `acc_status` |
+| `hu_system_mode` | `head_unit` | только Android 9: `standby` (ожидание), `active` (работа), `hold_15m` (15 минут работы ГУ после снятия ACC/зажигания), `sleep` (сон). `hold_15m` — удержание питания и экрана ГУ, не дистанционный запуск. На Android 10 значения нет |
 | `acc_cruise_state` | `head_unit` | `off`, `standby`, `active`, `override`, `fault` |
 | `ccs_cruise_state` | `head_unit` | `off`, `standby`, `active` |
 | `brake_pedal` | `head_unit` | `off`, `on` |
@@ -812,14 +836,19 @@ TCP :5555 включают только если порт ещё не слуша
 | `hvac_fan_direction` | `head_unit` | `face`, `foot`, `face_foot`, `defrost`, `defrost_foot` |
 | `hud_display_mode` | `head_unit` | `standard`, `snow` |
 | `icm_brightness_mode` | `head_unit` | `auto`, `manual` |
-| `steering_mode` | `head_unit` | `nor`, `eco`, `spt`; сейчас это alias того же live-сигнала, что `eps_mode` |
+| `steering_mode` | `head_unit` | `nor`, `eco`, `spt`; то же живое значение, что у `eps_mode` |
 | `eps_mode` | `head_unit` | `nor` (NOR, raw 1), `eco` (ECO, raw 2), `spt` (SPT, raw 3) |
 | `drive_mode_6dct` | `head_unit` | `ECO`, `NOR`, `SPT` |
-| `trunk_door` | `head_unit` | `closed`, `open`, `opening`, `closing` |
-| `door_front_left` | `head_unit` | `closed`, `open` (A9 BCM 1/2; A10 CEM2 0/1 via `decodeCemBinaryActive`) |
-| `door_front_right` | `head_unit` | `closed`, `open` |
-| `door_rear_left` | `head_unit` | `closed`, `open` |
-| `door_rear_right` | `head_unit` | `closed`, `open` |
+| `trunk_door` | `head_unit` | `closed`, `open`, `opening`, `closing` — багажник |
+| `door_front_left` | `head_unit` | `closed`, `open` — передняя левая дверь салона |
+| `door_front_right` | `head_unit` | `closed`, `open` — передняя правая дверь салона |
+| `door_rear_left` | `head_unit` | `closed`, `open` — задняя левая дверь салона |
+| `door_rear_right` | `head_unit` | `closed`, `open` — задняя правая дверь салона |
+| `epb_park_lamp` | `head_unit` | `off`, `on` — лампа EPB / паркинг |
+| `engine_oil_pressure` | `head_unit` | `off`, `on` — `on` значит предупреждение о давлении масла, `off` норма |
+| `brake_fluid` | `head_unit` | `off`, `on` — `on` значит предупреждение о тормозной жидкости, `off` норма |
+| `road_highway_class` | `app` | класс OSM-ребра: `motorway`, `motorway_link`, `trunk`, `trunk_link`, `primary`, `primary_link`, `secondary`, `secondary_link`, `tertiary`, `tertiary_link`, `unclassified`, `residential`, `living_street`, `service`, `track`. Без привязки к карте значения нет |
+| `road_tunnel` | `app` | `off` (вне тоннеля), `on` (в тоннеле) по OSM на привязанном ребре. Без привязки значения нет |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_radar_alarm_volume` | `head_unit` | `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
@@ -835,22 +864,26 @@ TCP :5555 включают только если порт ещё не слуша
 | `hu_headrest_speaker` | `app` | `only`, `assist`, `off` — динамик подголовника (Car Settings → Аудио) |
 | `tbox_connected` | `app` | `on`, `off` — UDP-связь с TBox |
 | `locate_status` | `app` | `on`, `off` — фиксация у активного источника геопозиции |
-| `media_title` | `app` | название трека или нет значения. Любая играющая MediaSession, виджет музыки не нужен |
-| `media_artist` | `app` | исполнитель или нет значения. Любая играющая MediaSession, виджет музыки не нужен |
+| `media_title` | `app` | название трека или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
+| `media_artist` | `app` | исполнитель или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_playing` | `app` | `on` / `off` — сессия играет или на паузе |
-| `media_position_ms` | `app` | позиция, мс, на момент чтения (дорисовка по скорости, как у виджета) |
-| `media_duration_ms` | `app` | длительность, мс; `0` если плеер её не сообщил |
 
 Следующие сигналы имеют только значения `off` / `on`:
 
 | Источник | `signal` |
 |---|---|
-| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status` |
+| `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `epb_park_lamp`, `engine_oil_pressure`, `brake_fluid`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `road_tunnel` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и
 `fragrance_concentration` доступны только на A9/mbCAN.
+
+Двери салона — четыре сигнала `door_front_left`, `door_front_right`, `door_rear_left`,
+`door_rear_right` со значениями `closed` / `open`. Капот отдельным сигналом не отдаётся.
+`trunk_door` — багажник, у него ещё есть `opening` и `closing`. `door_open_warning` в списке
+`off`/`on` выше — выключатель предупреждения об открытой двери, не положение двери.
+У `engine_oil_pressure` и `brake_fluid` значение `on` означает предупреждение, `off` — норма.
 
 ---
 

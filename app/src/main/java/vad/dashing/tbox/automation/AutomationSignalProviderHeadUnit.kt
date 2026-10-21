@@ -32,6 +32,14 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.IGNITION_KEY -> UniversalCanRepository.ignitionKeyState.map { value ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.HU_SYSTEM_MODE -> UniversalCanRepository.huSystemModeState.map { value ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.ACC_STATUS -> UniversalCanRepository.accStatusState.map { value ->
         value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
@@ -315,6 +323,8 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.CRUISE_SET_SPEED -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise
     AutomationSignalId.GEAR_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear
     AutomationSignalId.ACC_STATUS -> vad.dashing.tbox.mbcan.MbCanSignal.AccStatus
+    AutomationSignalId.IGNITION_KEY -> vad.dashing.tbox.mbcan.MbCanSignal.IgnitionKey
+    AutomationSignalId.HU_SYSTEM_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.HuSystemMode
     AutomationSignalId.ACC_CRUISE_STATE,
     AutomationSignalId.CCS_CRUISE_STATE,
     -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise

@@ -564,6 +564,12 @@ object MbCanEngineFacade {
                         if (raw != null) {
                             MbCanRepository.scheduleAccStatusPush(raw)
                         }
+                        val ign = runCatching {
+                            (accObj.javaClass.getMethod("getIgnSts").invoke(accObj) as? Number)?.toInt()
+                        }.getOrNull()
+                        if (ign != null) {
+                            MbCanRepository.scheduleIgnitionKeyPush(ign)
+                        }
                     }
                 }
             }
@@ -929,6 +935,72 @@ object MbCanEngineFacade {
     }
 
     /**
+     * System-mode push uses the engine field directly. [MBCanEngine.registACCListener]
+     * would also subscribe BCM and its unregister would drop production BCM pushes.
+     */
+    @Synchronized
+    fun syncSystemModeFieldListener(active: Boolean) {
+        systemModeFieldProduction = active
+        ensureSystemModeFieldProxy()
+    }
+
+    @Synchronized
+    private fun setSystemModeFieldDeep(active: Boolean): Boolean {
+        systemModeFieldDeep = active
+        ensureSystemModeFieldProxy()
+        return systemModeFieldProxy != null || !active
+    }
+
+    @Volatile
+    private var systemModeFieldProduction = false
+    @Volatile
+    private var systemModeFieldDeep = false
+    @Volatile
+    private var systemModeFieldProxy: Any? = null
+
+    private fun ensureSystemModeFieldProxy() {
+        if (!systemModeFieldProduction && !systemModeFieldDeep) {
+            clearSystemModeFieldProxy()
+            return
+        }
+        if (ensureInitialized() !is MbCanAvailability.Available) return
+        if (systemModeFieldProxy != null) return
+        val inst = engineInstance ?: return
+        val iface = runCatching {
+            Class.forName("com.mengbo.mbCan.interfaces.IMbCanVehicleAccStatusCallback")
+        }.getOrNull() ?: return
+        val proxy = newOemProxy(iface.classLoader, iface) { _, method, args ->
+            oemSafe(method.name) {
+                if (systemModeFieldDeep) mirrorDeepCallback(method.name, args)
+                if (systemModeFieldProduction && method.name == "onVehicleSystemModeChange") {
+                    val raw = (args?.getOrNull(0) as? Number)?.toInt()
+                    MbCanRepository.scheduleSystemModePush(raw)
+                }
+            }
+            null
+        }
+        val field = runCatching {
+            inst.javaClass.getDeclaredField("mbCanVehicleAccStatusCallback").apply { isAccessible = true }
+        }.getOrNull() ?: return
+        val current = runCatching { field.get(inst) }.getOrNull()
+        if (current != null) return
+        val ok = runCatching { field.set(inst, proxy); true }.getOrDefault(false)
+        if (ok) systemModeFieldProxy = proxy
+    }
+
+    private fun clearSystemModeFieldProxy() {
+        val inst = engineInstance
+        val proxy = systemModeFieldProxy
+        if (inst != null && proxy != null) {
+            runCatching {
+                val field = inst.javaClass.getDeclaredField("mbCanVehicleAccStatusCallback").apply { isAccessible = true }
+                if (field.get(inst) === proxy) field.set(inst, null)
+            }
+        }
+        systemModeFieldProxy = null
+    }
+
+    /**
      * Deep-only OEM callbacks that production never registers.
      *
      * Listeners whose unregister also unsubscribes shared types (ACC unsubscribes BCM,
@@ -942,10 +1014,7 @@ object MbCanEngineFacade {
             return emptyList()
         }
         val attached = mutableListOf<Pair<String, Boolean>>()
-        attached += "acc" to attachDeepFieldListener(
-            "mbCanVehicleAccStatusCallback",
-            "com.mengbo.mbCan.interfaces.IMbCanVehicleAccStatusCallback",
-        )
+        attached += "acc" to setSystemModeFieldDeep(true)
         attached += "airPurge" to attachDeepFieldListener(
             "mbAirPurgeListener",
             "com.mengbo.mbCan.interfaces.IMBAirPurgeListener",
@@ -958,6 +1027,7 @@ object MbCanEngineFacade {
 
     @Synchronized
     fun stopDeepExtraListeners() {
+        setSystemModeFieldDeep(false)
         detachDeepFieldListeners()
         val inst = engineInstance
         deepExtraListenerProxies.keys.toList().forEach { label ->
@@ -1173,6 +1243,40 @@ object MbCanEngineFacade {
             val accObj = nativeGetMbCanData(getMbCanData, inst, 6, accCls) ?: return null
             val raw = (accCls.getMethod("getAccStatus").invoke(accObj) as? Number)?.toInt() ?: return null
             AccStatusDomain.decodeMbCan(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * Key position from [MBCanVehicleAccStatus.getIgnSts].
+     * Data type **6** (`eMBCAN_VEHICLE_ACCSTATUS`).
+     */
+    fun readIgnitionKey(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val accCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleAccStatus")
+            val accObj = nativeGetMbCanData(getMbCanData, inst, 6, accCls) ?: return null
+            val raw = (accCls.getMethod("getIgnSts").invoke(accObj) as? Number)?.toInt() ?: return null
+            IgnitionKeyDomain.decode(raw)
+        }.getOrNull()
+    }
+
+    /**
+     * HU power mode from [MBCanVehicleAccStatus.getSystemMode].
+     * Data type **8** (`eMBCAN_SYSTEMMODE`).
+     */
+    fun readHuSystemMode(): String? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val accCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleAccStatus")
+            val accObj = nativeGetMbCanData(getMbCanData, inst, 8, accCls) ?: return null
+            val raw = (accCls.getMethod("getSystemMode").invoke(accObj) as? Number)?.toInt() ?: return null
+            HuSystemModeDomain.decode(raw)
         }.getOrNull()
     }
 

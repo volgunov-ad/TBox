@@ -4,8 +4,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.HuSystemModeDomain
+import vad.dashing.tbox.mbcan.IgnitionKeyDomain
 import vad.dashing.tbox.mbcan.MbCanSignal
 
 class AutomationSignalCatalogTest {
@@ -123,6 +126,30 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("ign"))
         assertTrue(hint, hint.contains("Android 9"))
         assertTrue(hint, hint.contains("Android 10"))
+    }
+
+    @Test
+    fun ignitionKeyAndSystemMode_areHeadUnitStates() {
+        val key = AutomationSignalCatalog.get(AutomationSignalId.IGNITION_KEY)
+        val mode = AutomationSignalCatalog.get(AutomationSignalId.HU_SYSTEM_MODE)
+        assertEquals(IgnitionKeyDomain.OPTIONS, key.stateOptions)
+        assertEquals(HuSystemModeDomain.OPTIONS, mode.stateOptions)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in key.sources)
+        assertFalse(AutomationSignalSource.TBOX in key.sources)
+        assertTrue(key.valueHint().contains("crank"))
+        assertTrue(mode.valueHint().contains("hold_15m"))
+        assertFalse(
+            AutomationSignalCatalog.headUnitUnsupported(
+                AutomationSignalId.IGNITION_KEY,
+                HeadUnitCanMode.Android10Vhal,
+            ),
+        )
+        assertTrue(
+            AutomationSignalCatalog.headUnitUnsupported(
+                AutomationSignalId.HU_SYSTEM_MODE,
+                HeadUnitCanMode.Android10Vhal,
+            ),
+        )
     }
 
     @Test

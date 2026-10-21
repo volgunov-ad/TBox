@@ -34,6 +34,8 @@ object FirmwareVehicleJsonMapper {
      * Scale is 0…3, not A9 AccStatus 4/5 — see [AccStatusDomain.decodeMcuReply].
      */
     const val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID = 557_845_540 // MCU_REPLY_ACC_STATUS
+    /** CEM key position: 0 off / 1 ACC / 2 ON / 3 crank. Same scale as A9 getIgnSts(). */
+    const val VHAL_CEM_KEY_STS = 289_412_126 // R_0400_CEM_2_KeySts
     /**
      * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
      * INT32 degrees as-is; rate (°/s) not provided by this property.

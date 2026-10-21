@@ -87,6 +87,10 @@ enum class AutomationSignalId(
     CRUISE_SET_SPEED("cruise_set_speed"),
     GEAR_MODE("gear_mode", AutomationSignalValueType.STATE),
     ACC_STATUS("acc_status", AutomationSignalValueType.STATE),
+    /** CEM key position: off / acc / on / crank. A9 getIgnSts, A10 CEM_2_KeySts. */
+    IGNITION_KEY("ignition_key", AutomationSignalValueType.STATE),
+    /** A9 HU power mode. 15 min is the post-key-off hold, not remote start. No A10 analog. */
+    HU_SYSTEM_MODE("hu_system_mode", AutomationSignalValueType.STATE),
     ACC_CRUISE_STATE("acc_cruise_state", AutomationSignalValueType.STATE),
     CCS_CRUISE_STATE("ccs_cruise_state", AutomationSignalValueType.STATE),
     GAS_PEDAL("gas_pedal"),
