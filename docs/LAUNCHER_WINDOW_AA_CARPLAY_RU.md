@@ -682,59 +682,24 @@ wireless-изоляция не изменялись.
 `git diff --check` выполнен без ошибок; предупреждения LF→CRLF не являются
 ошибками пробелов. Эти проверки не проверяют OEM smali или проекцию на ГУ.
 
-### 7.8. Установщик `:winpatch`: постоянная установка/откат p5 и p3 (2026-10-18)
+### 7.8. Установщик `:winpatch` и сборки `p6` (2026-10-22)
 
 Для повторяемой установки пропатченных APK без ноутбука создан отдельный модуль
-**`:winpatch`** — приложение «AA/CarPlay окна ГУ» (`vad.dashing.winpatch`, v0.1.0),
+**`:winpatch`** — приложение «AA/CarPlay окна ГУ» (`vad.dashing.winpatch`),
 архитектурная копия `:fwunlock` (Compose-экран, ViewModel, `RootShell` через
 `:adbcore`: собственный adbd ГУ на 127.0.0.1:5555 и `su 0 sh -c ...`).
 
-- Патченные APK зашиты в assets модуля и сверяются по MD5: `AndroidAuto_p5.apk`
-  (`f91c1def77c9105db35eed2dc0732c27`), `CarPlayView_p3.apk`
-  (`e9c8d958178875c0712f6bd0d39ae8a2`). Стоковые md5 целей:
-  `821cf2db51435747bd974a81fd52d1bb` / `2718803663e016a969e6d2fa0d2b4c16`.
-- Применение: staging assets → `getExternalFilesDir` (локальная проверка MD5 до
-  заливки), затем сгенерированный в приложении скрипт `apply.sh` в рабочей папке
-  `/data/local/tmp/winpatch`. Скрипт: preflight **до** снятия eMMC WP — копия
-  стейджа из мирочитаемого `/sdcard/Android/data/...` в root-only рабочую папку
-  с md5-сверкой (`stage_*`), запись идёт только из этой копии; `ensure_backup`
-  перенимает легаси-резервы `/data/local/tmp/AndroidAuto_orig_backup.apk` и
-  `CarPlayView_orig_backup.apk` (только со стоковым md5) как `*.orig.apk`;
-  резерв создаётся через `*.tmp` + md5 + `mv`, битый резерв удаляется с отказом
-  `badbackup_*` (следующий запуск пересоздаст его со стокового `/system`).
-  Запись атомарная: проверка места (`df -k`), `<apk>.new` в той же папке +
-  `chown root:root` + `chmod 644` + `chcon u:object_r:system_file:s0` + `sync` +
-  `drop_caches` + md5 `.new`, затем `mv` поверх цели (запущенный AA/CarPlay
-  держит старый inode). Если после `remount,rw` что-то упало (или пришёл сигнал),
-  цель с md5 «ни сток, ни патч» восстанавливается из резерва тем же атомарным
-  путём (код `… rolledback` / `… norollback`). Идемпотентный `wp_on` делает
-  `remount,ro /` и возврат WP на любом выходе (`trap … EXIT` + `HUP INT TERM PIPE`).
-  При отсутствии резерва и не-стоковом `/system` — отказ `nobackup_*`
-  (единственный источник отката не перезаписывается).
-- Откат `restore.sh` — обратная запись из `*.orig.apk` с той же защитой.
-- Android Auto и CarPlay ставятся и откатываются **раздельно** (2026-10-19): на
-  экране у каждой цели своя карточка (состояние, резерв, «Установить патч» /
-  «Вернуть штатный»); `applyScript(stages)` / `restoreScript(targets)` генерируют
-  стейдж, `ensure_backup`, запись, автооткат и перезапуск процесса только для
-  выбранной цели, вторая не затрагивается.
-- После записи скрипт перезапускает процесс выбранной цели (`com.adayo.androidauto`
-  или `com.adayo.carplay.view`); перезагрузка ГУ — отдельная кнопка
-  (`su 0 sh -c 'sync; reboot'`).
-- `CarPlayManagerConfig.json` установщик **не изменяет** — текущий md5 показывается
-  в фактах для контроля (сток `71082dfb83baf61eb449297d4df588ee`).
-- Результат сообщается маркерами `TBOX_WINPATCH_APPLIED/RESTORED/ERR` и
-  контрольными `md5sum` целей.
-- Верификация: `WinPatchCodecTest` (8 тестов: генерация apply/restore, парсинг
-  исходов, отказы `nobackup_*`), `:winpatch:testDebugUnitTest` 8/8,
-  `:winpatch:assembleDebug`, `:winpatch:lintDebug` — чисто.
-
-Установка на ГУ (2026-10-18): `adb install -r` (streaming-протокол) на этом HU
-**зависает** — 180 с без вывода, пакет не встаёт; рабочий путь:
-`adb push ... /data/local/tmp/winpatch-debug.apk` + `pm install -r`
-(`Success`, v0.1.0). Статус-экран на ГУ корректно распознал состояние: оба APK
-«патч установлен», резервы «в /data/local/tmp (переймутся при установке)»,
-конфиг не изменяется. Нажатие «Установить» перепишет те же p5/p3 (идемпотентно)
-и перенесёт легаси-резервы в рабочую папку — после этого доступен откат.
+- **Поддержка всех прошивок A10 (`V00.03.07`, `V00.03.16`, `V00.05.09`, `V00.07.12`):**
+  - В `assets` модуля зашиты единые универсальные патченные сборки `p6`:
+    - `AndroidAuto_p6.apk` (`7de94e8e0a80bd17af4ce097913fc9eb`) — собран на базе самого свежего стокового `AndroidAuto.apk` из прошивки `V00.07.12`, принудительно отдаёт `mParkBreakEngaged = true` (`DRIVE_STATUS_UNRESTRICTED`) и `CarAdapter.isParking() = true` (позволяет пройти первичную настройку AA на стенде без имитации CAN и снимает блокировки в движении), содержит `interceptOnCreate` с немедленным переводом с `Display #0` на виртуальный дисплей `ActivityViewVirtualDisplay@` (`Display #1`), принудительное обновление `mPromptView` и `mSurfaceView` от текущего оконного экземпляра `AAActivity`, отключение `MSG_ACTIVITY_DELAY_PAUSE` (`0x66`) и таймера самоубийства `MSG_IS_RESTART_APP` (`0x2716`), защиту `CmsProxy.setStatus` от NPE и установку `SO_REUSEADDR` до `bind(9527)`. Видео заполняет окно 1327×865 без верхних и нижних полос: `widthPixel/heightPixel` для `calSreen` — 1327×865, телефон получает `widthMargin` и рисует интерфейс в пропорции окна; `SurfaceView` расширен до 1536×865 и обрезан по бокам. Тач вычитает половину этого `widthMargin`, чтобы попадание совпало с картинкой. Проверено на ГУ `192.168.1.7` 2026-10-23. CarPlayView остаётся с aspect-fit 16:9 и полями. Предыдущая сборка с полосами — `2b38bc58847269d66a56d269137e38a1`.
+    - `CarPlayView_p6.apk` (`0841e6252eb54c88c98ef561dafd2857`) — содержит `WindowSurface.interceptOnCreate()` в начале `MainActivity.onCreate()`, который при любом запуске на `Display #0` (со штатной иконки лаунчера `full=true` или от `SourceMngService`) сохраняет `surfaceId`, ставит `needTake=false`, закрывает экземпляр на `Display #0` (до создания `SurfaceView`, чтобы `surfaceDestroyed` не вызывал `takeCarPlay()` / `setSurface(null)`) и перезапускает `MainActivity` на виртуальный дисплей `Display #1` (`1327×865`) с флагами `NEW_TASK | MULTIPLE_TASK`.
+  - В `assets/stock/` зашиты эталонные стоковые APK для всех ревизий прошивок A10:
+    - `stock/CarPlayView_stock.apk` (`2718803663e016a969e6d2fa0d2b4c16`, единый для `03.07`, `03.16`, `05.09`, `07.12`);
+    - `stock/AndroidAuto_v0307.apk` (`ed05e3db4ac59fbf82bf9d7018c0b01a`, для `V00.03.07` и `V00.03.16`, `incremental` `1719404309` / `1725521697`);
+    - `stock/AndroidAuto_v0509.apk` (`821cf2db51435747bd974a81fd52d1bb`, для `V00.05.09`, `incremental` `1742980640`);
+    - `stock/AndroidAuto_v0712.apk` (`5bbdbcb35d8c895912534ef3f9e46dee`, для `V00.07.12`, `incremental` `1763366978`).
+  - Установщик определяет прошивку по `ro.build.version.incremental` (и/или MD5 файла в `/system`) и автоматически использует соответствующий стоковый APK из `assets/stock/` для резерва и отката — даже если `/data/local/tmp` была очищена или в `/system` стояла старая сборка `p1..p5`.
+- Применение и откат выполняют атомарную запись через `<apk>.new` + `mv`, очищают `/data/dalvik-cache/*/...` и `oat`, и перезапускают процесс цели (`am force-stop` + `kill`).
 
 ## 8. Артефакты анализа (ПК, `C:\Users\volgu\AppData\Local\Temp\rufp\`)
 

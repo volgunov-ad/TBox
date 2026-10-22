@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import vad.dashing.winpatch.WinPatchCodec.FileState
+import vad.dashing.winpatch.WinPatchCodec.StockVariant
 import vad.dashing.winpatch.WinPatchCodec.Target
 import vad.dashing.winpatch.device.RootShell
 
@@ -107,69 +108,87 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
     private fun stageDir(): File = getApplication<Application>().getExternalFilesDir(null)
         ?: throw IOException("внешняя память недоступна — некуда распаковать APK")
 
-    /** Copies the bundled APKs to the app external files dir (root-readable via sdcardfs) and verifies MD5. */
-    private fun stageAssets(targets: List<Target>): Map<Target, String> {
+    private fun stageSingleAsset(assetPath: String, expectedMd5: String): String {
         val app = getApplication<Application>()
-        val dir = stageDir()
-        val stages = mutableMapOf<Target, String>()
-        for (t in targets) {
-            val out = File(dir, t.assetName)
-            val staged = out.isFile && runCatching { md5Of(out) }.getOrNull()?.equals(t.patchedMd5, ignoreCase = true) == true
-            if (!staged) {
-                out.outputStream().use { os -> app.assets.open(t.assetName).use { it.copyTo(os) } }
-            }
-            val actual = md5Of(out)
-            if (!actual.equals(t.patchedMd5, ignoreCase = true)) throw IOException("APK ${t.assetName}: MD5 не совпал")
-            stages[t] = out.absolutePath
+        val out = File(stageDir(), assetPath.replace('/', '_'))
+        val staged = out.isFile && runCatching { md5Of(out) }.getOrNull()?.equals(expectedMd5, ignoreCase = true) == true
+        if (!staged) {
+            out.outputStream().use { os -> app.assets.open(assetPath).use { it.copyTo(os) } }
         }
-        return stages
+        val actual = md5Of(out)
+        if (!actual.equals(expectedMd5, ignoreCase = true)) {
+            throw IOException("APK $assetPath: MD5 не совпал ($actual != $expectedMd5)")
+        }
+        return out.absolutePath
     }
+
+    /** Copies the bundled patched APKs to the app external files dir (root-readable via sdcardfs) and verifies MD5. */
+    private fun stageAssets(targets: List<Target>): Map<Target, String> =
+        targets.associateWith { stageSingleAsset(it.assetName, it.patchedMd5) }
+
+    private fun stageStockAsset(variant: StockVariant): String =
+        stageSingleAsset(variant.assetPath, variant.md5)
 
     private data class TargetInfo(
         val target: Target,
         val system: FileState,
         val systemMd5: String?,
+        val stockVariant: StockVariant,
         val backupOk: Boolean,
         val legacyOk: Boolean,
     )
 
+    private fun resolveStockVariant(target: Target, systemMd5: String?, backupMd5: String?, incremental: String): StockVariant {
+        target.stockVariantByMd5(systemMd5)?.let { return it }
+        target.stockVariantByMd5(backupMd5)?.let { return it }
+        return target.stockVariantForIncremental(incremental)
+    }
+
     private fun inspect() {
         val paths = WinPatchCodec.TARGETS.flatMap { listOf(it.systemPath, it.backupPath, it.legacyBackupPath) } +
             WinPatchCodec.CARPLAY_CONFIG
-        val output = openShell().use { shell ->
-            shell.rootText(paths.joinToString(" ") { "md5sum $it" } + " 2>/dev/null; true")
+        val (md5Output, incremental) = openShell().use { shell ->
+            val md5s = shell.rootText(paths.joinToString(" ") { "md5sum $it" } + " 2>/dev/null; true")
+            val inc = shell.rootText("getprop ro.build.version.incremental").trim()
+            md5s to inc
         }
-        val md5s = WinPatchCodec.parseMd5Map(output)
+        val md5s = WinPatchCodec.parseMd5Map(md5Output)
         val infos = WinPatchCodec.TARGETS.map { t ->
+            val sysMd5 = md5s[t.systemPath]
+            val bakMd5 = md5s[t.backupPath]
+            val legMd5 = md5s[t.legacyBackupPath]
+            val stockVar = resolveStockVariant(t, sysMd5, bakMd5 ?: legMd5, incremental)
             TargetInfo(
                 target = t,
-                system = WinPatchCodec.fileState(md5s[t.systemPath], t),
-                systemMd5 = md5s[t.systemPath],
-                backupOk = md5s[t.backupPath]?.equals(t.stockMd5, ignoreCase = true) == true,
-                legacyOk = md5s[t.legacyBackupPath]?.equals(t.stockMd5, ignoreCase = true) == true,
+                system = WinPatchCodec.fileState(sysMd5, t),
+                systemMd5 = sysMd5,
+                stockVariant = stockVar,
+                backupOk = t.stockVariantByMd5(bakMd5) != null,
+                legacyOk = t.stockVariantByMd5(legMd5) != null,
             )
         }
         val configMd5 = md5s[WinPatchCodec.CARPLAY_CONFIG]
         val facts = listOf(
+            "Прошивка ГУ" to WinPatchCodec.firmwareNameForIncremental(incremental),
             "CarPlayManagerConfig.json" to
                 (configMd5?.let { "не изменяется установщиком (${it.take(8)}…)" } ?: "не найден"),
-            "Подключение" to "проводное и беспроводное — как в стоке",
+            "Резервные копии стока" to "вшиты в приложение для V00.03.07, 03.16, 05.09 и 07.12",
         )
         val panels = infos.map(::panelOf)
-        val broken = infos.filter { it.system == FileState.Unknown || it.system == FileState.Missing }
-        val anyPatched = infos.any { it.system == FileState.Patched }
-        val banner = if (broken.isNotEmpty()) {
+        val missing = infos.filter { it.system == FileState.Missing }
+        val anyPatched = infos.any { it.system == FileState.Patched || it.system == FileState.LegacyPatched }
+        val banner = if (missing.isNotEmpty()) {
             WinPatchBanner(
-                "На ГУ не найдены штатные ${broken.joinToString { it.target.title }} " +
-                    "(неизвестный или отсутствующий APK) — для них установка и откат недоступны. " +
-                    "Это должен быть ГУ A10 (Adayo/VHAL) со штатными AndroidAuto и CarPlayView.",
+                "На ГУ не найдены файлы ${missing.joinToString { it.target.systemPath }} — " +
+                    "это должен быть ГУ A10 (Adayo/VHAL) со штатными AndroidAuto и CarPlayView.",
                 WinPatchBannerKind.Error,
             )
         } else {
             WinPatchBanner(
-                "Android Auto и CarPlay ставятся и откатываются отдельно: запись в /system со снятием защиты eMMC, " +
-                    "штатный APK сохраняется в резерв, процесс перезапускается. Проводное и беспроводное подключение " +
-                    "не затрагиваются." +
+                "Android Auto (${WinPatchCodec.ANDROID_AUTO.patchLabel}, база V00.07.12 + режим парковки P) и CarPlay " +
+                    "(${WinPatchCodec.CAR_PLAY.patchLabel}, автоперевод в окно лаунчера) ставятся и откатываются отдельно: " +
+                    "запись в /system со снятием защиты eMMC, очистка dalvik-cache и перезапуск процесса. " +
+                    "Эталонные стоковые APK для всех версий прошивки вшиты в приложение." +
                     if (anyPatched) " Если окно не подхватилось после установки — перезагрузите ГУ." else "",
                 WinPatchBannerKind.Info,
             )
@@ -183,10 +202,11 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun panelOf(info: TargetInfo): WinPatchTargetPanel {
         val t = info.target
+        val vLabel = info.stockVariant.firmwareLabel
         val backup = when {
-            info.backupOk -> "есть (штатный APK)"
-            info.legacyOk -> "в /data/local/tmp (переймётся при установке)"
-            else -> "нет"
+            info.backupOk -> "в ${WinPatchCodec.WORK_DIR} + встроенный сток ($vLabel)"
+            info.legacyOk -> "в /data/local/tmp + встроенный сток ($vLabel)"
+            else -> "встроенный в приложение сток ($vLabel)"
         }
         val base = WinPatchTargetPanel(
             id = t.id,
@@ -199,26 +219,32 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
             canRestore = false,
         )
         return when (info.system) {
-            FileState.Stock -> base.copy(status = "штатный APK", canApply = true)
-            FileState.Patched -> when {
-                info.backupOk -> base.copy(
-                    status = "патч ${t.patchLabel} установлен",
-                    kind = WinPatchBannerKind.Success,
-                    canRestore = true,
-                )
-                info.legacyOk -> base.copy(
-                    status = "патч ${t.patchLabel} установлен; «Установить» перенесёт резерв для отката",
-                    kind = WinPatchBannerKind.Warning,
+            FileState.Stock -> {
+                val matched = t.stockVariantByMd5(info.systemMd5)
+                base.copy(
+                    status = "штатный APK (${matched?.firmwareLabel ?: vLabel})",
                     canApply = true,
                 )
-                else -> base.copy(
-                    status = "патч ${t.patchLabel} установлен, штатного резерва нет — откат недоступен",
+            }
+            FileState.Patched -> base.copy(
+                status = "патч ${t.patchLabel} установлен (актуальный)",
+                kind = WinPatchBannerKind.Success,
+                canRestore = true,
+            )
+            FileState.LegacyPatched -> {
+                val oldRev = t.legacyPatchedMd5s[info.systemMd5?.lowercase()] ?: "предыдущая версия"
+                base.copy(
+                    status = "установлен старый патч ($oldRev) — рекомендуется обновить до ${t.patchLabel}",
                     kind = WinPatchBannerKind.Warning,
+                    canApply = true,
+                    canRestore = true,
                 )
             }
             FileState.Unknown -> base.copy(
-                status = "неизвестный APK (${info.systemMd5?.take(8)}…)",
-                kind = WinPatchBannerKind.Error,
+                status = "нестандартный APK (${info.systemMd5?.take(8)}…) — можно заменить на ${t.patchLabel} или вернуть сток",
+                kind = WinPatchBannerKind.Warning,
+                canApply = true,
+                canRestore = true,
             )
             FileState.Missing -> base.copy(status = "нет файла ${t.systemPath}", kind = WinPatchBannerKind.Error)
         }
@@ -228,8 +254,17 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
         val stages = stageAssets(listOf(target))
         openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
+            val inc = shell.rootText("getprop ro.build.version.incremental").trim()
+            val sysMd5Out = shell.rootText("md5sum ${target.systemPath} ${target.backupPath} ${target.legacyBackupPath} 2>/dev/null; true")
+            val md5s = WinPatchCodec.parseMd5Map(sysMd5Out)
+            val stockVar = resolveStockVariant(target, md5s[target.systemPath], md5s[target.backupPath] ?: md5s[target.legacyBackupPath], inc)
+            val stockStage = stageStockAsset(stockVar)
             shell.rootText("mkdir -p ${WinPatchCodec.WORK_DIR} && chmod 700 ${WinPatchCodec.WORK_DIR}")
-            val script = WinPatchCodec.applyScript(stages)
+            val script = WinPatchCodec.applyScript(
+                stages = stages,
+                stockStages = mapOf(target to stockStage),
+                stockMd5ByTarget = mapOf(target to stockVar.md5),
+            )
             shell.writeFile(WinPatchCodec.APPLY_SCRIPT, script.toByteArray(Charsets.UTF_8))
             val output = shell.root("sh ${WinPatchCodec.APPLY_SCRIPT}")
             when (val outcome = WinPatchCodec.parseOutcome("${output.stdout}\n${output.stderr}")) {
@@ -243,8 +278,17 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun runRestore(target: Target) {
         openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
+            val inc = shell.rootText("getprop ro.build.version.incremental").trim()
+            val sysMd5Out = shell.rootText("md5sum ${target.systemPath} ${target.backupPath} ${target.legacyBackupPath} 2>/dev/null; true")
+            val md5s = WinPatchCodec.parseMd5Map(sysMd5Out)
+            val stockVar = resolveStockVariant(target, md5s[target.systemPath], md5s[target.backupPath] ?: md5s[target.legacyBackupPath], inc)
+            val stockStage = stageStockAsset(stockVar)
             shell.rootText("mkdir -p ${WinPatchCodec.WORK_DIR} && chmod 700 ${WinPatchCodec.WORK_DIR}")
-            val script = WinPatchCodec.restoreScript(listOf(target))
+            val script = WinPatchCodec.restoreScript(
+                targets = listOf(target),
+                stockStages = mapOf(target to stockStage),
+                stockMd5ByTarget = mapOf(target to stockVar.md5),
+            )
             shell.writeFile(WinPatchCodec.RESTORE_SCRIPT, script.toByteArray(Charsets.UTF_8))
             val output = shell.root("sh ${WinPatchCodec.RESTORE_SCRIPT}")
             when (val outcome = WinPatchCodec.parseOutcome("${output.stdout}\n${output.stderr}")) {

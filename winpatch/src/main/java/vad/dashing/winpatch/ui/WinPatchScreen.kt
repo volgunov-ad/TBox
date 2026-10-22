@@ -48,11 +48,10 @@ fun WinPatchScreen(
             Text(text = "AA/CarPlay окна ГУ", style = MaterialTheme.typography.headlineSmall)
             Text(
                 text = "Постоянная установка пропатченных Android Auto (${WinPatchLabel.AA}) и CarPlayView " +
-                    "(${WinPatchLabel.CP}) в /system ГУ A10 (Adayo/VHAL): Android Auto — окно лаунчера со штатными " +
-                    "барами, CarPlay — без чёрных полос. Каждый ставится и откатывается отдельно. " +
-                    "APK зашиты в приложение, штатные сохраняются в резерв " +
-                    "в /data/local/tmp, запись идёт со снятием защиты eMMC (как в «Расширение /data»). " +
-                    "CarPlayManagerConfig.json не изменяется — проводное и беспроводное подключение остаются штатными.",
+                    "(${WinPatchLabel.CP}) в /system ГУ A10 (Adayo/VHAL): оба приложения сразу открываются в окне " +
+                    "лаунчера (1327×865) со штатными барами и корректным тачем; в Android Auto также снята блокировка " +
+                    "стояночного тормоза (работает на стенде и в движении). Каждый ставится и откатывается отдельно. " +
+                    "Эталонные штатные APK для всех прошивок (V00.03.07, 03.16, 05.09, 07.12) зашиты в приложение.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -196,6 +195,6 @@ private fun TargetCard(
 }
 
 private object WinPatchLabel {
-    const val AA = "p5"
-    const val CP = "p3"
+    const val AA = "p6"
+    const val CP = "p6"
 }

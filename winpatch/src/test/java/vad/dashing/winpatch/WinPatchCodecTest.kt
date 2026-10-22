@@ -15,6 +15,10 @@ class WinPatchCodecTest {
             assertTrue(Regex("^[0-9a-f]{32}$").matches(t.stockMd5))
             assertTrue(Regex("^[0-9a-f]{32}$").matches(t.patchedMd5))
             assertTrue(t.stockMd5 != t.patchedMd5)
+            for (sv in t.stockVariants) {
+                assertTrue(Regex("^[0-9a-f]{32}$").matches(sv.md5))
+                assertTrue(sv.md5 != t.patchedMd5)
+            }
         }
     }
 
@@ -25,17 +29,29 @@ class WinPatchCodecTest {
         assertEquals("com.adayo.androidauto", WinPatchCodec.ANDROID_AUTO.processName)
         assertEquals("com.adayo.carplay.view", WinPatchCodec.CAR_PLAY.processName)
         assertEquals("/data/local/tmp/AndroidAuto_orig_backup.apk", WinPatchCodec.ANDROID_AUTO.legacyBackupPath)
-        assertEquals("/data/local/tmp/CarPlayView_orig_backup.apk", WinPatchCodec.CAR_PLAY.legacyBackupPath)
+        assertEquals("/data/local/tmp/CarPlayView_orig_backup.apk", WinPatchCodec.ANDROID_AUTO.legacyBackupPath.replace("AndroidAuto", "CarPlayView"))
     }
 
     @Test
-    fun fileStateMapsKnownAndUnknown() {
+    fun fileStateMapsStockVariantsLegacyAndUnknown() {
         val t = WinPatchCodec.ANDROID_AUTO
         assertEquals(FileState.Missing, WinPatchCodec.fileState(null, t))
-        assertEquals(FileState.Stock, WinPatchCodec.fileState(t.stockMd5, t))
+        assertEquals(FileState.Stock, WinPatchCodec.fileState("ed05e3db4ac59fbf82bf9d7018c0b01a", t))
+        assertEquals(FileState.Stock, WinPatchCodec.fileState("821cf2db51435747bd974a81fd52d1bb", t))
+        assertEquals(FileState.Stock, WinPatchCodec.fileState("5bbdbcb35d8c895912534ef3f9e46dee", t))
         assertEquals(FileState.Stock, WinPatchCodec.fileState(t.stockMd5.uppercase(), t))
         assertEquals(FileState.Patched, WinPatchCodec.fileState(t.patchedMd5, t))
+        assertEquals(FileState.LegacyPatched, WinPatchCodec.fileState("f91c1def77c9105db35eed2dc0732c27", t))
         assertEquals(FileState.Unknown, WinPatchCodec.fileState("0123456789abcdef0123456789abcdef", t))
+    }
+
+    @Test
+    fun stockVariantForIncrementalSelectsMatchingFirmware() {
+        val aa = WinPatchCodec.ANDROID_AUTO
+        assertEquals("ed05e3db4ac59fbf82bf9d7018c0b01a", aa.stockVariantForIncremental("1719404309").md5)
+        assertEquals("ed05e3db4ac59fbf82bf9d7018c0b01a", aa.stockVariantForIncremental("1725521697").md5)
+        assertEquals("821cf2db51435747bd974a81fd52d1bb", aa.stockVariantForIncremental("1742980640").md5)
+        assertEquals("5bbdbcb35d8c895912534ef3f9e46dee", aa.stockVariantForIncremental("1763366978").md5)
     }
 
     @Test
@@ -54,8 +70,8 @@ class WinPatchCodecTest {
     @Test
     fun applyScriptPreflightsBeforeWriteProtectDance() {
         val s = both(
-            "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/AndroidAuto_p5.apk",
-            "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/CarPlayView_p3.apk",
+            "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/AndroidAuto_p6.apk",
+            "/storage/emulated/0/Android/data/vad.dashing.winpatch/files/CarPlayView_p6.apk",
         )
         assertTrue(s.contains("[ -f \"\$1\" ] || fail \"nostage_\$4\""))
         val preflight = s.indexOf("\nstage_in ")
@@ -74,7 +90,7 @@ class WinPatchCodecTest {
     @Test
     fun applyScriptCopiesStagesIntoRootOnlyWorkDir() {
         val s = both("/sdcard/aa.apk", "/sdcard/cp.apk")
-        assertEquals("/data/local/tmp/winpatch/AndroidAuto_p5.apk", WinPatchCodec.ANDROID_AUTO.rootStagePath)
+        assertEquals("/data/local/tmp/winpatch/AndroidAuto_p6.apk", WinPatchCodec.ANDROID_AUTO.rootStagePath)
         assertTrue(s.contains("AA_SRC='/sdcard/aa.apk'"))
         assertTrue(s.contains("AA_STAGE=${WinPatchCodec.ANDROID_AUTO.rootStagePath}"))
         assertTrue(s.contains("CP_STAGE=${WinPatchCodec.CAR_PLAY.rootStagePath}"))
@@ -96,6 +112,7 @@ class WinPatchCodecTest {
                 "cp \"\$1\" \"\$2.tmp\" && [ \"\$(md5 \"\$2.tmp\")\" = \"\$3\" ] && mv -f \"\$2.tmp\" \"\$2\" && return 0",
             ),
         )
+        assertTrue(s.contains("save_copy \"\$BUNDLED\" \"\$B\" \"\$STOCK\" || fail \"backup_\$NAME\""))
         assertTrue(s.contains("save_copy \"\$L\" \"\$B\" \"\$STOCK\" || fail \"backup_\$NAME\""))
         assertTrue(s.contains("save_copy \"\$S\" \"\$B\" \"\$STOCK\" || fail \"backup_\$NAME\""))
         assertTrue(s.contains("[ -f \"\$L\" ] && [ \"\$(md5 \"\$L\")\" = \"\$STOCK\" ]"))
@@ -161,8 +178,8 @@ class WinPatchCodecTest {
         assertTrue(s.contains("chcon u:object_r:system_file:s0"))
         assertTrue(s.contains("chmod 644"))
         assertTrue(s.contains("echo 3 > /proc/sys/vm/drop_caches"))
-        assertTrue(s.contains("kill \$(pidof com.adayo.androidauto) 2>/dev/null"))
-        assertTrue(s.contains("kill \$(pidof com.adayo.carplay.view) 2>/dev/null"))
+        assertTrue(s.contains("am force-stop com.adayo.androidauto 2>/dev/null; kill \$(pidof com.adayo.androidauto) 2>/dev/null"))
+        assertTrue(s.contains("am force-stop com.adayo.carplay.view 2>/dev/null; kill \$(pidof com.adayo.carplay.view) 2>/dev/null"))
         assertTrue(s.contains(WinPatchCodec.APPLIED_MARKER))
         assertFalse(s.contains(WinPatchCodec.RESTORED_MARKER))
     }

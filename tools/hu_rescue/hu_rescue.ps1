@@ -836,12 +836,53 @@ function Show-Diagnostics {
     $null = Show-GptReport $g
 }
 
+function Enable-Wifi {
+    Initialize-HuConsole
+    if ($script:Env['mode'] -ne 'android') { throw 'Wi-Fi включается только в загруженном Android' }
+    Write-Host 'Включение Wi-Fi на ГУ...' -ForegroundColor Cyan
+    $r = Invoke-Hu ('svc wifi enable 2>/dev/null; ' +
+        'for i in 1 2 3 4 5 6 7 8; do ip -4 addr show wlan0 2>/dev/null | grep -q "inet " && break; sleep 1; done; ' +
+        'ip -4 addr show wlan0 2>/dev/null | grep inet; true') -TimeoutSec 25 -AllowFail
+    $r.Lines | Where-Object { $_ } | ForEach-Object { Write-Host "  $_" }
+    $ip = [regex]::Match($r.Text, 'inet (\d+\.\d+\.\d+\.\d+)').Groups[1].Value
+    if ($ip) { Write-Host "Wi-Fi включён, адрес ГУ: $ip" -ForegroundColor Green }
+    else { Write-Host 'Wi-Fi включён, но у wlan0 пока нет IP-адреса. Добавьте сеть (пункт 4) или проверьте роутер.' -ForegroundColor Yellow }
+}
+
+function Activate-AdbDaemon {
+    Initialize-HuConsole
+    Write-Host 'Активация ADB на ГУ (tcp:5555 + запуск adbd)...' -ForegroundColor Cyan
+    $r = Invoke-Hu ('settings put global adb_enabled 1 2>/dev/null; ' +
+        'setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; ' +
+        'start adbd 2>/dev/null; setprop ctl.restart adbd; sleep 2; ' +
+        'echo "adbd=$(getprop init.svc.adbd)"; echo "port=$(getprop persist.adb.tcp.port)"; ' +
+        'ip -4 addr show wlan0 2>/dev/null | grep inet; true') -TimeoutSec 25 -AllowFail
+    $r.Lines | Where-Object { $_ } | ForEach-Object { Write-Host "  $_" }
+    $ip = [regex]::Match($r.Text, 'inet (\d+\.\d+\.\d+\.\d+)').Groups[1].Value
+    $adbd = [regex]::Match($r.Text, 'adbd=(\S+)').Groups[1].Value
+    if ($adbd -eq 'running') {
+        if ($ip) {
+            Write-Host "ADB активирован: adb connect ${ip}:5555" -ForegroundColor Green
+            $adb = Find-PcTool 'adb'
+            if ($adb) { $null = & $adb connect "${ip}:5555" 2>$null }
+        } else {
+            Write-Host 'ADB активирован (adbd запущен на порту 5555). Для сети включите Wi-Fi (пункт W или 3).' -ForegroundColor Green
+        }
+    } else {
+        Write-Host "Статус adbd: $adbd" -ForegroundColor Yellow
+    }
+}
+
 function Enable-Adb {
     Initialize-HuConsole
-    $r = Invoke-Hu 'svc wifi enable 2>/dev/null; setprop persist.adb.tcp.port 5555; setprop ctl.restart adbd; sleep 3; ip -4 addr show wlan0 2>/dev/null | grep inet; echo "adbd=$(getprop init.svc.adbd)"' -TimeoutSec 30 -AllowFail
+    $r = Invoke-Hu 'svc wifi enable 2>/dev/null; settings put global adb_enabled 1 2>/dev/null; setprop service.adb.tcp.port 5555; setprop persist.adb.tcp.port 5555; setprop ctl.restart adbd; sleep 3; ip -4 addr show wlan0 2>/dev/null | grep inet; echo "adbd=$(getprop init.svc.adbd)"' -TimeoutSec 30 -AllowFail
     $r.Lines | ForEach-Object { Write-Host "  $_" }
     $ip = [regex]::Match($r.Text, 'inet (\d+\.\d+\.\d+\.\d+)').Groups[1].Value
-    if ($ip) { Write-Host "ADB: adb connect ${ip}:5555" -ForegroundColor Green }
+    if ($ip) {
+        Write-Host "ADB: adb connect ${ip}:5555" -ForegroundColor Green
+        $adb = Find-PcTool 'adb'
+        if ($adb) { $null = & $adb connect "${ip}:5555" 2>$null }
+    }
     else { Write-Host 'У wlan0 нет адреса: ГУ не в сети. Добавьте сеть (пункт 4) или проверьте роутер.' -ForegroundColor Yellow }
 }
 
@@ -1161,6 +1202,8 @@ try {
         Write-Host ' 7  GPT: записать таблицы из дампа'
         Write-Host ' 8  Записать раздел из файла на USB-флешке'
         Write-Host ' 9  Перезагрузить ГУ (обычно / в fastboot по USB)'
+        Write-Host ' W  Включить Wi-Fi на ГУ (svc wifi enable)'
+        Write-Host ' A  Активировать ADB на ГУ (порт 5555 + запуск adbd)'
         Write-Host ' U  ADB по USB (порт ГУ для CarPlay в режим устройства)'
         Write-Host ' T  Терминал (ручной ввод)'
         Write-Host ' Q  Выход'
@@ -1176,6 +1219,8 @@ try {
                 '7' { Restore-GptFromDump }
                 '8' { Write-PartitionFromUsb }
                 '9' { Restart-Hu }
+                'W' { Enable-Wifi }
+                'A' { Activate-AdbDaemon }
                 'U' { Enable-UsbAdb }
                 'T' { Start-Terminal }
                 'Q' { Restore-Printk; return }

@@ -1,14 +1,15 @@
 package vad.dashing.winpatch
 
 /**
- * Permanent install of the patched launcher-window Android Auto (p5) and CarPlayView (p3)
+ * Permanent install of the patched launcher-window Android Auto (p6) and CarPlayView (p6)
  * APKs into the A10 head unit /system (companion of the Data Resize / USB Audio / Firewall
  * one-shot apps: dangerous /system writes live outside TBox Monitor).
  *
- * The patched APKs are bundled in assets; originals are backed up once into
- * /data/local/tmp/winpatch (adopting the pre-existing manual backups in /data/local/tmp).
- * CarPlayManagerConfig.json is never touched — wired and wireless AA/CarPlay pairing keep
- * the stock behavior. See docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md.
+ * One universal patched APK per target is bundled in assets (AndroidAuto_p6 is built from the
+ * newest V00.07.12 stock APK and works across all A10 firmwares). Stock backup APKs for every
+ * known A10 firmware (V00.03.07, V00.03.16, V00.05.09, V00.07.12) are also bundled in assets
+ * under `stock/`, so backup/restore works even if `/data/local/tmp` was wiped or a previous
+ * patch revision (p1..p5) is currently installed on `/system`.
  */
 object WinPatchCodec {
     const val WORK_DIR = "/data/local/tmp/winpatch"
@@ -23,6 +24,13 @@ object WinPatchCodec {
     private const val WP_PROC = "/proc/mmc_debug"
     private const val DISK = "/dev/block/mmcblk0"
 
+    data class StockVariant(
+        val firmwareLabel: String,
+        val buildIncrementals: Set<String>,
+        val assetPath: String,
+        val md5: String,
+    )
+
     data class Target(
         val id: String,
         val title: String,
@@ -34,39 +42,112 @@ object WinPatchCodec {
         val stockMd5: String,
         val patchedMd5: String,
         val processName: String,
+        val stockVariants: List<StockVariant>,
+        val legacyPatchedMd5s: Map<String, String> = emptyMap(),
     ) {
         val rootStagePath: String get() = "$WORK_DIR/$assetName"
+        val dalvikPattern: String
+            get() {
+                val encoded = systemPath.trimStart('/').replace('/', '@')
+                return "/data/dalvik-cache/*/$encoded@classes.* ${systemPath.substringBeforeLast('/')}/oat"
+            }
+
+        fun stockVariantForIncremental(incremental: String?): StockVariant {
+            if (!incremental.isNullOrBlank()) {
+                stockVariants.firstOrNull { incremental.trim() in it.buildIncrementals }?.let { return it }
+            }
+            return stockVariants.firstOrNull { it.md5.equals(stockMd5, ignoreCase = true) } ?: stockVariants.last()
+        }
+
+        fun stockVariantByMd5(md5: String?): StockVariant? {
+            if (md5.isNullOrBlank()) return null
+            return stockVariants.firstOrNull { it.md5.equals(md5.trim(), ignoreCase = true) }
+        }
     }
+
+    val ANDROID_AUTO_STOCK_VARIANTS = listOf(
+        StockVariant(
+            firmwareLabel = "V00.03.07 / V00.03.16",
+            buildIncrementals = setOf("1719404309", "1725521697"),
+            assetPath = "stock/AndroidAuto_v0307.apk",
+            md5 = "ed05e3db4ac59fbf82bf9d7018c0b01a",
+        ),
+        StockVariant(
+            firmwareLabel = "V00.05.09",
+            buildIncrementals = setOf("1742980640"),
+            assetPath = "stock/AndroidAuto_v0509.apk",
+            md5 = "821cf2db51435747bd974a81fd52d1bb",
+        ),
+        StockVariant(
+            firmwareLabel = "V00.07.12",
+            buildIncrementals = setOf("1763366978"),
+            assetPath = "stock/AndroidAuto_v0712.apk",
+            md5 = "5bbdbcb35d8c895912534ef3f9e46dee",
+        ),
+    )
+
+    val CARPLAY_STOCK_VARIANTS = listOf(
+        StockVariant(
+            firmwareLabel = "V00.03.07 – V00.07.12",
+            buildIncrementals = setOf("1719404309", "1725521697", "1742980640", "1763366978"),
+            assetPath = "stock/CarPlayView_stock.apk",
+            md5 = "2718803663e016a969e6d2fa0d2b4c16",
+        ),
+    )
 
     val ANDROID_AUTO = Target(
         id = "aa",
         title = "Android Auto",
-        patchLabel = "p5",
+        patchLabel = "p6",
         systemPath = "/system/app/AndroidAuto/AndroidAuto.apk",
         backupPath = "$WORK_DIR/AndroidAuto.orig.apk",
         legacyBackupPath = "/data/local/tmp/AndroidAuto_orig_backup.apk",
-        assetName = "AndroidAuto_p5.apk",
+        assetName = "AndroidAuto_p6.apk",
         stockMd5 = "821cf2db51435747bd974a81fd52d1bb",
-        patchedMd5 = "f91c1def77c9105db35eed2dc0732c27",
+        patchedMd5 = "7de94e8e0a80bd17af4ce097913fc9eb",
         processName = "com.adayo.androidauto",
+        stockVariants = ANDROID_AUTO_STOCK_VARIANTS,
+        legacyPatchedMd5s = mapOf(
+            "b47ebdd0a56953d215217fbac7cb7485" to "p1",
+            "380839b160c0a48743c08ae6e0e61c0b" to "p2",
+            "e6c527effb3e4cfc3ce9dbd5ff9b93e3" to "p3",
+            "0ca6fc37a46629ea08095165d0acca05" to "p4",
+            "f91c1def77c9105db35eed2dc0732c27" to "p5",
+            "cb434d97d52d3cdd18c401e04454e181" to "p6-test1",
+            "faa1584b4c5d215a018ceca2752b501a" to "p6-test2",
+            "9310bb89c5a854db72521856b602b980" to "p6-test3",
+            "2b38bc58847269d66a56d269137e38a1" to "p6-bars",
+            "83063975c2463d3a6a1c5a517381a939" to "p6-test4",
+            "eec23bafc74cfa1542a5e890c4b993ef" to "p6-test5",
+        ),
     )
 
     val CAR_PLAY = Target(
         id = "cp",
         title = "CarPlay",
-        patchLabel = "p3",
+        patchLabel = "p6",
         systemPath = "/system/app/CarPlayView/CarPlayView.apk",
         backupPath = "$WORK_DIR/CarPlayView.orig.apk",
         legacyBackupPath = "/data/local/tmp/CarPlayView_orig_backup.apk",
-        assetName = "CarPlayView_p3.apk",
+        assetName = "CarPlayView_p6.apk",
         stockMd5 = "2718803663e016a969e6d2fa0d2b4c16",
-        patchedMd5 = "e9c8d958178875c0712f6bd0d39ae8a2",
+        patchedMd5 = "0841e6252eb54c88c98ef561dafd2857",
         processName = "com.adayo.carplay.view",
+        stockVariants = CARPLAY_STOCK_VARIANTS,
+        legacyPatchedMd5s = mapOf(
+            "ab1ebdfe8b572d799965c84f1d8f1ad7" to "p1",
+            "035e74c3792a77d5cee55a13e1db9a39" to "p1",
+            "b652a30c36d11fea4343c0e3123ab942" to "p2",
+            "e9c8d958178875c0712f6bd0d39ae8a2" to "p3",
+            "719289e15bc858241e805060cfe845cd" to "p4",
+            "bc5ce29096eef28d8a68709bf90f9dfc" to "p5",
+            "da365136a431d56e179d24135cac9ee1" to "p6",
+        ),
     )
 
     val TARGETS = listOf(ANDROID_AUTO, CAR_PLAY)
 
-    enum class FileState { Stock, Patched, Unknown, Missing }
+    enum class FileState { Stock, Patched, LegacyPatched, Unknown, Missing }
 
     private val md5LineRegex = Regex("^([0-9a-fA-F]{32})\\s+(\\S+)\\s*$")
 
@@ -76,11 +157,24 @@ object WinPatchCodec {
             .mapNotNull { line -> md5LineRegex.find(line)?.let { it.groupValues[2] to it.groupValues[1].lowercase() } }
             .toMap()
 
-    fun fileState(md5: String?, target: Target): FileState = when {
-        md5 == null -> FileState.Missing
-        md5.equals(target.stockMd5, ignoreCase = true) -> FileState.Stock
-        md5.equals(target.patchedMd5, ignoreCase = true) -> FileState.Patched
-        else -> FileState.Unknown
+    fun fileState(md5: String?, target: Target): FileState {
+        if (md5 == null) return FileState.Missing
+        val lower = md5.lowercase()
+        return when {
+            lower == target.patchedMd5.lowercase() -> FileState.Patched
+            target.stockVariantByMd5(lower) != null -> FileState.Stock
+            lower in target.legacyPatchedMd5s -> FileState.LegacyPatched
+            else -> FileState.Unknown
+        }
+    }
+
+    fun firmwareNameForIncremental(incremental: String?): String = when (incremental?.trim()) {
+        "1719404309" -> "V00.03.07 (2024-06-26)"
+        "1725521697" -> "V00.03.16 (2024-09-05)"
+        "1742980640" -> "V00.05.09 (2025-03-26)"
+        "1763366978" -> "V00.07.12 (2025-11-17)"
+        null, "" -> "не определена"
+        else -> "incremental ${incremental.trim()}"
     }
 
     fun targetById(id: String): Target? = TARGETS.firstOrNull { it.id == id }
@@ -93,7 +187,7 @@ object WinPatchCodec {
      * After the remount, a failure (or a signal) restores any selected target that is neither
      * stock nor patched from its backup. wp_on is idempotent and also remounts / ro.
      */
-    private fun scriptPrologue(targets: List<Target>): String = """
+    private fun scriptPrologue(targets: List<Target>, stockMd5ByTarget: Map<Target, String>): String = """
         |W=$WORK_DIR
         |P=$WP_PROC
         |D=$DISK
@@ -144,7 +238,10 @@ object WinPatchCodec {
         |  ROLLBACK=0
         |  RBD=0
         |  RC=0
-        |${targets.joinToString("\n") { "  restore_one ${it.systemPath} ${it.backupPath} ${it.stockMd5} ${it.patchedMd5} || RC=1" }}
+        |${targets.joinToString("\n") {
+            val stockMd5 = stockMd5ByTarget[it] ?: it.stockMd5
+            "  restore_one ${it.systemPath} ${it.backupPath} $stockMd5 ${it.patchedMd5} || RC=1"
+        }}
         |  if [ "${'$'}RC" = 1 ]; then RB=" norollback"; elif [ "${'$'}RBD" = 1 ]; then RB=" rolledback"; fi
         |}
         |fail() { rollback; echo "$ERR_MARKER ${'$'}1${'$'}RB"; exit 1; }
@@ -161,7 +258,10 @@ object WinPatchCodec {
         |  return 1
         |}
         |ensure_backup() {
-        |  S="${'$'}1"; B="${'$'}2"; L="${'$'}3"; STOCK="${'$'}4"; PATCHED="${'$'}5"; NAME="${'$'}6"
+        |  S="${'$'}1"; B="${'$'}2"; L="${'$'}3"; STOCK="${'$'}4"; PATCHED="${'$'}5"; NAME="${'$'}6"; BUNDLED="${'$'}7"
+        |  if [ ! -f "${'$'}B" ] && [ -n "${'$'}BUNDLED" ] && [ -f "${'$'}BUNDLED" ] && [ "${'$'}(md5 "${'$'}BUNDLED")" = "${'$'}STOCK" ]; then
+        |    save_copy "${'$'}BUNDLED" "${'$'}B" "${'$'}STOCK" || fail "backup_${'$'}NAME"
+        |  fi
         |  if [ ! -f "${'$'}B" ] && [ -f "${'$'}L" ] && [ "${'$'}(md5 "${'$'}L")" = "${'$'}STOCK" ]; then
         |    save_copy "${'$'}L" "${'$'}B" "${'$'}STOCK" || fail "backup_${'$'}NAME"
         |  fi
@@ -195,44 +295,81 @@ object WinPatchCodec {
         targets.joinToString("") { line(it) + "\n" }
 
     /** Stage paths are app-writable; the script copies them into root-only [WORK_DIR] first. */
-    private fun applyBody(stages: Map<Target, String>): String {
+    private fun applyBody(
+        stages: Map<Target, String>,
+        stockStages: Map<Target, String>,
+        stockMd5ByTarget: Map<Target, String>,
+    ): String {
         val targets = stages.keys.toList()
         return lines(targets) { "${it.v}_SRC='${stages.getValue(it)}'" } +
             lines(targets) { "${it.v}_STAGE=${it.rootStagePath}" } +
+            lines(targets) {
+                val stockSrc = stockStages[it] ?: ""
+                "${it.v}_BUNDLED='$stockSrc'"
+            } +
             lines(targets) { "stage_in \"\$${it.v}_SRC\" \"\$${it.v}_STAGE\" ${it.patchedMd5} ${it.id}" } +
             lines(targets) {
-                "ensure_backup ${it.systemPath} ${it.backupPath} ${it.legacyBackupPath} ${it.stockMd5} ${it.patchedMd5} ${it.id}"
+                val stockMd5 = stockMd5ByTarget[it] ?: it.stockMd5
+                "ensure_backup ${it.systemPath} ${it.backupPath} ${it.legacyBackupPath} $stockMd5 ${it.patchedMd5} ${it.id} \"\$${it.v}_BUNDLED\""
             } +
             "\n" + wpOff() +
             "ROLLBACK=1\n" +
             lines(targets) { "write_one ${it.systemPath} \"\$${it.v}_STAGE\" ${it.patchedMd5} ${it.id}" } +
+            lines(targets) { "rm -rf ${it.dalvikPattern} 2>/dev/null" } +
             "ROLLBACK=0\n" +
             "rm -f ${targets.joinToString(" ") { "\"\$${it.v}_STAGE\"" }}\n"
     }
 
-    private fun restoreBody(targets: List<Target>): String =
+    private fun restoreBody(
+        targets: List<Target>,
+        stockStages: Map<Target, String>,
+        stockMd5ByTarget: Map<Target, String>,
+    ): String =
         lines(targets) { "${it.v}_BAK=${it.backupPath}" } +
+            lines(targets) {
+                val stockSrc = stockStages[it] ?: ""
+                val stockMd5 = stockMd5ByTarget[it] ?: it.stockMd5
+                "if [ ! -f \"\$${it.v}_BAK\" ] && [ -n '$stockSrc' ] && [ -f '$stockSrc' ]; then save_copy '$stockSrc' \"\$${it.v}_BAK\" $stockMd5 || fail backup_${it.id}; fi"
+            } +
             lines(targets) { "[ -f \"\$${it.v}_BAK\" ] || fail nobackup_${it.id}" } +
             "\n" + wpOff() +
-            lines(targets) { "write_one ${it.systemPath} \"\$${it.v}_BAK\" ${it.stockMd5} ${it.id}" }
+            lines(targets) {
+                val stockMd5 = stockMd5ByTarget[it] ?: it.stockMd5
+                "write_one ${it.systemPath} \"\$${it.v}_BAK\" $stockMd5 ${it.id}"
+            } +
+            lines(targets) { "rm -rf ${it.dalvikPattern} 2>/dev/null" }
 
     private fun scriptTail(targets: List<Target>): String =
         "\nwp_on\ntrap - EXIT HUP INT TERM PIPE\n" +
-            lines(targets) { "kill \$(pidof ${it.processName}) 2>/dev/null" }
+            lines(targets) { "am force-stop ${it.processName} 2>/dev/null; kill \$(pidof ${it.processName}) 2>/dev/null" }
 
     /** Patches only the targets in [stages] (target → app-side staged APK path), in [TARGETS] order. */
-    fun applyScript(stages: Map<Target, String>): String {
+    fun applyScript(
+        stages: Map<Target, String>,
+        stockStages: Map<Target, String> = emptyMap(),
+        stockMd5ByTarget: Map<Target, String> = emptyMap(),
+    ): String {
         require(stages.isNotEmpty()) { "no targets" }
         val ordered = TARGETS.filter { it in stages }.associateWith { stages.getValue(it) }
         val targets = ordered.keys.toList()
-        return scriptPrologue(targets) + applyBody(ordered) + scriptTail(targets) + "echo \"$APPLIED_MARKER\"\n"
+        return scriptPrologue(targets, stockMd5ByTarget) +
+            applyBody(ordered, stockStages, stockMd5ByTarget) +
+            scriptTail(targets) +
+            "echo \"$APPLIED_MARKER\"\n"
     }
 
-    /** Restores only [targets] from their backups. */
-    fun restoreScript(targets: Collection<Target>): String {
+    /** Restores only [targets] from their backups (or bundled stock APKs). */
+    fun restoreScript(
+        targets: Collection<Target>,
+        stockStages: Map<Target, String> = emptyMap(),
+        stockMd5ByTarget: Map<Target, String> = emptyMap(),
+    ): String {
         val ordered = TARGETS.filter { it in targets }
         require(ordered.isNotEmpty()) { "no targets" }
-        return scriptPrologue(ordered) + restoreBody(ordered) + scriptTail(ordered) + "echo \"$RESTORED_MARKER\"\n"
+        return scriptPrologue(ordered, stockMd5ByTarget) +
+            restoreBody(ordered, stockStages, stockMd5ByTarget) +
+            scriptTail(ordered) +
+            "echo \"$RESTORED_MARKER\"\n"
     }
 
     sealed interface Outcome {
