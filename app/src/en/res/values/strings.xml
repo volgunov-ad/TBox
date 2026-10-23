@@ -1990,6 +1990,15 @@
     <string name="location_geo_debug_log_recording">Recording… ticks: %1$d</string>
     <string name="location_geo_debug_log_idle">Not recording</string>
 
+    <string name="info_system_load_section">Load</string>
+    <string name="info_system_load_core">cpu%1$d</string>
+    <string name="info_system_load_memory">Memory</string>
+    <string name="info_system_load_disk">Disk</string>
+    <string name="info_system_load_used">%1$s of %2$s</string>
+    <string name="info_system_load_percent">%1$d%%</string>
+    <string name="info_system_load_gb">%1$.1f GB</string>
+    <string name="info_system_load_mb">%1$.0f MB</string>
+    <string name="info_system_load_unknown">—</string>
     <string name="info_tbox_section">TBox information</string>
     <string name="info_tbox_connection">Connection</string>
     <string name="info_tbox_connected_since">connected at %1$s</string>

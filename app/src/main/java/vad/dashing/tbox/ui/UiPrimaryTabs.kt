@@ -3724,6 +3724,7 @@ fun InfoTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item { HuSystemLoadSection() }
             item { HuSystemNetworksSection() }
             item { MqttStatusInfoSection() }
             if (!noTboxConnect) {

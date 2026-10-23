@@ -2001,6 +2001,15 @@
     <string name="location_geo_debug_log_recording">Идёт запись… тиков: %1$d</string>
     <string name="location_geo_debug_log_idle">Запись не идёт</string>
 
+    <string name="info_system_load_section">Загрузка</string>
+    <string name="info_system_load_core">cpu%1$d</string>
+    <string name="info_system_load_memory">Память</string>
+    <string name="info_system_load_disk">Диск</string>
+    <string name="info_system_load_used">%1$s из %2$s</string>
+    <string name="info_system_load_percent">%1$d%%</string>
+    <string name="info_system_load_gb">%1$.1f ГБ</string>
+    <string name="info_system_load_mb">%1$.0f МБ</string>
+    <string name="info_system_load_unknown">—</string>
     <string name="info_tbox_section">Информация TBox</string>
     <string name="info_tbox_connection">Подключение</string>
     <string name="info_tbox_connected_since">подключен в %1$s</string>
