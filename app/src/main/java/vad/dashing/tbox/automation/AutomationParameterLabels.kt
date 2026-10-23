@@ -183,6 +183,14 @@ object AutomationParameterLabels {
         AutomationSignalId.REAR_LEFT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH)
         AutomationSignalId.REAR_RIGHT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH)
         AutomationSignalId.GEO_POSITION -> "Геопозиция"
+        AutomationSignalId.GEO_ALTITUDE_M -> "Геопозиция: высота"
+        AutomationSignalId.GEO_SPEED_KMH -> "Геопозиция: скорость"
+        AutomationSignalId.GEO_SPEED_SOURCE -> "Геопозиция: источник скорости"
+        AutomationSignalId.GEO_BEARING_DEG -> "Геопозиция: курс"
+        AutomationSignalId.GEO_SATELLITES_VISIBLE -> "Геопозиция: спутники видимые"
+        AutomationSignalId.GEO_SATELLITES_USED -> "Геопозиция: спутники в решении"
+        AutomationSignalId.GEO_FIX_VALID -> "Геопозиция: правдивость"
+        AutomationSignalId.GEO_SOURCE -> "Геопозиция: источник"
         AutomationSignalId.DOOR_AUTO_LOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK)
         AutomationSignalId.DOOR_IGNOFF_UNLOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK)
         AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME -> vehicleLabel(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY)
@@ -270,6 +278,12 @@ object AutomationParameterLabels {
         AutomationSignalId.HU_HEADREST_SPEAKER -> "Динамик подголовника"
         AutomationSignalId.TBOX_CONNECTED -> "TBox на связи"
         AutomationSignalId.MODEM_SIGNAL_LEVEL -> "Модем: уровень сигнала"
+        AutomationSignalId.MODEM_RSSI_DBM -> "Модем: RSSI, дБм"
+        AutomationSignalId.MODEM_REGISTERED -> "Модем: регистрация в сети"
+        AutomationSignalId.MODEM_OPERATOR -> "Модем: оператор"
+        AutomationSignalId.MODEM_SOURCE -> "Модем: источник"
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS -> "Модем: скорость вниз, кбит/с"
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS -> "Модем: скорость вверх, кбит/с"
         AutomationSignalId.LOCATE_STATUS -> "Геопозиция: фиксация"
         AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> "Топливо % (фильтр)"
         AutomationSignalId.FUEL_LEVEL_LITERS -> "Топливо, л (калибровка)"

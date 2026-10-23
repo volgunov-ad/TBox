@@ -784,6 +784,14 @@ TCP :5555 включают только если порт ещё не слуша
 | `audio_balance` | `head_unit` | -7..7, только A9/mbCAN |
 | `audio_fader` | `head_unit` | -7..7, только A9/mbCAN |
 | `modem_signal_level` | `app` | уровень сигнала модема (обычно 0..5); 0 — нет данных |
+| `geo_altitude_m` | `app` | м, высота GeoDisplay; без LIVE/RETAINING значения нет |
+| `geo_speed_kmh` | `app` | км/ч, отображаемая скорость GeoDisplay; без LIVE/RETAINING значения нет |
+| `geo_bearing_deg` | `app` | °, курс; без bearing или без LIVE/RETAINING значения нет |
+| `geo_satellites_visible` | `app` | спутники в поле зрения; без LIVE/RETAINING значения нет |
+| `geo_satellites_used` | `app` | спутники в решении; без LIVE/RETAINING значения нет |
+| `modem_rssi_dbm` | `app` | дБм: signalDbm (Wi‑Fi HTTP) или CSQ→dBm для TBox; без значения — нет сигнала |
+| `modem_throughput_down_kbps` | `app` | кбит/с downlink Wi‑Fi HTTP; на TBox MDC значения нет |
+| `modem_throughput_up_kbps` | `app` | кбит/с uplink Wi‑Fi HTTP; на TBox MDC значения нет |
 | `fuel_level_percent_filtered` | `app` | %, отфильтрованный уровень в активной поездке |
 | `fuel_level_liters` | `app` | л, калиброванные (+15 °C) в активной поездке |
 | `gear_box_oil_temperature` | `tbox` | °C, масло КПП |
@@ -857,6 +865,10 @@ TCP :5555 включают только если порт ещё не слуша
 | `wifi_modem_link_status` | `app` | `idle`, `ok`, `auth_failed`, `unreachable`, `error` (HTTP к Wi‑Fi модему; idle без поллера / источник TBox) |
 | `modem_net_type` | `app` | `none`, `2g`, `3g`, `4g` |
 | `modem_sim_status` | `app` | `none`, `ready`, `pin`, `error`, `unknown` |
+| `geo_speed_source` | `app` | `gnss`, `can`, `retention`, `none` — источник отображаемой скорости |
+| `geo_source` | `app` | `tbox`, `companion`, `android`, `usb` — активный источник геопозиции |
+| `modem_operator` | `app` | имя оператора (строка) или нет значения; без IMEI/ICCID/IMSI |
+| `modem_source` | `app` | `tbox`, `wifi_http` — активный источник модема |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
 | `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
@@ -864,6 +876,8 @@ TCP :5555 включают только если порт ещё не слуша
 | `hu_headrest_speaker` | `app` | `only`, `assist`, `off` — динамик подголовника (Car Settings → Аудио) |
 | `tbox_connected` | `app` | `on`, `off` — UDP-связь с TBox |
 | `locate_status` | `app` | `on`, `off` — фиксация у активного источника геопозиции |
+| `geo_fix_valid` | `app` | `on`, `off` — правдивость GNSS (`gnssTruthful`), отдельно от `locate_status` |
+| `modem_registered` | `app` | `on`, `off` — домашняя сеть или роуминг |
 | `media_title` | `app` | название трека или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_artist` | `app` | исполнитель или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_playing` | `app` | `on` / `off` — сессия играет или на паузе |
@@ -873,7 +887,7 @@ TCP :5555 включают только если порт ещё не слуша
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `epb_park_lamp`, `engine_oil_pressure`, `brake_fluid`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `road_tunnel` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

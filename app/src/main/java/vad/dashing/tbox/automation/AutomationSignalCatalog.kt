@@ -769,6 +769,70 @@ object AutomationSignalCatalog {
             sources = appOnly,
             typicalRange = "Текущая точка GeoDisplay (GNSS или подмена)",
         ),
+        number(
+            AutomationSignalId.GEO_ALTITUDE_M,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_ALTITUDE_M),
+            "м",
+            appOnly,
+            typicalRange = "Высота GeoDisplay, м. Unavailable при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SPEED_KMH,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SPEED_KMH),
+            "км/ч",
+            appOnly,
+            typicalRange = "Отображаемая скорость GeoDisplay (GNSS/CAN/retention). " +
+                "Unavailable при NONE/LOST.",
+        ),
+        state(
+            AutomationSignalId.GEO_SPEED_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SPEED_SOURCE),
+            appOnly,
+            GeoAutomationSignals.SPEED_SOURCE_OPTIONS,
+            typicalRange = "gnss / can / retention — источник скорости GeoDisplay; " +
+                "none — нет LIVE/RETAINING снимка.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("gnss", "GNSS"),
+                AutomationSignalNamedValue("can", "CAN"),
+                AutomationSignalNamedValue("retention", "Удержание"),
+                AutomationSignalNamedValue("none", "Нет данных"),
+            ),
+        ),
+        number(
+            AutomationSignalId.GEO_BEARING_DEG,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_BEARING_DEG),
+            "°",
+            appOnly,
+            typicalRange = "Курс / bearing, градусы. Unavailable без надёжного bearing или при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SATELLITES_VISIBLE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SATELLITES_VISIBLE),
+            "",
+            appOnly,
+            typicalRange = "Спутники в поле зрения. Unavailable при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SATELLITES_USED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SATELLITES_USED),
+            "",
+            appOnly,
+            typicalRange = "Спутники в решении фикса. Unavailable при NONE/LOST.",
+        ),
+        state(
+            AutomationSignalId.GEO_FIX_VALID,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_FIX_VALID),
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off — правдивость GNSS (gnssTruthful), отдельно от locate_status.",
+        ),
+        state(
+            AutomationSignalId.GEO_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SOURCE),
+            appOnly,
+            GeoAutomationSignals.GEO_SOURCE_OPTIONS,
+            typicalRange = "Активный источник геопозиции из настроек: tbox / companion / android / usb.",
+        ),
         state(AutomationSignalId.ESP_GPIO_IN_0, "ESP-вход 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_GPIO_IN_1, "ESP-вход 1", appOnly, binaryStates),
         state(AutomationSignalId.ESP_GPIO_IN_2, "ESP-вход 2", appOnly, binaryStates),
@@ -943,6 +1007,51 @@ object AutomationSignalCatalog {
             appOnly,
             typicalRange = "Уровень сигнала модема (CSQ → «палочки»), обычно 0…5; 0 — нет данных. " +
                 "TBox MDC или Wi‑Fi HTTP sink в netState.",
+        ),
+        number(
+            AutomationSignalId.MODEM_RSSI_DBM,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_RSSI_DBM),
+            "дБм",
+            appOnly,
+            typicalRange = "RSSI/RSRP дБм: signalDbm с Wi‑Fi модема или CSQ→dBm (2·CSQ−113) " +
+                "для TBox при CSQ 0…31. Unavailable при CSQ 99 / без значения. " +
+                "IMEI/ICCID/IMSI не отдаются.",
+        ),
+        state(
+            AutomationSignalId.MODEM_REGISTERED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_REGISTERED),
+            appOnly,
+            binaryStates,
+            typicalRange = "on — домашняя сеть или роуминг; off — нет сети / поиск / отказ / иное.",
+        ),
+        state(
+            AutomationSignalId.MODEM_OPERATOR,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_OPERATOR),
+            appOnly,
+            typicalRange = "Имя оператора (строка) или нет значения. Без IMEI/ICCID/IMSI.",
+        ),
+        state(
+            AutomationSignalId.MODEM_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_SOURCE),
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.MODEM_SOURCE_OPTIONS,
+            typicalRange = "Активный источник модема из настроек: tbox / wifi_http.",
+        ),
+        number(
+            AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS),
+            "кбит/с",
+            appOnly,
+            typicalRange = "Downlink throughput Wi‑Fi HTTP модема (из bytes/s). " +
+                "Unavailable на пути TBox MDC или когда модем не отдал скорость.",
+        ),
+        number(
+            AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS),
+            "кбит/с",
+            appOnly,
+            typicalRange = "Uplink throughput Wi‑Fi HTTP модема (из bytes/s). " +
+                "Unavailable на пути TBox MDC или когда модем не отдал скорость.",
         ),
         state(
             AutomationSignalId.LOCATE_STATUS,

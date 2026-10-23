@@ -474,6 +474,41 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun geoModemEnrichmentSignals_areAppOnlyReadOnly() {
+        val altitude = AutomationSignalCatalog.get(AutomationSignalId.GEO_ALTITUDE_M)
+        val speedSrc = AutomationSignalCatalog.get(AutomationSignalId.GEO_SPEED_SOURCE)
+        val fixValid = AutomationSignalCatalog.get(AutomationSignalId.GEO_FIX_VALID)
+        val geoSource = AutomationSignalCatalog.get(AutomationSignalId.GEO_SOURCE)
+        val rssi = AutomationSignalCatalog.get(AutomationSignalId.MODEM_RSSI_DBM)
+        val registered = AutomationSignalCatalog.get(AutomationSignalId.MODEM_REGISTERED)
+        val operator = AutomationSignalCatalog.get(AutomationSignalId.MODEM_OPERATOR)
+        val modemSource = AutomationSignalCatalog.get(AutomationSignalId.MODEM_SOURCE)
+        val down = AutomationSignalCatalog.get(AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS)
+        val up = AutomationSignalCatalog.get(AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS)
+
+        assertEquals(AutomationSignalValueType.NUMBER, altitude.id.valueType)
+        assertEquals(listOf("gnss", "can", "retention", "none"), speedSrc.stateOptions)
+        assertEquals(listOf("off", "on"), fixValid.stateOptions)
+        assertEquals(listOf("tbox", "companion", "android", "usb"), geoSource.stateOptions)
+        assertEquals(AutomationSignalValueType.NUMBER, rssi.id.valueType)
+        assertEquals(listOf("off", "on"), registered.stateOptions)
+        assertTrue(operator.stateOptions.isEmpty())
+        assertEquals(listOf("tbox", "wifi_http"), modemSource.stateOptions)
+        assertEquals(AutomationSignalValueType.NUMBER, down.id.valueType)
+        assertEquals(AutomationSignalValueType.NUMBER, up.id.valueType)
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(altitude.id))
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(rssi.id))
+        assertEquals(
+            "Нет данных",
+            AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.GEO_SPEED_SOURCE, "none"),
+        )
+        assertEquals("Компаньон", AutomationSignalCatalog.stateOptionLabel("companion"))
+        assertEquals("Wi‑Fi HTTP", AutomationSignalCatalog.stateOptionLabel("wifi_http"))
+        assertTrue(rssi.valueHint().contains("CSQ"))
+        assertTrue(down.valueHint().contains("Wi‑Fi HTTP"))
+    }
+
+    @Test
     fun appThemeMode_isAppOnlyWithExplicitStates() {
         val descriptor = AutomationSignalCatalog.get(AutomationSignalId.APP_THEME_MODE)
         assertEquals(listOf("manual_day", "manual_night", "auto_day", "auto_night"), descriptor.stateOptions)

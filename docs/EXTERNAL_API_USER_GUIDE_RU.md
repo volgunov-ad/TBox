@@ -210,8 +210,8 @@ curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
 | `GET` | `/` и `/panel` | нет | Страница управления автомобилем, если включена простая веб-панель |
 | `POST` | `/v1/pair/request` | нет* | Начать pairing (`*` только при активном режиме) |
 | `GET` | `/v1/pair/status?requestId=` | нет* | Статус / `accessToken` после approve |
-| `GET` | `/v1/catalog` | да | Сигналы, действия, `voiceAliasesRu` |
-| `GET` | `/v1/signals?ids=&source=` | да | Snapshot значений |
+| `GET` | `/v1/catalog` | да | Сигналы, действия, `voiceAliasesRu` (`catalogVersion` 5+) |
+| `GET` | `/v1/signals?ids=&source=` | да | Snapshot значений (в т.ч. `geo_*` / `modem_rssi_dbm` и др. enrichment) |
 | `POST` | `/v1/actions/invoke` | да | Выполнить 1…N действий |
 | `GET` | `/v1/automations` | да | Список правил (id, name, enabled) |
 | `POST` | `/v1/automations/{id}/run` | да | RunNow |

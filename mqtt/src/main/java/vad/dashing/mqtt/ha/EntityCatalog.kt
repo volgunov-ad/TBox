@@ -348,8 +348,8 @@ fun groupFor(id: String): EntityGroup {
             key in setOf("avh", "hdc", "esp_off", "acc_status", "acc_cruise_state", "ccs_cruise_state") ->
             EntityGroup.MOTION
         key.contains("fuel") || key.contains("odometer") || key.contains("distance") ||
-            key.contains("trip") || key == "geo_position" || key.contains("consumption") ||
-            key == "voltage" ->
+            key.contains("trip") || key.startsWith("geo_") || key == "locate_status" ||
+            key.contains("consumption") || key == "voltage" ->
             EntityGroup.TRIP
         else -> EntityGroup.OTHER
     }

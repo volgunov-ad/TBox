@@ -1,5 +1,7 @@
 package vad.dashing.tbox.wifimodem
 
+import vad.dashing.tbox.NetState
+
 /**
  * Stable English automation state keys for modem tab / Wi‑Fi modem sinks.
  * UI [NetState] strings stay Russian; automations never match those literals.
@@ -34,6 +36,11 @@ object ModemAutomationStates {
 
     val SIM_OPTIONS = listOf(SIM_NONE, SIM_READY, SIM_PIN, SIM_ERROR, SIM_UNKNOWN)
 
+    const val SOURCE_TBOX = "tbox"
+    const val SOURCE_WIFI_HTTP = "wifi_http"
+
+    val MODEM_SOURCE_OPTIONS = listOf(SOURCE_TBOX, SOURCE_WIFI_HTTP)
+
     fun linkStatusKey(status: WifiModemLinkStatus): String =
         when (status) {
             WifiModemLinkStatus.IDLE -> LINK_IDLE
@@ -67,5 +74,42 @@ object ModemAutomationStates {
                 raw.contains("ready", ignoreCase = true) -> SIM_READY
             else -> SIM_UNKNOWN
         }
+    }
+
+    /**
+     * Home / roaming registration from Russian UI [NetState.regStatus]
+     * (same gate as APN poll in BackgroundService).
+     */
+    fun registeredKey(regStatus: String?): String {
+        val raw = regStatus?.trim().orEmpty()
+        return if (raw == "домашняя сеть" || raw == "роуминг") "on" else "off"
+    }
+
+    fun modemSourceKey(source: ModemSource): String =
+        when (source) {
+            ModemSource.TBOX -> SOURCE_TBOX
+            ModemSource.WIFI_HTTP -> SOURCE_WIFI_HTTP
+        }
+
+    /**
+     * Prefer Wi‑Fi modem [NetState.signalDbm]; else derive from AT+CSQ (`2*csq - 113`)
+     * when CSQ is 0…31 (not 99 / unknown). Null when neither is known.
+     */
+    fun rssiDbmOrNull(net: NetState): Int? {
+        net.signalDbm?.let { return it }
+        val csq = net.csq
+        return if (csq in 0..31) 2 * csq - 113 else null
+    }
+
+    /** Operator name for API; null when empty / placeholder. */
+    fun operatorOrNull(operator: String?): String? {
+        val raw = operator?.trim().orEmpty()
+        return raw.takeIf { it.isNotEmpty() && it != "-" }
+    }
+
+    /** [NetState] stores bytes/s; External API exposes kilobits/s. Null when unknown. */
+    fun throughputKbpsOrNull(bps: Long?): Double? {
+        if (bps == null || bps < 0L) return null
+        return bps * 8.0 / 1000.0
     }
 }

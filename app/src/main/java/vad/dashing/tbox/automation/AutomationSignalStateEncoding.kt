@@ -365,6 +365,14 @@ object AutomationSignalStateEncoding {
         "sand" -> "SAND"
         "mud" -> "MUD"
         "snow_mode" -> "SNOW"
+        "gnss" -> "GNSS"
+        "can" -> "CAN"
+        "retention" -> "Удержание"
+        "tbox" -> "TBox"
+        "companion" -> "Компаньон"
+        "android" -> "Android"
+        "usb" -> "USB"
+        "wifi_http" -> "Wi‑Fi HTTP"
         else -> AutomationRoadMatchSignals.highwayClassOptionLabel(raw) ?: raw
     }
 
