@@ -87,4 +87,16 @@
     <string name="state_open">Открыто</string>
     <string name="state_tilted">Откинут</string>
     <string name="need_firmware">Окна, люк и шторка видны с прошивкой компаньона 0.10.5 или новее.</string>
+    <string name="telemetry_title">Геопозиция и курс на ГУ</string>
+    <string name="telemetry_hint">Работает по прямому Bluetooth-соединению с ГУ. Фоновая служба и автозапуск активны, только когда включён хотя бы один из переключателей ниже.</string>
+    <string name="share_location">Отдавать геопозицию (GPS)</string>
+    <string name="share_gyro">Отдавать гироскоп</string>
+    <string name="share_compass">Отдавать компас</string>
+    <string name="telemetry_autostart_btn">Привязать ГУ для автозапуска</string>
+    <string name="telemetry_battery_btn">Отключить оптимизацию батареи</string>
+    <string name="telemetry_battery_ok">Оптимизация батареи отключена для работы в фоне.</string>
+    <string name="telemetry_battery_hint">На Xiaomi, Huawei, Samsung и других оболочках система может останавливать фоновую службу без отключения оптимизации батареи.</string>
+    <string name="telemetry_channel_name">Связь и геоданные для ГУ</string>
+    <string name="telemetry_notification_text">Передача геопозиции и датчиков курса в TBox Monitor по Bluetooth</string>
+    <string name="telemetry_bg_loc_hint">Разрешите геолокацию «В любом режиме», чтобы передача GPS стартовала из фона автоматически.</string>
 </resources>

@@ -388,6 +388,18 @@ object MbCanEngineFacade {
                         if (gearRaw != null) {
                             MbCanRepository.scheduleVehicleGearPush(gearRaw)
                         }
+                        val latAccelRaw = runCatching {
+                            val raw = args?.getOrNull(0) ?: return@runCatching null
+                            val getter = raw.javaClass.methods.firstOrNull {
+                                it.name == "getfLateraAccaleleration" && it.parameterCount == 0
+                            }
+                            (getter?.invoke(raw) as? Number)?.toFloat()
+                        }.getOrNull()
+                        if (latAccelRaw != null) {
+                            MbCanRepository.scheduleLateralAccelerationPush(
+                                LateralAccelerationDomain.decodeMbCanFloat(latAccelRaw),
+                            )
+                        }
                     }
                     "onVehicleEngineStatusChange" -> {
                         val engine = args?.getOrNull(0)
@@ -1189,6 +1201,23 @@ object MbCanEngineFacade {
             val speedObj = nativeGetMbCanData(getMbCanData, inst, 1, speedCls) ?: return null
             val speed = speedCls.getMethod("getSpeed").invoke(speedObj) as? Number
             speed?.toFloat()
+        }.getOrNull()
+    }
+
+    /**
+     * Reads lateral acceleration (m/s²) from [com.mengbo.mbCan.entity.MBCanVehicleSpeed#getfLateraAccaleleration]
+     * via [com.mengbo.mbCan.MBCanEngine.getMbCanData] data type 1 (`eMBCAN_VEHICLE_SPEED`).
+     */
+    fun readLateralAccelerationMps2(): Float? {
+        if (ensureInitialized() !is MbCanAvailability.Available) return null
+        val inst = engineInstance ?: return null
+        return runCatching {
+            val engineClass = Class.forName(ENGINE_CLASS)
+            val getMbCanData = engineClass.getMethod("getMbCanData", Int::class.javaPrimitiveType, Class::class.java)
+            val speedCls = Class.forName("com.mengbo.mbCan.entity.MBCanVehicleSpeed")
+            val speedObj = nativeGetMbCanData(getMbCanData, inst, 1, speedCls) ?: return null
+            val raw = (speedCls.getMethod("getfLateraAccaleleration").invoke(speedObj) as? Number)?.toFloat()
+            LateralAccelerationDomain.decodeMbCanFloat(raw)
         }.getOrNull()
     }
 

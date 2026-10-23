@@ -720,6 +720,8 @@ object Android10VhalRepository {
     private val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHF_PULSE_COUNTER_PROPERTY_ID
     private val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_LHR_PULSE_COUNTER_PROPERTY_ID
     private val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHR_PULSE_COUNTER_PROPERTY_ID
+    private val VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
     private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
@@ -1004,6 +1006,8 @@ object Android10VhalRepository {
     val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
     private val _turnSignalsState = MutableStateFlow(TurnSignalsState())
     val turnSignalsState: StateFlow<TurnSignalsState> = _turnSignalsState.asStateFlow()
+    private val _lateralAccelerationState = MutableStateFlow<Float?>(null)
+    val lateralAccelerationState: StateFlow<Float?> = _lateralAccelerationState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -1856,6 +1860,7 @@ object Android10VhalRepository {
                 VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID,
                 VHAL_HAZARD_LIGHT_SW_PROPERTY_ID,
             )
+            MbCanSignal.LateralAcceleration -> setOf(VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID)
         }
     }
 
@@ -2719,6 +2724,8 @@ object Android10VhalRepository {
                 applyVhalPulseCorner(2, decodePulseCounter(rawValue))
             VHAL_RHR_PULSE_COUNTER_PROPERTY_ID ->
                 applyVhalPulseCorner(3, decodePulseCounter(rawValue))
+            VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID ->
+                _lateralAccelerationState.value = LateralAccelerationDomain.decodeVhalRaw(rawValue)
             VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
                 _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
             VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID ->
@@ -2951,6 +2958,7 @@ object Android10VhalRepository {
                     _steerSpeedState.value = null
                 }
                 MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
+                MbCanSignal.LateralAcceleration -> _lateralAccelerationState.value = null
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(deniedReason)
@@ -3100,6 +3108,7 @@ object Android10VhalRepository {
                     _steerSpeedState.value = null
                 }
                 MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
+                MbCanSignal.LateralAcceleration -> _lateralAccelerationState.value = null
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(reason)
@@ -3663,6 +3672,11 @@ object Android10VhalRepository {
                     leftActive = left,
                     rightActive = right,
                     hazardActive = hazard,
+                )
+            }
+            MbCanSignal.LateralAcceleration -> {
+                _lateralAccelerationState.value = LateralAccelerationDomain.decodeVhalRaw(
+                    readNumericProperty(VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID),
                 )
             }
             MbCanSignal.SlaSpeedLimit -> {

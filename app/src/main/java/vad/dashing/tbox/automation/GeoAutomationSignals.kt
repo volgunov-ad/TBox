@@ -21,8 +21,9 @@ object GeoAutomationSignals {
     const val SOURCE_COMPANION = "companion"
     const val SOURCE_ANDROID = "android"
     const val SOURCE_USB = "usb"
+    const val SOURCE_PHONE = "phone"
 
-    val GEO_SOURCE_OPTIONS = listOf(SOURCE_TBOX, SOURCE_COMPANION, SOURCE_ANDROID, SOURCE_USB)
+    val GEO_SOURCE_OPTIONS = listOf(SOURCE_TBOX, SOURCE_COMPANION, SOURCE_ANDROID, SOURCE_USB, SOURCE_PHONE)
 
     /** LIVE / RETAINING still carry a usable snapshot; NONE / LOST do not. */
     fun hasDisplayData(state: GeoDisplayState): Boolean =
@@ -46,6 +47,7 @@ object GeoAutomationSignals {
             LocationSource.ESP32 -> SOURCE_COMPANION
             LocationSource.ANDROID -> SOURCE_ANDROID
             LocationSource.USB -> SOURCE_USB
+            LocationSource.PHONE -> SOURCE_PHONE
         }
 
     fun altitudeM(state: GeoDisplayState): AutomationSignalValue {

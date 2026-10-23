@@ -21,6 +21,8 @@ data class DrSensorSnapshot(
     val mountPitch: Float? = null,
     val mountRoll: Float? = null,
     val lastUpdateElapsedMs: Long = 0L,
+    /** True when the sensor HAL refused activation or produced no samples after >3 s. */
+    val halRefused: Boolean = false,
 ) {
     companion object {
         val EMPTY = DrSensorSnapshot()

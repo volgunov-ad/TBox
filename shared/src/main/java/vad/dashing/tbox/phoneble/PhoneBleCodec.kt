@@ -61,7 +61,23 @@ object PhoneBleCodec {
     const val TYPE_CMD: Int = 2
     const val TYPE_REFRESH: Int = 3
     const val TYPE_SNAP: Int = 4
+    const val TYPE_LOC_POS: Int = 5
+    const val TYPE_LOC_MOTION: Int = 6
+    const val TYPE_YAW: Int = 7
+    const val TYPE_MAG: Int = 8
+    const val TYPE_TELEMETRY_ACK: Int = 9
     const val TYPE_SNAP_PAGE_BASE: Int = 0x20
+
+    const val DEMAND_NONE: Int = 0
+    const val DEMAND_LOC: Int = 1
+    const val DEMAND_YAW: Int = 2
+    const val DEMAND_MAG: Int = 4
+    const val DEMAND_ALL: Int = DEMAND_LOC or DEMAND_YAW or DEMAND_MAG
+
+    const val YAW_FLAG_MOUNT_STABLE: Int = 1
+    const val YAW_FLAG_MOUNT_MOVED: Int = 2
+    const val MAG_FLAG_MOUNT_MOVED: Int = 0x80
+    const val REPLAY_WINDOW_BITS: Int = 32
 
     const val ID_LEN: Int = 4
     const val KEY_LEN: Int = 16
@@ -87,8 +103,15 @@ object PhoneBleCodec {
     fun isSnapType(type: Int): Boolean =
         type == TYPE_SNAP || type in (TYPE_SNAP_PAGE_BASE + PAGE_MEDIA)..(TYPE_SNAP_PAGE_BASE + PAGE_MAX)
 
+    fun isTelemetryType(type: Int): Boolean =
+        type == TYPE_LOC_POS || type == TYPE_LOC_MOTION || type == TYPE_YAW || type == TYPE_MAG
+
     private fun isSealedType(type: Int): Boolean =
-        type == TYPE_CMD || type == TYPE_REFRESH || isSnapType(type)
+        type == TYPE_CMD ||
+            type == TYPE_REFRESH ||
+            isSnapType(type) ||
+            isTelemetryType(type) ||
+            type == TYPE_TELEMETRY_ACK
     const val MISSING_TEMP: Int = 0x7FFF
     const val MISSING_U8: Int = 0xFF
     const val WIRE_WINDOW_BETWEEN: Int = 0xFE
@@ -163,6 +186,49 @@ object PhoneBleCodec {
         val op: Int,
         val seat: Int,
         val arg: Int,
+    )
+
+    data class PhoneLocation(
+        val gen: Int,
+        val latitude: Double,
+        val longitude: Double,
+        val horizontalAccuracyM: Float?,
+        val altitudeM: Float?,
+        val speedKmh: Float,
+        val bearingDeg: Float?,
+        val usedSatellites: Int,
+        val visibleSatellites: Int,
+        val fixAgeMs: Int,
+        val locateStatus: Boolean = true,
+    )
+
+    data class PhoneYawSample(
+        val dtMs: Int,
+        /** Integrated yaw angle around gravity vector over [dtMs] (°; left +, right −). */
+        val dPsiDeg: Float,
+        val monoLowMs: Int,
+        val mountStable: Boolean,
+        val mountMoved: Boolean,
+        val gravDeltaMg: Int,
+    )
+
+    data class PhoneMagSample(
+        /** Magnetic azimuth in phone horizontal plane (0..360°). */
+        val magneticAzimuthDeg: Float,
+        /** Magnetic field magnitude |B| (µT). */
+        val fieldStrengthUt: Float,
+        /** Android SensorManager accuracy (0..3). */
+        val accuracy: Int,
+        val pitchDeg: Int,
+        val rollDeg: Int,
+        val monoLowMs: Int,
+        val mountMoved: Boolean = false,
+    )
+
+    data class TelemetryAck(
+        val demandMask: Int,
+        val outsideTenths: Int? = null,
+        val insideTenths: Int? = null,
     )
 
     data class Snapshot(
@@ -287,6 +353,186 @@ object PhoneBleCodec {
     fun readRefreshTextHash(body: ByteArray): Int = if (body.size < 2) 0 else getU16(body, 0)
 
     fun readRefreshGroups(body: ByteArray): Int = if (body.size < 3) 0 else body[2].toInt() and GROUP_MASK
+
+    fun locBodies(gen: Int, loc: PhoneLocation): Pair<ByteArray, ByteArray> {
+        val g = (gen and 0xFF).toByte()
+        val pos = ByteArray(BODY_LEN)
+        pos[0] = g
+        putI32(pos, 1, (loc.latitude * 1e7).toInt())
+        putI32(pos, 5, (loc.longitude * 1e7).toInt())
+        val accCm = loc.horizontalAccuracyM
+            ?.takeIf { it.isFinite() && it >= 0f }
+            ?.let { (it * 100f).toInt().coerceIn(0, MISSING_U16 - 1) }
+            ?: MISSING_U16
+        putU16(pos, 9, accCm)
+
+        val motion = ByteArray(BODY_LEN)
+        motion[0] = g
+        val alt = loc.altitudeM
+            ?.takeIf { it.isFinite() }
+            ?.let { it.toInt().coerceIn(-32000, 32000) }
+            ?: MISSING_TEMP
+        putI16(motion, 1, alt)
+        val spdCms = if (loc.speedKmh.isFinite() && loc.speedKmh >= 0f) {
+            ((loc.speedKmh / 3.6f) * 100f).toInt().coerceIn(0, MISSING_U16 - 1)
+        } else {
+            0
+        }
+        putU16(motion, 3, spdCms)
+        val brgCdeg = loc.bearingDeg
+            ?.takeIf { it.isFinite() && it >= 0f }
+            ?.let { (((it % 360f) + 360f) % 360f * 100f).toInt().coerceIn(0, 35_999) }
+            ?: MISSING_U16
+        putU16(motion, 5, brgCdeg)
+        val used = loc.usedSatellites.coerceIn(0, 15)
+        val vis = loc.visibleSatellites.coerceIn(0, 15)
+        motion[7] = ((vis shl 4) or used).toByte()
+        putU16(motion, 8, loc.fixAgeMs.coerceIn(0, MISSING_U16 - 1))
+        motion[10] = if (loc.locateStatus) 1 else 0
+        return pos to motion
+    }
+
+    class LocAssembler {
+        private var posGen: Int = -1
+        private var posBody: ByteArray? = null
+        private var motionGen: Int = -1
+        private var motionBody: ByteArray? = null
+
+        fun accept(type: Int, body: ByteArray): PhoneLocation? {
+            if (body.size < BODY_LEN) return null
+            val gen = body[0].toInt() and 0xFF
+            when (type) {
+                TYPE_LOC_POS -> {
+                    posGen = gen
+                    posBody = body.copyOf(BODY_LEN)
+                }
+                TYPE_LOC_MOTION -> {
+                    motionGen = gen
+                    motionBody = body.copyOf(BODY_LEN)
+                }
+                else -> return null
+            }
+            if (posGen != motionGen || posGen < 0) return null
+            val p = posBody ?: return null
+            val m = motionBody ?: return null
+            posGen = -1
+            motionGen = -1
+            posBody = null
+            motionBody = null
+            val lat = getI32(p, 1) / 1e7
+            val lon = getI32(p, 5) / 1e7
+            val hAcc = optionalU16(getU16(p, 9))?.let { it / 100f }
+            val alt = optionalTemp(getI16(m, 1))?.toFloat()
+            val spdKmh = (optionalU16(getU16(m, 3)) ?: 0) * 0.036f
+            val brg = optionalU16(getU16(m, 5))?.takeIf { it in 0..35_999 }?.let { it / 100f }
+            val satsByte = m[7].toInt() and 0xFF
+            val used = satsByte and 0x0F
+            val visible = (satsByte ushr 4) and 0x0F
+            val ageMs = optionalU16(getU16(m, 8)) ?: 0
+            val locate = (m[10].toInt() and 0x01) != 0
+            return PhoneLocation(
+                gen = gen,
+                latitude = lat,
+                longitude = lon,
+                horizontalAccuracyM = hAcc,
+                altitudeM = alt,
+                speedKmh = spdKmh,
+                bearingDeg = brg,
+                usedSatellites = used,
+                visibleSatellites = maxOf(visible, used),
+                fixAgeMs = ageMs,
+                locateStatus = locate,
+            )
+        }
+    }
+
+    fun yawBody(sample: PhoneYawSample): ByteArray {
+        val body = ByteArray(BODY_LEN)
+        putU16(body, 0, sample.dtMs.coerceIn(0, MISSING_U16 - 1))
+        val cdeg = (sample.dPsiDeg * 100f).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+        putI16(body, 2, cdeg)
+        putU16(body, 4, sample.monoLowMs and 0xFFFF)
+        var flags = 0
+        if (sample.mountStable) flags = flags or YAW_FLAG_MOUNT_STABLE
+        if (sample.mountMoved) flags = flags or YAW_FLAG_MOUNT_MOVED
+        body[6] = flags.toByte()
+        putU16(body, 7, sample.gravDeltaMg.coerceIn(0, MISSING_U16 - 1))
+        return body
+    }
+
+    fun readYaw(body: ByteArray): PhoneYawSample? {
+        if (body.size < 9) return null
+        val dtMs = getU16(body, 0)
+        val dPsiDeg = getI16(body, 2) / 100f
+        val monoLowMs = getU16(body, 4)
+        val flags = body[6].toInt() and 0xFF
+        val gravDeltaMg = getU16(body, 7)
+        return PhoneYawSample(
+            dtMs = dtMs,
+            dPsiDeg = dPsiDeg,
+            monoLowMs = monoLowMs,
+            mountStable = (flags and YAW_FLAG_MOUNT_STABLE) != 0,
+            mountMoved = (flags and YAW_FLAG_MOUNT_MOVED) != 0,
+            gravDeltaMg = gravDeltaMg,
+        )
+    }
+
+    fun magBody(sample: PhoneMagSample): ByteArray {
+        val body = ByteArray(BODY_LEN)
+        val az = (((sample.magneticAzimuthDeg % 360f) + 360f) % 360f * 100f)
+            .toInt()
+            .coerceIn(0, 35_999)
+        putU16(body, 0, az)
+        val ut10 = (sample.fieldStrengthUt.coerceAtLeast(0f) * 10f)
+            .toInt()
+            .coerceIn(0, MISSING_U16 - 1)
+        putU16(body, 2, ut10)
+        var accByte = sample.accuracy.coerceIn(0, 3)
+        if (sample.mountMoved) accByte = accByte or MAG_FLAG_MOUNT_MOVED
+        body[4] = accByte.toByte()
+        body[5] = sample.pitchDeg.coerceIn(-90, 90).toByte()
+        body[6] = sample.rollDeg.coerceIn(-127, 127).toByte()
+        putU16(body, 7, sample.monoLowMs and 0xFFFF)
+        return body
+    }
+
+    fun readMag(body: ByteArray): PhoneMagSample? {
+        if (body.size < 9) return null
+        val az = (getU16(body, 0).coerceIn(0, 35_999)) / 100f
+        val ut = getU16(body, 2) / 10f
+        val accByte = body[4].toInt() and 0xFF
+        val acc = accByte and 0x03
+        val mountMoved = (accByte and MAG_FLAG_MOUNT_MOVED) != 0
+        val pitch = body[5].toInt()
+        val roll = body[6].toInt()
+        val monoLowMs = getU16(body, 7)
+        return PhoneMagSample(
+            magneticAzimuthDeg = az,
+            fieldStrengthUt = ut,
+            accuracy = acc,
+            pitchDeg = pitch,
+            rollDeg = roll,
+            monoLowMs = monoLowMs,
+            mountMoved = mountMoved,
+        )
+    }
+
+    fun telemetryAckBody(ack: TelemetryAck): ByteArray {
+        val body = ByteArray(BODY_LEN)
+        body[0] = (ack.demandMask and DEMAND_ALL).toByte()
+        putI16(body, 1, ack.outsideTenths ?: MISSING_TEMP)
+        putI16(body, 3, ack.insideTenths ?: MISSING_TEMP)
+        return body
+    }
+
+    fun readTelemetryAck(body: ByteArray): TelemetryAck? {
+        if (body.size < 5) return null
+        return TelemetryAck(
+            demandMask = body[0].toInt() and DEMAND_ALL,
+            outsideTenths = optionalTemp(getI16(body, 1)),
+            insideTenths = optionalTemp(getI16(body, 3)),
+        )
+    }
 
     /** Drops characters the firmware JSON reader does not unescape, then fits [maxBytes]. */
     fun clipText(text: String?, maxBytes: Int): String {
@@ -582,6 +828,32 @@ object PhoneBleCodec {
 
     fun counterAccepted(last: Long, next: Long): Boolean = next > last
 
+    /**
+     * 32-packet sliding anti-replay window.
+     * Bit 0 of [windowMask] always corresponds to [maxCounter]; bit `d` (1..31) corresponds
+     * to `maxCounter - d`. Returns updated `(maxCounter, windowMask)` when accepted, or null.
+     */
+    fun acceptCounterInWindow(maxCounter: Long, windowMask: Long, next: Long): Pair<Long, Long>? {
+        if (next <= 0L) return null
+        if (maxCounter <= 0L) {
+            return next to 1L
+        }
+        if (next > maxCounter) {
+            val shift = next - maxCounter
+            val shifted = if (shift >= REPLAY_WINDOW_BITS) {
+                1L
+            } else {
+                ((windowMask shl shift.toInt()) or 1L) and 0xFFFF_FFFFL
+            }
+            return next to shifted
+        }
+        val diff = maxCounter - next
+        if (diff >= REPLAY_WINDOW_BITS) return null
+        val bit = 1L shl diff.toInt()
+        if ((windowMask and bit) != 0L) return null
+        return maxCounter to ((windowMask or bit) and 0xFFFF_FFFFL)
+    }
+
     fun stepTemp(current: Int?, increase: Boolean): Int? {
         val base = current ?: return null
         val rem = Math.floorMod(base - TEMP_MIN, TEMP_STEP)
@@ -663,4 +935,11 @@ object PhoneBleCodec {
 
     private fun getI16(src: ByteArray, offset: Int): Int =
         ByteBuffer.wrap(src, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
+
+    private fun putI32(dst: ByteArray, offset: Int, value: Int) {
+        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array().copyInto(dst, offset)
+    }
+
+    private fun getI32(src: ByteArray, offset: Int): Int =
+        ByteBuffer.wrap(src, offset, 4).order(ByteOrder.LITTLE_ENDIAN).int
 }

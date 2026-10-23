@@ -94,6 +94,12 @@ class MockLocationJob(
     private val onOnlineGyroBiasPersist: (GyroBiasOffsets) -> Unit = {},
     /** Debounced persist of online yaw scale (enhancement modes). */
     private val onOnlineDriveCalibPersist: (DriveCalibrationOffsets) -> Unit = {},
+    /** Persist auto-calibrated rear track width B for [WheelHeadingIntegrator]. */
+    private val onWheelHeadingCalibPersist: (WheelHeadingCalibration) -> Unit = {},
+    /** Persist online phone gyro scale/bias. */
+    private val onPhoneGyroCalibPersist: (PhoneGyroCalibration) -> Unit = {},
+    /** Persist 8-sector phone compass residual table. */
+    private val onPhoneCompassCalibPersist: (PhoneCompassCalibration) -> Unit = {},
 ) {
     companion object {
         private const val TAG = "MockLocationJob"
@@ -892,9 +898,17 @@ class MockLocationJob(
                 if (wanted == steerInterestActive) return@withLock
                 runCatching {
                     if (wanted) {
+                        val signals = buildSet {
+                            add(vad.dashing.tbox.mbcan.MbCanSignal.SteeringAngle)
+                            val h = headingSource.value
+                            if (h.usesWheels || h.usesPhone) {
+                                add(vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse)
+                                add(vad.dashing.tbox.mbcan.MbCanSignal.LateralAcceleration)
+                            }
+                        }
                         vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
                             MOCK_DR_STEER_SOURCE_ID,
-                            setOf(vad.dashing.tbox.mbcan.MbCanSignal.SteeringAngle),
+                            signals,
                         )
                     } else {
                         vad.dashing.tbox.mbcan.UniversalCanRepository.enqueueClearSource(
@@ -930,8 +944,56 @@ class MockLocationJob(
         }
     }
 
+    private fun flushSteerDeltaNow(now: Long): Float {
+        SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
+        SteerHeadingIntegrator.tick(now)
+        return SteerHeadingIntegrator.consumeDeltaDeg()
+    }
+
+    private fun currentSpeedKmhForHeading(now: Long): Float {
+        val can = TripTelemetryRepository.accountingCarSpeed(now)
+        if (can != null && can.isFinite()) return DriveCalibrationStore.applyCanSpeed(can)
+        val live = TboxRepository.locValues.value.speed
+        return if (live.isFinite() && live >= 0f) live else 0f
+    }
+
+    private fun applyFallbackWheelsOrSteer(
+        nose: Float,
+        selected: MockHeadingSource,
+        reasonPrefix: String,
+        now: Long,
+    ): Pair<Float, Boolean> {
+        val wFresh = WheelHeadingIntegrator.isFresh(now)
+        val sDelta = flushSteerDeltaNow(now)
+        if (wFresh) {
+            val wDelta = WheelHeadingIntegrator.consumeDeltaDeg()
+            val snap = WheelHeadingIntegrator.peekDebugSnapshot()
+            val spd = currentSpeedKmhForHeading(now)
+            val delta = WheelHeadingIntegrator.hybridWheelsSteerDelta(
+                wheelsDeltaDeg = wDelta,
+                steerDeltaDeg = sDelta,
+                speedKmh = spd,
+                slipRejected = snap.slipRejected,
+                yasTrustWeight = snap.yasTrustWeight,
+            )
+            HeadingFallbackStatusRepository.publish(
+                selected = selected,
+                effective = MockHeadingSource.WHEELS_STEER,
+                reason = "$reasonPrefix->wheels",
+            )
+            return if (delta != 0f) applyYawDeltaToBearing(nose, delta) to true else nose to false
+        }
+        WheelHeadingIntegrator.discardThrough(now)
+        HeadingFallbackStatusRepository.publish(
+            selected = selected,
+            effective = MockHeadingSource.STEER,
+            reason = "$reasonPrefix->steer",
+        )
+        return if (sDelta != 0f) applyYawDeltaToBearing(nose, sDelta) to true else nose to false
+    }
+
     /**
-     * Apply pending heading delta from gyro or steer, discarding the inactive integrator.
+     * Apply pending heading delta from gyro, wheels, phone, or steer, discarding inactive integrators.
      * Returns updated nose and whether a non-zero delta was applied.
      */
     private fun applyHeadingDelta(
@@ -943,16 +1005,27 @@ class MockLocationJob(
         if (!allowIntegrate) {
             YawIntegrator.discardThrough(now)
             SteerHeadingIntegrator.discardThrough(now)
+            WheelHeadingIntegrator.discardThrough(now)
+            PhoneTelemetryRepository.discardGyro()
             return nose to false
         }
         return when (source) {
             MockHeadingSource.GYRO -> {
-                SteerHeadingIntegrator.discardThrough(now)
+                WheelHeadingIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
                 val lastYawAt = YawIntegrator.lastSampleElapsedMs()
-                if (lastYawAt > 0L && now - lastYawAt > MAX_YAW_SAMPLE_AGE_MS) {
+                val gyroFresh = lastYawAt > 0L && now - lastYawAt <= MAX_YAW_SAMPLE_AGE_MS
+                if (!gyroFresh) {
                     YawIntegrator.discardThrough(now)
+                    if (WheelHeadingIntegrator.isFresh(now) || SteerHeadingIntegrator.isAngleFresh(now)) {
+                        return applyFallbackWheelsOrSteer(nose, source, "hu_gyro_silent", now)
+                    }
+                    SteerHeadingIntegrator.discardThrough(now)
+                    HeadingFallbackStatusRepository.publish(source, MockHeadingSource.GYRO, "hu_gyro_silent")
                     return nose to false
                 }
+                SteerHeadingIntegrator.discardThrough(now)
+                HeadingFallbackStatusRepository.publish(source, MockHeadingSource.GYRO, null)
                 val delta = YawIntegrator.consumeDeltaDeg()
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
@@ -962,12 +1035,13 @@ class MockLocationJob(
             }
             MockHeadingSource.STEER -> {
                 YawIntegrator.discardThrough(now)
+                WheelHeadingIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
+                HeadingFallbackStatusRepository.publish(source, MockHeadingSource.STEER, null)
                 // Speed samples already advanced the bicycle model via the speed
                 // collector. Here only refresh the held v (no time) then flush the
                 // remaining held-wheel interval up to the mock tick.
-                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
-                SteerHeadingIntegrator.tick(now)
-                val delta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val delta = flushSteerDeltaNow(now)
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
                 } else {
@@ -975,6 +1049,8 @@ class MockLocationJob(
                 }
             }
             MockHeadingSource.GYRO_STEER -> {
+                WheelHeadingIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
                 // Gyro primary; steer fills quiet/stale gyro and, when it leads on
                 // the same side, pulls toward the bicycle-model delta (blend + cap).
                 // Never sum both. Held-wheel trust drops only after age >
@@ -985,15 +1061,191 @@ class MockLocationJob(
                 if (!gyroFresh) {
                     YawIntegrator.discardThrough(now)
                 }
+                HeadingFallbackStatusRepository.publish(
+                    source,
+                    if (gyroFresh) MockHeadingSource.GYRO_STEER else MockHeadingSource.STEER,
+                    if (gyroFresh) null else "hu_gyro_silent->steer",
+                )
                 val gyroDelta = if (gyroFresh) YawIntegrator.consumeDeltaDeg() else 0f
-                SteerHeadingIntegrator.onSpeedKmh(signedSteerSpeedKmhNow(now))
-                SteerHeadingIntegrator.tick(now)
-                val steerDelta = SteerHeadingIntegrator.consumeDeltaDeg()
+                val steerDelta = flushSteerDeltaNow(now)
                 val delta = hybridGyroSteerDelta(gyroDelta, steerDelta)
                 if (delta != 0f) {
                     applyYawDeltaToBearing(nose, delta) to true
                 } else {
                     nose to false
+                }
+            }
+            MockHeadingSource.WHEELS -> {
+                YawIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
+                val snap = WheelHeadingIntegrator.peekDebugSnapshot()
+                if (WheelHeadingIntegrator.isFresh(now) && !snap.slipRejected) {
+                    SteerHeadingIntegrator.discardThrough(now)
+                    HeadingFallbackStatusRepository.publish(source, MockHeadingSource.WHEELS, null)
+                    val delta = WheelHeadingIntegrator.consumeDeltaDeg()
+                    if (delta != 0f) {
+                        applyYawDeltaToBearing(nose, delta) to true
+                    } else {
+                        nose to false
+                    }
+                } else {
+                    WheelHeadingIntegrator.discardThrough(now)
+                    val sDelta = flushSteerDeltaNow(now)
+                    HeadingFallbackStatusRepository.publish(
+                        source,
+                        MockHeadingSource.STEER,
+                        if (snap.slipRejected) "wheels_slip->steer" else "wheels_silent->steer",
+                    )
+                    if (sDelta != 0f) {
+                        applyYawDeltaToBearing(nose, sDelta) to true
+                    } else {
+                        nose to false
+                    }
+                }
+            }
+            MockHeadingSource.WHEELS_STEER -> {
+                YawIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
+                if (WheelHeadingIntegrator.isFresh(now)) {
+                    val wDelta = WheelHeadingIntegrator.consumeDeltaDeg()
+                    val sDelta = flushSteerDeltaNow(now)
+                    val snap = WheelHeadingIntegrator.peekDebugSnapshot()
+                    val spd = currentSpeedKmhForHeading(now)
+                    val delta = WheelHeadingIntegrator.hybridWheelsSteerDelta(
+                        wheelsDeltaDeg = wDelta,
+                        steerDeltaDeg = sDelta,
+                        speedKmh = spd,
+                        slipRejected = snap.slipRejected,
+                        yasTrustWeight = snap.yasTrustWeight,
+                    )
+                    HeadingFallbackStatusRepository.publish(
+                        source,
+                        MockHeadingSource.WHEELS_STEER,
+                        if (snap.slipRejected) "wheels_slip->steer" else null,
+                    )
+                    if (delta != 0f) {
+                        applyYawDeltaToBearing(nose, delta) to true
+                    } else {
+                        nose to false
+                    }
+                } else {
+                    WheelHeadingIntegrator.discardThrough(now)
+                    val sDelta = flushSteerDeltaNow(now)
+                    HeadingFallbackStatusRepository.publish(
+                        source,
+                        MockHeadingSource.STEER,
+                        "wheels_silent->steer",
+                    )
+                    if (sDelta != 0f) {
+                        applyYawDeltaToBearing(nose, sDelta) to true
+                    } else {
+                        nose to false
+                    }
+                }
+            }
+            MockHeadingSource.PHONE_GYRO -> {
+                YawIntegrator.discardThrough(now)
+                if (PhoneTelemetryRepository.isGyroFresh(now)) {
+                    WheelHeadingIntegrator.discardThrough(now)
+                    SteerHeadingIntegrator.discardThrough(now)
+                    HeadingFallbackStatusRepository.publish(source, MockHeadingSource.PHONE_GYRO, null)
+                    val delta = PhoneTelemetryRepository.consumeGyroNavDeltaDeg(now)
+                    if (delta != 0f) {
+                        applyYawDeltaToBearing(nose, delta) to true
+                    } else {
+                        nose to false
+                    }
+                } else {
+                    PhoneTelemetryRepository.discardGyro()
+                    applyFallbackWheelsOrSteer(nose, source, "phone_gyro_silent", now)
+                }
+            }
+            MockHeadingSource.PHONE_COMPASS -> {
+                YawIntegrator.discardThrough(now)
+                PhoneTelemetryRepository.discardGyro()
+                val compassDeg = PhoneTelemetryRepository.calibratedCompassHeadingDeg(now)
+                if (compassDeg != null) {
+                    val stepDelta = if (WheelHeadingIntegrator.isFresh(now)) {
+                        SteerHeadingIntegrator.discardThrough(now)
+                        WheelHeadingIntegrator.consumeDeltaDeg()
+                    } else {
+                        WheelHeadingIntegrator.discardThrough(now)
+                        flushSteerDeltaNow(now)
+                    }
+                    val stepped = applyYawDeltaToBearing(nose, stepDelta)
+                    val pull = DriveCalibrationMath.wrapDeltaDeg(stepped, compassDeg) * 0.25f
+                    val totalDelta = stepDelta + pull
+                    HeadingFallbackStatusRepository.publish(source, MockHeadingSource.PHONE_COMPASS, null)
+                    if (kotlin.math.abs(totalDelta) > 0.01f) {
+                        applyYawDeltaToBearing(nose, totalDelta) to true
+                    } else {
+                        nose to false
+                    }
+                } else {
+                    applyFallbackWheelsOrSteer(nose, source, "phone_compass_rejected", now)
+                }
+            }
+            MockHeadingSource.PHONE_GYRO_COMPASS -> {
+                YawIntegrator.discardThrough(now)
+                val gyroOk = PhoneTelemetryRepository.isGyroFresh(now)
+                val compassDeg = PhoneTelemetryRepository.calibratedCompassHeadingDeg(now)
+                when {
+                    gyroOk && compassDeg != null -> {
+                        WheelHeadingIntegrator.discardThrough(now)
+                        SteerHeadingIntegrator.discardThrough(now)
+                        val gyroDelta = PhoneTelemetryRepository.consumeGyroNavDeltaDeg(now)
+                        val stepped = applyYawDeltaToBearing(nose, gyroDelta)
+                        val pull = DriveCalibrationMath.wrapDeltaDeg(stepped, compassDeg) * 0.05f
+                        val totalDelta = gyroDelta + pull
+                        HeadingFallbackStatusRepository.publish(source, MockHeadingSource.PHONE_GYRO_COMPASS, null)
+                        if (kotlin.math.abs(totalDelta) > 0.01f) {
+                            applyYawDeltaToBearing(nose, totalDelta) to true
+                        } else {
+                            nose to false
+                        }
+                    }
+                    gyroOk -> {
+                        WheelHeadingIntegrator.discardThrough(now)
+                        SteerHeadingIntegrator.discardThrough(now)
+                        val gyroDelta = PhoneTelemetryRepository.consumeGyroNavDeltaDeg(now)
+                        HeadingFallbackStatusRepository.publish(
+                            source,
+                            MockHeadingSource.PHONE_GYRO,
+                            "phone_compass_rejected->phone_gyro",
+                        )
+                        if (gyroDelta != 0f) {
+                            applyYawDeltaToBearing(nose, gyroDelta) to true
+                        } else {
+                            nose to false
+                        }
+                    }
+                    compassDeg != null -> {
+                        PhoneTelemetryRepository.discardGyro()
+                        val stepDelta = if (WheelHeadingIntegrator.isFresh(now)) {
+                            SteerHeadingIntegrator.discardThrough(now)
+                            WheelHeadingIntegrator.consumeDeltaDeg()
+                        } else {
+                            WheelHeadingIntegrator.discardThrough(now)
+                            flushSteerDeltaNow(now)
+                        }
+                        val stepped = applyYawDeltaToBearing(nose, stepDelta)
+                        val pull = DriveCalibrationMath.wrapDeltaDeg(stepped, compassDeg) * 0.25f
+                        val totalDelta = stepDelta + pull
+                        HeadingFallbackStatusRepository.publish(
+                            source,
+                            MockHeadingSource.PHONE_COMPASS,
+                            "phone_gyro_silent->phone_compass",
+                        )
+                        if (kotlin.math.abs(totalDelta) > 0.01f) {
+                            applyYawDeltaToBearing(nose, totalDelta) to true
+                        } else {
+                            nose to false
+                        }
+                    }
+                    else -> {
+                        PhoneTelemetryRepository.discardGyro()
+                        applyFallbackWheelsOrSteer(nose, source, "phone_silent", now)
+                    }
                 }
             }
         }
@@ -1224,7 +1476,9 @@ class MockLocationJob(
         job?.cancel()
         job = null
         ensureGearInterest(enabled && mode.enhancesMock)
-        ensureSteerInterest(enabled && mode.enhancesMock && heading.usesSteer)
+        ensureSteerInterest(
+            enabled && mode.enhancesMock && (heading.usesSteer || heading.usesWheels || heading.usesPhone),
+        )
         if (!enabled || !mode.enhancesMock) {
             stopSpeedSampleCollection()
         } else {
@@ -1234,6 +1488,8 @@ class MockLocationJob(
             val now = SystemClock.elapsedRealtime()
             YawIntegrator.discardThrough(now)
             SteerHeadingIntegrator.discardThrough(now)
+            WheelHeadingIntegrator.discardThrough(now)
+            PhoneTelemetryRepository.discardGyro()
             SpeedIntegrator.discardThrough(now)
             flushPersistedAsync()
             locationMockManager.stopMockLocation()
@@ -1734,6 +1990,20 @@ class MockLocationJob(
         if (lastKnownBearingDeg != null && nose == null) {
             // Scrub stored NaN/∞ so later ticks can re-acquire GNSS course.
             lastKnownBearingDeg = null
+        }
+        // Standstill / initial heading without GNSS: phone compass can seed or gently anchor nose (§5.4)
+        if (headingSource.value.usesPhoneCompass && !gnssPresent) {
+            val compassDeg = PhoneTelemetryRepository.calibratedCompassHeadingDeg(now)
+            if (compassDeg != null) {
+                if (nose == null) {
+                    nose = compassDeg
+                    lastKnownBearingDeg = compassDeg
+                } else if (speedKmh < COURSE_HOLD_MIN_KMH) {
+                    val pull = DriveCalibrationMath.wrapDeltaDeg(nose, compassDeg) * 0.25f
+                    nose = wrapBearingDeg(nose + pull)
+                    lastKnownBearingDeg = nose
+                }
+            }
         }
         var bearingSource = GeoBearingSource.RETENTION
 
@@ -2350,6 +2620,40 @@ class MockLocationJob(
         reverse: Boolean,
         gnssTruthful: Boolean,
     ) {
+        val speedKmh = when {
+            canKmh != null -> DriveCalibrationStore.applyCanSpeed(canKmh)
+            else -> live.speed
+        }
+        val gnssNose = if (live.trueDirection != 0f && live.trueDirection.isFinite()) {
+            ConstantDrMath.noseHeadingFromCourseOverGround(live.trueDirection, reverse)
+        } else {
+            null
+        }
+        if (gnssTruthful && !reverse && gnssNose != null) {
+            WheelHeadingIntegrator.onGnssCourseForCalibration(
+                gnssCourseDeg = gnssNose,
+                speedKmh = speedKmh,
+                reverse = reverse,
+                gnssTruthful = true,
+                nowEpochMs = System.currentTimeMillis(),
+            )?.let(onWheelHeadingCalibPersist)
+
+            val (gyroUpd, compassUpd) = PhoneTelemetryRepository.onGnssReference(
+                gnssCourseDeg = gnssNose,
+                lat = live.latitude,
+                lon = live.longitude,
+                altM = live.altitude.toFloat(),
+                speedKmh = speedKmh,
+                steerDeg = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value,
+                reverse = reverse,
+                gnssTruthful = true,
+                nowElapsedMs = now,
+                nowEpochMs = System.currentTimeMillis(),
+            )
+            gyroUpd?.let(onPhoneGyroCalibPersist)
+            compassUpd?.let(onPhoneCompassCalibPersist)
+        }
+
         // Online yaw calib only applies when enabled and gyro is the heading source.
         if (!onlineYawCalibEnabled.value || !headingSource.value.usesGyro) {
             onlineYawCalib.reset()
@@ -2361,10 +2665,6 @@ class MockLocationJob(
             retainingFix = false,
             hrms = live.hrms,
         )
-        val speedKmh = when {
-            canKmh != null -> DriveCalibrationStore.applyCanSpeed(canKmh)
-            else -> live.speed
-        }
         runOnlineYawCalib(
             now = now,
             live = live,

@@ -1867,6 +1867,30 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun resetWheelHeadingCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetWheelHeadingCalibration()
+        }
+    }
+
+    fun resetPhoneGyroCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetPhoneGyroCalibration()
+        }
+    }
+
+    fun resetPhoneCompassCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetPhoneCompassCalibration()
+        }
+    }
+
+    fun savePreferredPhoneTelemetryId(idHex: String?) {
+        viewModelScope.launch {
+            settingsManager.savePreferredPhoneTelemetryId(idHex)
+        }
+    }
+
     fun saveMockJunkFixFilterSetting(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveMockJunkFixFilterSetting(enabled)

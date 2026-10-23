@@ -31,6 +31,7 @@ class PhoneDirectLink(
     private val store: PhoneStore,
     private val assembler: PhoneBleCodec.SnapshotAssembler,
     private val onSnap: (PhoneBleCodec.Snapshot) -> Unit,
+    private val onTelemetryAck: (PhoneBleCodec.TelemetryAck) -> Unit = {},
 ) : PhoneLink {
     private val appContext = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -64,8 +65,8 @@ class PhoneDirectLink(
     override val confirmed: Boolean get() = linkUp && lastSnapAt != 0L
 
     override var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
-    override var acceptFromCounter: Long = -1L
-    override var waitingCounter: Long = -1L
+    @Volatile override var acceptFromCounter: Long = -1L
+    @Volatile override var waitingCounter: Long = -1L
 
     /** Full passes over the candidates that found no head unit since [start]. */
     @Volatile var passesWithoutLink: Int = 0
@@ -107,19 +108,80 @@ class PhoneDirectLink(
         val link = socket ?: return
         if (!linkUp) return
         val frame = PhoneDirectWire.frame(payload)
+        enqueueFrames(link, frame)
+    }
+
+    /**
+     * Allocates [PhoneStore.nextCounter] and seals [body] inside the single-threaded
+     * [writer] executor so high-rate telemetry (`YAW`, `LOC`, `MAG`) and UI packets
+     * (`CMD`, `REFRESH`) are always written to the RFCOMM stream in strictly ascending
+     * counter order.
+     */
+    fun writeSealed(
+        type: Int,
+        body: ByteArray,
+        resetAcceptRange: Boolean = false,
+        updateWaitingCounter: Boolean = false,
+    ) {
+        val link = socket ?: return
+        if (!linkUp) return
         writer.execute {
-            val started = SystemClock.elapsedRealtime()
-            writeLink = link
-            writeAt = started
-            try {
-                link.outputStream.write(frame)
-                link.outputStream.flush()
-            } catch (e: IOException) {
-                Log.w(TAG, "write: ${e.message}")
-                runCatching { link.close() }
-            } finally {
-                if (writeAt == started) writeAt = 0L
+            val counter = store.nextCounter()
+            if (resetAcceptRange) {
+                acceptFromCounter = counter
             }
+            if (updateWaitingCounter) {
+                waitingCounter = counter
+            }
+            val sealed = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
+            val frame = PhoneDirectWire.frame(sealed)
+            writeFrameBlocking(link, frame)
+        }
+    }
+
+    /**
+     * Seals and writes a multi-packet batch (e.g. `LOC_POS` + `LOC_MOTION`) atomically
+     * on the single-threaded [writer] executor.
+     */
+    fun writeSealedBatch(packets: List<Pair<Int, ByteArray>>) {
+        if (packets.isEmpty()) return
+        val link = socket ?: return
+        if (!linkUp) return
+        writer.execute {
+            val frames = packets.map { (type, body) ->
+                val counter = store.nextCounter()
+                val sealed = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
+                PhoneDirectWire.frame(sealed)
+            }
+            val total = frames.sumOf { it.size }
+            val combined = ByteArray(total)
+            var offset = 0
+            for (f in frames) {
+                f.copyInto(combined, offset)
+                offset += f.size
+            }
+            writeFrameBlocking(link, combined)
+        }
+    }
+
+    private fun enqueueFrames(link: BluetoothSocket, frame: ByteArray) {
+        writer.execute {
+            writeFrameBlocking(link, frame)
+        }
+    }
+
+    private fun writeFrameBlocking(link: BluetoothSocket, frame: ByteArray) {
+        val started = SystemClock.elapsedRealtime()
+        writeLink = link
+        writeAt = started
+        try {
+            link.outputStream.write(frame)
+            link.outputStream.flush()
+        } catch (e: IOException) {
+            Log.w(TAG, "write: ${e.message}")
+            runCatching { link.close() }
+        } finally {
+            if (writeAt == started) writeAt = 0L
         }
     }
 
@@ -267,6 +329,13 @@ class PhoneDirectLink(
 
     private fun acceptSnap(value: ByteArray, peer: BluetoothDevice) {
         val open = PhoneBleCodec.open(storeKey, value) ?: return
+        if (open.type == PhoneBleCodec.TYPE_TELEMETRY_ACK) {
+            val ack = PhoneBleCodec.readTelemetryAck(open.body) ?: return
+            lastSnapAt = SystemClock.elapsedRealtime()
+            if (store.directAddress != peer.address) store.directAddress = peer.address
+            onTelemetryAck(ack)
+            return
+        }
         if (!PhoneBleCodec.isSnapType(open.type)) return
         if (open.counter !in acceptFromCounter..waitingCounter) return
         lastSnapAt = SystemClock.elapsedRealtime()

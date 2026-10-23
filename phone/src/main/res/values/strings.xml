@@ -87,4 +87,16 @@
     <string name="state_open">Open</string>
     <string name="state_tilted">Tilted</string>
     <string name="need_firmware">Windows, sunroof and shade need companion firmware 0.10.5 or newer.</string>
+    <string name="telemetry_title">Geoposition and heading to head unit</string>
+    <string name="telemetry_hint">Works over direct Bluetooth connection to the head unit. Background service and autostart are active only while at least one option below is enabled.</string>
+    <string name="share_location">Share geoposition (GPS)</string>
+    <string name="share_gyro">Share gyroscope</string>
+    <string name="share_compass">Share compass</string>
+    <string name="telemetry_autostart_btn">Bind head unit for autostart</string>
+    <string name="telemetry_battery_btn">Disable battery optimization</string>
+    <string name="telemetry_battery_ok">Battery optimization is disabled for background work.</string>
+    <string name="telemetry_battery_hint">Xiaomi, Huawei, Samsung and other OEMs may stop background Bluetooth/GPS unless battery optimization is disabled.</string>
+    <string name="telemetry_channel_name">Head unit link and telemetry</string>
+    <string name="telemetry_notification_text">Sharing requested telemetry with TBox Monitor over Bluetooth</string>
+    <string name="telemetry_bg_loc_hint">Allow «All the time» location access so GPS can start automatically in background.</string>
 </resources>

@@ -1438,6 +1438,9 @@ class EspCompanionManager(
             LocationSource.USB -> {
                 // Direct USB NMEA is owned by BackgroundService / UsbNmeaLocationSource.
             }
+            LocationSource.PHONE -> {
+                // Phone GPS over RFCOMM is owned by PhoneDirectServer / PhoneTelemetryRepository.
+            }
         }
         if (source == LocationSource.ANDROID && mockLocation.value) {
             locationMockManager.stopMockLocation()

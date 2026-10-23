@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -152,9 +153,10 @@ private const val OLD_FIRMWARE_PAGES = 8
 @Composable
 private fun PhoneScreen() {
     val context = LocalContext.current
-    val store = remember { PhoneStore(context) }
-    var snap by remember { mutableStateOf(PhoneBleCodec.Snapshot()) }
-    var lastSnapAt by remember { mutableLongStateOf(0L) }
+    val radio = remember { PhoneSessionController.ensureInitialized(context) }
+    val store = remember { PhoneSessionController.store }
+    var snap by remember { mutableStateOf(PhoneSessionController.snapshot) }
+    var lastSnapAt by remember { mutableLongStateOf(PhoneSessionController.lastSnapAtElapsedMs) }
     var refreshAt by remember { mutableLongStateOf(0L) }
     var acceptReset by remember { mutableStateOf(true) }
     var linkedAt by remember { mutableLongStateOf(0L) }
@@ -170,24 +172,46 @@ private fun PhoneScreen() {
     var page by remember { mutableStateOf(if (store.paired) storedPage(store) else Page.CONNECT) }
     var reopened by remember { mutableStateOf(false) }
     var pairRequest by remember { mutableStateOf(PairRequest.NONE) }
+    var shareLocation by remember { mutableStateOf(store.shareLocation) }
+    var shareGyro by remember { mutableStateOf(store.shareGyro) }
+    var shareCompass by remember { mutableStateOf(store.shareCompass) }
+    var batteryOptDisabled by remember {
+        mutableStateOf(PhoneSystemHelpers.isIgnoringBatteryOptimizations(context))
+    }
+    var hasBgLocation by remember {
+        mutableStateOf(PhoneTelemetryStreamer.hasBackgroundLocationPermission(context))
+    }
     val fallbackName = stringResource(R.string.phone_name)
     val phoneName = remember { Build.MODEL?.trim().orEmpty().ifEmpty { fallbackName } }
-    val radio = remember {
-        PhoneLinkRouter(context, store) { next ->
-            val now = SystemClock.elapsedRealtime()
-            if (next.positionMs != snap.positionMs || next.playing != snap.playing) positionAt = now
-            snap = next
-            lastSnapAt = now
-            pagesSinceSwitch++
-            if (next.volume != null && next.volume > 0) lastVolume = next.volume
-            if (!paired) {
-                paired = true
-                store.paired = true
-                pairRequest = PairRequest.NONE
-                page = storedPage(store)
+
+    DisposableEffect(Unit) {
+        val listener = object : PhoneSessionController.Listener {
+            override fun onSnapshotChanged(next: PhoneBleCodec.Snapshot, receivedAtElapsedMs: Long) {
+                if (next.positionMs != snap.positionMs || next.playing != snap.playing) {
+                    positionAt = receivedAtElapsedMs
+                }
+                snap = next
+                lastSnapAt = receivedAtElapsedMs
+                pagesSinceSwitch++
+                if (next.volume != null && next.volume > 0) lastVolume = next.volume
+                if (!paired) {
+                    paired = true
+                    store.paired = true
+                    pairRequest = PairRequest.NONE
+                    page = storedPage(store)
+                }
+            }
+
+            override fun onStateChanged() {
+                shareLocation = store.shareLocation
+                shareGyro = store.shareGyro
+                shareCompass = store.shareCompass
             }
         }
+        PhoneSessionController.addListener(listener)
+        onDispose { PhoneSessionController.removeListener(listener) }
     }
+
     val permissions = remember {
         if (Build.VERSION.SDK_INT >= 31) {
             arrayOf(
@@ -203,6 +227,29 @@ private fun PhoneScreen() {
     ) { granted ->
         ready = granted.values.all { it }
     }
+    val bgLocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasBgLocation = granted || PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
+        PhoneSessionController.syncServiceAndStreamer(context)
+    }
+    val locPermissionsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { granted ->
+        val fineOk = granted[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            PhoneTelemetryStreamer.hasFineLocationPermission(context)
+        if (fineOk) {
+            shareLocation = true
+            PhoneSessionController.updateTelemetryToggles(context, shareLocation = true)
+            hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
+            if (Build.VERSION.SDK_INT >= 29 && !hasBgLocation) {
+                bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+        }
+    }
+    val companionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { }
 
     /**
      * Asks for the pages the current screen shows. A late answer to an earlier request for
@@ -212,20 +259,13 @@ private fun PhoneScreen() {
     fun requestSnapshot(now: Long, newState: Boolean = false) {
         if (!radio.linkUp) return
         refreshAt = now
-        val counter = store.nextCounter()
-        if (newState || acceptReset) {
-            radio.acceptFromCounter = counter
-            acceptReset = false
-        }
-        radio.waitingCounter = counter
-        radio.write(
-            PhoneBleCodec.seal(
-                store.key,
-                PhoneBleCodec.TYPE_REFRESH,
-                store.id,
-                counter,
-                PhoneBleCodec.refreshBody(radio.textHash, page.groups),
-            ),
+        val resetAccept = newState || acceptReset
+        acceptReset = false
+        radio.writeSealedUiPacket(
+            type = PhoneBleCodec.TYPE_REFRESH,
+            body = PhoneBleCodec.refreshBody(radio.textHash, page.groups),
+            resetAcceptRange = resetAccept,
+            updateWaitingCounter = true,
         )
     }
 
@@ -239,15 +279,16 @@ private fun PhoneScreen() {
     }
 
     DisposableEffect(ready) {
-        radio.storeKey = store.key
-        if (ready) radio.start()
-        onDispose { radio.stop() }
+        PhoneSessionController.onUiStarted(context, ready)
+        onDispose { PhoneSessionController.onUiStopped(context) }
     }
     val activity = context as ComponentActivity
     DisposableEffect(activity, ready) {
         if (!ready) return@DisposableEffect onDispose { }
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                batteryOptDisabled = PhoneSystemHelpers.isIgnoringBatteryOptimizations(context)
+                hasBgLocation = PhoneTelemetryStreamer.hasBackgroundLocationPermission(context)
                 // Long idle / doze often leaves a hung scan, dead GATT, or zombie linkUp
                 // without snaps; kill+relaunch used to clear it — resume kick does the
                 // same without dropping pairing.
@@ -295,14 +336,6 @@ private fun PhoneScreen() {
             return
         }
         if (!radio.linkUp) return
-        val counter = store.nextCounter()
-        val payload = PhoneBleCodec.seal(
-            store.key,
-            PhoneBleCodec.TYPE_CMD,
-            store.id,
-            counter,
-            PhoneBleCodec.commandBody(op, seat, arg),
-        )
         if (op == PhoneBleCodec.OP_MEDIA_PLAY_PAUSE && snap.playing != null) {
             val now = SystemClock.elapsedRealtime()
             snap = snap.copy(
@@ -316,7 +349,10 @@ private fun PhoneScreen() {
         lastSnapAt = 0L
         refreshAt = 0L
         acceptReset = true
-        radio.write(payload)
+        radio.writeSealedUiPacket(
+            type = PhoneBleCodec.TYPE_CMD,
+            body = PhoneBleCodec.commandBody(op, seat, arg),
+        )
     }
 
     fun pair() {
@@ -385,8 +421,59 @@ private fun PhoneScreen() {
                         linked = paired && snap.gen != 0,
                         path = path,
                         pairRequest = pairRequest,
+                        shareLocation = shareLocation,
+                        shareGyro = shareGyro,
+                        shareCompass = shareCompass,
+                        hasBgLocation = hasBgLocation,
+                        batteryOptDisabled = batteryOptDisabled,
                         onPath = ::choosePath,
                         onPair = ::pair,
+                        onToggleLocation = { next ->
+                            if (next && !PhoneTelemetryStreamer.hasFineLocationPermission(context)) {
+                                val perms = buildList {
+                                    add(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    add(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    if (Build.VERSION.SDK_INT >= 33) {
+                                        add(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                }.toTypedArray()
+                                locPermissionsLauncher.launch(perms)
+                            } else {
+                                shareLocation = next
+                                PhoneSessionController.updateTelemetryToggles(
+                                    context,
+                                    shareLocation = next,
+                                )
+                                if (next && Build.VERSION.SDK_INT >= 29 && !hasBgLocation) {
+                                    bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                }
+                            }
+                        },
+                        onToggleGyro = { next ->
+                            shareGyro = next
+                            PhoneSessionController.updateTelemetryToggles(
+                                context,
+                                shareGyro = next,
+                            )
+                        },
+                        onToggleCompass = { next ->
+                            shareCompass = next
+                            PhoneSessionController.updateTelemetryToggles(
+                                context,
+                                shareCompass = next,
+                            )
+                        },
+                        onBindAutostart = {
+                            PhoneSystemHelpers.requestCompanionDeviceAssociation(
+                                context = context,
+                                directAddress = store.directAddress,
+                            ) { sender ->
+                                companionLauncher.launch(IntentSenderRequest.Builder(sender).build())
+                            }
+                        },
+                        onDisableBatteryOpt = {
+                            PhoneSystemHelpers.requestIgnoreBatteryOptimizations(context)
+                        },
                     )
                     Page.CLIMATE -> ClimatePage(snap, ::send)
                     Page.SEATS -> SeatsPage(snap, ::send)
@@ -514,8 +601,18 @@ private fun ConnectPage(
     linked: Boolean,
     path: PhonePath,
     pairRequest: PairRequest,
+    shareLocation: Boolean,
+    shareGyro: Boolean,
+    shareCompass: Boolean,
+    hasBgLocation: Boolean,
+    batteryOptDisabled: Boolean,
     onPath: (PhonePath) -> Unit,
     onPair: () -> Unit,
+    onToggleLocation: (Boolean) -> Unit,
+    onToggleGyro: (Boolean) -> Unit,
+    onToggleCompass: (Boolean) -> Unit,
+    onBindAutostart: () -> Unit,
+    onDisableBatteryOpt: () -> Unit,
 ) {
     Card {
         SectionTitle(stringResource(R.string.connection))
@@ -565,6 +662,52 @@ private fun ConnectPage(
             )
         }
         if (pairText != null) Label(pairText)
+    }
+
+    Card {
+        SectionTitle(stringResource(R.string.telemetry_title))
+        Label(stringResource(R.string.telemetry_hint))
+        ModeButton(
+            text = stringResource(R.string.share_location),
+            selected = shareLocation,
+            modifier = Modifier.fillMaxWidth(),
+        ) { onToggleLocation(!shareLocation) }
+        if (shareLocation && !hasBgLocation) {
+            Label(stringResource(R.string.telemetry_bg_loc_hint))
+        }
+        ModeButton(
+            text = stringResource(R.string.share_gyro),
+            selected = shareGyro,
+            modifier = Modifier.fillMaxWidth(),
+        ) { onToggleGyro(!shareGyro) }
+        ModeButton(
+            text = stringResource(R.string.share_compass),
+            selected = shareCompass,
+            modifier = Modifier.fillMaxWidth(),
+        ) { onToggleCompass(!shareCompass) }
+
+        if (shareLocation || shareGyro || shareCompass) {
+            Divider()
+            ModeButton(
+                text = stringResource(R.string.telemetry_autostart_btn),
+                selected = false,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onBindAutostart,
+            )
+            Label(
+                stringResource(
+                    if (batteryOptDisabled) R.string.telemetry_battery_ok else R.string.telemetry_battery_hint,
+                ),
+            )
+            if (!batteryOptDisabled) {
+                ModeButton(
+                    text = stringResource(R.string.telemetry_battery_btn),
+                    selected = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onDisableBatteryOpt,
+                )
+            }
+        }
     }
 }
 
