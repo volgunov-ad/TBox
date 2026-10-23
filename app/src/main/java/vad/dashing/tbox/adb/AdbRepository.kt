@@ -331,6 +331,22 @@ object AdbRepository {
         }
     }
 
+    suspend fun dropConnectionAfterAdbdRestart(reason: String) {
+        cancelScriptRun(ScriptOutcome.CANCELLED)
+        requestLogcatStop()
+        awaitLogcatJob()
+        mutex.withLock {
+            if (connection == null) return@withLock
+            val endpoint = _state.value.endpoint
+            AdbShutdownGate.withIntentionalTransportClose {
+                closeConnection()
+            }
+            _state.value = State()
+            appendLog("Disconnected from $endpoint ($reason)")
+            TboxRepository.addLog("DEBUG", JOURNAL_TAG, "Disconnected from $endpoint ($reason)")
+        }
+    }
+
     fun execute(command: String) {
         val normalized = command.trim()
         if (normalized.isEmpty()) return

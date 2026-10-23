@@ -68,7 +68,11 @@ object HuAdbControl {
     }
 
     suspend fun setTcpEnabled(enabled: Boolean) {
-        applyCommands(tcpCommands(enabled))
+        AdbShutdownGate.withIntentionalTransportCloseSuspending {
+            if (applyCommands(tcpCommands(enabled))) {
+                AdbRepository.dropConnectionAfterAdbdRestart("adbd restarted")
+            }
+        }
     }
 
     suspend fun setUsbEnabled(context: Context, enabled: Boolean) {
@@ -127,11 +131,13 @@ object HuAdbControl {
         null
     }
 
-    private suspend fun applyCommands(commands: List<List<String>>) {
+    private suspend fun applyCommands(commands: List<List<String>>): Boolean {
+        var applied = false
         applyMutex.withLock {
             withContext(Dispatchers.IO) {
                 val errors = commands.mapNotNull { runCommand(it) }
                 if (errors.isEmpty()) {
+                    applied = true
                     TboxRepository.addLog(
                         level = "INFO",
                         tag = TAG,
@@ -148,6 +154,7 @@ object HuAdbControl {
             }
             refresh()
         }
+        return applied
     }
 
     internal fun tcpCommands(enabled: Boolean): List<List<String>> {
