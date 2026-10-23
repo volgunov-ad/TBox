@@ -30,4 +30,5 @@ include(":dataresize")
 include(":usbaudio")
 include(":fwunlock")
 include(":winpatch")
+include(":camview")
  
