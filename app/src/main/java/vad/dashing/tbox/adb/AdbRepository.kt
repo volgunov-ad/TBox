@@ -457,6 +457,11 @@ object AdbRepository {
      *
      * Used by [LocalhostAdbSession.AndroidGateway] for grants, automations, virtual display,
      * and AppList advanced ADB actions.
+     *
+     * A reused live connection that turns out dead (stale `CONNECTED` state after an adbd
+     * restart / idle drop) is closed, the tab state reset, and the block retried exactly
+     * once on a fresh ephemeral client — consumers are idempotent (grants, dumpsys,
+     * force-stop + am start, package lists).
      */
     suspend fun <T> withTcpShellSession(
         host: String,
@@ -517,7 +522,39 @@ object AdbRepository {
                 AdbExclusiveTcpShell.Mode.ReuseLiveTcp -> {
                     val live = checkNotNull(active) { "ReuseLiveTcp without connection" }
                     appendLog("Reusing open TCP session for automation (${AdbEndpoints.format(host, port)})")
-                    block { command -> live.execute(command) }
+                    try {
+                        block { command -> live.execute(command) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        if (!AdbExclusiveTcpShell.shouldFallbackToEphemeral(error)) throw error
+                        // Cached tab connection was dead; the block never completed, so
+                        // drop it and retry once on a fresh ephemeral client.
+                        val message = error.message ?: error.javaClass.simpleName
+                        closeConnection()
+                        _state.value = State()
+                        appendLog("Disconnected ($message)")
+                        appendLog("Reused TCP session was dead; retried with ephemeral session")
+                        TboxRepository.addLog(
+                            "DEBUG",
+                            JOURNAL_TAG,
+                            "Disconnected ($message)",
+                        )
+                        TboxRepository.addLog(
+                            "WARN",
+                            JOURNAL_TAG,
+                            "Reused ADB TCP session was dead ($message); stale tab connection dropped, retried once on ephemeral",
+                        )
+                        AdbExclusiveTcpShell.openEphemeral(
+                            host = host,
+                            port = port,
+                            connectTimeoutMs = connectTimeoutMs,
+                            sessionTimeoutMs = sessionTimeoutMs,
+                            keysDir = keysDir,
+                            clientName = clientName,
+                            block = block,
+                        )
+                    }
                 }
                 AdbExclusiveTcpShell.Mode.Ephemeral -> {
                     AdbExclusiveTcpShell.openEphemeral(

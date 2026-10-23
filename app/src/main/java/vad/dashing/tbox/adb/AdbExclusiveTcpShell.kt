@@ -1,6 +1,7 @@
 package vad.dashing.tbox.adb
 
 import java.io.File
+import kotlinx.coroutines.CancellationException
 
 /**
  * Coordination for ephemeral localhost ADB shell vs the interactive ADB tab.
@@ -12,6 +13,9 @@ import java.io.File
  *
  * Note: `ADB CLSE local id mismatch` also happens on a **single** connection when late
  * CLSE/OKAY from a previous shell is mis-attributed; that is fixed in [AdbConnection].
+ * A cached live connection that died meanwhile (stale `CONNECTED` state) is detected at
+ * reuse time and retried once on a fresh ephemeral client — see
+ * [shouldFallbackToEphemeral].
  *
  * All production [LocalhostAdbSession.AndroidGateway] shell I/O goes through here.
  */
@@ -22,6 +26,22 @@ internal object AdbExclusiveTcpShell {
         ReuseLiveTcp,
         /** Open a new short-lived TCP client. */
         Ephemeral,
+    }
+
+    private val DEAD_TRANSPORT_MARKERS = listOf("connection reset", "broken pipe")
+
+    /**
+     * Whether [error] from a reused live TCP connection means the cached transport died
+     * before the block completed (peer EOF after an adbd restart / idle drop), so a
+     * single retry on a fresh ephemeral client is safe. Unrelated protocol or consumer
+     * errors, and cancellation, must not be retried.
+     */
+    fun shouldFallbackToEphemeral(error: Throwable): Boolean {
+        if (error is CancellationException) return false
+        val normalized = error.message?.trim()?.lowercase().orEmpty()
+        if (normalized.isEmpty()) return false
+        return AdbIoErrors.isBenignDisconnectMessage(normalized) ||
+            DEAD_TRANSPORT_MARKERS.any { it in normalized }
     }
 
     /**
