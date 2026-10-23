@@ -67,6 +67,8 @@ class MengboCamController {
     private var mbOms: MBOms? = null
     private var mbDms: MBDms? = null
 
+    private val frameSlots = arrayOfNulls<Bitmap>(2)
+    private var nextSlotIndex = 0
     private var fpsWindowStartMs: Long = 0L
     private var fpsFramesInWindow: Int = 0
     private val timeFmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
@@ -315,6 +317,7 @@ class MengboCamController {
             _state.value.fps
         }
 
+        val slot = nextSlotIndex
         val bmp = FrameDecoder.decodeToBitmap(
             buf = buf,
             width = width,
@@ -322,8 +325,13 @@ class MengboCamController {
             stride = stride,
             imageSize = imageSize,
             colorFmt = colorFmt,
-            mode = _state.value.decodeMode
+            mode = _state.value.decodeMode,
+            reuseBitmap = frameSlots[slot]
         )
+        if (bmp != null) {
+            frameSlots[slot] = bmp
+            nextSlotIndex = (slot + 1) % frameSlots.size
+        }
         val total = _state.value.frameCount + 1
         val meta = "$source #$frameNum | ${width}x${height} stride=$stride size=$imageSize fmt=$colorFmt cap=${buf.capacity()}"
         if (total == 1L || total % 30L == 0L) {

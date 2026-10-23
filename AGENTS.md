@@ -124,11 +124,19 @@ Separate app **Файрвол ГУ** (`vad.dashing.fwunlock`) for A10 HUs: perma
 
 ### Window Patch APK (`:winpatch`)
 
-Separate app **AA/CarPlay окна ГУ** (`vad.dashing.winpatch`) for A10 HUs: permanent install/rollback of the patched `AndroidAuto` p5 and `CarPlayView` p3 APKs into `/system/app/...` with the eMMC write-protect dance from `:dataresize`, via localhost ADB + su (`RootShell` over `:adbcore`). Patched APKs are bundled in assets with pinned MD5s; installer checks stock/patched md5, adopts legacy backups from `/data/local/tmp`, refuses to overwrite a non-stock `/system` without a backup (`nobackup_*`), and reports `TBOX_WINPATCH_*` markers. Design: [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8.
+Separate app **AA/CarPlay окна ГУ** (`vad.dashing.winpatch`) for A10 HUs: permanent install/rollback of the universal patched `AndroidAuto` p6 and `CarPlayView` p6 APKs into `/system/app/...` across all known A10 firmwares (`V00.03.07`, `V00.03.16`, `V00.05.09`, `V00.07.12`), with the eMMC write-protect dance from `:dataresize`, via localhost ADB + su (`RootShell` over `:adbcore`). Patched APKs (`AndroidAuto_p6.apk`, `CarPlayView_p6.apk`) and reference stock APKs (`assets/stock/*`) are bundled in assets with pinned MD5s; installer matches the firmware by `ro.build.version.incremental` / `/system` MD5, backs up and restores stock even if `/data/local/tmp` was wiped or a legacy patch (`p1..p5`) is installed, clears dalvik-cache/oat, and reports `TBOX_WINPATCH_*` markers. Design: [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8.
 
 ```
 ./gradlew :winpatch:testDebugUnitTest
 ./gradlew :winpatch:assembleDebug
+```
+
+### Mengbo Camera Preview Test APK (`:camview`)
+
+Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing.camview`, `arm64-v8a`) for A9 HUs: live preview and pixel format decoding (`ARGB_8888`, `RGB_565`, `UYVY`, `YUYV`, `NV12`) from the Mengbo native SDKs (`MBAvm`, `MBOms`, `MBDms`) and direct shared-memory files (`/early_services/earlydata/*_sharecamera`), with AVM view switching (`nativeSendViewCtrol`) and a draggable/resizable in-app or system overlay window (`TYPE_APPLICATION_OVERLAY`).
+
+```
+./gradlew :camview:assembleDebug
 ```
 
 ### Git branches

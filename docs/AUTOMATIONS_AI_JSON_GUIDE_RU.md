@@ -821,10 +821,10 @@ TCP :5555 включают только если порт ещё не слуша
 | `wiper_sts` | `head_unit` | `off`, `int`, `low`, `high` |
 | `sunshade` | `head_unit` | `0%`, `10%`, `20%`, `30%`, `40%`, `50%`, `60%`, `70%`, `80%`, `90%`, `100%` |
 | `sunroof` | `head_unit` | `0%` … `100%` (шаг 10), `tilt` (откинут: чтение 102 или 10%) |
-| `window_front_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
-| `window_front_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
-| `window_rear_left` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
-| `window_rear_right` | `head_unit` | `0%`, `20%`, `80%`, `100%` |
+| `window_front_left` | `head_unit` | `0%`, `20%`, `80%`, `100%`, `open` (на A9 — проценты и `open` между остановками; на A10 — только `0%` закрыто и `open` открыто) |
+| `window_front_right` | `head_unit` | `0%`, `20%`, `80%`, `100%`, `open` (на A10 — только `0%` и `open`) |
+| `window_rear_left` | `head_unit` | `0%`, `20%`, `80%`, `100%`, `open` (на A10 — только `0%` и `open`) |
+| `window_rear_right` | `head_unit` | `0%`, `20%`, `80%`, `100%`, `open` (на A10 — только `0%` и `open`) |
 | `drive_mode` | `head_unit` | `ECO`, `NOR`, `SPT`, `SAND`, `MUD`, `SNOW` |
 | `headlight_mode` | `head_unit` | `AUTO`, `PARK`, `LOW`, `OFF` |
 | `front_left_seat_mode` | `head_unit` | `off`, `heat_1`, `heat_2`, `heat_3`, `vent_1`, `vent_2`, `vent_3` |

@@ -16,6 +16,24 @@ enum class PixelDecodeMode(val label: String) {
 
 object FrameDecoder {
 
+    private var reusableRawBuffer = ByteArray(0)
+    private var reusablePixelBuffer = IntArray(0)
+
+    private fun obtainRawBuffer(size: Int): ByteArray {
+        if (reusableRawBuffer.size < size) {
+            reusableRawBuffer = ByteArray(size)
+        }
+        return reusableRawBuffer
+    }
+
+    private fun obtainPixelBuffer(size: Int): IntArray {
+        if (reusablePixelBuffer.size < size) {
+            reusablePixelBuffer = IntArray(size)
+        }
+        return reusablePixelBuffer
+    }
+
+    @Synchronized
     fun decodeToBitmap(
         buf: ByteBuffer,
         width: Int,
@@ -23,7 +41,8 @@ object FrameDecoder {
         stride: Int,
         imageSize: Int,
         colorFmt: Int,
-        mode: PixelDecodeMode
+        mode: PixelDecodeMode,
+        reuseBitmap: Bitmap? = null
     ): Bitmap? {
         if (width <= 0 || height <= 0 || width > 4096 || height > 4096) return null
         val dup = buf.duplicate()
@@ -47,9 +66,9 @@ object FrameDecoder {
             when (effectiveMode) {
                 PixelDecodeMode.ARGB_8888 -> {
                     val needed = width * height * 4
-                    if (avail < needed) return decodeRgb565OrUyvyFallback(dup, width, height)
+                    if (avail < needed) return decodeRgb565OrUyvyFallback(dup, width, height, reuseBitmap)
                     dup.limit(needed)
-                    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val bmp = obtainBitmap(reuseBitmap, width, height, Bitmap.Config.ARGB_8888)
                     bmp.copyPixelsFromBuffer(dup)
                     bmp
                 }
@@ -57,13 +76,13 @@ object FrameDecoder {
                     val needed = width * height * 2
                     if (avail < needed) return null
                     dup.limit(needed)
-                    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                    val bmp = obtainBitmap(reuseBitmap, width, height, Bitmap.Config.RGB_565)
                     bmp.copyPixelsFromBuffer(dup)
                     bmp
                 }
-                PixelDecodeMode.UYVY -> decodeYuv422(dup, width, height, stride, uyvy = true)
-                PixelDecodeMode.YUYV -> decodeYuv422(dup, width, height, stride, uyvy = false)
-                PixelDecodeMode.NV12 -> decodeNv12(dup, width, height, stride)
+                PixelDecodeMode.UYVY -> decodeYuv422(dup, width, height, stride, uyvy = true, reuseBitmap = reuseBitmap)
+                PixelDecodeMode.YUYV -> decodeYuv422(dup, width, height, stride, uyvy = false, reuseBitmap = reuseBitmap)
+                PixelDecodeMode.NV12 -> decodeNv12(dup, width, height, stride, reuseBitmap = reuseBitmap)
                 PixelDecodeMode.AUTO -> null
             }
         } catch (_: Throwable) {
@@ -71,12 +90,36 @@ object FrameDecoder {
         }
     }
 
-    private fun decodeRgb565OrUyvyFallback(dup: ByteBuffer, width: Int, height: Int): Bitmap? {
+    private fun obtainBitmap(
+        candidate: Bitmap?,
+        width: Int,
+        height: Int,
+        config: Bitmap.Config
+    ): Bitmap {
+        if (
+            candidate != null &&
+            !candidate.isRecycled &&
+            candidate.isMutable &&
+            candidate.width == width &&
+            candidate.height == height &&
+            candidate.config == config
+        ) {
+            return candidate
+        }
+        return Bitmap.createBitmap(width, height, config)
+    }
+
+    private fun decodeRgb565OrUyvyFallback(
+        dup: ByteBuffer,
+        width: Int,
+        height: Int,
+        reuseBitmap: Bitmap?
+    ): Bitmap? {
         val needed = width * height * 2
         if (dup.remaining() < needed) return null
         dup.position(0)
         dup.limit(needed)
-        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+        val bmp = obtainBitmap(reuseBitmap, width, height, Bitmap.Config.RGB_565)
         bmp.copyPixelsFromBuffer(dup)
         return bmp
     }
@@ -86,19 +129,21 @@ object FrameDecoder {
         width: Int,
         height: Int,
         stride: Int,
-        uyvy: Boolean
+        uyvy: Boolean,
+        reuseBitmap: Bitmap?
     ): Bitmap? {
         val rowBytes = if (stride >= width * 2) stride else width * 2
         val needed = rowBytes * height
         if (dup.remaining() < width * height * 2) return null
-        val raw = ByteArray(minOf(dup.remaining(), needed))
-        dup.get(raw)
-        val pixels = IntArray(width * height)
+        val copyBytes = minOf(dup.remaining(), needed)
+        val raw = obtainRawBuffer(copyBytes)
+        dup.get(raw, 0, copyBytes)
+        val pixels = obtainPixelBuffer(width * height)
         var outIdx = 0
         for (y in 0 until height) {
             var inIdx = y * rowBytes
             var x = 0
-            while (x < width && inIdx + 3 < raw.size) {
+            while (x < width && inIdx + 3 < copyBytes) {
                 val b0 = raw[inIdx].toInt() and 0xFF
                 val b1 = raw[inIdx + 1].toInt() and 0xFF
                 val b2 = raw[inIdx + 2].toInt() and 0xFF
@@ -126,35 +171,44 @@ object FrameDecoder {
                 inIdx += 4
             }
         }
-        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        val bmp = obtainBitmap(reuseBitmap, width, height, Bitmap.Config.ARGB_8888)
+        bmp.setPixels(pixels, 0, width, 0, 0, width, height)
+        return bmp
     }
 
     private fun decodeNv12(
         dup: ByteBuffer,
         width: Int,
         height: Int,
-        stride: Int
+        stride: Int,
+        reuseBitmap: Bitmap?
     ): Bitmap? {
         val rowStride = if (stride >= width) stride else width
         val ySize = rowStride * height
         val totalNeeded = ySize + rowStride * (height / 2)
         if (dup.remaining() < width * height * 3 / 2) return null
-        val raw = ByteArray(minOf(dup.remaining(), totalNeeded))
-        dup.get(raw)
-        val pixels = IntArray(width * height)
+        val copyBytes = minOf(dup.remaining(), totalNeeded)
+        val raw = obtainRawBuffer(copyBytes)
+        dup.get(raw, 0, copyBytes)
+        val pixels = obtainPixelBuffer(width * height)
         for (y in 0 until height) {
             val yRow = y * rowStride
             val uvRow = ySize + (y / 2) * rowStride
             var x = 0
             while (x < width) {
-                val y0 = raw.getOrElse(yRow + x) { 0 }.toInt() and 0xFF
-                val u = (raw.getOrElse(uvRow + (x and 1.inv())) { 128.toByte() }.toInt() and 0xFF) - 128
-                val v = (raw.getOrElse(uvRow + (x and 1.inv()) + 1) { 128.toByte() }.toInt() and 0xFF) - 128
+                val yIdx = yRow + x
+                val uIdx = uvRow + (x and 1.inv())
+                val vIdx = uIdx + 1
+                val y0 = if (yIdx < copyBytes) raw[yIdx].toInt() and 0xFF else 0
+                val u = (if (uIdx < copyBytes) raw[uIdx].toInt() and 0xFF else 128) - 128
+                val v = (if (vIdx < copyBytes) raw[vIdx].toInt() and 0xFF else 128) - 128
                 pixels[y * width + x] = yuvToArgb(y0, u, v)
                 x++
             }
         }
-        return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        val bmp = obtainBitmap(reuseBitmap, width, height, Bitmap.Config.ARGB_8888)
+        bmp.setPixels(pixels, 0, width, 0, 0, width, height)
+        return bmp
     }
 
     private fun yuvToArgb(y: Int, u: Int, v: Int): Int {

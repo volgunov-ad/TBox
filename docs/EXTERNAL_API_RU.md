@@ -335,7 +335,7 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 ```
 
 Для state-сигналов `value` — строка канонического состояния (`"D"`, `"on"`, …).  
-У стёкол (`window_front_left`, `window_front_right`, `window_rear_left`, `window_rear_right`) `value` — `"0%"`, `"20%"`, `"80%"`, `"100%"` или `"open"` (стекло между остановками, A9 отдаёт −1), и есть поле `"open": true/false` — открыто ли стекло в любом положении.  
+У стёкол (`window_front_left`, `window_front_right`, `window_rear_left`, `window_rear_right`) `value` — `"0%"`, `"20%"`, `"80%"`, `"100%"` или `"open"` (на A9 `−1` между остановками → `"open"`; на A10 статусный enum `0..4` декодируется в `"0%"` для `1` и `"open"` для `0/2/3/4`), и есть поле `"open": true/false` — открыто ли стекло в любом положении.  
 Для `geo_position` — объект `{ "latitude", "longitude" }` (Unavailable при NONE/LOST).
 Дополнительно (отдельные id, source `app`, без изменения `geo_position` / `locate_status`):
 

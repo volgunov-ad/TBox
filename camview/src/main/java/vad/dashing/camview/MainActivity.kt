@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
                 val state by controller.state.collectAsState()
                 LaunchedEffect(
                     state.floatingEnabled,
+                    state.frameCount,
                     state.bitmap,
                     state.windowWidthDp,
                     state.windowHeightDp
@@ -222,6 +224,7 @@ class MainActivity : ComponentActivity() {
 
         state.bitmap?.let { bmp: Bitmap ->
             overlayImageView?.setImageBitmap(bmp)
+            overlayImageView?.invalidate()
         }
     }
 
@@ -509,12 +512,14 @@ fun CamViewScreen(
                 ) {
                     val bmp = state.bitmap
                     if (bmp != null) {
-                        Image(
-                            bitmap = bmp.asImageBitmap(),
-                            contentDescription = "Камера",
-                            contentScale = ContentScale.FillBounds,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        key(state.frameCount) {
+                            Image(
+                                bitmap = bmp.asImageBitmap(),
+                                contentDescription = "Камера",
+                                contentScale = ContentScale.FillBounds,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
