@@ -204,6 +204,22 @@ enum class AutomationSignalId(
     REAR_LEFT_SEAT_MODE("rear_left_seat_mode", AutomationSignalValueType.STATE),
     REAR_RIGHT_SEAT_MODE("rear_right_seat_mode", AutomationSignalValueType.STATE),
     GEO_POSITION("geo_position", AutomationSignalValueType.POSITION),
+    /** Altitude m from [GeoDisplayRepository] when LIVE/RETAINING. */
+    GEO_ALTITUDE_M("geo_altitude_m"),
+    /** Display speed km/h from GeoDisplay (GNSS/CAN/retention blend). */
+    GEO_SPEED_KMH("geo_speed_kmh"),
+    /** Speed source key: `gnss` / `can` / `retention` / `none`. */
+    GEO_SPEED_SOURCE("geo_speed_source", AutomationSignalValueType.STATE),
+    /** Course / bearing degrees when known. */
+    GEO_BEARING_DEG("geo_bearing_deg"),
+    /** Satellites in view. */
+    GEO_SATELLITES_VISIBLE("geo_satellites_visible"),
+    /** Satellites used in fix. */
+    GEO_SATELLITES_USED("geo_satellites_used"),
+    /** GNSS receiver trust ([GeoDisplayState.gnssTruthful]), on/off. */
+    GEO_FIX_VALID("geo_fix_valid", AutomationSignalValueType.STATE),
+    /** Active location source setting: `tbox` / `companion` / `android` / `usb`. */
+    GEO_SOURCE("geo_source", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_0("esp_gpio_in_0", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_1("esp_gpio_in_1", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_2("esp_gpio_in_2", AutomationSignalValueType.STATE),
@@ -244,6 +260,21 @@ enum class AutomationSignalId(
     TBOX_CONNECTED("tbox_connected", AutomationSignalValueType.STATE),
     /** Cellular bars / CSQ-derived level from [TboxRepository.netState.signalLevel]. */
     MODEM_SIGNAL_LEVEL("modem_signal_level"),
+    /**
+     * RSSI dBm: [NetState.signalDbm] when set (Wi‑Fi HTTP), else AT+CSQ→dBm for CSQ 0…31.
+     * Unavailable when neither is known (CSQ 99 / empty).
+     */
+    MODEM_RSSI_DBM("modem_rssi_dbm"),
+    /** Home/roaming registration from [NetState.regStatus] (on/off). */
+    MODEM_REGISTERED("modem_registered", AutomationSignalValueType.STATE),
+    /** Operator name from [NetValues.operator] (free-form string). */
+    MODEM_OPERATOR("modem_operator", AutomationSignalValueType.STATE),
+    /** Active modem source setting: `tbox` / `wifi_http`. */
+    MODEM_SOURCE("modem_source", AutomationSignalValueType.STATE),
+    /** Downlink throughput kbps from Wi‑Fi modem HTTP ([NetState.downloadSpeedBps]). */
+    MODEM_THROUGHPUT_DOWN_KBPS("modem_throughput_down_kbps"),
+    /** Uplink throughput kbps from Wi‑Fi modem HTTP ([NetState.uploadSpeedBps]). */
+    MODEM_THROUGHPUT_UP_KBPS("modem_throughput_up_kbps"),
     /** Active geo source has a fix ([GeoDisplayRepository.state.locateStatus]). */
     LOCATE_STATUS("locate_status", AutomationSignalValueType.STATE),
     /** Trip-dwell filtered fuel % ([TripTelemetryRepository.fuelLevelPercentageFiltered]). */

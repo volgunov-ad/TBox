@@ -221,7 +221,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 4,
+  "catalogVersion": 5,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -277,7 +277,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   вопросов),
 - действия: типы из automations (`can_command`, `builtin`, `launch_application`, …) +
   `safety` (`safe`\|`confirm`\|`dangerous`) + **`voiceAliasesRu`**,
-- `catalogVersion` (сейчас **4** — у `can_command` добавлены `operations`, `signalId` и `write`).
+- `catalogVersion` (сейчас **5** — read-only обогащение гео/модема отдельными signal id;
+  **4** — у `can_command` добавлены `operations`, `signalId` и `write`).
 
 `write` — схема записи для сопряжённого клиента (TBox MQTT). Поле аддитивное: голосовой клиент его не читает.
 
@@ -335,8 +336,26 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 
 Для state-сигналов `value` — строка канонического состояния (`"D"`, `"on"`, …).  
 У стёкол (`window_front_left`, `window_front_right`, `window_rear_left`, `window_rear_right`) `value` — `"0%"`, `"20%"`, `"80%"`, `"100%"` или `"open"` (стекло между остановками, A9 отдаёт −1), и есть поле `"open": true/false` — открыто ли стекло в любом положении.  
-Для `geo_position` — объект координат по схеме, согласованной с автоматизациями (уточнить в
-реализации; не сырой byte dump).
+Для `geo_position` — объект `{ "latitude", "longitude" }` (Unavailable при NONE/LOST).
+Дополнительно (отдельные id, source `app`, без изменения `geo_position` / `locate_status`):
+
+| id | Тип | Примечание |
+|----|-----|------------|
+| `geo_altitude_m` | number | м; Unavailable без LIVE/RETAINING |
+| `geo_speed_kmh` | number | км/ч; Unavailable без LIVE/RETAINING |
+| `geo_speed_source` | state | `gnss` / `can` / `retention` / `none` |
+| `geo_bearing_deg` | number | °; Unavailable без bearing |
+| `geo_satellites_visible` / `geo_satellites_used` | number | Unavailable без LIVE/RETAINING |
+| `geo_fix_valid` | state | on/off — `gnssTruthful` |
+| `geo_source` | state | `tbox` / `companion` / `android` / `usb` |
+| `modem_rssi_dbm` | number | signalDbm или CSQ→dBm; без IMEI/ICCID/IMSI |
+| `modem_registered` | state | on/off (домашняя/роуминг) |
+| `modem_operator` | state | строка оператора |
+| `modem_source` | state | `tbox` / `wifi_http` |
+| `modem_throughput_down_kbps` / `modem_throughput_up_kbps` | number | только Wi‑Fi HTTP |
+
+Не дублируют уже существующие `modem_net_type`, `modem_sim_status`, `modem_signal_level`,
+`modem_mobile_data`. Write/actions не расширялись.
 
 **Подписки на поток в v1 нет.** Клиент при необходимости повторяет GET.
 
@@ -422,9 +441,13 @@ provider + AI guide + тесты), чтобы UI правил и HTTP API пол
 | G6 | `active_trip_distance_km`, `active_trip_avg_fuel_l100km`, `active_trip_duration_s`, `active_trip_motor_hours`, `motor_hours` | поездка / моточасы, `app` | **в каталоге** |
 | G7 | `media_title`, `media_artist` | now playing, `app` | **в каталоге** |
 
+**Обогащение гео/модема** (отдельные id, `catalogVersion` **5**, read-only): см. таблицу в §7.4
+(`geo_altitude_m` … `geo_source`, `modem_rssi_dbm` … `modem_throughput_*_kbps`). Без PII
+(IMEI/ICCID/IMSI) и без debug NMEA/DR.
+
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
 `/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
-действий). `catalogVersion = 3`.
+действий). `catalogVersion = 3` (+ aliases); схема write — 4; гео/модем enrichment — **5**.
 
 ### Не в блокирующем списке v1
 
@@ -486,6 +509,7 @@ MQTT-клиент для Home Assistant — отдельное приложен�
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
 | 8a | PC smoke-клиент `tools/tbox_external_api_pair.py` | Сопряжение + health/catalog/signals/automations/invoke/run с LAN | **сделано** |
 | 9 | `voiceAliasesRu` в catalog | Voice APK может матчить RU-фразы | **сделано** (`catalogVersion` 3) |
+| 9a | Гео/модем enrichment (отдельные read-only id) | Каталог + provider + aliases + тесты | **сделано** (`catalogVersion` 5) |
 | 10 | Voice APK / телефон MVP | Спросить телеметрию / команда / запуск правила | план: [VOICE_APK_RU.md](VOICE_APK_RU.md) |
 | 12 | MQTT-клиент Home Assistant | Состояния и команды каталога в брокер, discovery | план: [MQTT_APK_RU.md](MQTT_APK_RU.md) |
 | 11 | (Опционально) deprecated/удаление legacy broadcast | Нет зависимости в дереве | открыто |
@@ -500,7 +524,7 @@ MQTT-клиент для Home Assistant — отдельное приложен�
 1. Точный default port и диапазон допустимых портов в UI.
 2. Pairing: long-poll vs `202 pending` + status poll (рекомендация: pending + poll).
 3. TTL access token: ручной revoke, плюс удаление, если токен не использовался больше 6 календарных месяцев. Проверка — через 1 минуту после запуска сервера API. Успешный запрос с Bearer обновляет время (на диск не чаще раза в час; повторно — в момент проверки).
-4. Форма `geo_position` и набор id для G6 в JSON ответа signals.
+4. ~~Форма `geo_position`~~ — `{latitude,longitude}` + enrichment id в §7.4; G6 — в каталоге.
 5. Нужен ли позже mDNS / QR с URL для телефона.
 6. HTTPS / certificate pinning — после стабилизации HTTP v1.
 

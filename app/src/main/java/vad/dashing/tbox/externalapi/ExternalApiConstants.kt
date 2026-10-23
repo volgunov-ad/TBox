@@ -2,7 +2,8 @@ package vad.dashing.tbox.externalapi
 
 object ExternalApiConstants {
     const val API_VERSION = 1
-    const val CATALOG_VERSION = 4
+    /** 5 — geo/modem enrichment signals (separate ids; read-only). */
+    const val CATALOG_VERSION = 5
 
     const val DEFAULT_PORT = 8765
     const val MIN_PORT = 1024

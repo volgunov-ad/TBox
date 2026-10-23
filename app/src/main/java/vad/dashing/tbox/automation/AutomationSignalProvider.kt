@@ -321,6 +321,28 @@ internal fun geoDisplayFlow(): Flow<AutomationSignalValue> =
         }
         .distinctUntilChanged()
 
+internal fun locationSourceSettingFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return vad.dashing.tbox.SettingsManager(context).locationSourceFlow
+        .map { source ->
+            AutomationSignalValue.State(GeoAutomationSignals.locationSourceKey(source))
+        }
+        .distinctUntilChanged()
+}
+
+internal fun modemSourceSettingFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return vad.dashing.tbox.SettingsManager(context).modemSourceFlow
+        .map { source ->
+            AutomationSignalValue.State(
+                vad.dashing.tbox.wifimodem.ModemAutomationStates.modemSourceKey(source),
+            )
+        }
+        .distinctUntilChanged()
+}
+
 internal fun activeTripDistanceFlow(): Flow<AutomationSignalValue> =
     TripRepository.activeTrip.map { trip ->
         val t = trip?.takeIf { it.isCurrentActive }

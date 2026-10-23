@@ -145,6 +145,68 @@ object ExternalApiVoiceAliasesRu {
             "геолокация",
             "есть ли gps",
         ),
+        AutomationSignalId.GEO_ALTITUDE_M to listOf(
+            "высота",
+            "высота gps",
+            "над уровнем моря",
+        ),
+        AutomationSignalId.GEO_SPEED_KMH to listOf(
+            "скорость gps",
+            "гео скорость",
+        ),
+        AutomationSignalId.GEO_SPEED_SOURCE to listOf(
+            "источник скорости",
+            "откуда скорость",
+        ),
+        AutomationSignalId.GEO_BEARING_DEG to listOf(
+            "курс",
+            "азимут",
+            "направление движения",
+        ),
+        AutomationSignalId.GEO_SATELLITES_VISIBLE to listOf(
+            "спутники видимые",
+            "сколько спутников видно",
+        ),
+        AutomationSignalId.GEO_SATELLITES_USED to listOf(
+            "спутники в решении",
+            "сколько спутников используется",
+        ),
+        AutomationSignalId.GEO_FIX_VALID to listOf(
+            "правдивость gps",
+            "валидный gps",
+            "достоверный gps",
+        ),
+        AutomationSignalId.GEO_SOURCE to listOf(
+            "источник геопозиции",
+            "откуда gps",
+        ),
+        AutomationSignalId.MODEM_RSSI_DBM to listOf(
+            "rssi",
+            "сигнал в децибелах",
+            "сила сигнала модема",
+        ),
+        AutomationSignalId.MODEM_REGISTERED to listOf(
+            "регистрация в сети",
+            "модем в сети",
+            "есть ли сеть",
+        ),
+        AutomationSignalId.MODEM_OPERATOR to listOf(
+            "оператор",
+            "сотовый оператор",
+            "какой оператор",
+        ),
+        AutomationSignalId.MODEM_SOURCE to listOf(
+            "источник модема",
+            "откуда модем",
+        ),
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS to listOf(
+            "скорость загрузки модема",
+            "download модема",
+        ),
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS to listOf(
+            "скорость отдачи модема",
+            "upload модема",
+        ),
         AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE to listOf(
             "температура масла кпп",
             "масло коробки",
