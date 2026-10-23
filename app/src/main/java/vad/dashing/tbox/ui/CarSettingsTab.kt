@@ -1322,17 +1322,35 @@ private fun shadeRoofStatusText(raw: Int?): String =
     }
 
 @Composable
-private fun windowStatusText(raw: Int?): String =
-    windowStatusText(
-        raw,
-        stringResource(R.string.car_settings_windows_status_unknown),
-        stringResource(R.string.car_settings_windows_status_between),
-    )
+private fun windowStatusText(raw: Int?, android10: Boolean): String = windowStatusText(
+    raw,
+    stringResource(R.string.car_settings_windows_status_unknown),
+    stringResource(R.string.car_settings_windows_status_between),
+    stringResource(R.string.car_settings_windows_status_closed),
+    stringResource(R.string.car_settings_windows_status_open),
+    android10,
+)
 
-private fun windowStatusText(raw: Int?, unknown: String, between: String): String = when {
-    raw == BodyComfortDomain.WINDOW_RAW_BETWEEN_STOPS -> between
-    raw != null && raw in 0..100 -> "$raw%"
-    else -> unknown
+private fun windowStatusText(
+    raw: Int?,
+    unknown: String,
+    between: String,
+    closedA10: String,
+    openA10: String,
+    android10: Boolean,
+): String {
+    if (android10) {
+        return when {
+            raw == 1 -> closedA10
+            raw != null && raw in BodyComfortDomain.WINDOW_A10_STATUS_RANGE -> openA10
+            else -> unknown
+        }
+    }
+    return when {
+        raw == BodyComfortDomain.WINDOW_RAW_BETWEEN_STOPS -> between
+        raw != null && raw in 0..100 -> "$raw%"
+        else -> unknown
+    }
 }
 
 @Composable
@@ -1360,6 +1378,8 @@ private fun CarSettingsWindowsSection(
     val windowOptions = windowCommandOptions(android10)
     val unknownStatus = stringResource(R.string.car_settings_windows_status_unknown)
     val betweenStatus = stringResource(R.string.car_settings_windows_status_between)
+    val closedStatusA10 = stringResource(R.string.car_settings_windows_status_closed)
+    val openStatusA10 = stringResource(R.string.car_settings_windows_status_open)
 
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
@@ -1399,7 +1419,9 @@ private fun CarSettingsWindowsSection(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_all_title),
             listOf(raw.windowFl, raw.windowFr, raw.windowRl, raw.windowRr)
-                .joinToString(" / ") { windowStatusText(it, unknownStatus, betweenStatus) },
+                .joinToString(" / ") {
+                    windowStatusText(it, unknownStatus, betweenStatus, closedStatusA10, openStatusA10, android10)
+                },
         ),
         options = windowOptions,
         selectedRawValue = lastAllWindows,
@@ -1412,7 +1434,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fl_title),
-            windowStatusText(raw.windowFl),
+            windowStatusText(raw.windowFl, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1429,7 +1451,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fr_title),
-            windowStatusText(raw.windowFr),
+            windowStatusText(raw.windowFr, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1446,7 +1468,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rl_title),
-            windowStatusText(raw.windowRl),
+            windowStatusText(raw.windowRl, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1463,7 +1485,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rr_title),
-            windowStatusText(raw.windowRr),
+            windowStatusText(raw.windowRr, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(

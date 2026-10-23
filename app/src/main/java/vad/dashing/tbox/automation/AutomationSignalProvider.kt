@@ -19,6 +19,7 @@ import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.PlatformAudioDomain
@@ -444,10 +445,14 @@ internal fun Flow<BodyComfortRawRead>.shadeRoofStateFlow(
 
 internal fun Flow<BodyComfortRawRead>.windowStateFlow(
     selector: (BodyComfortRawRead) -> Int?,
-): Flow<AutomationSignalValue> = map { raw ->
-    BodyComfortDomain.windowStateValue(selector(raw))
-        ?.let(AutomationSignalValue::State)
-        ?: AutomationSignalValue.Unavailable
+): Flow<AutomationSignalValue> = combine(UniversalCanRepository.mode) { raw, mode ->
+    val value = selector(raw)
+    val state = if (mode == HeadUnitCanMode.Android10Vhal) {
+        BodyComfortDomain.windowStateValueA10(value)
+    } else {
+        BodyComfortDomain.windowStateValue(value)
+    }
+    state?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
 }
 
 internal fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =

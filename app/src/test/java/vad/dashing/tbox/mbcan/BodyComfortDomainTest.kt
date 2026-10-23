@@ -105,22 +105,67 @@ class BodyComfortDomainTest {
     }
 
     @Test
+    fun window_a10StatusEnum() {
+        assertEquals(WindowPanePosition.Closed, BodyComfortDomain.decodeWindowA10Status(1))
+        assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindowA10Status(0))
+        assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindowA10Status(2))
+        assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindowA10Status(3))
+        assertEquals(WindowPanePosition.Open, BodyComfortDomain.decodeWindowA10Status(4))
+        assertNull(BodyComfortDomain.decodeWindowA10Status(null))
+        assertNull(BodyComfortDomain.decodeWindowA10Status(-1))
+        assertNull(BodyComfortDomain.decodeWindowA10Status(5))
+        assertNull(BodyComfortDomain.decodeWindowA10Status(20))
+        assertNull(BodyComfortDomain.decodeWindowA10Status(100))
+
+        assertEquals("0%", BodyComfortDomain.windowStateValueA10(1))
+        assertEquals(BodyComfortDomain.STATE_OPEN, BodyComfortDomain.windowStateValueA10(0))
+        assertEquals(BodyComfortDomain.STATE_OPEN, BodyComfortDomain.windowStateValueA10(2))
+        assertEquals(BodyComfortDomain.STATE_OPEN, BodyComfortDomain.windowStateValueA10(4))
+        assertNull(BodyComfortDomain.windowStateValueA10(null))
+        assertNull(BodyComfortDomain.windowStateValueA10(7))
+        assertFalse(BodyComfortDomain.windowStateOpen(BodyComfortDomain.windowStateValueA10(1)))
+        assertTrue(BodyComfortDomain.windowStateOpen(BodyComfortDomain.windowStateValueA10(0)))
+        assertTrue(
+            BodyComfortDomain.windowStateMatches(
+                BodyComfortDomain.windowStateValueA10(2)!!,
+                BodyComfortDomain.STATE_OPEN,
+            ),
+        )
+    }
+
+    @Test
     fun selectedWindowWriteValues_a10Commands() {
         assertEquals(
             setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE),
-            BodyComfortDomain.selectedWindowWriteValues(0, null, android10 = true),
-        )
-        assertEquals(
-            setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_VENT),
-            BodyComfortDomain.selectedWindowWriteValues(20, null, android10 = true),
+            BodyComfortDomain.selectedWindowWriteValues(1, null, android10 = true),
         )
         assertEquals(
             setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN),
-            BodyComfortDomain.selectedWindowWriteValues(80, null, android10 = true),
+            BodyComfortDomain.selectedWindowWriteValues(0, null, android10 = true),
         )
         assertEquals(
-            setOf(2),
+            setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN),
+            BodyComfortDomain.selectedWindowWriteValues(2, null, android10 = true),
+        )
+        assertEquals(
+            setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN),
+            BodyComfortDomain.selectedWindowWriteValues(3, null, android10 = true),
+        )
+        assertEquals(
+            setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN),
+            BodyComfortDomain.selectedWindowWriteValues(4, null, android10 = true),
+        )
+        assertEquals(
+            setOf(MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN),
             BodyComfortDomain.selectedWindowWriteValues(null, 2, android10 = true),
+        )
+        assertEquals(
+            setOf(3),
+            BodyComfortDomain.selectedWindowWriteValues(7, 3, android10 = true),
+        )
+        assertEquals(
+            emptySet<Int>(),
+            BodyComfortDomain.selectedWindowWriteValues(null, null, android10 = true),
         )
     }
 

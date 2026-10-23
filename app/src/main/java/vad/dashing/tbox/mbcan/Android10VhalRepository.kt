@@ -2026,8 +2026,8 @@ object Android10VhalRepository {
         applyPosition: (WindowPanePosition) -> Unit,
         copyRaw: (BodyComfortRawRead, Int) -> BodyComfortRawRead,
     ) {
-        val value = BodyComfortDomain.sanitizeStatusRaw(raw)?.takeIf { it in 0..100 } ?: return
-        BodyComfortDomain.decodeWindow(value)?.let(applyPosition)
+        val value = raw?.takeIf { it in BodyComfortDomain.WINDOW_A10_STATUS_RANGE } ?: return
+        BodyComfortDomain.decodeWindowA10Status(value)?.let(applyPosition)
         _bodyComfortRaw.value = copyRaw(_bodyComfortRaw.value, value)
     }
 

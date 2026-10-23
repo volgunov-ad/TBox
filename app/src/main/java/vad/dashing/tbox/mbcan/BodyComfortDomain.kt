@@ -5,8 +5,9 @@ package vad.dashing.tbox.mbcan
  *
  * Write scales differ (shade/roof 1…11 + 12 tilt, A10 windows 1/2/3). Live status
  * is percent: shade/roof read 0…100 % with step 10 (write N ↔ read (N−1)×10 %,
- * roof tilt reads **102** or 10 %), windows 0…100 % from A9 BCM `stWindowSts` /
- * A10 `*_WIN_Position`.
+ * roof tilt reads **102** or 10 %), A9 windows 0…100 % from BCM `stWindowSts`.
+ * A10 `*_WIN_Position` reads a status enum 0…4, not a percent —
+ * see [decodeWindowA10Status].
  */
 enum class ShadeRoofPosition {
     Closed,
@@ -36,8 +37,16 @@ object BodyComfortDomain {
      * does not show as open.
      */
     const val WINDOW_RAW_BETWEEN_STOPS = -1
-    /** Window automation state: anything but closed (−1, 20 %, 80 %, 100 %, or any A10 percent). */
+    /** Window automation state: anything but closed (−1, 20 %, 80 %, 100 %, or any A10 open status). */
     const val STATE_OPEN = "open"
+
+    /**
+     * A10 `*_WIN_Position` reads a status enum **0…4**, not a percent: **1** closed at
+     * rest, **0/2/3/4** while the pane moves / is open (per-value meaning not yet
+     * confirmed). Journal 2026-10-23: parked car held 1 on all four panes, cycling
+     * produced only 0…4. Write stays the command enum 1 close / 2 open / 3 vent.
+     */
+    val WINDOW_A10_STATUS_RANGE: IntRange = 0..4
 
     fun sanitizeStatusRaw(raw: Int?): Int? =
         raw?.takeIf { it >= 0 && it <= SUNROOF_STATUS_TILT }
@@ -105,7 +114,7 @@ object BodyComfortDomain {
     }
 
     /**
-     * Window position: 0…100 % (A9 BCM / A10 `*_WIN_Position`).
+     * A9 window position: 0…100 % from BCM.
      * 0 closed, 1…30 vent (stock A9 щель is 20), 31…100 open, −1 (A9 between stops) open.
      */
     fun decodeWindow(raw: Int?): WindowPanePosition? {
@@ -117,6 +126,23 @@ object BodyComfortDomain {
             in 31..100 -> WindowPanePosition.Open
             else -> null
         }
+    }
+
+    /**
+     * A10 window live status 0…4: **1** closed at rest, **0/2/3/4** open (pane moving
+     * or off its stop; per-value meaning not confirmed on the car yet).
+     */
+    fun decodeWindowA10Status(raw: Int?): WindowPanePosition? = when (raw) {
+        1 -> WindowPanePosition.Closed
+        in WINDOW_A10_STATUS_RANGE -> WindowPanePosition.Open
+        else -> null
+    }
+
+    /** Automation state for an A10 status raw: `0%` closed, `open` for any open status. */
+    fun windowStateValueA10(raw: Int?): String? = when (decodeWindowA10Status(raw)) {
+        WindowPanePosition.Closed -> "0%"
+        WindowPanePosition.Open, WindowPanePosition.Vent -> STATE_OPEN
+        null -> null
     }
 
     /**
@@ -150,24 +176,25 @@ object BodyComfortDomain {
 
     /**
      * A9: live percent snaps to the nearest allowed stop 0/20/80/100.
-     * A10: 1 close / 2 open / 3 vent derived from the percent bands.
+     * A10: live status 0…4 (not a percent) → 1 close / 2 open; vent never
+     * highlights from the readback because the status enum has no confirmed vent code.
      */
     fun selectedWindowWriteValues(
         raw: Int?,
         lastCommand: Int?,
         android10: Boolean,
     ): Set<Int> {
+        if (android10) {
+            val command = when (decodeWindowA10Status(raw)) {
+                WindowPanePosition.Closed -> MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE
+                WindowPanePosition.Open -> MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN
+                WindowPanePosition.Vent -> MbCanKnownVehiclePropertyId.WINDOW_A10_VENT
+                null -> null
+            } ?: return setOfNotNull(lastCommand)
+            return setOf(command)
+        }
         val percent = sanitizeStatusRaw(raw)?.takeIf { it in 0..100 }
             ?: return setOfNotNull(lastCommand)
-        if (android10) {
-            return setOf(
-                when {
-                    percent == 0 -> MbCanKnownVehiclePropertyId.WINDOW_A10_CLOSE
-                    percent <= WINDOW_A9_VENT_PERCENT + 10 -> MbCanKnownVehiclePropertyId.WINDOW_A10_VENT
-                    else -> MbCanKnownVehiclePropertyId.WINDOW_A10_OPEN
-                },
-            )
-        }
         return setOf(nearestWindowA9Step(percent))
     }
 
