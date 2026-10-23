@@ -101,6 +101,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md) | План Voice APK: STT/TTS/NLU, этапы MVP |
 | [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md) | TBox MQTT (`:mqtt`): брокер, каталог API, Home Assistant discovery |
 | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.8 | «Расширение /data» (`:dataresize`): перенос `userdata` в свободный хвост eMMC на A10 |
+| [tools/hu_rescue/ИНСТРУКЦИЯ.md](tools/hu_rescue/ИНСТРУКЦИЯ.md) | Восстановление ГУ A10 через отладочный UART (`tools/hu_rescue/`: диагностика, Wi-Fi/ADB, откат/ремонт GPT, fastboot) |
 | [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md) | Звук через USB-карту на A10: хаб-обход бага ядра, защита eMMC, постоянное включение (`:usbaudio`) и временный bind в TBox Monitor |
 | [docs/USB_AUDIO_A10_SIMPLE_RU.md](docs/USB_AUDIO_A10_SIMPLE_RU.md) | То же самое простыми словами: Блокнот + копировать/вставить, без диагностики |
 | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2 | «Файрвол ГУ» (`:fwunlock`): постоянный белый список сети для приложений на A10 (файрвол Adayo), рантайм-фикс в TBox Monitor — страховка |

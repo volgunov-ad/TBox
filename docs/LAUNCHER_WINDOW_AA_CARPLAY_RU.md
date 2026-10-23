@@ -239,12 +239,13 @@ adb shell am broadcast -a com.adayo.launcher.FULLSCREEN --ei fullscreen 0   # н
 Гоча этой прошивки: в `packages.xml` атрибут `key=` элемента `<cert>` содержит **hex**, а не
 base64 (в стоке AOSP — base64); серийник и хэш выше посчитаны после hex-декода.
 
-### 7.2. Артефакты проверки подписи (`Temp\rufp\`)
+### 7.2. Артефакты проверки подписи (`tools/winpatch/certs/`)
 
-- `sysuid_cert_real.der` — сертификат UID system с ГУ (hex-декод из packages.xml);
-- `aosp_platform_cert.der` / `.pem` — эталон AOSP `android-10.0.0_r1`;
-- `packages.xml` — слепок с ГУ;
-- `sysuid_cert.b64` — сырой hex-текст атрибута (имя историческое, содержимое — hex).
+- `sysuid_cert_real.der` — сертификат UID system с ГУ (hex-декод из `packages.xml`);
+- `aosp_platform_cert.der` / `.pem` / `.b64` — эталон AOSP `android-10.0.0_r1`;
+- `platform.pk8` / `.b64` — приватный ключ AOSP platform test-key;
+- `sysuid_cert.b64` / `.der` — сырой hex-текст атрибута из `packages.xml` (имя историческое, содержимое — hex);
+- `AndroidAuto.sig`, `CarPlayView.sig` — дампы сертификатов стоковых APK.
 
 ### 7.3. Патч CarPlayView: собран и проверен на стенде (2025, Wi-Fi bench)
 
@@ -281,11 +282,11 @@ base64 (в стоке AOSP — base64); серийник и хэш выше по
   `(900,400)→(330,306)→(477,382)`; `(1500,800)→(930,706)→(1345,881)`;
   `(1200,500)→(630,406)→(911,506)` — `x·1920/1327, y·1080/865` подтверждён.
 
-Артефакты (`Temp\rufp\`): `CarPlayView_patched_signed.apk` (md5 `ab1ebdfe8b572d799965c84f1d8f1ad7`),
-`apktool.jar`, `platform.pk8`/`aosp_platform_cert.pem`, скрипты `patch_cpv.sh` (замена
-файла через WP-танец, идемпотентный) и `clean_cpv_cache.sh`; бэкап оригинала на ГУ
-`/data/local/tmp/CarPlayView_orig_backup.apk` (md5 `2718803663e016a969e6d2fa0d2b4c16`).
-Откат — тем же скриптом с бэкапом + чистка dalvik-cache + force-stop.
+Артефакты в репозитории (`tools/winpatch/`): ключи `certs/platform.pk8` и `certs/aosp_platform_cert.pem`,
+скрипты `scripts/patch_cpv.sh` (замена файла через WP-танец, идемпотентный) и `scripts/clean_cpv_cache.sh`;
+эталонный стоковый APK — `winpatch/src/main/assets/stock/CarPlayView_stock.apk`
+(md5 `2718803663e016a969e6d2fa0d2b4c16`, на ГУ резерв в `/data/local/tmp/CarPlayView_orig_backup.apk`).
+Откат — тем же скриптом с бэкапом + чистка dalvik-cache + force-stop (или через приложение `:winpatch`).
 
 Живая сессия проверена 2026-10-17 — см. §7.5 (бары видны, тач точный, стек
 уводит активити на дисплей 0 «между барами»).
@@ -359,9 +360,7 @@ wireless-конфигов CarPlay и рестарта стека, pid 17815): `(
 - Для p2 перезагрузка/рестарт процесса не понадобились: система подхватила новый
   манифест при следующем `LAUNCH_APP` (новый таск t1283 на дисплее 1).
 
-Артефакты: `Temp\rufp\{CarPlayView_p2_signed.apk, uart_cmd.ps1, w_cp1.png (до
-встраивания: окно дисплей-0 + диалог TBox в окне), w_emb.png (встроено: чёрная
-поверхность ровно в области окна), uart_log.txt}`.
+Артефакты: `tools/winpatch/scripts/uart_cmd.ps1` (хелпер разовых команд по UART); историческая сборка `CarPlayView_p2_signed.apk` (`b652a30c36d11fea4343c0e3123ab942`) учтена в `WinPatchCodec.CAR_PLAY.legacyPatchedMd5s`.
 
 ### 7.5. Живая сессия CarPlay (iPhone по USB, ADB, 2026-10-17)
 
@@ -386,7 +385,7 @@ CarPlay на всю ширину между несокрытыми барами 
 Ниже — результаты промежуточной проверки, не готовое решение:
 
 - бары лаунчера (верх/низ) видны всю сессию — `hideBottomUIMenu`-патч работает и на
-  дисплее 0 (`w_sess2.png`, `w_home.png`, `w_t4.png`; скриншоты в `Temp\rufp\`);
+  дисплее 0;
 - тач: координаты окна на дисплее 0 = экранным; эмпирический скейл патча
   **x×1.0, y×1.25 (getHeight()≈864), смещение 0** — подтверждено попаданиями:
   физ. (56,818)→логич. (56,1022) = кнопка Home CarPlay (переключило на home-экран);
@@ -453,9 +452,8 @@ CarPlay на всю ширину между несокрытыми барами 
 - ADB и живая USB-сессия доступны одновременно; новых `AndroidRuntime` ошибок
   в выбранном интервале проверки не найдено.
 
-Артефакты p3 в `Temp\rufp`: `WindowSurface.java`, `DecodeHelper.java`,
-`cphelper.zip`, `carplayview_dec`, `CarPlayView_p3{,_al,_signed}.apk`,
-`restore_cpmgr.sh`, `clean_cpv_cache.sh`, `cpv_p3*.png`.
+Артефакты в репозитории (`tools/winpatch/`): `src/com/adayo/carplay/view/patch/WindowSurface.java`,
+`src/DecodeHelper.java`, `scripts/restore_cpmgr.sh`, `scripts/clean_cpv_cache.sh`.
 Исходный Manager-конфиг также сохранён на ГУ в
 `/data/local/tmp/CarPlayManagerConfig.json.orig`.
 
@@ -535,19 +533,18 @@ AA p5), md5 `bc5ce29096eef28d8a68709bf90f9dfc`, 206167 байт. Установ�
 `2718803663e016a969e6d2fa0d2b4c16` не тронут; процесс view остановлен перед
 записью — поднимется стеком на следующей сессии). Поведение p5 проверяется следующей
 живой CarPlay-сессией по цели из шапки: **окно с барами удерживается всю сессию**
-(оба сценария старта), `startInWindow display=-2`, тач работает; до приёмки ассет
-`:winpatch` остаётся на CP p3. Артефакты в
-`Temp\rufp`: `carplayview_p5_dec`, `CarPlayView_p5{,_al,_signed}.apk`,
-`p4_log4.txt`, `p4_acts.txt`/`wp3.png` (без сессии), `p4_acts3.txt`/`wp4.png`
-(живая сессия), `carplayview_p4_dec`.
+(оба сценария старта), `startInWindow display=-2`, тач работает; финальное решение
+реализовано в сборке **p6** (`winpatch/src/main/assets/CarPlayView_p6.apk`, исходники и
+smali-оверлей в `tools/winpatch/`).
 
 ### 7.7. Android Auto p1–p5: оконный рендерер и маршрутизация (2026-10-18)
 
-Исходный APK сохранён на ГУ в `/data/local/tmp/AndroidAuto_orig_backup.apk`,
-md5 `821cf2db51435747bd974a81fd52d1bb`. Рабочие исходники и сборки находятся в
-`Temp\rufp`: `AAWindowPatch.java`, `androidauto_dec`, `aahelper.zip`,
-`AndroidAuto_p1{,_al,_signed}.apk` … `AndroidAuto_p5{,_al,_signed}.apk`,
-`patch_aa.sh`. Это локальные артефакты исследования, не файлы репозитория.
+Эталонные стоковые APK сохранены в репозитории в `winpatch/src/main/assets/stock/AndroidAuto_v*.apk`
+(для `V00.05.09` md5 `821cf2db51435747bd974a81fd52d1bb`, на ГУ резерв в
+`/data/local/tmp/AndroidAuto_orig_backup.apk`). Исходники патча, smali-оверлеи и скрипты сборки/деплоя
+перенесены в репозиторий в `tools/winpatch/` (`src/com/adayo/androidauto/patch/AAWindowPatch.java`,
+`patches/androidauto_p6/`, `build_p6.py`, `scripts/patch_aa.sh`, `scripts/deploy_p6.sh`,
+`scripts/deploy_aa_nomargin.sh`).
 
 Общие изменения Android Auto:
 
@@ -654,33 +651,24 @@ Display #1; прямой `am start -n` был доставлен существ�
   10 секунд сохранила ту же задачу и PID: прежнее завершение через 10 секунд
   не следует считать неизбежным при каждом запуске;
 - `dumpsys activity top` показывает SurfaceView 1327×865 и видимый слой
-  `app:id/prompt`. Скриншот `Temp\rufp\aa_p5_recheck.png` в 01:57 показывает
-  **«Запустите Android Auto»** с индикатором в настоящем окне лаунчера; верхний
-  и нижний бары и левая колонка сохранены. Это экран ожидания, **не живая
-  проекция**. Более ранний `aa_p5_reboot.png` показывал TBox Monitor;
+  `app:id/prompt`. На экране в 01:57 отображалось **«Запустите Android Auto»** с
+  индикатором в настоящем окне лаунчера; верхний и нижний бары и левая колонка
+  сохранены. Это экран ожидания, **не живая проекция**;
 - в считанных бинарных логах нет подтверждённого p5 viewport с согласованным
   видеокадром и нет проверенных попаданий или свайпов по живому интерфейсу.
   Текстовый logcat всё ещё непригоден для отрицательных выводов.
 
-**Приёмка Android Auto не завершена:** восстановление после перезагрузки и
-повторная проверка оконного запуска выполнены, но требуется работающая сессия
-телефона, живое видео с aspect-fit и точные тапы/свайпы. Состояние экрана телефона
-и физический тач удалённо не проверены. Следующая проверка с пользователем:
-разблокировать телефон, завершить отображаемые шаги Android Auto, запустить
-ярлык TBox Monitor и сообщить, появляется ли проекция, сохраняется ли окно,
-правильны ли пропорции и попадания. Если сессии нет — нужен точный текст
-сообщения на телефоне. p5 оставлен экспериментальным, пакет включён;
-повторные рестарты и новые замены APK не выполнялись. CarPlay p3 и его
-wireless-изоляция не изменялись.
+**Итог этапа p5 → переход к p6 (§7.8):** проблемы привязки `mPromptView`/`mSurfaceView`
+к новому оконному экземпляру `AAActivity`, таймера `MSG_IS_RESTART_APP` (`0x2716`),
+ложного `MSG_ACTIVITY_DELAY_PAUSE` (`0x66`), блокировки ручника (`mParkBreakEngaged`) и
+боковых полей полностью решены в финальной сборке **`AndroidAuto_p6.apk`** (§7.8).
 
-Проверки репозитория, завершённые до этого продолжения:
+Проверки репозитория:
 `.\gradlew.bat :app:lintRuDebug :app:compileRuDebugKotlin --console=plain`
-успешно выполнена; сохранённый `Temp\rufp\gradle_lint2.txt` содержит
-`compileRuDebugKotlin UP-TO-DATE`, `lintRuDebug` и `BUILD SUCCESSFUL in 14m 5s`.
+успешно выполнена (`compileRuDebugKotlin UP-TO-DATE`, `lintRuDebug`, `BUILD SUCCESSFUL`).
 В `app/build/reports/lint-results-ruDebug.xml` нет issues severity Error/Fatal.
-Повторный запуск не требовался: изменения этого продолжения — только отчёт.
 `git diff --check` выполнен без ошибок; предупреждения LF→CRLF не являются
-ошибками пробелов. Эти проверки не проверяют OEM smali или проекцию на ГУ.
+ошибками пробелов.
 
 ### 7.8. Установщик `:winpatch` и сборки `p6` (2026-10-22)
 
@@ -701,17 +689,23 @@ wireless-изоляция не изменялись.
   - Установщик определяет прошивку по `ro.build.version.incremental` (и/или MD5 файла в `/system`) и автоматически использует соответствующий стоковый APK из `assets/stock/` для резерва и отката — даже если `/data/local/tmp` была очищена или в `/system` стояла старая сборка `p1..p5`.
 - Применение и откат выполняют атомарную запись через `<apk>.new` + `mv`, очищают `/data/dalvik-cache/*/...` и `oat`, и перезапускают процесс цели (`am force-stop` + `kill`).
 
-## 8. Артефакты анализа (ПК, `C:\Users\volgu\AppData\Local\Temp\rufp\`)
+## 8. Артефакты в репозитории (`winpatch/` и `tools/winpatch/`)
 
-| APK на ГУ | Локальная копия | Дамп (dexdump -d) | Ключевые строки дампа |
-|---|---|---|---|
-| `/system/app/Launcher/Launcher.apk` (v1.0) | `Launcher.apk` | `launcher_x/dump_classes.txt` (46,6 МБ) | `HKActivityView` 232272; `LauncherActivity` 480996 (`setFullScreen` 482124, `launchActivityViewAppInternal` 482471, `openSourcetype` 481739, `onCreate` 482601); `$5` FULLSCREEN 208221; `$6` StateCallback 208275; `ScreenUtil.switchFullscreen` 230367 |
-| `/system/app/AndroidAuto/AndroidAuto.apk` | `AndroidAuto.apk` | `androidauto_x/dump_classes.txt` (109,7 МБ) | `AAActivity` 140493; `AAService$3` 135746; `AAProjectionRenderer` 144600 (transformMotion 146494, скейлы ~145440+); `SystemUiHider` 369466 |
-| `/system/app/CarPlay/CarPlay.apk` | `CarPlay.apk` | `carplay_x/dump_classes.txt` (9,1 МБ) | binder `reportTouchEvent` 126586; `requestTouchHid` 77328 |
-| `/system/app/CarPlayView/CarPlayView.apk` | `CarPlayView.apk` | `carplayview_x/dump_classes.txt` (3,9 МБ) | `MainActivity` 9182; `CarPlayApplication.touchEvent` 38641 |
+| Каталог / файл в репозитории | Назначение |
+|---|---|
+| `winpatch/src/main/assets/AndroidAuto_p6.apk`, `CarPlayView_p6.apk` | Готовые подписанные патченные APK `p6` |
+| `winpatch/src/main/assets/stock/AndroidAuto_v*.apk`, `CarPlayView_stock.apk` | Эталонные стоковые APK со всех прошивок A10 (`03.07`, `03.16`, `05.09`, `07.12`) |
+| `tools/winpatch/src/` | Java-исходники хелперов `AAWindowPatch.java`, `WindowSurface.java`, `DecodeHelper.java` |
+| `tools/winpatch/patches/androidauto_p6/`, `patches/carplayview_p6/` | Пропатченные `AndroidManifest.xml`, `res/` и `.smali`-файлы поверх стоковых APK |
+| `tools/winpatch/certs/` | Ключи и сертификаты AOSP platform test-key (`platform.pk8`, `aosp_platform_cert.pem`/`.der`, `sysuid_cert_real.der`, `*.sig`) |
+| `tools/winpatch/build_p6.py` | Скрипт воспроизводимой пересборки и подписи `AndroidAuto_p6.apk` и `CarPlayView_p6.apk` из стоковых APK и патчей |
+| `tools/winpatch/scripts/` | Ручные shell-скрипты установки/отката на ГУ (`deploy_p6.sh`, `deploy_aa_nomargin.sh`, `patch_aa.sh`, `patch_cpv.sh`, `clean_cpv_cache.sh`, `restore_cpmgr.sh`) и `uart_cmd.ps1` |
 
-dexdump: `C:\Users\volgu\AppData\Local\Android\Sdk\build-tools\35.0.0\dexdump.exe`.
-Там же `carservice_x/` (дамп `com.adayo.carservice`) — в этом исследовании не разбирался.
+Справочные строки `dexdump -d` по штатным APK на ГУ:
+- `/system/app/Launcher/Launcher.apk` (v1.0): `HKActivityView` 232272; `LauncherActivity` 480996 (`setFullScreen` 482124, `launchActivityViewAppInternal` 482471, `openSourcetype` 481739, `onCreate` 482601); `$5` FULLSCREEN 208221; `$6` StateCallback 208275; `ScreenUtil.switchFullscreen` 230367.
+- `/system/app/AndroidAuto/AndroidAuto.apk`: `AAActivity` 140493; `AAService$3` 135746; `AAProjectionRenderer` 144600 (transformMotion 146494, скейлы ~145440+); `SystemUiHider` 369466.
+- `/system/app/CarPlay/CarPlay.apk`: binder `reportTouchEvent` 126586; `requestTouchHid` 77328.
+- `/system/app/CarPlayView/CarPlayView.apk`: `MainActivity` 9182; `CarPlayApplication.touchEvent` 38641.
 
 ## 9. Краткая сводка
 

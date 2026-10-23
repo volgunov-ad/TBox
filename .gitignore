@@ -51,3 +51,10 @@ hu_perf_results/
 
 # R8 mapping.txt of published APKs (tools/build_ota_release.py), ~100 MB each
 release-mapping/
+
+# HU UART rescue runtime logs and large raw partition images (MD5SUMS.txt is tracked)
+tools/hu_rescue/logs/
+tools/hu_rescue/partitions_2026-10-20/*.img
+
+# Local apktool binary if placed in tools/winpatch/
+tools/winpatch/apktool.jar

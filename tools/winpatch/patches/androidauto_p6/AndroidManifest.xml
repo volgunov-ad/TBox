@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:compileSdkVersion="30" android:compileSdkVersionCodename="11" android:sharedUserId="android.uid.system" package="com.adayo.androidauto" platformBuildVersionCode="30" platformBuildVersionName="11">
+    <uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.OVERRIDE_WIFI_CONFIG"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.NFC"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL"/>
+    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS"/>
+    <uses-permission android:name="android.permission.READ_LOGS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
+    <uses-permission android:name="android.permission.READ_SETTINGS"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <permission android:name="com.adayo.permission"/>
+    <application android:allowBackup="true" android:extractNativeLibs="true" android:label="@string/app_name" android:name="com.adayo.androidauto.AndroidAutoApplication" android:theme="@android:style/Theme.Holo.Light.NoActionBar">
+        <activity android:icon="@mipmap/ic_launcher_settings" android:label="@string/title_activity_settings" android:launchMode="singleTask" android:name="com.google.android.projection.sink.settings.SettingsActivity"/>
+        <activity android:label="@string/title_activity_simulation_settings" android:name="com.google.android.projection.sink.settings.SimulationSettingsActivity" android:parentActivityName="com.google.android.projection.sink.settings.SettingsActivity">
+            <meta-data android:name="android.support.PARENT_ACTIVITY" android:value="com.google.android.projection.sink.settings.SettingsActivity"/>
+        </activity>
+        <receiver android:name="com.google.android.projection.sink.settings.SettingsBroadcastReceiver">
+            <intent-filter>
+                <action android:name="com.google.android.projection.sink.SETTINGS"/>
+            </intent-filter>
+        </receiver>
+        <activity android:icon="@mipmap/icon_launcher" android:label="@string/app_name" android:launchMode="singleTop" android:name="com.adayo.androidauto.ui.AAActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.adayo.intent.action.androidautoui"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.adayo.intent.action.btandroidautophone"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.adayo.intent.action.androidauto"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <meta-data android:name="adayoAction" android:value="com.adayo.intent.action.androidautoui"/>
+        </activity>
+        <service android:exported="true" android:name="com.adayo.androidauto.service.AAService">
+            <intent-filter>
+                <action android:name="com.adayo.androidauto.service"/>
+            </intent-filter>
+        </service>
+        <service android:exported="true" android:name="com.adayo.androidauto.depend.CustomPlatformAAService">
+            <intent-filter>
+                <action android:name="com.adayo.androidauto.service.customservice"/>
+            </intent-filter>
+        </service>
+        <receiver android:name="com.adayo.androidauto.receivers.BootCompletedReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.test"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+        </receiver>
+        <service android:exported="true" android:name="com.adayo.androidauto.apiservice.ApiService"/>
+    </application>
+</manifest>

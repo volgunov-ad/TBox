@@ -26,12 +26,18 @@
 param(
     [string]$Port = 'COM21',
     [int]$Baud = 921600,
-    [string]$DumpDir = 'D:\Dashing\Android10-VHAL\emmc_dump_2026-10-14',
+    [string]$DumpDir = '',
     [string]$LogDir = '',
     [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $DumpDir) {
+    $bundledGpt = Join-Path $PSScriptRoot 'gpt_2026-10-20'
+    if (Test-Path $bundledGpt) { $DumpDir = $bundledGpt }
+    else { $DumpDir = 'D:\Dashing\Android10-VHAL\emmc_dump_2026-10-14' }
+}
 
 $Mmc = '/dev/block/mmcblk0'
 $Work = '/cache/hu_rescue'
@@ -365,8 +371,7 @@ $script:Env = @{}
 
 function Open-Uart {
     if (-not $LogDir) {
-        if (Test-Path 'D:\Dashing\Android10-VHAL\uart_logs') { $script:LogDir = 'D:\Dashing\Android10-VHAL\uart_logs' }
-        else { $script:LogDir = Join-Path $env:USERPROFILE 'hu_rescue_logs' }
+        $script:LogDir = Join-Path $PSScriptRoot 'logs'
     }
     if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir | Out-Null }
     $script:LogPath = Join-Path $LogDir ('hu_rescue_{0:yyyyMMdd_HHmmss}.log' -f (Get-Date))
@@ -1017,7 +1022,8 @@ function Write-PartitionFromUsb {
     $name = (Read-Host 'Имя раздела (например recovery_a, boot-раздел kernel_b, misc)').Trim()
     if (-not $name -or $name -notmatch '^[A-Za-z0-9_]+$') { throw 'неверное имя раздела' }
     if ($name -in @('preloader', 'userdata')) { throw "«$name» так не пишется: preloader накрывает GPT, userdata — данные" }
-    $defLocal = Join-Path $DumpDir "$name.img"
+    $partDir = Join-Path $PSScriptRoot 'partitions_2026-10-20'
+    $defLocal = if (Test-Path (Join-Path $partDir "$name.img")) { Join-Path $partDir "$name.img" } else { Join-Path $DumpDir "$name.img" }
     $local = Read-Host "Тот же файл на ПК для сверки MD5 [$defLocal]"
     if (-not $local) { $local = $defLocal }
     if (-not (Test-Path $local)) { throw "нет файла $local" }

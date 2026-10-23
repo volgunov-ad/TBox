@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:compileSdkVersion="28" android:compileSdkVersionCodename="9" android:sharedUserId="android.uid.system" package="com.adayo.carplay.view" platformBuildVersionCode="157" platformBuildVersionName="2.2.9">
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <application android:allowBackup="true" android:exported="true" android:icon="@mipmap/apple_iocn_n" android:label="@string/app_name" android:name="com.adayo.carplay.view.CarPlayApplication" android:roundIcon="@mipmap/apple_iocn_n" android:supportsRtl="true" android:theme="@style/noAnimationTheme">
+        <service android:enabled="true" android:exported="true" android:name="com.adayo.carplay.view.service.CarPlayViewService"/>
+        <activity android:launchMode="singleTop" android:name="com.adayo.carplay.view.ui.activity.MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.adayo.intent.action.carplay"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.adayo.intent.action.carplayphone"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+            </intent-filter>
+            <meta-data android:name="adayoAction" android:value="com.adayo.intent.action.carplay"/>
+        </activity>
+    </application>
+</manifest>
