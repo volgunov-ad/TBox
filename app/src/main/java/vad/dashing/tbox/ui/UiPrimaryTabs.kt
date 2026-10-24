@@ -113,6 +113,7 @@ import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.GnssFreshness
 import vad.dashing.tbox.location.HeadingFallbackStatusRepository
 import vad.dashing.tbox.location.HeadingMotionDebug
 import vad.dashing.tbox.location.HeadingMotionDebugChannel
@@ -3555,9 +3556,18 @@ fun LocationTabContent(
                 )
             }
             item {
+                // Live receiver fix. geoDisplay.locateStatus stays true while retention
+                // holds the last point, which made this row say «да» after GNSS went silent.
+                val gnssFix = remember(locValues.locateStatus, locationUpdateTime, incomingBitRateTick) {
+                    GnssFreshness.hasLiveFix(
+                        locValues.locateStatus,
+                        locationUpdateTime?.time,
+                        System.currentTimeMillis(),
+                    )
+                }
                 StatusRow(
                     stringResource(R.string.location_fixation),
-                    if (geoDisplay.locateStatus) yesLabel else noLabel,
+                    if (gnssFix) yesLabel else noLabel,
                     labelColumnWidthPercent = 25,
                 )
             }
