@@ -240,4 +240,52 @@ class PhoneAndWheelHeadingTest {
         assertNull(PhoneTelemetryRepository.uiState.value.mountYawOffsetDeg)
         assertFalse(PhoneTelemetryRepository.isCompassUsable(1900L))
     }
+
+    @Test
+    fun phoneTelemetryRepository_offlinePreferredPhoneDoesNotBlockAuto() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = 40f,
+            bearingDeg = 100f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 50,
+        )
+        fun feed(idHex: String, at: Long) = PhoneTelemetryRepository.onPhoneLocation(
+            idHex = idHex,
+            name = null,
+            loc = loc.copy(latitude = if (idHex == "aabbccdd") 59.93 else 55.75),
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = at,
+            nowEpochMs = 1_700_000_000_000L + at,
+        )
+
+        // Preferring an offline phone must not make it active.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex("11223344")
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        // Back to Auto: another phone is accepted right away.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex(null)
+        feed("aabbccdd", 1_000L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+
+        // A second phone is ignored while the active one keeps streaming...
+        feed("11223344", 2_000L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        // ...but takes over once the active phone has been silent past the takeover timeout.
+        feed("11223344", 1_000L + PhoneTelemetryRepository.ACTIVE_PHONE_SILENT_TAKEOVER_MS + 1L)
+        assertEquals("11223344", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        assertEquals(55.75, PhoneTelemetryRepository.uiState.value.lastLocation!!.latitude, 1e-4)
+
+        // Explicit preference switches immediately.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex("aabbccdd")
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        feed("11223344", 20_000L)
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        feed("aabbccdd", 20_100L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+    }
 }

@@ -110,6 +110,7 @@ object PhoneTelemetryRepository {
     const val MAX_LOC_AGE_MS = 3_000L
     const val MAX_YAW_AGE_MS = 1_200L
     const val MAX_MAG_AGE_MS = 3_500L
+    const val ACTIVE_PHONE_SILENT_TAKEOVER_MS = 10_000L
 
     private const val COMPASS_MEDIAN_WINDOW = 5
     private const val MAX_MAG_FIELD_JUMP_UT = 12f
@@ -146,6 +147,7 @@ object PhoneTelemetryRepository {
     private var preferredPhoneIdHex: String? = null
     private var activePhoneIdHex: String? = null
     private var activePhoneName: String? = null
+    private var lastActivePhonePacketAtElapsedMs: Long = 0L
 
     private var lastLocation: PhoneBleCodec.PhoneLocation? = null
     private var lastLocAtElapsedMs: Long = 0L
@@ -189,8 +191,11 @@ object PhoneTelemetryRepository {
     fun setPreferredPhoneIdHex(idHex: String?) {
         synchronized(lock) {
             preferredPhoneIdHex = idHex?.trim()?.lowercase()?.ifEmpty { null }
-            if (preferredPhoneIdHex != null && activePhoneIdHex != preferredPhoneIdHex) {
-                activePhoneIdHex = preferredPhoneIdHex
+            val pref = preferredPhoneIdHex
+            // The preferred phone becomes active on its first accepted packet, not here:
+            // pinning an offline phone would block every other phone.
+            if (pref != null && activePhoneIdHex != null && activePhoneIdHex != pref) {
+                releaseActivePhoneLocked("preferred_phone_changed")
             }
             publishUiStateLocked()
         }
@@ -199,13 +204,18 @@ object PhoneTelemetryRepository {
     fun onPhoneDisconnected(idHex: String) {
         synchronized(lock) {
             if (activePhoneIdHex == idHex) {
-                activePhoneIdHex = null
-                activePhoneName = null
-                pendingYawNavDeltaDeg = 0.0
-                resetMountOffsetLocked("phone_disconnected")
+                releaseActivePhoneLocked("phone_disconnected")
                 publishUiStateLocked()
             }
         }
+    }
+
+    private fun releaseActivePhoneLocked(reason: String) {
+        activePhoneIdHex = null
+        activePhoneName = null
+        lastActivePhonePacketAtElapsedMs = 0L
+        pendingYawNavDeltaDeg = 0.0
+        resetMountOffsetLocked(reason)
     }
 
     fun resetSessionMountOffset() {
@@ -237,20 +247,23 @@ object PhoneTelemetryRepository {
         return mask
     }
 
-    private fun acceptsPhoneLocked(idHex: String, name: String?): Boolean {
+    private fun acceptsPhoneLocked(idHex: String, name: String?, nowElapsedMs: Long): Boolean {
         val pref = preferredPhoneIdHex
-        if (pref != null) {
-            if (idHex != pref) return false
-            activePhoneIdHex = idHex
-            if (!name.isNullOrBlank()) activePhoneName = name
-            return true
+        if (pref != null && idHex != pref) return false
+        val active = activePhoneIdHex
+        if (active != null && active != idHex) {
+            // Auto: a phone that went silent without a clean disconnect must not block others.
+            val silentMs = nowElapsedMs - lastActivePhonePacketAtElapsedMs
+            if (pref != null || lastActivePhonePacketAtElapsedMs <= 0L || silentMs > ACTIVE_PHONE_SILENT_TAKEOVER_MS) {
+                releaseActivePhoneLocked("active_phone_switched")
+            } else {
+                return false
+            }
         }
-        if (activePhoneIdHex == null || activePhoneIdHex == idHex) {
-            activePhoneIdHex = idHex
-            if (!name.isNullOrBlank()) activePhoneName = name
-            return true
-        }
-        return false
+        activePhoneIdHex = idHex
+        lastActivePhonePacketAtElapsedMs = nowElapsedMs
+        if (!name.isNullOrBlank()) activePhoneName = name
+        return true
     }
 
     fun onPhoneLocation(
@@ -263,7 +276,7 @@ object PhoneTelemetryRepository {
     ) {
         var toPublish: LocValues? = null
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             lastLocation = loc
             lastLocAtElapsedMs = nowElapsedMs
             val fixEpochMs = (nowEpochMs - loc.fixAgeMs.toLong().coerceAtLeast(0L)).coerceAtLeast(0L)
@@ -309,7 +322,7 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ) {
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             updateClockOffsetLocked(nowElapsedMs, sample.monoLowMs)
             lastYawAtElapsedMs = nowElapsedMs
             if (sample.mountMoved) {
@@ -358,7 +371,7 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ) {
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             updateClockOffsetLocked(nowElapsedMs, sample.monoLowMs)
             lastMagAtElapsedMs = nowElapsedMs
             lastMagAzimuthDeg = sample.magneticAzimuthDeg
@@ -620,6 +633,7 @@ object PhoneTelemetryRepository {
             preferredPhoneIdHex = null
             activePhoneIdHex = null
             activePhoneName = null
+            lastActivePhonePacketAtElapsedMs = 0L
             lastLocation = null
             lastLocAtElapsedMs = 0L
             lastLocValues = null
