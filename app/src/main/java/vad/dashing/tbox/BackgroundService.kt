@@ -2460,11 +2460,6 @@ class BackgroundService : Service() {
                 if (generation != serviceStartupGeneration || !isActive || !isRunning) {
                     return@launch
                 }
-                runCatching {
-                    val savedCanMode = settingsManager.headUnitCanModeFlow.first()
-                    UniversalCanRepository.setMode(savedCanMode)
-                    vad.dashing.tbox.drsensor.DrSensorRepository.onHeadUnitModeChanged()
-                }
                 val newEngine = AutomationEngine(
                     context = this@BackgroundService,
                     settingsManager = settingsManager,

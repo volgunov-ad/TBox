@@ -77,12 +77,10 @@ class AutomationConditionWaitTest {
             pollMillis = 250L,
         )
     @Test
-    fun canStartupReadiness_waitsAndWarmsUpUntilAvailable() = runBlocking {
+    fun canStartupReadiness_waitsUntilAvailable() = runBlocking {
         var now = 0L
-        var warmUps = 0
         val ready = awaitCanBackendReadyForAction(
             isAvailable = { now >= 750L },
-            warmUp = { warmUps += 1 },
             nowElapsedMillis = { now },
             delayFor = { now += it },
             timeoutMs = 15_000L,
@@ -90,14 +88,12 @@ class AutomationConditionWaitTest {
         )
         assertTrue(ready)
         assertEquals(750L, now)
-        assertTrue(warmUps >= 1)
     }
 
     @Test
     fun canStartupRetry_retriesTransientUnavailableAndPreReadFailures() = runBlocking {
         var now = 0L
         var attempts = 0
-        var warmUps = 0
         val outcomes = listOf(
             vad.dashing.tbox.mbcan.MbCanCommandResult(false, "mbCAN unavailable"),
             vad.dashing.tbox.mbcan.MbCanCommandResult(false, "Pre-read failed"),
@@ -109,7 +105,6 @@ class AutomationConditionWaitTest {
                 attempts += 1
                 next
             },
-            warmUp = { warmUps += 1 },
             nowElapsedMillis = { now },
             delayFor = { now += it },
             retryWindowMs = 12_000L,
@@ -117,7 +112,6 @@ class AutomationConditionWaitTest {
         )
         assertTrue(result.success)
         assertEquals(3, attempts)
-        assertEquals(2, warmUps)
         assertEquals(1_000L, now)
     }
 
@@ -130,7 +124,6 @@ class AutomationConditionWaitTest {
                 attempts += 1
                 vad.dashing.tbox.mbcan.MbCanCommandResult(false, "Value 99 is not allowed")
             },
-            warmUp = {},
             nowElapsedMillis = { now },
             delayFor = { now += it },
             retryWindowMs = 12_000L,

@@ -118,7 +118,6 @@ object AutomationCruiseActions {
             isAvailable = {
                 UniversalCanRepository.availability.value is MbCanAvailability.Available
             },
-            warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
             nowElapsedMillis = { SystemClock.elapsedRealtime() },
             delayFor = { delay(it) },
         )
@@ -149,7 +148,6 @@ object AutomationCruiseActions {
                         MbCanCommandResult(false, "Не действие круиза")
                 }
             },
-            warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
             nowElapsedMillis = { SystemClock.elapsedRealtime() },
             delayFor = { delay(it) },
         )

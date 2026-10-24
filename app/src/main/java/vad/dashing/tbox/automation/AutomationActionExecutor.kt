@@ -130,7 +130,6 @@ class AutomationActionExecutor(
                     isAvailable = {
                         UniversalCanRepository.availability.value is MbCanAvailability.Available
                     },
-                    warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
                     nowElapsedMillis = { SystemClock.elapsedRealtime() },
                     delayFor = { delay(it) },
                 )
@@ -190,7 +189,6 @@ class AutomationActionExecutor(
                 }
                 val result = executeCanWithStartupRetry(
                     execute = { UniversalCanRepository.execute(command) },
-                    warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
                     nowElapsedMillis = { SystemClock.elapsedRealtime() },
                     delayFor = { delay(it) },
                 )
@@ -534,7 +532,6 @@ class AutomationActionExecutor(
                     isAvailable = {
                         UniversalCanRepository.availability.value is MbCanAvailability.Available
                     },
-                    warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
                     nowElapsedMillis = { SystemClock.elapsedRealtime() },
                     delayFor = { delay(it) },
                 )
@@ -824,14 +821,11 @@ class AutomationActionExecutor(
 
 internal suspend fun awaitCanBackendReadyForAction(
     isAvailable: () -> Boolean,
-    warmUp: suspend () -> Unit,
     nowElapsedMillis: () -> Long,
     delayFor: suspend (Long) -> Unit,
     timeoutMs: Long = AutomationActionExecutor.CAN_READY_WAIT_TIMEOUT_MS,
     pollMs: Long = AutomationActionExecutor.CAN_READY_POLL_MS,
 ): Boolean {
-    if (isAvailable()) return true
-    warmUp()
     if (isAvailable()) return true
     if (timeoutMs <= 0L) return false
     val deadline = nowElapsedMillis() + timeoutMs
@@ -839,8 +833,6 @@ internal suspend fun awaitCanBackendReadyForAction(
         val remaining = deadline - nowElapsedMillis()
         if (remaining <= 0L) return isAvailable()
         delayFor(min(pollMs, remaining))
-        if (isAvailable()) return true
-        warmUp()
         if (isAvailable()) return true
     }
 }
@@ -860,7 +852,6 @@ internal fun isTransientCanStartupFailure(message: String): Boolean {
 
 internal suspend fun executeCanWithStartupRetry(
     execute: suspend () -> MbCanCommandResult,
-    warmUp: suspend () -> Unit,
     nowElapsedMillis: () -> Long,
     delayFor: suspend (Long) -> Unit,
     retryWindowMs: Long = AutomationActionExecutor.CAN_EXEC_RETRY_WINDOW_MS,
@@ -875,7 +866,6 @@ internal suspend fun executeCanWithStartupRetry(
         val remaining = deadline - nowElapsedMillis()
         if (remaining <= 0L) break
         delayFor(min(retryDelayMs, remaining))
-        warmUp()
         result = execute()
     }
     return result
