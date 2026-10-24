@@ -1120,12 +1120,9 @@ class AutomationEvaluatorTest {
         assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
         assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
         assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L)))
-        assertEquals(
-            "tunnel_exit",
-            exitEval.onSignalSample(
-                sample(AutomationSignalValue.State("off"), 5_000L),
-            )?.triggerId,
-        )
+        val exitAfterGap = exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L))
+        assertEquals("tunnel_exit", exitAfterGap?.triggerId)
+        assertEquals(AutomationSignalValue.State("on"), exitAfterGap?.oldValue)
 
         // Direct off -> on -> off transitions also fire once each.
         assertEquals(
