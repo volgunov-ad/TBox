@@ -189,6 +189,7 @@ class PhoneDirectServer(
         } finally {
             closeQuietly(link.socket)
             links -= link
+            if (host.takeCountersDirty()) saveRecords()
             val disconnectedId = link.phoneIdHex
             if (disconnectedId != null) {
                 if (links.none { it.phoneIdHex == disconnectedId }) {
@@ -208,6 +209,7 @@ class PhoneDirectServer(
             PhoneDirectHost.Result.Accepted -> link.lastValidAt = SystemClock.elapsedRealtime()
             is PhoneDirectHost.Result.Command -> {
                 bind(link, result.idHex)
+                if (host.takeCommandCounterDirty()) saveRecords()
                 // The cached state predates this command.
                 snapMutex.withLock { cachedSnap = null }
                 try {
@@ -368,8 +370,9 @@ class PhoneDirectServer(
                 val limit = if (link.phoneIdHex == null) STRANGER_IDLE_MS else LINK_IDLE_MS
                 if (now - link.lastValidAt >= limit) closeQuietly(link.socket)
             }
-            // A counter write per refresh would wear the flash; replay of the last few
-            // seconds after a power cut is the accepted cost, as on the companion.
+            // Telemetry arrives several times a second while driving; a write per packet, or
+            // even every few seconds, would wear the flash. Commands are saved at once, so a
+            // power cut can only reopen replay of recent refresh and telemetry packets.
             if (now - lastSaveAt >= COUNTER_SAVE_MS && host.takeCountersDirty()) {
                 saveRecords()
                 lastSaveAt = now
@@ -409,7 +412,7 @@ class PhoneDirectServer(
         const val STRANGER_IDLE_MS = 20_000L
         /** The phone refreshes about every 2 s while its screen is open. */
         const val LINK_IDLE_MS = 30_000L
-        const val COUNTER_SAVE_MS = 10_000L
+        const val COUNTER_SAVE_MS = 300_000L
         const val TELEMETRY_ACK_INTERVAL_MS = 4_500L
     }
 }
