@@ -76,6 +76,10 @@ class AutomationConditionWaitTest {
             delayFor = { now += it },
             pollMillis = 250L,
         )
+        assertTrue(ready)
+        assertEquals(750L, now)
+    }
+
     @Test
     fun canStartupReadiness_waitsUntilAvailable() = runBlocking {
         var now = 0L
