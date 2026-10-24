@@ -540,15 +540,19 @@ private fun StateTriggerFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val descriptor = AutomationSignalCatalog.get(signal)
             onChange(
                 trigger.copy(
                     signal = signal,
                     source = AutomationSignalCatalog.resolveSource(signal, trigger.source),
-                    expectedState = automationExpectedStateForSignal(
+                    expectedState = automationTriggerExpectedStateForSignal(
                         signal,
                         trigger.expectedState,
                     ),
+                    startupBehavior = if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                        AutomationStartupBehavior.INITIALIZE_ONLY
+                    } else {
+                        trigger.startupBehavior
+                    },
                 ),
             )
         },
@@ -572,7 +576,7 @@ private fun StateTriggerFields(
                     label = "Состояние",
                     value = trigger.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
-                    optionLabel = { automationStateLabel(trigger.signal, it) },
+                    optionLabel = { automationTriggerStateLabel(trigger.signal, it) },
                     onValueChange = { onChange(trigger.copy(expectedState = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -608,8 +612,10 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
-    StartupBehaviorField(trigger.startupBehavior) {
-        onChange(trigger.copy(startupBehavior = it))
+    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL) {
+        StartupBehaviorField(trigger.startupBehavior) {
+            onChange(trigger.copy(startupBehavior = it))
+        }
     }
 }
 

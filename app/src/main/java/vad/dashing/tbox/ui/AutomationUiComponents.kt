@@ -951,6 +951,9 @@ internal fun automationStateLabel(value: String): String =
 internal fun automationStateLabel(signal: AutomationSignalId, value: String): String =
     AutomationSignalCatalog.stateOptionLabel(signal, value)
 
+internal fun automationTriggerStateLabel(signal: AutomationSignalId, value: String): String =
+    AutomationSignalCatalog.triggerStateOptionLabel(signal, value)
+
 @Composable
 private fun GeofenceConditionFields(
     condition: AutomationCondition.Geofence,
@@ -1227,6 +1230,15 @@ internal fun automationExpectedStateForSignal(
     if (signal == AutomationSignalId.FOREGROUND_APP) return ""
     if (signal == AutomationSignalId.WIFI_SSID) return WifiStaSsid.NONE
     return AutomationSignalCatalog.get(signal).stateOptions.firstOrNull() ?: previous
+}
+
+internal fun automationTriggerExpectedStateForSignal(
+    signal: AutomationSignalId,
+    previous: String,
+): String {
+    if (signal == AutomationSignalId.FOREGROUND_APP) return ""
+    if (signal == AutomationSignalId.WIFI_SSID) return WifiStaSsid.NONE
+    return AutomationSignalCatalog.defaultTriggerStateOption(signal) ?: previous
 }
 
 @Composable

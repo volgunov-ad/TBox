@@ -153,7 +153,7 @@ class AutomationRoadMatchSignalsTest {
     }
 
     @Test
-    fun tunnelOptionLabels_useInsideOutsideCopy() {
+    fun tunnelOptionLabels_useInsideOutsideForCondition_andEnterExitForTrigger() {
         assertEquals(
             "В тоннеле / Inside",
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
@@ -161,6 +161,18 @@ class AutomationRoadMatchSignalsTest {
         assertEquals(
             "Вне тоннеля / Outside",
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
+        )
+        assertEquals(
+            "Въезд в тоннель / Enter tunnel",
+            AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
+        )
+        assertEquals(
+            "Выезд из тоннеля / Exit tunnel",
+            AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
+        )
+        assertEquals(
+            "on",
+            AutomationSignalCatalog.defaultTriggerStateOption(AutomationSignalId.ROAD_TUNNEL),
         )
         assertEquals(
             "Дорога: тоннель",
