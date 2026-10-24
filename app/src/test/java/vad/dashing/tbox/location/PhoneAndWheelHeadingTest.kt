@@ -216,10 +216,16 @@ class PhoneAndWheelHeadingTest {
 
     @Test
     fun lateralAccelerationDomain_decodesMbCanAndVhal() {
-        assertEquals(1.25f, LateralAccelerationDomain.decodeMbCanFloat(1.25f)!!, 1e-4f)
+        val g = LateralAccelerationDomain.STANDARD_GRAVITY_MPS2
+        assertEquals(0.25f * g, LateralAccelerationDomain.decodeMbCanFloat(0.25f)!!, 1e-4f)
+        assertEquals(-0.305f * g, LateralAccelerationDomain.decodeMbCanFloat(-0.305f)!!, 1e-4f)
+        assertNull(LateralAccelerationDomain.decodeMbCanFloat(532899.56f))
         assertEquals(0.0f, LateralAccelerationDomain.decodeVhalRaw(2000)!!, 1e-3f)
-        assertEquals(0.5f, LateralAccelerationDomain.decodeVhalRaw(2500)!!, 1e-3f)
+        assertEquals(0.5f * g, LateralAccelerationDomain.decodeVhalRaw(2500)!!, 1e-3f)
+        assertEquals(-0.3f * g, LateralAccelerationDomain.decodeVhalRaw(-0.3f)!!, 1e-3f)
         assertNull(LateralAccelerationDomain.decodeVhalRaw(0xFFFF))
+        assertEquals(0.1f * g, LateralAccelerationDomain.gToMps2(0.1f)!!, 1e-4f)
+        assertNull(LateralAccelerationDomain.gToMps2(3f))
     }
 
     @Test
