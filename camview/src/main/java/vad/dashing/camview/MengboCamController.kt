@@ -50,7 +50,9 @@ data class CamUiState(
     val lastMeta: String = "Кадров пока нет",
     val statusLine: String = "Готов к подключению",
     val logs: List<String> = emptyList(),
-    val bitmap: Bitmap? = null,
+    /** Bumped on every published frame; read the pixels with [MengboCamController.acquireFrame]. */
+    val frameVersion: Long = 0,
+    val hasFrame: Boolean = false,
     val windowWidthDp: Int = 720,
     val windowHeightDp: Int = 450,
     val offsetXDp: Int = 20,
@@ -67,8 +69,16 @@ class MengboCamController {
     private var mbOms: MBOms? = null
     private var mbDms: MBDms? = null
 
-    private val frameSlots = arrayOfNulls<Bitmap>(2)
-    private var nextSlotIndex = 0
+    /**
+     * Decoded frames are written into reused bitmaps. A slot is never rewritten while it is
+     * the latest published frame or acquired by a consumer (screen, overlay), so the decoder
+     * cannot overwrite pixels that are about to be drawn.
+     */
+    private val frameSlots = arrayOfNulls<Bitmap>(FRAME_SLOTS)
+    private val slotLock = Any()
+    private val decodeLock = Any()
+    private var latestFrame: Bitmap? = null
+    private val acquiredFrames = HashMap<String, Bitmap>()
     private var fpsWindowStartMs: Long = 0L
     private var fpsFramesInWindow: Int = 0
     private val timeFmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
@@ -280,8 +290,10 @@ class MengboCamController {
         )
         appendLog(msg)
         if (bmp != null) {
+            synchronized(slotLock) { latestFrame = bmp }
             _state.value = _state.value.copy(
-                bitmap = bmp,
+                frameVersion = _state.value.frameVersion + 1,
+                hasFrame = true,
                 frameCount = _state.value.frameCount + 1,
                 lastMeta = "SHM ${width}x${height} off=$offset (${path.substringAfterLast('/')})",
                 statusLine = msg
@@ -291,6 +303,25 @@ class MengboCamController {
         }
     }
 
+    /** Latest frame, held for [consumer] until its next acquire or [releaseFrame]. */
+    fun acquireFrame(consumer: String): Bitmap? = synchronized(slotLock) {
+        val frame = latestFrame
+        if (frame != null) acquiredFrames[consumer] = frame else acquiredFrames.remove(consumer)
+        frame
+    }
+
+    fun releaseFrame(consumer: String) {
+        synchronized(slotLock) { acquiredFrames.remove(consumer) }
+    }
+
+    private fun freeSlotIndex(): Int = synchronized(slotLock) {
+        frameSlots.indices.first { index ->
+            val slot = frameSlots[index]
+            slot == null || (slot !== latestFrame && acquiredFrames.values.none { it === slot })
+        }
+    }
+
+    /** AVM, OMS and DMS call back on their own native threads. */
     private fun onRawFrame(
         source: String,
         buf: ByteBuffer,
@@ -300,7 +331,7 @@ class MengboCamController {
         imageSize: Int,
         colorFmt: Int,
         frameNum: Int
-    ) {
+    ) = synchronized(decodeLock) {
         val now = System.currentTimeMillis()
         if (fpsWindowStartMs == 0L) {
             fpsWindowStartMs = now
@@ -317,7 +348,7 @@ class MengboCamController {
             _state.value.fps
         }
 
-        val slot = nextSlotIndex
+        val slot = freeSlotIndex()
         val bmp = FrameDecoder.decodeToBitmap(
             buf = buf,
             width = width,
@@ -329,19 +360,23 @@ class MengboCamController {
             reuseBitmap = frameSlots[slot]
         )
         if (bmp != null) {
-            frameSlots[slot] = bmp
-            nextSlotIndex = (slot + 1) % frameSlots.size
+            synchronized(slotLock) {
+                frameSlots[slot] = bmp
+                latestFrame = bmp
+            }
         }
         val total = _state.value.frameCount + 1
         val meta = "$source #$frameNum | ${width}x${height} stride=$stride size=$imageSize fmt=$colorFmt cap=${buf.capacity()}"
         if (total == 1L || total % 30L == 0L) {
             appendLog("Кадр $meta")
         }
-        _state.value = _state.value.copy(
+        val current = _state.value
+        _state.value = current.copy(
             frameCount = total,
             fps = currentFps,
             lastMeta = meta,
-            bitmap = bmp ?: _state.value.bitmap
+            frameVersion = if (bmp != null) current.frameVersion + 1 else current.frameVersion,
+            hasFrame = current.hasFrame || bmp != null
         )
     }
 
@@ -356,5 +391,13 @@ class MengboCamController {
         val stamp = timeFmt.format(Date())
         val updated = (_state.value.logs + "[$stamp] $line").takeLast(60)
         _state.value = _state.value.copy(logs = updated)
+    }
+
+    companion object {
+        const val CONSUMER_SCREEN = "screen"
+        const val CONSUMER_OVERLAY = "overlay"
+
+        /** Latest frame + one per consumer + one being decoded. */
+        private const val FRAME_SLOTS = 4
     }
 }

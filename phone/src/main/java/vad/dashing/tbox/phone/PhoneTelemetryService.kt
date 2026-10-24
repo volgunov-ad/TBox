@@ -2,12 +2,12 @@ package vad.dashing.tbox.phone
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -37,6 +37,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneSensorMath
@@ -164,6 +165,7 @@ object PhoneSessionController {
     fun onUiStarted(context: Context, permissionsReady: Boolean) {
         val r = ensureInitialized(context)
         uiVisible = true
+        r.foreground = true
         r.storeKey = store.key
         if (permissionsReady) {
             r.start()
@@ -174,6 +176,7 @@ object PhoneSessionController {
 
     fun onUiStopped(context: Context) {
         uiVisible = false
+        router?.foreground = false
         val st = store
         if (!st.anyTelemetryEnabled) {
             mainHandler.removeCallbacks(bgTickRunnable)
@@ -305,10 +308,13 @@ class PhoneTelemetryStreamer(
     private var settledMountGravity: PhoneSensorMath.Vec3? = null
     private var windowAccelAnomaly = false
     private var mountMovedPending = false
+    private var mountTiltSinceElapsedMs = 0L
+    private var hasGravitySensor = false
 
     // Gyro window integration (150 ms)
-    private var lastGyroSampleElapsedMs = 0L
-    private var windowStartElapsedMs = 0L
+    /** `SensorEvent.timestamp` (ns) of the last gyro sample and of the current window start. */
+    private var lastGyroEventNs = 0L
+    private var windowStartEventNs = 0L
     private var windowAccumPsiDeg = 0.0
 
     // Magnetometer state (1000 ms)
@@ -341,7 +347,7 @@ class PhoneTelemetryStreamer(
                 longitude = location.longitude,
                 horizontalAccuracyM = if (location.hasAccuracy()) location.accuracy else null,
                 altitudeM = if (location.hasAltitude()) location.altitude.toFloat() else null,
-                speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f,
+                speedKmh = if (location.hasSpeed()) location.speed * 3.6f else null,
                 bearingDeg = if (location.hasBearing()) location.bearing else null,
                 usedSatellites = usedSats,
                 visibleSatellites = maxOf(visibleSats, usedSats),
@@ -373,7 +379,7 @@ class PhoneTelemetryStreamer(
                         event.values[1],
                         event.values[2],
                     )
-                    onGravityVector(g)
+                    onGravityVector(g, nowElapsedMs)
                 }
                 Sensor.TYPE_ACCELEROMETER -> {
                     val ax = event.values[0]
@@ -384,7 +390,9 @@ class PhoneTelemetryStreamer(
                     if (abs(norm - PhoneSensorMath.STANDARD_GRAVITY_MPS2) > 3.5f) {
                         windowAccelAnomaly = true
                     }
-                    // Low-pass filter accelerometer into gravity when TYPE_GRAVITY is absent or alongside it
+                    // The low-passed accelerometer is the apparent vertical (includes braking and
+                    // cornering), so it may only stand in for gravity when TYPE_GRAVITY is absent.
+                    if (hasGravitySensor) return
                     val prev = latestGravity
                     val filtered = if (prev == null) {
                         raw
@@ -395,7 +403,7 @@ class PhoneTelemetryStreamer(
                             prev.z * 0.85f + az * 0.15f,
                         )
                     }
-                    onGravityVector(filtered)
+                    onGravityVector(filtered, nowElapsedMs)
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     if (!gyroActive) return
@@ -406,20 +414,24 @@ class PhoneTelemetryStreamer(
                         event.values[2],
                     )
                     val rateDegPerSec = PhoneSensorMath.projectYawRateDegPerSec(gyro, g) ?: return
-                    if (windowStartElapsedMs == 0L) {
-                        windowStartElapsedMs = nowElapsedMs
-                        lastGyroSampleElapsedMs = nowElapsedMs
+                    // Callbacks run on the main looper and arrive in bursts after UI stalls;
+                    // the event timestamp is when the sample was actually taken.
+                    val eventNs = event.timestamp
+                    if (windowStartEventNs == 0L || eventNs <= lastGyroEventNs) {
+                        windowStartEventNs = eventNs
+                        lastGyroEventNs = eventNs
                         windowStartGravity = g
                         windowAccumPsiDeg = 0.0
                         return
                     }
-                    val dtSec = ((nowElapsedMs - lastGyroSampleElapsedMs) / 1000.0).coerceIn(0.0, 0.25)
-                    lastGyroSampleElapsedMs = nowElapsedMs
+                    val dtSec = ((eventNs - lastGyroEventNs) / 1e9).coerceIn(0.0, 0.25)
+                    lastGyroEventNs = eventNs
                     windowAccumPsiDeg += rateDegPerSec * dtSec
 
-                    val windowDtMs = (nowElapsedMs - windowStartElapsedMs).toInt()
+                    val windowDtMs = ((eventNs - windowStartEventNs) / 1_000_000L).toInt()
                     if (windowDtMs >= YAW_WINDOW_MS) {
                         flushYawWindow(nowElapsedMs, windowDtMs, g)
+                        windowStartEventNs = eventNs
                     }
                 }
                 Sensor.TYPE_MAGNETIC_FIELD -> {
@@ -444,17 +456,26 @@ class PhoneTelemetryStreamer(
         }
     }
 
-    private fun onGravityVector(g: PhoneSensorMath.Vec3) {
+    private fun onGravityVector(g: PhoneSensorMath.Vec3, nowElapsedMs: Long) {
         latestGravity = g
         val settled = settledMountGravity
         if (settled == null) {
             settledMountGravity = g
-        } else {
-            val tiltFromMount = PhoneSensorMath.angleBetweenDeg(settled, g)
-            if (tiltFromMount > PhoneSensorMath.MOUNT_MOVED_GRAVITY_TILT_DEG) {
-                mountMovedPending = true
-                settledMountGravity = g
-            }
+            mountTiltSinceElapsedMs = 0L
+            return
+        }
+        val tiltFromMount = PhoneSensorMath.angleBetweenDeg(settled, g)
+        if (tiltFromMount <= PhoneSensorMath.MOUNT_MOVED_GRAVITY_TILT_DEG) {
+            mountTiltSinceElapsedMs = 0L
+            return
+        }
+        // A real mount change persists; a stop or a turn tilts the estimate only briefly.
+        if (mountTiltSinceElapsedMs == 0L) {
+            mountTiltSinceElapsedMs = nowElapsedMs
+        } else if (nowElapsedMs - mountTiltSinceElapsedMs >= MOUNT_MOVED_CONFIRM_MS) {
+            mountMovedPending = true
+            settledMountGravity = g
+            mountTiltSinceElapsedMs = 0L
         }
     }
 
@@ -476,7 +497,6 @@ class PhoneTelemetryStreamer(
             mountMoved = moved,
             gravDeltaMg = gravDeltaMg,
         )
-        windowStartElapsedMs = nowElapsedMs
         windowStartGravity = currentGravity
         windowAccumPsiDeg = 0.0
         windowAccelAnomaly = false
@@ -565,17 +585,17 @@ class PhoneTelemetryStreamer(
             runCatching { sm.unregisterListener(sensorListener) }
             sensorListenerRegistered = false
         }
-        windowStartElapsedMs = 0L
-        lastGyroSampleElapsedMs = 0L
+        windowStartEventNs = 0L
+        lastGyroEventNs = 0L
         windowAccumPsiDeg = 0.0
         windowAccelAnomaly = false
         if (!gyroActive && !compassActive) return
 
         val gravitySensor = sm.getDefaultSensor(Sensor.TYPE_GRAVITY)
         val accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (gravitySensor != null) {
+        hasGravitySensor = gravitySensor != null &&
             sm.registerListener(sensorListener, gravitySensor, SensorManager.SENSOR_DELAY_GAME)
-        }
+        mountTiltSinceElapsedMs = 0L
         if (accelSensor != null) {
             sm.registerListener(sensorListener, accelSensor, SensorManager.SENSOR_DELAY_GAME)
         }
@@ -597,6 +617,8 @@ class PhoneTelemetryStreamer(
         private const val LOC_PERIOD_MS = 1_000L
         private const val YAW_WINDOW_MS = 150
         private const val MAG_PERIOD_MS = 1_000L
+        /** Tilt beyond MOUNT_MOVED_GRAVITY_TILT_DEG must persist this long to count as a mount move. */
+        private const val MOUNT_MOVED_CONFIRM_MS = 3_000L
 
         fun hasFineLocationPermission(context: Context): Boolean =
             context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
@@ -619,15 +641,17 @@ class PhoneTelemetryStreamer(
 class PhoneTelemetryService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Foreground service type currently held, or `null` before the first `startForeground`. */
+    private var promotedFgsType: Int? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val store = PhoneStore(this)
-        if (!store.anyTelemetryEnabled) {
+        // Every start comes from startForegroundService: startForeground must run before any
+        // stopSelf, otherwise the system kills the app ("did not then call startForeground").
+        val promoted = promoteToForeground(store)
+        if (!promoted || !store.anyTelemetryEnabled) {
             PhoneSessionController.onServiceStopped()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (!promoteToForeground(store)) {
-            PhoneSessionController.onServiceStopped()
+            if (promoted) stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -636,11 +660,62 @@ class PhoneTelemetryService : Service() {
     }
 
     override fun onDestroy() {
+        promotedFgsType = null
         PhoneSessionController.onServiceStopped()
         super.onDestroy()
     }
 
+    @RequiresApi(29)
+    private fun desiredFgsType(store: PhoneStore): Int {
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        // Android 14 only needs the while-in-use grant when the location type is started from
+        // the foreground; background starts without ACCESS_BACKGROUND_LOCATION fall back below.
+        if (store.anyTelemetryEnabled && store.shareLocation &&
+            PhoneTelemetryStreamer.hasFineLocationPermission(this)
+        ) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        }
+        return type
+    }
+
     private fun promoteToForeground(store: PhoneStore): Boolean {
+        val desired = if (Build.VERSION.SDK_INT >= 29) desiredFgsType(store) else 0
+        val current = promotedFgsType
+        if (current == desired) return true
+        val notification = buildNotification()
+        if (tryStartForeground(notification, desired)) {
+            promotedFgsType = desired
+            return true
+        }
+        // Already foreground (e.g. the location type was granted while the UI was visible and
+        // a background re-promote was refused): keep what we hold instead of stopping.
+        if (current != null) return true
+        // Android 14+ background start without a location grant: connectedDevice alone keeps
+        // gyro/compass streaming.
+        if (Build.VERSION.SDK_INT >= 29) {
+            val fallback = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            if (desired != fallback && tryStartForeground(notification, fallback)) {
+                promotedFgsType = fallback
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun tryStartForeground(notification: Notification, fgsType: Int): Boolean =
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIFICATION_ID, notification, fgsType)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground(type=$fgsType) failed: ${e.message}")
+            false
+        }
+
+    private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -655,54 +730,13 @@ class PhoneTelemetryService : Service() {
             Intent(this, PhoneActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.telemetry_notification_text))
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
-
-        return try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                var fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                val canUseLocationFgs = store.shareLocation &&
-                    PhoneTelemetryStreamer.hasFineLocationPermission(this) &&
-                    PhoneTelemetryStreamer.hasBackgroundLocationPermission(this)
-                if (canUseLocationFgs) {
-                    fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                }
-                startForeground(NOTIFICATION_ID, notification, fgsType)
-            } else if (Build.VERSION.SDK_INT >= 29) {
-                var fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                if (store.shareLocation && PhoneTelemetryStreamer.hasFineLocationPermission(this)) {
-                    fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                }
-                startForeground(NOTIFICATION_ID, notification, fgsType)
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-            true
-        } catch (e: Exception) {
-            // Fallback on Android 14+ when started from background without location grant:
-            // keep connectedDevice FGS so gyro/compass still work.
-            if (Build.VERSION.SDK_INT >= 29) {
-                runCatching {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                    )
-                    true
-                }.getOrElse {
-                    Log.w(TAG, "startForeground failed: ${it.message}")
-                    false
-                }
-            } else {
-                Log.w(TAG, "startForeground failed: ${e.message}")
-                false
-            }
-        }
     }
 
     companion object {
@@ -716,6 +750,10 @@ class PhoneTelemetryService : Service() {
                 stop(app)
                 return
             }
+            if (!canHoldConnectedDeviceFgs(app)) {
+                Log.w(TAG, "BLUETOOTH_CONNECT not granted: telemetry service not started")
+                return
+            }
             val intent = Intent(app, PhoneTelemetryService::class.java)
             runCatching {
                 app.startForegroundService(intent)
@@ -723,6 +761,12 @@ class PhoneTelemetryService : Service() {
                 Log.w(TAG, "startForegroundService failed: ${e.message}")
             }
         }
+
+        /** Android 14+ refuses the connectedDevice FGS type without a Bluetooth runtime grant. */
+        private fun canHoldConnectedDeviceFgs(context: Context): Boolean =
+            Build.VERSION.SDK_INT < 34 ||
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
 
         fun stop(context: Context) {
             val app = context.applicationContext
@@ -736,7 +780,10 @@ class PhoneTelemetryService : Service() {
 /**
  * Wakes the phone app when the associated head-unit Bluetooth device appears in range,
  * **only** when at least one telemetry toggle is enabled in [PhoneStore].
+ *
+ * `CompanionDeviceService` exists since API 31; older systems never bind this manifest entry.
  */
+@RequiresApi(31)
 class PhoneCompanionDeviceService : CompanionDeviceService() {
     @Deprecated("Deprecated in API 33")
     override fun onDeviceAppeared(address: String) {
@@ -765,8 +812,15 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
         val store = PhoneStore(context)
         if (!store.anyTelemetryEnabled) return
         when (intent?.action) {
-            BluetoothDevice.ACTION_ACL_CONNECTED,
-            BluetoothAdapter.ACTION_STATE_CHANGED,
+            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                // Headphones and watches connect too; only the known head unit should wake us.
+                val known = store.directAddress
+                @Suppress("DEPRECATION")
+                val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                if (known.isNullOrBlank() || device?.address.equals(known, ignoreCase = true)) {
+                    PhoneTelemetryService.startOrUpdate(context)
+                }
+            }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 PhoneTelemetryService.startOrUpdate(context)
@@ -798,6 +852,21 @@ object PhoneSystemHelpers {
         }
     }
 
+    /**
+     * Android 12 has no `onAssociationCreated`; the chosen device only comes back in the
+     * chooser result, so presence observation is armed here for API 31–32.
+     */
+    fun onCompanionAssociationResult(context: Context, resultCode: Int, data: Intent?) {
+        if (resultCode != Activity.RESULT_OK || data == null) return
+        if (Build.VERSION.SDK_INT < 31 || Build.VERSION.SDK_INT >= 33) return
+        @Suppress("DEPRECATION")
+        val device = data.getParcelableExtra<BluetoothDevice>(CompanionDeviceManager.EXTRA_DEVICE)
+            ?: return
+        val cdm = context.getSystemService(CompanionDeviceManager::class.java) ?: return
+        runCatching { cdm.startObservingDevicePresence(device.address) }
+            .onFailure { Log.w("PhoneCompanion", "startObservingDevicePresence failed: ${it.message}") }
+    }
+
     fun requestCompanionDeviceAssociation(
         context: Context,
         directAddress: String?,
@@ -823,7 +892,8 @@ object PhoneSystemHelpers {
                 }
 
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                    if (Build.VERSION.SDK_INT >= 31) {
+                    // Callback and AssociationInfo.deviceMacAddress are both API 33.
+                    if (Build.VERSION.SDK_INT >= 33) {
                         runCatching { cdm.startObservingDevicePresence(associationInfo.deviceMacAddress?.toString().orEmpty()) }
                     }
                 }

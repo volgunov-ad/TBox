@@ -194,7 +194,8 @@ object PhoneBleCodec {
         val longitude: Double,
         val horizontalAccuracyM: Float?,
         val altitudeM: Float?,
-        val speedKmh: Float,
+        /** Null when the fix carries no speed; older head units read it as 0. */
+        val speedKmh: Float?,
         val bearingDeg: Float?,
         val usedSatellites: Int,
         val visibleSatellites: Int,
@@ -373,11 +374,10 @@ object PhoneBleCodec {
             ?.let { it.toInt().coerceIn(-32000, 32000) }
             ?: MISSING_TEMP
         putI16(motion, 1, alt)
-        val spdCms = if (loc.speedKmh.isFinite() && loc.speedKmh >= 0f) {
-            ((loc.speedKmh / 3.6f) * 100f).toInt().coerceIn(0, MISSING_U16 - 1)
-        } else {
-            0
-        }
+        val spdCms = loc.speedKmh
+            ?.takeIf { it.isFinite() && it >= 0f }
+            ?.let { ((it / 3.6f) * 100f).toInt().coerceIn(0, MISSING_U16 - 1) }
+            ?: MISSING_U16
         putU16(motion, 3, spdCms)
         val brgCdeg = loc.bearingDeg
             ?.takeIf { it.isFinite() && it >= 0f }
@@ -423,7 +423,7 @@ object PhoneBleCodec {
             val lon = getI32(p, 5) / 1e7
             val hAcc = optionalU16(getU16(p, 9))?.let { it / 100f }
             val alt = optionalTemp(getI16(m, 1))?.toFloat()
-            val spdKmh = (optionalU16(getU16(m, 3)) ?: 0) * 0.036f
+            val spdKmh = optionalU16(getU16(m, 3))?.let { it * 0.036f }
             val brg = optionalU16(getU16(m, 5))?.takeIf { it in 0..35_999 }?.let { it / 100f }
             val satsByte = m[7].toInt() and 0xFF
             val used = satsByte and 0x0F

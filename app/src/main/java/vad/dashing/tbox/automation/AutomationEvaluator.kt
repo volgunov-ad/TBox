@@ -157,6 +157,7 @@ class AutomationEvaluator(
                         triggerStates.getValue(trigger.id),
                         rearm = trigger.rearmsOnUnavailable() && !rebaseline,
                         rebaseline = rebaseline,
+                        keepLastValue = trigger.keepsStateAcrossGap() && !rebaseline,
                     )
                 }
             }
@@ -339,7 +340,12 @@ class AutomationEvaluator(
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
-    private fun invalidate(state: RuntimeState, rearm: Boolean = false, rebaseline: Boolean = false) {
+    private fun invalidate(
+        state: RuntimeState,
+        rearm: Boolean = false,
+        rebaseline: Boolean = false,
+        keepLastValue: Boolean = false,
+    ) {
         if (state.initialized) {
             state.initialFireAllowed = false
         }
@@ -355,7 +361,9 @@ class AutomationEvaluator(
             state.armed = true
         }
         state.matchingSinceElapsedMillis = null
-        state.currentValue = null
+        // Tunnel / road class survive a GPS gap; the next fire reports the state before it
+        // (e.g. "in tunnel") as oldValue instead of null.
+        if (!keepLastValue) state.currentValue = null
         state.previousValue = null
         state.pendingInitialFire = false
     }
@@ -664,6 +672,9 @@ private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = when (this) {
             signal != AutomationSignalId.ROAD_HIGHWAY_CLASS
     else -> false
 }
+
+private fun AutomationTrigger.keepsStateAcrossGap(): Boolean =
+    this is AutomationTrigger.StateEquals && !rearmsOnUnavailable()
 
 /** First live sample after a gap is a snapshot of current levels, not an edge. */
 private fun AutomationSignalKey.baselinesAfterGap(): Boolean = when (signal) {

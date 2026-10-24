@@ -46,10 +46,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,8 +79,7 @@ class MainActivity : ComponentActivity() {
                 val state by controller.state.collectAsState()
                 LaunchedEffect(
                     state.floatingEnabled,
-                    state.frameCount,
-                    state.bitmap,
+                    state.frameVersion,
                     state.windowWidthDp,
                     state.windowHeightDp
                 ) {
@@ -149,6 +149,7 @@ class MainActivity : ComponentActivity() {
             overlayContainer = null
             overlayImageView = null
             overlayParams = null
+            controller.releaseFrame(MengboCamController.CONSUMER_OVERLAY)
             return
         }
         val density = resources.displayMetrics.density
@@ -222,9 +223,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        state.bitmap?.let { bmp: Bitmap ->
-            overlayImageView?.setImageBitmap(bmp)
-            overlayImageView?.invalidate()
+        val iv = overlayImageView ?: return
+        controller.acquireFrame(MengboCamController.CONSUMER_OVERLAY)?.let { bmp: Bitmap ->
+            iv.setImageBitmap(bmp)
+            iv.invalidate()
         }
     }
 
@@ -237,6 +239,23 @@ class MainActivity : ComponentActivity() {
         controller.stopAll()
         super.onDestroy()
     }
+}
+
+/** A reused slot can come back with new pixels, so a fresh wrapper per [frameVersion] forces a redraw. */
+@Composable
+private fun CameraFrame(controller: MengboCamController, frameVersion: Long) {
+    DisposableEffect(controller) {
+        onDispose { controller.releaseFrame(MengboCamController.CONSUMER_SCREEN) }
+    }
+    val image = remember(frameVersion) {
+        controller.acquireFrame(MengboCamController.CONSUMER_SCREEN)?.asImageBitmap()
+    } ?: return
+    Image(
+        bitmap = image,
+        contentDescription = "Камера",
+        contentScale = ContentScale.FillBounds,
+        modifier = Modifier.fillMaxSize()
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -510,16 +529,8 @@ fun CamViewScreen(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    val bmp = state.bitmap
-                    if (bmp != null) {
-                        key(state.frameCount) {
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Камера",
-                                contentScale = ContentScale.FillBounds,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                    if (state.hasFrame) {
+                        CameraFrame(controller, state.frameVersion)
                     } else {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(

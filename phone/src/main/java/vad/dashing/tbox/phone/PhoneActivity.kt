@@ -1,6 +1,7 @@
 package vad.dashing.tbox.phone
 
 import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -253,7 +254,21 @@ private fun PhoneScreen() {
     }
     val companionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        PhoneSystemHelpers.onCompanionAssociationResult(context, result.resultCode, result.data)
+    }
+    val notificationsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
     ) { }
+    // The telemetry service notification is hidden on Android 13+ without this grant.
+    fun ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     /**
      * Asks for the pages the current screen shows. A late answer to an earlier request for
@@ -455,6 +470,7 @@ private fun PhoneScreen() {
                             }
                         },
                         onToggleGyro = { next ->
+                            if (next) ensureNotificationPermission()
                             shareGyro = next
                             PhoneSessionController.updateTelemetryToggles(
                                 context,
@@ -462,6 +478,7 @@ private fun PhoneScreen() {
                             )
                         },
                         onToggleCompass = { next ->
+                            if (next) ensureNotificationPermission()
                             shareCompass = next
                             PhoneSessionController.updateTelemetryToggles(
                                 context,
@@ -709,12 +726,15 @@ private fun ConnectPage(
 
         if (telemetryEnabled && (shareLocation || shareGyro || shareCompass)) {
             Divider()
-            ModeButton(
-                text = stringResource(R.string.telemetry_autostart_btn),
-                selected = false,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onBindAutostart,
-            )
+            // Presence-based autostart needs CompanionDeviceService (API 31+).
+            if (Build.VERSION.SDK_INT >= 31) {
+                ModeButton(
+                    text = stringResource(R.string.telemetry_autostart_btn),
+                    selected = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onBindAutostart,
+                )
+            }
             Label(
                 stringResource(
                     if (batteryOptDisabled) R.string.telemetry_battery_ok else R.string.telemetry_battery_hint,

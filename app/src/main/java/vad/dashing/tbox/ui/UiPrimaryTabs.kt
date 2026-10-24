@@ -3261,7 +3261,8 @@ fun LocationTabContent(
                             modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
                         )
                     }
-                    if ((locationSource == LocationSource.PHONE || mockHeadingSource.usesPhone) && headingEnabled) {
+                    // With the phone as location source the same hint is already under the source selector.
+                    if (locationSource != LocationSource.PHONE && mockHeadingSource.usesPhone && headingEnabled) {
                         Text(
                             text = stringResource(R.string.location_phone_direct_only_hint),
                             style = MaterialTheme.typography.tboxBody,

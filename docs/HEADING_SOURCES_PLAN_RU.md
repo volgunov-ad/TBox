@@ -108,7 +108,7 @@
 | Пакет | Период | Полезная нагрузка (`BODY_LEN = 11` байт) |
 |-------|--------|------------------------------------------|
 | `LOC_POS` | 1 с (частота `GPS_PROVIDER`) | `u8 gen`, `i32le latE7` (широта × $10^7$), `i32le lonE7` (долгота × $10^7$), `u16le hAccCm` (горизонтальная точность в см, `0xFFFF` — нет) |
-| `LOC_MOTION` | 1 с (в паре с `LOC_POS`) | `u8 gen`, `i16le altM` (высота м, `0x7FFF` — нет), `u16le speedCms` (скорость см/с), `u16le bearingCdeg` (курс × 100°, `0xFFFF` — нет), `u8 sats` (`used` в младших 4 битах, `visible` в старших 4 битах), `u16le fixAgeMs` (возраст фикса на момент отправки по `elapsedRealtimeNanos`) |
+| `LOC_MOTION` | 1 с (в паре с `LOC_POS`) | `u8 gen`, `i16le altM` (высота м, `0x7FFF` — нет), `u16le speedCms` (скорость см/с, `0xFFFF` — нет: ГУ оценивает скорость по предыдущему фиксу; старые ГУ читают `0xFFFF` как 0), `u16le bearingCdeg` (курс × 100°, `0xFFFF` — нет), `u8 sats` (`used` в младших 4 битах, `visible` в старших 4 битах), `u16le fixAgeMs` (возраст фикса на момент отправки по `elapsedRealtimeNanos`) |
 | `YAW` | 100–200 мс | `u16le dtMs` (длительность окна), `i16le dPsiCdeg` ($\Delta\psi$ вокруг вертикали за окно в сотых градуса), `u16le monoLowMs` (младшие 16 бит `elapsedRealtime` конца окна), `u8 flags` (`bit0` = телефон неподвижен относительно машины, `bit1` = скачок акселерометра/гравитации), `u16le gravDeltaMg` (поворот/разброс вектора $\hat{g}$ за окно), `u16le reserved` |
 | `MAG` | 1 с | `u16le magAzCdeg` (магнитный азимут в сотых градуса), `u16le fieldUt10` ($\|B\| \times 10$ мкТл), `u8 accuracy` (точность Android `0…3`), `i8 pitchDeg`, `i8 rollDeg` (наклон телефона), `u16le monoLowMs`, `u16le reserved` |
 

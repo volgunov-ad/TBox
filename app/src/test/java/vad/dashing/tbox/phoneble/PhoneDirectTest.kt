@@ -8,6 +8,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.Base64
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -137,6 +138,37 @@ class PhoneDirectTest {
             PhoneBleCodec.commandBody(PhoneBleCodec.OP_FAN, 0, 4),
         )
         assertEquals(PhoneDirectHost.Result.Command(idHex, PhoneBleCodec.OP_FAN, 0, 4), host.onPayload(packet))
+        assertTrue(host.takeCommandCounterDirty())
+        assertFalse(host.takeCommandCounterDirty())
+        assertFalse(host.takeCountersDirty())
+    }
+
+    @Test
+    fun refresh_isNotUrgentCounterWrite() {
+        val host = pairedHost()
+        host.onPayload(refresh(1))
+        assertFalse(host.takeCommandCounterDirty())
+        assertTrue(host.takeCountersDirty())
+    }
+
+    @Test
+    fun json_keepsReplayWindowAcrossRestart() {
+        val host = pairedHost(counter = 10)
+        host.onPayload(refresh(12))
+        host.onPayload(refresh(11))
+        host.onPayload(refresh(13))
+        val restored = PhoneDirectHost(PhoneDirectHost.fromJson(PhoneDirectHost.toJson(host.records())))
+        assertEquals(PhoneDirectHost.Result.Ignored, restored.onPayload(refresh(11)))
+        assertEquals(PhoneDirectHost.Result.Ignored, restored.onPayload(refresh(12)))
+        assertTrue(restored.onPayload(refresh(14)) is PhoneDirectHost.Result.Refresh)
+    }
+
+    @Test
+    fun json_withoutWindow_treatsOlderCountersAsSeen() {
+        val legacy = """[{"id":"$idHex","key":"${Base64.getEncoder().encodeToString(key)}","name":"Pixel","counter":20}]"""
+        val host = PhoneDirectHost(PhoneDirectHost.fromJson(legacy))
+        assertEquals(PhoneDirectHost.Result.Ignored, host.onPayload(refresh(15)))
+        assertTrue(host.onPayload(refresh(21)) is PhoneDirectHost.Result.Refresh)
     }
 
     @Test

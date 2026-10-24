@@ -73,6 +73,11 @@ object WheelHeadingIntegrator {
     const val YAS_DISAGREE_START_DEG_PER_SEC = 8f
     const val YAS_DISAGREE_MAX_DEG_PER_SEC = 25f
 
+    /** Both rates above this (°/s) vote on the YAS sign. */
+    private const val YAS_SIGN_VOTE_MIN_DEG_PER_SEC = 6f
+    private const val YAS_SIGN_VOTES_KNOWN = 8
+    private const val YAS_SIGN_VOTES_MAX = 20
+
     /** Online track calibration arc thresholds. */
     private const val CALIB_MIN_SPEED_KMH = 15f
     private const val CALIB_MIN_ARC_DEG = 18f
@@ -103,6 +108,7 @@ object WheelHeadingIntegrator {
     private var lastLateralAccelMps2: Float? = null
     private var lastYasTrustWeight: Float = 1f
     private var lastSlipRejected: Boolean = false
+    private var yasSignVotes: Int = 0
 
     // Online arc calibration state for track B
     private var arcWheelDiffM: Double = 0.0
@@ -146,6 +152,7 @@ object WheelHeadingIntegrator {
             lastLateralAccelMps2 = null
             lastYasTrustWeight = 1f
             lastSlipRejected = false
+            yasSignVotes = 0
             resetArcLocked()
         }
     }
@@ -164,7 +171,7 @@ object WheelHeadingIntegrator {
      * @param reverse true when reverse gear is engaged (`considerReverse`).
      * @param steerDeg current steering wheel angle (°) for slip/quantization ceiling.
      * @param speedKmh current vehicle speed (km/h).
-     * @param lateralAccelMps2 optional YAS lateral acceleration (m/s²).
+     * @param lateralAccelMps2 current YAS lateral acceleration (m/s²); null when no fresh value.
      * @param nowElapsedMs monotonic timestamp (`SystemClock.elapsedRealtime()`).
      */
     fun onWheelSample(
@@ -178,9 +185,9 @@ object WheelHeadingIntegrator {
     ) {
         if (nowElapsedMs <= 0L) return
         synchronized(lock) {
-            if (lateralAccelMps2 != null && lateralAccelMps2.isFinite()) {
-                lastLateralAccelMps2 = lateralAccelMps2
-            }
+            // The caller passes the current value; keeping an old one would cross-check
+            // the wheels against a turn that ended when the source went silent.
+            lastLateralAccelMps2 = lateralAccelMps2?.takeIf { it.isFinite() }
             val prev = prevCounters
             val prevAt = lastSampleElapsedMs
             val prevIngestAt = lastIngestElapsedMs
@@ -240,7 +247,7 @@ object WheelHeadingIntegrator {
                 val vMps = (spd / 3.6f).coerceAtLeast(1f)
                 val omegaLat = Math.toDegrees((latAcc / vMps).toDouble()).toFloat()
                 lastOmegaLatDegPerSec = omegaLat
-                val diff = abs(abs(omegaWheels) - abs(omegaLat))
+                val diff = yasDisagreementLocked(omegaWheels, omegaLat)
                 lastYasTrustWeight = when {
                     diff <= YAS_DISAGREE_START_DEG_PER_SEC -> 1f
                     diff >= YAS_DISAGREE_MAX_DEG_PER_SEC -> 0.35f
@@ -279,11 +286,14 @@ object WheelHeadingIntegrator {
         synchronized(lock) {
             val spd = speedKmh ?: 0f
             if (!gnssTruthful || reverse || !spd.isFinite() || spd < CALIB_MIN_SPEED_KMH ||
-                gnssCourseDeg == null || !gnssCourseDeg.isFinite() || gnssCourseDeg == 0f
+                gnssCourseDeg == null || !gnssCourseDeg.isFinite()
             ) {
                 resetArcLocked()
                 return null
             }
+            // Exactly 0° is what some receivers send without a course, but it is also due
+            // north: skip the sample instead of dropping an arc that passes through north.
+            if (gnssCourseDeg == 0f) return null
             if (arcHadSlipOrReverse) {
                 resetArcLocked()
                 return null
@@ -403,6 +413,23 @@ object WheelHeadingIntegrator {
             distanceM / wheelbase * kotlin.math.tan(Math.toRadians(roadDeg.toDouble())),
         ).toFloat()
         return (steerCeiling + 1.0f).coerceIn(1.0f, physicalMax.coerceAtLeast(1.5f))
+    }
+
+    /**
+     * The YAS sign relative to the wheels is not fixed by spec, so it is learned from clear
+     * turns. Until it is known only magnitudes are compared; after that a turn the wheels see
+     * one way and YAS the other counts as full disagreement.
+     */
+    private fun yasDisagreementLocked(omegaWheels: Float, omegaLat: Float): Float {
+        if (abs(omegaWheels) >= YAS_SIGN_VOTE_MIN_DEG_PER_SEC && abs(omegaLat) >= YAS_SIGN_VOTE_MIN_DEG_PER_SEC) {
+            val vote = if ((omegaWheels > 0f) == (omegaLat > 0f)) 1 else -1
+            yasSignVotes = (yasSignVotes + vote).coerceIn(-YAS_SIGN_VOTES_MAX, YAS_SIGN_VOTES_MAX)
+        }
+        return when {
+            yasSignVotes >= YAS_SIGN_VOTES_KNOWN -> abs(omegaWheels - omegaLat)
+            yasSignVotes <= -YAS_SIGN_VOTES_KNOWN -> abs(omegaWheels + omegaLat)
+            else -> abs(abs(omegaWheels) - abs(omegaLat))
+        }
     }
 
     private fun resetArcLocked() {

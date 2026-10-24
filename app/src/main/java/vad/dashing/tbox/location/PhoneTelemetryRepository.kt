@@ -110,6 +110,11 @@ object PhoneTelemetryRepository {
     const val MAX_LOC_AGE_MS = 3_000L
     const val MAX_YAW_AGE_MS = 1_200L
     const val MAX_MAG_AGE_MS = 3_500L
+    const val ACTIVE_PHONE_SILENT_TAKEOVER_MS = 10_000L
+
+    private const val DERIVED_SPEED_MIN_DT_MS = 200L
+    private const val DERIVED_SPEED_MAX_DT_MS = 5_000L
+    private const val DERIVED_SPEED_MAX_KMH = 300f
 
     private const val COMPASS_MEDIAN_WINDOW = 5
     private const val MAX_MAG_FIELD_JUMP_UT = 12f
@@ -146,6 +151,7 @@ object PhoneTelemetryRepository {
     private var preferredPhoneIdHex: String? = null
     private var activePhoneIdHex: String? = null
     private var activePhoneName: String? = null
+    private var lastActivePhonePacketAtElapsedMs: Long = 0L
 
     private var lastLocation: PhoneBleCodec.PhoneLocation? = null
     private var lastLocAtElapsedMs: Long = 0L
@@ -189,8 +195,11 @@ object PhoneTelemetryRepository {
     fun setPreferredPhoneIdHex(idHex: String?) {
         synchronized(lock) {
             preferredPhoneIdHex = idHex?.trim()?.lowercase()?.ifEmpty { null }
-            if (preferredPhoneIdHex != null && activePhoneIdHex != preferredPhoneIdHex) {
-                activePhoneIdHex = preferredPhoneIdHex
+            val pref = preferredPhoneIdHex
+            // The preferred phone becomes active on its first accepted packet, not here:
+            // pinning an offline phone would block every other phone.
+            if (pref != null && activePhoneIdHex != null && activePhoneIdHex != pref) {
+                releaseActivePhoneLocked("preferred_phone_changed")
             }
             publishUiStateLocked()
         }
@@ -199,13 +208,18 @@ object PhoneTelemetryRepository {
     fun onPhoneDisconnected(idHex: String) {
         synchronized(lock) {
             if (activePhoneIdHex == idHex) {
-                activePhoneIdHex = null
-                activePhoneName = null
-                pendingYawNavDeltaDeg = 0.0
-                resetMountOffsetLocked("phone_disconnected")
+                releaseActivePhoneLocked("phone_disconnected")
                 publishUiStateLocked()
             }
         }
+    }
+
+    private fun releaseActivePhoneLocked(reason: String) {
+        activePhoneIdHex = null
+        activePhoneName = null
+        lastActivePhonePacketAtElapsedMs = 0L
+        pendingYawNavDeltaDeg = 0.0
+        resetMountOffsetLocked(reason)
     }
 
     fun resetSessionMountOffset() {
@@ -237,20 +251,23 @@ object PhoneTelemetryRepository {
         return mask
     }
 
-    private fun acceptsPhoneLocked(idHex: String, name: String?): Boolean {
+    private fun acceptsPhoneLocked(idHex: String, name: String?, nowElapsedMs: Long): Boolean {
         val pref = preferredPhoneIdHex
-        if (pref != null) {
-            if (idHex != pref) return false
-            activePhoneIdHex = idHex
-            if (!name.isNullOrBlank()) activePhoneName = name
-            return true
+        if (pref != null && idHex != pref) return false
+        val active = activePhoneIdHex
+        if (active != null && active != idHex) {
+            // Auto: a phone that went silent without a clean disconnect must not block others.
+            val silentMs = nowElapsedMs - lastActivePhonePacketAtElapsedMs
+            if (pref != null || lastActivePhonePacketAtElapsedMs <= 0L || silentMs > ACTIVE_PHONE_SILENT_TAKEOVER_MS) {
+                releaseActivePhoneLocked("active_phone_switched")
+            } else {
+                return false
+            }
         }
-        if (activePhoneIdHex == null || activePhoneIdHex == idHex) {
-            activePhoneIdHex = idHex
-            if (!name.isNullOrBlank()) activePhoneName = name
-            return true
-        }
-        return false
+        activePhoneIdHex = idHex
+        lastActivePhonePacketAtElapsedMs = nowElapsedMs
+        if (!name.isNullOrBlank()) activePhoneName = name
+        return true
     }
 
     fun onPhoneLocation(
@@ -261,12 +278,20 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
         nowEpochMs: Long = System.currentTimeMillis(),
     ) {
+        // Packets are signed, but a phone app bug must not become the car's position.
+        if (!loc.latitude.isFinite() || loc.latitude !in -90.0..90.0 ||
+            !loc.longitude.isFinite() || loc.longitude !in -180.0..180.0 ||
+            loc.speedKmh?.isFinite() == false
+        ) {
+            return
+        }
         var toPublish: LocValues? = null
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             lastLocation = loc
             lastLocAtElapsedMs = nowElapsedMs
             val fixEpochMs = (nowEpochMs - loc.fixAgeMs.toLong().coerceAtLeast(0L)).coerceAtLeast(0L)
+            val speedKmh = loc.speedKmh ?: derivedSpeedKmhLocked(loc, fixEpochMs)
             val hAcc = loc.horizontalAccuracyM?.takeIf { it.isFinite() && it > 0f }
             val hdop = hAcc?.let { (it / 4.5f).coerceIn(0.5f, 50f) } ?: 1.0f
             val locValues = LocValues(
@@ -276,7 +301,7 @@ object PhoneTelemetryRepository {
                 latitude = loc.latitude,
                 longitude = loc.longitude,
                 altitude = (loc.altitudeM ?: 0f).toDouble(),
-                speed = loc.speedKmh.coerceAtLeast(0f),
+                speed = speedKmh.coerceAtLeast(0f),
                 trueDirection = loc.bearingDeg ?: 0f,
                 magneticDirection = 0f,
                 visibleSatellites = loc.visibleSatellites,
@@ -302,6 +327,20 @@ object PhoneTelemetryRepository {
         }
     }
 
+    /**
+     * A fix without speed would read as "standing" downstream; estimate it from the previous
+     * phone fix instead, or report 0 when there is no recent one.
+     */
+    private fun derivedSpeedKmhLocked(loc: PhoneBleCodec.PhoneLocation, fixEpochMs: Long): Float {
+        val prev = lastLocValues ?: return 0f
+        if (!prev.locateStatus || !loc.locateStatus) return 0f
+        val dtMs = fixEpochMs - (prev.updateTime?.time ?: return 0f)
+        if (dtMs !in DERIVED_SPEED_MIN_DT_MS..DERIVED_SPEED_MAX_DT_MS) return 0f
+        val distM = ConstantDrMath.distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+        val kmh = (distM / (dtMs / 1000.0) * 3.6).toFloat()
+        return if (kmh.isFinite() && kmh <= DERIVED_SPEED_MAX_KMH) kmh else 0f
+    }
+
     fun onPhoneYaw(
         idHex: String,
         name: String?,
@@ -309,7 +348,7 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ) {
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             updateClockOffsetLocked(nowElapsedMs, sample.monoLowMs)
             lastYawAtElapsedMs = nowElapsedMs
             if (sample.mountMoved) {
@@ -358,7 +397,7 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
     ) {
         synchronized(lock) {
-            if (!acceptsPhoneLocked(idHex, name)) return
+            if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             updateClockOffsetLocked(nowElapsedMs, sample.monoLowMs)
             lastMagAtElapsedMs = nowElapsedMs
             lastMagAzimuthDeg = sample.magneticAzimuthDeg
@@ -461,7 +500,7 @@ object PhoneTelemetryRepository {
             }
             val spd = speedKmh ?: 0f
             if (!gnssTruthful || reverse || !spd.isFinite() || spd < MOUNT_CALIB_MIN_SPEED_KMH ||
-                gnssCourseDeg == null || !gnssCourseDeg.isFinite() || gnssCourseDeg == 0f
+                gnssCourseDeg == null || !gnssCourseDeg.isFinite()
             ) {
                 lastMountCalibElapsedMs = 0L
                 gyroArcLastGnssCourse = null
@@ -469,6 +508,8 @@ object PhoneTelemetryRepository {
                 gyroArcGnssDeg = 0f
                 return null to null
             }
+            // 0° may mean "no course"; skip it without dropping arcs that pass through north.
+            if (gnssCourseDeg == 0f) return null to null
 
             // 1. Online phone gyro arc scale calibration (forward turns)
             if (nowElapsedMs - lastYawAtElapsedMs <= MAX_YAW_AGE_MS && lastYawRejectReason == null) {
@@ -512,7 +553,12 @@ object PhoneTelemetryRepository {
 
             // 2. Straight-line session mountYawOffset & sector calibration for phone compass
             val straightSteer = steerDeg == null || !steerDeg.isFinite() || abs(steerDeg) <= MOUNT_CALIB_MAX_STEER_DEG
-            val quietYaw = lastYawRateDegPerSec == null || abs(lastYawRateDegPerSec!!) <= MOUNT_CALIB_MAX_YAW_DEG_PER_SEC
+            // A stale rate from a gyro that was switched off (compass-only phone) says nothing
+            // about this moment and would block the mount calibration forever.
+            val yawRate = lastYawRateDegPerSec?.takeIf {
+                lastYawAtElapsedMs > 0L && nowElapsedMs - lastYawAtElapsedMs <= MAX_YAW_AGE_MS
+            }
+            val quietYaw = yawRate == null || abs(yawRate) <= MOUNT_CALIB_MAX_YAW_DEG_PER_SEC
             val magFresh = lastMagAtElapsedMs > 0L && nowElapsedMs - lastMagAtElapsedMs <= MAX_MAG_AGE_MS
             val rawMag = if (magHistory.isNotEmpty()) circularMedianDeg(magHistory.toList()) else lastMagAzimuthDeg
             if (straightSteer && quietYaw && magFresh && rawMag != null &&
@@ -620,6 +666,7 @@ object PhoneTelemetryRepository {
             preferredPhoneIdHex = null
             activePhoneIdHex = null
             activePhoneName = null
+            lastActivePhonePacketAtElapsedMs = 0L
             lastLocation = null
             lastLocAtElapsedMs = 0L
             lastLocValues = null

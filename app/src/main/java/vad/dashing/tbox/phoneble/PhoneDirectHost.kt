@@ -71,6 +71,7 @@ class PhoneDirectHost(initial: List<PhoneDirectRecord>) {
     private var pending: PhoneBleCodec.PairMaterial? = null
     private var deniedIdHex: String? = null
     private var countersDirty = false
+    private var commandCounterDirty = false
 
     val learning: Boolean get() = synchronized(lock) { learnOpen }
 
@@ -130,6 +131,21 @@ class PhoneDirectHost(initial: List<PhoneDirectRecord>) {
     fun takeCountersDirty(): Boolean = synchronized(lock) {
         val dirty = countersDirty
         countersDirty = false
+        commandCounterDirty = false
+        dirty
+    }
+
+    /**
+     * True once after a command packet was accepted. A replayed command acts on the car,
+     * so its counter is persisted before the command runs; telemetry can wait for the
+     * periodic save.
+     */
+    fun takeCommandCounterDirty(): Boolean = synchronized(lock) {
+        val dirty = commandCounterDirty
+        if (dirty) {
+            commandCounterDirty = false
+            countersDirty = false
+        }
         dirty
     }
 
@@ -193,6 +209,7 @@ class PhoneDirectHost(initial: List<PhoneDirectRecord>) {
         countersDirty = true
         return when (open.type) {
             PhoneBleCodec.TYPE_CMD -> {
+                commandCounterDirty = true
                 val cmd = PhoneBleCodec.readCommand(open.body) ?: return Result.Ignored
                 Result.Command(record.idHex, cmd.op, cmd.seat, cmd.arg)
             }
@@ -234,7 +251,8 @@ class PhoneDirectHost(initial: List<PhoneDirectRecord>) {
                         .put("id", record.idHex)
                         .put("key", Base64.getEncoder().encodeToString(record.key))
                         .put("name", record.name)
-                        .put("counter", record.counter),
+                        .put("counter", record.counter)
+                        .put("window", record.windowMask),
                 )
             }
             return array.toString()
@@ -249,7 +267,16 @@ class PhoneDirectHost(initial: List<PhoneDirectRecord>) {
                     val id = PhoneBleCodec.parseIdHex(item.optString("id")) ?: continue
                     val key = runCatching { Base64.getDecoder().decode(item.optString("key")) }.getOrNull()
                     if (key == null || key.size != PhoneBleCodec.KEY_LEN) continue
-                    add(PhoneDirectRecord(id, key, item.optString("name"), item.optLong("counter", 0L)))
+                    val counter = item.optLong("counter", 0L)
+                    // Without a stored window every unseen counter of the last 32 would pass again.
+                    val window = if (item.has("window")) {
+                        item.optLong("window") and 0xFFFF_FFFFL
+                    } else if (counter > 0L) {
+                        0xFFFF_FFFFL
+                    } else {
+                        0L
+                    }
+                    add(PhoneDirectRecord(id, key, item.optString("name"), counter, window))
                 }
             }
         }

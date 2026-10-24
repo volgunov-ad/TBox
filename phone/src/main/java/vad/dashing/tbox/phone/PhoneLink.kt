@@ -62,6 +62,18 @@ class PhoneLinkRouter(
     /** When true, direct RFCOMM stays active even in AUTO/COMPANION so telemetry reaches the HU. */
     var keepDirectForTelemetry: Boolean = store.anyTelemetryEnabled
 
+    /**
+     * [PhoneActivity] is visible. In the background only telemetry runs, and it goes over the
+     * direct link alone, so AUTO skips the companion BLE search and the direct search backs off.
+     */
+    var foreground: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            direct.foreground = value
+            if (running) start()
+        }
+
     val directLinkUp: Boolean get() = direct.linkUp
     val directConfirmed: Boolean get() = direct.confirmed
 
@@ -136,13 +148,15 @@ class PhoneLinkRouter(
                 radio.confirmed -> {
                     searchSince = 0L
                     setDirect(keepDirectForTelemetry)
-                    setRadio(true)
+                    setRadio(foreground)
                 }
                 else -> {
                     val now = SystemClock.elapsedRealtime()
                     if (searchSince == 0L) searchSince = now
                     setDirect(true)
-                    if (radioOn || now - searchSince >= DIRECT_FIRST_MS || direct.passesWithoutLink > 0) {
+                    if (!foreground) {
+                        setRadio(false)
+                    } else if (radioOn || now - searchSince >= DIRECT_FIRST_MS || direct.passesWithoutLink > 0) {
                         setRadio(true)
                     }
                 }

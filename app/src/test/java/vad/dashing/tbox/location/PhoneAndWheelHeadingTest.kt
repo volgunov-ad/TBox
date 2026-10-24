@@ -215,6 +215,136 @@ class PhoneAndWheelHeadingTest {
     }
 
     @Test
+    fun wheelHeadingIntegrator_dropsLateralAccelWhenSourceGoesSilent() {
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(100, 100, 100, 100, 1000L),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 0f,
+            speedKmh = 30f,
+            lateralAccelMps2 = 2f,
+            nowElapsedMs = 1000L,
+        )
+        assertEquals(2f, WheelHeadingIntegrator.peekDebugSnapshot().lastLateralAccelMps2!!, 1e-4f)
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(120, 120, 120, 120, 1500L),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 0f,
+            speedKmh = 30f,
+            lateralAccelMps2 = null,
+            nowElapsedMs = 1500L,
+        )
+        assertNull(WheelHeadingIntegrator.peekDebugSnapshot().lastLateralAccelMps2)
+    }
+
+    @Test
+    fun wheelHeadingIntegrator_learnsYasSignAndCatchesOppositeTurn() {
+        // Left turn: rear right wheel +24 vs left +20 per 0.5 s at 30 km/h ≈ 7.2 °/s.
+        val latAccMatching = 1.04f
+        var lhr = 100
+        var rhr = 100
+        var now = 1000L
+        fun step(latAcc: Float) {
+            lhr += 20
+            rhr += 24
+            now += 500L
+            WheelHeadingIntegrator.onWheelSample(
+                counters = WheelCounters(lhr, rhr, lhr, rhr, now),
+                kMetersPerPulse = 0.025f,
+                reverse = false,
+                steerDeg = 90f,
+                speedKmh = 30f,
+                lateralAccelMps2 = latAcc,
+                nowElapsedMs = now,
+            )
+        }
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(lhr, rhr, lhr, rhr, now),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 90f,
+            speedKmh = 30f,
+            nowElapsedMs = now,
+        )
+        // Before the sign is known an opposite YAS turn still looks consistent.
+        step(-latAccMatching)
+        assertEquals(1f, WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight, 1e-4f)
+        repeat(12) { step(latAccMatching) }
+        assertEquals(1f, WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight, 1e-4f)
+        step(-latAccMatching)
+        assertTrue(WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight < 0.9f)
+    }
+
+    @Test
+    fun phoneTelemetryRepository_staleGyroRateDoesNotBlockMountCalibration() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = 40f,
+            bearingDeg = 100f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 50,
+        )
+        PhoneTelemetryRepository.onPhoneLocation(
+            idHex = "11223344",
+            name = "DriverPhone",
+            loc = loc,
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = 1000L,
+            nowEpochMs = 1_700_000_000_000L,
+        )
+        // Last gyro window before the gyro was switched off: a sharp turn.
+        PhoneTelemetryRepository.onPhoneYaw(
+            idHex = "11223344",
+            name = "DriverPhone",
+            sample = PhoneBleCodec.PhoneYawSample(
+                dtMs = 150,
+                dPsiDeg = 3f,
+                monoLowMs = 1000,
+                mountStable = true,
+                mountMoved = false,
+                gravDeltaMg = 0,
+            ),
+            nowElapsedMs = 1000L,
+        )
+        val later = 1000L + PhoneTelemetryRepository.MAX_YAW_AGE_MS + 1_000L
+        PhoneTelemetryRepository.onPhoneMag(
+            idHex = "11223344",
+            name = "DriverPhone",
+            sample = PhoneBleCodec.PhoneMagSample(
+                magneticAzimuthDeg = 80f,
+                fieldStrengthUt = 45f,
+                accuracy = 3,
+                pitchDeg = 0,
+                rollDeg = 0,
+                monoLowMs = later.toInt(),
+                mountMoved = false,
+            ),
+            steerDeg = 0f,
+            wheelDeltaDeg = 0f,
+            nowElapsedMs = later,
+        )
+        PhoneTelemetryRepository.onGnssReference(
+            gnssCourseDeg = 100f,
+            lat = 55.75,
+            lon = 37.61,
+            altM = 120f,
+            speedKmh = 36f,
+            steerDeg = 0f,
+            reverse = false,
+            gnssTruthful = true,
+            nowElapsedMs = later + 100L,
+            nowEpochMs = 1_700_000_005_000L,
+        )
+        assertNotNull(PhoneTelemetryRepository.uiState.value.mountYawOffsetDeg)
+    }
+
+    @Test
     fun lateralAccelerationDomain_decodesMbCanAndVhal() {
         val g = LateralAccelerationDomain.STANDARD_GRAVITY_MPS2
         assertEquals(0.25f * g, LateralAccelerationDomain.decodeMbCanFloat(0.25f)!!, 1e-4f)
@@ -327,5 +457,86 @@ class PhoneAndWheelHeadingTest {
         )
         assertNull(PhoneTelemetryRepository.uiState.value.mountYawOffsetDeg)
         assertFalse(PhoneTelemetryRepository.isCompassUsable(1900L))
+    }
+
+    @Test
+    fun phoneTelemetryRepository_offlinePreferredPhoneDoesNotBlockAuto() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = 40f,
+            bearingDeg = 100f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 50,
+        )
+        fun feed(idHex: String, at: Long) = PhoneTelemetryRepository.onPhoneLocation(
+            idHex = idHex,
+            name = null,
+            loc = loc.copy(latitude = if (idHex == "aabbccdd") 59.93 else 55.75),
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = at,
+            nowEpochMs = 1_700_000_000_000L + at,
+        )
+
+        // Preferring an offline phone must not make it active.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex("11223344")
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        // Back to Auto: another phone is accepted right away.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex(null)
+        feed("aabbccdd", 1_000L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+
+        // A second phone is ignored while the active one keeps streaming...
+        feed("11223344", 2_000L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        // ...but takes over once the active phone has been silent past the takeover timeout.
+        feed("11223344", 1_000L + PhoneTelemetryRepository.ACTIVE_PHONE_SILENT_TAKEOVER_MS + 1L)
+        assertEquals("11223344", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        assertEquals(55.75, PhoneTelemetryRepository.uiState.value.lastLocation!!.latitude, 1e-4)
+
+        // Explicit preference switches immediately.
+        PhoneTelemetryRepository.setPreferredPhoneIdHex("aabbccdd")
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        feed("11223344", 20_000L)
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+        feed("aabbccdd", 20_100L)
+        assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+    }
+
+    @Test
+    fun phoneTelemetryRepository_rejectsBadCoordinatesAndEstimatesMissingSpeed() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = null,
+            bearingDeg = 0f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 0,
+        )
+        fun feed(l: PhoneBleCodec.PhoneLocation, at: Long) = PhoneTelemetryRepository.onPhoneLocation(
+            idHex = "11223344",
+            name = null,
+            loc = l,
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = at,
+            nowEpochMs = 1_700_000_000_000L + at,
+        )
+        feed(loc.copy(latitude = 123.0), 1_000L)
+        assertNull(PhoneTelemetryRepository.peekLastLocationValues())
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+
+        feed(loc, 1_000L)
+        assertEquals(0f, PhoneTelemetryRepository.peekLastLocationValues()!!.first.speed, 1e-4f)
+        // 10 m north in 1 s = 36 km/h.
+        feed(loc.copy(gen = 2, latitude = 55.75 + 10.0 / 111_320.0), 2_000L)
+        assertEquals(36f, PhoneTelemetryRepository.peekLastLocationValues()!!.first.speed, 0.5f)
     }
 }
