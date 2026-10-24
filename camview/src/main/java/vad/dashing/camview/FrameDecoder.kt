@@ -133,9 +133,10 @@ object FrameDecoder {
         reuseBitmap: Bitmap?
     ): Bitmap? {
         val rowBytes = if (stride >= width * 2) stride else width * 2
-        val needed = rowBytes * height
-        if (dup.remaining() < width * height * 2) return null
-        val copyBytes = minOf(dup.remaining(), needed)
+        // The pixel buffer is reused: a short frame would keep the previous frame's tail rows.
+        val needed = rowBytes * (height - 1) + (width + 1) / 2 * 4
+        if (dup.remaining() < needed) return null
+        val copyBytes = needed
         val raw = obtainRawBuffer(copyBytes)
         dup.get(raw, 0, copyBytes)
         val pixels = obtainPixelBuffer(width * height)
