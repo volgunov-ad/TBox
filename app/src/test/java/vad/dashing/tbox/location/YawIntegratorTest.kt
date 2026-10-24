@@ -119,4 +119,13 @@ class GnssFreshnessTest {
     fun staleClearMatchesConstant() {
         assertEquals(3_000L, GnssFreshness.STALE_CLEAR_MS)
     }
+
+    @Test
+    fun liveFixRequiresStatusAndFreshPacket() {
+        val packetAt = 10_000L
+        assertTrue(GnssFreshness.hasLiveFix(true, packetAt, packetAt + 2_999L))
+        assertFalse(GnssFreshness.hasLiveFix(true, packetAt, packetAt + 3_000L))
+        assertFalse(GnssFreshness.hasLiveFix(false, packetAt, packetAt + 1L))
+        assertFalse(GnssFreshness.hasLiveFix(true, null, packetAt))
+    }
 }

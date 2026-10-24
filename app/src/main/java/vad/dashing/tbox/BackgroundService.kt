@@ -5941,7 +5941,8 @@ class BackgroundService : Service() {
                         }
                         // DETACH / link drop — drop stale LocValues immediately so Advanced
                         // does not soft-blend a frozen fix while assist restarts.
-                        TboxRepository.clearActiveLocation()
+                        // Keep the last packet clocks so the debug rows do not go blank.
+                        TboxRepository.clearActiveLocation(preserveTimestamps = true)
                         TboxRepository.updateIsLocValuesTrue(false)
                         startUsbNmeaLocationSource()
                     }
@@ -6415,7 +6416,7 @@ class BackgroundService : Service() {
                         val delta = currentTime - (TboxRepository.locationUpdateTime.value?.time
                             ?: 0)
                         if (delta > 10000) {
-                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.clearActiveLocation(preserveTimestamps = true)
                             TboxRepository.updateIsLocValuesTrue(false)
                             val nowMs = System.currentTimeMillis()
                             if (vad.dashing.tbox.location.LocSubscribePolicy.shouldPeriodicResubscribe(
@@ -6440,7 +6441,7 @@ class BackgroundService : Service() {
                         if (lastAt != null &&
                             currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
-                            TboxRepository.clearActiveLocation()
+                            TboxRepository.clearActiveLocation(preserveTimestamps = true)
                             TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }

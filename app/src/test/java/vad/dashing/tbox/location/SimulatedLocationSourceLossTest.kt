@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.LocValues
 import vad.dashing.tbox.TboxRepository
+import java.util.Date
 
 class SimulatedLocationSourceLossTest {
 
@@ -74,5 +75,37 @@ class SimulatedLocationSourceLossTest {
         assertEquals(blocked, TboxRepository.locValues.value)
         assertTrue(TboxRepository.locationUpdateTime.value != null)
         assertTrue(TboxRepository.isLocValuesTrue.value)
+    }
+
+    @Test
+    fun staleClearDropsFixButKeepsLastClocks() {
+        val changedAt = Date(1_700_000_000_000L)
+        val live = LocValues(
+            rawValue = "PHONE:abc#1",
+            updateTime = changedAt,
+            locateStatus = true,
+            latitude = 56.25,
+            longitude = 43.44,
+        )
+        TboxRepository.updateLocValues(live)
+        TboxRepository.updateLocationUpdateTime()
+        val packetAt = TboxRepository.locationUpdateTime.value
+
+        TboxRepository.clearActiveLocation(preserveTimestamps = true)
+
+        val cleared = TboxRepository.locValues.value
+        assertFalse(cleared.locateStatus)
+        assertEquals(0.0, cleared.latitude, 0.0)
+        assertEquals(0.0, cleared.longitude, 0.0)
+        assertEquals("", cleared.rawValue)
+        assertEquals(changedAt, cleared.updateTime)
+        assertEquals(packetAt, TboxRepository.locationUpdateTime.value)
+        assertFalse(
+            GnssFreshness.hasLiveFix(
+                cleared.locateStatus,
+                packetAt?.time,
+                System.currentTimeMillis(),
+            ),
+        )
     }
 }
