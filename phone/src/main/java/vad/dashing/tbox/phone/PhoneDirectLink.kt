@@ -72,6 +72,9 @@ class PhoneDirectLink(
     @Volatile var passesWithoutLink: Int = 0
         private set
 
+    /** UI visible: retry every [RETRY_MS]; otherwise back off (see [PhoneBleLinkPolicy.directSearchRetryMs]). */
+    @Volatile var foreground: Boolean = false
+
     override fun start() {
         if (running) {
             recoverIfStale()
@@ -235,7 +238,8 @@ class PhoneDirectLink(
                 break
             }
             if (!linked && gen == generation) passesWithoutLink++
-            if (!pause(gen, if (linked) RECONNECT_MS else RETRY_MS)) return
+            val wait = if (linked) RECONNECT_MS else PhoneBleLinkPolicy.directSearchRetryMs(foreground, passesWithoutLink)
+            if (!pause(gen, wait)) return
         }
     }
 
@@ -379,10 +383,14 @@ class PhoneDirectLink(
 
     /** False when the worker became obsolete during the wait. */
     private fun pause(gen: Int, ms: Long): Boolean {
-        val until = SystemClock.elapsedRealtime() + ms
+        val startedAt = SystemClock.elapsedRealtime()
+        val until = startedAt + ms
         while (gen == generation) {
-            val left = until - SystemClock.elapsedRealtime()
+            val now = SystemClock.elapsedRealtime()
+            val left = until - now
             if (left <= 0) return true
+            // Opening the UI cuts a long background back-off short.
+            if (foreground && now - startedAt >= RETRY_MS) return true
             try {
                 Thread.sleep(minOf(left, 250L))
             } catch (e: InterruptedException) {
@@ -394,7 +402,7 @@ class PhoneDirectLink(
 
     private companion object {
         const val TAG = "PhoneDirectLink"
-        const val RETRY_MS = 5_000L
+        const val RETRY_MS = PhoneBleLinkPolicy.DIRECT_RETRY_MS
         const val RECONNECT_MS = 1_000L
         const val WATCHDOG_MS = 1_000L
     }

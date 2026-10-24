@@ -1,5 +1,6 @@
 package vad.dashing.tbox.phoneble
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -176,6 +177,17 @@ class PhoneBleLinkPolicyTest {
                 attemptAgeMs = 0,
                 snapAgeMs = PhoneBleLinkPolicy.LINK_STALE_MS,
             ),
+        )
+    }
+
+    @Test
+    fun directSearchRetry_backsOffOnlyInBackground() {
+        val fg = (1..8).map { PhoneBleLinkPolicy.directSearchRetryMs(foreground = true, passesWithoutLink = it) }
+        assertTrue(fg.all { it == PhoneBleLinkPolicy.DIRECT_RETRY_MS })
+        val bg = (0..8).map { PhoneBleLinkPolicy.directSearchRetryMs(foreground = false, passesWithoutLink = it) }
+        assertEquals(
+            listOf(5_000L, 5_000L, 10_000L, 20_000L, 40_000L, 60_000L, 60_000L, 60_000L, 60_000L),
+            bg,
         )
     }
 }

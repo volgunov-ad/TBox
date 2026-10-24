@@ -41,6 +41,23 @@ object PhoneBleLinkPolicy {
     fun hungWrite(writing: Boolean, writeAgeMs: Long, force: Boolean): Boolean =
         writing && (force || writeAgeMs >= WRITE_STALE_MS)
 
+    /** Direct RFCOMM search pause while the phone UI is visible. */
+    const val DIRECT_RETRY_MS: Long = 5_000L
+
+    /** Upper bound of the background direct-search back-off. */
+    const val DIRECT_BACKGROUND_RETRY_MAX_MS: Long = 60_000L
+
+    /**
+     * Pause after a direct search pass that found no head unit. Each pass may SDP-probe every
+     * connected HFP/A2DP device (earbuds, watch), so in the background the wait doubles per
+     * empty pass: 5, 10, 20, 40, 60, 60… s.
+     */
+    fun directSearchRetryMs(foreground: Boolean, passesWithoutLink: Int): Long {
+        if (foreground || passesWithoutLink <= 1) return DIRECT_RETRY_MS
+        val shift = (passesWithoutLink - 1).coerceAtMost(4)
+        return (DIRECT_RETRY_MS shl shift).coerceAtMost(DIRECT_BACKGROUND_RETRY_MAX_MS)
+    }
+
     /** Resume kick: skip only a fresh in-flight scan/connect; always reopen a stale link. */
     fun resumeShouldKick(
         linkUp: Boolean,

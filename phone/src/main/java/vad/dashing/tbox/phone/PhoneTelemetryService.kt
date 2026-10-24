@@ -165,6 +165,7 @@ object PhoneSessionController {
     fun onUiStarted(context: Context, permissionsReady: Boolean) {
         val r = ensureInitialized(context)
         uiVisible = true
+        r.foreground = true
         r.storeKey = store.key
         if (permissionsReady) {
             r.start()
@@ -175,6 +176,7 @@ object PhoneSessionController {
 
     fun onUiStopped(context: Context) {
         uiVisible = false
+        router?.foreground = false
         val st = store
         if (!st.anyTelemetryEnabled) {
             mainHandler.removeCallbacks(bgTickRunnable)
