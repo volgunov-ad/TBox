@@ -556,6 +556,19 @@
     <string name="widget_media_volume_action_decrease">Уменьшить громкость медиа</string>
     <string name="widget_media_volume_action_mute">Включить или выключить звук медиа</string>
     <string name="widget_media_volume_use_mbcan_vhal">Работа через CAN (mbCAN/VHAL)</string>
+
+    <string name="widget_hu_screen_brightness_title">Яркость экрана ГУ</string>
+    <string name="widget_hu_screen_brightness_action_increase">Увеличить яркость экрана ГУ</string>
+    <string name="widget_hu_screen_brightness_action_decrease">Уменьшить яркость экрана ГУ</string>
+    <string name="widget_hu_screen_brightness_action_auto">Включить или выключить автояркость экрана ГУ</string>
+    <string name="widget_icm_brightness_title">Яркость приборной панели</string>
+    <string name="widget_icm_brightness_action_increase">Увеличить яркость приборной панели</string>
+    <string name="widget_icm_brightness_action_decrease">Уменьшить яркость приборной панели</string>
+    <string name="widget_icm_brightness_action_auto">Включить или выключить автояркость приборной панели</string>
+    <string name="widget_hud_brightness_title">Яркость HUD</string>
+    <string name="widget_hud_brightness_action_increase">Увеличить яркость HUD</string>
+    <string name="widget_hud_brightness_action_decrease">Уменьшить яркость HUD</string>
+    <string name="widget_hud_brightness_action_auto">Включить или выключить автояркость HUD</string>
     <string name="widget_stepper_adjust_icon_style_title">Кнопки изменения значения</string>
     <string name="widget_stepper_adjust_icon_style_desc">Вид иконок для увеличения и уменьшения</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Плюс и минус</string>
@@ -2457,6 +2470,13 @@
     <string name="data_title_music_buttons_widget_vertical">Виджет управления музыкой (только кнопки, вертикально)</string>
     <string name="data_title_media_volume_widget_horizontal">Виджет громкости медиа (горизонтально)</string>
     <string name="data_title_media_volume_widget_vertical">Виджет громкости медиа (вертикально)</string>
+
+    <string name="data_title_hu_screen_brightness_widget_horizontal">Яркость экрана ГУ (горизонтально)</string>
+    <string name="data_title_hu_screen_brightness_widget_vertical">Яркость экрана ГУ (вертикально)</string>
+    <string name="data_title_icm_brightness_widget_horizontal">Яркость приборки (горизонтально)</string>
+    <string name="data_title_icm_brightness_widget_vertical">Яркость приборки (вертикально)</string>
+    <string name="data_title_hud_brightness_widget_horizontal">Яркость HUD (горизонтально)</string>
+    <string name="data_title_hud_brightness_widget_vertical">Яркость HUD (вертикально)</string>
     <string name="data_title_time_widget">Время</string>
     <string name="data_title_cpu_usage">Загрузка процессора</string>
     <string name="data_title_free_ram_percent">Свободная память</string>
@@ -2697,6 +2717,13 @@
     <string name="widget_desc_music_buttons_vertical">Вертикальные кнопки управления воспроизведением без текста трека; шапка плеера — по «Показывать заголовок».</string>
     <string name="widget_desc_media_volume_horizontal">Горизонтальный регулятор громкости мультимедиа.</string>
     <string name="widget_desc_media_volume_vertical">Вертикальный регулятор громкости мультимедиа.</string>
+
+    <string name="widget_desc_hu_screen_brightness_horizontal">Горизонтальный регулятор яркости экрана ГУ.</string>
+    <string name="widget_desc_hu_screen_brightness_vertical">Вертикальный регулятор яркости экрана ГУ.</string>
+    <string name="widget_desc_icm_brightness_horizontal">Горизонтальный регулятор яркости приборной панели.</string>
+    <string name="widget_desc_icm_brightness_vertical">Вертикальный регулятор яркости приборной панели.</string>
+    <string name="widget_desc_hud_brightness_horizontal">Горизонтальный регулятор яркости HUD.</string>
+    <string name="widget_desc_hud_brightness_vertical">Вертикальный регулятор яркости HUD.</string>
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
     <string name="widget_desc_app_list">Список установленных программ с запуском, скрытием и удалением.</string>
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
@@ -2773,6 +2800,10 @@
     <string name="widget_actions_music_square">Две строки кнопок; опционально обложка и «Нравится»; свайп — сменить плеер.</string>
     <string name="widget_actions_music_buttons">Кнопки — предыдущая, воспроизведение или пауза и следующая; свайп — сменить плеер.</string>
     <string name="widget_actions_media_volume">Кнопки или свайп — изменить громкость; нажатие по центру — выключить или вернуть звук.</string>
+
+    <string name="widget_actions_hu_screen_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость. При выключении авто записывается текущий уровень.</string>
+    <string name="widget_actions_icm_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость приборки. При выключении авто записывается текущий уровень.</string>
+    <string name="widget_actions_hud_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость HUD. При выключении авто записывается текущий уровень.</string>
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение; двойное — закрыть (ADB force-stop, без повторного запуска).</string>
     <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>

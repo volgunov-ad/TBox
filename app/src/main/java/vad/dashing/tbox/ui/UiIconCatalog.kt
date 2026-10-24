@@ -304,6 +304,21 @@ object UiIconCatalog {
         }
 
         listOf(
+            Triple("hu.manual", R.drawable.ic_widget_brightness_hu, "HU MANUAL"),
+            Triple("hu.auto", R.drawable.ic_widget_brightness_hu_auto, "HU AUTO"),
+            Triple("settings.manual", R.drawable.ic_widget_brightness_settings, "BRIGHTNESS"),
+            Triple("settings.auto", R.drawable.ic_widget_brightness_settings_auto, "BRIGHTNESS AUTO"),
+        ).forEach { (state, drawable, label) ->
+            addIcon(
+                "dashboard.brightness.$state",
+                UiIconCategory.NAVIGATION,
+                R.string.data_title_hu_screen_brightness_widget_horizontal,
+                drawable,
+                label,
+            )
+        }
+
+        listOf(
             Triple("ac", R.drawable.ic_widget_hvac_ac, "A/C"),
             Triple("ac_max", R.drawable.ic_widget_hvac_ac_max, "A/C MAX"),
             Triple("ac_clean_when_locked", R.drawable.ic_widget_hvac_ac_clean_when_locked, "A/C CLEAN"),

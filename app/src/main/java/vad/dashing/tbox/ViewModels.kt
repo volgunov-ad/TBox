@@ -491,6 +491,24 @@ object WidgetsRepository {
         MIRROR_ADJUST_MODE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_adjust_mode_widget),
         MIRROR_FOLD_WIDGET_DATA_KEY to DataTitle(R.string.data_title_mirror_fold_widget),
         DAY_NIGHT_THEME_WIDGET_DATA_KEY to DataTitle(R.string.data_title_day_night_theme_widget),
+        HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_hu_screen_brightness_widget_horizontal
+        ),
+        HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_hu_screen_brightness_widget_vertical
+        ),
+        ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_icm_brightness_widget_horizontal
+        ),
+        ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_icm_brightness_widget_vertical
+        ),
+        HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_hud_brightness_widget_horizontal
+        ),
+        HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_hud_brightness_widget_vertical
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_main_screen_page_selector_widget_horizontal
         ),
@@ -839,6 +857,30 @@ object WidgetsRepository {
             R.string.widget_desc_day_night_theme,
             R.string.widget_actions_day_night_theme,
         ),
+        HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hu_screen_brightness_horizontal,
+            R.string.widget_actions_hu_screen_brightness,
+        ),
+        HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hu_screen_brightness_vertical,
+            R.string.widget_actions_hu_screen_brightness,
+        ),
+        ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_icm_brightness_horizontal,
+            R.string.widget_actions_icm_brightness,
+        ),
+        ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_icm_brightness_vertical,
+            R.string.widget_actions_icm_brightness,
+        ),
+        HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hud_brightness_horizontal,
+            R.string.widget_actions_hud_brightness,
+        ),
+        HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_hud_brightness_vertical,
+            R.string.widget_actions_hud_brightness,
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
             R.string.widget_desc_main_screen_page_selector_horizontal,
             R.string.widget_actions_main_screen_page_selector,
@@ -1057,6 +1099,12 @@ object WidgetsRepository {
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
@@ -1183,6 +1231,12 @@ object WidgetsRepository {
             MIRROR_ADJUST_MODE_WIDGET_DATA_KEY,
             MIRROR_FOLD_WIDGET_DATA_KEY,
             DAY_NIGHT_THEME_WIDGET_DATA_KEY,
+            HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+            HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,

@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.GAS_BRAKE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_AC_MAX_WIDGET_DATA_KEY
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.HMA_WIDGET_DATA_KEY
@@ -13,6 +15,8 @@ import vad.dashing.tbox.EPB_PARK_LAMP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ENGINE_OIL_PRESSURE_WIDGET_DATA_KEY
 import vad.dashing.tbox.BRAKE_FLUID_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRM_DX_TAR_OBJ_WIDGET_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
@@ -117,5 +121,33 @@ class MbCanWidgetSignalMapTest {
     fun frmDxTarObjWidget_subscribesFrmTargetDistance() {
         assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY)))
         assertEquals(MbCanSignal.FrmTargetDistance, MbCanWidgetSignalMap.signalFor(FRM_DX_TAR_OBJ_WIDGET_DATA_KEY))
+    }
+
+    @Test
+    fun icmBrightnessWidget_subscribesModeAndManual() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY)))
+        assertEquals(
+            MbCanSignal.IcmManualBrightness,
+            MbCanWidgetSignalMap.signalFor(ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(
+            listOf(ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY),
+        )
+        assertTrue(signals.contains(MbCanSignal.IcmManualBrightness))
+        assertTrue(signals.contains(MbCanSignal.IcmBrightnessMode))
+    }
+
+    @Test
+    fun hudBrightnessWidget_subscribesLevelAndAuto() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY)))
+        assertEquals(
+            MbCanSignal.HudBrightness,
+            MbCanWidgetSignalMap.signalFor(HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY),
+        )
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(
+            listOf(HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        assertTrue(signals.contains(MbCanSignal.HudBrightness))
+        assertTrue(signals.contains(MbCanSignal.HudAutoBrightness))
     }
 }
