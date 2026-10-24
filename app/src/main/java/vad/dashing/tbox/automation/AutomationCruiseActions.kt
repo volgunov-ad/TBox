@@ -1,14 +1,18 @@
 package vad.dashing.tbox.automation
 
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
 import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.GlobalCruiseControlType
 import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.mbcan.AccCruiseController
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommandResult
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
+import android.os.SystemClock
 
 /**
  * Parses Builtin cruise parameters and dispatches to [AccCruiseController].
@@ -104,34 +108,51 @@ object AutomationCruiseActions {
     }
 
     suspend fun execute(action: AutomationAction.Builtin): AutomationActionResult {
-        val mode = resolveRuntimeMode()
-        val result: MbCanCommandResult = when (action.type) {
-            AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
-                val params = parseEngageParams(action)
-                AccCruiseController.engageToTargetAwaiting(
-                    targetKmh = params.targetKmh,
-                    increaseIntervalMs = params.increaseIntervalMs,
-                    decreaseIntervalMs = params.decreaseIntervalMs,
-                    cruiseControlType = params.cruiseControlType,
-                )
-            }
-            AutomationBuiltinActionType.CRUISE_PAUSE ->
-                AccCruiseController.pauseCruise(mode)
-            AutomationBuiltinActionType.CRUISE_FULL_OFF ->
-                AccCruiseController.fullOff(mode)
-            AutomationBuiltinActionType.CRUISE_RESUME ->
-                AccCruiseController.resumeCruise(mode)
-            AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
-                AccCruiseController.activateCruiseAtCurrentSpeed(mode)
-            AutomationBuiltinActionType.CRUISE_NUDGE -> {
-                if (action.intValue != 1 && action.intValue != -1) {
-                    return AutomationActionResult.failure("Круиз: шаг уставки +1 или −1")
-                }
-                AccCruiseController.nudgeCruise(action.intValue, mode)
-            }
-            else ->
-                return AutomationActionResult.failure("Не действие круиза")
+        if (action.type == AutomationBuiltinActionType.CRUISE_NUDGE &&
+            action.intValue != 1 &&
+            action.intValue != -1
+        ) {
+            return AutomationActionResult.failure("Круиз: шаг уставки +1 или −1")
         }
+        awaitCanBackendReadyForAction(
+            isAvailable = {
+                UniversalCanRepository.availability.value is MbCanAvailability.Available
+            },
+            warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
+            nowElapsedMillis = { SystemClock.elapsedRealtime() },
+            delayFor = { delay(it) },
+        )
+        val result: MbCanCommandResult = executeCanWithStartupRetry(
+            execute = {
+                val mode = resolveRuntimeMode()
+                when (action.type) {
+                    AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
+                        val params = parseEngageParams(action)
+                        AccCruiseController.engageToTargetAwaiting(
+                            targetKmh = params.targetKmh,
+                            increaseIntervalMs = params.increaseIntervalMs,
+                            decreaseIntervalMs = params.decreaseIntervalMs,
+                            cruiseControlType = params.cruiseControlType,
+                        )
+                    }
+                    AutomationBuiltinActionType.CRUISE_PAUSE ->
+                        AccCruiseController.pauseCruise(mode)
+                    AutomationBuiltinActionType.CRUISE_FULL_OFF ->
+                        AccCruiseController.fullOff(mode)
+                    AutomationBuiltinActionType.CRUISE_RESUME ->
+                        AccCruiseController.resumeCruise(mode)
+                    AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ->
+                        AccCruiseController.activateCruiseAtCurrentSpeed(mode)
+                    AutomationBuiltinActionType.CRUISE_NUDGE ->
+                        AccCruiseController.nudgeCruise(action.intValue, mode)
+                    else ->
+                        MbCanCommandResult(false, "Не действие круиза")
+                }
+            },
+            warmUp = { UniversalCanRepository.warmUpAvailabilityForUi() },
+            nowElapsedMillis = { SystemClock.elapsedRealtime() },
+            delayFor = { delay(it) },
+        )
         return AutomationActionResult(result.success, result.message)
     }
 }

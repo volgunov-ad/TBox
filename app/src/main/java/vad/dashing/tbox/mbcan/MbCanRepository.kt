@@ -4312,6 +4312,7 @@ object MbCanRepository {
 
     private suspend fun ensureMbCanReadyIfNeeded() {
         if (MbCanEngineFacade.isInitialized()) {
+            _availability.value = MbCanEngineFacade.availability
             // Heal orphaned JobManager types if init happened outside this path.
             MbCanJobManager.ensureOemSubscriptions()
             return
@@ -4536,6 +4537,9 @@ object MbCanRepository {
             // Listener bridges above may ensureInitialized() as a side effect; make sure
             // JobManager types (incl. STEERING_ANGLE / TURNLIGHT / WHEEL for A9 push) are actually subscribed.
             MbCanJobManager.ensureOemSubscriptions()
+            if (MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.availability
+            }
         }
     }
 
