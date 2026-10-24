@@ -134,6 +134,6 @@ class AndroidSensorDrBackend(
 
     companion object {
         const val HAL_SILENT_TIMEOUT_MS = 3_000L
-        const val HAL_REFUSED_STATUS = "????????? HAL ??????? ? ?????????"
+        const val HAL_REFUSED_STATUS = "sensor HAL refused activation"
     }
 }

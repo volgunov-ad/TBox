@@ -8,7 +8,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -348,7 +347,7 @@ class PhoneTelemetryStreamer(
                 longitude = location.longitude,
                 horizontalAccuracyM = if (location.hasAccuracy()) location.accuracy else null,
                 altitudeM = if (location.hasAltitude()) location.altitude.toFloat() else null,
-                speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f,
+                speedKmh = if (location.hasSpeed()) location.speed * 3.6f else null,
                 bearingDeg = if (location.hasBearing()) location.bearing else null,
                 usedSatellites = usedSats,
                 visibleSatellites = maxOf(visibleSats, usedSats),
@@ -813,8 +812,15 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
         val store = PhoneStore(context)
         if (!store.anyTelemetryEnabled) return
         when (intent?.action) {
-            BluetoothDevice.ACTION_ACL_CONNECTED,
-            BluetoothAdapter.ACTION_STATE_CHANGED,
+            BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                // Headphones and watches connect too; only the known head unit should wake us.
+                val known = store.directAddress
+                @Suppress("DEPRECATION")
+                val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                if (known.isNullOrBlank() || device?.address.equals(known, ignoreCase = true)) {
+                    PhoneTelemetryService.startOrUpdate(context)
+                }
+            }
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
                 PhoneTelemetryService.startOrUpdate(context)

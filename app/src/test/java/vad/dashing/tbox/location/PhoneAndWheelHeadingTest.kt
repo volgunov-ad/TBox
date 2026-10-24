@@ -506,4 +506,37 @@ class PhoneAndWheelHeadingTest {
         feed("aabbccdd", 20_100L)
         assertEquals("aabbccdd", PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
     }
+
+    @Test
+    fun phoneTelemetryRepository_rejectsBadCoordinatesAndEstimatesMissingSpeed() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = null,
+            bearingDeg = 0f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 0,
+        )
+        fun feed(l: PhoneBleCodec.PhoneLocation, at: Long) = PhoneTelemetryRepository.onPhoneLocation(
+            idHex = "11223344",
+            name = null,
+            loc = l,
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = at,
+            nowEpochMs = 1_700_000_000_000L + at,
+        )
+        feed(loc.copy(latitude = 123.0), 1_000L)
+        assertNull(PhoneTelemetryRepository.peekLastLocationValues())
+        assertNull(PhoneTelemetryRepository.uiState.value.activePhoneIdHex)
+
+        feed(loc, 1_000L)
+        assertEquals(0f, PhoneTelemetryRepository.peekLastLocationValues()!!.first.speed, 1e-4f)
+        // 10 m north in 1 s = 36 km/h.
+        feed(loc.copy(gen = 2, latitude = 55.75 + 10.0 / 111_320.0), 2_000L)
+        assertEquals(36f, PhoneTelemetryRepository.peekLastLocationValues()!!.first.speed, 0.5f)
+    }
 }

@@ -112,6 +112,10 @@ object PhoneTelemetryRepository {
     const val MAX_MAG_AGE_MS = 3_500L
     const val ACTIVE_PHONE_SILENT_TAKEOVER_MS = 10_000L
 
+    private const val DERIVED_SPEED_MIN_DT_MS = 200L
+    private const val DERIVED_SPEED_MAX_DT_MS = 5_000L
+    private const val DERIVED_SPEED_MAX_KMH = 300f
+
     private const val COMPASS_MEDIAN_WINDOW = 5
     private const val MAX_MAG_FIELD_JUMP_UT = 12f
     private const val MAX_UNEXPLAINED_AZIMUTH_JUMP_DEG = 35f
@@ -274,12 +278,20 @@ object PhoneTelemetryRepository {
         nowElapsedMs: Long = SystemClock.elapsedRealtime(),
         nowEpochMs: Long = System.currentTimeMillis(),
     ) {
+        // Packets are signed, but a phone app bug must not become the car's position.
+        if (!loc.latitude.isFinite() || loc.latitude !in -90.0..90.0 ||
+            !loc.longitude.isFinite() || loc.longitude !in -180.0..180.0 ||
+            loc.speedKmh?.isFinite() == false
+        ) {
+            return
+        }
         var toPublish: LocValues? = null
         synchronized(lock) {
             if (!acceptsPhoneLocked(idHex, name, nowElapsedMs)) return
             lastLocation = loc
             lastLocAtElapsedMs = nowElapsedMs
             val fixEpochMs = (nowEpochMs - loc.fixAgeMs.toLong().coerceAtLeast(0L)).coerceAtLeast(0L)
+            val speedKmh = loc.speedKmh ?: derivedSpeedKmhLocked(loc, fixEpochMs)
             val hAcc = loc.horizontalAccuracyM?.takeIf { it.isFinite() && it > 0f }
             val hdop = hAcc?.let { (it / 4.5f).coerceIn(0.5f, 50f) } ?: 1.0f
             val locValues = LocValues(
@@ -289,7 +301,7 @@ object PhoneTelemetryRepository {
                 latitude = loc.latitude,
                 longitude = loc.longitude,
                 altitude = (loc.altitudeM ?: 0f).toDouble(),
-                speed = loc.speedKmh.coerceAtLeast(0f),
+                speed = speedKmh.coerceAtLeast(0f),
                 trueDirection = loc.bearingDeg ?: 0f,
                 magneticDirection = 0f,
                 visibleSatellites = loc.visibleSatellites,
@@ -313,6 +325,20 @@ object PhoneTelemetryRepository {
             TboxRepository.updateLocationUpdateTime()
             TboxRepository.updateLocValues(values)
         }
+    }
+
+    /**
+     * A fix without speed would read as "standing" downstream; estimate it from the previous
+     * phone fix instead, or report 0 when there is no recent one.
+     */
+    private fun derivedSpeedKmhLocked(loc: PhoneBleCodec.PhoneLocation, fixEpochMs: Long): Float {
+        val prev = lastLocValues ?: return 0f
+        if (!prev.locateStatus || !loc.locateStatus) return 0f
+        val dtMs = fixEpochMs - (prev.updateTime?.time ?: return 0f)
+        if (dtMs !in DERIVED_SPEED_MIN_DT_MS..DERIVED_SPEED_MAX_DT_MS) return 0f
+        val distM = ConstantDrMath.distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+        val kmh = (distM / (dtMs / 1000.0) * 3.6).toFloat()
+        return if (kmh.isFinite() && kmh <= DERIVED_SPEED_MAX_KMH) kmh else 0f
     }
 
     fun onPhoneYaw(

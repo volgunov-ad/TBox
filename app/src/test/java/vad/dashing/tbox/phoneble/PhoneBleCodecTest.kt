@@ -458,11 +458,16 @@ class PhoneBleCodecTest {
         assertEquals(44.005986, assembled.longitude, 1e-6)
         assertEquals(4.25f, assembled.horizontalAccuracyM!!, 0.02f)
         assertEquals(142f, assembled.altitudeM!!, 0.5f)
-        assertEquals(72.0f, assembled.speedKmh, 0.1f)
+        assertEquals(72.0f, assembled.speedKmh!!, 0.1f)
         assertEquals(215.45f, assembled.bearingDeg!!, 0.05f)
         assertEquals(11, assembled.usedSatellites)
         assertEquals(15, assembled.visibleSatellites)
         assertEquals(120, assembled.fixAgeMs)
+
+        val (noSpeedPos, noSpeedMotion) = PhoneBleCodec.locBodies(43, loc.copy(gen = 43, speedKmh = null))
+        val noSpeedAssembler = PhoneBleCodec.LocAssembler()
+        noSpeedAssembler.accept(PhoneBleCodec.TYPE_LOC_POS, noSpeedPos)
+        assertNull(noSpeedAssembler.accept(PhoneBleCodec.TYPE_LOC_MOTION, noSpeedMotion)!!.speedKmh)
 
         val yaw = PhoneBleCodec.PhoneYawSample(
             dtMs = 150,
