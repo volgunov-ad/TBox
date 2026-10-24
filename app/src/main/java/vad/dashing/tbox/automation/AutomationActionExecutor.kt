@@ -18,6 +18,7 @@ import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MEDIA_AUTOMATION_SOURCE_HOLD_MS
 import vad.dashing.tbox.MainActivityIntentHelper
@@ -126,13 +127,16 @@ class AutomationActionExecutor(
             canCommandMutex.withLock {
                 val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
                     ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
-                awaitCanBackendReadyForAction(
-                    isAvailable = {
-                        UniversalCanRepository.availability.value is MbCanAvailability.Available
-                    },
-                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
-                    delayFor = { delay(it) },
-                )
+                if (!awaitCanBackendReadyForAction(
+                        isAvailable = {
+                            UniversalCanRepository.availability.value is MbCanAvailability.Available
+                        },
+                        nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                        delayFor = { delay(it) },
+                    )
+                ) {
+                    return@withLock AutomationActionResult.failure(CAN_NOT_READY_MESSAGE)
+                }
                 val canMode = UniversalCanRepository.mode.value
                 if (!entry.isActionAllowed(action)) {
                     return@withLock AutomationActionResult.failure(
@@ -528,13 +532,16 @@ class AutomationActionExecutor(
             if (ui == null) {
                 AutomationActionResult.failure("Подголовник: only / assist / off")
             } else {
-                awaitCanBackendReadyForAction(
-                    isAvailable = {
-                        UniversalCanRepository.availability.value is MbCanAvailability.Available
-                    },
-                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
-                    delayFor = { delay(it) },
-                )
+                // On Adayo/A10 the headrest goes through AdayoSettingsService, not VHAL.
+                if (!HeadUnitDayNightMapping.usesAdayoKeys()) {
+                    awaitCanBackendReadyForAction(
+                        isAvailable = {
+                            UniversalCanRepository.availability.value is MbCanAvailability.Available
+                        },
+                        nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                        delayFor = { delay(it) },
+                    )
+                }
                 val ok = PlatformAudioRepository.setHeadrestMode(ui)
                 AutomationActionResult(
                     ok,
@@ -816,6 +823,8 @@ class AutomationActionExecutor(
         internal const val CAN_READY_POLL_MS = 250L
         internal const val CAN_EXEC_RETRY_WINDOW_MS = 12_000L
         internal const val CAN_EXEC_RETRY_DELAY_MS = 500L
+        internal const val CAN_EXEC_MAX_WRITE_FAILURE_RETRIES = 2
+        internal const val CAN_NOT_READY_MESSAGE = "CAN ГУ не готов"
     }
 }
 
@@ -837,18 +846,30 @@ internal suspend fun awaitCanBackendReadyForAction(
     }
 }
 
-internal fun isTransientCanStartupFailure(message: String): Boolean {
+/** Backend not bound yet or pre-read failed: nothing reached the bus. */
+internal fun isCanBackendNotReadyFailure(message: String): Boolean {
     val normalized = message.trim().lowercase()
     if (normalized.isEmpty()) return false
     return normalized.contains("mbcan unavailable") ||
         normalized.contains("vhal unavailable") ||
         normalized.contains("car service") ||
         normalized.contains("pre-read failed") ||
-        normalized.contains("set command failed") ||
-        normalized.contains("set audio command failed") ||
-        normalized == "set failed" ||
         normalized.startsWith("unavailable")
 }
+
+/**
+ * Write was attempted and rejected. VHAL reports any exception (including unsupported
+ * property / value) as "Set failed", so these may be permanent.
+ */
+internal fun isCanWriteFailure(message: String): Boolean {
+    val normalized = message.trim().lowercase()
+    return normalized.contains("set command failed") ||
+        normalized.contains("set audio command failed") ||
+        normalized == "set failed"
+}
+
+internal fun isTransientCanStartupFailure(message: String): Boolean =
+    isCanBackendNotReadyFailure(message) || isCanWriteFailure(message)
 
 internal suspend fun executeCanWithStartupRetry(
     execute: suspend () -> MbCanCommandResult,
@@ -856,13 +877,19 @@ internal suspend fun executeCanWithStartupRetry(
     delayFor: suspend (Long) -> Unit,
     retryWindowMs: Long = AutomationActionExecutor.CAN_EXEC_RETRY_WINDOW_MS,
     retryDelayMs: Long = AutomationActionExecutor.CAN_EXEC_RETRY_DELAY_MS,
+    maxWriteFailureRetries: Int = AutomationActionExecutor.CAN_EXEC_MAX_WRITE_FAILURE_RETRIES,
 ): MbCanCommandResult {
     var result = execute()
     if (result.success || retryWindowMs <= 0L || !isTransientCanStartupFailure(result.message)) {
         return result
     }
     val deadline = nowElapsedMillis() + retryWindowMs
+    var writeFailureRetries = 0
     while (!result.success && isTransientCanStartupFailure(result.message)) {
+        if (isCanWriteFailure(result.message)) {
+            if (writeFailureRetries >= maxWriteFailureRetries) break
+            writeFailureRetries += 1
+        }
         val remaining = deadline - nowElapsedMillis()
         if (remaining <= 0L) break
         delayFor(min(retryDelayMs, remaining))

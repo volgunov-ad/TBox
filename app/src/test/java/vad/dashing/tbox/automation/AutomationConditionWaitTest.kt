@@ -137,4 +137,66 @@ class AutomationConditionWaitTest {
         assertEquals(1, attempts)
         assertEquals(0L, now)
     }
+
+    @Test
+    fun canStartupRetry_capsRetriesOfRejectedWrites() = runBlocking {
+        var now = 0L
+        var attempts = 0
+        val result = executeCanWithStartupRetry(
+            execute = {
+                attempts += 1
+                vad.dashing.tbox.mbcan.MbCanCommandResult(false, "Set failed")
+            },
+            nowElapsedMillis = { now },
+            delayFor = { now += it },
+            retryWindowMs = 12_000L,
+            retryDelayMs = 500L,
+            maxWriteFailureRetries = 2,
+        )
+        assertFalse(result.success)
+        assertEquals(3, attempts)
+        assertEquals(1_000L, now)
+    }
+
+    @Test
+    fun canStartupRetry_keepsRetryingWhileBackendNotReadyThenCapsWrites() = runBlocking {
+        var now = 0L
+        var attempts = 0
+        val result = executeCanWithStartupRetry(
+            execute = {
+                attempts += 1
+                if (now < 3_000L) {
+                    vad.dashing.tbox.mbcan.MbCanCommandResult(false, "mbCAN unavailable")
+                } else {
+                    vad.dashing.tbox.mbcan.MbCanCommandResult(false, "Set command failed")
+                }
+            },
+            nowElapsedMillis = { now },
+            delayFor = { now += it },
+            retryWindowMs = 12_000L,
+            retryDelayMs = 500L,
+            maxWriteFailureRetries = 1,
+        )
+        assertFalse(result.success)
+        assertEquals(8, attempts)
+        assertEquals(3_500L, now)
+    }
+
+    @Test
+    fun canStartupRetry_zeroWindowRunsOnce() = runBlocking {
+        var now = 0L
+        var attempts = 0
+        val result = executeCanWithStartupRetry(
+            execute = {
+                attempts += 1
+                vad.dashing.tbox.mbcan.MbCanCommandResult(false, "mbCAN unavailable")
+            },
+            nowElapsedMillis = { now },
+            delayFor = { now += it },
+            retryWindowMs = 0L,
+        )
+        assertFalse(result.success)
+        assertEquals(1, attempts)
+        assertEquals(0L, now)
+    }
 }
