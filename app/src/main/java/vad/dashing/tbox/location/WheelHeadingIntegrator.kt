@@ -92,7 +92,10 @@ object WheelHeadingIntegrator {
 
     private val lock = Any()
     private var prevCounters: WheelCounters? = null
+    /** dt anchor; [discardThrough] moves it forward. */
     private var lastSampleElapsedMs: Long = 0L
+    /** Time of the last real wheel sample; drives [isFresh] and the gap check. */
+    private var lastIngestElapsedMs: Long = 0L
     private var pendingDeltaDeg: Double = 0.0
     private var lastStepDeltaDeg: Float = 0f
     private var lastOmegaWheelsDegPerSec: Float? = null
@@ -110,12 +113,12 @@ object WheelHeadingIntegrator {
 
     fun pendingDeltaDeg(): Float = synchronized(lock) { pendingDeltaDeg.toFloat() }
 
-    fun lastSampleElapsedMs(): Long = synchronized(lock) { lastSampleElapsedMs }
+    fun lastSampleElapsedMs(): Long = synchronized(lock) { lastIngestElapsedMs }
 
     fun isFresh(nowElapsedMs: Long): Boolean = synchronized(lock) {
         nowElapsedMs > 0L &&
-            lastSampleElapsedMs > 0L &&
-            nowElapsedMs - lastSampleElapsedMs <= MAX_SAMPLE_AGE_MS
+            lastIngestElapsedMs > 0L &&
+            nowElapsedMs - lastIngestElapsedMs <= MAX_SAMPLE_AGE_MS
     }
 
     fun peekDebugSnapshot(): DebugSnapshot = synchronized(lock) {
@@ -127,7 +130,7 @@ object WheelHeadingIntegrator {
             yasTrustWeight = lastYasTrustWeight,
             slipRejected = lastSlipRejected,
             trackWidthM = WheelHeadingCalibrationStore.trackWidthM,
-            lastSampleElapsedMs = lastSampleElapsedMs,
+            lastSampleElapsedMs = lastIngestElapsedMs,
         )
     }
 
@@ -135,6 +138,7 @@ object WheelHeadingIntegrator {
         synchronized(lock) {
             prevCounters = null
             lastSampleElapsedMs = 0L
+            lastIngestElapsedMs = 0L
             pendingDeltaDeg = 0.0
             lastStepDeltaDeg = 0f
             lastOmegaWheelsDegPerSec = null
@@ -179,9 +183,17 @@ object WheelHeadingIntegrator {
             }
             val prev = prevCounters
             val prevAt = lastSampleElapsedMs
+            val prevIngestAt = lastIngestElapsedMs
             prevCounters = counters
             lastSampleElapsedMs = nowElapsedMs
+            lastIngestElapsedMs = nowElapsedMs
             if (prev == null || prevAt <= 0L || nowElapsedMs < prevAt) return
+            // After a silent gap (collection stopped, standstill, CAN dropout) the counter
+            // delta spans an unknown path: rebase instead of integrating it as one step.
+            if (prevIngestAt <= 0L || nowElapsedMs - prevIngestAt > MAX_SAMPLE_AGE_MS) {
+                arcHadSlipOrReverse = true
+                return
+            }
 
             val dLhf = WheelPulseOdometer.forwardDelta(prev.lhf, counters.lhf)
             val dRhf = WheelPulseOdometer.forwardDelta(prev.rhf, counters.rhf)
@@ -370,8 +382,8 @@ object WheelHeadingIntegrator {
                 (FULL_WHEELS_SPEED_KMH - LOW_SPEED_THRESHOLD_KMH)
         }.coerceIn(0f, 1f)
         val effWheelW = (speedW * yasTrustWeight.coerceIn(0f, 1f)).coerceIn(0f, 1f)
-        if (w == 0f) return s * (1f - effWheelW * 0.5f)
-        if (s == 0f) return w * effWheelW
+        // A zero wheel delta is a quantization gap: the next sample carries those pulses,
+        // so steer must not get extra weight here or curves are over-counted.
         return w * effWheelW + s * (1f - effWheelW)
     }
 

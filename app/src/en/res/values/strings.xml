@@ -2522,8 +2522,8 @@
     <string name="cycle_voltage">Cycle voltage, V</string>
     <string name="cycle_speed">Cycle speed, km/h</string>
     <string name="cycle_engine_rpm">Cycle engine rpm, rpm</string>
-    <string name="cycle_lateral_acceleration">Cycle lateral acceleration, m/s2</string>
-    <string name="cycle_longitudinal_acceleration">Cycle longitudinal acceleration, m/s2</string>
+    <string name="cycle_lateral_acceleration">Cycle lateral acceleration, g</string>
+    <string name="cycle_longitudinal_acceleration">Cycle longitudinal acceleration, g</string>
     <string name="cycle_pressure_fl">Cycle pressure FL, bar</string>
     <string name="cycle_pressure_fr">Cycle pressure FR, bar</string>
     <string name="cycle_pressure_rl">Cycle pressure RL, bar</string>

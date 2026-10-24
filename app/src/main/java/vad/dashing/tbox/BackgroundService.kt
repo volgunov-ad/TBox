@@ -4713,7 +4713,9 @@ class BackgroundService : Service() {
                     val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
                     val speed = TripTelemetryRepository.accountingCarSpeed()
                     val latAcc = vad.dashing.tbox.mbcan.UniversalCanRepository.lateralAccelerationState.value
-                        ?: CycleDataRepository.lateralAcceleration.value
+                        ?: vad.dashing.tbox.mbcan.LateralAccelerationDomain.gToMps2(
+                            CycleDataRepository.lateralAcceleration.value,
+                        )
                     val now = SystemClock.elapsedRealtime()
                     if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
                         vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
