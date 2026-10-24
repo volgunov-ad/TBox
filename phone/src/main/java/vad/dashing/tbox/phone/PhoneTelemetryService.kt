@@ -774,7 +774,10 @@ class PhoneTelemetryService : Service() {
 /**
  * Wakes the phone app when the associated head-unit Bluetooth device appears in range,
  * **only** when at least one telemetry toggle is enabled in [PhoneStore].
+ *
+ * `CompanionDeviceService` exists since API 31; older systems never bind this manifest entry.
  */
+@RequiresApi(31)
 class PhoneCompanionDeviceService : CompanionDeviceService() {
     @Deprecated("Deprecated in API 33")
     override fun onDeviceAppeared(address: String) {
@@ -861,7 +864,8 @@ object PhoneSystemHelpers {
                 }
 
                 override fun onAssociationCreated(associationInfo: AssociationInfo) {
-                    if (Build.VERSION.SDK_INT >= 31) {
+                    // Callback and AssociationInfo.deviceMacAddress are both API 33.
+                    if (Build.VERSION.SDK_INT >= 33) {
                         runCatching { cdm.startObservingDevicePresence(associationInfo.deviceMacAddress?.toString().orEmpty()) }
                     }
                 }
