@@ -312,8 +312,9 @@ class PhoneTelemetryStreamer(
     private var hasGravitySensor = false
 
     // Gyro window integration (150 ms)
-    private var lastGyroSampleElapsedMs = 0L
-    private var windowStartElapsedMs = 0L
+    /** `SensorEvent.timestamp` (ns) of the last gyro sample and of the current window start. */
+    private var lastGyroEventNs = 0L
+    private var windowStartEventNs = 0L
     private var windowAccumPsiDeg = 0.0
 
     // Magnetometer state (1000 ms)
@@ -413,20 +414,24 @@ class PhoneTelemetryStreamer(
                         event.values[2],
                     )
                     val rateDegPerSec = PhoneSensorMath.projectYawRateDegPerSec(gyro, g) ?: return
-                    if (windowStartElapsedMs == 0L) {
-                        windowStartElapsedMs = nowElapsedMs
-                        lastGyroSampleElapsedMs = nowElapsedMs
+                    // Callbacks run on the main looper and arrive in bursts after UI stalls;
+                    // the event timestamp is when the sample was actually taken.
+                    val eventNs = event.timestamp
+                    if (windowStartEventNs == 0L || eventNs <= lastGyroEventNs) {
+                        windowStartEventNs = eventNs
+                        lastGyroEventNs = eventNs
                         windowStartGravity = g
                         windowAccumPsiDeg = 0.0
                         return
                     }
-                    val dtSec = ((nowElapsedMs - lastGyroSampleElapsedMs) / 1000.0).coerceIn(0.0, 0.25)
-                    lastGyroSampleElapsedMs = nowElapsedMs
+                    val dtSec = ((eventNs - lastGyroEventNs) / 1e9).coerceIn(0.0, 0.25)
+                    lastGyroEventNs = eventNs
                     windowAccumPsiDeg += rateDegPerSec * dtSec
 
-                    val windowDtMs = (nowElapsedMs - windowStartElapsedMs).toInt()
+                    val windowDtMs = ((eventNs - windowStartEventNs) / 1_000_000L).toInt()
                     if (windowDtMs >= YAW_WINDOW_MS) {
                         flushYawWindow(nowElapsedMs, windowDtMs, g)
+                        windowStartEventNs = eventNs
                     }
                 }
                 Sensor.TYPE_MAGNETIC_FIELD -> {
@@ -492,7 +497,6 @@ class PhoneTelemetryStreamer(
             mountMoved = moved,
             gravDeltaMg = gravDeltaMg,
         )
-        windowStartElapsedMs = nowElapsedMs
         windowStartGravity = currentGravity
         windowAccumPsiDeg = 0.0
         windowAccelAnomaly = false
@@ -581,8 +585,8 @@ class PhoneTelemetryStreamer(
             runCatching { sm.unregisterListener(sensorListener) }
             sensorListenerRegistered = false
         }
-        windowStartElapsedMs = 0L
-        lastGyroSampleElapsedMs = 0L
+        windowStartEventNs = 0L
+        lastGyroEventNs = 0L
         windowAccumPsiDeg = 0.0
         windowAccelAnomaly = false
         if (!gyroActive && !compassActive) return
