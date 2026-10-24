@@ -114,14 +114,24 @@ object AutomationCruiseActions {
         ) {
             return AutomationActionResult.failure("Круиз: шаг уставки +1 или −1")
         }
-        awaitCanBackendReadyForAction(
-            isAvailable = {
-                UniversalCanRepository.availability.value is MbCanAvailability.Available
-            },
-            nowElapsedMillis = { SystemClock.elapsedRealtime() },
-            delayFor = { delay(it) },
-        )
+        if (!awaitCanBackendReadyForAction(
+                isAvailable = {
+                    UniversalCanRepository.availability.value is MbCanAvailability.Available
+                },
+                nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                delayFor = { delay(it) },
+            )
+        ) {
+            return AutomationActionResult.failure(AutomationActionExecutor.CAN_NOT_READY_MESSAGE)
+        }
+        // Nudge moves the remembered CCS setpoint before the pulse, so a retry would shift it twice.
+        val retryWindowMs = if (action.type == AutomationBuiltinActionType.CRUISE_NUDGE) {
+            0L
+        } else {
+            AutomationActionExecutor.CAN_EXEC_RETRY_WINDOW_MS
+        }
         val result: MbCanCommandResult = executeCanWithStartupRetry(
+            retryWindowMs = retryWindowMs,
             execute = {
                 val mode = resolveRuntimeMode()
                 when (action.type) {

@@ -2545,8 +2545,8 @@
     <string name="cycle_voltage">Cycle напряжение, В</string>
     <string name="cycle_speed">Cycle скорость, км/ч</string>
     <string name="cycle_engine_rpm">Cycle обороты двигателя, об/мин</string>
-    <string name="cycle_lateral_acceleration">Cycle поперечное ускорение, м/с2</string>
-    <string name="cycle_longitudinal_acceleration">Cycle продольное ускорение, м/с2</string>
+    <string name="cycle_lateral_acceleration">Cycle поперечное ускорение, g</string>
+    <string name="cycle_longitudinal_acceleration">Cycle продольное ускорение, g</string>
     <string name="cycle_pressure_fl">Cycle давление ПЛ, бар</string>
     <string name="cycle_pressure_fr">Cycle давление ПП, бар</string>
     <string name="cycle_pressure_rl">Cycle давление ЗЛ, бар</string>
