@@ -474,7 +474,7 @@ object PhoneTelemetryRepository {
             }
             val spd = speedKmh ?: 0f
             if (!gnssTruthful || reverse || !spd.isFinite() || spd < MOUNT_CALIB_MIN_SPEED_KMH ||
-                gnssCourseDeg == null || !gnssCourseDeg.isFinite() || gnssCourseDeg == 0f
+                gnssCourseDeg == null || !gnssCourseDeg.isFinite()
             ) {
                 lastMountCalibElapsedMs = 0L
                 gyroArcLastGnssCourse = null
@@ -482,6 +482,8 @@ object PhoneTelemetryRepository {
                 gyroArcGnssDeg = 0f
                 return null to null
             }
+            // 0° may mean "no course"; skip it without dropping arcs that pass through north.
+            if (gnssCourseDeg == 0f) return null to null
 
             // 1. Online phone gyro arc scale calibration (forward turns)
             if (nowElapsedMs - lastYawAtElapsedMs <= MAX_YAW_AGE_MS && lastYawRejectReason == null) {
@@ -525,7 +527,12 @@ object PhoneTelemetryRepository {
 
             // 2. Straight-line session mountYawOffset & sector calibration for phone compass
             val straightSteer = steerDeg == null || !steerDeg.isFinite() || abs(steerDeg) <= MOUNT_CALIB_MAX_STEER_DEG
-            val quietYaw = lastYawRateDegPerSec == null || abs(lastYawRateDegPerSec!!) <= MOUNT_CALIB_MAX_YAW_DEG_PER_SEC
+            // A stale rate from a gyro that was switched off (compass-only phone) says nothing
+            // about this moment and would block the mount calibration forever.
+            val yawRate = lastYawRateDegPerSec?.takeIf {
+                lastYawAtElapsedMs > 0L && nowElapsedMs - lastYawAtElapsedMs <= MAX_YAW_AGE_MS
+            }
+            val quietYaw = yawRate == null || abs(yawRate) <= MOUNT_CALIB_MAX_YAW_DEG_PER_SEC
             val magFresh = lastMagAtElapsedMs > 0L && nowElapsedMs - lastMagAtElapsedMs <= MAX_MAG_AGE_MS
             val rawMag = if (magHistory.isNotEmpty()) circularMedianDeg(magHistory.toList()) else lastMagAzimuthDeg
             if (straightSteer && quietYaw && magFresh && rawMag != null &&

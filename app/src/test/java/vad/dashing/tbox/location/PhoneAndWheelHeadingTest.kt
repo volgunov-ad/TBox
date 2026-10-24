@@ -215,6 +215,136 @@ class PhoneAndWheelHeadingTest {
     }
 
     @Test
+    fun wheelHeadingIntegrator_dropsLateralAccelWhenSourceGoesSilent() {
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(100, 100, 100, 100, 1000L),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 0f,
+            speedKmh = 30f,
+            lateralAccelMps2 = 2f,
+            nowElapsedMs = 1000L,
+        )
+        assertEquals(2f, WheelHeadingIntegrator.peekDebugSnapshot().lastLateralAccelMps2!!, 1e-4f)
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(120, 120, 120, 120, 1500L),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 0f,
+            speedKmh = 30f,
+            lateralAccelMps2 = null,
+            nowElapsedMs = 1500L,
+        )
+        assertNull(WheelHeadingIntegrator.peekDebugSnapshot().lastLateralAccelMps2)
+    }
+
+    @Test
+    fun wheelHeadingIntegrator_learnsYasSignAndCatchesOppositeTurn() {
+        // Left turn: rear right wheel +24 vs left +20 per 0.5 s at 30 km/h ≈ 7.2 °/s.
+        val latAccMatching = 1.04f
+        var lhr = 100
+        var rhr = 100
+        var now = 1000L
+        fun step(latAcc: Float) {
+            lhr += 20
+            rhr += 24
+            now += 500L
+            WheelHeadingIntegrator.onWheelSample(
+                counters = WheelCounters(lhr, rhr, lhr, rhr, now),
+                kMetersPerPulse = 0.025f,
+                reverse = false,
+                steerDeg = 90f,
+                speedKmh = 30f,
+                lateralAccelMps2 = latAcc,
+                nowElapsedMs = now,
+            )
+        }
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(lhr, rhr, lhr, rhr, now),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 90f,
+            speedKmh = 30f,
+            nowElapsedMs = now,
+        )
+        // Before the sign is known an opposite YAS turn still looks consistent.
+        step(-latAccMatching)
+        assertEquals(1f, WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight, 1e-4f)
+        repeat(12) { step(latAccMatching) }
+        assertEquals(1f, WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight, 1e-4f)
+        step(-latAccMatching)
+        assertTrue(WheelHeadingIntegrator.peekDebugSnapshot().yasTrustWeight < 0.9f)
+    }
+
+    @Test
+    fun phoneTelemetryRepository_staleGyroRateDoesNotBlockMountCalibration() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 1,
+            latitude = 55.75,
+            longitude = 37.61,
+            horizontalAccuracyM = 4f,
+            altitudeM = 120f,
+            speedKmh = 40f,
+            bearingDeg = 100f,
+            usedSatellites = 10,
+            visibleSatellites = 14,
+            fixAgeMs = 50,
+        )
+        PhoneTelemetryRepository.onPhoneLocation(
+            idHex = "11223344",
+            name = "DriverPhone",
+            loc = loc,
+            activeLocationSource = LocationSource.PHONE,
+            nowElapsedMs = 1000L,
+            nowEpochMs = 1_700_000_000_000L,
+        )
+        // Last gyro window before the gyro was switched off: a sharp turn.
+        PhoneTelemetryRepository.onPhoneYaw(
+            idHex = "11223344",
+            name = "DriverPhone",
+            sample = PhoneBleCodec.PhoneYawSample(
+                dtMs = 150,
+                dPsiDeg = 3f,
+                monoLowMs = 1000,
+                mountStable = true,
+                mountMoved = false,
+                gravDeltaMg = 0,
+            ),
+            nowElapsedMs = 1000L,
+        )
+        val later = 1000L + PhoneTelemetryRepository.MAX_YAW_AGE_MS + 1_000L
+        PhoneTelemetryRepository.onPhoneMag(
+            idHex = "11223344",
+            name = "DriverPhone",
+            sample = PhoneBleCodec.PhoneMagSample(
+                magneticAzimuthDeg = 80f,
+                fieldStrengthUt = 45f,
+                accuracy = 3,
+                pitchDeg = 0,
+                rollDeg = 0,
+                monoLowMs = later.toInt(),
+                mountMoved = false,
+            ),
+            steerDeg = 0f,
+            wheelDeltaDeg = 0f,
+            nowElapsedMs = later,
+        )
+        PhoneTelemetryRepository.onGnssReference(
+            gnssCourseDeg = 100f,
+            lat = 55.75,
+            lon = 37.61,
+            altM = 120f,
+            speedKmh = 36f,
+            steerDeg = 0f,
+            reverse = false,
+            gnssTruthful = true,
+            nowElapsedMs = later + 100L,
+            nowEpochMs = 1_700_000_005_000L,
+        )
+        assertNotNull(PhoneTelemetryRepository.uiState.value.mountYawOffsetDeg)
+    }
+
+    @Test
     fun lateralAccelerationDomain_decodesMbCanAndVhal() {
         val g = LateralAccelerationDomain.STANDARD_GRAVITY_MPS2
         assertEquals(0.25f * g, LateralAccelerationDomain.decodeMbCanFloat(0.25f)!!, 1e-4f)
