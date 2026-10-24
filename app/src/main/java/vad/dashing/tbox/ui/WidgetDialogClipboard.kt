@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP
 import vad.dashing.tbox.DEFAULT_PANEL_SHAPE
 
 /**
@@ -58,6 +61,11 @@ internal data class WholePanelClipboardSnapshot(
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
     val collapseTouchZoneThicknessDp: Int,
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,

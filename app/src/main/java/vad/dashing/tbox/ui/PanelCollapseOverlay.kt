@@ -7,10 +7,12 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -24,12 +26,20 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
-import vad.dashing.tbox.PanelCollapseEdge
+import kotlin.math.roundToInt
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP
 import vad.dashing.tbox.PANEL_COLLAPSE_ANIMATION_MS
+import vad.dashing.tbox.PanelCollapseAlongEdgeSegment
+import vad.dashing.tbox.PanelCollapseEdge
 
 internal data class PanelCollapseEdgeDropdownOption(
     val edge: PanelCollapseEdge,
@@ -61,6 +71,9 @@ internal fun CollapsiblePanelFrame(
     isEditMode: Boolean,
     onCollapsedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    stripLengthPercent: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    stripPositionPercent: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    touchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (edge == PanelCollapseEdge.NONE) {
@@ -69,6 +82,7 @@ internal fun CollapsiblePanelFrame(
     }
 
     val touchZoneDp = touchZoneThicknessDp.coerceAtLeast(stripThicknessDp)
+    val alongEdge = PanelCollapseAlongEdgeSegment.normalize(stripLengthPercent, stripPositionPercent)
     val gestureModifier = if (isEditMode) {
         Modifier
     } else {
@@ -83,87 +97,173 @@ internal fun CollapsiblePanelFrame(
         }
     }
 
-    val zoneAlignment = collapseZoneAlignment(edge)
-    val stripOuterAlignment = collapseStripOuterAlignment(edge)
-
     Box(modifier = modifier) {
         if (collapsed) {
             // Collapsed: only the strip color is drawn (no panel/tile underlay behind it).
             // Fully transparent stripColor → nothing visible; the touch zone still receives gestures.
-            Box(modifier = Modifier.fillMaxSize()) {
+            // Floating overlay window stays full-edge; only the drawn strip (and optional
+            // matched touch zone) use length/position.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
+                val alongPx = collapseAlongEdgePx(edge, maxWidth, maxHeight, density)
+                val segment = collapseAlongEdgeSegmentPx(alongPx, alongEdge)
+                val lengthDp = with(density) { segment.lengthPx.toDp() }
+                val offsetDp = with(density) { segment.offsetPx.toDp() }
                 if (stripColor.alpha > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .align(stripOuterAlignment)
-                            .then(collapseStripSizeModifier(edge, stripThicknessDp))
-                            .background(stripColor),
+                    CollapseAlongEdgeBox(
+                        edge = edge,
+                        collapsed = true,
+                        thicknessDp = stripThicknessDp,
+                        lengthDp = lengthDp,
+                        offsetDp = offsetDp,
+                        fullEdge = false,
+                        modifier = Modifier.background(stripColor),
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(gestureModifier),
-                )
+                val touchMatchStrip = touchZoneMatchStrip && !alongEdge.isFullEdge
+                if (touchMatchStrip) {
+                    CollapseAlongEdgeBox(
+                        edge = edge,
+                        collapsed = true,
+                        thicknessDp = touchZoneDp,
+                        lengthDp = lengthDp,
+                        offsetDp = offsetDp,
+                        fullEdge = false,
+                        modifier = gestureModifier,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(gestureModifier),
+                    )
+                }
             }
         } else {
             content()
-            Box(
-                modifier = Modifier
-                    .align(zoneAlignment)
-                    .then(collapseTouchZoneSizeModifier(edge, touchZoneDp))
-                    .then(gestureModifier),
-            ) {
-                // Strip is flush with the panel's outer edge; the extra touch-zone
-                // thickness (touchZoneDp - stripThicknessDp) grows inward, toward the content.
-                if (stripExpandedColor.alpha > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .align(zoneAlignment)
-                            .then(collapseStripSizeModifier(edge, stripThicknessDp))
-                            .background(stripExpandedColor),
-                    )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val density = LocalDensity.current
+                val alongPx = collapseAlongEdgePx(edge, maxWidth, maxHeight, density)
+                val segment = collapseAlongEdgeSegmentPx(alongPx, alongEdge)
+                val lengthDp = with(density) { segment.lengthPx.toDp() }
+                val offsetDp = with(density) { segment.offsetPx.toDp() }
+                val touchMatchStrip = touchZoneMatchStrip && !alongEdge.isFullEdge
+                CollapseAlongEdgeBox(
+                    edge = edge,
+                    collapsed = false,
+                    thicknessDp = touchZoneDp,
+                    lengthDp = lengthDp,
+                    offsetDp = offsetDp,
+                    // Default: full edge; match mode: strip length+position.
+                    fullEdge = !touchMatchStrip,
+                    modifier = gestureModifier,
+                ) {
+                    // Strip is flush with the panel's outer edge; the extra touch-zone
+                    // thickness (touchZoneDp - stripThicknessDp) grows inward, toward the content.
+                    if (stripExpandedColor.alpha > 0f) {
+                        val stripOffsetInParent = if (touchMatchStrip) 0.dp else offsetDp
+                        CollapseAlongEdgeBox(
+                            edge = edge,
+                            collapsed = false,
+                            thicknessDp = stripThicknessDp,
+                            lengthDp = lengthDp,
+                            offsetDp = stripOffsetInParent,
+                            fullEdge = false,
+                            modifier = Modifier.background(stripExpandedColor),
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-private fun collapseZoneAlignment(edge: PanelCollapseEdge): Alignment =
+private data class CollapseAlongEdgeSegmentPx(
+    val lengthPx: Int,
+    val offsetPx: Int,
+)
+
+private fun collapseAlongEdgePx(
+    edge: PanelCollapseEdge,
+    maxWidth: Dp,
+    maxHeight: Dp,
+    density: Density,
+): Int = with(density) {
     when (edge) {
-        PanelCollapseEdge.BOTTOM -> Alignment.BottomCenter
-        PanelCollapseEdge.TOP -> Alignment.TopCenter
-        PanelCollapseEdge.RIGHT -> Alignment.CenterEnd
-        PanelCollapseEdge.LEFT -> Alignment.CenterStart
+        PanelCollapseEdge.TOP, PanelCollapseEdge.BOTTOM -> maxWidth.roundToPx()
+        PanelCollapseEdge.LEFT, PanelCollapseEdge.RIGHT -> maxHeight.roundToPx()
+        PanelCollapseEdge.NONE -> maxWidth.roundToPx()
+    }.coerceAtLeast(1)
+}
+
+private fun collapseAlongEdgeSegmentPx(
+    alongPx: Int,
+    segment: PanelCollapseAlongEdgeSegment,
+): CollapseAlongEdgeSegmentPx {
+    val lengthPx = ((alongPx * segment.lengthPercent) / 100f).roundToInt().coerceIn(1, alongPx)
+    val offsetPx = ((alongPx * segment.positionPercent) / 100f).roundToInt()
+        .coerceIn(0, (alongPx - lengthPx).coerceAtLeast(0))
+    return CollapseAlongEdgeSegmentPx(lengthPx = lengthPx, offsetPx = offsetPx)
+}
+
+/** Outer-edge alignment for the thickness axis (collapsed = opposite edge). */
+private fun collapseZoneOuterAlignment(edge: PanelCollapseEdge, collapsed: Boolean): Alignment =
+    when (edge) {
+        PanelCollapseEdge.BOTTOM -> if (collapsed) Alignment.TopStart else Alignment.BottomStart
+        PanelCollapseEdge.TOP -> if (collapsed) Alignment.BottomStart else Alignment.TopStart
+        PanelCollapseEdge.RIGHT -> if (collapsed) Alignment.TopStart else Alignment.TopEnd
+        PanelCollapseEdge.LEFT -> if (collapsed) Alignment.TopEnd else Alignment.TopStart
         PanelCollapseEdge.NONE -> Alignment.Center
     }
 
-/** Aligns the visible strip on the outer edge of the collapsed panel (the edge it shrank toward). */
-private fun collapseStripOuterAlignment(edge: PanelCollapseEdge): Alignment =
-    when (edge) {
-        PanelCollapseEdge.BOTTOM -> Alignment.TopCenter
-        PanelCollapseEdge.TOP -> Alignment.BottomCenter
-        PanelCollapseEdge.RIGHT -> Alignment.CenterStart
-        PanelCollapseEdge.LEFT -> Alignment.CenterEnd
-        PanelCollapseEdge.NONE -> Alignment.Center
-    }
-
-private fun collapseTouchZoneSizeModifier(edge: PanelCollapseEdge, touchZoneDp: Int): Modifier =
-    when (edge) {
-        PanelCollapseEdge.TOP, PanelCollapseEdge.BOTTOM ->
-            Modifier.fillMaxWidth().height(touchZoneDp.dp)
-        PanelCollapseEdge.LEFT, PanelCollapseEdge.RIGHT ->
-            Modifier.fillMaxHeight().width(touchZoneDp.dp)
-        PanelCollapseEdge.NONE -> Modifier
-    }
-
-private fun collapseStripSizeModifier(edge: PanelCollapseEdge, stripThicknessDp: Int): Modifier =
-    when (edge) {
-        PanelCollapseEdge.TOP, PanelCollapseEdge.BOTTOM ->
-            Modifier.fillMaxWidth().height(stripThicknessDp.dp)
-        PanelCollapseEdge.LEFT, PanelCollapseEdge.RIGHT ->
-            Modifier.fillMaxHeight().width(stripThicknessDp.dp)
-        PanelCollapseEdge.NONE -> Modifier
-    }
+@Composable
+private fun BoxScope.CollapseAlongEdgeBox(
+    edge: PanelCollapseEdge,
+    collapsed: Boolean,
+    thicknessDp: Int,
+    lengthDp: Dp,
+    offsetDp: Dp,
+    fullEdge: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    val density = LocalDensity.current
+    val offsetPx = with(density) { offsetDp.roundToPx() }
+    Box(
+        modifier = Modifier
+            .align(collapseZoneOuterAlignment(edge, collapsed))
+            .offset {
+                if (fullEdge) {
+                    IntOffset.Zero
+                } else {
+                    when (edge) {
+                        PanelCollapseEdge.TOP, PanelCollapseEdge.BOTTOM -> IntOffset(offsetPx, 0)
+                        PanelCollapseEdge.LEFT, PanelCollapseEdge.RIGHT -> IntOffset(0, offsetPx)
+                        PanelCollapseEdge.NONE -> IntOffset.Zero
+                    }
+                }
+            }
+            .then(
+                when (edge) {
+                    PanelCollapseEdge.TOP, PanelCollapseEdge.BOTTOM ->
+                        if (fullEdge) {
+                            Modifier.fillMaxWidth().height(thicknessDp.dp)
+                        } else {
+                            Modifier.width(lengthDp).height(thicknessDp.dp)
+                        }
+                    PanelCollapseEdge.LEFT, PanelCollapseEdge.RIGHT ->
+                        if (fullEdge) {
+                            Modifier.fillMaxHeight().width(thicknessDp.dp)
+                        } else {
+                            Modifier.height(lengthDp).width(thicknessDp.dp)
+                        }
+                    PanelCollapseEdge.NONE -> Modifier
+                },
+            )
+            .then(modifier),
+        content = content,
+    )
+}
 
 /**
  * Unified single-stream detector for the collapse strip / touch zone. Replaces the previous pair of

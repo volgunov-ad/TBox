@@ -534,6 +534,17 @@ fun MainScreenDashboardPanel(
                 collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
                 isEditMode = isEditMode,
                 onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
+                stripLengthPercent = if (effectiveCollapsed) {
+                    panel.collapseStripLengthPercentCollapsed
+                } else {
+                    panel.collapseStripLengthPercentExpanded
+                },
+                stripPositionPercent = if (effectiveCollapsed) {
+                    panel.collapseStripPositionPercentCollapsed
+                } else {
+                    panel.collapseStripPositionPercentExpanded
+                },
+                touchZoneMatchStrip = panel.collapseTouchZoneMatchStrip,
                 modifier = Modifier.fillMaxSize(),
             ) {
         DashboardPanelGridAndFrames(

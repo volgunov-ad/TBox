@@ -181,14 +181,21 @@ import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
+import vad.dashing.tbox.normalizePanelCollapseStripLengthPercent
+import vad.dashing.tbox.normalizePanelCollapseStripPositionPercent
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
 import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.normalizeWidgetPaddingPercent
@@ -508,6 +515,21 @@ internal class WidgetSelectionDialogState(
     var wholePanelCollapseEdge by mutableStateOf(PanelCollapseEdge.NONE.storageValue)
     var wholePanelCollapseStripThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
     var wholePanelCollapseTouchZoneThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+    var wholePanelCollapseStripLengthPercentCollapsed by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    var wholePanelCollapseStripLengthPercentExpanded by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    var wholePanelCollapseStripPositionPercentCollapsed by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    )
+    var wholePanelCollapseStripPositionPercentExpanded by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    )
+    var wholePanelCollapseTouchZoneMatchStrip by mutableStateOf(
+        DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+    )
     var wholePanelCollapseStripColorLight by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT)
     var wholePanelCollapseStripColorDark by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK)
     var wholePanelCollapseStripExpandedColorLight by mutableIntStateOf(
@@ -552,6 +574,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = cfg.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = cfg.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed = cfg.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded = cfg.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = cfg.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
@@ -577,6 +604,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = cfg.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = cfg.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed = cfg.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded = cfg.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = cfg.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
@@ -1716,6 +1748,11 @@ internal class WidgetSelectionDialogState(
             collapseEdge = wholePanelCollapseEdge,
             collapseStripThicknessDp = wholePanelCollapseStripThicknessDp,
             collapseTouchZoneThicknessDp = wholePanelCollapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = wholePanelCollapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = wholePanelCollapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = wholePanelCollapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = wholePanelCollapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = wholePanelCollapseTouchZoneMatchStrip,
             collapseStripColorLight = wholePanelCollapseStripColorLight,
             collapseStripColorDark = wholePanelCollapseStripColorDark,
             collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
@@ -1747,6 +1784,13 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = snapshot.collapseEdge
         wholePanelCollapseStripThicknessDp = snapshot.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = snapshot.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = snapshot.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = snapshot.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed =
+            snapshot.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded =
+            snapshot.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = snapshot.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = snapshot.collapseStripColorLight
         wholePanelCollapseStripColorDark = snapshot.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
@@ -2065,6 +2109,103 @@ private fun PanelCollapseWholeSettingsSection(
         minValue = touchZoneMin,
         maxValue = MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP,
         enabled = collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseTouchZoneMatchStrip,
+        { state.wholePanelCollapseTouchZoneMatchStrip = it },
+        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_title),
+        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripLengthPercentCollapsed,
+        onValueChange = {
+            val length = normalizePanelCollapseStripLengthPercent(it)
+            state.wholePanelCollapseStripLengthPercentCollapsed = length
+            state.wholePanelCollapseStripPositionPercentCollapsed =
+                normalizePanelCollapseStripPositionPercent(
+                    state.wholePanelCollapseStripPositionPercentCollapsed,
+                    length,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_length_collapsed_title,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
+        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        enabled = collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripPositionPercentCollapsed,
+        onValueChange = {
+            state.wholePanelCollapseStripPositionPercentCollapsed =
+                normalizePanelCollapseStripPositionPercent(
+                    it,
+                    state.wholePanelCollapseStripLengthPercentCollapsed,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_position_collapsed_title,
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
+        minValue = 0,
+        maxValue = (
+            100 - normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentCollapsed,
+            )
+            ).coerceAtLeast(0),
+        enabled = collapseSettingsEnabled &&
+            normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentCollapsed,
+            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripLengthPercentExpanded,
+        onValueChange = {
+            val length = normalizePanelCollapseStripLengthPercent(it)
+            state.wholePanelCollapseStripLengthPercentExpanded = length
+            state.wholePanelCollapseStripPositionPercentExpanded =
+                normalizePanelCollapseStripPositionPercent(
+                    state.wholePanelCollapseStripPositionPercentExpanded,
+                    length,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_length_expanded_title,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
+        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        enabled = collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripPositionPercentExpanded,
+        onValueChange = {
+            state.wholePanelCollapseStripPositionPercentExpanded =
+                normalizePanelCollapseStripPositionPercent(
+                    it,
+                    state.wholePanelCollapseStripLengthPercentExpanded,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_position_expanded_title,
+            state.wholePanelCollapseStripPositionPercentExpanded,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
+        minValue = 0,
+        maxValue = (
+            100 - normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentExpanded,
+            )
+            ).coerceAtLeast(0),
+        enabled = collapseSettingsEnabled &&
+            normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentExpanded,
+            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
     )
     WidgetColorThemeSegmentRow(
         selectedSegment = state.wholePanelCollapseColorThemeSegment,
@@ -4064,6 +4205,21 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
             state.wholePanelCollapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentExpanded,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = state.wholePanelCollapseTouchZoneMatchStrip,
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
@@ -4101,6 +4257,21 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
             state.wholePanelCollapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentExpanded,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = state.wholePanelCollapseTouchZoneMatchStrip,
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,

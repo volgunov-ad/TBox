@@ -637,6 +637,17 @@ fun FloatingDashboard(
                     collapseOnStripDoubleTap = panelConfig.collapseOnStripDoubleTap,
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
+                    stripLengthPercent = if (effectiveCollapsed) {
+                        panelConfig.collapseStripLengthPercentCollapsed
+                    } else {
+                        panelConfig.collapseStripLengthPercentExpanded
+                    },
+                    stripPositionPercent = if (effectiveCollapsed) {
+                        panelConfig.collapseStripPositionPercentCollapsed
+                    } else {
+                        panelConfig.collapseStripPositionPercentExpanded
+                    },
+                    touchZoneMatchStrip = panelConfig.collapseTouchZoneMatchStrip,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                         DashboardPanelGridAndFrames(

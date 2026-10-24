@@ -2840,6 +2840,14 @@
     <string name="settings_panel_collapse_thickness_desc">Размер полосы после сворачивания.</string>
     <string name="settings_panel_collapse_touch_zone_thickness_title">Толщина зоны касания: %1$d dp</string>
     <string name="settings_panel_collapse_touch_zone_thickness_desc">Область свайпа и нажатия на развёрнутой и свёрнутой панели. Не меньше толщины полосы; расширяется внутрь панели.</string>
+    <string name="settings_panel_collapse_touch_zone_match_strip_title">Зона касания по длине полоски</string>
+    <string name="settings_panel_collapse_touch_zone_match_strip_desc">По умолчанию зона касания вдоль края — весь край (короткая полоска только визуальная). Если включено — зона совпадает с длиной и положением полоски текущего состояния (свёрнута / развёрнута). Толщина зоны касания не меняется.</string>
+    <string name="settings_panel_collapse_strip_length_collapsed_title">Длина полоски (свёрнута): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_length_expanded_title">Длина полоски (развёрнута): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_length_desc">Доля выбранного края сворачивания (1–100%).</string>
+    <string name="settings_panel_collapse_strip_position_collapsed_title">Положение полоски (свёрнута): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_position_expanded_title">Положение полоски (развёрнута): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_position_desc">Сдвиг от начала края: слева/справа — сверху, сверху/снизу — слева. При длине 100% не применяется.</string>
     <string name="settings_panel_collapse_on_strip_tap_title">Реагировать на одиночные нажатия полоски</string>
     <string name="settings_panel_collapse_on_strip_tap_desc">Одиночное нажатие по полоске или зоне касания сразу сворачивает или разворачивает панель (дополняет свайп).</string>
     <string name="settings_panel_collapse_on_strip_double_tap_title">Реагировать на двойные нажатия полоски</string>

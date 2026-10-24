@@ -633,6 +633,42 @@ object ThemeLayoutExport {
                         o.optInt("collapseTouchZoneThicknessDp", stripThickness),
                         stripThickness,
                     ),
+                    collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+                        o.optInt(
+                            "collapseStripLengthPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+                        o.optInt(
+                            "collapseStripLengthPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+                        o.optInt(
+                            "collapseStripPositionPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+                        ),
+                        o.optInt(
+                            "collapseStripLengthPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+                        o.optInt(
+                            "collapseStripPositionPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+                        ),
+                        o.optInt(
+                            "collapseStripLengthPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseTouchZoneMatchStrip = o.optBoolean(
+                        "collapseTouchZoneMatchStrip",
+                        DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+                    ),
                     collapseStripColorLight = colorHexToIntOrNull(
                         o.optString("collapseStripColorLight"),
                     ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -723,6 +759,42 @@ object ThemeLayoutExport {
                         o.optInt("collapseTouchZoneThicknessDp", stripThickness),
                         stripThickness,
                     ),
+                    collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+                        o.optInt(
+                            "collapseStripLengthPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+                        o.optInt(
+                            "collapseStripLengthPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+                        o.optInt(
+                            "collapseStripPositionPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+                        ),
+                        o.optInt(
+                            "collapseStripLengthPercentCollapsed",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+                        o.optInt(
+                            "collapseStripPositionPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+                        ),
+                        o.optInt(
+                            "collapseStripLengthPercentExpanded",
+                            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+                        ),
+                    ),
+                    collapseTouchZoneMatchStrip = o.optBoolean(
+                        "collapseTouchZoneMatchStrip",
+                        DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+                    ),
                     collapseStripColorLight = colorHexToIntOrNull(
                         o.optString("collapseStripColorLight"),
                     ) ?: DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -772,6 +844,11 @@ object ThemeLayoutExport {
             collapseEdge = panel.collapseEdge,
             collapseStripThicknessDp = panel.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = panel.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = panel.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = panel.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = panel.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = panel.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = panel.collapseTouchZoneMatchStrip,
             collapseStripColorLight = panel.collapseStripColorLight,
             collapseStripColorDark = panel.collapseStripColorDark,
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
@@ -789,6 +866,11 @@ object ThemeLayoutExport {
             collapseEdge = panel.collapseEdge,
             collapseStripThicknessDp = panel.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = panel.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = panel.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = panel.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = panel.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = panel.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = panel.collapseTouchZoneMatchStrip,
             collapseStripColorLight = panel.collapseStripColorLight,
             collapseStripColorDark = panel.collapseStripColorDark,
             collapseStripExpandedColorLight = panel.collapseStripExpandedColorLight,
@@ -805,6 +887,11 @@ object ThemeLayoutExport {
         collapseEdge: String,
         collapseStripThicknessDp: Int,
         collapseTouchZoneThicknessDp: Int,
+        collapseStripLengthPercentCollapsed: Int,
+        collapseStripLengthPercentExpanded: Int,
+        collapseStripPositionPercentCollapsed: Int,
+        collapseStripPositionPercentExpanded: Int,
+        collapseTouchZoneMatchStrip: Boolean,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
@@ -823,6 +910,35 @@ object ThemeLayoutExport {
         }
         if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
             o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
+        }
+        val lengthCollapsed = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentCollapsed,
+        )
+        val lengthExpanded = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentExpanded,
+        )
+        val positionCollapsed = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentCollapsed,
+            lengthCollapsed,
+        )
+        val positionExpanded = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentExpanded,
+            lengthExpanded,
+        )
+        if (lengthCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentCollapsed", lengthCollapsed)
+        }
+        if (lengthExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentExpanded", lengthExpanded)
+        }
+        if (positionCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentCollapsed", positionCollapsed)
+        }
+        if (positionExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentExpanded", positionExpanded)
+        }
+        if (collapseTouchZoneMatchStrip != DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP) {
+            o.put("collapseTouchZoneMatchStrip", collapseTouchZoneMatchStrip)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", colorIntToHex(collapseStripColorLight))
