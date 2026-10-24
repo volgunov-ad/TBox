@@ -62,6 +62,11 @@ class ExternalApiSignalReader {
     /**
      * Widget interests do not cover every signal the page asks for. Without this,
      * a zone that has no tile on the head unit stays empty in the snapshot.
+     *
+     * The pull runs only when [signals] is a new set. Phone REFRESH and HTTP polls
+     * otherwise read the flows already updated by push and the 30 s poll. Repeating
+     * [UniversalCanRepository.refreshSignalsNow] on every snapshot re-read the whole
+     * climate/body set every ~2 s; on A10 that took 1–4 s and ran off the VHAL apply thread.
      */
     private suspend fun ensureHeadUnitSignals(ids: List<String>) {
         val signals = ids.mapNotNull { rawId ->
@@ -74,21 +79,26 @@ class ExternalApiSignalReader {
         }.toSet()
         if (signals.isEmpty()) return
         val changed = synchronized(headUnitInterestLock) {
-            if (signals == headUnitInterest) {
-                false
-            } else {
-                headUnitInterest = signals
-                true
-            }
+            val pull = headUnitPullRequired(headUnitInterest, signals)
+            if (pull) headUnitInterest = signals
+            pull
         }
-        if (changed) {
-            UniversalCanRepository.setSourceSignals(HEAD_UNIT_SOURCE_ID, signals)
-        }
+        if (!changed) return
+        UniversalCanRepository.setSourceSignals(HEAD_UNIT_SOURCE_ID, signals)
         UniversalCanRepository.refreshSignalsNow(signals)
     }
 
     companion object {
         private const val HEAD_UNIT_SOURCE_ID = "external-api"
+
+        /**
+         * True when [requested] should be subscribed and pulled once.
+         * An empty request and a repeat of [subscribed] must not start another VHAL/mbCAN pull.
+         */
+        internal fun headUnitPullRequired(
+            subscribed: Set<MbCanSignal>,
+            requested: Set<MbCanSignal>,
+        ): Boolean = requested.isNotEmpty() && requested != subscribed
 
         fun signalToJson(
             id: String,
