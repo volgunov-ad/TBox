@@ -1332,6 +1332,31 @@ class BackgroundService : Service() {
                     scope = scope,
                     readSnapshot = { controller.readPhoneSnapshot() },
                     executeCommand = { op, seat, arg -> controller.executePhoneCommand(op, seat, arg) },
+                    telemetryDemandProvider = {
+                        val locSrc = if (::locationSource.isInitialized) {
+                            locationSource.value
+                        } else {
+                            vad.dashing.tbox.esp.LocationSource.TBOX
+                        }
+                        val headSrc = if (::mockHeadingSource.isInitialized) {
+                            mockHeadingSource.value
+                        } else {
+                            vad.dashing.tbox.location.MockHeadingSource.GYRO
+                        }
+                        val geoRec = vad.dashing.tbox.location.GeoDebugLogRecorder.isRecording()
+                        vad.dashing.tbox.location.PhoneTelemetryRepository.computeTelemetryDemandMask(
+                            locationSource = locSrc,
+                            headingSource = headSrc,
+                            geoDebugRecording = geoRec,
+                        )
+                    },
+                    activeLocationSourceProvider = {
+                        if (::locationSource.isInitialized) {
+                            locationSource.value
+                        } else {
+                            vad.dashing.tbox.esp.LocationSource.TBOX
+                        }
+                    },
                 ).also { it.start() }
             }
         }
@@ -2387,6 +2412,14 @@ class BackgroundService : Service() {
                         wheelPulse.confidence,
                     )
                     lastPersistedWheelPulseCalib = wheelPulse
+                    val wheelHeading = settingsManager.loadWheelHeadingCalibration()
+                    vad.dashing.tbox.location.WheelHeadingCalibrationStore.update(wheelHeading)
+                    val phoneGyro = settingsManager.loadPhoneGyroCalibration()
+                    vad.dashing.tbox.location.PhoneGyroCalibrationStore.update(phoneGyro)
+                    val phoneCompass = settingsManager.loadPhoneCompassCalibration()
+                    vad.dashing.tbox.location.PhoneCompassCalibrationStore.update(phoneCompass)
+                    val prefPhoneId = settingsManager.loadPreferredPhoneTelemetryId()
+                    vad.dashing.tbox.location.PhoneTelemetryRepository.setPreferredPhoneIdHex(prefPhoneId)
                     settingsManager.loadGeoCalibrationState()
                 }
                 startWheelPulseFeatureWatcher()
@@ -4621,19 +4654,25 @@ class BackgroundService : Service() {
     }
 
     private var wheelPulseFeatureWatchJob: Job? = null
+    private var lateralAccelJob: Job? = null
 
     /**
-     * Subscribe to wheel-pulse CAN/VHAL only while [WheelPulseCalibration.featureEnabled].
-     * Default off — no OEM `onPull` / VHAL pulse props until the user opts in.
+     * Subscribe to wheel-pulse CAN/VHAL while [WheelPulseCalibration.featureEnabled],
+     * or while heading source uses wheels / phone fallback, or during geo-debug recording.
      */
     private fun startWheelPulseFeatureWatcher() {
         wheelPulseFeatureWatchJob?.cancel()
         wheelPulseFeatureWatchJob = scope.launch {
-            vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration
-                .map { it.featureEnabled }
+            combine(
+                vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.map { it.featureEnabled },
+                mockHeadingSource,
+                vad.dashing.tbox.location.GeoDebugLogRecorder.uiState.map { it.recording },
+            ) { featureOn, heading, geoRec ->
+                featureOn || heading.usesWheels || heading.usesPhone || geoRec
+            }
                 .distinctUntilChanged()
-                .collect { enabled ->
-                    if (enabled) {
+                .collect { needed ->
+                    if (needed) {
                         startWheelPulseCollection()
                     } else {
                         stopWheelPulseCollection()
@@ -4645,23 +4684,26 @@ class BackgroundService : Service() {
     private fun startWheelPulseCollection() {
         wheelPulseJob?.cancel()
         wheelPulseOdometerJob?.cancel()
-        if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
-            return
-        }
+        lateralAccelJob?.cancel()
         scope.launch {
             runCatching {
                 vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
                     WHEEL_PULSE_CAN_SOURCE_ID,
-                    setOf(vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse),
+                    setOf(
+                        vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse,
+                        vad.dashing.tbox.mbcan.MbCanSignal.LateralAcceleration,
+                    ),
                 )
+            }
+        }
+        lateralAccelJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.lateralAccelerationState.collect { latAcc ->
+                vad.dashing.tbox.location.WheelHeadingIntegrator.onLateralAcceleration(latAcc)
             }
         }
         wheelPulseJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.wheelPulseState.collect { counters ->
                 if (counters == null) return@collect
-                if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
-                    return@collect
-                }
                 runCatching {
                     val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
                         reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
@@ -4670,15 +4712,29 @@ class BackgroundService : Service() {
                     )
                     val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
                     val speed = TripTelemetryRepository.accountingCarSpeed()
+                    val latAcc = vad.dashing.tbox.mbcan.UniversalCanRepository.lateralAccelerationState.value
+                        ?: CycleDataRepository.lateralAcceleration.value
                     val now = SystemClock.elapsedRealtime()
-                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                    if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
+                        vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                            counters = counters,
+                            reverse = reverse,
+                            steerDeg = steer,
+                            speedKmh = speed,
+                            nowElapsedMs = now,
+                        )
+                        maybePersistWheelPulseCalibration()
+                    }
+                    val k = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekCalibration().metersPerPulse
+                    vad.dashing.tbox.location.WheelHeadingIntegrator.onWheelSample(
                         counters = counters,
+                        kMetersPerPulse = k,
                         reverse = reverse,
                         steerDeg = steer,
                         speedKmh = speed,
+                        lateralAccelMps2 = latAcc,
                         nowElapsedMs = now,
                     )
-                    maybePersistWheelPulseCalibration()
                 }.onFailure { e ->
                     Log.e("BackgroundService", "Wheel pulse sample failed", e)
                     TboxRepository.addLog("ERROR", "WheelPulse", "Sample failed: ${e.message}")
@@ -4712,6 +4768,8 @@ class BackgroundService : Service() {
         wheelPulseJob = null
         wheelPulseOdometerJob?.cancel()
         wheelPulseOdometerJob = null
+        lateralAccelJob?.cancel()
+        lateralAccelJob = null
         flushWheelPulseCalibrationPersist(force = true)
         scope.launch {
             runCatching {
@@ -4901,6 +4959,27 @@ class BackgroundService : Service() {
                             off.calibratedAtEpochMs.takeIf { it > 0L }
                                 ?: System.currentTimeMillis(),
                         )
+                    }
+                }
+            },
+            onWheelHeadingCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveWheelHeadingCalibration(calib)
+                    }
+                }
+            },
+            onPhoneGyroCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.savePhoneGyroCalibration(calib)
+                    }
+                }
+            },
+            onPhoneCompassCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.savePhoneCompassCalibration(calib)
                     }
                 }
             },
@@ -5804,6 +5883,21 @@ class BackgroundService : Service() {
                             startUsbNmeaLocationSource()
                             espCompanionManager?.applyLocationSource(source)
                         }
+                        LocationSource.PHONE -> {
+                            stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
+                            locSubscribe(false)
+                            espCompanionManager?.applyLocationSource(source)
+                            vad.dashing.tbox.location.PhoneTelemetryRepository.peekLastLocationValues()
+                                ?.let { (loc, atElapsed) ->
+                                    if (SystemClock.elapsedRealtime() - atElapsed <=
+                                        vad.dashing.tbox.location.PhoneTelemetryRepository.MAX_LOC_AGE_MS
+                                    ) {
+                                        TboxRepository.updateLocationUpdateTime()
+                                        TboxRepository.updateLocValues(loc)
+                                    }
+                                }
+                        }
                     }
                 }
             }
@@ -6337,7 +6431,8 @@ class BackgroundService : Service() {
                         }
                     }
                     if (locationSource.value == LocationSource.USB ||
-                        locationSource.value == LocationSource.ESP32
+                        locationSource.value == LocationSource.ESP32 ||
+                        locationSource.value == LocationSource.PHONE
                     ) {
                         val lastAt = TboxRepository.locationUpdateTime.value?.time
                         if (lastAt != null &&

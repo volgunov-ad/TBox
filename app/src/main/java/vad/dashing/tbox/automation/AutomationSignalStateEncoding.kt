@@ -372,6 +372,7 @@ object AutomationSignalStateEncoding {
         "companion" -> "Компаньон"
         "android" -> "Android"
         "usb" -> "USB"
+        "phone" -> "Телефон"
         "wifi_http" -> "Wi‑Fi HTTP"
         else -> AutomationRoadMatchSignals.highwayClassOptionLabel(raw) ?: raw
     }

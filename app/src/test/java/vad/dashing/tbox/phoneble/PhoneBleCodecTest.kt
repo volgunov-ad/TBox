@@ -428,4 +428,103 @@ class PhoneBleCodecTest {
         assertNull(PhoneCompanionHost.toAction(PhoneBleCodec.OP_VOLUME, 0, -1))
         assertNull(PhoneCompanionHost.toAction(99, 0, 0))
     }
+
+    @Test
+    fun telemetryPackets_andSlidingReplayWindow_roundTrip() {
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 42,
+            latitude = 56.326887,
+            longitude = 44.005986,
+            horizontalAccuracyM = 4.25f,
+            altitudeM = 142f,
+            speedKmh = 72.0f,
+            bearingDeg = 215.45f,
+            usedSatellites = 11,
+            visibleSatellites = 15,
+            fixAgeMs = 120,
+            locateStatus = true,
+        )
+        val (posBody, motionBody) = PhoneBleCodec.locBodies(42, loc)
+        val posSealed = PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_LOC_POS, id, 10, posBody)
+        val motionSealed = PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_LOC_MOTION, id, 11, motionBody)
+        val assembler = PhoneBleCodec.LocAssembler()
+        val openPos = PhoneBleCodec.open(key, posSealed)!!
+        assertNull(assembler.accept(openPos.type, openPos.body))
+        val openMotion = PhoneBleCodec.open(key, motionSealed)!!
+        val assembled = assembler.accept(openMotion.type, openMotion.body)
+        assertNotNull(assembled)
+        assertEquals(42, assembled!!.gen)
+        assertEquals(56.326887, assembled.latitude, 1e-6)
+        assertEquals(44.005986, assembled.longitude, 1e-6)
+        assertEquals(4.25f, assembled.horizontalAccuracyM!!, 0.02f)
+        assertEquals(142f, assembled.altitudeM!!, 0.5f)
+        assertEquals(72.0f, assembled.speedKmh, 0.1f)
+        assertEquals(215.45f, assembled.bearingDeg!!, 0.05f)
+        assertEquals(11, assembled.usedSatellites)
+        assertEquals(15, assembled.visibleSatellites)
+        assertEquals(120, assembled.fixAgeMs)
+
+        val yaw = PhoneBleCodec.PhoneYawSample(
+            dtMs = 150,
+            dPsiDeg = -3.45f,
+            monoLowMs = 0xBEEF,
+            mountStable = true,
+            mountMoved = false,
+            gravDeltaMg = 18,
+        )
+        val yawOpen = PhoneBleCodec.open(
+            key,
+            PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_YAW, id, 12, PhoneBleCodec.yawBody(yaw)),
+        )!!
+        val decodedYaw = PhoneBleCodec.readYaw(yawOpen.body)!!
+        assertEquals(150, decodedYaw.dtMs)
+        assertEquals(-3.45f, decodedYaw.dPsiDeg, 0.02f)
+        assertEquals(0xBEEF, decodedYaw.monoLowMs)
+        assertTrue(decodedYaw.mountStable)
+        assertFalse(decodedYaw.mountMoved)
+        assertEquals(18, decodedYaw.gravDeltaMg)
+
+        val mag = PhoneBleCodec.PhoneMagSample(
+            magneticAzimuthDeg = 312.8f,
+            fieldStrengthUt = 48.6f,
+            accuracy = 3,
+            pitchDeg = -12,
+            rollDeg = 4,
+            monoLowMs = 0x1234,
+            mountMoved = true,
+        )
+        val magOpen = PhoneBleCodec.open(
+            key,
+            PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_MAG, id, 13, PhoneBleCodec.magBody(mag)),
+        )!!
+        val decodedMag = PhoneBleCodec.readMag(magOpen.body)!!
+        assertEquals(312.8f, decodedMag.magneticAzimuthDeg, 0.05f)
+        assertEquals(48.6f, decodedMag.fieldStrengthUt, 0.15f)
+        assertEquals(3, decodedMag.accuracy)
+        assertEquals(-12, decodedMag.pitchDeg)
+        assertEquals(4, decodedMag.rollDeg)
+        assertTrue(decodedMag.mountMoved)
+
+        val ack = PhoneBleCodec.TelemetryAck(
+            demandMask = PhoneBleCodec.DEMAND_LOC or PhoneBleCodec.DEMAND_YAW,
+            outsideTenths = -55,
+            insideTenths = 210,
+        )
+        val ackOpen = PhoneBleCodec.open(
+            key,
+            PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_TELEMETRY_ACK, id, 14, PhoneBleCodec.telemetryAckBody(ack)),
+        )!!
+        val decodedAck = PhoneBleCodec.readTelemetryAck(ackOpen.body)!!
+        assertEquals(PhoneBleCodec.DEMAND_LOC or PhoneBleCodec.DEMAND_YAW, decodedAck.demandMask)
+        assertEquals(-55, decodedAck.outsideTenths)
+        assertEquals(210, decodedAck.insideTenths)
+
+        // Sliding 32-packet anti-replay window accepts out-of-order once and rejects replay
+        val w1 = PhoneBleCodec.acceptCounterInWindow(0L, 0L, 10L)!!
+        val w2 = PhoneBleCodec.acceptCounterInWindow(w1.first, w1.second, 12L)!!
+        val wOutOrder = PhoneBleCodec.acceptCounterInWindow(w2.first, w2.second, 11L)
+        assertNotNull(wOutOrder)
+        assertNull(PhoneBleCodec.acceptCounterInWindow(wOutOrder!!.first, wOutOrder.second, 11L))
+        assertNull(PhoneBleCodec.acceptCounterInWindow(wOutOrder.first, wOutOrder.second, 12L))
+    }
 }

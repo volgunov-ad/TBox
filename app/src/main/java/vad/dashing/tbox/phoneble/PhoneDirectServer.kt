@@ -32,10 +32,16 @@ class PhoneDirectServer(
     private val scope: CoroutineScope,
     private val readSnapshot: suspend () -> PhoneBleCodec.Snapshot,
     private val executeCommand: suspend (op: Int, seat: Int, arg: Int) -> Unit,
+    private val telemetryDemandProvider: () -> Int = { PhoneBleCodec.DEMAND_ALL },
+    private val activeLocationSourceProvider: () -> vad.dashing.tbox.esp.LocationSource = {
+        vad.dashing.tbox.esp.LocationSource.TBOX
+    },
 ) {
     private class Link(val socket: BluetoothSocket, val address: String) {
         @Volatile var phoneIdHex: String? = null
         @Volatile var lastValidAt: Long = SystemClock.elapsedRealtime()
+        @Volatile var lastAckSentAt: Long = 0L
+        @Volatile var lastAckDemandMask: Int = -1
     }
 
     private val manager = context.getSystemService(BluetoothManager::class.java)
@@ -107,6 +113,7 @@ class PhoneDirectServer(
     fun forget(idHex: String) {
         if (host.forget(idHex)) saveRecords()
         links.filter { it.phoneIdHex == idHex }.forEach { closeQuietly(it.socket) }
+        vad.dashing.tbox.location.PhoneTelemetryRepository.onPhoneDisconnected(idHex)
         publishPhones()
     }
 
@@ -182,7 +189,13 @@ class PhoneDirectServer(
         } finally {
             closeQuietly(link.socket)
             links -= link
-            if (link.phoneIdHex != null) publishPhones()
+            val disconnectedId = link.phoneIdHex
+            if (disconnectedId != null) {
+                if (links.none { it.phoneIdHex == disconnectedId }) {
+                    vad.dashing.tbox.location.PhoneTelemetryRepository.onPhoneDisconnected(disconnectedId)
+                }
+                publishPhones()
+            }
         }
     }
 
@@ -209,8 +222,68 @@ class PhoneDirectServer(
                 bind(link, result.idHex)
                 answer(link, result)
             }
+            is PhoneDirectHost.Result.TelemetryPartial -> {
+                bind(link, result.idHex)
+                maybeSendTelemetryAck(link, result.idHex, result.counter)
+            }
+            is PhoneDirectHost.Result.Location -> {
+                bind(link, result.idHex)
+                val phoneName = host.records().firstOrNull { it.idHex == result.idHex }?.name
+                vad.dashing.tbox.location.PhoneTelemetryRepository.onPhoneLocation(
+                    idHex = result.idHex,
+                    name = phoneName,
+                    loc = result.location,
+                    activeLocationSource = activeLocationSourceProvider(),
+                )
+                maybeSendTelemetryAck(link, result.idHex, result.counter)
+            }
+            is PhoneDirectHost.Result.Yaw -> {
+                bind(link, result.idHex)
+                val phoneName = host.records().firstOrNull { it.idHex == result.idHex }?.name
+                vad.dashing.tbox.location.PhoneTelemetryRepository.onPhoneYaw(
+                    idHex = result.idHex,
+                    name = phoneName,
+                    sample = result.sample,
+                )
+                maybeSendTelemetryAck(link, result.idHex, result.counter)
+            }
+            is PhoneDirectHost.Result.Mag -> {
+                bind(link, result.idHex)
+                val phoneName = host.records().firstOrNull { it.idHex == result.idHex }?.name
+                val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
+                val wheelDelta = vad.dashing.tbox.location.WheelHeadingIntegrator.peekDebugSnapshot().lastDeltaDeg
+                vad.dashing.tbox.location.PhoneTelemetryRepository.onPhoneMag(
+                    idHex = result.idHex,
+                    name = phoneName,
+                    sample = result.sample,
+                    steerDeg = steer,
+                    wheelDeltaDeg = wheelDelta,
+                )
+                maybeSendTelemetryAck(link, result.idHex, result.counter)
+            }
             PhoneDirectHost.Result.Ignored -> Unit
         }
+    }
+
+    private fun maybeSendTelemetryAck(link: Link, idHex: String, counter: Long) {
+        val now = SystemClock.elapsedRealtime()
+        val demand = telemetryDemandProvider()
+        if (link.lastAckSentAt != 0L &&
+            now - link.lastAckSentAt < TELEMETRY_ACK_INTERVAL_MS &&
+            link.lastAckDemandMask == demand
+        ) {
+            return
+        }
+        val cached = cachedSnap
+        val ack = PhoneBleCodec.TelemetryAck(
+            demandMask = demand,
+            outsideTenths = cached?.outsideTenths,
+            insideTenths = cached?.insideTenths,
+        )
+        val sealed = host.sealTelemetryAck(idHex, counter, ack) ?: return
+        link.lastAckSentAt = now
+        link.lastAckDemandMask = demand
+        send(link, listOf(sealed))
     }
 
     private suspend fun answer(link: Link, request: PhoneDirectHost.Result.Refresh) {
@@ -219,7 +292,20 @@ class PhoneDirectServer(
         val took = SystemClock.elapsedRealtime() - started
         if (took >= SLOW_SNAPSHOT_MS) Log.w(TAG, "snapshot for ${link.address} took ${took}ms")
         val pages = host.sealSnapshot(request.idHex, request.counter, gen, snap, request.textHash, request.groups)
-        if (pages.isNotEmpty()) send(link, pages)
+        val demand = telemetryDemandProvider()
+        val ackPacket = host.sealTelemetryAck(
+            request.idHex,
+            request.counter,
+            PhoneBleCodec.TelemetryAck(
+                demandMask = demand,
+                outsideTenths = snap.outsideTenths,
+                insideTenths = snap.insideTenths,
+            ),
+        )
+        link.lastAckSentAt = SystemClock.elapsedRealtime()
+        link.lastAckDemandMask = demand
+        val out = if (ackPacket != null) pages + listOf(ackPacket) else pages
+        if (out.isNotEmpty()) send(link, out)
     }
 
     private fun bind(link: Link, idHex: String) {
@@ -324,5 +410,6 @@ class PhoneDirectServer(
         /** The phone refreshes about every 2 s while its screen is open. */
         const val LINK_IDLE_MS = 30_000L
         const val COUNTER_SAVE_MS = 10_000L
+        const val TELEMETRY_ACK_INTERVAL_MS = 4_500L
     }
 }

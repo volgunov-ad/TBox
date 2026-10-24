@@ -78,9 +78,19 @@ object DrSensorRepository {
             }
         }
         fallback?.start { snap ->
-            if (!primaryGotSample && hasUsefulData(snap)) {
+            if (!primaryGotSample && hasUsefulData(snap) && !snap.halRefused) {
                 _snapshot.value = snap
                 noteYawSample(snap)
+            } else if (!primaryGotSample && snap.halRefused) {
+                val primaryStatus = _snapshot.value.statusText
+                _snapshot.value = snap.copy(
+                    statusText = if (primaryStatus.isNotBlank() && !primaryStatus.contains(snap.statusText)) {
+                        "${snap.statusText} (primary: $primaryStatus)"
+                    } else {
+                        snap.statusText
+                    },
+                    halRefused = true,
+                )
             } else if (!primaryGotSample &&
                 _snapshot.value.source == DrSensorSource.NONE &&
                 snap.statusText.isNotBlank()
@@ -98,6 +108,20 @@ object DrSensorRepository {
             }
         }
         Log.d(TAG, "backends: primary=${primary?.source} mode=$mode")
+    }
+
+    /**
+     * True when the head-unit gyro (`GYRO` / `GYRO_STEER`) can be used on this unit.
+     * On A10 there is no working gyro (`binder null` + SensorService HAL refusal) unless
+     * a real `gyroYaw` sample actually arrived.
+     */
+    fun isHuGyroAvailable(
+        mode: HeadUnitCanMode = UniversalCanRepository.mode.value,
+        snap: DrSensorSnapshot = _snapshot.value,
+    ): Boolean {
+        if (snap.gyroYaw != null) return true
+        if (snap.halRefused) return false
+        return mode != HeadUnitCanMode.Android10Vhal
     }
 
     private fun stopBackends() {

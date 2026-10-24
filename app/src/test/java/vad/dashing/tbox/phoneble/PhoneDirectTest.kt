@@ -178,4 +178,32 @@ class PhoneDirectTest {
         assertTrue(PhoneDirectHost.fromJson(null).isEmpty())
         assertTrue(PhoneDirectHost.fromJson("not json").isEmpty())
     }
+
+    @Test
+    fun telemetryAndOutOfOrderCounters_handledByHost() {
+        val host = pairedHost(counter = 5)
+        val loc = PhoneBleCodec.PhoneLocation(
+            gen = 7,
+            latitude = 55.7558,
+            longitude = 37.6173,
+            horizontalAccuracyM = 3.5f,
+            altitudeM = 150f,
+            speedKmh = 60f,
+            bearingDeg = 90f,
+            usedSatellites = 9,
+            visibleSatellites = 12,
+            fixAgeMs = 80,
+        )
+        val (posBody, motionBody) = PhoneBleCodec.locBodies(7, loc)
+        // Send counter 7 before counter 6 to verify sliding anti-replay window
+        val p7 = PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_LOC_MOTION, id, 7, motionBody)
+        val p6 = PhoneBleCodec.seal(key, PhoneBleCodec.TYPE_LOC_POS, id, 6, posBody)
+        assertEquals(PhoneDirectHost.Result.TelemetryPartial(idHex, 7), host.onPayload(p7))
+        val locRes = host.onPayload(p6) as PhoneDirectHost.Result.Location
+        assertEquals(idHex, locRes.idHex)
+        assertEquals(55.7558, locRes.location.latitude, 1e-4)
+        // Replaying counter 6 or 7 is rejected
+        assertEquals(PhoneDirectHost.Result.Ignored, host.onPayload(p6))
+        assertEquals(PhoneDirectHost.Result.Ignored, host.onPayload(p7))
+    }
 }

@@ -8,7 +8,9 @@ enum class LocationSource {
     ESP32,
     ANDROID,
     /** Direct USB CDC / UART-bridge GNSS (NMEA), user-selected device. */
-    USB;
+    USB,
+    /** Phone GPS over direct Bluetooth RFCOMM (`LOC_POS` + `LOC_MOTION`). */
+    PHONE;
 
     companion object {
         fun fromStorage(raw: String?): LocationSource {
@@ -17,6 +19,7 @@ enum class LocationSource {
                 "ESP32" -> ESP32
                 "ANDROID" -> ANDROID
                 "USB" -> USB
+                "PHONE" -> PHONE
                 else -> TBOX
             }
         }

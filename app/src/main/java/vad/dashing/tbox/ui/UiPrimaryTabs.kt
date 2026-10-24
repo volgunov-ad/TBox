@@ -2557,6 +2557,12 @@ fun LocationTabContent(
                             stringResource(R.string.settings_location_source_usb),
                         ),
                     )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.PHONE,
+                            stringResource(R.string.settings_location_source_phone),
+                        ),
+                    )
                 }
                 val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
                     ?: locationSourceOptions.first()
@@ -2608,6 +2614,14 @@ fun LocationTabContent(
                     options = locationSourceOptions,
                     selectorWidth = 300.dp,
                 )
+                if (locationSource == LocationSource.PHONE) {
+                    Text(
+                        text = stringResource(R.string.location_phone_direct_only_hint),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
             }
             // Device list is always visible so the user can pick a receiver before
             // switching the location source to USB (otherwise the gate blocks USB
@@ -3176,10 +3190,17 @@ fun LocationTabContent(
                 ) {
                     override fun toString(): String = label
                 }
+                val huCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
+                val huGyroOk = DrSensorRepository.isHuGyroAvailable(huCanMode, drSensor)
+                val unavailHalSuffix = if (!huGyroOk) {
+                    " (${stringResource(R.string.settings_mock_heading_source_unavailable_hal)})"
+                } else {
+                    ""
+                }
                 val headingOptions = listOf(
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.GYRO,
-                        stringResource(R.string.settings_mock_heading_source_gyro),
+                        stringResource(R.string.settings_mock_heading_source_gyro) + unavailHalSuffix,
                     ),
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.STEER,
@@ -3187,12 +3208,35 @@ fun LocationTabContent(
                     ),
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER,
-                        stringResource(R.string.settings_mock_heading_source_gyro_steer),
+                        stringResource(R.string.settings_mock_heading_source_gyro_steer) + unavailHalSuffix,
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.WHEELS,
+                        stringResource(R.string.settings_mock_heading_source_wheels),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.WHEELS_STEER,
+                        stringResource(R.string.settings_mock_heading_source_wheels_steer),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_GYRO,
+                        stringResource(R.string.settings_mock_heading_source_phone_gyro),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_COMPASS,
+                        stringResource(R.string.settings_mock_heading_source_phone_compass),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_GYRO_COMPASS,
+                        stringResource(R.string.settings_mock_heading_source_phone_gyro_compass),
                     ),
                 )
                 val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
                     ?: headingOptions.first()
                 val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                val fallbackStatus by vad.dashing.tbox.location.HeadingFallbackStatusRepository.status.collectAsStateWithLifecycle()
+                val phoneTelemetryUi by vad.dashing.tbox.location.PhoneTelemetryRepository.uiState.collectAsStateWithLifecycle()
+                val pairedPhones by vad.dashing.tbox.phoneble.PhoneDirectRepository.phones.collectAsStateWithLifecycle()
                 if (mockEnhanceControlsVisible) {
                     SettingDropdownGeneric(
                         selectedValue = selectedHeading,
@@ -3205,6 +3249,85 @@ fun LocationTabContent(
                         options = headingOptions,
                         selectorWidth = 300.dp,
                     )
+                    if (fallbackStatus.fallbackReason != null && headingEnabled) {
+                        Text(
+                            text = stringResource(
+                                R.string.settings_mock_heading_fallback_active,
+                                fallbackStatus.effectiveSource.name,
+                                fallbackStatus.fallbackReason.orEmpty(),
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    if ((locationSource == LocationSource.PHONE || mockHeadingSource.usesPhone) && headingEnabled) {
+                        Text(
+                            text = stringResource(R.string.location_phone_direct_only_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                        data class PhonePickOption(val idHex: String?, val label: String) {
+                            override fun toString(): String = label
+                        }
+                        val autoLabel = stringResource(R.string.location_phone_telemetry_auto_first)
+                        val phonePickOptions = buildList {
+                            add(PhonePickOption(null, autoLabel))
+                            pairedPhones.forEach { p ->
+                                add(PhonePickOption(p.id, "${p.name} (${p.id})"))
+                            }
+                        }
+                        val selectedPhonePick = phonePickOptions.firstOrNull {
+                            it.idHex == phoneTelemetryUi.preferredPhoneIdHex
+                        } ?: phonePickOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedPhonePick,
+                            onValueChange = { opt ->
+                                settingsViewModel.savePreferredPhoneTelemetryId(opt.idHex)
+                            },
+                            text = stringResource(R.string.location_phone_telemetry_active_phone),
+                            description = stringResource(R.string.location_phone_telemetry_section_title),
+                            enabled = true,
+                            options = phonePickOptions,
+                            selectorWidth = 300.dp,
+                        )
+                        val nowEl = android.os.SystemClock.elapsedRealtime()
+                        fun fmtAge(at: Long): String =
+                            if (at <= 0L) "—" else "${((nowEl - at).coerceAtLeast(0L) / 1000L)}s"
+                        val activeLabel = phoneTelemetryUi.activePhoneName
+                            ?: phoneTelemetryUi.activePhoneIdHex
+                            ?: "—"
+                        Text(
+                            text = stringResource(
+                                R.string.location_phone_telemetry_status_line,
+                                activeLabel,
+                                fmtAge(phoneTelemetryUi.lastLocAtElapsedMs),
+                                fmtAge(phoneTelemetryUi.lastYawAtElapsedMs),
+                                fmtAge(phoneTelemetryUi.lastMagAtElapsedMs),
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
+                        )
+                        val mountLabel = phoneTelemetryUi.mountYawOffsetDeg?.let {
+                            String.format(java.util.Locale.US, "%.1f°", it) +
+                                if (phoneTelemetryUi.mountOffsetConfirmed) " (OK)" else " (~)"
+                        } ?: "—"
+                        Text(
+                            text = stringResource(
+                                R.string.location_phone_telemetry_compass_line,
+                                phoneTelemetryUi.lastMagAccuracy?.toString() ?: "—",
+                                phoneTelemetryUi.lastFieldStrengthUt?.let {
+                                    String.format(java.util.Locale.US, "%.1f", it)
+                                } ?: "—",
+                                mountLabel,
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.STEER &&
                         headingEnabled &&
                         steerLive == null

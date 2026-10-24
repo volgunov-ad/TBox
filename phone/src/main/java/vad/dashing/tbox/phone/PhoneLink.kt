@@ -41,19 +41,29 @@ interface PhoneLink {
  * search after [DIRECT_FIRST_MS] or after a full pass over the bonded head units without
  * an answer. The first link that delivers a sealed snapshot wins and the other stops until
  * it drops; until then PAIR and REFRESH go to every open link.
+ *
+ * When [keepDirectForTelemetry] is true (phone geo / gyro / compass sharing is enabled),
+ * the direct RFCOMM link stays active in AUTO even if the companion BLE link answered.
  */
 class PhoneLinkRouter(
     context: Context,
     private val store: PhoneStore,
     onSnap: (PhoneBleCodec.Snapshot) -> Unit,
+    onTelemetryAck: (PhoneBleCodec.TelemetryAck) -> Unit = {},
 ) : PhoneLink {
     private val assembler = PhoneBleCodec.SnapshotAssembler()
     private val radio = PhoneRadio(context, assembler, onSnap)
-    private val direct = PhoneDirectLink(context, store, assembler, onSnap)
+    private val direct = PhoneDirectLink(context, store, assembler, onSnap, onTelemetryAck)
     private var running = false
     private var radioOn = false
     private var directOn = false
     private var searchSince = 0L
+
+    /** When true, direct RFCOMM stays active even in AUTO/COMPANION so telemetry reaches the HU. */
+    var keepDirectForTelemetry: Boolean = store.anyTelemetryEnabled
+
+    val directLinkUp: Boolean get() = direct.linkUp
+    val directConfirmed: Boolean get() = direct.confirmed
 
     var path: PhonePath = store.path
         set(value) {
@@ -107,6 +117,7 @@ class PhoneLinkRouter(
 
     override fun start() {
         running = true
+        keepDirectForTelemetry = store.anyTelemetryEnabled
         when (path) {
             PhonePath.DIRECT -> {
                 setRadio(false)
@@ -124,7 +135,7 @@ class PhoneLinkRouter(
                 }
                 radio.confirmed -> {
                     searchSince = 0L
-                    setDirect(false)
+                    setDirect(keepDirectForTelemetry)
                     setRadio(true)
                 }
                 else -> {
@@ -158,6 +169,45 @@ class PhoneLinkRouter(
                 if (radioOn) radio.write(payload)
             }
         }
+    }
+
+    /**
+     * Writes a sealed packet (`CMD` or `REFRESH`). When routed exclusively over the direct
+     * RFCOMM link, counter allocation and sealing happen inside `PhoneDirectLink`'s single
+     * writer thread so telemetry packets cannot reorder counters.
+     */
+    fun writeSealedUiPacket(
+        type: Int,
+        body: ByteArray,
+        resetAcceptRange: Boolean = false,
+        updateWaitingCounter: Boolean = false,
+    ) {
+        if (direct.confirmed || (directOn && !radioOn)) {
+            direct.writeSealed(
+                type = type,
+                body = body,
+                resetAcceptRange = resetAcceptRange,
+                updateWaitingCounter = updateWaitingCounter,
+            )
+            return
+        }
+        val counter = store.nextCounter()
+        if (resetAcceptRange) acceptFromCounter = counter
+        if (updateWaitingCounter) waitingCounter = counter
+        val payload = PhoneBleCodec.seal(store.key, type, store.id, counter, body)
+        write(payload)
+    }
+
+    /** Sends telemetry (`YAW` or `MAG`) exclusively over the direct RFCOMM link. */
+    fun writeDirectTelemetry(type: Int, body: ByteArray) {
+        if (!direct.linkUp) return
+        direct.writeSealed(type, body)
+    }
+
+    /** Sends multi-page telemetry (`LOC_POS` + `LOC_MOTION`) atomically over the direct RFCOMM link. */
+    fun writeDirectTelemetryBatch(packets: List<Pair<Int, ByteArray>>) {
+        if (!direct.linkUp) return
+        direct.writeSealedBatch(packets)
     }
 
     private fun stopAll() {

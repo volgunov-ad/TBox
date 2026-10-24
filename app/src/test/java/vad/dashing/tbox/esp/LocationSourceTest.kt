@@ -11,6 +11,7 @@ class LocationSourceTest {
         assertEquals(LocationSource.ESP32, LocationSource.fromStorage("esp32"))
         assertEquals(LocationSource.ANDROID, LocationSource.fromStorage("Android"))
         assertEquals(LocationSource.USB, LocationSource.fromStorage("usb"))
+        assertEquals(LocationSource.PHONE, LocationSource.fromStorage("phone"))
         assertEquals(LocationSource.TBOX, LocationSource.fromStorage(null))
         assertEquals(LocationSource.TBOX, LocationSource.fromStorage(""))
     }

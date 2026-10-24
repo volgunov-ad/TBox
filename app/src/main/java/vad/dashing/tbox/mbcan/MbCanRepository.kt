@@ -237,6 +237,11 @@ enum class MbCanSignal(val subscribeDataTypes: Set<String>) {
      * A10: DirectionInd L/R + HazardLightSW (+ TurnlightSts as lamp blink fallback).
      */
     TurnSignals(setOf("eMBCAN_VEHICLE_TURNLIGHT")),
+    /**
+     * Lateral acceleration m/s² (`MBCanVehicleSpeed.fLateraAccaleleration` on A9,
+     * `R_0900_YAS_1_LateraAccaleleration` on A10).
+     */
+    LateralAcceleration(setOf("eMBCAN_VEHICLE_SPEED")),
 }
 
 sealed class MbCanBinaryState {
@@ -742,6 +747,8 @@ object MbCanRepository {
     val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
     private val _turnSignalsState = MutableStateFlow(TurnSignalsState())
     val turnSignalsState: StateFlow<TurnSignalsState> = _turnSignalsState.asStateFlow()
+    private val _lateralAccelerationState = MutableStateFlow<Float?>(null)
+    val lateralAccelerationState: StateFlow<Float?> = _lateralAccelerationState.asStateFlow()
 
     private val _carSettingsEpsMode = MutableStateFlow<Int?>(null)
     val carSettingsEpsMode: StateFlow<Int?> = _carSettingsEpsMode.asStateFlow()
@@ -1571,6 +1578,17 @@ object MbCanRepository {
         recordPushDebugEvent("telemetry/car_speed", "raw=$speed")
     }
 
+    fun scheduleLateralAccelerationPush(latAccelMps2: Float?) {
+        synchronized(telemetryPushLock) {
+            pendingTelemetryPushes[MbCanSignal.LateralAcceleration] = latAccelMps2
+            if (!telemetryPushFlushScheduled) {
+                telemetryPushFlushScheduled = true
+                cfgPushHandler.postDelayed(flushTelemetryPushesRunnable, PUSH_STATE_COALESCE_MS)
+            }
+        }
+        recordPushDebugEvent("telemetry/lateral_accel", "mps2=$latAccelMps2")
+    }
+
     /**
      * Called from [MbCanEngineFacade.registerSettingsTelemetryBridge] push callback
      * (`onCanVehicleSpeed` also fires for `eMBCAN_VEHICLE_GEAR`).
@@ -1935,6 +1953,7 @@ object MbCanRepository {
                         MbCanSignal.OutsideTemperature -> _outsideTemperatureState.value = value
                         MbCanSignal.CurrentFuelConsumption -> _currentFuelConsumptionState.value = value
                         MbCanSignal.SteeringAngle -> _steerAngleState.value = value
+                        MbCanSignal.LateralAcceleration -> _lateralAccelerationState.value = value
                         else -> Unit
                     }
                 }
@@ -2754,6 +2773,7 @@ object MbCanRepository {
             MbCanSignal.Pm25AirQuality -> refreshPm25AirQuality()
             MbCanSignal.SteeringAngle -> refreshSteeringAngle()
             MbCanSignal.TurnSignals -> refreshTurnSignals()
+            MbCanSignal.LateralAcceleration -> refreshLateralAcceleration()
             MbCanSignal.SlaSpeedLimit -> refreshSlaSpeedLimit()
             MbCanSignal.SpeedLimiter -> refreshSpeedLimiter()
             MbCanSignal.AccCruise -> refreshAccCruise()
@@ -3680,6 +3700,23 @@ object MbCanRepository {
         }
     }
 
+    private suspend fun refreshLateralAcceleration() {
+        withContext(stateApplyDispatcher) {
+            if (!MbCanEngineFacade.isInitialized()) {
+                _availability.value = MbCanEngineFacade.probeAvailability()
+                _lateralAccelerationState.value = null
+                return@withContext
+            }
+            val availability = MbCanEngineFacade.availability
+            _availability.value = availability
+            if (availability !is MbCanAvailability.Available) {
+                _lateralAccelerationState.value = null
+                return@withContext
+            }
+            _lateralAccelerationState.value = MbCanEngineFacade.readLateralAccelerationMps2()
+        }
+    }
+
     private suspend fun refreshVehicleGear() {
         withContext(stateApplyDispatcher) {
             if (!MbCanEngineFacade.isInitialized()) {
@@ -4504,7 +4541,8 @@ object MbCanRepository {
                 mergedSignals.contains(MbCanSignal.VehicleTires) ||
                 mergedSignals.contains(MbCanSignal.CurrentFuelConsumption) ||
                 mergedSignals.contains(MbCanSignal.DistanceToFuelEmpty) ||
-                mergedSignals.contains(MbCanSignal.TrunkDoor)
+                mergedSignals.contains(MbCanSignal.TrunkDoor) ||
+                mergedSignals.contains(MbCanSignal.LateralAcceleration)
             // Deep mode keeps every OEM push bridge alive so payloads are mirrored to the journal.
             val deep = MbCanDiagnostics.deepEnabled.value
             MbCanEngineFacade.syncVehicleCfgCmdListener(needsCfgVehicleListener || deep)

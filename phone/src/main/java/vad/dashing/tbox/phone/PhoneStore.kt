@@ -6,7 +6,8 @@ import vad.dashing.tbox.phoneble.PhoneBleCodec
 import java.security.SecureRandom
 
 class PhoneStore(context: Context) {
-    private val prefs = context.getSharedPreferences("phone_companion", Context.MODE_PRIVATE)
+    private val prefs = context.applicationContext.getSharedPreferences("phone_companion", Context.MODE_PRIVATE)
+    private val counterLock = Any()
     val id: ByteArray
     val key: ByteArray
 
@@ -31,19 +32,20 @@ class PhoneStore(context: Context) {
     /*
      * The stored value is a reserved upper bound, written with commit() before any
      * counter below it goes on air. A killed process then skips the unused rest of the
-     * block instead of reusing a counter the ESP already rejected as a replay.
+     * block instead of reusing a counter the ESP or HU already rejected as a replay.
+     * Block size is 512 so 10 Hz YAW + 1 Hz LOC/MAG only commits to flash every ~45 s.
      */
     private var reserved: Long = prefs.getLong(KEY_COUNTER, 0L)
     private var counter: Long = reserved
 
-    fun nextCounter(): Long {
+    fun nextCounter(): Long = synchronized(counterLock) {
         val next = counter + 1L
         if (next > reserved) {
             reserved = next + COUNTER_BLOCK
             prefs.edit().putLong(KEY_COUNTER, reserved).commit()
         }
         counter = next
-        return next
+        next
     }
 
     /** Set once the companion or the head unit answered with a sealed snapshot, i.e. it knows our key. */
@@ -73,7 +75,35 @@ class PhoneStore(context: Context) {
             prefs.edit().putString(KEY_DIRECT_ADDRESS, value).apply()
         }
 
-    private companion object {
+    var shareLocation: Boolean
+        get() = prefs.getBoolean(KEY_SHARE_LOCATION, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHARE_LOCATION, value).apply()
+        }
+
+    var shareGyro: Boolean
+        get() = prefs.getBoolean(KEY_SHARE_GYRO, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHARE_GYRO, value).apply()
+        }
+
+    var shareCompass: Boolean
+        get() = prefs.getBoolean(KEY_SHARE_COMPASS, false)
+        set(value) {
+            prefs.edit().putBoolean(KEY_SHARE_COMPASS, value).apply()
+        }
+
+    var anyTelemetryEnabled: Boolean
+        get() = path != PhonePath.COMPANION && (shareLocation || shareGyro || shareCompass)
+        private set(_) = Unit
+
+    val hasAnyTelemetryToggleChecked: Boolean
+        get() = shareLocation || shareGyro || shareCompass
+
+    val directPaired: Boolean
+        get() = !directAddress.isNullOrBlank()
+
+    companion object {
         const val KEY_ID = "id"
         const val KEY_SECRET = "key"
         const val KEY_COUNTER = "counter"
@@ -81,6 +111,9 @@ class PhoneStore(context: Context) {
         const val KEY_PAGE = "page"
         const val KEY_PATH = "path"
         const val KEY_DIRECT_ADDRESS = "direct_address"
-        const val COUNTER_BLOCK = 64L
+        const val KEY_SHARE_LOCATION = "share_location"
+        const val KEY_SHARE_GYRO = "share_gyro"
+        const val KEY_SHARE_COMPASS = "share_compass"
+        const val COUNTER_BLOCK = 512L
     }
 }

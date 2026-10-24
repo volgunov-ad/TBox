@@ -911,6 +911,28 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
         private val WHEEL_PULSE_MOCK_DR_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_mock_dr_enabled")
+        private val WHEEL_HEADING_TRACK_WIDTH_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_heading_track_width_m")
+        private val WHEEL_HEADING_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}wheel_heading_calib_at_ms")
+        private val WHEEL_HEADING_ARC_COUNT_KEY =
+            intPreferencesKey("${KEY_PREFIX}wheel_heading_arc_count")
+        private val PHONE_GYRO_BIAS_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_bias_deg_s")
+        private val PHONE_GYRO_SCALE_L_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_scale_l")
+        private val PHONE_GYRO_SCALE_R_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_scale_r")
+        private val PHONE_GYRO_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}phone_gyro_sign")
+        private val PHONE_GYRO_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}phone_gyro_calib_at_ms")
+        private val PHONE_COMPASS_SECTORS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}phone_compass_sectors_json")
+        private val PHONE_COMPASS_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}phone_compass_calib_at_ms")
+        private val PHONE_TELEMETRY_PREFERRED_ID_KEY =
+            stringPreferencesKey("${KEY_PREFIX}phone_telemetry_preferred_id")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
@@ -2838,6 +2860,108 @@ class SettingsManager(private val context: Context) {
         vad.dashing.tbox.location.SpeedIntegrator.discard()
     }
 
+    suspend fun loadWheelHeadingCalibration(): vad.dashing.tbox.location.WheelHeadingCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.location.WheelHeadingCalibration(
+            trackWidthM = prefs[WHEEL_HEADING_TRACK_WIDTH_M_KEY]
+                ?: vad.dashing.tbox.location.WheelHeadingIntegrator.DEFAULT_TRACK_M,
+            calibratedAtEpochMs = prefs[WHEEL_HEADING_CALIB_AT_MS_KEY] ?: 0L,
+            arcCount = prefs[WHEEL_HEADING_ARC_COUNT_KEY] ?: 0,
+        )
+    }
+
+    suspend fun saveWheelHeadingCalibration(calibration: vad.dashing.tbox.location.WheelHeadingCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHEEL_HEADING_TRACK_WIDTH_M_KEY] = calibration.trackWidthM
+            preferences[WHEEL_HEADING_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+            preferences[WHEEL_HEADING_ARC_COUNT_KEY] = calibration.arcCount
+        }
+        vad.dashing.tbox.location.WheelHeadingCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetWheelHeadingCalibration() {
+        val cleared = vad.dashing.tbox.location.WheelHeadingCalibration()
+        saveWheelHeadingCalibration(cleared)
+        vad.dashing.tbox.location.WheelHeadingIntegrator.reset()
+    }
+
+    suspend fun loadPhoneGyroCalibration(): vad.dashing.tbox.location.PhoneGyroCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.location.PhoneGyroCalibration(
+            biasDegPerSec = prefs[PHONE_GYRO_BIAS_KEY] ?: 0f,
+            scaleLeft = prefs[PHONE_GYRO_SCALE_L_KEY] ?: 1f,
+            scaleRight = prefs[PHONE_GYRO_SCALE_R_KEY] ?: 1f,
+            sign = prefs[PHONE_GYRO_SIGN_KEY] ?: 1,
+            calibratedAtEpochMs = prefs[PHONE_GYRO_CALIB_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    suspend fun savePhoneGyroCalibration(calibration: vad.dashing.tbox.location.PhoneGyroCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_GYRO_BIAS_KEY] = calibration.biasDegPerSec
+            preferences[PHONE_GYRO_SCALE_L_KEY] = calibration.scaleLeft
+            preferences[PHONE_GYRO_SCALE_R_KEY] = calibration.scaleRight
+            preferences[PHONE_GYRO_SIGN_KEY] = calibration.sign
+            preferences[PHONE_GYRO_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+        }
+        vad.dashing.tbox.location.PhoneGyroCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetPhoneGyroCalibration() {
+        val cleared = vad.dashing.tbox.location.PhoneGyroCalibration()
+        savePhoneGyroCalibration(cleared)
+        vad.dashing.tbox.location.PhoneTelemetryRepository.discardGyro()
+    }
+
+    suspend fun loadPhoneCompassCalibration(): vad.dashing.tbox.location.PhoneCompassCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        val raw = prefs[PHONE_COMPASS_SECTORS_JSON_KEY].orEmpty()
+        val sectors = if (raw.isBlank()) {
+            List(vad.dashing.tbox.location.PhoneCompassCalibration.SECTOR_COUNT) { 0f }
+        } else {
+            val parts = raw.split(",")
+            List(vad.dashing.tbox.location.PhoneCompassCalibration.SECTOR_COUNT) { idx ->
+                parts.getOrNull(idx)?.toFloatOrNull() ?: 0f
+            }
+        }
+        return vad.dashing.tbox.location.PhoneCompassCalibration(
+            sectorOffsetsDeg = sectors,
+            calibratedAtEpochMs = prefs[PHONE_COMPASS_CALIB_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    suspend fun savePhoneCompassCalibration(calibration: vad.dashing.tbox.location.PhoneCompassCalibration) {
+        val serialized = calibration.sectorOffsetsDeg.joinToString(",") { it.toString() }
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_COMPASS_SECTORS_JSON_KEY] = serialized
+            preferences[PHONE_COMPASS_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+        }
+        vad.dashing.tbox.location.PhoneCompassCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetPhoneCompassCalibration() {
+        val cleared = vad.dashing.tbox.location.PhoneCompassCalibration()
+        savePhoneCompassCalibration(cleared)
+        vad.dashing.tbox.location.PhoneTelemetryRepository.resetSessionMountOffset()
+    }
+
+    suspend fun loadPreferredPhoneTelemetryId(): String? {
+        val prefs = context.settingsDataStore.data.first()
+        return prefs[PHONE_TELEMETRY_PREFERRED_ID_KEY]?.trim()?.ifEmpty { null }
+    }
+
+    suspend fun savePreferredPhoneTelemetryId(idHex: String?) {
+        val clean = idHex?.trim()?.lowercase()?.ifEmpty { null }
+        context.settingsDataStore.edit { preferences ->
+            if (clean == null) {
+                preferences.remove(PHONE_TELEMETRY_PREFERRED_ID_KEY)
+            } else {
+                preferences[PHONE_TELEMETRY_PREFERRED_ID_KEY] = clean
+            }
+        }
+        vad.dashing.tbox.location.PhoneTelemetryRepository.setPreferredPhoneIdHex(clean)
+    }
+
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
@@ -3093,8 +3217,10 @@ class SettingsManager(private val context: Context) {
                     )
                 }
             }
-            // USB GNSS does not require / enable the ESP companion session.
-            if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
+            // USB GNSS and Phone GPS do not require / enable the ESP companion session.
+            if (effective == vad.dashing.tbox.esp.LocationSource.USB ||
+                effective == vad.dashing.tbox.esp.LocationSource.PHONE
+            ) {
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                     writeMockPowerState(
                         preferences,
@@ -3119,6 +3245,7 @@ class SettingsManager(private val context: Context) {
                     }
                     vad.dashing.tbox.esp.LocationSource.USB,
                     vad.dashing.tbox.esp.LocationSource.ESP32,
+                    vad.dashing.tbox.esp.LocationSource.PHONE,
                     -> {
                         preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = true
                     }

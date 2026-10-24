@@ -1035,6 +1035,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val lateralAccelerationState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.lateralAccelerationState
+            } else {
+                Android10VhalRepository.lateralAccelerationState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /**
      * Cabin door ajar open/closed (FL/FR/RL/RR). Not trunk (see [TrunkDoorRepository]).
      * A9: BCM 1/2 via [MbCanRepository.bcmDoorsState]; A10: CEM2 0/1 via [Android10VhalRepository.vhalDoorAjarRaw].

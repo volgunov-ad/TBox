@@ -87,4 +87,18 @@
     <string name="state_open">Открыто</string>
     <string name="state_tilted">Откинут</string>
     <string name="need_firmware">Окна, люк и шторка видны с прошивкой компаньона 0.10.5 или новее.</string>
+    <string name="telemetry_title">Геопозиция и курс на ГУ</string>
+    <string name="telemetry_hint">Работает только при прямом подключении к Bluetooth ГУ (не через BLE-компаньон ESP32). Фоновая служба и автозапуск активны, только когда включён хотя бы один из переключателей ниже.</string>
+    <string name="telemetry_companion_disabled_hint">Недоступно в режиме «Компаньон» (BLE): передача геопозиции, гироскопа и компаса возможна только при прямом подключении к Bluetooth ГУ. Переключите путь подключения на «ГУ напрямую» или «Авто».</string>
+    <string name="telemetry_need_direct_pair_hint">Внимание: телефон ещё не привязан к ГУ напрямую. Для отдачи геопозиции и курса сопрягите телефон с Bluetooth ГУ и выполните привязку через «Настройки → API → Приложение телефона напрямую → Подключить телефон» в TBox Monitor.</string>
+    <string name="share_location">Отдавать геопозицию (GPS)</string>
+    <string name="share_gyro">Отдавать гироскоп</string>
+    <string name="share_compass">Отдавать компас</string>
+    <string name="telemetry_autostart_btn">Привязать ГУ для автозапуска</string>
+    <string name="telemetry_battery_btn">Отключить оптимизацию батареи</string>
+    <string name="telemetry_battery_ok">Оптимизация батареи отключена для работы в фоне.</string>
+    <string name="telemetry_battery_hint">На Xiaomi, Huawei, Samsung и других оболочках система может останавливать фоновую службу без отключения оптимизации батареи.</string>
+    <string name="telemetry_channel_name">Связь и геоданные для ГУ</string>
+    <string name="telemetry_notification_text">Передача геопозиции и датчиков курса в TBox Monitor по Bluetooth</string>
+    <string name="telemetry_bg_loc_hint">Разрешите геолокацию «В любом режиме», чтобы передача GPS стартовала из фона автоматически.</string>
 </resources>

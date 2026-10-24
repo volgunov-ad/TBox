@@ -831,7 +831,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SOURCE),
             appOnly,
             GeoAutomationSignals.GEO_SOURCE_OPTIONS,
-            typicalRange = "Активный источник геопозиции из настроек: tbox / companion / android / usb.",
+            typicalRange = "Активный источник геопозиции из настроек: tbox / companion / android / usb / phone.",
         ),
         state(AutomationSignalId.ESP_GPIO_IN_0, "ESP-вход 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_GPIO_IN_1, "ESP-вход 1", appOnly, binaryStates),

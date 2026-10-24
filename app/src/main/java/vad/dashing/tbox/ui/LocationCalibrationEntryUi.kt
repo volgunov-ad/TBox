@@ -42,6 +42,7 @@ fun LocationCalibrationEntryButtons(
 ) {
     var showGyroHub by remember { mutableStateOf(false) }
     var showSteerHub by remember { mutableStateOf(false) }
+    var showWheelsPhoneHub by remember { mutableStateOf(false) }
     val mockPowerState by settingsViewModel.mockPowerState.collectAsStateWithLifecycle()
     val mockCanSpeedMode by settingsViewModel.mockCanSpeedMode.collectAsStateWithLifecycle()
     val constantAutoCalibEnabled by settingsViewModel.constantAutoCalibEnabled.collectAsStateWithLifecycle()
@@ -99,6 +100,17 @@ fun LocationCalibrationEntryButtons(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { showWheelsPhoneHub = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_calib_wheels_phone_btn),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
     }
 
     if (showGyroHub) {
@@ -112,6 +124,96 @@ fun LocationCalibrationEntryButtons(
             settingsViewModel = settingsViewModel,
             onDismiss = { showSteerHub = false },
         )
+    }
+    if (showWheelsPhoneHub) {
+        WheelsAndPhoneCalibrationHubDialog(
+            settingsViewModel = settingsViewModel,
+            onDismiss = { showWheelsPhoneHub = false },
+        )
+    }
+}
+
+@Composable
+private fun WheelsAndPhoneCalibrationHubDialog(
+    settingsViewModel: SettingsViewModel,
+    onDismiss: () -> Unit,
+) {
+    val wheelCalib by vad.dashing.tbox.location.WheelHeadingCalibrationStore.calibration.collectAsStateWithLifecycle()
+    val phoneGyroCalib by vad.dashing.tbox.location.PhoneGyroCalibrationStore.calibration.collectAsStateWithLifecycle()
+    val phoneCompassCalib by vad.dashing.tbox.location.PhoneCompassCalibrationStore.calibration.collectAsStateWithLifecycle()
+    val phoneUi by vad.dashing.tbox.location.PhoneTelemetryRepository.uiState.collectAsStateWithLifecycle()
+
+    CalibrationHubDialog(
+        title = stringResource(R.string.location_calib_wheels_phone_btn),
+        onDismiss = onDismiss,
+    ) {
+        Text(
+            text = stringResource(
+                R.string.location_calib_wheels_track_label,
+                String.format(java.util.Locale.US, "%.3f", wheelCalib.trackWidthM),
+                wheelCalib.arcCount,
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { settingsViewModel.resetWheelHeadingCalibration() },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_calib_wheels_reset_btn),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            text = stringResource(
+                R.string.location_calib_phone_gyro_label,
+                String.format(java.util.Locale.US, "%.2f", phoneGyroCalib.biasDegPerSec),
+                String.format(java.util.Locale.US, "%.2f", phoneGyroCalib.scaleLeft),
+                String.format(java.util.Locale.US, "%.2f", phoneGyroCalib.scaleRight),
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { settingsViewModel.resetPhoneGyroCalibration() },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_calib_phone_gyro_reset_btn),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        val mountStr = phoneUi.mountYawOffsetDeg?.let {
+            String.format(java.util.Locale.US, "%.1f°", it) +
+                if (phoneUi.mountOffsetConfirmed) " (OK)" else " (~)"
+        } ?: stringResource(R.string.location_calib_not_set)
+        val sectorsStr = phoneCompassCalib.sectorOffsetsDeg.joinToString("/") {
+            String.format(java.util.Locale.US, "%.1f", it)
+        }
+        Text(
+            text = stringResource(
+                R.string.location_calib_phone_compass_label,
+                mountStr,
+                sectorsStr,
+            ),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        OutlinedButton(
+            onClick = rememberWrappedOnClick { settingsViewModel.resetPhoneCompassCalibration() },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.location_calib_phone_compass_reset_btn),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
     }
 }
 

@@ -394,7 +394,7 @@ GET /v1/signals?ids=outside_temperature,fuel_level_percent&source=head_unit
 | `geo_bearing_deg` | number | °; Unavailable без bearing |
 | `geo_satellites_visible` / `geo_satellites_used` | number | Unavailable без LIVE/RETAINING |
 | `geo_fix_valid` | state | on/off — `gnssTruthful` |
-| `geo_source` | state | `tbox` / `companion` / `android` / `usb` |
+| `geo_source` | state | `tbox` / `companion` / `android` / `usb` / `phone` |
 | `modem_rssi_dbm` | number | signalDbm или CSQ→dBm; без IMEI/ICCID/IMSI |
 | `modem_registered` | state | on/off (домашняя/роуминг) |
 | `modem_operator` | state | строка оператора |

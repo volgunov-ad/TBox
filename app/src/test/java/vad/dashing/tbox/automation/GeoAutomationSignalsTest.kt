@@ -59,6 +59,7 @@ class GeoAutomationSignalsTest {
         assertEquals("companion", GeoAutomationSignals.locationSourceKey(LocationSource.ESP32))
         assertEquals("android", GeoAutomationSignals.locationSourceKey(LocationSource.ANDROID))
         assertEquals("usb", GeoAutomationSignals.locationSourceKey(LocationSource.USB))
+        assertEquals("phone", GeoAutomationSignals.locationSourceKey(LocationSource.PHONE))
     }
 
     @Test
