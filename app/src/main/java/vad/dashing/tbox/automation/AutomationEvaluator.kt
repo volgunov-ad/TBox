@@ -658,7 +658,12 @@ private fun AutomationTrigger.usesRearmHysteresis(): Boolean = when (this) {
     else -> true
 }
 
-private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = this is AutomationTrigger.StateEquals
+private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = when (this) {
+    is AutomationTrigger.StateEquals ->
+        signal != AutomationSignalId.ROAD_TUNNEL &&
+            signal != AutomationSignalId.ROAD_HIGHWAY_CLASS
+    else -> false
+}
 
 /** First live sample after a gap is a snapshot of current levels, not an edge. */
 private fun AutomationSignalKey.baselinesAfterGap(): Boolean = when (signal) {
@@ -786,7 +791,12 @@ private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = whe
     -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.Interval -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
-    is AutomationTrigger.StateEquals -> startupBehavior
+    is AutomationTrigger.StateEquals ->
+        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+            AutomationStartupBehavior.INITIALIZE_ONLY
+        } else {
+            startupBehavior
+        }
     is AutomationTrigger.Geofence -> startupBehavior
     is AutomationTrigger.Time -> startupBehavior
     is AutomationTrigger.Solar -> startupBehavior

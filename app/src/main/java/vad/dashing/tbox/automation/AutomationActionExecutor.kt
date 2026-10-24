@@ -36,12 +36,16 @@ import vad.dashing.tbox.httpRequestWidgetErrorMessage
 import vad.dashing.tbox.httpRequestWidgetIsSuccess
 import vad.dashing.tbox.location.GeoDebugLogRecorder
 import vad.dashing.tbox.location.MockLocationWidgetCycle
+import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanCommand
+import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.voice.VadVoiceLaunchContract
+import android.os.SystemClock
+import kotlin.math.min
 
 data class AutomationActionResult(
     val success: Boolean,
@@ -122,6 +126,13 @@ class AutomationActionExecutor(
             canCommandMutex.withLock {
                 val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
                     ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                awaitCanBackendReadyForAction(
+                    isAvailable = {
+                        UniversalCanRepository.availability.value is MbCanAvailability.Available
+                    },
+                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                    delayFor = { delay(it) },
+                )
                 val canMode = UniversalCanRepository.mode.value
                 if (!entry.isActionAllowed(action)) {
                     return@withLock AutomationActionResult.failure(
@@ -176,7 +187,11 @@ class AutomationActionExecutor(
                             )
                     }
                 }
-                val result = UniversalCanRepository.execute(command)
+                val result = executeCanWithStartupRetry(
+                    execute = { UniversalCanRepository.execute(command) },
+                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                    delayFor = { delay(it) },
+                )
                 AutomationActionResult(result.success, result.message)
             }
         }
@@ -513,6 +528,13 @@ class AutomationActionExecutor(
             if (ui == null) {
                 AutomationActionResult.failure("Подголовник: only / assist / off")
             } else {
+                awaitCanBackendReadyForAction(
+                    isAvailable = {
+                        UniversalCanRepository.availability.value is MbCanAvailability.Available
+                    },
+                    nowElapsedMillis = { SystemClock.elapsedRealtime() },
+                    delayFor = { delay(it) },
+                )
                 val ok = PlatformAudioRepository.setHeadrestMode(ui)
                 AutomationActionResult(
                     ok,
@@ -790,5 +812,61 @@ class AutomationActionExecutor(
     companion object {
         private const val MEDIA_SOURCE_ID = "user-automations"
         private const val WINDOW_ACTION_TIMEOUT_MS = 10_000L
+        internal const val CAN_READY_WAIT_TIMEOUT_MS = 15_000L
+        internal const val CAN_READY_POLL_MS = 250L
+        internal const val CAN_EXEC_RETRY_WINDOW_MS = 12_000L
+        internal const val CAN_EXEC_RETRY_DELAY_MS = 500L
     }
+}
+
+internal suspend fun awaitCanBackendReadyForAction(
+    isAvailable: () -> Boolean,
+    nowElapsedMillis: () -> Long,
+    delayFor: suspend (Long) -> Unit,
+    timeoutMs: Long = AutomationActionExecutor.CAN_READY_WAIT_TIMEOUT_MS,
+    pollMs: Long = AutomationActionExecutor.CAN_READY_POLL_MS,
+): Boolean {
+    if (isAvailable()) return true
+    if (timeoutMs <= 0L) return false
+    val deadline = nowElapsedMillis() + timeoutMs
+    while (true) {
+        val remaining = deadline - nowElapsedMillis()
+        if (remaining <= 0L) return isAvailable()
+        delayFor(min(pollMs, remaining))
+        if (isAvailable()) return true
+    }
+}
+
+internal fun isTransientCanStartupFailure(message: String): Boolean {
+    val normalized = message.trim().lowercase()
+    if (normalized.isEmpty()) return false
+    return normalized.contains("mbcan unavailable") ||
+        normalized.contains("vhal unavailable") ||
+        normalized.contains("car service") ||
+        normalized.contains("pre-read failed") ||
+        normalized.contains("set command failed") ||
+        normalized.contains("set audio command failed") ||
+        normalized == "set failed" ||
+        normalized.startsWith("unavailable")
+}
+
+internal suspend fun executeCanWithStartupRetry(
+    execute: suspend () -> MbCanCommandResult,
+    nowElapsedMillis: () -> Long,
+    delayFor: suspend (Long) -> Unit,
+    retryWindowMs: Long = AutomationActionExecutor.CAN_EXEC_RETRY_WINDOW_MS,
+    retryDelayMs: Long = AutomationActionExecutor.CAN_EXEC_RETRY_DELAY_MS,
+): MbCanCommandResult {
+    var result = execute()
+    if (result.success || retryWindowMs <= 0L || !isTransientCanStartupFailure(result.message)) {
+        return result
+    }
+    val deadline = nowElapsedMillis() + retryWindowMs
+    while (!result.success && isTransientCanStartupFailure(result.message)) {
+        val remaining = deadline - nowElapsedMillis()
+        if (remaining <= 0L) break
+        delayFor(min(retryDelayMs, remaining))
+        result = execute()
+    }
+    return result
 }

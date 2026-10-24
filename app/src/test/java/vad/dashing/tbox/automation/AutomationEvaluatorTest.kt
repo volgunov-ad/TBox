@@ -978,7 +978,7 @@ class AutomationEvaluatorTest {
     }
 
     @Test
-    fun roadHighwayClass_stateEqualsFiresOnClassChange_notOnUnavailable() {
+    fun roadHighwayClass_stateEqualsFiresOnClassChange_notOnUnavailableOrSameClassAfterGap() {
         val trigger = AutomationTrigger.StateEquals(
             id = "road_class",
             signal = AutomationSignalId.ROAD_HIGHWAY_CLASS,
@@ -1009,16 +1009,19 @@ class AutomationEvaluatorTest {
         assertNull(
             evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_000L)),
         )
-        // StateEquals rearms on Unavailable: match-back onto residential is a fresh edge.
-        assertEquals(
-            "road_class",
+        // Brief match loss on intersection/stalk must not re-fire on the same highway class.
+        assertNull(
             evaluator.onSignalSample(
                 sample(AutomationSignalValue.State("residential"), 4_000L),
-            )?.triggerId,
+            ),
         )
         assertNull(
             evaluator.onSignalSample(sample(AutomationSignalValue.State("primary"), 5_000L)),
         )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 5_500L)),
+        )
+        // Transition from primary across a brief intersection gap onto residential fires once.
         assertEquals(
             "road_class",
             evaluator.onSignalSample(
@@ -1055,21 +1058,23 @@ class AutomationEvaluatorTest {
     }
 
     @Test
-    fun roadTunnel_stateEqualsFiresOnEnterAndExit_notOnUnavailable() {
+    fun roadTunnel_stateEqualsFiresOnEnterAndExit_notOnUnavailableOrStartup() {
         val enter = AutomationTrigger.StateEquals(
             id = "tunnel_enter",
             signal = AutomationSignalId.ROAD_TUNNEL,
             source = AutomationSignalSource.APP,
             expectedState = "on",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
         )
         val exit = AutomationTrigger.StateEquals(
             id = "tunnel_exit",
             signal = AutomationSignalId.ROAD_TUNNEL,
             source = AutomationSignalSource.APP,
             expectedState = "off",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
         )
-        val enterEval = evaluator(enter, allowStartupFire = false)
-        val exitEval = evaluator(exit, allowStartupFire = false)
+        val enterEval = evaluator(enter, allowStartupFire = true)
+        val exitEval = evaluator(exit, allowStartupFire = true)
         val key = AutomationSignalKey(
             AutomationSignalId.ROAD_TUNNEL,
             AutomationSignalSource.APP,
@@ -1080,31 +1085,61 @@ class AutomationEvaluatorTest {
             observedAtElapsedMillis = at,
         )
 
+        // Cold start outside tunnel (Unavailable -> off) must not fire exit trigger even if FIRE_IF_MATCHING is set.
         assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
-        assertNull(
-            enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)),
-        )
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+
+        // off -> Unavailable -> off while driving outside tunnel must not fire exit trigger.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+
+        // off -> Unavailable -> on at tunnel portal fires enter once and arms exit.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
         assertEquals(
             "tunnel_enter",
             enterEval.onSignalSample(
-                sample(AutomationSignalValue.State("on"), 2_000L),
+                sample(AutomationSignalValue.State("on"), 3_000L),
             )?.triggerId,
         )
         assertNull(
-            exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 2_000L)),
+            exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 3_000L)),
         )
+
+        // on -> Unavailable -> on while driving inside tunnel must not refire enter trigger.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+
+        // on -> Unavailable -> off at tunnel exit portal fires exit once and rearms enter.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L)))
         assertEquals(
             "tunnel_exit",
             exitEval.onSignalSample(
-                sample(AutomationSignalValue.State("off"), 3_000L),
+                sample(AutomationSignalValue.State("off"), 5_000L),
             )?.triggerId,
         )
-        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_000L)))
-        // StateEquals rearms on Unavailable: re-enter after match loss is a fresh edge.
+
+        // Direct off -> on -> off transitions also fire once each.
         assertEquals(
             "tunnel_enter",
             enterEval.onSignalSample(
-                sample(AutomationSignalValue.State("on"), 5_000L),
+                sample(AutomationSignalValue.State("on"), 6_000L),
+            )?.triggerId,
+        )
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 6_000L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 7_000L)))
+        assertEquals(
+            "tunnel_exit",
+            exitEval.onSignalSample(
+                sample(AutomationSignalValue.State("off"), 7_000L),
             )?.triggerId,
         )
     }

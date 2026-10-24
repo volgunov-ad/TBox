@@ -4312,6 +4312,7 @@ object MbCanRepository {
 
     private suspend fun ensureMbCanReadyIfNeeded() {
         if (MbCanEngineFacade.isInitialized()) {
+            _availability.value = MbCanEngineFacade.availability
             // Heal orphaned JobManager types if init happened outside this path.
             MbCanJobManager.ensureOemSubscriptions()
             return

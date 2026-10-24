@@ -1183,7 +1183,8 @@ object AutomationSignalCatalog {
             appOnly,
             binaryStates,
             typicalRange = "Тоннель / Tunnel (OSM на matched-ребре). " +
-                "on — в тоннеле (въезд / enter), off — вне тоннеля (выезд / exit). " +
+                "Условие: on — в тоннеле, off — вне тоннеля. " +
+                "Триггер: on — въезд в тоннель (off→on), off — выезд из тоннеля (on→off). " +
                 "Без match — сигнала нет. Поднимает matcher без коррекции позы; не SpeedCam.",
             namedValues = listOf(
                 AutomationSignalNamedValue("off", "Вне тоннеля / Outside"),
@@ -1322,6 +1323,24 @@ object AutomationSignalCatalog {
             it.value.equals(raw.trim(), ignoreCase = true)
         }?.label
         return named?.takeIf { it.isNotBlank() } ?: stateOptionLabel(raw)
+    }
+
+    /** UI label for a state trigger option; uses transition wording for tunnel enter/exit. */
+    fun triggerStateOptionLabel(signal: AutomationSignalId, raw: String): String {
+        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+            return when (raw.trim().lowercase()) {
+                "on" -> "Въезд в тоннель / Enter tunnel"
+                "off" -> "Выезд из тоннеля / Exit tunnel"
+                else -> stateOptionLabel(signal, raw)
+            }
+        }
+        return stateOptionLabel(signal, raw)
+    }
+
+    /** Default state option when a signal is selected in a trigger editor. */
+    fun defaultTriggerStateOption(signal: AutomationSignalId): String? = when (signal) {
+        AutomationSignalId.ROAD_TUNNEL -> "on"
+        else -> get(signal).stateOptions.firstOrNull()
     }
 }
 
