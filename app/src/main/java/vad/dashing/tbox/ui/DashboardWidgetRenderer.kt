@@ -1945,18 +1945,13 @@ fun DashboardWidgetRenderer(
                 toFull -> FUEL_LEVEL_LITERS_TO_FULL_FLOW_KEY
                 else -> widget.dataKey
             }
-            val literUnit = if (toFull) {
-                stringResource(R.string.unit_liter_to_full)
-            } else {
-                widget.unit
-            }
             val litersTitleOverride = when {
                 titleOverride.isNotBlank() -> titleOverride
                 toFull -> stringResource(R.string.data_title_fuel_to_full)
                 else -> titleOverride
             }
             DashboardWidgetItem(
-                widget = widget.copy(dataKey = remappedKey, unit = literUnit),
+                widget = widget.copy(dataKey = remappedKey),
                 dataProvider = dataProvider,
                 onClick = onClick,
                 onLongClick = onLongClick,

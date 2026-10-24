@@ -2256,7 +2256,6 @@
     <string name="widget_fuel_liters_display_remaining">Остаток топлива</string>
     <string name="widget_fuel_liters_display_to_full">До полного бака</string>
     <string name="data_title_fuel_to_full">До полного бака</string>
-    <string name="unit_liter_to_full">л до полн.</string>
     <string name="trips_last_trip_widget_title">Последняя поездка</string>
     <string name="trips_start_time">Начало</string>
     <string name="trips_end_time">Окончание</string>

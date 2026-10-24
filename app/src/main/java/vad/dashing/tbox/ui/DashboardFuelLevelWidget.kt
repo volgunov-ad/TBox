@@ -50,11 +50,7 @@ fun DashboardFuelLevelWidgetItem(
     val pctStr by pctFlow.collectAsStateWithLifecycle()
     val litersStr by litersFlow.collectAsStateWithLifecycle()
     val percentUnit = stringResource(R.string.unit_percent)
-    val literUnit = if (toFull) {
-        stringResource(R.string.unit_liter_to_full)
-    } else {
-        stringResource(R.string.unit_liter)
-    }
+    val literUnit = stringResource(R.string.unit_liter)
     val firstLine = "$pctStr${if (units) "\u2009$percentUnit" else ""}"
     val secondLine = "$litersStr${if (units) "\u2009$literUnit" else ""}"
     val defaultTitle = stringResource(R.string.widget_title_fuel_level)
