@@ -59,6 +59,17 @@ enum class MockHeadingSource {
     val usesPhone: Boolean
         get() = usesPhoneGyro || usesPhoneCompass
 
+    fun labelResId(): Int = when (this) {
+        GYRO -> vad.dashing.tbox.R.string.settings_mock_heading_source_gyro
+        STEER -> vad.dashing.tbox.R.string.settings_mock_heading_source_steer
+        GYRO_STEER -> vad.dashing.tbox.R.string.settings_mock_heading_source_gyro_steer
+        WHEELS -> vad.dashing.tbox.R.string.settings_mock_heading_source_wheels
+        WHEELS_STEER -> vad.dashing.tbox.R.string.settings_mock_heading_source_wheels_steer
+        PHONE_GYRO -> vad.dashing.tbox.R.string.settings_mock_heading_source_phone_gyro
+        PHONE_COMPASS -> vad.dashing.tbox.R.string.settings_mock_heading_source_phone_compass
+        PHONE_GYRO_COMPASS -> vad.dashing.tbox.R.string.settings_mock_heading_source_phone_gyro_compass
+    }
+
     companion object {
         fun fromStorage(raw: String?): MockHeadingSource {
             if (raw.isNullOrBlank()) return GYRO

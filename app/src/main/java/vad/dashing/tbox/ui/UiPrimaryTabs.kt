@@ -114,7 +114,13 @@ import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GnssFreshness
+import vad.dashing.tbox.location.HeadingFallbackStatusRepository
+import vad.dashing.tbox.location.HeadingMotionDebug
+import vad.dashing.tbox.location.HeadingMotionDebugChannel
 import vad.dashing.tbox.location.LocationIncomingBitRate
+import vad.dashing.tbox.location.PhoneTelemetryRepository
+import vad.dashing.tbox.location.WheelHeadingIntegrator
+import vad.dashing.tbox.location.headingMotionDebug
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
@@ -2304,6 +2310,79 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
     )
 }
 
+@Composable
+private fun headingMotionStatusText(
+    debug: HeadingMotionDebug,
+    drStatus: String,
+    phone: PhoneTelemetryRepository.PhoneTelemetryUiState,
+    steerDeg: Float?,
+    wheelsFresh: Boolean,
+    wheelsDeltaDeg: Float,
+): String {
+    val lines = mutableListOf<String>()
+    if (debug.fallbackReason != null || debug.effective != debug.selected) {
+        lines += stringResource(
+            R.string.settings_mock_heading_fallback_active,
+            stringResource(debug.effective.labelResId()),
+            debug.fallbackReason ?: "—",
+        )
+    }
+    if (HeadingMotionDebugChannel.PHONE in debug.channels) {
+        val nowEl = SystemClock.elapsedRealtime()
+        fun fmtAge(at: Long): String =
+            if (at <= 0L) "—" else "${((nowEl - at).coerceAtLeast(0L) / 1000L)}s"
+        val activeLabel = phone.activePhoneName ?: phone.activePhoneIdHex ?: "—"
+        lines += stringResource(
+            R.string.location_phone_telemetry_status_line,
+            activeLabel,
+            fmtAge(phone.lastLocAtElapsedMs),
+            fmtAge(phone.lastYawAtElapsedMs),
+            fmtAge(phone.lastMagAtElapsedMs),
+        )
+        if (debug.selected.usesPhoneCompass || debug.effective.usesPhoneCompass) {
+            val mountLabel = phone.mountYawOffsetDeg?.let {
+                String.format(Locale.US, "%.1f°", it) +
+                    if (phone.mountOffsetConfirmed) " (OK)" else " (~)"
+            } ?: "—"
+            lines += stringResource(
+                R.string.location_phone_telemetry_compass_line,
+                phone.lastMagAccuracy?.toString() ?: "—",
+                phone.lastFieldStrengthUt?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                mountLabel,
+            )
+        }
+        val reject = listOfNotNull(phone.lastYawRejectReason, phone.lastMagRejectReason)
+            .distinct()
+            .joinToString(", ")
+        if (reject.isNotEmpty()) lines += reject
+    }
+    if (HeadingMotionDebugChannel.STEER in debug.channels) {
+        lines += if (steerDeg != null && steerDeg.isFinite()) {
+            stringResource(
+                R.string.location_heading_debug_steer,
+                String.format(Locale.getDefault(), "%.1f", steerDeg),
+            )
+        } else {
+            stringResource(R.string.location_heading_debug_steer_missing)
+        }
+    }
+    if (HeadingMotionDebugChannel.WHEELS in debug.channels) {
+        lines += if (wheelsFresh) {
+            stringResource(
+                R.string.location_heading_debug_wheels_fresh,
+                String.format(Locale.getDefault(), "%.2f", wheelsDeltaDeg),
+            )
+        } else {
+            stringResource(R.string.location_heading_debug_wheels_stale)
+        }
+    }
+    if (HeadingMotionDebugChannel.HU_IMU in debug.channels) {
+        val hal = drStatus.trim()
+        if (hal.isNotEmpty()) lines += hal
+    }
+    return lines.joinToString("\n").ifBlank { "—" }
+}
+
 
 private enum class SettingsSection {
     CAR,
@@ -2379,6 +2458,7 @@ fun LocationTabContent(
     val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
+    val headingFallback by HeadingFallbackStatusRepository.status.collectAsStateWithLifecycle()
     val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
     val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
     val tboxGearBoxMode by CanDataRepository.gearBoxMode.collectAsStateWithLifecycle()
@@ -3460,6 +3540,7 @@ fun LocationTabContent(
             }
                 } // Cameras
                 LocationSection.DataDebug -> {
+            val headingDebug = headingMotionDebug(mockHeadingSource, headingFallback)
             item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
@@ -3628,16 +3709,28 @@ fun LocationTabContent(
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
-                    stringResource(drSensor.source.labelResId()),
+                    stringResource(headingDebug.selected.labelResId()),
                 )
             }
             item {
+                val phoneTelemetryUi by PhoneTelemetryRepository.uiState.collectAsStateWithLifecycle()
+                val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                val wheelsDebug = remember(incomingBitRateTick) { WheelHeadingIntegrator.peekDebugSnapshot() }
+                val wheelsFresh = WheelHeadingIntegrator.isFresh(incomingBitRateTick)
                 StatusRow(
                     stringResource(R.string.location_dr_status),
-                    drSensor.statusText.ifBlank { "—" },
-                    valueMaxLines = 3,
+                    headingMotionStatusText(
+                        debug = headingDebug,
+                        drStatus = drSensor.statusText,
+                        phone = phoneTelemetryUi,
+                        steerDeg = steerLive,
+                        wheelsFresh = wheelsFresh,
+                        wheelsDeltaDeg = wheelsDebug.lastDeltaDeg,
+                    ),
+                    valueMaxLines = 6,
                 )
             }
+            if (HeadingMotionDebugChannel.HU_IMU in headingDebug.channels) {
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_gyro_yaw),
@@ -3677,6 +3770,7 @@ fun LocationTabContent(
                         vad.dashing.tbox.location.GyroBiasStore.applyAccelZ(drSensor.accelZ),
                     ),
                 )
+            }
             }
 
             item {
