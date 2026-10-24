@@ -37,6 +37,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneSensorMath
@@ -634,15 +635,17 @@ class PhoneTelemetryStreamer(
 class PhoneTelemetryService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Foreground service type currently held, or `null` before the first `startForeground`. */
+    private var promotedFgsType: Int? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val store = PhoneStore(this)
-        if (!store.anyTelemetryEnabled) {
+        // Every start comes from startForegroundService: startForeground must run before any
+        // stopSelf, otherwise the system kills the app ("did not then call startForeground").
+        val promoted = promoteToForeground(store)
+        if (!promoted || !store.anyTelemetryEnabled) {
             PhoneSessionController.onServiceStopped()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (!promoteToForeground(store)) {
-            PhoneSessionController.onServiceStopped()
+            if (promoted) stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -651,11 +654,62 @@ class PhoneTelemetryService : Service() {
     }
 
     override fun onDestroy() {
+        promotedFgsType = null
         PhoneSessionController.onServiceStopped()
         super.onDestroy()
     }
 
+    @RequiresApi(29)
+    private fun desiredFgsType(store: PhoneStore): Int {
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        // Android 14 only needs the while-in-use grant when the location type is started from
+        // the foreground; background starts without ACCESS_BACKGROUND_LOCATION fall back below.
+        if (store.anyTelemetryEnabled && store.shareLocation &&
+            PhoneTelemetryStreamer.hasFineLocationPermission(this)
+        ) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        }
+        return type
+    }
+
     private fun promoteToForeground(store: PhoneStore): Boolean {
+        val desired = if (Build.VERSION.SDK_INT >= 29) desiredFgsType(store) else 0
+        val current = promotedFgsType
+        if (current == desired) return true
+        val notification = buildNotification()
+        if (tryStartForeground(notification, desired)) {
+            promotedFgsType = desired
+            return true
+        }
+        // Already foreground (e.g. the location type was granted while the UI was visible and
+        // a background re-promote was refused): keep what we hold instead of stopping.
+        if (current != null) return true
+        // Android 14+ background start without a location grant: connectedDevice alone keeps
+        // gyro/compass streaming.
+        if (Build.VERSION.SDK_INT >= 29) {
+            val fallback = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            if (desired != fallback && tryStartForeground(notification, fallback)) {
+                promotedFgsType = fallback
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun tryStartForeground(notification: Notification, fgsType: Int): Boolean =
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIFICATION_ID, notification, fgsType)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "startForeground(type=$fgsType) failed: ${e.message}")
+            false
+        }
+
+    private fun buildNotification(): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(
             CHANNEL_ID,
@@ -670,54 +724,13 @@ class PhoneTelemetryService : Service() {
             Intent(this, PhoneActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val notification = Notification.Builder(this, CHANNEL_ID)
+        return Notification.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.telemetry_notification_text))
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
-
-        return try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                var fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                val canUseLocationFgs = store.shareLocation &&
-                    PhoneTelemetryStreamer.hasFineLocationPermission(this) &&
-                    PhoneTelemetryStreamer.hasBackgroundLocationPermission(this)
-                if (canUseLocationFgs) {
-                    fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                }
-                startForeground(NOTIFICATION_ID, notification, fgsType)
-            } else if (Build.VERSION.SDK_INT >= 29) {
-                var fgsType = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                if (store.shareLocation && PhoneTelemetryStreamer.hasFineLocationPermission(this)) {
-                    fgsType = fgsType or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                }
-                startForeground(NOTIFICATION_ID, notification, fgsType)
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-            true
-        } catch (e: Exception) {
-            // Fallback on Android 14+ when started from background without location grant:
-            // keep connectedDevice FGS so gyro/compass still work.
-            if (Build.VERSION.SDK_INT >= 29) {
-                runCatching {
-                    startForeground(
-                        NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-                    )
-                    true
-                }.getOrElse {
-                    Log.w(TAG, "startForeground failed: ${it.message}")
-                    false
-                }
-            } else {
-                Log.w(TAG, "startForeground failed: ${e.message}")
-                false
-            }
-        }
     }
 
     companion object {
@@ -731,6 +744,10 @@ class PhoneTelemetryService : Service() {
                 stop(app)
                 return
             }
+            if (!canHoldConnectedDeviceFgs(app)) {
+                Log.w(TAG, "BLUETOOTH_CONNECT not granted: telemetry service not started")
+                return
+            }
             val intent = Intent(app, PhoneTelemetryService::class.java)
             runCatching {
                 app.startForegroundService(intent)
@@ -738,6 +755,12 @@ class PhoneTelemetryService : Service() {
                 Log.w(TAG, "startForegroundService failed: ${e.message}")
             }
         }
+
+        /** Android 14+ refuses the connectedDevice FGS type without a Bluetooth runtime grant. */
+        private fun canHoldConnectedDeviceFgs(context: Context): Boolean =
+            Build.VERSION.SDK_INT < 34 ||
+                context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                PackageManager.PERMISSION_GRANTED
 
         fun stop(context: Context) {
             val app = context.applicationContext
