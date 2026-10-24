@@ -93,8 +93,15 @@ class PhoneStore(context: Context) {
             prefs.edit().putBoolean(KEY_SHARE_COMPASS, value).apply()
         }
 
-    val anyTelemetryEnabled: Boolean
+    var anyTelemetryEnabled: Boolean
+        get() = path != PhonePath.COMPANION && (shareLocation || shareGyro || shareCompass)
+        private set(_) = Unit
+
+    val hasAnyTelemetryToggleChecked: Boolean
         get() = shareLocation || shareGyro || shareCompass
+
+    val directPaired: Boolean
+        get() = !directAddress.isNullOrBlank()
 
     companion object {
         const val KEY_ID = "id"

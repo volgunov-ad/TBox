@@ -175,6 +175,7 @@ private fun PhoneScreen() {
     var shareLocation by remember { mutableStateOf(store.shareLocation) }
     var shareGyro by remember { mutableStateOf(store.shareGyro) }
     var shareCompass by remember { mutableStateOf(store.shareCompass) }
+    var directPaired by remember { mutableStateOf(store.directPaired) }
     var batteryOptDisabled by remember {
         mutableStateOf(PhoneSystemHelpers.isIgnoringBatteryOptimizations(context))
     }
@@ -193,6 +194,7 @@ private fun PhoneScreen() {
                 snap = next
                 lastSnapAt = receivedAtElapsedMs
                 pagesSinceSwitch++
+                directPaired = store.directPaired
                 if (next.volume != null && next.volume > 0) lastVolume = next.volume
                 if (!paired) {
                     paired = true
@@ -206,6 +208,8 @@ private fun PhoneScreen() {
                 shareLocation = store.shareLocation
                 shareGyro = store.shareGyro
                 shareCompass = store.shareCompass
+                directPaired = store.directPaired
+                path = store.path
             }
         }
         PhoneSessionController.addListener(listener)
@@ -371,7 +375,7 @@ private fun PhoneScreen() {
     fun choosePath(next: PhonePath) {
         if (next == path) return
         path = next
-        radio.path = next
+        PhoneSessionController.onPathChanged(context, next)
         pairRequest = PairRequest.NONE
         lastSnapAt = 0L
         linked = false
@@ -420,6 +424,7 @@ private fun PhoneScreen() {
                     Page.CONNECT -> ConnectPage(
                         linked = paired && snap.gen != 0,
                         path = path,
+                        directPaired = directPaired,
                         pairRequest = pairRequest,
                         shareLocation = shareLocation,
                         shareGyro = shareGyro,
@@ -600,6 +605,7 @@ private fun BottomBar(current: Page, onSelect: (Page) -> Unit) {
 private fun ConnectPage(
     linked: Boolean,
     path: PhonePath,
+    directPaired: Boolean,
     pairRequest: PairRequest,
     shareLocation: Boolean,
     shareGyro: Boolean,
@@ -614,6 +620,8 @@ private fun ConnectPage(
     onBindAutostart: () -> Unit,
     onDisableBatteryOpt: () -> Unit,
 ) {
+    val companionOnly = path == PhonePath.COMPANION
+    val telemetryEnabled = !companionOnly
     Card {
         SectionTitle(stringResource(R.string.connection))
         if (linked) {
@@ -667,26 +675,39 @@ private fun ConnectPage(
     Card {
         SectionTitle(stringResource(R.string.telemetry_title))
         Label(stringResource(R.string.telemetry_hint))
+        if (companionOnly) {
+            Text(
+                text = stringResource(R.string.telemetry_companion_disabled_hint),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = PhoneColors.accentText,
+            )
+        } else if (!directPaired) {
+            Label(stringResource(R.string.telemetry_need_direct_pair_hint))
+        }
         ModeButton(
             text = stringResource(R.string.share_location),
-            selected = shareLocation,
+            selected = shareLocation && telemetryEnabled,
+            enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleLocation(!shareLocation) }
-        if (shareLocation && !hasBgLocation) {
+        if (telemetryEnabled && shareLocation && !hasBgLocation) {
             Label(stringResource(R.string.telemetry_bg_loc_hint))
         }
         ModeButton(
             text = stringResource(R.string.share_gyro),
-            selected = shareGyro,
+            selected = shareGyro && telemetryEnabled,
+            enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleGyro(!shareGyro) }
         ModeButton(
             text = stringResource(R.string.share_compass),
-            selected = shareCompass,
+            selected = shareCompass && telemetryEnabled,
+            enabled = telemetryEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) { onToggleCompass(!shareCompass) }
 
-        if (shareLocation || shareGyro || shareCompass) {
+        if (telemetryEnabled && (shareLocation || shareGyro || shareCompass)) {
             Divider()
             ModeButton(
                 text = stringResource(R.string.telemetry_autostart_btn),
@@ -1165,12 +1186,14 @@ private fun ModeButton(
     text: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     accent: Accent = Accent.PRIMARY,
     horizontalPadding: Dp = 12.dp,
     onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier.heightIn(min = 44.dp),
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 4.dp),

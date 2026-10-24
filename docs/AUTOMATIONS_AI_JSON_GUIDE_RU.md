@@ -866,7 +866,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `modem_net_type` | `app` | `none`, `2g`, `3g`, `4g` |
 | `modem_sim_status` | `app` | `none`, `ready`, `pin`, `error`, `unknown` |
 | `geo_speed_source` | `app` | `gnss`, `can`, `retention`, `none` — источник отображаемой скорости |
-| `geo_source` | `app` | `tbox`, `companion`, `android`, `usb` — активный источник геопозиции |
+| `geo_source` | `app` | `tbox`, `companion`, `android`, `usb`, `phone` — активный источник геопозиции |
 | `modem_operator` | `app` | имя оператора (строка) или нет значения; без IMEI/ICCID/IMSI |
 | `modem_source` | `app` | `tbox`, `wifi_http` — активный источник модема |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |

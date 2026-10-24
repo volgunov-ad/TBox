@@ -2614,6 +2614,14 @@ fun LocationTabContent(
                     options = locationSourceOptions,
                     selectorWidth = 300.dp,
                 )
+                if (locationSource == LocationSource.PHONE) {
+                    Text(
+                        text = stringResource(R.string.location_phone_direct_only_hint),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
             }
             // Device list is always visible so the user can pick a receiver before
             // switching the location source to USB (otherwise the gate blocks USB
@@ -3254,6 +3262,12 @@ fun LocationTabContent(
                         )
                     }
                     if ((locationSource == LocationSource.PHONE || mockHeadingSource.usesPhone) && headingEnabled) {
+                        Text(
+                            text = stringResource(R.string.location_phone_direct_only_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
                         data class PhonePickOption(val idHex: String?, val label: String) {
                             override fun toString(): String = label
                         }

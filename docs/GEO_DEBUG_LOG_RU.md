@@ -38,11 +38,11 @@
 
 | Поле | Смысл |
 |------|--------|
-| **source** | Откуда GNSS: `TBOX` / `USB` / `ESP32` / `ANDROID` |
+| **source** | Откуда GNSS: `TBOX` / `USB` / `ESP32` / `ANDROID` / `PHONE` |
 | **mockOn** | Включена ли подмена геопозиции в систему (`true`/`false`) |
 | **mockPower** | Питание подмены: `OFF` / `WHEN_NO_FIX` / `ALWAYS_ON` |
 | **mockMode** | **Эффективный** режим DR: `NONE` = Прямой, `WHEN_FIX_LOST` = При потере, `ALWAYS` = Всегда, `CONSTANT` = Продвинутый. При `WHEN_NO_FIX` всегда `CONSTANT`, даже если в настройках сохранён Direct |
-| **headingSrc** | Источник курса DR: `GYRO` / `STEER` / `GYRO_STEER` |
+| **headingSrc** | Источник курса DR: `GYRO` / `STEER` / `GYRO_STEER` / `WHEELS` / `WHEELS_STEER` / `PHONE_GYRO` / `PHONE_COMPASS` / `PHONE_GYRO_COMPASS` |
 | **simulatedLoss** | Включён отладочный сброс фикса и отбрасывание координат активного источника; физический поток при этом может продолжаться |
 | **bitrate_bps** | Скорость входящих GNSS-данных (бит/с); `-` если не считается |
 
@@ -176,7 +176,7 @@
 | Поле | Смысл |
 |------|--------|
 | **lat / lon / course** | Координаты и курс опоры; `-` если ничего нет |
-| **src** | `nmea` (RMC статуса `A` за этот тик) / `tbox` / `usb` / `android` / `esp32` / `-` |
+| **src** | `nmea` (RMC статуса `A` за этот тик) / `tbox` / `usb` / `android` / `esp32` / `phone` / `-` |
 | **accM** | Оценка горизонтальной точности, м; `-` если нет |
 | **ageMs** | Возраст фикса относительно тика. `0` для свежего NMEA; у `locValues` — от `updateTime`; у last-known Android — от `elapsedRealtime`; у кэша растёт |
 

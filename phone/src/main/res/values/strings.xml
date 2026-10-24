@@ -88,7 +88,9 @@
     <string name="state_tilted">Tilted</string>
     <string name="need_firmware">Windows, sunroof and shade need companion firmware 0.10.5 or newer.</string>
     <string name="telemetry_title">Geoposition and heading to head unit</string>
-    <string name="telemetry_hint">Works over direct Bluetooth connection to the head unit. Background service and autostart are active only while at least one option below is enabled.</string>
+    <string name="telemetry_hint">Works only over direct Bluetooth connection to the head unit (not over the ESP32 BLE companion). Background service and autostart run only while at least one option below is enabled.</string>
+    <string name="telemetry_companion_disabled_hint">Unavailable in «Companion» (BLE) mode: geoposition, gyroscope and compass can be sent only over direct Bluetooth connection to the head unit. Switch connection path to «Head unit» or «Auto».</string>
+    <string name="telemetry_need_direct_pair_hint">Note: the phone is not paired directly with the head unit yet. For geoposition and heading sharing, pair the phone with the head unit over Bluetooth and connect via «Settings → API → Phone app directly → Connect phone» in TBox Monitor.</string>
     <string name="share_location">Share geoposition (GPS)</string>
     <string name="share_gyro">Share gyroscope</string>
     <string name="share_compass">Share compass</string>

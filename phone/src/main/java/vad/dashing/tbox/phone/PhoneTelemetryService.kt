@@ -222,6 +222,15 @@ object PhoneSessionController {
         listeners.forEach { it.onStateChanged() }
     }
 
+    fun onPathChanged(context: Context, next: PhonePath) {
+        ensureInitialized(context)
+        val r = router ?: return
+        r.path = next
+        r.keepDirectForTelemetry = store.anyTelemetryEnabled
+        syncServiceAndStreamer(context)
+        listeners.forEach { it.onStateChanged() }
+    }
+
     fun syncServiceAndStreamer(context: Context) {
         ensureInitialized(context)
         if (store.anyTelemetryEnabled) {
@@ -240,7 +249,7 @@ object PhoneSessionController {
         val r = router ?: return
         val s = streamer ?: return
         val st = store
-        val directActive = r.directLinkUp && (r.directConfirmed || st.paired)
+        val directActive = st.path != PhonePath.COMPANION && r.directLinkUp && (r.directConfirmed || st.directPaired)
         if (!directActive) {
             huDemandMask = PhoneBleCodec.DEMAND_ALL
             s.stopAll()

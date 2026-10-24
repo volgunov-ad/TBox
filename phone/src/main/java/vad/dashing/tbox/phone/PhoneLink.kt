@@ -124,7 +124,7 @@ class PhoneLinkRouter(
                 setDirect(true)
             }
             PhonePath.COMPANION -> {
-                setDirect(keepDirectForTelemetry)
+                setDirect(false)
                 setRadio(true)
             }
             PhonePath.AUTO -> when {
