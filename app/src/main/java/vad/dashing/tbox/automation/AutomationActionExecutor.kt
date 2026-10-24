@@ -127,6 +127,21 @@ class AutomationActionExecutor(
             canCommandMutex.withLock {
                 val entry = AutomationCanCatalog.get(action.bus, action.propertyId)
                     ?: return@withLock AutomationActionResult.failure("CAN-команда не разрешена")
+                // Checks that do not depend on the backend run first: a broken action must
+                // not sit through the readiness wait. Mode-dependent ones follow the wait,
+                // because the mode can still change while the backend starts.
+                if (!entry.isActionAllowed(action)) {
+                    return@withLock AutomationActionResult.failure(
+                        "Недопустимая операция или значение CAN",
+                    )
+                }
+                if (action.bus == AutomationCanBus.AUDIO &&
+                    action.operation == AutomationCanOperation.TRUNK_PULSE
+                ) {
+                    return@withLock AutomationActionResult.failure(
+                        "Импульс багажника не относится к аудио",
+                    )
+                }
                 if (!awaitCanBackendReadyForAction(
                         isAvailable = {
                             UniversalCanRepository.availability.value is MbCanAvailability.Available
@@ -138,11 +153,6 @@ class AutomationActionExecutor(
                     return@withLock AutomationActionResult.failure(CAN_NOT_READY_MESSAGE)
                 }
                 val canMode = UniversalCanRepository.mode.value
-                if (!entry.isActionAllowed(action)) {
-                    return@withLock AutomationActionResult.failure(
-                        "Недопустимая операция или значение CAN",
-                    )
-                }
                 val writeValue = AutomationCanValueCodec.resolveWriteValue(action, canMode)
                     ?: return@withLock AutomationActionResult.failure(
                         "Недопустимая операция или значение CAN",
