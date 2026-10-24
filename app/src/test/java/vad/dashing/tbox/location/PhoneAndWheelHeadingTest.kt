@@ -133,6 +133,88 @@ class PhoneAndWheelHeadingTest {
     }
 
     @Test
+    fun wheelHeadingIntegrator_discardThroughDoesNotKeepSilentWheelsFresh() {
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(100, 100, 100, 100, 1000L),
+            kMetersPerPulse = 0.025f,
+            reverse = false,
+            steerDeg = 0f,
+            speedKmh = 30f,
+            nowElapsedMs = 1000L,
+        )
+        var now = 1000L
+        repeat(10) {
+            now += 500L
+            WheelHeadingIntegrator.discardThrough(now)
+        }
+        assertFalse(WheelHeadingIntegrator.isFresh(now))
+        assertEquals(1000L, WheelHeadingIntegrator.lastSampleElapsedMs())
+    }
+
+    @Test
+    fun wheelHeadingIntegrator_rebasesAfterSilentGapInsteadOfJumping() {
+        val k = 0.025f
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(100, 100, 100, 100, 1000L),
+            kMetersPerPulse = k,
+            reverse = false,
+            steerDeg = 90f,
+            speedKmh = 30f,
+            nowElapsedMs = 1000L,
+        )
+        // Collection stopped for a minute; counters drifted with a large L/R mismatch.
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(1100, 1400, 1100, 1400, 61_000L),
+            kMetersPerPulse = k,
+            reverse = false,
+            steerDeg = 90f,
+            speedKmh = 30f,
+            nowElapsedMs = 61_000L,
+        )
+        assertEquals(0f, WheelHeadingIntegrator.consumeDeltaDeg(), 1e-4f)
+        assertTrue(WheelHeadingIntegrator.isFresh(61_000L))
+
+        WheelHeadingIntegrator.onWheelSample(
+            counters = WheelCounters(1120, 1424, 1120, 1424, 61_500L),
+            kMetersPerPulse = k,
+            reverse = false,
+            steerDeg = 90f,
+            speedKmh = 30f,
+            nowElapsedMs = 61_500L,
+        )
+        assertTrue(WheelHeadingIntegrator.consumeDeltaDeg() < -1.0f)
+    }
+
+    @Test
+    fun hybridWheelsSteer_zeroWheelTickDoesNotOverweightSteer() {
+        val steer = 2f
+        val atFullSpeed = WheelHeadingIntegrator.hybridWheelsSteerDelta(
+            wheelsDeltaDeg = 0f,
+            steerDeltaDeg = steer,
+            speedKmh = 60f,
+            slipRejected = false,
+            yasTrustWeight = 1f,
+        )
+        assertEquals(0f, atFullSpeed, 1e-4f)
+        val halfTrust = WheelHeadingIntegrator.hybridWheelsSteerDelta(
+            wheelsDeltaDeg = 0f,
+            steerDeltaDeg = steer,
+            speedKmh = 60f,
+            slipRejected = false,
+            yasTrustWeight = 0.5f,
+        )
+        assertEquals(1f, halfTrust, 1e-4f)
+        val lowSpeed = WheelHeadingIntegrator.hybridWheelsSteerDelta(
+            wheelsDeltaDeg = 0f,
+            steerDeltaDeg = steer,
+            speedKmh = 3f,
+            slipRejected = false,
+            yasTrustWeight = 1f,
+        )
+        assertEquals(steer, lowSpeed, 1e-4f)
+    }
+
+    @Test
     fun lateralAccelerationDomain_decodesMbCanAndVhal() {
         assertEquals(1.25f, LateralAccelerationDomain.decodeMbCanFloat(1.25f)!!, 1e-4f)
         assertEquals(0.0f, LateralAccelerationDomain.decodeVhalRaw(2000)!!, 1e-3f)
