@@ -2834,6 +2834,20 @@ object Android10VhalRepository {
         logDebug("VHAL push coalesced[$body]")
     }
 
+    /**
+     * One queued pull of [signals] on [stateApplyDispatcher].
+     * [refreshSignal] itself must not hop: the poll loop and [execute] already run there,
+     * and a nested [withContext] on this single thread would deadlock.
+     */
+    suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
+        val unique = signals.distinct()
+        if (unique.isEmpty()) return
+        withContext(stateApplyDispatcher) {
+            prioritize(unique)
+            unique.forEach { refreshSignal(it) }
+        }
+    }
+
     suspend fun refreshSignal(signal: MbCanSignal) {
         permissionDeniedReasonForSignal(signal)?.let { deniedReason ->
             when (signal) {

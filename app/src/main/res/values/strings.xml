@@ -1998,6 +1998,10 @@
     <string name="location_dr_source_a9">Штатные (Android 9)</string>
     <string name="location_dr_source_a10">Штатные (Android 10)</string>
     <string name="location_dr_status">Состояние датчиков</string>
+    <string name="location_heading_debug_steer">Угол руля: %1$s°</string>
+    <string name="location_heading_debug_steer_missing">Угол руля недоступен</string>
+    <string name="location_heading_debug_wheels_fresh">Импульсы колёс: есть, Δ %1$s°</string>
+    <string name="location_heading_debug_wheels_stale">Импульсы колёс: нет свежих данных</string>
     <string name="location_dr_gyro_yaw">Скорость поворота (рысканье)</string>
     <string name="location_dr_gyro_pitch">Скорость наклона вперёд-назад</string>
     <string name="location_dr_gyro_roll">Скорость крена влево-вправо</string>

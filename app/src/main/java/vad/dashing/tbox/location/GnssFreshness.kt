@@ -25,4 +25,11 @@ object GnssFreshness {
         val age = nowMs - lastUpdateAtMs
         return age in 0L until staleMs
     }
+
+    /**
+     * Debug «фиксация»: the receiver still reports a fix and the last packet is inside
+     * [STALE_CLEAR_MS]. Retention may keep publishing a held point after this is false.
+     */
+    fun hasLiveFix(locateStatus: Boolean, lastPacketAtMs: Long?, nowMs: Long): Boolean =
+        locateStatus && isFresh(lastPacketAtMs, nowMs)
 }

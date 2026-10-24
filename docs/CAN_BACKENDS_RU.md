@@ -108,7 +108,7 @@
 - `setSourceSignals(sourceId: String, signals: Set<MbCanSignal>)`  
   Явная подписка на сигналы (например, `AudioVolume`, `EngineRpm`), когда нужно не через `dataKey`.
 - `refreshSignalsNow(signals: Collection<MbCanSignal>)` *(suspend)*  
-  Немедленный последовательный pull (видимая секция «Настройки авто»). Native/VHAL get остаётся на apply-потоке.
+  Немедленный последовательный pull (видимая секция «Настройки авто»). Native get на A9 и VHAL get на A10 идут на apply-поток (`mbcan-state-apply` / `vhal-a10-state-apply`), не на Main и не на поток снимка. Снимок телефона и HTTP вызывают pull только когда набор сигналов источника меняется: повтор на каждый запрос на A10 занимал 1–4 с и читал `CarProperty` с чужого потока.
 - `execute(command: MbCanCommand): MbCanCommandResult`  
   `command` — `ToggleProperty/SetProperty/ToggleAudioProperty/SetAudioProperty/RefreshSignal`.  
   На A9 (`MbCanRepository`) native get/set идут на `mbcan-state-apply` (не main): Car Settings может звать `execute` с Main. VHAL не переключается.

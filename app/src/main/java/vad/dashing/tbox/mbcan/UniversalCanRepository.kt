@@ -1212,7 +1212,9 @@ object UniversalCanRepository {
 
     /**
      * Immediate sequential pull for [signals] (visible Car Settings section first).
-     * Stays on the backend apply thread — not a per-signal IO job.
+     * Stays on the backend apply thread — not a per-signal IO job and not the main thread.
+     * A9 hops inside [MbCanRepository.refreshSignal]. A10 hops once in
+     * [Android10VhalRepository.refreshSignalsNow] (`vhal-a10-state-apply`).
      */
     suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
         val unique = signals.distinct()
@@ -1221,8 +1223,7 @@ object UniversalCanRepository {
             MbCanJobManager.prioritize(unique)
             unique.forEach { MbCanRepository.refreshSignal(it) }
         } else {
-            Android10VhalRepository.prioritize(unique)
-            unique.forEach { Android10VhalRepository.refreshSignal(it) }
+            Android10VhalRepository.refreshSignalsNow(unique)
         }
     }
 
