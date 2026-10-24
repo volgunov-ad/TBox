@@ -442,7 +442,7 @@ if command -v su >/dev/null 2>&1; then setsid su 0 sh -c 'sleep 1; svc power reb
 
 ## 9. Прочие особенности A10
 
-- **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`InWindowAlertDialog`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
+- **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`WidgetEditorScreen` с `inWindow = true`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 - **USB-разрешения.** Доработанный `UsbPermissionActivity` Adayo сам выдаёт разрешение (`CBen_grantUsbPermissions`) и закрывается, но в ответе приходит `granted=false`. Приложение перепроверяет `UsbManager.hasPermission()`.
 - **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`).
 
