@@ -305,6 +305,8 @@ class PhoneTelemetryStreamer(
     private var settledMountGravity: PhoneSensorMath.Vec3? = null
     private var windowAccelAnomaly = false
     private var mountMovedPending = false
+    private var mountTiltSinceElapsedMs = 0L
+    private var hasGravitySensor = false
 
     // Gyro window integration (150 ms)
     private var lastGyroSampleElapsedMs = 0L
@@ -373,7 +375,7 @@ class PhoneTelemetryStreamer(
                         event.values[1],
                         event.values[2],
                     )
-                    onGravityVector(g)
+                    onGravityVector(g, nowElapsedMs)
                 }
                 Sensor.TYPE_ACCELEROMETER -> {
                     val ax = event.values[0]
@@ -384,7 +386,9 @@ class PhoneTelemetryStreamer(
                     if (abs(norm - PhoneSensorMath.STANDARD_GRAVITY_MPS2) > 3.5f) {
                         windowAccelAnomaly = true
                     }
-                    // Low-pass filter accelerometer into gravity when TYPE_GRAVITY is absent or alongside it
+                    // The low-passed accelerometer is the apparent vertical (includes braking and
+                    // cornering), so it may only stand in for gravity when TYPE_GRAVITY is absent.
+                    if (hasGravitySensor) return
                     val prev = latestGravity
                     val filtered = if (prev == null) {
                         raw
@@ -395,7 +399,7 @@ class PhoneTelemetryStreamer(
                             prev.z * 0.85f + az * 0.15f,
                         )
                     }
-                    onGravityVector(filtered)
+                    onGravityVector(filtered, nowElapsedMs)
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     if (!gyroActive) return
@@ -444,17 +448,26 @@ class PhoneTelemetryStreamer(
         }
     }
 
-    private fun onGravityVector(g: PhoneSensorMath.Vec3) {
+    private fun onGravityVector(g: PhoneSensorMath.Vec3, nowElapsedMs: Long) {
         latestGravity = g
         val settled = settledMountGravity
         if (settled == null) {
             settledMountGravity = g
-        } else {
-            val tiltFromMount = PhoneSensorMath.angleBetweenDeg(settled, g)
-            if (tiltFromMount > PhoneSensorMath.MOUNT_MOVED_GRAVITY_TILT_DEG) {
-                mountMovedPending = true
-                settledMountGravity = g
-            }
+            mountTiltSinceElapsedMs = 0L
+            return
+        }
+        val tiltFromMount = PhoneSensorMath.angleBetweenDeg(settled, g)
+        if (tiltFromMount <= PhoneSensorMath.MOUNT_MOVED_GRAVITY_TILT_DEG) {
+            mountTiltSinceElapsedMs = 0L
+            return
+        }
+        // A real mount change persists; a stop or a turn tilts the estimate only briefly.
+        if (mountTiltSinceElapsedMs == 0L) {
+            mountTiltSinceElapsedMs = nowElapsedMs
+        } else if (nowElapsedMs - mountTiltSinceElapsedMs >= MOUNT_MOVED_CONFIRM_MS) {
+            mountMovedPending = true
+            settledMountGravity = g
+            mountTiltSinceElapsedMs = 0L
         }
     }
 
@@ -573,9 +586,9 @@ class PhoneTelemetryStreamer(
 
         val gravitySensor = sm.getDefaultSensor(Sensor.TYPE_GRAVITY)
         val accelSensor = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        if (gravitySensor != null) {
+        hasGravitySensor = gravitySensor != null &&
             sm.registerListener(sensorListener, gravitySensor, SensorManager.SENSOR_DELAY_GAME)
-        }
+        mountTiltSinceElapsedMs = 0L
         if (accelSensor != null) {
             sm.registerListener(sensorListener, accelSensor, SensorManager.SENSOR_DELAY_GAME)
         }
@@ -597,6 +610,8 @@ class PhoneTelemetryStreamer(
         private const val LOC_PERIOD_MS = 1_000L
         private const val YAW_WINDOW_MS = 150
         private const val MAG_PERIOD_MS = 1_000L
+        /** Tilt beyond MOUNT_MOVED_GRAVITY_TILT_DEG must persist this long to count as a mount move. */
+        private const val MOUNT_MOVED_CONFIRM_MS = 3_000L
 
         fun hasFineLocationPermission(context: Context): Boolean =
             context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
