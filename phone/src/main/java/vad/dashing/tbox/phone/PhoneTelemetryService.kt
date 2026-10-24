@@ -2,6 +2,7 @@ package vad.dashing.tbox.phone
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -843,6 +844,21 @@ object PhoneSystemHelpers {
                 context.startActivity(fallback)
             }
         }
+    }
+
+    /**
+     * Android 12 has no `onAssociationCreated`; the chosen device only comes back in the
+     * chooser result, so presence observation is armed here for API 31–32.
+     */
+    fun onCompanionAssociationResult(context: Context, resultCode: Int, data: Intent?) {
+        if (resultCode != Activity.RESULT_OK || data == null) return
+        if (Build.VERSION.SDK_INT < 31 || Build.VERSION.SDK_INT >= 33) return
+        @Suppress("DEPRECATION")
+        val device = data.getParcelableExtra<BluetoothDevice>(CompanionDeviceManager.EXTRA_DEVICE)
+            ?: return
+        val cdm = context.getSystemService(CompanionDeviceManager::class.java) ?: return
+        runCatching { cdm.startObservingDevicePresence(device.address) }
+            .onFailure { Log.w("PhoneCompanion", "startObservingDevicePresence failed: ${it.message}") }
     }
 
     fun requestCompanionDeviceAssociation(
