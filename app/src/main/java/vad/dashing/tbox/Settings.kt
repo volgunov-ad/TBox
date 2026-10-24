@@ -499,6 +499,19 @@ data class MainScreenPanelConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
     val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Strip length along the edge when collapsed (1–100% of edge). */
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip length along the edge when expanded (1–100% of edge). */
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip shift from edge start when collapsed (0…100−length %). */
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /** Strip shift from edge start when expanded (0…100−length %). */
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /**
+     * When true, touch zone along the edge matches strip length+position for the current state.
+     * When false (default), touch zone spans the full edge; thickness setting is unchanged.
+     */
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
@@ -540,6 +553,19 @@ data class FloatingDashboardConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
     val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Strip length along the edge when collapsed (1–100% of edge). */
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip length along the edge when expanded (1–100% of edge). */
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip shift from edge start when collapsed (0…100−length %). */
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /** Strip shift from edge start when expanded (0…100−length %). */
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /**
+     * When true, touch zone along the edge matches strip length+position for the current state.
+     * When false (default), touch zone spans the full edge; thickness setting is unchanged.
+     */
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
@@ -5390,6 +5416,28 @@ class SettingsManager(private val context: Context) {
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
             collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
             collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
+            collapseStripLengthPercentCollapsed = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentCollapsed",
+            ),
+            collapseStripLengthPercentExpanded = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentExpanded",
+            ),
+            collapseStripPositionPercentCollapsed = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentCollapsed",
+                positionKey = "collapseStripPositionPercentCollapsed",
+            ),
+            collapseStripPositionPercentExpanded = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentExpanded",
+                positionKey = "collapseStripPositionPercentExpanded",
+            ),
+            collapseTouchZoneMatchStrip = obj.optBoolean(
+                "collapseTouchZoneMatchStrip",
+                DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+            ),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -5513,6 +5561,28 @@ class SettingsManager(private val context: Context) {
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
             collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
             collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
+            collapseStripLengthPercentCollapsed = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentCollapsed",
+            ),
+            collapseStripLengthPercentExpanded = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentExpanded",
+            ),
+            collapseStripPositionPercentCollapsed = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentCollapsed",
+                positionKey = "collapseStripPositionPercentCollapsed",
+            ),
+            collapseStripPositionPercentExpanded = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentExpanded",
+                positionKey = "collapseStripPositionPercentExpanded",
+            ),
+            collapseTouchZoneMatchStrip = obj.optBoolean(
+                "collapseTouchZoneMatchStrip",
+                DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+            ),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -5602,12 +5672,34 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    private fun parsePanelCollapseStripLengthPercent(obj: JSONObject, key: String): Int =
+        normalizePanelCollapseStripLengthPercent(
+            obj.optInt(key, DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT),
+        )
+
+    private fun parsePanelCollapseStripPositionPercent(
+        obj: JSONObject,
+        lengthKey: String,
+        positionKey: String,
+    ): Int {
+        val length = parsePanelCollapseStripLengthPercent(obj, lengthKey)
+        return normalizePanelCollapseStripPositionPercent(
+            obj.optInt(positionKey, DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT),
+            length,
+        )
+    }
+
     private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
         putPanelCollapseFields(
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = config.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = config.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = config.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = config.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = config.collapseTouchZoneMatchStrip,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
@@ -5625,6 +5717,11 @@ class SettingsManager(private val context: Context) {
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = config.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = config.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = config.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = config.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = config.collapseTouchZoneMatchStrip,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
@@ -5641,6 +5738,11 @@ class SettingsManager(private val context: Context) {
         collapseEdge: String,
         collapseStripThicknessDp: Int,
         collapseTouchZoneThicknessDp: Int,
+        collapseStripLengthPercentCollapsed: Int,
+        collapseStripLengthPercentExpanded: Int,
+        collapseStripPositionPercentCollapsed: Int,
+        collapseStripPositionPercentExpanded: Int,
+        collapseTouchZoneMatchStrip: Boolean,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
@@ -5659,6 +5761,35 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
             o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
+        }
+        val lengthCollapsed = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentCollapsed,
+        )
+        val lengthExpanded = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentExpanded,
+        )
+        val positionCollapsed = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentCollapsed,
+            lengthCollapsed,
+        )
+        val positionExpanded = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentExpanded,
+            lengthExpanded,
+        )
+        if (lengthCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentCollapsed", lengthCollapsed)
+        }
+        if (lengthExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentExpanded", lengthExpanded)
+        }
+        if (positionCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentCollapsed", positionCollapsed)
+        }
+        if (positionExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentExpanded", positionExpanded)
+        }
+        if (collapseTouchZoneMatchStrip != DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP) {
+            o.put("collapseTouchZoneMatchStrip", collapseTouchZoneMatchStrip)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", collapseStripColorLight)

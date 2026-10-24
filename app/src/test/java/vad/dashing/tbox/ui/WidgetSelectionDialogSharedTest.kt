@@ -238,6 +238,11 @@ class WidgetSelectionDialogSharedTest {
         state.wholePanelCollapseEdge = PanelCollapseEdge.LEFT.storageValue
         state.wholePanelCollapseOnTileTap = true
         state.wholePanelCollapseOnTileTapDelaySec = 3
+        state.wholePanelCollapseStripLengthPercentCollapsed = 40
+        state.wholePanelCollapseStripLengthPercentExpanded = 60
+        state.wholePanelCollapseStripPositionPercentCollapsed = 20
+        state.wholePanelCollapseStripPositionPercentExpanded = 15
+        state.wholePanelCollapseTouchZoneMatchStrip = true
 
         val currentConfigs = List(12) { i ->
             FloatingDashboardWidgetConfig(dataKey = if (i == 0) "voltage" else "speed$i")
@@ -262,6 +267,11 @@ class WidgetSelectionDialogSharedTest {
         assertEquals(PanelCollapseEdge.LEFT.storageValue, other.wholePanelCollapseEdge)
         assertTrue(other.wholePanelCollapseOnTileTap)
         assertEquals(3, other.wholePanelCollapseOnTileTapDelaySec)
+        assertEquals(40, other.wholePanelCollapseStripLengthPercentCollapsed)
+        assertEquals(60, other.wholePanelCollapseStripLengthPercentExpanded)
+        assertEquals(20, other.wholePanelCollapseStripPositionPercentCollapsed)
+        assertEquals(15, other.wholePanelCollapseStripPositionPercentExpanded)
+        assertTrue(other.wholePanelCollapseTouchZoneMatchStrip)
         assertTrue(other.wholePanelDraftSeeded)
         assertEquals(12, other.wholePanelWidgetsDraft?.size)
         assertEquals("voltage", other.selectedDataKey)

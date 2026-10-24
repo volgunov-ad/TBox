@@ -59,6 +59,23 @@ const val DEFAULT_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 1
 const val MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 0
 const val MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC = 10
 
+/**
+ * Visible strip length along the collapse edge, as percent of that edge.
+ * Default 100% = full edge (legacy panels).
+ */
+const val DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT = 100
+const val MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT = 1
+const val MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT = 100
+
+/** Shift of the strip from the start of the edge (top for L/R, left for T/B), percent. */
+const val DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT = 0
+
+/**
+ * When false (default), the touch zone spans the full edge; a shorter strip is visual-only.
+ * When true, the touch zone matches the strip length and position for the current state.
+ */
+const val DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP = false
+
 /** Shared collapse/expand animation length for main-screen and floating panels. */
 const val PANEL_COLLAPSE_ANIMATION_MS = 180
 
@@ -73,6 +90,41 @@ fun normalizePanelCollapseTouchZoneThicknessDp(raw: Int, stripThicknessDp: Int):
 
 fun normalizePanelCollapseOnTileTapDelaySec(raw: Int): Int =
     raw.coerceIn(MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC, MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC)
+
+fun normalizePanelCollapseStripLengthPercent(raw: Int): Int =
+    raw.coerceIn(MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT, MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT)
+
+/**
+ * Clamps position so the strip never extends past the edge:
+ * `offset = min(offset, 100 - length)`.
+ */
+fun normalizePanelCollapseStripPositionPercent(raw: Int, lengthPercent: Int): Int {
+    val length = normalizePanelCollapseStripLengthPercent(lengthPercent)
+    return raw.coerceIn(0, 100 - length)
+}
+
+/** Normalized along-edge length + position for one collapse state (collapsed or expanded). */
+data class PanelCollapseAlongEdgeSegment(
+    val lengthPercent: Int,
+    val positionPercent: Int,
+) {
+    val isFullEdge: Boolean get() = lengthPercent >= MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+
+    companion object {
+        val FULL = PanelCollapseAlongEdgeSegment(
+            lengthPercent = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+            positionPercent = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+        )
+
+        fun normalize(lengthPercent: Int, positionPercent: Int): PanelCollapseAlongEdgeSegment {
+            val length = normalizePanelCollapseStripLengthPercent(lengthPercent)
+            return PanelCollapseAlongEdgeSegment(
+                lengthPercent = length,
+                positionPercent = normalizePanelCollapseStripPositionPercent(positionPercent, length),
+            )
+        }
+    }
+}
 
 /** Pixel layout of a panel (overlay or main-screen absolute box). */
 data class PanelPxBounds(
@@ -119,6 +171,7 @@ fun collapsedPanelBounds(
 /**
  * Window / hit-test bounds when collapsed and the touch zone is thicker than the visible strip.
  * The extra thickness extends **inward** from the strip (toward where the expanded panel was).
+ * Along-edge length stays the full panel edge (floating overlay window is not shrunk to strip length).
  */
 fun collapsedPanelInteractionBounds(
     expanded: PanelPxBounds,
@@ -136,6 +189,58 @@ fun collapsedPanelInteractionBounds(
         PanelCollapseEdge.LEFT -> visual.copy(x = visual.x - extra, width = touch)
         PanelCollapseEdge.RIGHT -> visual.copy(width = touch)
         PanelCollapseEdge.NONE -> visual
+    }
+}
+
+/**
+ * Pixel rect of the visible strip (or matching along-edge touch segment) inside [container].
+ *
+ * - [thicknessPx] is across the edge (into the panel).
+ * - [lengthPercent] / [positionPercent] are along the edge (start = top for left/right,
+ *   left for top/bottom); position is clamped via [normalizePanelCollapseStripPositionPercent].
+ * - When [collapsed] is true, the strip sits on the edge **opposite** to [edge]
+ *   (same convention as [collapsedPanelBounds]).
+ */
+fun panelCollapseStripBoundsInContainer(
+    container: PanelPxBounds,
+    edge: PanelCollapseEdge,
+    thicknessPx: Int,
+    lengthPercent: Int,
+    positionPercent: Int,
+    collapsed: Boolean,
+): PanelPxBounds {
+    val c = container.coercedPositive()
+    if (edge == PanelCollapseEdge.NONE) return c
+    val segment = PanelCollapseAlongEdgeSegment.normalize(lengthPercent, positionPercent)
+    val horizontalStrip = edge == PanelCollapseEdge.TOP || edge == PanelCollapseEdge.BOTTOM
+    val alongFull = if (horizontalStrip) c.width else c.height
+    val acrossFull = if (horizontalStrip) c.height else c.width
+    val lengthPx = ((alongFull * segment.lengthPercent) / 100f).roundToInt().coerceIn(1, alongFull)
+    val offsetPx = ((alongFull * segment.positionPercent) / 100f).roundToInt()
+        .coerceIn(0, (alongFull - lengthPx).coerceAtLeast(0))
+    val t = thicknessPx.coerceIn(1, acrossFull)
+    return when (edge) {
+        PanelCollapseEdge.BOTTOM -> if (collapsed) {
+            PanelPxBounds(c.x + offsetPx, c.y, lengthPx, t)
+        } else {
+            PanelPxBounds(c.x + offsetPx, c.y + c.height - t, lengthPx, t)
+        }
+        PanelCollapseEdge.TOP -> if (collapsed) {
+            PanelPxBounds(c.x + offsetPx, c.y + c.height - t, lengthPx, t)
+        } else {
+            PanelPxBounds(c.x + offsetPx, c.y, lengthPx, t)
+        }
+        PanelCollapseEdge.RIGHT -> if (collapsed) {
+            PanelPxBounds(c.x, c.y + offsetPx, t, lengthPx)
+        } else {
+            PanelPxBounds(c.x + c.width - t, c.y + offsetPx, t, lengthPx)
+        }
+        PanelCollapseEdge.LEFT -> if (collapsed) {
+            PanelPxBounds(c.x + c.width - t, c.y + offsetPx, t, lengthPx)
+        } else {
+            PanelPxBounds(c.x, c.y + offsetPx, t, lengthPx)
+        }
+        PanelCollapseEdge.NONE -> c
     }
 }
 

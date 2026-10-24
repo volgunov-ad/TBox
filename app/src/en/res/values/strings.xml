@@ -2789,6 +2789,14 @@
     <string name="settings_panel_collapse_thickness_desc">Size of the strip after collapse.</string>
     <string name="settings_panel_collapse_touch_zone_thickness_title">Touch zone thickness: %1$d dp</string>
     <string name="settings_panel_collapse_touch_zone_thickness_desc">Swipe and tap area on expanded and collapsed panels. Not less than strip thickness; extends inward into the panel.</string>
+    <string name="settings_panel_collapse_touch_zone_match_strip_title">Touch zone matches strip length</string>
+    <string name="settings_panel_collapse_touch_zone_match_strip_desc">By default the along-edge touch zone is the full edge (a short strip is visual only). When enabled, the zone matches the strip length and position for the current state (collapsed / expanded). Touch zone thickness is unchanged.</string>
+    <string name="settings_panel_collapse_strip_length_collapsed_title">Strip length (collapsed): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_length_expanded_title">Strip length (expanded): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_length_desc">Fraction of the selected collapse edge (1–100%).</string>
+    <string name="settings_panel_collapse_strip_position_collapsed_title">Strip position (collapsed): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_position_expanded_title">Strip position (expanded): %1$d%%</string>
+    <string name="settings_panel_collapse_strip_position_desc">Offset from the start of the edge: left/right → from the top, top/bottom → from the left. Ignored when length is 100%.</string>
     <string name="settings_panel_collapse_on_strip_tap_title">Respond to single taps on the strip</string>
     <string name="settings_panel_collapse_on_strip_tap_desc">A single tap on the strip or touch zone immediately collapses or expands the panel (in addition to swipe).</string>
     <string name="settings_panel_collapse_on_strip_double_tap_title">Respond to double taps on the strip</string>
