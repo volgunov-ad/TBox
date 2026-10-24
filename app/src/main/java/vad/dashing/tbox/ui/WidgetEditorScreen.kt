@@ -314,6 +314,7 @@ private fun WidgetEditorContent(
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (state.panelTab) {
                             PanelEditorTab.GENERAL -> PanelGeneralTab(state, surface, settingsViewModel)
+                            PanelEditorTab.PLACEMENT -> PanelPlacementTab(state, surface, settingsViewModel)
                             PanelEditorTab.GRID -> PanelGridTab(
                                 state = state,
                                 surface = surface,
@@ -347,6 +348,7 @@ private fun TileEditorTab.titleRes(): Int = when (this) {
 
 private fun PanelEditorTab.titleRes(): Int = when (this) {
     PanelEditorTab.GENERAL -> R.string.widget_editor_tab_general
+    PanelEditorTab.PLACEMENT -> R.string.widget_editor_tab_placement
     PanelEditorTab.GRID -> R.string.widget_editor_tab_grid
     PanelEditorTab.BACKGROUND -> R.string.widget_editor_tab_background
     PanelEditorTab.COLLAPSE -> R.string.widget_editor_tab_collapse

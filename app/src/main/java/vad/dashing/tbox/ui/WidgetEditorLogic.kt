@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
+import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_FRACTION
+import vad.dashing.tbox.MIN_MAIN_SCREEN_PANEL_REL_PERCENT
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.normalizePanelCollapseStripLengthPercent
 import vad.dashing.tbox.normalizePanelCollapseStripPositionPercent
@@ -16,7 +19,7 @@ internal enum class WidgetEditorLevel { TILE, PANEL }
 
 internal enum class TileEditorTab { TYPE, VIEW, COLORS, BEHAVIOR }
 
-internal enum class PanelEditorTab { GENERAL, GRID, BACKGROUND, COLLAPSE }
+internal enum class PanelEditorTab { GENERAL, PLACEMENT, GRID, BACKGROUND, COLLAPSE }
 
 /** Grid geometry of the edited panel (rows × cols, spacing, panel chrome) for the preview. */
 internal data class WidgetEditorGrid(
@@ -171,6 +174,129 @@ internal fun collapseStripPositionForCenter(centerFraction: Float, lengthPercent
     val length = normalizePanelCollapseStripLengthPercent(lengthPercent)
     val raw = (centerFraction.coerceIn(0f, 1f) * 100f - length / 2f).roundToInt()
     return normalizePanelCollapseStripPositionPercent(raw, length)
+}
+
+/**
+ * Stored panel frame. Main-screen panels: size in % of the screen, X/Y in % of the free range
+ * (screen minus panel, so 0 = flush left/top, 100 = flush right/bottom). Floating panels: px.
+ */
+internal data class PanelPlacement(val x: Int, val y: Int, val width: Int, val height: Int)
+
+/** How a [PanelPlacement] maps onto the screen. */
+internal sealed interface PanelPlacementUnits {
+    val keepOnScreen: Boolean
+    val minWidthFraction: Float
+    val minHeightFraction: Float
+
+    data object MainScreenPercent : PanelPlacementUnits {
+        override val keepOnScreen = true
+        override val minWidthFraction = MIN_MAIN_SCREEN_PANEL_REL_FRACTION
+        override val minHeightFraction = MIN_MAIN_SCREEN_PANEL_REL_FRACTION
+    }
+
+    data class Pixels(
+        val screenWidth: Int,
+        val screenHeight: Int,
+        val allowBeyondScreen: Boolean,
+    ) : PanelPlacementUnits {
+        override val keepOnScreen get() = !allowBeyondScreen
+        override val minWidthFraction get() = MIN_FLOATING_PANEL_SIZE_PX / screenWidth.coerceAtLeast(1).toFloat()
+        override val minHeightFraction get() = MIN_FLOATING_PANEL_SIZE_PX / screenHeight.coerceAtLeast(1).toFloat()
+    }
+}
+
+/** Panel frame as fractions of the screen (floating panels may leave 0..1 when allowed). */
+internal data class PanelScreenRect(val left: Float, val top: Float, val width: Float, val height: Float)
+
+internal fun panelPlacementToScreenRect(placement: PanelPlacement, units: PanelPlacementUnits): PanelScreenRect =
+    when (units) {
+        PanelPlacementUnits.MainScreenPercent -> {
+            val w = (placement.width / 100f).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
+            val h = (placement.height / 100f).coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
+            PanelScreenRect(
+                left = placement.x.coerceIn(0, 100) / 100f * (1f - w),
+                top = placement.y.coerceIn(0, 100) / 100f * (1f - h),
+                width = w,
+                height = h,
+            )
+        }
+        is PanelPlacementUnits.Pixels -> {
+            val sw = units.screenWidth.coerceAtLeast(1).toFloat()
+            val sh = units.screenHeight.coerceAtLeast(1).toFloat()
+            PanelScreenRect(placement.x / sw, placement.y / sh, placement.width / sw, placement.height / sh)
+        }
+    }
+
+internal fun panelPlacementFromScreenRect(rect: PanelScreenRect, units: PanelPlacementUnits): PanelPlacement =
+    when (units) {
+        PanelPlacementUnits.MainScreenPercent -> {
+            val widthPercent = (rect.width * 100f).roundToInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)
+            val heightPercent = (rect.height * 100f).roundToInt().coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100)
+            fun freeRangePercent(start: Float, sizePercent: Int): Int {
+                val range = 1f - sizePercent / 100f
+                if (range <= 0.0001f) return 0
+                return (start / range * 100f).roundToInt().coerceIn(0, 100)
+            }
+            PanelPlacement(
+                x = freeRangePercent(rect.left, widthPercent),
+                y = freeRangePercent(rect.top, heightPercent),
+                width = widthPercent,
+                height = heightPercent,
+            )
+        }
+        is PanelPlacementUnits.Pixels -> PanelPlacement(
+            x = (rect.left * units.screenWidth).roundToInt(),
+            y = (rect.top * units.screenHeight).roundToInt(),
+            width = (rect.width * units.screenWidth).roundToInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+            height = (rect.height * units.screenHeight).roundToInt().coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX),
+        )
+    }
+
+/** Moves the frame by a screen fraction; stays fully on screen when [PanelPlacementUnits.keepOnScreen]. */
+internal fun movePanelScreenRect(
+    rect: PanelScreenRect,
+    dx: Float,
+    dy: Float,
+    units: PanelPlacementUnits,
+): PanelScreenRect {
+    val left = rect.left + dx
+    val top = rect.top + dy
+    if (!units.keepOnScreen) return rect.copy(left = left, top = top)
+    return rect.copy(
+        left = left.coerceIn(0f, (1f - rect.width).coerceAtLeast(0f)),
+        top = top.coerceIn(0f, (1f - rect.height).coerceAtLeast(0f)),
+    )
+}
+
+/** Resizes the frame from its bottom-right corner by a screen fraction. */
+internal fun resizePanelScreenRect(
+    rect: PanelScreenRect,
+    dw: Float,
+    dh: Float,
+    units: PanelPlacementUnits,
+): PanelScreenRect {
+    val maxWidth = if (units.keepOnScreen) 1f - rect.left else Float.MAX_VALUE
+    val maxHeight = if (units.keepOnScreen) 1f - rect.top else Float.MAX_VALUE
+    return rect.copy(
+        width = (rect.width + dw).coerceIn(units.minWidthFraction, maxWidth.coerceAtLeast(units.minWidthFraction)),
+        height = (rect.height + dh).coerceIn(units.minHeightFraction, maxHeight.coerceAtLeast(units.minHeightFraction)),
+    )
+}
+
+/** Centers the frame horizontally ([horizontal]) or vertically, keeping its size. */
+internal fun centerPanelPlacement(
+    placement: PanelPlacement,
+    units: PanelPlacementUnits,
+    horizontal: Boolean,
+): PanelPlacement = when (units) {
+    PanelPlacementUnits.MainScreenPercent ->
+        if (horizontal) placement.copy(x = 50) else placement.copy(y = 50)
+    is PanelPlacementUnits.Pixels ->
+        if (horizontal) {
+            placement.copy(x = ((units.screenWidth - placement.width) / 2).coerceAtLeast(0))
+        } else {
+            placement.copy(y = ((units.screenHeight - placement.height) / 2).coerceAtLeast(0))
+        }
 }
 
 /** Distinct non-empty tile types of a panel, in grid order. */

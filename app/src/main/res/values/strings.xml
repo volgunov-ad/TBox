@@ -3382,4 +3382,11 @@
     <string name="widget_editor_discard_text">Несохранённые изменения будут потеряны.</string>
     <string name="widget_editor_discard_confirm">Не сохранять</string>
     <string name="widget_editor_keep_editing">Продолжить</string>
+    <string name="widget_editor_tab_placement">Размер и место</string>
+    <string name="widget_editor_card_placement">Положение на экране</string>
+    <string name="widget_editor_placement_hint">Перетащите панель, чтобы сдвинуть её; тяните за уголок справа снизу, чтобы изменить размер. Применится после «Сохранить».</string>
+    <string name="widget_editor_placement_screen_px">Экран: %1$d × %2$d px</string>
+    <string name="widget_editor_card_placement_values">Точные значения</string>
+    <string name="widget_editor_center_horizontal">По центру по горизонтали</string>
+    <string name="widget_editor_center_vertical">По центру по вертикали</string>
 </resources>

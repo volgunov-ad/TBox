@@ -6,8 +6,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.MIN_FLOATING_PANEL_SIZE_PX
 import vad.dashing.tbox.TileBackgroundImageStorage
 
 class WidgetEditorLogicTest {
@@ -236,5 +238,106 @@ class WidgetEditorLogicTest {
         val working = state.workingTileConfigs(current, 2)
         assertEquals("", working[1].dataKey)
         assertEquals("speed", working[0].dataKey)
+    }
+
+    private val pixels = PanelPlacementUnits.Pixels(screenWidth = 1000, screenHeight = 500, allowBeyondScreen = false)
+
+    @Test
+    fun mainScreenPlacement_usesFreeRangeForPosition() {
+        val rect = panelPlacementToScreenRect(PanelPlacement(x = 100, y = 50, width = 40, height = 20), PanelPlacementUnits.MainScreenPercent)
+        assertEquals(0.6f, rect.left, 0.0001f)
+        assertEquals(0.4f, rect.top, 0.0001f)
+        assertEquals(0.4f, rect.width, 0.0001f)
+    }
+
+    @Test
+    fun mainScreenPlacement_roundTripsThroughScreenRect() {
+        val placement = PanelPlacement(x = 37, y = 80, width = 45, height = 30)
+        val units = PanelPlacementUnits.MainScreenPercent
+        assertEquals(placement, panelPlacementFromScreenRect(panelPlacementToScreenRect(placement, units), units))
+    }
+
+    @Test
+    fun mainScreenPlacement_fullWidthHasZeroPosition() {
+        val placement = panelPlacementFromScreenRect(PanelScreenRect(0f, 0.2f, 1f, 0.5f), PanelPlacementUnits.MainScreenPercent)
+        assertEquals(0, placement.x)
+        assertEquals(100, placement.width)
+        assertEquals(40, placement.y)
+    }
+
+    @Test
+    fun floatingPlacement_roundTripsInPixels() {
+        val placement = PanelPlacement(x = 120, y = 40, width = 300, height = 200)
+        assertEquals(placement, panelPlacementFromScreenRect(panelPlacementToScreenRect(placement, pixels), pixels))
+    }
+
+    @Test
+    fun moveScreenRect_staysOnScreenUnlessAllowed() {
+        val rect = PanelScreenRect(0.5f, 0.5f, 0.4f, 0.4f)
+        val clamped = movePanelScreenRect(rect, 0.5f, -0.9f, pixels)
+        assertEquals(0.6f, clamped.left, 0.0001f)
+        assertEquals(0f, clamped.top, 0.0001f)
+        val free = movePanelScreenRect(rect, 0.5f, -0.9f, pixels.copy(allowBeyondScreen = true))
+        assertEquals(1f, free.left, 0.0001f)
+        assertEquals(-0.4f, free.top, 0.0001f)
+    }
+
+    @Test
+    fun resizeScreenRect_respectsMinimumAndScreenEdge() {
+        val rect = PanelScreenRect(0.5f, 0.5f, 0.2f, 0.2f)
+        val grown = resizePanelScreenRect(rect, 0.9f, 0.1f, pixels)
+        assertEquals(0.5f, grown.width, 0.0001f)
+        assertEquals(0.3f, grown.height, 0.0001f)
+        val shrunk = resizePanelScreenRect(rect, -1f, -1f, pixels)
+        assertEquals(MIN_FLOATING_PANEL_SIZE_PX / 1000f, shrunk.width, 0.0001f)
+        assertEquals(MIN_FLOATING_PANEL_SIZE_PX / 500f, shrunk.height, 0.0001f)
+    }
+
+    @Test
+    fun resizeMainScreenPanel_keepsLeftEdge() {
+        val units = PanelPlacementUnits.MainScreenPercent
+        val start = PanelPlacement(x = 50, y = 0, width = 40, height = 40)
+        val rect = panelPlacementToScreenRect(start, units)
+        val resized = panelPlacementFromScreenRect(resizePanelScreenRect(rect, 0.2f, 0f, units), units)
+        assertEquals(60, resized.width)
+        assertEquals(rect.left, panelPlacementToScreenRect(resized, units).left, 0.01f)
+    }
+
+    @Test
+    fun centerPanelPlacement_centersInBothUnits() {
+        val main = centerPanelPlacement(PanelPlacement(0, 0, 40, 40), PanelPlacementUnits.MainScreenPercent, horizontal = true)
+        assertEquals(50, main.x)
+        val floating = centerPanelPlacement(PanelPlacement(0, 0, 400, 100), pixels, horizontal = false)
+        assertEquals(200, floating.y)
+        assertEquals(0, floating.x)
+    }
+
+    @Test
+    fun wholePanelPlacement_isSavedOnlyWhenEdited() {
+        val state = editorState(listOf(tile("speed")))
+        state.syncWholePanelDraftFromFloating(
+            FloatingDashboardConfig(
+                id = "f1",
+                name = "F",
+                enabled = true,
+                widgetsConfig = emptyList(),
+                rows = 1,
+                cols = 1,
+                width = 300,
+                height = 200,
+                startX = 10,
+                startY = 20,
+                background = false,
+                clickAction = false,
+            )
+        )
+        state.markWholePanelDraftSeeded()
+        assertNull(state.editedWholePanelPlacement)
+        assertFalse(state.isPanelDirty)
+
+        state.wholePanelPlacement = PanelPlacement(x = 50, y = 20, width = 300, height = 200)
+
+        assertEquals(PanelPlacement(50, 20, 300, 200), state.editedWholePanelPlacement)
+        assertTrue(state.isPanelDirty)
     }
 }

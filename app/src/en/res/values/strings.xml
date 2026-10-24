@@ -3361,4 +3361,11 @@
     <string name="widget_editor_discard_text">Unsaved changes will be lost.</string>
     <string name="widget_editor_discard_confirm">Discard</string>
     <string name="widget_editor_keep_editing">Keep editing</string>
+    <string name="widget_editor_tab_placement">Size &amp; position</string>
+    <string name="widget_editor_card_placement">Position on screen</string>
+    <string name="widget_editor_placement_hint">Drag the panel to move it; drag the bottom-right corner to resize. Applied on «Save».</string>
+    <string name="widget_editor_placement_screen_px">Screen: %1$d × %2$d px</string>
+    <string name="widget_editor_card_placement_values">Exact values</string>
+    <string name="widget_editor_center_horizontal">Center horizontally</string>
+    <string name="widget_editor_center_vertical">Center vertically</string>
 </resources>

@@ -145,6 +145,7 @@ import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import kotlin.math.roundToInt
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
 val WidgetDialogDropdownSelectorWidth = 300.dp
@@ -494,6 +495,15 @@ internal class WidgetSelectionDialogState(
     var wholePanelBackgroundImageRelPathDark by mutableStateOf<String?>(null)
     var wholePanelShape by mutableIntStateOf(DEFAULT_PANEL_SHAPE)
     var wholePanelBackgroundColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
+    /** Panel frame draft: percent of the main screen (main-screen panels) or px (floating panels). */
+    var wholePanelPlacement by mutableStateOf<PanelPlacement?>(null)
+    /** Frame as loaded; Save writes the frame only when it differs (keeps sub-percent main-screen layout). */
+    var wholePanelPlacementLoaded by mutableStateOf<PanelPlacement?>(null)
+        private set
+
+    /** Frame to persist, or null when it was not edited. */
+    val editedWholePanelPlacement: PanelPlacement?
+        get() = wholePanelPlacement?.takeIf { it != wholePanelPlacementLoaded }
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
      * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
@@ -535,6 +545,14 @@ internal class WidgetSelectionDialogState(
         wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
         wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
         wholePanelShape = normalizePanelShape(cfg.panelShape)
+        val placement = PanelPlacement(
+            x = (cfg.relX * 100f).roundToInt(),
+            y = (cfg.relY * 100f).roundToInt(),
+            width = (cfg.relWidth * 100f).roundToInt(),
+            height = (cfg.relHeight * 100f).roundToInt(),
+        )
+        wholePanelPlacement = placement
+        wholePanelPlacementLoaded = placement
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -565,6 +583,9 @@ internal class WidgetSelectionDialogState(
         wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
         wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
         wholePanelShape = normalizePanelShape(cfg.panelShape)
+        val placement = PanelPlacement(x = cfg.startX, y = cfg.startY, width = cfg.width, height = cfg.height)
+        wholePanelPlacement = placement
+        wholePanelPlacementLoaded = placement
     }
 
     /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
@@ -1899,6 +1920,7 @@ internal class WidgetSelectionDialogState(
         wholePanelBackgroundImageRelPathLight,
         wholePanelBackgroundImageRelPathDark,
         wholePanelShape,
+        wholePanelPlacement,
     )
 
     private var panelBaseline by mutableStateOf<List<Any?>?>(null)
@@ -2157,6 +2179,7 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
     state: WidgetSelectionDialogState
 ): MainScreenWholePanelFieldsForWidgetDialogSave? {
     if (!state.wholePanelDraftSeeded) return null
+    val placement = state.editedWholePanelPlacement
     return MainScreenWholePanelFieldsForWidgetDialogSave(
         name = state.wholePanelNameDraft.trim(),
         rows = state.wholePanelRows,
@@ -2203,6 +2226,10 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
         panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
         panelShape = normalizePanelShape(state.wholePanelShape),
+        relXPercent = placement?.x,
+        relYPercent = placement?.y,
+        relWidthPercent = placement?.width,
+        relHeightPercent = placement?.height,
     )
 }
 
@@ -2210,6 +2237,7 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
     state: WidgetSelectionDialogState
 ): FloatingWholePanelFieldsForWidgetDialogSave? {
     if (!state.wholePanelDraftSeeded) return null
+    val placement = state.editedWholePanelPlacement
     return FloatingWholePanelFieldsForWidgetDialogSave(
         name = state.wholePanelNameDraft.trim(),
         rows = state.wholePanelRows,
@@ -2255,6 +2283,10 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
         panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
         panelShape = normalizePanelShape(state.wholePanelShape),
+        width = placement?.width,
+        height = placement?.height,
+        startX = placement?.x,
+        startY = placement?.y,
     )
 }
 
