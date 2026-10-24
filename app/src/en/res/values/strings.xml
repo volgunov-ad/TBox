@@ -553,6 +553,19 @@
     <string name="widget_media_volume_action_decrease">Decrease media volume</string>
     <string name="widget_media_volume_action_mute">Toggle media mute</string>
     <string name="widget_media_volume_use_mbcan_vhal">Use CAN mode (mbCAN/VHAL)</string>
+
+    <string name="widget_hu_screen_brightness_title">HU screen brightness</string>
+    <string name="widget_hu_screen_brightness_action_increase">Increase HU screen brightness</string>
+    <string name="widget_hu_screen_brightness_action_decrease">Decrease HU screen brightness</string>
+    <string name="widget_hu_screen_brightness_action_auto">Toggle HU screen auto brightness</string>
+    <string name="widget_icm_brightness_title">Instrument cluster brightness</string>
+    <string name="widget_icm_brightness_action_increase">Increase instrument cluster brightness</string>
+    <string name="widget_icm_brightness_action_decrease">Decrease instrument cluster brightness</string>
+    <string name="widget_icm_brightness_action_auto">Toggle instrument cluster auto brightness</string>
+    <string name="widget_hud_brightness_title">HUD brightness</string>
+    <string name="widget_hud_brightness_action_increase">Increase HUD brightness</string>
+    <string name="widget_hud_brightness_action_decrease">Decrease HUD brightness</string>
+    <string name="widget_hud_brightness_action_auto">Toggle HUD auto brightness</string>
     <string name="widget_stepper_adjust_icon_style_title">Value adjust buttons</string>
     <string name="widget_stepper_adjust_icon_style_desc">Icons for increase and decrease controls</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Plus and minus</string>
@@ -2447,6 +2460,13 @@
     <string name="data_title_music_buttons_widget_vertical">Music control widget (buttons only, vertical)</string>
     <string name="data_title_media_volume_widget_horizontal">Media volume widget (horizontal)</string>
     <string name="data_title_media_volume_widget_vertical">Media volume widget (vertical)</string>
+
+    <string name="data_title_hu_screen_brightness_widget_horizontal">HU screen brightness (horizontal)</string>
+    <string name="data_title_hu_screen_brightness_widget_vertical">HU screen brightness (vertical)</string>
+    <string name="data_title_icm_brightness_widget_horizontal">Instrument cluster brightness (horizontal)</string>
+    <string name="data_title_icm_brightness_widget_vertical">Instrument cluster brightness (vertical)</string>
+    <string name="data_title_hud_brightness_widget_horizontal">HUD brightness (horizontal)</string>
+    <string name="data_title_hud_brightness_widget_vertical">HUD brightness (vertical)</string>
     <string name="data_title_time_widget">Time</string>
     <string name="data_title_cpu_usage">CPU load</string>
     <string name="data_title_free_ram_percent">Free memory</string>
@@ -2677,6 +2697,13 @@
     <string name="widget_desc_music_buttons_vertical">Vertical playback controls without track text; player header follows Show title.</string>
     <string name="widget_desc_media_volume_horizontal">Horizontal media volume control.</string>
     <string name="widget_desc_media_volume_vertical">Vertical media volume control.</string>
+
+    <string name="widget_desc_hu_screen_brightness_horizontal">Horizontal HU screen brightness control.</string>
+    <string name="widget_desc_hu_screen_brightness_vertical">Vertical HU screen brightness control.</string>
+    <string name="widget_desc_icm_brightness_horizontal">Horizontal instrument cluster brightness control.</string>
+    <string name="widget_desc_icm_brightness_vertical">Vertical instrument cluster brightness control.</string>
+    <string name="widget_desc_hud_brightness_horizontal">Horizontal HUD brightness control.</string>
+    <string name="widget_desc_hud_brightness_vertical">Vertical HUD brightness control.</string>
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
     <string name="widget_desc_app_list">List of installed apps with open, hide, and uninstall actions.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
@@ -2753,6 +2780,10 @@
     <string name="widget_actions_music_square">Two button rows; optional artwork and Like; swipe — change player.</string>
     <string name="widget_actions_music_buttons">Buttons — previous, play or pause, and next; swipe — change player.</string>
     <string name="widget_actions_media_volume">Buttons or swipe — change volume; center tap — mute or restore sound.</string>
+
+    <string name="widget_actions_hu_screen_brightness">Buttons or swipe — change brightness; center tap — auto brightness. Turning auto off writes the current level.</string>
+    <string name="widget_actions_icm_brightness">Buttons or swipe — change brightness; center tap — instrument cluster auto brightness. Turning auto off writes the current level.</string>
+    <string name="widget_actions_hud_brightness">Buttons or swipe — change brightness; center tap — HUD auto brightness. Turning auto off writes the current level.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application; double tap — close (ADB force-stop, no relaunch).</string>
     <string name="widget_actions_app_list">Single tap — open the app list.</string>
     <string name="widget_actions_http_request">Single tap — perform the configured action.</string>

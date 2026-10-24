@@ -126,7 +126,9 @@ Whitelist из штатного `FactoryMode` (`effect_key` / `effect_value`): *
 | HUD auto brightness | **227** | **289412243** → **289412723** | A9: 1 Off / 2 On; A10: 2 Off / 1 On |
 | Overspeed alarm | **296** `eVEHICLE_OVERSPEEDALARM_SET` (best effort) | **289415091** `T_0901_IHU_21_OverspeedAlarm_Set` read/write | `raw = (km/h − 30) / 5`, display = `raw×5 + 30` |
 
-Это settings-only сигналы (`MbCanSignal`); виджеты для них намеренно не добавлены. Anion использует split backend: A9 `HVAC_AQS` и отдельные A10 read/write VHAL ID. Fragrance реализован только через A9 mbCAN; на Android 10 не используются неподтверждённые stub VHAL ID, поэтому controls disabled.
+Anion использует split backend: A9 `HVAC_AQS` и отдельные A10 read/write VHAL ID. Fragrance реализован только через A9 mbCAN; на Android 10 не используются неподтверждённые stub VHAL ID, поэтому controls disabled.
+
+**Виджеты яркости (stepper 1…10):** `huScreenBrightnessWidgetHorizontal/Vertical` — экран ГУ через `HeadUnitBrightnessRepository` (не mbCAN/VHAL; те же права, что Car Settings → Экраны). `icmBrightnessWidgetHorizontal/Vertical` — ICM mode **208** + manual **209** (иконка `settings_brightness` / рамка+A). `hudBrightnessWidgetHorizontal/Vertical` — HUD brightness **222** + auto **227** (та же схема иконок, что ICM). Центр — toggle авто; при выключении авто явно пишется текущий уровень; ± при авто сначала выключает авто и сразу применяет ±1.
 
 ---
 

@@ -78,6 +78,12 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
@@ -1477,6 +1483,102 @@ fun DashboardWidgetRenderer(
         MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY -> {
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHuScreenBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHuScreenBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardIcmBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardIcmBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHudBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHudBrightnessWidgetItem(
                 isVertical = true,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,

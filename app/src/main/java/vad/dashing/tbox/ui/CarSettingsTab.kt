@@ -2,7 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,7 +37,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadUnitBrightnessRepository
-import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.PlatformAudioDomain
@@ -1517,11 +1515,7 @@ private fun CarSettingsHudSection(
     // Theme uses Settings.Global / Launcher — do not gate on Adayo brightness bind.
     val canWriteHuTheme = canWriteSecure
     // A9 brightness needs WRITE_SETTINGS (+ secure for auto); A10 needs Adayo settings service.
-    val canWriteHuBrightness = HeadUnitBrightnessRepository.isAvailable(context) &&
-        (
-            HeadUnitDayNightMapping.usesAdayoKeys() ||
-                (Settings.System.canWrite(context) && canWriteSecure)
-            )
+    val canWriteHuBrightness = HeadUnitBrightnessRepository.canWrite(context)
     DisposableEffect(context) {
         HeadUnitBrightnessRepository.startObserving(context)
         HeadUnitDayNightRepository.startObserving(context)
