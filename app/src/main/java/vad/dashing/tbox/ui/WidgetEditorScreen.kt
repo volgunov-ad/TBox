@@ -66,7 +66,9 @@ import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
 import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.normalizePanelShape
 import vad.dashing.tbox.normalizeWidgetPaddingPercent
+import vad.dashing.tbox.normalizeWidgetShape
 import vad.dashing.tbox.resolvePanelBackgroundColorArgb
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -621,7 +623,7 @@ private fun PanelPreviewGrid(
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(width, height)
-                .clip(RoundedCornerShape(grid.panelShape.coerceIn(0, 24).dp))
+                .clip(RoundedCornerShape(normalizePanelShape(grid.panelShape).dp))
                 .background(panelColor)
                 .pointerInput(rows, cols, tileCount, gridSelectMode) {
                     detectTapGestures { offset ->
@@ -702,7 +704,7 @@ private fun PreviewTile(
     modifier: Modifier = Modifier,
 ) {
     val key = config?.dataKey.orEmpty()
-    val shape = RoundedCornerShape((config?.shape ?: 0).coerceIn(0, 24).dp)
+    val shape = RoundedCornerShape(normalizeWidgetShape(config?.shape ?: 0).dp)
     val borderColor = when {
         dragTarget -> MaterialTheme.colorScheme.tertiary
         editing -> MaterialTheme.colorScheme.primary
