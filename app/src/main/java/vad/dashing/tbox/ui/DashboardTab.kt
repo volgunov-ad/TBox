@@ -4,10 +4,8 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.ui.theme.tboxTabLabel
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,10 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -37,7 +32,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
@@ -92,7 +86,6 @@ import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.ExternalWidgetHostManager
-import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
@@ -662,7 +655,9 @@ fun WidgetSelectionDialog(
     currentTheme: Int,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
+    val dashboardRows by settingsViewModel.dashboardRows.collectAsStateWithLifecycle()
+    val dashboardCols by settingsViewModel.dashboardCols.collectAsStateWithLifecycle()
+    val dashboardGridSpacingDp by settingsViewModel.dashboardGridSpacingDp.collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
         currentWidgets = currentWidgets,
@@ -671,91 +666,31 @@ fun WidgetSelectionDialog(
         defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_MAIN,
         currentTheme = currentTheme,
     )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {  },
-        modifier = Modifier.tboxDialogSurfaceFill(),
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false // Отключает стандартную ширину платформы
+    WidgetEditorHost(
+        state = state,
+        dashboardManager = dashboardManager,
+        settingsViewModel = settingsViewModel,
+        surface = WidgetEditorSurface.MAIN_TAB,
+        inWindow = false,
+        tileStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
+        saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
+        panelId = "",
+        panelName = "",
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        baseGrid = WidgetEditorGrid(
+            rows = dashboardRows,
+            cols = dashboardCols,
+            gridSpacingDp = dashboardGridSpacingDp,
+            panelBackgroundColorLight = null,
+            panelBackgroundColorDark = null,
+            panelShape = 0,
         ),
-        text = {
-            WidgetSelectionDialogForm(
-                titleText = if (state.showAdvancedSettings) {
-                    stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                } else {
-                    stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                },
-                settingsViewModel = settingsViewModel,
-                state = state,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                dataKeyFilter = WidgetsRepository::isOfferedOnMainDashboardTab,
-                widgetIndex = widgetIndex,
-                currentWidgetConfigs = currentWidgetConfigs,
-                tileBackgroundPanelStorageId = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
-                bottomContent = {
-                    if (state.isExternalAppWidgetSelected) {
-                        ExternalAppWidgetPickerSection(
-                            appWidgetId = externalAppWidgetIdForApply(
-                                state,
-                                currentWidgetConfigs,
-                                widgetIndex
-                            ),
-                            onPickClick = {
-                                WidgetPickerActivity.start(
-                                    context = context,
-                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
-                                    panelId = "",
-                                    widgetIndex = widgetIndex,
-                                    showTitle = state.showTitle,
-                                    showUnit = state.showUnit
-                                )
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
-            )
-        },
-        confirmButton = {
-            WidgetSelectionDialogActions(
-                state = state,
-                onDismiss = onDismiss,
-                onSave = {
-                    if (tryLaunchExternalWidgetPicker(
-                            context = context,
-                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_DASHBOARD,
-                            panelId = "",
-                            widgetIndex = widgetIndex,
-                            state = state,
-                            currentWidgetConfigs = currentWidgetConfigs,
-                            onDismiss = onDismiss
-                        )
-                    ) {
-                        return@WidgetSelectionDialogActions
-                    }
-                    applyWidgetSelectionChanges(
-                        context = context,
-                        dashboardManager = dashboardManager,
-                        currentWidgets = currentWidgets,
-                        currentWidgetConfigs = currentWidgetConfigs,
-                        widgetIndex = widgetIndex,
-                        state = state,
-                        saveConfigs = settingsViewModel::saveDashboardWidgets,
-                        externalAppWidgetId = externalAppWidgetIdForApply(
-                            state,
-                            currentWidgetConfigs,
-                            widgetIndex
-                        )
-                    )
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        dismissButton = {}
+        dataKeyFilter = WidgetsRepository::isOfferedOnMainDashboardTab,
+        onWholePanelOpened = {},
+        saveConfigs = settingsViewModel::saveDashboardWidgets,
+        onDismiss = onDismiss,
+        onDeletePanel = null,
     )
 }
 
@@ -771,8 +706,7 @@ fun MainScreenPanelWidgetSelectionDialog(
     onDismiss: () -> Unit,
     onDeletePanel: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val mainScreenPanelSnapshot by settingsViewModel.mainScreenPanelConfig(panelId)
+    val snapshot by settingsViewModel.mainScreenPanelConfig(panelId)
         .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
@@ -782,131 +716,50 @@ fun MainScreenPanelWidgetSelectionDialog(
         defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING,
         currentTheme = currentTheme,
     )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { },
-        modifier = Modifier.tboxDialogSurfaceFill(),
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-        text = {
-            WidgetSelectionDialogForm(
-                titleText = when {
-                    state.showWholePanelSettings ->
-                        stringResource(R.string.widget_panel_settings_title)
-                    state.showAdvancedSettings ->
-                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                    else ->
-                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                },
-                settingsViewModel = settingsViewModel,
-                state = state,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                mainScreenPanelId = panelId,
-                widgetIndex = widgetIndex,
-                currentWidgetConfigs = currentWidgetConfigs,
-                tileBackgroundPanelStorageId = panelId,
-                bottomContent = {
-                    if (state.isExternalAppWidgetSelected) {
-                        ExternalAppWidgetPickerSection(
-                            appWidgetId = externalAppWidgetIdForApply(
-                                state,
-                                currentWidgetConfigs,
-                                widgetIndex
-                            ),
-                            onPickClick = {
-                                WidgetPickerActivity.start(
-                                    context = context,
-                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
-                                    panelId = panelId,
-                                    widgetIndex = widgetIndex,
-                                    showTitle = state.showTitle,
-                                    showUnit = state.showUnit
-                                )
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
+    WidgetEditorHost(
+        state = state,
+        dashboardManager = dashboardManager,
+        settingsViewModel = settingsViewModel,
+        surface = WidgetEditorSurface.MAIN_SCREEN_PANEL,
+        inWindow = false,
+        tileStorageId = panelId,
+        saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
+        panelId = panelId,
+        panelName = snapshot.name,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        baseGrid = WidgetEditorGrid(
+            rows = snapshot.rows,
+            cols = snapshot.cols,
+            gridSpacingDp = snapshot.gridSpacingDp,
+            panelBackgroundColorLight = snapshot.panelBackgroundColorLight,
+            panelBackgroundColorDark = snapshot.panelBackgroundColorDark,
+            panelShape = snapshot.panelShape,
+        ),
+        dataKeyFilter = { true },
+        onWholePanelOpened = {
+            state.syncWholePanelDraftFromMainScreen(snapshot)
+            state.markWholePanelDraftSeeded()
+        },
+        saveConfigs = { configs ->
+            settingsViewModel.saveMainScreenDashboardWidgets(
+                panelId,
+                configs,
+                wholePanelFromWidgetDialog = mainScreenWholePanelSavePayloadIfSeeded(state)
             )
         },
-        confirmButton = {
-            WidgetSelectionDialogActions(
-                showWholePanelButton = true,
-                onWholePanelSectionOpened = {
-                    mainScreenPanelSnapshot?.let { snap ->
-                        state.syncWholePanelDraftFromMainScreen(snap)
-                        state.wholePanelDraftSeeded = true
-                    }
-                },
-                deleteAfterWholePanel = {
-                    OutlinedButton(
-                        onClick = rememberWrappedOnClick {
-                            onDeletePanel()
-                            onDismiss()
-                        },
-                        modifier = Modifier.weight(1f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text(
-                            text = stringResource(R.string.action_delete),
-                            style = MaterialTheme.typography.tboxButton
-                        )
-                    }
-                },
-                state = state,
-                onDismiss = onDismiss,
-                onSave = {
-                    if (tryLaunchExternalWidgetPicker(
-                            context = context,
-                            saveTarget = WidgetPickerActivity.SAVE_TARGET_MAIN_SCREEN,
-                            panelId = panelId,
-                            widgetIndex = widgetIndex,
-                            state = state,
-                            currentWidgetConfigs = currentWidgetConfigs,
-                            onDismiss = onDismiss
-                        )
-                    ) {
-                        return@WidgetSelectionDialogActions
-                    }
-                    val wholePanelPayload = mainScreenWholePanelSavePayloadIfSeeded(state)
-                    applyWidgetSelectionChanges(
-                        context = context,
-                        dashboardManager = dashboardManager,
-                        currentWidgets = currentWidgets,
-                        currentWidgetConfigs = currentWidgetConfigs,
-                        widgetIndex = widgetIndex,
-                        state = state,
-                        saveConfigs = { configs ->
-                            settingsViewModel.saveMainScreenDashboardWidgets(
-                                panelId,
-                                configs,
-                                wholePanelFromWidgetDialog = wholePanelPayload
-                            )
-                        },
-                        externalAppWidgetId = externalAppWidgetIdForApply(
-                            state,
-                            currentWidgetConfigs,
-                            widgetIndex
-                        )
-                    )
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth()
-            )
+        onDismiss = onDismiss,
+        onDeletePanel = {
+            onDeletePanel()
+            onDismiss()
         },
-        dismissButton = {}
     )
 }
 
 /**
  * Widget editor for a **floating overlay** panel, shown from [MainScreen] when the user starts
- * edit from the overlay (same UX as [MainScreenPanelWidgetSelectionDialog]). Drawn in-window
- * ([InWindowAlertDialog]): the request may arrive while A10 moves MainActivity to another display.
+ * edit from the overlay (same UX as [MainScreenPanelWidgetSelectionDialog]). Drawn in-window:
+ * the request may arrive while A10 moves MainActivity to another display.
  */
 @Composable
 fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
@@ -920,8 +773,7 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
     onDismiss: () -> Unit,
     onDeletePanel: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val floatingDashboardSnapshot by settingsViewModel.floatingDashboardConfig(panelId)
+    val snapshot by settingsViewModel.floatingDashboardConfig(panelId)
         .collectAsStateWithLifecycle()
     val state = rememberWidgetSelectionDialogState(
         widgetIndex = widgetIndex,
@@ -931,121 +783,128 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
         defaultBackgroundDark = DEFAULT_WIDGET_BACKGROUND_COLOR_DARK_FLOATING,
         currentTheme = currentTheme,
     )
+    WidgetEditorHost(
+        state = state,
+        dashboardManager = dashboardManager,
+        settingsViewModel = settingsViewModel,
+        surface = WidgetEditorSurface.FLOATING_PANEL,
+        inWindow = true,
+        tileStorageId = panelId,
+        saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
+        panelId = panelId,
+        panelName = snapshot.name,
+        currentWidgets = currentWidgets,
+        currentWidgetConfigs = currentWidgetConfigs,
+        baseGrid = WidgetEditorGrid(
+            rows = snapshot.rows,
+            cols = snapshot.cols,
+            gridSpacingDp = snapshot.gridSpacingDp,
+            panelBackgroundColorLight = snapshot.panelBackgroundColorLight,
+            panelBackgroundColorDark = snapshot.panelBackgroundColorDark,
+            panelShape = snapshot.panelShape,
+        ),
+        dataKeyFilter = { true },
+        onWholePanelOpened = {
+            state.syncWholePanelDraftFromFloating(snapshot)
+            state.markWholePanelDraftSeeded()
+        },
+        saveConfigs = { configs ->
+            settingsViewModel.saveFloatingDashboardWidgets(
+                panelId,
+                configs,
+                wholePanelFromWidgetDialog = floatingWholePanelSavePayloadIfSeeded(state)
+            )
+        },
+        onDismiss = onDismiss,
+        onDeletePanel = {
+            onDeletePanel()
+            onDismiss()
+        },
+    )
+}
 
-    InWindowAlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.tboxDialogSurfaceFill(),
-        text = {
-            WidgetSelectionDialogForm(
-                titleText = when {
-                    state.showWholePanelSettings ->
-                        stringResource(R.string.widget_panel_settings_title)
-                    state.showAdvancedSettings ->
-                        stringResource(R.string.widget_additional_settings_for_tile, widgetIndex + 1)
-                    else ->
-                        stringResource(R.string.widget_select_data_for_tile, widgetIndex + 1)
-                },
-                settingsViewModel = settingsViewModel,
+@Composable
+private fun WidgetEditorHost(
+    state: WidgetSelectionDialogState,
+    dashboardManager: DashboardManager,
+    settingsViewModel: SettingsViewModel,
+    surface: WidgetEditorSurface,
+    inWindow: Boolean,
+    tileStorageId: String,
+    saveTarget: Int,
+    panelId: String,
+    panelName: String,
+    currentWidgets: List<DashboardWidget>,
+    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+    baseGrid: WidgetEditorGrid,
+    dataKeyFilter: (String) -> Boolean,
+    onWholePanelOpened: () -> Unit,
+    saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
+    onDismiss: () -> Unit,
+    onDeletePanel: (() -> Unit)?,
+) {
+    val context = LocalContext.current
+    val persist: (Boolean) -> Unit = { writeEditingTile ->
+        applyWidgetSelectionChanges(
+            context = context,
+            dashboardManager = dashboardManager,
+            currentWidgets = currentWidgets,
+            currentWidgetConfigs = currentWidgetConfigs,
+            widgetIndex = state.editingIndex,
+            state = state,
+            saveConfigs = saveConfigs,
+            externalAppWidgetId = externalAppWidgetIdForApply(
+                state,
+                currentWidgetConfigs,
+                state.editingIndex
+            ),
+            writeEditingTile = writeEditingTile,
+        )
+    }
+    WidgetEditorScreen(
+        state = state,
+        settingsViewModel = settingsViewModel,
+        surface = surface,
+        inWindow = inWindow,
+        tileStorageId = tileStorageId,
+        currentWidgetConfigs = currentWidgetConfigs,
+        baseGrid = baseGrid,
+        baseTileCount = currentWidgets.size,
+        panelName = panelName,
+        dataKeyFilter = dataKeyFilter,
+        onWholePanelOpened = onWholePanelOpened,
+        onPickExternalWidget = {
+            if (state.otherTilesDirty || state.isPanelDirty) {
+                persist(false)
+            }
+            WidgetPickerActivity.start(
+                context = context,
+                saveTarget = saveTarget,
+                panelId = panelId,
+                widgetIndex = state.editingIndex,
+                showTitle = state.showTitle,
+                showUnit = state.showUnit
+            )
+            onDismiss()
+        },
+        onDismiss = onDismiss,
+        onSave = {
+            val launchedPicker = tryLaunchExternalWidgetPicker(
+                context = context,
+                saveTarget = saveTarget,
+                panelId = panelId,
+                widgetIndex = state.editingIndex,
                 state = state,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                floatingDashboardPanelId = panelId,
-                widgetIndex = widgetIndex,
                 currentWidgetConfigs = currentWidgetConfigs,
-                tileBackgroundPanelStorageId = panelId,
-                bottomContent = {
-                    if (state.isExternalAppWidgetSelected) {
-                        ExternalAppWidgetPickerSection(
-                            appWidgetId = externalAppWidgetIdForApply(
-                                state,
-                                currentWidgetConfigs,
-                                widgetIndex
-                            ),
-                            onPickClick = {
-                                WidgetPickerActivity.start(
-                                    context = context,
-                                    saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
-                                    panelId = panelId,
-                                    widgetIndex = widgetIndex,
-                                    showTitle = state.showTitle,
-                                    showUnit = state.showUnit
-                                )
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
-            )
-        },
-        confirmButton = {
-            WidgetSelectionDialogActions(
-                showWholePanelButton = true,
-                onWholePanelSectionOpened = {
-                    floatingDashboardSnapshot?.let { snap: FloatingDashboardConfig ->
-                        state.syncWholePanelDraftFromFloating(snap)
-                        state.wholePanelDraftSeeded = true
-                    }
-                },
-                deleteAfterWholePanel = {
-                    OutlinedButton(
-                        onClick = rememberWrappedOnClick {
-                            onDeletePanel()
-                            onDismiss()
-                        },
-                        modifier = Modifier.weight(1f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text(
-                            text = stringResource(R.string.action_delete),
-                            style = MaterialTheme.typography.tboxButton
-                        )
-                    }
-                },
-                state = state,
                 onDismiss = onDismiss,
-                onSave = {
-                    if (tryLaunchExternalWidgetPicker(
-                            context = context,
-                            saveTarget = WidgetPickerActivity.SAVE_TARGET_FLOATING,
-                            panelId = panelId,
-                            widgetIndex = widgetIndex,
-                            state = state,
-                            currentWidgetConfigs = currentWidgetConfigs,
-                            onDismiss = onDismiss
-                        )
-                    ) {
-                        return@WidgetSelectionDialogActions
-                    }
-                    val wholePanelPayload = floatingWholePanelSavePayloadIfSeeded(state)
-                    applyWidgetSelectionChanges(
-                        context = context,
-                        dashboardManager = dashboardManager,
-                        currentWidgets = currentWidgets,
-                        currentWidgetConfigs = currentWidgetConfigs,
-                        widgetIndex = widgetIndex,
-                        state = state,
-                        saveConfigs = { configs ->
-                            settingsViewModel.saveFloatingDashboardWidgets(
-                                panelId,
-                                configs,
-                                wholePanelFromWidgetDialog = wholePanelPayload
-                            )
-                        },
-                        externalAppWidgetId = externalAppWidgetIdForApply(
-                            state,
-                            currentWidgetConfigs,
-                            widgetIndex
-                        )
-                    )
-                    onDismiss()
-                },
-                modifier = Modifier.fillMaxWidth()
+                persistOtherChanges = { persist(false) },
             )
+            if (!launchedPicker) {
+                persist(true)
+                onDismiss()
+            }
         },
+        onDeletePanel = onDeletePanel,
     )
 }
 
