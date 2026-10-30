@@ -13,12 +13,13 @@
 | Тип сборки | `user` | `userdebug` |
 | `ro.build.version.release` / API | 9 / 28 | 9 / 28 (в UI может показываться «10», см. [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md)) |
 | SELinux | Permissive | Permissive |
-| root (`su`) | нет | есть: `/system/xbin/su`, `su 0` из `adb shell` |
+| root (`su`) | нет; root-исполнение через `mb_daemon` (§10) | есть: `/system/xbin/su`, `su 0` из `adb shell` |
+| Verified Boot | `green` / `veritymode=enforcing`, vbmeta **locked**; `/system` под dm-verity, `/vendor` — нет (§10) | `veritymode=disabled`, но eMMC WP (§6.6) |
 | `/data` | 37 ГБ (`/dev/block/sda10`, UFS) | **2 ГБ** (`/dev/block/userdata`, раздел 39 eMMC 64 ГБ) |
 | Часовой пояс | `Europe/Moscow` | задаётся службой Adayo, см. §5.1 (заводское `PRC`) |
 | ADB по Wi-Fi после перезагрузки | `persist.adb.tcp.port=5555` | `persist.adb.tcp.port=5555` |
 
-`/system` на A10 собран неизменяемым: запись даже от root отдаёт `EIO`, `ro.boot.veritymode=disabled`, но перемонтирование rw не помогает. Слоты A/B, активный — `_b`.
+`/system` на A10 собран неизменяемым: запись даже от root отдаёт `EIO`, `ro.boot.veritymode=disabled`, но перемонтирование rw не помогает. Слоты A/B, активный — `_b`. На A9 слоты тоже A/B с активным `_b`; защита записи — другая (dm-verity + locked vbmeta на `/system`, программный BLKROSET на `/vendor`), см. §10.
 
 ## 2. Работа с ГУ по ADB с Windows
 
@@ -447,7 +448,72 @@ if command -v su >/dev/null 2>&1; then setsid su 0 sh -c 'sleep 1; svc power reb
 - **USB-разрешения.** Доработанный `UsbPermissionActivity` Adayo сам выдаёт разрешение (`CBen_grantUsbPermissions`) и закрывается, но в ответе приходит `granted=false`. Приложение перепроверяет `UsbManager.hasPermission()`.
 - **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`).
 
-## 10. Открытые вопросы
+## 10. Root на A9: примитив `mb_daemon` и защита записи (проверено 31.10.2026)
+
+### 10.1. Root-исполнение без модификации системы
+
+`mb_daemon` (работает от `uid=0(root)`, контекст `u:r:mb_daemon:s0`; SELinux на A9 Permissive) исполняет `/sdcard/autorun.sh` при взводе свойства `vendor.autorun.sdcard.logfile`. Значение свойства — путь к **существующему** файлу-флагу (иначе молча не срабатывает). Скрипт выполняется в глобальном mount namespace — его изменения видны из `adb shell` (проверено на remount `/vendor`), т. е. применим для bind-оверлеев.
+
+Взвод (с ПК по Wi-Fi ADB):
+
+```
+adb push payload.sh /sdcard/autorun.sh
+adb shell chmod 777 /sdcard/autorun.sh
+adb shell touch /sdcard/autorun.flag
+adb shell setprop vendor.autorun.sdcard.logfile /sdcard/autorun.flag
+# ждать ~3–5 с, забрать вывод (скрипт сам пишет в /sdcard/*.txt)
+adb shell rm /sdcard/autorun.sh /sdcard/autorun.flag
+adb shell setprop vendor.autorun.sdcard.logfile ''
+```
+
+Скрипты должны быть с **LF** (см. §2). Повторный запуск в тот же файл: сначала `rm` старого `autorun.sh`/флага. Возможная интеграция в TBox Monitor: `BOOT_COMPLETED` → `setprop` тем же способом — даёт root-скрипт на каждом старте без записи в `/system`.
+
+### 10.2. Verified Boot на A9 (UFS, слоты A/B, активный `_b`)
+
+| Разделы | Разметка (UFS) |
+|---|---|
+| `system_a/b` | `sda6` / `sda7` (8 ГБ); активный `sda7` = dm-0 `vroot` |
+| `early_services_a/b` | dm-1 `vearly_userspace` |
+| `vendor_a/b` | `sde16` / `sde35` (2 ГБ); активный `sde35` = dm-2 `vendor` (**линейный**, не verity) |
+| `vbmeta_a/b` | `sde17` / `sde36` (64 КБ, используется 4096 байт) |
+| прочее | `sde39` devinfo, `sda3` misc (BCB пуст), `sda9` earlydata rw, `sda8` oemdata rw |
+
+`vbmeta` — big-endian вариант AVB (`avbtool 1.1.0`, стандартный заголовок `AVB0` в BE-кодировке): подпись RSA 512 байт (algorithm 2), pubkey 1032 байта. ABL пинит sha256 первых 4096 байт (`androidboot.vbmeta.digest=31a3deb2…15ad1` — совпадает с дампом), `vbmeta.device_state=locked`, `ro.boot.flash.locked=1`; при этом `sys.oem_unlock_allowed=1`, `ro.oem_unlock_supported=1` (теоретический путь — `fastboot flashing unlock` через USB, с wipe `userdata`).
+
+Дескрипторы hashtree внутри vbmeta (общий salt `e202c9110aea84adc863077664a608e664ba75146160f8efe7f23100f16749e1`):
+
+| Раздел | Алгоритм | Root digest | Использование при загрузке |
+|---|---|---|---|
+| `system` | sha1 | `6b6b3081e4312614e2db0978116f36058e7155c2` | да — попадает в cmdline `dm="1 vroot …"` (dm-verity, `restart_on_corruption`, FEC) |
+| `early_services` | sha1 | `fbdbb17fdb5424ae2845c9ff7c396fcb72eda7f8` | да — `dm1="1 vearly_userspace …"` |
+| `vendor` | sha1 | `a12efcac00491a407df6a3bf6d243003f3cc9aa0` | **нет** — dm-дескриптора для vendor в cmdline нет, dm-2 линейный |
+| `boot` | sha256 | `91587e50…5e5a30` | проверка ABL |
+| `dtbo` | sha256 | `e0c8bdd0…672f2af` | проверка ABL |
+
+`devinfo` — Qualcomm-структура `ANDROID-BOOT!` (байты 13/14 = `01 01`); семантика полей под этим форматом не подтверждена, поэтому её не трогали.
+
+### 10.3. Итог по защите записи
+
+| Раздел | Механизм защиты | Снимается root-ом (mb_daemon)? |
+|---|---|---|
+| `/system` | enforced dm-verity `vroot` + подписанный locked vbmeta; `remount,rw /` → «'/dev/root' is read-only» | **нет** — только unlock загрузчика (USB, wipe) или ключ OEM; raw-запись в `sda7` ломает дерево Merkle → незагрузка |
+| `/vendor` | `remount,rw` как root проходит (dm-2 линейный); реальный барьер — BLKROSET-флаг на `sde35` (`blockdev --getro`=1), выставлен userspace (init/fs_mgr), не аппаратно | **да** — проверено 31.10.2026: `blockdev --setrw /dev/block/sde35` → rc=0, ro=0 (после теста возвращено) |
+
+Рецепт записи в `/vendor` (root из §10.1):
+
+```
+blockdev --setrw /dev/block/sde35
+mount -o remount,rw /vendor
+# ... изменения ...
+mount -o remount,ro /vendor
+blockdev --setro /dev/block/sde35
+```
+
+Оговорки: содержимое `/vendor` разойдётся с подписанным hashtree-дескриптором vbmeta — текущий boot-путь это не проверяет (загрузке не мешает), но сломаются OTA-дельты на vendor и любая будущая проверка. `modem_b` монтируется внутри `/vendor/firmware_mnt` — раздел затрагивает прошивку модема, эксперименты только с копиями. Для постоянных правок предпочтительнее systemless: bind-оверлеи из `/data`, наводимые при старте через тот же примитив §10.1 (аналог временного варианта на A10). Симптом «remount rw прошёл, remount ro даёт I/O error» — тот же, что на A10 (§6.6), но причина на A9 программная (BLKROSET), а не eMMC WP.
+
+Данные получены read-only-инспектом + тремя прогонами root-диагностики через примитив §10.1 (adb 192.168.1.128:5555); после тестов ГУ возвращён в исходное состояние (`sde35` ro=1, `/vendor` ro, флаги сняты), артефакты на `/sdcard` удалены.
+
+## 11. Открытые вопросы
 
 - Включать ли по умолчанию `main_screen_open_on_boot`, автоустановку сертификатов и открытие файрвола на A10.
 - Почему в некоторых загрузках `DROP` в цепочках Adayo не появлялся.
