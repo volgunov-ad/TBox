@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.utils.readTextAtMost
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -143,6 +144,11 @@ class SpeedCamPackManager(
         deleteSource: Boolean,
     ): Boolean {
         publishBusyLocked(0.7f, "Parsing…")
+        if (part.length() > MAX_DATA_FILE_BYTES) {
+            if (deleteSource) part.delete()
+            failLocked("Speedcam file is too large")
+            return false
+        }
         val text = part.readText(Charsets.UTF_8)
         if (text.trimStart().startsWith("Contact with me", ignoreCase = true)) {
             if (deleteSource) part.delete()
@@ -211,7 +217,7 @@ class SpeedCamPackManager(
             return
         }
         try {
-            val text = file.readText(Charsets.UTF_8)
+            val text = file.readTextAtMost(MAX_DATA_FILE_BYTES)
             val points = SpeedCamIgoParser.parse(text)
             index = SpeedCamIndex(points)
             val manifest = readManifestLocked()
@@ -283,6 +289,7 @@ class SpeedCamPackManager(
         const val DIR_NAME = "speedcam"
         const val DATA_FILE_NAME = "speedcam.txt"
         const val MANIFEST_FILE_NAME = "manifest.json"
+        private const val MAX_DATA_FILE_BYTES = 64L * 1024 * 1024
         /** SpeedCamOnline iGO extended, all types, Russia. */
         const val DEFAULT_DOWNLOAD_URL = SpeedCamDownloader.DEFAULT_URL
 

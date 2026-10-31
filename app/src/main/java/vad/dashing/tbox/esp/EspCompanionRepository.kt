@@ -1,10 +1,15 @@
 package vad.dashing.tbox.esp
 
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.automation.AutomationHardKeyStatus
+import vad.dashing.tbox.automation.AutomationTriggerEspGpioBtnEventBus
 
 data class EspDeviceInfo(
     val firmwareVersion: String = "",
@@ -26,8 +31,15 @@ data class EspDeviceInfo(
     val ble: Boolean = false,
     val bleOn: Boolean = false,
     val bleMacs: List<String> = emptyList(),
+    val bleKey: Boolean = false,
     val ap: Boolean = false,
+    val phone: Boolean = false,
 )
+
+sealed interface PhoneUsbEvent {
+    data class Command(val op: Int, val seat: Int, val arg: Int) : PhoneUsbEvent
+    data object SnapReq : PhoneUsbEvent
+}
 
 data class EspApStatus(
     val on: Boolean = false,
@@ -172,6 +184,21 @@ object EspCompanionRepository {
     private val _bleMacs = MutableStateFlow<List<String>>(emptyList())
     val bleMacs: StateFlow<List<String>> = _bleMacs.asStateFlow()
 
+    private val _bleKeyedMacs = MutableStateFlow<Set<String>>(emptySet())
+    val bleKeyedMacs: StateFlow<Set<String>> = _bleKeyedMacs.asStateFlow()
+
+    private val _phones = MutableStateFlow<List<EspPhoneDevice>>(emptyList())
+    val phones: StateFlow<List<EspPhoneDevice>> = _phones.asStateFlow()
+
+    private val _phoneLearnActive = MutableStateFlow(false)
+    val phoneLearnActive: StateFlow<Boolean> = _phoneLearnActive.asStateFlow()
+
+    private val _pendingPhone = MutableStateFlow<EspPhoneDevice?>(null)
+    val pendingPhone: StateFlow<EspPhoneDevice?> = _pendingPhone.asStateFlow()
+
+    private val _phoneUsbEvents = MutableSharedFlow<PhoneUsbEvent>(extraBufferCapacity = 16)
+    val phoneUsbEvents: SharedFlow<PhoneUsbEvent> = _phoneUsbEvents.asSharedFlow()
+
     private val _bleDevices = MutableStateFlow<Map<String, EspBleDeviceRuntime>>(emptyMap())
     val bleDevices: StateFlow<Map<String, EspBleDeviceRuntime>> = _bleDevices.asStateFlow()
 
@@ -265,6 +292,10 @@ object EspCompanionRepository {
             _routerBusy.value = false
             _bleLearnActive.value = false
             _bleMacs.value = emptyList()
+            _bleKeyedMacs.value = emptySet()
+            _phones.value = emptyList()
+            _phoneLearnActive.value = false
+            _pendingPhone.value = null
             _bleDevices.value = emptyMap()
             _lastBleBtn.value = null
             if (!_otaBusy.value) {
@@ -301,9 +332,18 @@ object EspCompanionRepository {
         lastBat: Int = -1,
         lastRssi: Int = 0,
         lastMac: String? = null,
+        phoneLearn: Boolean = false,
+        phones: List<EspPhoneDevice> = emptyList(),
+        keyed: List<String> = emptyList(),
     ) {
+        _bleKeyedMacs.value = keyed.map(::normalizeEspBleMac).filter { it.isNotEmpty() }.toSet()
         _bleOn.value = on
         _bleLearnActive.value = learn
+        _phoneLearnActive.value = phoneLearn
+        _phones.value = phones
+        if (!phoneLearn) {
+            _pendingPhone.value = null
+        }
         replaceBleMacs(macs)
         val mac = normalizeEspBleMac(lastMac.orEmpty())
         if (mac.isNotEmpty() && (lastBat in 0..100 || lastRssi != 0)) {
@@ -321,6 +361,31 @@ object EspCompanionRepository {
         if (info.ble) {
             _deviceInfo.value = info.copy(bleOn = on, bleMacs = _bleMacs.value)
         }
+        touchMessage()
+    }
+
+    fun closePhoneLearn() {
+        _phoneLearnActive.value = false
+        _pendingPhone.value = null
+    }
+
+    fun setPendingPhone(phone: EspPhoneDevice) {
+        if (phone.id.isBlank()) return
+        _pendingPhone.value = phone
+        touchMessage()
+    }
+
+    fun clearPendingPhone() {
+        _pendingPhone.value = null
+    }
+
+    fun emitPhoneCommand(op: Int, seat: Int, arg: Int) {
+        _phoneUsbEvents.tryEmit(PhoneUsbEvent.Command(op = op, seat = seat, arg = arg))
+        touchMessage()
+    }
+
+    fun emitPhoneSnapReq() {
+        _phoneUsbEvents.tryEmit(PhoneUsbEvent.SnapReq)
         touchMessage()
     }
 
@@ -405,6 +470,17 @@ object EspCompanionRepository {
         val bit = 1 shl channel
         val next = if (level) _gpioMask.value or bit else _gpioMask.value and bit.inv()
         updateGpioMask(next)
+        // Edge events only after a full snapshot; logical 1 = pressed (active-low HW).
+        if (_gpioInputsReady.value && channel in 0..3) {
+            AutomationTriggerEspGpioBtnEventBus.publish(
+                channel = channel,
+                status = if (level) {
+                    AutomationHardKeyStatus.PRESSED
+                } else {
+                    AutomationHardKeyStatus.RELEASED
+                },
+            )
+        }
     }
 
     fun updateRelayMask(mask: Int) {

@@ -2,7 +2,6 @@ package vad.dashing.tbox.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.provider.Settings
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -38,19 +37,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadUnitBrightnessRepository
-import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.HeadlightMode
 import vad.dashing.tbox.PlatformAudioDomain
 import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN
+import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.VehicleFeatureSettings
+import vad.dashing.tbox.uiCapabilities
 import vad.dashing.tbox.mbcan.HvacClimateCanRepository
 import vad.dashing.tbox.mbcan.HvacCustomMode
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.AccTimeGap
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.LdwSensitivity
 import vad.dashing.tbox.mbcan.BodyComfortDomain
@@ -193,6 +195,22 @@ private fun remoteFeedbackOptions(): List<CarSettingsModeOption> = listOf(
 )
 
 @Composable
+private fun accTimeGapOptions(): List<CarSettingsModeOption> = listOf(
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Near),
+        stringResource(R.string.car_settings_acc_time_gap_near),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Medium),
+        stringResource(R.string.car_settings_acc_time_gap_medium),
+    ),
+    CarSettingsModeOption(
+        CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Far),
+        stringResource(R.string.car_settings_acc_time_gap_far),
+    ),
+)
+
+@Composable
 private fun fcwSensitivityOptions(): List<CarSettingsModeOption> = listOf(
     CarSettingsModeOption(
         CarSettingsAdasDomain.encodeFcwSensitivityMbCan(FcwSensitivity.Far),
@@ -243,6 +261,7 @@ private fun signalsForSection(section: CarSettingsSection): Set<MbCanSignal> = w
         MbCanSignal.SlaSpeedLimit,
         MbCanSignal.LasModeSelection,
         MbCanSignal.TjaIca,
+        MbCanSignal.AccTimeGap,
         MbCanSignal.HmaSwitch,
         MbCanSignal.Bsd,
         MbCanSignal.Dow,
@@ -314,6 +333,7 @@ internal fun carSettingsTabMbCanSignals(): Set<MbCanSignal> =
 
 @Composable
 fun CarSettingsTab(
+    settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -322,7 +342,12 @@ fun CarSettingsTab(
     val headUnitCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
 
     val sections = carSettingsVisibleSections()
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.CAR_SETTINGS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     LaunchedEffect(Unit) {
@@ -772,6 +797,7 @@ private fun CarSettingsDriverAssistSection(
     val slaOnOffState by UniversalCanRepository.slaOnOffState.collectAsStateWithLifecycle()
     val lasModeRaw by UniversalCanRepository.lasModeRaw.collectAsStateWithLifecycle()
     val tjaIcaState by UniversalCanRepository.tjaIcaState.collectAsStateWithLifecycle()
+    val accTimeGap by UniversalCanRepository.accTimeGap.collectAsStateWithLifecycle()
     val hmaState by UniversalCanRepository.hmaState.collectAsStateWithLifecycle()
     val bsdState by UniversalCanRepository.bsdState.collectAsStateWithLifecycle()
     val dowState by UniversalCanRepository.dowState.collectAsStateWithLifecycle()
@@ -815,6 +841,13 @@ private fun CarSettingsDriverAssistSection(
         text = stringResource(R.string.car_settings_tja_ica_title),
         description = stringResource(R.string.car_settings_tja_ica_desc),
         enabled = mbCanOk,
+    )
+    CarSettingsModeButtonsRow(
+        text = stringResource(R.string.car_settings_acc_time_gap_title),
+        options = accTimeGapOptions(),
+        selectedRawValue = accTimeGap?.let(CarSettingsAdasDomain::encodeAccTimeGapRequest),
+        enabled = mbCanOk,
+        onValueChange = { onSetProperty(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET, it) },
     )
     SettingSwitch(
         isChecked = hmaState is MbCanBinaryState.On,
@@ -1077,6 +1110,8 @@ private fun CarSettingsClimateExtraSection(
     onSetProperty: (Int, Int) -> Unit,
     onToggleProperty: (Int) -> Unit,
 ) {
+    val climateType by VehicleFeatureSettings.climateControlTypeFlow.collectAsStateWithLifecycle()
+    val climateCaps = climateType.uiCapabilities()
     val customMode by HvacClimateCanRepository.hvacCustomMode.collectAsStateWithLifecycle()
     val acMax by UniversalCanRepository.hvacAcMaxState.collectAsStateWithLifecycle()
     val acPower by UniversalCanRepository.hvacAcPowerState.collectAsStateWithLifecycle()
@@ -1125,13 +1160,15 @@ private fun CarSettingsClimateExtraSection(
         description = stringResource(R.string.car_settings_hvac_ac_desc),
         enabled = mbCanOk,
     )
-    SettingSwitch(
-        isChecked = autoState is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) },
-        text = stringResource(R.string.car_settings_hvac_auto_title),
-        description = stringResource(R.string.car_settings_hvac_auto_desc),
-        enabled = mbCanOk,
-    )
+    if (climateCaps.showAuto) {
+        SettingSwitch(
+            isChecked = autoState is MbCanBinaryState.On,
+            onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AUTO_STATE) },
+            text = stringResource(R.string.car_settings_hvac_auto_title),
+            description = stringResource(R.string.car_settings_hvac_auto_desc),
+            enabled = mbCanOk,
+        )
+    }
     SettingSwitch(
         isChecked = anionPurify is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_AQS) },
@@ -1167,13 +1204,15 @@ private fun CarSettingsClimateExtraSection(
         description = stringResource(R.string.car_settings_hvac_recirc_desc),
         enabled = mbCanOk,
     )
-    SettingSwitch(
-        isChecked = sync is MbCanBinaryState.On,
-        onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) },
-        text = stringResource(R.string.car_settings_hvac_sync_title),
-        description = stringResource(R.string.car_settings_hvac_sync_desc),
-        enabled = mbCanOk,
-    )
+    if (climateCaps.showSync) {
+        SettingSwitch(
+            isChecked = sync is MbCanBinaryState.On,
+            onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_SYNC_SWITCH) },
+            text = stringResource(R.string.car_settings_hvac_sync_title),
+            description = stringResource(R.string.car_settings_hvac_sync_desc),
+            enabled = mbCanOk,
+        )
+    }
     SettingSwitch(
         isChecked = rearDefrost is MbCanBinaryState.On,
         onCheckedChange = { onToggleProperty(MbCanKnownVehiclePropertyId.HVAC_DEFROSTER_SWITCH) },
@@ -1276,15 +1315,41 @@ private fun shadeRoofStatusText(raw: Int?): String =
     if (BodyComfortDomain.shadeRoofTilted(raw)) {
         stringResource(R.string.car_settings_windows_status_tilt)
     } else {
-        percentStatusText(raw)
+        raw?.takeIf { it in 0..100 }?.let { "$it%" }
+            ?: stringResource(R.string.car_settings_windows_status_unknown)
     }
 
 @Composable
-private fun percentStatusText(raw: Int?): String =
-    percentStatusText(raw, stringResource(R.string.car_settings_windows_status_unknown))
+private fun windowStatusText(raw: Int?, android10: Boolean): String = windowStatusText(
+    raw,
+    stringResource(R.string.car_settings_windows_status_unknown),
+    stringResource(R.string.car_settings_windows_status_between),
+    stringResource(R.string.car_settings_windows_status_closed),
+    stringResource(R.string.car_settings_windows_status_open),
+    android10,
+)
 
-private fun percentStatusText(raw: Int?, unknown: String): String =
-    raw?.takeIf { it in 0..100 }?.let { "$it%" } ?: unknown
+private fun windowStatusText(
+    raw: Int?,
+    unknown: String,
+    between: String,
+    closedA10: String,
+    openA10: String,
+    android10: Boolean,
+): String {
+    if (android10) {
+        return when {
+            raw == 1 -> closedA10
+            raw != null && raw in BodyComfortDomain.WINDOW_A10_STATUS_RANGE -> openA10
+            else -> unknown
+        }
+    }
+    return when {
+        raw == BodyComfortDomain.WINDOW_RAW_BETWEEN_STOPS -> between
+        raw != null && raw in 0..100 -> "$raw%"
+        else -> unknown
+    }
+}
 
 @Composable
 private fun windowsRowTitle(title: String, status: String): String =
@@ -1310,6 +1375,9 @@ private fun CarSettingsWindowsSection(
     val roofOptions = sunroofPositionOptions()
     val windowOptions = windowCommandOptions(android10)
     val unknownStatus = stringResource(R.string.car_settings_windows_status_unknown)
+    val betweenStatus = stringResource(R.string.car_settings_windows_status_between)
+    val closedStatusA10 = stringResource(R.string.car_settings_windows_status_closed)
+    val openStatusA10 = stringResource(R.string.car_settings_windows_status_open)
 
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
@@ -1349,7 +1417,9 @@ private fun CarSettingsWindowsSection(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_all_title),
             listOf(raw.windowFl, raw.windowFr, raw.windowRl, raw.windowRr)
-                .joinToString(" / ") { percentStatusText(it, unknownStatus) },
+                .joinToString(" / ") {
+                    windowStatusText(it, unknownStatus, betweenStatus, closedStatusA10, openStatusA10, android10)
+                },
         ),
         options = windowOptions,
         selectedRawValue = lastAllWindows,
@@ -1362,7 +1432,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fl_title),
-            percentStatusText(raw.windowFl),
+            windowStatusText(raw.windowFl, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1379,7 +1449,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_fr_title),
-            percentStatusText(raw.windowFr),
+            windowStatusText(raw.windowFr, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1396,7 +1466,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rl_title),
-            percentStatusText(raw.windowRl),
+            windowStatusText(raw.windowRl, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1413,7 +1483,7 @@ private fun CarSettingsWindowsSection(
     CarSettingsModeButtonsRow(
         text = windowsRowTitle(
             stringResource(R.string.car_settings_windows_rr_title),
-            percentStatusText(raw.windowRr),
+            windowStatusText(raw.windowRr, android10),
         ),
         options = windowOptions,
         selectedRawValues = BodyComfortDomain.selectedWindowWriteValues(
@@ -1445,11 +1515,7 @@ private fun CarSettingsHudSection(
     // Theme uses Settings.Global / Launcher — do not gate on Adayo brightness bind.
     val canWriteHuTheme = canWriteSecure
     // A9 brightness needs WRITE_SETTINGS (+ secure for auto); A10 needs Adayo settings service.
-    val canWriteHuBrightness = HeadUnitBrightnessRepository.isAvailable(context) &&
-        (
-            HeadUnitDayNightMapping.usesAdayoKeys() ||
-                (Settings.System.canWrite(context) && canWriteSecure)
-            )
+    val canWriteHuBrightness = HeadUnitBrightnessRepository.canWrite(context)
     DisposableEffect(context) {
         HeadUnitBrightnessRepository.startObserving(context)
         HeadUnitDayNightRepository.startObserving(context)

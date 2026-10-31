@@ -29,6 +29,7 @@ import android.widget.Toast
 import vad.dashing.tbox.fuel.FuelTypes
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetLayout
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.wifimodem.ModemSource
@@ -48,6 +49,11 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
     val collapseTouchZoneThicknessDp: Int,
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
@@ -73,6 +79,11 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val collapseEdge: String,
     val collapseStripThicknessDp: Int,
     val collapseTouchZoneThicknessDp: Int,
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int,
     val collapseStripColorDark: Int,
     val collapseStripExpandedColorLight: Int,
@@ -110,6 +121,21 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
             w.collapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            w.collapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            w.collapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            w.collapseStripPositionPercentCollapsed,
+            w.collapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            w.collapseStripPositionPercentExpanded,
+            w.collapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = w.collapseTouchZoneMatchStrip,
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
@@ -150,6 +176,21 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
             w.collapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(w.collapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            w.collapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            w.collapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            w.collapseStripPositionPercentCollapsed,
+            w.collapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            w.collapseStripPositionPercentExpanded,
+            w.collapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = w.collapseTouchZoneMatchStrip,
         collapseStripColorLight = w.collapseStripColorLight,
         collapseStripColorDark = w.collapseStripColorDark,
         collapseStripExpandedColorLight = w.collapseStripExpandedColorLight,
@@ -249,6 +290,10 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
 
     private val _showPermissionsDialog = MutableStateFlow(false)
     val showPermissionsDialog: StateFlow<Boolean> = _showPermissionsDialog.asStateFlow()
+
+    private val _showVehicleFeatureSetupDialog = MutableStateFlow(false)
+    val showVehicleFeatureSetupDialog: StateFlow<Boolean> =
+        _showVehicleFeatureSetupDialog.asStateFlow()
 
     val isAutoModemRestartEnabled = settingsManager.autoModemRestartFlow
         .stateIn(
@@ -632,11 +677,25 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = false,
         )
 
+    val phoneDirectEnabled = settingsManager.phoneDirectEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val isLeftMenuVisible = settingsManager.leftMenuVisibleFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = true
+        )
+
+    val leftMenuWidthDp = settingsManager.leftMenuWidthDpFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DEFAULT_LEFT_MENU_WIDTH_DP,
         )
 
     val floatingDashboards = settingsManager.floatingDashboardsFlow
@@ -767,6 +826,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = DEFAULT_PANEL_LAYOUT_SNAP_DP
+        )
+
+    val floatingPanelsAboveSystemBars = settingsManager.floatingPanelsAboveSystemBarsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
         )
 
     val floatingPanelsAllowBeyondScreen = settingsManager.floatingPanelsAllowBeyondScreenFlow
@@ -907,6 +973,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = SettingsManager.MAIN_SCREEN_TAB_KEY
+        )
+
+    val lastMenuSections = settingsManager.lastMenuSectionsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap(),
         )
 
     val leftMenuLayout = settingsManager.leftMenuLayoutJsonFlow
@@ -1470,11 +1543,58 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = HeadUnitCanMode.Android9MbCan
         )
 
+    val cruiseControlType = settingsManager.cruiseControlTypeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = GlobalCruiseControlType.DEFAULT,
+        )
+
+    val climateControlType = settingsManager.climateControlTypeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ClimateControlType.DEFAULT,
+        )
+
+    val vehicleFeatureTypesConfigured = settingsManager.vehicleFeatureTypesConfiguredFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true,
+        )
+
     val launchMainInStockAppWindow = settingsManager.launchMainInStockAppWindowFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = true,
+        )
+
+    val huCaCertsAutoInstall = settingsManager.huCaCertsAutoInstallFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
+    val huDspMode = settingsManager.huDspModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HuDspMode.DEFAULT_MODE)
+
+    val huDspAutoApply = settingsManager.huDspAutoApplyFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val huUsbAudioAutoApply = settingsManager.huUsbAudioAutoApplyFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val appDexoptAuto = settingsManager.appDexoptAutoFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val huAppNetworkAutoOpen = settingsManager.huAppNetworkAutoOpenFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
         )
 
     init {
@@ -1483,6 +1603,8 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             if (!settingsManager.permissionsIntroSeenFlow.first()) {
                 _showPermissionsDialog.value = true
+            } else if (!settingsManager.vehicleFeatureTypesConfiguredFlow.first()) {
+                _showVehicleFeatureSetupDialog.value = true
             }
         }
         // Users who enabled «Не подключаться к TBox» before Modem stayed available may still
@@ -1782,6 +1904,30 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveMockHeadingSourceSetting(source: vad.dashing.tbox.location.MockHeadingSource) {
         viewModelScope.launch {
             settingsManager.saveMockHeadingSourceSetting(source)
+        }
+    }
+
+    fun resetWheelHeadingCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetWheelHeadingCalibration()
+        }
+    }
+
+    fun resetPhoneGyroCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetPhoneGyroCalibration()
+        }
+    }
+
+    fun resetPhoneCompassCalibration() {
+        viewModelScope.launch {
+            settingsManager.resetPhoneCompassCalibration()
+        }
+    }
+
+    fun savePreferredPhoneTelemetryId(idHex: String?) {
+        viewModelScope.launch {
+            settingsManager.savePreferredPhoneTelemetryId(idHex)
         }
     }
 
@@ -2309,6 +2455,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun savePhoneDirectEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.savePhoneDirectEnabled(enabled)
+        }
+    }
+
     fun refreshHuAdbState() {
         viewModelScope.launch {
             vad.dashing.tbox.adb.HuAdbControl.refresh()
@@ -2321,9 +2473,9 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
-    fun setHuAdbUsbEnabled(enabled: Boolean) {
+    fun setHuAdbUsbEnabled(context: Context, enabled: Boolean) {
         viewModelScope.launch {
-            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(enabled)
+            vad.dashing.tbox.adb.HuAdbControl.setUsbEnabled(context, enabled)
         }
     }
 
@@ -2432,12 +2584,35 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         _showPermissionsDialog.value = false
         viewModelScope.launch {
             settingsManager.savePermissionsIntroSeen(true)
+            if (!settingsManager.vehicleFeatureTypesConfiguredFlow.first()) {
+                _showVehicleFeatureSetupDialog.value = true
+            }
+        }
+    }
+
+    /**
+     * Persists cruise/climate types (defaults when the user dismisses without choosing)
+     * and closes the setup dialog.
+     */
+    fun dismissVehicleFeatureSetupDialog(
+        cruise: GlobalCruiseControlType = GlobalCruiseControlType.DEFAULT,
+        climate: ClimateControlType = ClimateControlType.DEFAULT,
+    ) {
+        _showVehicleFeatureSetupDialog.value = false
+        viewModelScope.launch {
+            settingsManager.saveVehicleFeatureTypes(cruise, climate)
         }
     }
 
     fun saveLeftMenuVisibleSetting(visible: Boolean) {
         viewModelScope.launch {
             settingsManager.saveLeftMenuVisibleSetting(visible)
+        }
+    }
+
+    fun saveLeftMenuWidthDp(widthDp: Int) {
+        viewModelScope.launch {
+            settingsManager.saveLeftMenuWidthDp(widthDp)
         }
     }
 
@@ -2466,6 +2641,27 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveSelectedTab(tabKey: String) {
         viewModelScope.launch {
             settingsManager.saveSelectedTab(tabKey)
+        }
+    }
+
+    /** First DataStore emission for the horizontal section of [tabKey] (null if unset). */
+    suspend fun peekLastMenuSection(tabKey: String): String? =
+        settingsManager.lastMenuSectionsFlow.first()[tabKey]
+
+    fun saveLastMenuSection(tabKey: String, sectionKey: String) {
+        viewModelScope.launch {
+            settingsManager.saveLastMenuSection(tabKey, sectionKey)
+        }
+    }
+
+    /** Leave Main Screen for the left-menu console, restoring [SettingsManager.lastMenuTabFlow]. */
+    fun openConsoleFromMain() {
+        viewModelScope.launch {
+            val last = settingsManager.lastMenuTabFlow.first()
+            val layout = LeftMenuLayout.parse(settingsManager.leftMenuLayoutJsonFlow.first())
+            settingsManager.saveSelectedTab(
+                LeftMenuLayout.resolveOpenConsoleTab(last, layout),
+            )
         }
     }
 
@@ -3221,6 +3417,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveFloatingPanelsAboveSystemBars(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveFloatingPanelsAboveSystemBars(enabled)
+        }
+    }
+
     fun saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds: Int) {
         viewModelScope.launch {
             settingsManager.saveFloatingPanelsShowOnServiceStartDelaySeconds(delaySeconds)
@@ -3528,9 +3730,57 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         }
     }
 
+    fun saveCruiseControlType(type: GlobalCruiseControlType) {
+        viewModelScope.launch {
+            settingsManager.saveCruiseControlType(type)
+        }
+    }
+
+    fun saveClimateControlType(type: ClimateControlType) {
+        viewModelScope.launch {
+            settingsManager.saveClimateControlType(type)
+        }
+    }
+
     fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveLaunchMainInStockAppWindow(enabled)
+        }
+    }
+
+    fun saveHuCaCertsAutoInstall(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuCaCertsAutoInstall(enabled)
+        }
+    }
+
+    fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuAppNetworkAutoOpen(enabled)
+        }
+    }
+
+    fun saveHuDspMode(mode: Int) {
+        viewModelScope.launch {
+            settingsManager.saveHuDspMode(mode)
+        }
+    }
+
+    fun saveHuDspAutoApply(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuDspAutoApply(enabled)
+        }
+    }
+
+    fun saveHuUsbAudioAutoApply(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveHuUsbAudioAutoApply(enabled)
+        }
+    }
+
+    fun saveAppDexoptAuto(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveAppDexoptAuto(enabled)
         }
     }
 

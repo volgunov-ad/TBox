@@ -46,8 +46,9 @@ import vad.dashing.tbox.mbcan.setHvacCustomMode
 import vad.dashing.tbox.mbcan.toggleHvacFrontOff
 import vad.dashing.tbox.ui.theme.WidgetActiveColors
 
+/** Eco/Comfort: drive-mode Eco/Normal RGB with 0xD9. Strong: heat orange (same as seat heat widgets). */
 private val HvacCustomEcoColor = Color(0xD900A400)
-private val HvacCustomComfortColor = Color(0xD900C8FF)
+private val HvacCustomComfortColor = Color(0xD92180F3)
 
 private fun hvacBlowModeIconRes(mode: HvacBlowMode): Int = when (mode) {
     HvacBlowMode.Face -> R.drawable.ic_widget_hvac_blow_face
@@ -532,6 +533,7 @@ private fun hvacCustomModeIconRes(mode: HvacCustomMode): Int = when (mode) {
 private fun HvacCustomMode.activeColor(): Color = when (this) {
     HvacCustomMode.Eco -> HvacCustomEcoColor
     HvacCustomMode.Comfort -> HvacCustomComfortColor
+    // Full opacity like ControlAppearanceKind.Heat / seat heat icons (not 0xD9).
     HvacCustomMode.Strong -> WidgetActiveColors.Secondary
 }
 

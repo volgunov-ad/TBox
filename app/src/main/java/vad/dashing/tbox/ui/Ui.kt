@@ -28,7 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,6 +57,8 @@ import vad.dashing.tbox.CycleDataViewModel
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModelFactory
+import vad.dashing.tbox.dexopt.AppDexoptCompiler
+import kotlinx.coroutines.flow.first
 import vad.dashing.tbox.update.UpdateUiState
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.update.UpdateViewModelFactory
@@ -103,14 +107,22 @@ fun TboxApp(
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val selectedTab by settingsViewModel.selectedTab.collectAsStateWithLifecycle()
-    val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val pendingThemeOpen by ThemeOpenRequestBus.pending.collectAsStateWithLifecycle()
     val showPermissionsDialog by settingsViewModel.showPermissionsDialog.collectAsStateWithLifecycle()
+    val showVehicleFeatureSetupDialog by
+        settingsViewModel.showVehicleFeatureSetupDialog.collectAsStateWithLifecycle()
     val showAppListDialog by AppListDialogRequestBus.visible.collectAsStateWithLifecycle()
+    var showAppDexoptHint by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         settingsViewModel.validateThemeSettings(context)
+    }
+
+    LaunchedEffect(Unit) {
+        showAppDexoptHint = !BuildConfig.DEBUG &&
+            !settingsManager.appDexoptAutoFlow.first() &&
+            AppDexoptCompiler.shouldOfferHint(context)
     }
 
     LaunchedEffect(Unit) {
@@ -137,9 +149,7 @@ fun TboxApp(
                 appDataViewModel = appDataViewModel,
                 settingsViewModel = settingsViewModel,
                 onOpenConsole = {
-                    settingsViewModel.saveSelectedTab(
-                        LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                    )
+                    settingsViewModel.openConsoleFromMain()
                 },
                 onTboxRestart = onTboxRestart,
                 onTripFinishAndStart = onTripFinishAndStart,
@@ -175,12 +185,23 @@ fun TboxApp(
                 onDismiss = { settingsViewModel.dismissPermissionsDialog() },
             )
         }
+        if (showVehicleFeatureSetupDialog && !showPermissionsDialog) {
+            VehicleFeatureSetupDialog(
+                settingsViewModel = settingsViewModel,
+                onDismiss = { cruise, climate ->
+                    settingsViewModel.dismissVehicleFeatureSetupDialog(cruise, climate)
+                },
+            )
+        }
         if (showAppListDialog) {
             AppListDialog(
                 visible = true,
                 settingsViewModel = settingsViewModel,
                 onDismiss = { AppListDialogRequestBus.dismiss() },
             )
+        }
+        if (showAppDexoptHint && !showPermissionsDialog && !showVehicleFeatureSetupDialog) {
+            AppDexoptHintDialog(onDismiss = { showAppDexoptHint = false })
         }
         }
         }
@@ -217,6 +238,7 @@ fun TboxScreen(
     val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
     val serviceStartTime by viewModel.serviceStartTime.collectAsStateWithLifecycle()
     val isMenuVisible by settingsViewModel.isLeftMenuVisible.collectAsStateWithLifecycle()
+    val leftMenuWidthDp by settingsViewModel.leftMenuWidthDp.collectAsStateWithLifecycle()
     val updateUiState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val showUpdateMenuEntry = when (val state = updateUiState) {
         is UpdateUiState.Available,
@@ -264,7 +286,7 @@ fun TboxScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .width(if (isMenuVisible) 330.dp else menuButtonSize)
+                    .width(if (isMenuVisible) leftMenuWidthDp.dp else menuButtonSize)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.background)
             ) {
@@ -485,7 +507,9 @@ fun TboxScreen(
                         currentTheme = currentTheme,
                         onRequestWallpaperStorageAccess = onRequestWallpaperStorageAccess,
                     )
-                    LeftMenuTabField.CAR_SETTINGS.id -> CarSettingsTab()
+                    LeftMenuTabField.CAR_SETTINGS.id -> CarSettingsTab(
+                        settingsViewModel = settingsViewModel,
+                    )
                     SettingsManager.UPDATE_TAB_KEY -> UpdateTab(
                         updateViewModel = updateViewModel,
                         onOpenInstallPermissionSettings = onOpenInstallPermissionSettings,

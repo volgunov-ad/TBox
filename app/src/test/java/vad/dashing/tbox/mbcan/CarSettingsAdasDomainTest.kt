@@ -28,15 +28,19 @@ class CarSettingsAdasDomainTest {
     }
 
     /** Values from A9 HU log: item=95 value=1 (with TJA on) and value=4 (with TJA off). */
-    @Test fun accTimeGap_decodesA9LogLevelsOneAndFour() {
-        assertEquals(AccTimeGap.Level1, CarSettingsAdasDomain.decodeAccTimeGapMbCan(1))
-        assertEquals(AccTimeGap.Level4, CarSettingsAdasDomain.decodeAccTimeGapMbCan(4))
-        assertEquals(AccTimeGap.Level2, CarSettingsAdasDomain.decodeAccTimeGapMbCan(2))
-        assertEquals(AccTimeGap.Level3, CarSettingsAdasDomain.decodeAccTimeGapVhal(3))
-        assertNull(CarSettingsAdasDomain.decodeAccTimeGapMbCan(0))
-        assertNull(CarSettingsAdasDomain.decodeAccTimeGapMbCan(5))
-        assertEquals(1, CarSettingsAdasDomain.encodeAccTimeGapMbCan(AccTimeGap.Level1))
-        assertEquals(4, CarSettingsAdasDomain.encodeAccTimeGapVhal(AccTimeGap.Level4))
+    @Test fun accTimeGap_matchesStockRequestAndClusterStatus() {
+        assertEquals(AccTimeGap.Medium, CarSettingsAdasDomain.decodeAccTimeGapStatus(0))
+        assertEquals(AccTimeGap.Far, CarSettingsAdasDomain.decodeAccTimeGapStatus(1))
+        assertEquals(AccTimeGap.Near, CarSettingsAdasDomain.decodeAccTimeGapStatus(2))
+        assertNull(CarSettingsAdasDomain.decodeAccTimeGapStatus(3))
+        assertEquals(AccTimeGap.Medium, CarSettingsAdasDomain.decodeAccTimeGapRequest(1))
+        assertEquals(AccTimeGap.Far, CarSettingsAdasDomain.decodeAccTimeGapRequest(2))
+        assertEquals(AccTimeGap.Near, CarSettingsAdasDomain.decodeAccTimeGapRequest(3))
+        assertNull(CarSettingsAdasDomain.decodeAccTimeGapRequest(0))
+        assertNull(CarSettingsAdasDomain.decodeAccTimeGapRequest(4))
+        assertEquals(1, CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Medium))
+        assertEquals(2, CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Far))
+        assertEquals(3, CarSettingsAdasDomain.encodeAccTimeGapRequest(AccTimeGap.Near))
     }
 
     /** Values from A9 HU log: item=80 value=1 with LAS=2 (LKA), value=2 with LAS=1 (LDW). */
@@ -53,7 +57,7 @@ class CarSettingsAdasDomainTest {
         val gap = MbCanCommandRegistry.get(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
         assertEquals(MbCanSignal.AccTimeGap, gap?.refreshSignal)
         assertEquals(
-            MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
+            MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
             gap?.policy,
         )
         val ldw = MbCanCommandRegistry.get(MbCanKnownVehiclePropertyId.LDW_SWITCH)

@@ -31,7 +31,11 @@ object MainActivityForegroundTracker {
 
     fun register(application: Application) {
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+                if (activity is MainActivity) {
+                    AdbShutdownGate.markAppAlive()
+                }
+            }
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {
                 if (activity is MainActivity && activity.isFinishing) {

@@ -1,6 +1,8 @@
 package vad.dashing.tbox
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
@@ -73,6 +75,19 @@ object HeadUnitBrightnessRepository {
 
     fun isAvailable(context: Context): Boolean =
         !HeadUnitDayNightMapping.usesAdayoKeys() || AdayoSettingsService.isAvailable()
+
+    /**
+     * Same write gate as Car Settings → Экраны: A10 needs Adayo bind;
+     * A9 needs [Settings.System.canWrite] plus [Manifest.permission.WRITE_SECURE_SETTINGS].
+     */
+    fun canWrite(context: Context): Boolean {
+        if (!isAvailable(context)) return false
+        if (HeadUnitDayNightMapping.usesAdayoKeys()) return true
+        val canWriteSecure =
+            context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+                PackageManager.PERMISSION_GRANTED
+        return Settings.System.canWrite(context) && canWriteSecure
+    }
 
     fun startObserving(context: Context) {
         observeRefCount++

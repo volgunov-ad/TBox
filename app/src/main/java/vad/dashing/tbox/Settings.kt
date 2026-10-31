@@ -1,12 +1,15 @@
 package vad.dashing.tbox
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import android.util.Log
 import androidx.datastore.core.DataStore
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -15,6 +18,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +36,8 @@ import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.hotspot.EspSoftApIdentity
 import vad.dashing.tbox.mbcan.SlaSpeedLimitDomain
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.normalizeLeftMenuWidthDp
 import vad.dashing.tbox.ui.theme.DARK_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
@@ -40,7 +46,18 @@ import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
-internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = DATASTORE_NAME)
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = DATASTORE_NAME,
+    corruptionHandler = resetOnCorruption(DATASTORE_NAME),
+)
+
+/** A corrupt preferences file would otherwise throw on every read and crash-loop the app. */
+internal fun resetOnCorruption(storeName: String): ReplaceFileCorruptionHandler<Preferences> =
+    ReplaceFileCorruptionHandler { error ->
+        Log.e("DataStore", "Corrupt $storeName, resetting", error)
+        TboxRepository.addLog("ERROR", "DataStore", "Corrupt $storeName reset: ${error.message}")
+        emptyPreferences()
+    }
 
 enum class SetLauncherAppCustomIconResult {
     Success,
@@ -243,6 +260,13 @@ data class FloatingDashboardWidgetConfig(
      */
     val avgFuelConsumptionSource: Int = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
     /**
+     * Liters line for fuel widgets that show volume:
+     * [FUEL_LITERS_DISPLAY_REMAINING] (default) or [FUEL_LITERS_DISPLAY_TO_FULL].
+     * Applies to [FUEL_LEVEL_LITERS_WIDGET_DATA_KEY], [FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY],
+     * and the liters part of [FUEL_LEVEL_WIDGET_DATA_KEY]. Percent-only tiles ignore this.
+     */
+    val fuelLitersDisplayMode: Int = FUEL_LITERS_DISPLAY_REMAINING,
+    /**
      * Companion relay tile mode ([espRelay0]/[espRelay1]): [EspRelayWidgetMode.BUTTON] or
      * [EspRelayWidgetMode.RELAY]. Ignored for other data keys.
      */
@@ -349,6 +373,12 @@ data class FloatingDashboardWidgetConfig(
      * Default [DEFAULT_MAPS_CAM_RADAR_HOLD_M].
      */
     val mapsCamRadarHoldDistanceM: Int = DEFAULT_MAPS_CAM_RADAR_HOLD_M,
+    /**
+     * Optional physical button that duplicates single/double taps on this tile
+     * while it is on screen (main-screen or floating panels only).
+     * Unsupported for multi-zone tiles — see [supportsWidgetButtonBinding].
+     */
+    val buttonBinding: WidgetButtonBinding? = null,
 )
 
 /** Normalized top-left of the MainScreen settings button: x,y in [0,1] vs usable width/height. */
@@ -469,6 +499,19 @@ data class MainScreenPanelConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
     val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Strip length along the edge when collapsed (1–100% of edge). */
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip length along the edge when expanded (1–100% of edge). */
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip shift from edge start when collapsed (0…100−length %). */
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /** Strip shift from edge start when expanded (0…100−length %). */
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /**
+     * When true, touch zone along the edge matches strip length+position for the current state.
+     * When false (default), touch zone spans the full edge; thickness setting is unchanged.
+     */
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
@@ -510,6 +553,19 @@ data class FloatingDashboardConfig(
     val collapseStripThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
     /** Touch-target thickness along the collapse edge; defaults to [collapseStripThicknessDp]. */
     val collapseTouchZoneThicknessDp: Int = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+    /** Strip length along the edge when collapsed (1–100% of edge). */
+    val collapseStripLengthPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip length along the edge when expanded (1–100% of edge). */
+    val collapseStripLengthPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    /** Strip shift from edge start when collapsed (0…100−length %). */
+    val collapseStripPositionPercentCollapsed: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /** Strip shift from edge start when expanded (0…100−length %). */
+    val collapseStripPositionPercentExpanded: Int = DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    /**
+     * When true, touch zone along the edge matches strip length+position for the current state.
+     * When false (default), touch zone spans the full edge; thickness setting is unchanged.
+     */
+    val collapseTouchZoneMatchStrip: Boolean = DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
     val collapseStripColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
     val collapseStripColorDark: Int = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
     val collapseStripExpandedColorLight: Int = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
@@ -881,6 +937,28 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_trips_enabled")
         private val WHEEL_PULSE_MOCK_DR_ENABLED_KEY =
             booleanPreferencesKey("${KEY_PREFIX}wheel_pulse_mock_dr_enabled")
+        private val WHEEL_HEADING_TRACK_WIDTH_M_KEY =
+            floatPreferencesKey("${KEY_PREFIX}wheel_heading_track_width_m")
+        private val WHEEL_HEADING_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}wheel_heading_calib_at_ms")
+        private val WHEEL_HEADING_ARC_COUNT_KEY =
+            intPreferencesKey("${KEY_PREFIX}wheel_heading_arc_count")
+        private val PHONE_GYRO_BIAS_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_bias_deg_s")
+        private val PHONE_GYRO_SCALE_L_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_scale_l")
+        private val PHONE_GYRO_SCALE_R_KEY =
+            floatPreferencesKey("${KEY_PREFIX}phone_gyro_scale_r")
+        private val PHONE_GYRO_SIGN_KEY =
+            intPreferencesKey("${KEY_PREFIX}phone_gyro_sign")
+        private val PHONE_GYRO_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}phone_gyro_calib_at_ms")
+        private val PHONE_COMPASS_SECTORS_JSON_KEY =
+            stringPreferencesKey("${KEY_PREFIX}phone_compass_sectors_json")
+        private val PHONE_COMPASS_CALIB_AT_MS_KEY =
+            longPreferencesKey("${KEY_PREFIX}phone_compass_calib_at_ms")
+        private val PHONE_TELEMETRY_PREFERRED_ID_KEY =
+            stringPreferencesKey("${KEY_PREFIX}phone_telemetry_preferred_id")
         private val STEER_CALIB_ZERO_DEG_KEY =
             floatPreferencesKey("${KEY_PREFIX}steer_calib_zero_deg")
         private val STEER_CALIB_SCALE_KEY =
@@ -915,6 +993,7 @@ class SettingsManager(private val context: Context) {
             booleanPreferencesKey("${KEY_PREFIX}external_api_dangerous_enabled")
         private val EXTERNAL_API_WEB_PANEL_ENABLED =
             booleanPreferencesKey("${KEY_PREFIX}external_api_web_panel_enabled")
+        private val PHONE_DIRECT_ENABLED = booleanPreferencesKey("${KEY_PREFIX}phone_direct_enabled")
         private val EXTERNAL_API_CLIENTS_JSON =
             stringPreferencesKey("${KEY_PREFIX}external_api_clients_json")
         /** After first-run permissions dialog was closed (also set when opened from Settings and dismissed). */
@@ -990,6 +1069,18 @@ class SettingsManager(private val context: Context) {
 
         private val SELECTED_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}selected_tab")
 
+        /**
+         * Last left-menu tab (not [MAIN_SCREEN_TAB_KEY]). Kept when switching to Main Screen so
+         * returning to the menu can restore that item.
+         */
+        private val LAST_MENU_TAB_KEY = stringPreferencesKey("${KEY_PREFIX}last_menu_tab")
+
+        /**
+         * JSON map of left-menu tab id → horizontal section enum name
+         * (see [vad.dashing.tbox.ui.LastMenuSections]).
+         */
+        private val LAST_MENU_SECTIONS_KEY = stringPreferencesKey("${KEY_PREFIX}last_menu_sections")
+
         private val DASHBOARD_ROWS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_rows")
         private val DASHBOARD_COLS_KEY = intPreferencesKey("${KEY_PREFIX}dashboard_cols")
         private val DASHBOARD_CHART_KEY = booleanPreferencesKey("${KEY_PREFIX}dashboard_chart")
@@ -999,6 +1090,8 @@ class SettingsManager(private val context: Context) {
             intPreferencesKey("${KEY_PREFIX}floating_panels_layout_snap_dp")
         private val FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY =
             booleanPreferencesKey("${KEY_PREFIX}floating_panels_allow_beyond_screen")
+        private val FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}floating_panels_above_system_bars")
         private val FLOATING_PANELS_SHOW_ON_SERVICE_START_DELAY_SECONDS_KEY =
             intPreferencesKey("${KEY_PREFIX}floating_panels_show_on_service_start_delay_seconds")
         private val MAIN_SCREEN_PANELS_LAYOUT_SNAP_DP_KEY =
@@ -1035,11 +1128,36 @@ class SettingsManager(private val context: Context) {
         private val UPDATE_CHECK_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}update_check_enabled")
         private val HEAD_UNIT_CAN_MODE_KEY = stringPreferencesKey("${KEY_PREFIX}head_unit_can_mode")
         /**
+         * Global cruise type: [GlobalCruiseControlType] storage (`acc` / `ccs`).
+         * Absent → unset (first-run dialog); runtime default [GlobalCruiseControlType.DEFAULT].
+         */
+        private val CRUISE_CONTROL_TYPE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}cruise_control_type")
+        /**
+         * Global climate layout: [ClimateControlType] storage
+         * (`ordinary_ac` / `single_zone` / `dual_zone`).
+         * Absent → unset (first-run dialog); runtime default [ClimateControlType.DEFAULT].
+         */
+        private val CLIMATE_CONTROL_TYPE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}climate_control_type")
+        /**
          * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
          * Default true when key absent.
          */
         private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
             booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
+        /** A10 only: re-apply the extra root CA overlay on app start. Default false. */
+        private val HU_CA_CERTS_AUTO_INSTALL_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_ca_certs_auto_install")
+        /** A10 only: keep app uids allowed through the stock Adayo iptables whitelist. Default false. */
+        private val HU_APP_NETWORK_AUTO_OPEN_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_app_network_auto_open")
+        private val HU_DSP_MODE_KEY = intPreferencesKey("${KEY_PREFIX}hu_dsp_mode")
+        private val HU_DSP_AUTO_APPLY_KEY = booleanPreferencesKey("${KEY_PREFIX}hu_dsp_auto_apply")
+        /** A10 only: re-apply the temporary USB audio bind overlay at app startup. Default false. */
+        private val HU_USB_AUDIO_AUTO_APPLY_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}hu_usb_audio_auto_apply")
+        private val APP_DEXOPT_AUTO_KEY = booleanPreferencesKey("${KEY_PREFIX}app_dexopt_auto")
         private val CAN_AUTO_BIND_ENABLED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_enabled")
         private val CAN_AUTO_BIND_LOCKED_KEY = booleanPreferencesKey("${KEY_PREFIX}can_auto_bind_locked")
         private val CAN_AUTO_BIND_LAST_PRIMARY_MODE_KEY =
@@ -1181,7 +1299,7 @@ class SettingsManager(private val context: Context) {
         )
 
         // Кэш ключей для производительности
-        private val stringKeysCache = mutableMapOf<String, Preferences.Key<String>>()
+        private val stringKeysCache = ConcurrentHashMap<String, Preferences.Key<String>>()
 
         // Ключ для сохранения конфигурации виджетов
         private val DASHBOARD_WIDGETS_KEY = stringPreferencesKey("${KEY_PREFIX}dashboard_widgets")
@@ -1194,6 +1312,8 @@ class SettingsManager(private val context: Context) {
 
         private val LEFT_MENU_LAYOUT_KEY =
             stringPreferencesKey("${KEY_PREFIX}left_menu_layout")
+        private val LEFT_MENU_WIDTH_DP_KEY =
+            intPreferencesKey("${KEY_PREFIX}left_menu_width_dp")
 
     }
 
@@ -1622,6 +1742,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[EXTERNAL_API_WEB_PANEL_ENABLED] ?: false }
         .distinctUntilChanged()
 
+    val phoneDirectEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[PHONE_DIRECT_ENABLED] ?: false }
+        .distinctUntilChanged()
+
     val externalApiClientsJsonFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences -> preferences[EXTERNAL_API_CLIENTS_JSON] ?: "[]" }
         .distinctUntilChanged()
@@ -1634,11 +1758,41 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[LEFT_MENU_VISIBLE] ?: true }
         .distinctUntilChanged()
 
+    val leftMenuWidthDpFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeLeftMenuWidthDp(
+                preferences[LEFT_MENU_WIDTH_DP_KEY] ?: DEFAULT_LEFT_MENU_WIDTH_DP,
+            )
+        }
+        .distinctUntilChanged()
+
     val selectedTabFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
             vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
                 preferences[SELECTED_TAB_KEY],
             )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Last non-main left-menu tab key. Unset / blank parses as [MAIN_SCREEN_TAB_KEY] via
+     * [vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey] (restore then falls back).
+     */
+    val lastMenuTabFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.ui.LeftMenuLayout.parseSelectedTabKey(
+                preferences[LAST_MENU_TAB_KEY],
+            )
+        }
+        .distinctUntilChanged()
+
+    /**
+     * Per left-menu tab: last selected horizontal section key (enum name).
+     * Empty map when unset. Included in full settings backup via DataStore export.
+     */
+    val lastMenuSectionsFlow: Flow<Map<String, String>> = context.settingsDataStore.data
+        .map { preferences ->
+            vad.dashing.tbox.ui.LastMenuSections.parse(preferences[LAST_MENU_SECTIONS_KEY])
         }
         .distinctUntilChanged()
 
@@ -1961,6 +2115,10 @@ class SettingsManager(private val context: Context) {
         .map { preferences -> preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] ?: false }
         .distinctUntilChanged()
 
+    val floatingPanelsAboveSystemBarsFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY] ?: false }
+        .distinctUntilChanged()
+
     /** Seconds to wait after periodic-job start before the first floating-panel ensure. */
     val floatingPanelsShowOnServiceStartDelaySecondsFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
@@ -2080,11 +2238,71 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     /**
+     * Global cruise type. When the key is absent, returns [GlobalCruiseControlType.DEFAULT]
+     * for runtime; use [cruiseControlTypeConfiguredFlow] for first-run gating.
+     */
+    val cruiseControlTypeFlow: Flow<GlobalCruiseControlType> = context.settingsDataStore.data
+        .map { preferences ->
+            GlobalCruiseControlType.fromStorageKey(preferences[CRUISE_CONTROL_TYPE_KEY])
+        }
+        .distinctUntilChanged()
+
+    val cruiseControlTypeConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences.contains(CRUISE_CONTROL_TYPE_KEY) }
+        .distinctUntilChanged()
+
+    /**
+     * Global climate layout. When the key is absent, returns [ClimateControlType.DEFAULT]
+     * for runtime; use [climateControlTypeConfiguredFlow] for first-run gating.
+     */
+    val climateControlTypeFlow: Flow<ClimateControlType> = context.settingsDataStore.data
+        .map { preferences ->
+            ClimateControlType.fromStorageKey(preferences[CLIMATE_CONTROL_TYPE_KEY])
+        }
+        .distinctUntilChanged()
+
+    val climateControlTypeConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences.contains(CLIMATE_CONTROL_TYPE_KEY) }
+        .distinctUntilChanged()
+
+    /** True when both cruise and climate type keys are present in DataStore. */
+    val vehicleFeatureTypesConfiguredFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences.contains(CRUISE_CONTROL_TYPE_KEY) &&
+                preferences.contains(CLIMATE_CONTROL_TYPE_KEY)
+        }
+        .distinctUntilChanged()
+
+    /**
      * When true (default) and HU mode is Android 10, programmatic [MainActivity] opens use
      * Adayo stock app window instead of fullscreen.
      */
     val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
+        .distinctUntilChanged()
+
+    val huCaCertsAutoInstallFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huAppNetworkAutoOpenFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huDspModeFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> HuDspMode.normalize(preferences[HU_DSP_MODE_KEY]) }
+        .distinctUntilChanged()
+
+    val huDspAutoApplyFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_DSP_AUTO_APPLY_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val huUsbAudioAutoApplyFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[HU_USB_AUDIO_AUTO_APPLY_KEY] ?: false }
+        .distinctUntilChanged()
+
+    val appDexoptAutoFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[APP_DEXOPT_AUTO_KEY] ?: false }
         .distinctUntilChanged()
 
     val canAutoBindEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -2668,6 +2886,108 @@ class SettingsManager(private val context: Context) {
         vad.dashing.tbox.location.SpeedIntegrator.discard()
     }
 
+    suspend fun loadWheelHeadingCalibration(): vad.dashing.tbox.location.WheelHeadingCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.location.WheelHeadingCalibration(
+            trackWidthM = prefs[WHEEL_HEADING_TRACK_WIDTH_M_KEY]
+                ?: vad.dashing.tbox.location.WheelHeadingIntegrator.DEFAULT_TRACK_M,
+            calibratedAtEpochMs = prefs[WHEEL_HEADING_CALIB_AT_MS_KEY] ?: 0L,
+            arcCount = prefs[WHEEL_HEADING_ARC_COUNT_KEY] ?: 0,
+        )
+    }
+
+    suspend fun saveWheelHeadingCalibration(calibration: vad.dashing.tbox.location.WheelHeadingCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHEEL_HEADING_TRACK_WIDTH_M_KEY] = calibration.trackWidthM
+            preferences[WHEEL_HEADING_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+            preferences[WHEEL_HEADING_ARC_COUNT_KEY] = calibration.arcCount
+        }
+        vad.dashing.tbox.location.WheelHeadingCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetWheelHeadingCalibration() {
+        val cleared = vad.dashing.tbox.location.WheelHeadingCalibration()
+        saveWheelHeadingCalibration(cleared)
+        vad.dashing.tbox.location.WheelHeadingIntegrator.reset()
+    }
+
+    suspend fun loadPhoneGyroCalibration(): vad.dashing.tbox.location.PhoneGyroCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        return vad.dashing.tbox.location.PhoneGyroCalibration(
+            biasDegPerSec = prefs[PHONE_GYRO_BIAS_KEY] ?: 0f,
+            scaleLeft = prefs[PHONE_GYRO_SCALE_L_KEY] ?: 1f,
+            scaleRight = prefs[PHONE_GYRO_SCALE_R_KEY] ?: 1f,
+            sign = prefs[PHONE_GYRO_SIGN_KEY] ?: 1,
+            calibratedAtEpochMs = prefs[PHONE_GYRO_CALIB_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    suspend fun savePhoneGyroCalibration(calibration: vad.dashing.tbox.location.PhoneGyroCalibration) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_GYRO_BIAS_KEY] = calibration.biasDegPerSec
+            preferences[PHONE_GYRO_SCALE_L_KEY] = calibration.scaleLeft
+            preferences[PHONE_GYRO_SCALE_R_KEY] = calibration.scaleRight
+            preferences[PHONE_GYRO_SIGN_KEY] = calibration.sign
+            preferences[PHONE_GYRO_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+        }
+        vad.dashing.tbox.location.PhoneGyroCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetPhoneGyroCalibration() {
+        val cleared = vad.dashing.tbox.location.PhoneGyroCalibration()
+        savePhoneGyroCalibration(cleared)
+        vad.dashing.tbox.location.PhoneTelemetryRepository.discardGyro()
+    }
+
+    suspend fun loadPhoneCompassCalibration(): vad.dashing.tbox.location.PhoneCompassCalibration {
+        val prefs = context.settingsDataStore.data.first()
+        val raw = prefs[PHONE_COMPASS_SECTORS_JSON_KEY].orEmpty()
+        val sectors = if (raw.isBlank()) {
+            List(vad.dashing.tbox.location.PhoneCompassCalibration.SECTOR_COUNT) { 0f }
+        } else {
+            val parts = raw.split(",")
+            List(vad.dashing.tbox.location.PhoneCompassCalibration.SECTOR_COUNT) { idx ->
+                parts.getOrNull(idx)?.toFloatOrNull() ?: 0f
+            }
+        }
+        return vad.dashing.tbox.location.PhoneCompassCalibration(
+            sectorOffsetsDeg = sectors,
+            calibratedAtEpochMs = prefs[PHONE_COMPASS_CALIB_AT_MS_KEY] ?: 0L,
+        )
+    }
+
+    suspend fun savePhoneCompassCalibration(calibration: vad.dashing.tbox.location.PhoneCompassCalibration) {
+        val serialized = calibration.sectorOffsetsDeg.joinToString(",") { it.toString() }
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_COMPASS_SECTORS_JSON_KEY] = serialized
+            preferences[PHONE_COMPASS_CALIB_AT_MS_KEY] = calibration.calibratedAtEpochMs
+        }
+        vad.dashing.tbox.location.PhoneCompassCalibrationStore.update(calibration)
+    }
+
+    suspend fun resetPhoneCompassCalibration() {
+        val cleared = vad.dashing.tbox.location.PhoneCompassCalibration()
+        savePhoneCompassCalibration(cleared)
+        vad.dashing.tbox.location.PhoneTelemetryRepository.resetSessionMountOffset()
+    }
+
+    suspend fun loadPreferredPhoneTelemetryId(): String? {
+        val prefs = context.settingsDataStore.data.first()
+        return prefs[PHONE_TELEMETRY_PREFERRED_ID_KEY]?.trim()?.ifEmpty { null }
+    }
+
+    suspend fun savePreferredPhoneTelemetryId(idHex: String?) {
+        val clean = idHex?.trim()?.lowercase()?.ifEmpty { null }
+        context.settingsDataStore.edit { preferences ->
+            if (clean == null) {
+                preferences.remove(PHONE_TELEMETRY_PREFERRED_ID_KEY)
+            } else {
+                preferences[PHONE_TELEMETRY_PREFERRED_ID_KEY] = clean
+            }
+        }
+        vad.dashing.tbox.location.PhoneTelemetryRepository.setPreferredPhoneIdHex(clean)
+    }
+
     suspend fun loadSteerCalibrationOffsets(): vad.dashing.tbox.location.SteerCalibrationOffsets {
         val prefs = context.settingsDataStore.data.first()
         val sign = prefs[STEER_CALIB_SIGN_KEY] ?: 1
@@ -2923,8 +3243,10 @@ class SettingsManager(private val context: Context) {
                     )
                 }
             }
-            // USB GNSS does not require / enable the ESP companion session.
-            if (effective == vad.dashing.tbox.esp.LocationSource.USB) {
+            // USB GNSS and Phone GPS do not require / enable the ESP companion session.
+            if (effective == vad.dashing.tbox.esp.LocationSource.USB ||
+                effective == vad.dashing.tbox.esp.LocationSource.PHONE
+            ) {
                 if (previous == vad.dashing.tbox.esp.LocationSource.ANDROID) {
                     writeMockPowerState(
                         preferences,
@@ -2949,6 +3271,7 @@ class SettingsManager(private val context: Context) {
                     }
                     vad.dashing.tbox.esp.LocationSource.USB,
                     vad.dashing.tbox.esp.LocationSource.ESP32,
+                    vad.dashing.tbox.esp.LocationSource.PHONE,
                     -> {
                         preferences[AUTO_SUSPEND_TBOX_LOC_KEY] = true
                     }
@@ -3276,6 +3599,12 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun savePhoneDirectEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PHONE_DIRECT_ENABLED] = enabled
+        }
+    }
+
     suspend fun saveExternalApiClientsJson(json: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[EXTERNAL_API_CLIENTS_JSON] = json
@@ -3291,6 +3620,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLeftMenuVisibleSetting(visible: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LEFT_MENU_VISIBLE] = visible
+        }
+    }
+
+    suspend fun saveLeftMenuWidthDp(widthDp: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LEFT_MENU_WIDTH_DP_KEY] = normalizeLeftMenuWidthDp(widthDp)
         }
     }
 
@@ -3336,6 +3671,25 @@ class SettingsManager(private val context: Context) {
     suspend fun saveSelectedTab(tabKey: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[SELECTED_TAB_KEY] = tabKey
+            // Remember last menu item when leaving Main Screen; do not clear on Main.
+            if (tabKey != MAIN_SCREEN_TAB_KEY) {
+                preferences[LAST_MENU_TAB_KEY] = tabKey
+            }
+        }
+    }
+
+    /**
+     * Remembers the horizontal section ([sectionKey], typically enum name) for [tabKey]
+     * (a [vad.dashing.tbox.ui.LeftMenuTabField.id]). No-op when unchanged.
+     */
+    suspend fun saveLastMenuSection(tabKey: String, sectionKey: String) {
+        if (tabKey.isBlank() || sectionKey.isBlank()) return
+        val current = lastMenuSectionsFlow.first()
+        if (current[tabKey] == sectionKey) return
+        val merged = current.toMutableMap().apply { put(tabKey, sectionKey) }
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAST_MENU_SECTIONS_KEY] =
+                vad.dashing.tbox.ui.LastMenuSections.serialize(merged)
         }
     }
 
@@ -3378,26 +3732,27 @@ class SettingsManager(private val context: Context) {
                 if (snapshot[folderUriKey].orEmpty().isNotEmpty()) return false
                 val hadLegacyFlag = snapshot[legacyBooleanKey] == true
                 if (!hadLegacyFlag && !legacyFile.isFile) return false
-                val bmp = runCatching {
-                    BitmapFactory.decodeFile(legacyFile.absolutePath)
-                }.getOrNull()
-                if (bmp == null) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                runCatching { BitmapFactory.decodeFile(legacyFile.absolutePath, bounds) }
+                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
                     if (legacyFile.exists()) legacyFile.delete()
                     if (hadLegacyFlag) {
                         context.settingsDataStore.edit { it[legacyBooleanKey] = false }
                     }
                     return false
                 }
+                val extension = when (bounds.outMimeType) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    else -> "jpg"
+                }
                 val dir = File(context.filesDir, dirRel)
                 dir.mkdirs()
-                val dest = File(dir, "migrated_wallpaper.jpg")
+                val dest = File(dir, "migrated_wallpaper.$extension")
                 val ok = runCatching {
-                    dest.outputStream().use { out ->
-                        bmp.compress(Bitmap.CompressFormat.JPEG, 92, out)
-                    }
+                    legacyFile.copyTo(dest, overwrite = true)
                     dest.length() > 0L
                 }.getOrDefault(false)
-                bmp.recycle()
                 if (!ok) {
                     dest.delete()
                     return false
@@ -3454,19 +3809,19 @@ class SettingsManager(private val context: Context) {
 
     suspend fun saveMainScreenPageCount(pageCount: Int) {
         val normalized = PagingStateNormalizer.normalizePageCount(pageCount)
-        val prefs = context.settingsDataStore.data.first()
-        val oldPageCount = PagingStateNormalizer.normalizePageCount(
-            prefs[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val rawJson = prefs[getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)] ?: ""
-        val parsePageCount = if (oldPageCount == 1 && normalized > 1) 1 else normalized
-        val panels = parseMainScreenDashboardsJson(rawJson, parsePageCount)
-        val adjusted = PagingStateNormalizer.adjustPanelsForPageCountChange(
-            panels = panels,
-            oldPageCount = oldPageCount,
-            newPageCount = normalized,
-        )
+        val dashboardsKey = getStringKey(MAIN_SCREEN_DASHBOARDS_LIST_KEY)
         context.settingsDataStore.edit { preferences ->
+            val oldPageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+            )
+            val parsePageCount = if (oldPageCount == 1 && normalized > 1) 1 else normalized
+            val panels = parseMainScreenDashboardsJson(preferences[dashboardsKey] ?: "", parsePageCount)
+            val adjusted = PagingStateNormalizer.adjustPanelsForPageCountChange(
+                panels = panels,
+                oldPageCount = oldPageCount,
+                newPageCount = normalized,
+            )
+            preferences[dashboardsKey] = serializeMainScreenDashboards(normalizeMainScreenDashboards(adjusted))
             preferences[MAIN_SCREEN_PAGE_COUNT_KEY] = normalized
             val current = preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] ?: DEFAULT_MAIN_SCREEN_CURRENT_PAGE
             preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] =
@@ -3478,28 +3833,23 @@ class SettingsManager(private val context: Context) {
                     PagingStateNormalizer.normalizeCurrentPage(windowPage, normalized)
             }
         }
-        saveMainScreenDashboards(adjusted)
     }
 
     suspend fun saveMainScreenCurrentPage(page: Int) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
-        )
-        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = normalized
+            val pageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+            preferences[MAIN_SCREEN_CURRENT_PAGE_KEY] = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         }
     }
 
     suspend fun saveMainScreenWindowModeCurrentPage(page: Int) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
-        )
-        val normalized = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = normalized
+            val pageCount = PagingStateNormalizer.normalizePageCount(
+                preferences[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT
+            )
+            preferences[MAIN_SCREEN_WINDOW_MODE_CURRENT_PAGE_KEY] = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         }
     }
 
@@ -3618,13 +3968,20 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveDriveModeThemePath(rawValue: Int, uri: String) {
-        val current = driveModeThemePathsFlow.first().toMutableMap()
-        if (uri.isBlank()) {
-            current.remove(rawValue)
-        } else {
-            current[rawValue] = uri
+        context.settingsDataStore.edit { preferences ->
+            val current = parseDriveModeThemePathsJson(preferences[DRIVE_MODE_THEME_PATHS_KEY].orEmpty())
+                .toMutableMap()
+            if (uri.isBlank()) {
+                current.remove(rawValue)
+            } else {
+                current[rawValue] = uri
+            }
+            if (current.isEmpty()) {
+                preferences.remove(DRIVE_MODE_THEME_PATHS_KEY)
+            } else {
+                preferences[DRIVE_MODE_THEME_PATHS_KEY] = serializeDriveModeThemePaths(current)
+            }
         }
-        saveDriveModeThemePaths(current)
     }
 
     suspend fun clearDriveModeThemePaths() {
@@ -3748,15 +4105,9 @@ class SettingsManager(private val context: Context) {
         forLightTheme: Boolean,
         fileName: String,
     ) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
-        val current = mainScreenWallpaperSelectionByPageFlow.first()
-        saveMainScreenWallpaperSelectionsByPage(
-            current.withFileName(normalizedPage, forLightTheme, fileName),
-        )
+        context.settingsDataStore.edit { preferences ->
+            preferences.putWallpaperSelectionForPage(page, forLightTheme, fileName)
+        }
     }
 
     /** Single DataStore write when picking wallpaper (folder URI + selected file name for [page]). */
@@ -3765,21 +4116,9 @@ class SettingsManager(private val context: Context) {
         selectedFileName: String,
         page: Int,
     ) {
-        val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
-        )
-        val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
-        val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
-        ).withFileName(normalizedPage, forLightTheme = true, selectedFileName)
         context.settingsDataStore.edit { preferences ->
             preferences[MAIN_SCREEN_WALLPAPER_LIGHT_FOLDER_URI_KEY] = folderUriString
-            if (selections.isEmpty()) {
-                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
-            } else {
-                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
-            }
+            preferences.putWallpaperSelectionForPage(page, forLightTheme = true, selectedFileName)
         }
     }
 
@@ -3788,21 +4127,29 @@ class SettingsManager(private val context: Context) {
         selectedFileName: String,
         page: Int,
     ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
+            preferences.putWallpaperSelectionForPage(page, forLightTheme = false, selectedFileName)
+        }
+    }
+
+    /** Read-modify-write of the per-page selection inside the caller's DataStore transaction. */
+    private fun MutablePreferences.putWallpaperSelectionForPage(
+        page: Int,
+        forLightTheme: Boolean,
+        fileName: String,
+    ) {
         val pageCount = PagingStateNormalizer.normalizePageCount(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_PAGE_COUNT_KEY]
-                ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
+            this[MAIN_SCREEN_PAGE_COUNT_KEY] ?: DEFAULT_MAIN_SCREEN_PAGE_COUNT,
         )
         val normalizedPage = PagingStateNormalizer.normalizeCurrentPage(page, pageCount)
         val selections = MainScreenWallpaperSelectionsByPage.fromDataStoreJson(
-            context.settingsDataStore.data.first()[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
-        ).withFileName(normalizedPage, forLightTheme = false, selectedFileName)
-        context.settingsDataStore.edit { preferences ->
-            preferences[MAIN_SCREEN_WALLPAPER_DARK_FOLDER_URI_KEY] = folderUriString
-            if (selections.isEmpty()) {
-                preferences.remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
-            } else {
-                preferences[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
-            }
+            this[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY],
+        ).withFileName(normalizedPage, forLightTheme, fileName)
+        if (selections.isEmpty()) {
+            remove(MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY)
+        } else {
+            this[MAIN_SCREEN_WALLPAPER_SELECTION_BY_PAGE_KEY] = selections.toJson().toString()
         }
     }
 
@@ -4467,7 +4814,14 @@ class SettingsManager(private val context: Context) {
     }
 
     suspend fun saveMainScreenDashboards(configs: List<MainScreenPanelConfig>) {
-        val normalized = configs
+        saveCustomString(
+            MAIN_SCREEN_DASHBOARDS_LIST_KEY,
+            serializeMainScreenDashboards(normalizeMainScreenDashboards(configs)),
+        )
+    }
+
+    private fun normalizeMainScreenDashboards(configs: List<MainScreenPanelConfig>): List<MainScreenPanelConfig> =
+        configs
             .filter { it.id.isNotBlank() }
             .distinctBy { it.id }
             .map {
@@ -4480,8 +4834,6 @@ class SettingsManager(private val context: Context) {
                     relHeight = it.relHeight.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, 1f)
                 )
             }
-        saveCustomString(MAIN_SCREEN_DASHBOARDS_LIST_KEY, serializeMainScreenDashboards(normalized))
-    }
 
     suspend fun ensureDefaultFloatingDashboards() {
         // Historical API: empty floating panel list is valid; no default injection.
@@ -4541,6 +4893,12 @@ class SettingsManager(private val context: Context) {
     suspend fun saveFloatingPanelsAllowBeyondScreen(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[FLOATING_PANELS_ALLOW_BEYOND_SCREEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveFloatingPanelsAboveSystemBars(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FLOATING_PANELS_ABOVE_SYSTEM_BARS_KEY] = enabled
         }
     }
 
@@ -4736,11 +5094,78 @@ class SettingsManager(private val context: Context) {
         }
     }
 
+    suspend fun saveCruiseControlType(type: GlobalCruiseControlType) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CRUISE_CONTROL_TYPE_KEY] = type.storageKey
+        }
+        VehicleFeatureSettings.updateCruise(type)
+    }
+
+    suspend fun saveClimateControlType(type: ClimateControlType) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CLIMATE_CONTROL_TYPE_KEY] = type.storageKey
+        }
+        VehicleFeatureSettings.updateClimate(type)
+    }
+
+    /**
+     * Writes cruise + climate types (defaults if the caller passes the runtime defaults)
+     * so first-run setup is considered complete.
+     */
+    suspend fun saveVehicleFeatureTypes(
+        cruise: GlobalCruiseControlType,
+        climate: ClimateControlType,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CRUISE_CONTROL_TYPE_KEY] = cruise.storageKey
+            preferences[CLIMATE_CONTROL_TYPE_KEY] = climate.storageKey
+        }
+        VehicleFeatureSettings.updateCruise(cruise)
+        VehicleFeatureSettings.updateClimate(climate)
+    }
+
     suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
         }
         LaunchMainInStockAppWindowSetting.update(enabled)
+    }
+
+    suspend fun saveHuCaCertsAutoInstall(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_CA_CERTS_AUTO_INSTALL_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuAppNetworkAutoOpen(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_APP_NETWORK_AUTO_OPEN_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuDspMode(mode: Int) {
+        require(mode in HuDspMode.MODES)
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_DSP_MODE_KEY] = mode
+        }
+    }
+
+    suspend fun saveHuDspAutoApply(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_DSP_AUTO_APPLY_KEY] = enabled
+        }
+    }
+
+    suspend fun saveHuUsbAudioAutoApply(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[HU_USB_AUDIO_AUTO_APPLY_KEY] = enabled
+        }
+    }
+
+    suspend fun saveAppDexoptAuto(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[APP_DEXOPT_AUTO_KEY] = enabled
+        }
     }
 
     suspend fun saveCanAutoBindEnabled(enabled: Boolean) {
@@ -4991,6 +5416,28 @@ class SettingsManager(private val context: Context) {
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
             collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
             collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
+            collapseStripLengthPercentCollapsed = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentCollapsed",
+            ),
+            collapseStripLengthPercentExpanded = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentExpanded",
+            ),
+            collapseStripPositionPercentCollapsed = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentCollapsed",
+                positionKey = "collapseStripPositionPercentCollapsed",
+            ),
+            collapseStripPositionPercentExpanded = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentExpanded",
+                positionKey = "collapseStripPositionPercentExpanded",
+            ),
+            collapseTouchZoneMatchStrip = obj.optBoolean(
+                "collapseTouchZoneMatchStrip",
+                DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+            ),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -5114,6 +5561,28 @@ class SettingsManager(private val context: Context) {
             collapseEdge = PanelCollapseEdge.fromStorage(obj.optString("collapseEdge")).storageValue,
             collapseStripThicknessDp = parsePanelCollapseStripThicknessDp(obj),
             collapseTouchZoneThicknessDp = parsePanelCollapseTouchZoneThicknessDp(obj),
+            collapseStripLengthPercentCollapsed = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentCollapsed",
+            ),
+            collapseStripLengthPercentExpanded = parsePanelCollapseStripLengthPercent(
+                obj,
+                "collapseStripLengthPercentExpanded",
+            ),
+            collapseStripPositionPercentCollapsed = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentCollapsed",
+                positionKey = "collapseStripPositionPercentCollapsed",
+            ),
+            collapseStripPositionPercentExpanded = parsePanelCollapseStripPositionPercent(
+                obj,
+                lengthKey = "collapseStripLengthPercentExpanded",
+                positionKey = "collapseStripPositionPercentExpanded",
+            ),
+            collapseTouchZoneMatchStrip = obj.optBoolean(
+                "collapseTouchZoneMatchStrip",
+                DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+            ),
             collapseStripColorLight = obj.optInt(
                 "collapseStripColorLight",
                 DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
@@ -5203,12 +5672,34 @@ class SettingsManager(private val context: Context) {
         )
     }
 
+    private fun parsePanelCollapseStripLengthPercent(obj: JSONObject, key: String): Int =
+        normalizePanelCollapseStripLengthPercent(
+            obj.optInt(key, DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT),
+        )
+
+    private fun parsePanelCollapseStripPositionPercent(
+        obj: JSONObject,
+        lengthKey: String,
+        positionKey: String,
+    ): Int {
+        val length = parsePanelCollapseStripLengthPercent(obj, lengthKey)
+        return normalizePanelCollapseStripPositionPercent(
+            obj.optInt(positionKey, DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT),
+            length,
+        )
+    }
+
     private fun putPanelCollapseFields(o: JSONObject, config: MainScreenPanelConfig) {
         putPanelCollapseFields(
             o = o,
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = config.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = config.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = config.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = config.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = config.collapseTouchZoneMatchStrip,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
@@ -5226,6 +5717,11 @@ class SettingsManager(private val context: Context) {
             collapseEdge = config.collapseEdge,
             collapseStripThicknessDp = config.collapseStripThicknessDp,
             collapseTouchZoneThicknessDp = config.collapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = config.collapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = config.collapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = config.collapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = config.collapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = config.collapseTouchZoneMatchStrip,
             collapseStripColorLight = config.collapseStripColorLight,
             collapseStripColorDark = config.collapseStripColorDark,
             collapseStripExpandedColorLight = config.collapseStripExpandedColorLight,
@@ -5242,6 +5738,11 @@ class SettingsManager(private val context: Context) {
         collapseEdge: String,
         collapseStripThicknessDp: Int,
         collapseTouchZoneThicknessDp: Int,
+        collapseStripLengthPercentCollapsed: Int,
+        collapseStripLengthPercentExpanded: Int,
+        collapseStripPositionPercentCollapsed: Int,
+        collapseStripPositionPercentExpanded: Int,
+        collapseTouchZoneMatchStrip: Boolean,
         collapseStripColorLight: Int,
         collapseStripColorDark: Int,
         collapseStripExpandedColorLight: Int,
@@ -5260,6 +5761,35 @@ class SettingsManager(private val context: Context) {
         }
         if (collapseTouchZoneThicknessDp != collapseStripThicknessDp) {
             o.put("collapseTouchZoneThicknessDp", collapseTouchZoneThicknessDp)
+        }
+        val lengthCollapsed = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentCollapsed,
+        )
+        val lengthExpanded = normalizePanelCollapseStripLengthPercent(
+            collapseStripLengthPercentExpanded,
+        )
+        val positionCollapsed = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentCollapsed,
+            lengthCollapsed,
+        )
+        val positionExpanded = normalizePanelCollapseStripPositionPercent(
+            collapseStripPositionPercentExpanded,
+            lengthExpanded,
+        )
+        if (lengthCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentCollapsed", lengthCollapsed)
+        }
+        if (lengthExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT) {
+            o.put("collapseStripLengthPercentExpanded", lengthExpanded)
+        }
+        if (positionCollapsed != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentCollapsed", positionCollapsed)
+        }
+        if (positionExpanded != DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT) {
+            o.put("collapseStripPositionPercentExpanded", positionExpanded)
+        }
+        if (collapseTouchZoneMatchStrip != DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP) {
+            o.put("collapseTouchZoneMatchStrip", collapseTouchZoneMatchStrip)
         }
         if (collapseStripColorLight != DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT) {
             o.put("collapseStripColorLight", collapseStripColorLight)

@@ -58,6 +58,9 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+    sourceSets.named("main") {
+        java.srcDir("../shared/localaccess/java")
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

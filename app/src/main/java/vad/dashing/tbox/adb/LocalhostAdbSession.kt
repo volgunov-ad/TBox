@@ -6,6 +6,7 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -20,7 +21,8 @@ import vad.dashing.tbox.TboxRepository
  * (longer after `adbd` restart), run shell commands, disconnect, then optionally
  * restore previous TCP state — but only when this session actually turned TCP on.
  *
- * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [VirtualDisplayAdb],
+ * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [MockLocationAutoGrant],
+ * [VirtualDisplayAdb],
  * [AdbAutomationActions], and [PackageAdbActions]. Always runs blocking socket work on
  * [Dispatchers.IO]. Production shell I/O goes through [AdbRepository.withTcpShellSession]:
  * reuses a live ADB-tab TCP client when present, otherwise opens an ephemeral socket so
@@ -56,7 +58,11 @@ internal object LocalhostAdbSession {
     }
 
     sealed class Result<out T> {
-        data class Ok<T>(val value: T) : Result<T>()
+        /**
+         * [tcpEnabledBySession]: this session turned TCP on (decided under the session mutex);
+         * with [AfterSession.LeaveTcpEnabled] the caller owns turning it back off.
+         */
+        data class Ok<T>(val value: T, val tcpEnabledBySession: Boolean = false) : Result<T>()
         data class Failed(val reason: Reason, val detail: String = "") : Result<Nothing>()
     }
 
@@ -86,6 +92,8 @@ internal object LocalhostAdbSession {
         nowMs: () -> Long = { System.currentTimeMillis() },
         delayMs: (suspend (Long) -> Unit)? = null,
         afterSession: AfterSession = AfterSession.RestorePreviousTcp,
+        /** Called as soon as this session turned TCP on — survives cancellation, unlike the result. */
+        onTcpEnabled: () -> Unit = {},
         block: (execute: (String) -> AdbShellResult) -> T,
     ): Result<T> = withContext(Dispatchers.IO) {
         val delayFn: suspend (Long) -> Unit = delayMs ?: { ms -> delay(ms) }
@@ -113,6 +121,7 @@ internal object LocalhostAdbSession {
                     }
                     // We invoked enable because TCP was not available; restore only in this case.
                     enabledByUs = true
+                    onTcpEnabled()
                 }
 
                 val waitMs = if (enabledByUs) {
@@ -149,7 +158,7 @@ internal object LocalhostAdbSession {
                         clientName = clientName,
                         block = block,
                     )
-                    Result.Ok(value)
+                    Result.Ok(value, tcpEnabledBySession = enabledByUs)
                 } catch (e: CancellationException) {
                     // Composition / ViewModel teardown must not become a user-facing
                     // "ADB transport closed" Toast via Result.Failed.
@@ -180,25 +189,41 @@ internal object LocalhostAdbSession {
                 val shouldRestore =
                     enabledByUs && afterSession == AfterSession.RestorePreviousTcp
                 if (shouldRestore) {
-                    // ctl.restart adbd drops live tab/ephemeral clients — expected EOF.
-                    AdbShutdownGate.withIntentionalTransportCloseSuspending {
-                        runCatching {
-                            gateway.setTcpEnabled(false)
-                            gateway.refreshHuAdb()
-                        }.onFailure { e ->
-                            if (e is CancellationException) throw e
-                            TboxRepository.addLog(
-                                level = "WARN",
-                                tag = TAG,
-                                message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
-                            )
-                        }
-                    }
+                    restoreTcpOffUnlocked(gateway)
                 } else if (enabledByUs && afterSession == AfterSession.LeaveTcpEnabled) {
                     TboxRepository.addLog(
                         level = "INFO",
                         tag = TAG,
                         message = "ADB TCP left enabled after localhost session",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Turns TCP back off after a series of [AfterSession.LeaveTcpEnabled] sessions that
+     * reported [Result.Ok.tcpEnabledBySession].
+     */
+    suspend fun restoreTcpOff(gateway: Gateway) {
+        withContext(NonCancellable + Dispatchers.IO) {
+            mutex.withLock { restoreTcpOffUnlocked(gateway) }
+        }
+    }
+
+    private suspend fun restoreTcpOffUnlocked(gateway: Gateway) {
+        // ctl.restart adbd drops live tab/ephemeral clients — expected EOF.
+        // NonCancellable: a cancelled caller must not leave persist TCP on.
+        withContext(NonCancellable) {
+            AdbShutdownGate.withIntentionalTransportCloseSuspending {
+                runCatching {
+                    gateway.setTcpEnabled(false)
+                    gateway.refreshHuAdb()
+                }.onFailure { e ->
+                    TboxRepository.addLog(
+                        level = "WARN",
+                        tag = TAG,
+                        message = "Failed to restore ADB TCP off: ${e.message ?: e.javaClass.simpleName}",
                     )
                 }
             }

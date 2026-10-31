@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TBox MQTT</string>
+    <string name="notification_channel">Мост MQTT</string>
+    <string name="notification_title">TBox MQTT</string>
+</resources>

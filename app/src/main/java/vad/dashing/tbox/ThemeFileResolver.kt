@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import android.content.Context
 import android.net.Uri
+import vad.dashing.tbox.utils.readBytesAtMost
 import java.io.File
 
 object ThemeFileResolver {
@@ -41,8 +42,11 @@ object ThemeFileResolver {
         return runCatching {
             val uri = Uri.parse(trimmed)
             when (uri.scheme) {
-                "file" -> File(uri.path ?: return@runCatching null).takeIf { it.isFile }?.readBytes()
-                "content" -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                "file" -> File(uri.path ?: return@runCatching null).takeIf { it.isFile }
+                    ?.readBytesAtMost(ThemeBundleExport.MAX_BUNDLE_FILE_BYTES)
+                "content" -> context.contentResolver.openInputStream(uri)?.use {
+                    it.readBytesAtMost(ThemeBundleExport.MAX_BUNDLE_FILE_BYTES)
+                }
                 else -> null
             }
         }.getOrNull()

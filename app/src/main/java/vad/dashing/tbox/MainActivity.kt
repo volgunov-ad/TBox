@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
+import android.view.Display
 import android.view.ViewTreeObserver
 import android.provider.Settings
 import android.util.Log
@@ -22,20 +24,23 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import java.io.File
 import java.io.FileWriter
 import androidx.core.net.toUri
 import vad.dashing.tbox.ui.TboxApp
-import vad.dashing.tbox.ui.disposeAppLauncherPickerIconCache
+import vad.dashing.tbox.ui.AppLauncherPickerIconCacheHostEffect
 import vad.dashing.tbox.update.InstallPermissionHelper
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,6 +49,10 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS = 300L
+
+        @Volatile
+        private var lastExternalRedirectAtMs = 0L
     }
 
     private val finishForWindowModeReceiver = object : BroadcastReceiver() {
@@ -154,11 +163,11 @@ class MainActivity : ComponentActivity() {
         consumeThemeOpenIntent(intent)
         MainActivityLoadTimings.mark("main_after_intent")
 
+        if (redirectExternalLaunchToStockAppWindow(savedInstanceState)) return
+
         MainActivityLoadTimings.mark("main_before_setContent")
         setContent {
-            DisposableEffect(Unit) {
-                onDispose { disposeAppLauncherPickerIconCache() }
-            }
+            AppLauncherPickerIconCacheHostEffect(Unit)
             Surface(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -241,6 +250,58 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             settingsManager.saveSelectedTab(SettingsManager.MAIN_SCREEN_TAB_KEY)
         }
+    }
+
+    /**
+     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; on A10 with
+     * the stock-window setting on, hand them to the Adayo launcher ActivityView. Pending
+     * tile-edit / theme requests are already on their buses for the relaunched instance.
+     */
+    private fun redirectExternalLaunchToStockAppWindow(savedInstanceState: Bundle?): Boolean {
+        @Suppress("DEPRECATION")
+        val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
+        if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) return false
+        if (!AdayoStockAppWindow.isAvailable(this)) return false
+        // Application-level caches may still hold defaults on a cold start, so read DataStore, but
+        // never stall the first frame on it: on timeout fall back to the caches (worst case the
+        // launch simply stays fullscreen).
+        val readStartMs = SystemClock.elapsedRealtime()
+        val stored = runCatching {
+            runBlocking {
+                withTimeoutOrNull(EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS) {
+                    settingsManager.launchMainInStockAppWindowFlow.first() to
+                        settingsManager.headUnitCanModeFlow.first()
+                }
+            }
+        }.getOrNull()
+        val now = SystemClock.elapsedRealtime()
+        if (stored == null) {
+            Log.w(TAG, "Stock-window redirect: settings read timed out after ${now - readStartMs} ms, using cache")
+        }
+        val (settingEnabled, canMode) = stored
+            ?: (LaunchMainInStockAppWindowSetting.enabled to UniversalCanRepository.mode.value)
+        val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
+            freshInstance = true,
+            displayId = displayId,
+            nowMs = now,
+            lastRedirectAtMs = lastExternalRedirectAtMs,
+            settingEnabled = settingEnabled,
+            headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal,
+            adayoLauncherAvailable = true,
+        )
+        if (!redirect) return false
+        val launched = AdayoStockAppWindow.launchInAppWindow(
+            context = this,
+            packageName = packageName,
+            activityClass = MainActivity::class.java.name,
+        )
+        if (!launched) return false
+        lastExternalRedirectAtMs = now
+        Log.i(TAG, "External launch on default display redirected to stock app window")
+        finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+        return true
     }
 
     private fun consumeThemeOpenIntent(intent: Intent?) {

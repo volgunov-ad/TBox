@@ -3,6 +3,7 @@ package vad.dashing.tbox.esp
 import org.json.JSONArray
 import org.json.JSONObject
 import vad.dashing.tbox.LocValues
+import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.UtcTime
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -80,6 +81,16 @@ object EspCompanionProtocol {
     const val TYPE_BLE_LEARN_END = "bleLearnEnd"
     const val TYPE_BLE_ALLOW = "bleAllow"
     const val TYPE_BLE_FORGET = "bleForget"
+    const val TYPE_BLE_KEY = "bleKey"
+    const val TYPE_PHONE_LEARN_BEGIN = "phoneLearnBegin"
+    const val TYPE_PHONE_LEARN_END = "phoneLearnEnd"
+    const val TYPE_PHONE_ALLOW = "phoneAllow"
+    const val TYPE_PHONE_DENY = "phoneDeny"
+    const val TYPE_PHONE_FORGET = "phoneForget"
+    const val TYPE_PHONE_PAIR = "phonePair"
+    const val TYPE_PHONE_CMD = "phoneCmd"
+    const val TYPE_PHONE_SNAP_REQ = "phoneSnapReq"
+    const val TYPE_PHONE_SNAP = "phoneSnap"
     const val TYPE_AP_CFG = "apCfg"
     const val TYPE_AP_STATUS = "apStatus"
 
@@ -205,8 +216,30 @@ object EspCompanionProtocol {
     fun encodeBleSet(on: Boolean): String =
         line(TYPE_BLE_SET, mapOf("on" to on))
 
-    fun encodeBleLearnBegin(timeoutMs: Long = 30_000L): String =
-        line(TYPE_BLE_LEARN_BEGIN, mapOf("timeoutMs" to timeoutMs))
+    /** [key] is a normalized BTHome key ([normalizeBleKey]) or empty for a plain remote. */
+    fun encodeBleLearnBegin(timeoutMs: Long = 30_000L, key: String = ""): String =
+        line(
+            TYPE_BLE_LEARN_BEGIN,
+            if (key.isEmpty()) mapOf("timeoutMs" to timeoutMs) else mapOf("timeoutMs" to timeoutMs, "key" to key),
+        )
+
+    /** Empty [key] removes the key and the remote is accepted unencrypted again. */
+    fun encodeBleKey(mac: String, key: String): String =
+        line(TYPE_BLE_KEY, mapOf("mac" to mac.trim().lowercase(Locale.US), "key" to key))
+
+    /**
+     * BTHome key as 32 lowercase hex digits, "" for blank input, null if malformed.
+     * Spaces, ':' and '-' between digit pairs are allowed, as the Shelly app shows them.
+     */
+    fun normalizeBleKey(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return ""
+        val groups = trimmed.split(' ', ':', '-').filter { it.isNotEmpty() }
+        if (groups.any { it.length % 2 != 0 }) return null
+        val hex = groups.joinToString("").lowercase(Locale.US)
+        if (hex.length != 32 || hex.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
+        return hex
+    }
 
     fun encodeBleLearnEnd(): String = line(TYPE_BLE_LEARN_END)
 
@@ -215,6 +248,56 @@ object EspCompanionProtocol {
 
     fun encodeBleForget(mac: String): String =
         line(TYPE_BLE_FORGET, mapOf("mac" to mac.trim().lowercase(Locale.US)))
+
+    fun encodePhoneLearnBegin(timeoutMs: Long = 90_000L): String =
+        line(TYPE_PHONE_LEARN_BEGIN, mapOf("timeoutMs" to timeoutMs))
+
+    fun encodePhoneLearnEnd(): String = line(TYPE_PHONE_LEARN_END)
+
+    fun encodePhoneAllow(id: String): String =
+        line(TYPE_PHONE_ALLOW, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneDeny(id: String): String =
+        line(TYPE_PHONE_DENY, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneForget(id: String): String =
+        line(TYPE_PHONE_FORGET, mapOf("id" to id.trim().lowercase(Locale.US)))
+
+    fun encodePhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot): String {
+        val extras = linkedMapOf<String, Any>("gen" to gen)
+        snap.leftTenths?.let { extras["left"] = it }
+        snap.rightTenths?.let { extras["right"] = it }
+        snap.fan?.let { extras["fan"] = it }
+        snap.mode?.let { extras["mode"] = it }
+        snap.auto?.let { extras["auto"] = it }
+        snap.blow?.let { extras["blow"] = it }
+        snap.sync?.let { extras["sync"] = it }
+        snap.recirc?.let { extras["recirc"] = it }
+        snap.front?.let { extras["front"] = it }
+        snap.ac?.let { extras["ac"] = it }
+        snap.climateLayout?.let { extras["layout"] = it }
+        snap.seats.forEachIndexed { index, value ->
+            if (value != null) extras["s$index"] = value
+        }
+        snap.volume?.let { extras["vol"] = it }
+        snap.playing?.let { extras["play"] = it }
+        snap.positionMs?.let { extras["pos"] = it }
+        snap.durationMs?.let { extras["dur"] = it }
+        PhoneBleCodec.clipText(snap.title, PhoneBleCodec.TITLE_MAX).takeIf { it.isNotEmpty() }
+            ?.let { extras["title"] = it }
+        PhoneBleCodec.clipText(snap.artist, PhoneBleCodec.ARTIST_MAX).takeIf { it.isNotEmpty() }
+            ?.let { extras["artist"] = it }
+        snap.windows.forEachIndexed { index, value ->
+            val wire = PhoneBleCodec.windowWire(value)
+            if (wire != PhoneBleCodec.MISSING_U8) extras["w$index"] = wire
+        }
+        snap.sunroof?.let { extras["roof"] = it }
+        snap.sunshade?.let { extras["shade"] = it }
+        snap.android10?.let { extras["hu"] = if (it) 10 else 9 }
+        snap.outsideTenths?.let { extras["out"] = it }
+        snap.insideTenths?.let { extras["in"] = it }
+        return line(TYPE_PHONE_SNAP, extras)
+    }
 
     fun encodeBleForgetAll(): String =
         line(TYPE_BLE_FORGET, mapOf("all" to true))
@@ -416,6 +499,33 @@ object EspCompanionProtocol {
         return null
     }
 
+    private val OTA_REPLY_MARKERS = arrayOf(
+        "\"t\":\"otaAck\"",
+        "\"t\":\"otaDone\"",
+        "\"t\": \"otaAck\"",
+        "\"t\": \"otaDone\"",
+    )
+
+    /**
+     * Cuts one message out of a received line. OTA replies can arrive glued to binary
+     * junk on both sides, and they are flat, so they end at the first '}'. Other messages
+     * nest objects (`phones`) and must be kept whole. A line cut by older firmware is glued
+     * to the next message; the last `{"v":` is where that message starts.
+     */
+    fun extractMessageJson(line: String): String {
+        for (marker in OTA_REPLY_MARKERS) {
+            val at = line.indexOf(marker)
+            if (at < 0) continue
+            val start = line.lastIndexOf('{', at)
+            val end = line.indexOf('}', at)
+            if (start >= 0 && end > start) return line.substring(start, end + 1)
+        }
+        val glued = line.lastIndexOf("{\"v\":")
+        if (glued > 0) return line.substring(glued)
+        val start = line.indexOf('{')
+        return if (start < 0) line else line.substring(start)
+    }
+
     fun parseLine(line: String): EspMessage? {
         val trimmed = line.trim()
         if (trimmed.isEmpty() || !trimmed.startsWith("{")) return null
@@ -448,7 +558,9 @@ object EspCompanionProtocol {
                         ble = o.optBoolean("ble", false),
                         bleOn = o.optBoolean("bleOn", false),
                         bleMacs = parseStringList(o, "bleMacs"),
+                        bleKey = o.optBoolean("bleKey", false),
                         ap = o.optBoolean("ap", false),
+                        phone = o.optBoolean("phone", false),
                     )
                 }
                 TYPE_HB -> EspMessage.Heartbeat(uptimeMs = o.optLong("uptimeMs", 0L))
@@ -566,11 +678,25 @@ object EspCompanionProtocol {
                     on = o.optBoolean("on", false),
                     learn = o.optBoolean("learn", false),
                     macs = parseStringList(o, "macs"),
+                    keyed = parseStringList(o, "keyed"),
                     lastBat = if (o.has("lastBat")) o.optInt("lastBat", -1) else -1,
                     lastRssi = if (o.has("lastRssi")) o.optInt("lastRssi", 0) else 0,
                     lastMac = o.optString("lastMac", "").trim().lowercase(Locale.US)
                         .ifBlank { null },
+                    phoneLearn = o.optBoolean("phoneLearn", false),
+                    phones = parsePhones(o),
                 )
+                TYPE_PHONE_PAIR -> EspMessage.PhonePair(
+                    id = o.optString("id", "").trim().lowercase(Locale.US),
+                    name = o.optString("name", "").trim(),
+                )
+                TYPE_PHONE_CMD -> EspMessage.PhoneCmd(
+                    id = o.optString("id", "").trim().lowercase(Locale.US),
+                    op = o.optInt("op", 0),
+                    seat = o.optInt("seat", 0),
+                    arg = o.optInt("arg", 0),
+                )
+                TYPE_PHONE_SNAP_REQ -> EspMessage.PhoneSnapReq
                 TYPE_BLE_SEEN -> EspMessage.BleSeen(
                     mac = o.optString("mac", "").trim().lowercase(Locale.US),
                     rssi = o.optInt("rssi", 0),
@@ -634,6 +760,18 @@ object EspCompanionProtocol {
         }.distinct()
     }
 
+    private fun parsePhones(o: JSONObject): List<EspPhoneDevice> {
+        val arr = o.optJSONArray("phones") ?: return emptyList()
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.optJSONObject(i) ?: continue
+                val id = item.optString("id", "").trim().lowercase(Locale.US)
+                if (id.isEmpty()) continue
+                add(EspPhoneDevice(id = id, name = item.optString("name", "").trim()))
+            }
+        }
+    }
+
     private fun parseStringList(o: JSONObject, key: String): List<String> {
         val arr = o.optJSONArray(key) ?: return emptyList()
         return buildList {
@@ -678,6 +816,11 @@ object EspCompanionProtocol {
     }
 }
 
+data class EspPhoneDevice(
+    val id: String,
+    val name: String,
+)
+
 sealed class EspMessage {
     data class Hello(
         val fw: String,
@@ -701,8 +844,12 @@ sealed class EspMessage {
         val ble: Boolean = false,
         val bleOn: Boolean = false,
         val bleMacs: List<String> = emptyList(),
+        /** Firmware 0.11+ accepts BTHome keys (encrypted Shelly BLU). */
+        val bleKey: Boolean = false,
         /** Firmware 0.9+ SoftAP router. */
         val ap: Boolean = false,
+        /** Firmware 0.10+ phone companion channel. */
+        val phone: Boolean = false,
     ) : EspMessage()
 
     data class Heartbeat(val uptimeMs: Long) : EspMessage()
@@ -809,10 +956,28 @@ sealed class EspMessage {
         val on: Boolean,
         val learn: Boolean,
         val macs: List<String> = emptyList(),
+        /** Remotes with a BTHome key; their plain frames are dropped. */
+        val keyed: List<String> = emptyList(),
         val lastBat: Int = -1,
         val lastRssi: Int = 0,
         val lastMac: String? = null,
+        val phoneLearn: Boolean = false,
+        val phones: List<EspPhoneDevice> = emptyList(),
     ) : EspMessage()
+
+    data class PhonePair(
+        val id: String,
+        val name: String,
+    ) : EspMessage()
+
+    data class PhoneCmd(
+        val id: String,
+        val op: Int,
+        val seat: Int,
+        val arg: Int,
+    ) : EspMessage()
+
+    data object PhoneSnapReq : EspMessage()
 
     data class BleSeen(
         val mac: String,

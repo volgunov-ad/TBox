@@ -464,12 +464,10 @@ private fun NumericConditionFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 condition.copy(
                     signal = signal,
-                    source = condition.source.takeIf { it in sources }
-                        ?: AutomationSignalCatalog.preferredSource(sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, condition.source),
                     mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
                         condition.mac.ifBlank {
                             EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
@@ -492,7 +490,7 @@ private fun NumericConditionFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = condition.source,
+            value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
             options = AutomationSignalCatalog.sourcesForUi(condition.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
@@ -532,8 +530,7 @@ private fun StateConditionFields(
             onChange(
                 condition.copy(
                     signal = signal,
-                    source = condition.source.takeIf { it in descriptor.sources }
-                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, condition.source),
                     expectedState = automationExpectedStateForSignal(
                         signal,
                         condition.expectedState,
@@ -549,8 +546,8 @@ private fun StateConditionFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = condition.source,
-            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
+            value = AutomationSignalCatalog.resolveSource(condition.signal, condition.source),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(condition.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -561,7 +558,7 @@ private fun StateConditionFields(
                     label = "Состояние",
                     value = condition.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, condition.expectedState),
-                    optionLabel = ::automationStateLabel,
+                    optionLabel = { automationStateLabel(condition.signal, it) },
                     onValueChange = { onChange(condition.copy(expectedState = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -751,12 +748,9 @@ internal fun AutomationSolarInstantFields(
             label = "Минуты, 0–$AUTOMATION_SOLAR_MAX_OFFSET_MINUTES",
             value = instant.offsetMinutes,
             onValueChange = { raw ->
+                // Skip empty draft; do not clamp here or the field fights typing.
                 if (raw == Int.MIN_VALUE) return@AutomationIntField
-                onChange(
-                    instant.copy(
-                        offsetMinutes = raw.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
-                    ),
-                )
+                onChange(instant.copy(offsetMinutes = raw))
             },
             modifier = Modifier.weight(1f),
         )
@@ -953,6 +947,12 @@ internal fun automationComparisonLabel(comparison: AutomationComparison): String
 
 internal fun automationStateLabel(value: String): String =
     AutomationSignalCatalog.stateOptionLabel(value)
+
+internal fun automationStateLabel(signal: AutomationSignalId, value: String): String =
+    AutomationSignalCatalog.stateOptionLabel(signal, value)
+
+internal fun automationTriggerStateLabel(signal: AutomationSignalId, value: String): String =
+    AutomationSignalCatalog.triggerStateOptionLabel(signal, value)
 
 @Composable
 private fun GeofenceConditionFields(
@@ -1232,6 +1232,15 @@ internal fun automationExpectedStateForSignal(
     return AutomationSignalCatalog.get(signal).stateOptions.firstOrNull() ?: previous
 }
 
+internal fun automationTriggerExpectedStateForSignal(
+    signal: AutomationSignalId,
+    previous: String,
+): String {
+    if (signal == AutomationSignalId.FOREGROUND_APP) return ""
+    if (signal == AutomationSignalId.WIFI_SSID) return WifiStaSsid.NONE
+    return AutomationSignalCatalog.defaultTriggerStateOption(signal) ?: previous
+}
+
 @Composable
 internal fun AutomationWifiSsidPicker(
     label: String,
@@ -1274,6 +1283,7 @@ internal fun AutomationPackagePicker(
     packageName: String,
     apps: List<LaunchableAppEntry>,
     onValueChange: (String) -> Unit,
+    blankLabel: String = "Выберите…",
 ) {
     val known = apps
         .filter { it.packageName.isNotBlank() }
@@ -1291,7 +1301,7 @@ internal fun AutomationPackagePicker(
         options = options,
         optionLabel = { pkg ->
             when {
-                pkg.isBlank() -> "Выберите…"
+                pkg.isBlank() -> blankLabel
                 else -> apps.firstOrNull { it.packageName == pkg }?.label
                     ?.let { "$it ($pkg)" } ?: pkg
             }

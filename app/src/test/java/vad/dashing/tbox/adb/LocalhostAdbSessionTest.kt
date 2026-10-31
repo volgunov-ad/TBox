@@ -1,6 +1,10 @@
 package vad.dashing.tbox.adb
 
 import java.io.File
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,7 +46,7 @@ class LocalhostAdbSessionTest {
             execute("pm grant x y")
             1
         }
-        assertEquals(LocalhostAdbSession.Result.Ok(1), result)
+        assertEquals(LocalhostAdbSession.Result.Ok(1, tcpEnabledBySession = true), result)
         assertEquals(listOf(true, false), gateway.setTcpCalls)
     }
 
@@ -55,7 +59,7 @@ class LocalhostAdbSessionTest {
             clientName = "test@hu",
             afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
         ) { "ok" }
-        assertEquals(LocalhostAdbSession.Result.Ok("ok"), result)
+        assertEquals(LocalhostAdbSession.Result.Ok("ok", tcpEnabledBySession = true), result)
         assertEquals(listOf(true), gateway.setTcpCalls)
         assertTrue(gateway.tcpEnabled)
         assertTrue(gateway.portOpen)
@@ -73,6 +77,37 @@ class LocalhostAdbSessionTest {
         assertTrue(gateway.setTcpCalls.isEmpty())
     }
 
+    @Test
+    fun run_cancelledMidSession_stillRestoresTcp() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
+        val keysDir = tempFolder.newFolder("adb")
+        lateinit var job: Job
+        job = launch {
+            LocalhostAdbSession.run(gateway = gateway, keysDir = keysDir, clientName = "test@hu") {
+                job.cancel()
+                "x"
+            }
+        }
+        job.join()
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+    }
+
+    @Test
+    fun run_reportsTcpEnabledCallback() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = false, portOpen = false)
+        var enabled = false
+        LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb"),
+            clientName = "test@hu",
+            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+            onTcpEnabled = { enabled = true },
+        ) { "ok" }
+        assertTrue(enabled)
+        LocalhostAdbSession.restoreTcpOff(gateway)
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
+    }
+
     private class FakeGateway(
         var tcpEnabled: Boolean,
         var portOpen: Boolean,
@@ -85,6 +120,8 @@ class LocalhostAdbSessionTest {
         override suspend fun isTcpEnabled(): Boolean = tcpEnabled
 
         override suspend fun setTcpEnabled(enabled: Boolean) {
+            // Like HuAdbControl's withContext(IO): fails fast in a cancelled coroutine.
+            currentCoroutineContext().ensureActive()
             setTcpCalls += enabled
             tcpEnabled = enabled
             portOpen = enabled

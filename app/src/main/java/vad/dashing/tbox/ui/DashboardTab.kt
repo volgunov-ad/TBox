@@ -904,8 +904,9 @@ fun MainScreenPanelWidgetSelectionDialog(
 }
 
 /**
- * [AlertDialog]-style widget editor for a **floating overlay** panel, shown from [MainScreen] when
- * the user starts edit from the overlay (same UX as [MainScreenPanelWidgetSelectionDialog]).
+ * Widget editor for a **floating overlay** panel, shown from [MainScreen] when the user starts
+ * edit from the overlay (same UX as [MainScreenPanelWidgetSelectionDialog]). Drawn in-window
+ * ([InWindowAlertDialog]): the request may arrive while A10 moves MainActivity to another display.
  */
 @Composable
 fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
@@ -931,11 +932,9 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
         currentTheme = currentTheme,
     )
 
-    AlertDialog(
+    InWindowAlertDialog(
         onDismissRequest = onDismiss,
-        title = { },
         modifier = Modifier.tboxDialogSurfaceFill(),
-        properties = DialogProperties(usePlatformDefaultWidth = false),
         text = {
             WidgetSelectionDialogForm(
                 titleText = when {
@@ -1047,7 +1046,6 @@ fun FloatingOverlayFloatingPanelWidgetSelectionDialog(
                 modifier = Modifier.fillMaxWidth()
             )
         },
-        dismissButton = {}
     )
 }
 

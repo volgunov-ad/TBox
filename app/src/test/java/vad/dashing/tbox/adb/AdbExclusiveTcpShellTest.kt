@@ -1,6 +1,11 @@
 package vad.dashing.tbox.adb
 
+import java.io.EOFException
+import java.io.IOException
+import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AdbExclusiveTcpShellTest {
@@ -81,6 +86,49 @@ class AdbExclusiveTcpShellTest {
                 hasConnection = true,
                 host = "127.0.0.1",
                 port = 5555,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldFallbackToEphemeral_forDeadTransportErrors() {
+        assertTrue(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                EOFException("ADB transport closed"),
+            ),
+        )
+        assertTrue(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IOException("Connection reset"),
+            ),
+        )
+        assertTrue(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IOException("Broken pipe"),
+            ),
+        )
+    }
+
+    @Test
+    fun shouldFallbackToEphemeral_rejectsUnrelatedEmptyAndCancellation() {
+        assertFalse(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IOException("Bad ADB payload checksum"),
+            ),
+        )
+        assertFalse(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IOException(""),
+            ),
+        )
+        assertFalse(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                IOException(null as String?),
+            ),
+        )
+        assertFalse(
+            AdbExclusiveTcpShell.shouldFallbackToEphemeral(
+                CancellationException("ADB transport closed"),
             ),
         )
     }

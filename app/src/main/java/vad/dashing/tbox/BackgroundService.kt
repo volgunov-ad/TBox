@@ -8,9 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
@@ -19,6 +17,9 @@ import androidx.core.content.ContextCompat
 import dashingineering.jetour.tboxcore.TBoxClient
 import dashingineering.jetour.tboxcore.types.TBoxClientCallback
 import dashingineering.jetour.tboxcore.types.LogType
+import dashingineering.jetour.tboxcore.types.TBoxStatus
+import dashingineering.jetour.tboxcore.types.TBoxStatusType
+import dashingineering.jetour.tboxcore.util.TBoxReceivedMessage
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.GeoDisplaySourcePassthrough
@@ -48,6 +49,8 @@ import vad.dashing.tbox.obd.Elm327Manager
 import vad.dashing.tbox.obd.ObdInterestAggregator
 import vad.dashing.tbox.obd.ObdRepository
 import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.PhoneUsbEvent
+import vad.dashing.tbox.phoneble.PhoneDirectServer
 import vad.dashing.tbox.esp.AndroidLocationSource
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.wifimodem.ModemConnectionCheck
@@ -69,6 +72,10 @@ import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.esp.Um980ConfigUiStore
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.uda.CrtVctrlProtocol
+import vad.dashing.tbox.uda.UdaDiag
+import vad.dashing.tbox.uda.UdaDtcEntry
+import vad.dashing.tbox.uda.UdaDtcSession
+import vad.dashing.tbox.uda.UdaEcuCatalog
 import vad.dashing.tbox.uda.UdaProtocol
 import vad.dashing.tbox.um980fw.EspUm980BinaryTransport
 import vad.dashing.tbox.um980fw.Um980FirmwareUpdater
@@ -105,6 +112,7 @@ import vad.dashing.tbox.automation.AutomationEngine
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
+import vad.dashing.tbox.automation.AutomationRoadMatchTracking
 import vad.dashing.tbox.automation.AutomationRuntimeState
 import vad.dashing.tbox.automation.AutomationServiceActions
 import vad.dashing.tbox.automation.AutomationStore
@@ -145,7 +153,6 @@ import vad.dashing.tbox.fuel.RefuelRecord
 import vad.dashing.tbox.fuel.RefuelRepository
 import vad.dashing.tbox.fuel.ambientTempForCalibrationC
 import vad.dashing.tbox.fuel.refuelsListFromJson
-import vad.dashing.tbox.fuel.refuelsListToJson
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformInvisibleAnchorActivity
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
@@ -154,9 +161,7 @@ import vad.dashing.tbox.trip.TripRecord
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.trip.TripRules
 import vad.dashing.tbox.trip.favoritesSetFromJson
-import vad.dashing.tbox.trip.favoritesSetToJson
 import vad.dashing.tbox.trip.tripsListFromJson
-import vad.dashing.tbox.trip.tripsListToJson
 import java.net.DatagramPacket
 import java.net.InetAddress
 import java.nio.ByteBuffer
@@ -209,10 +214,12 @@ class BackgroundService : Service() {
     private lateinit var espUm980RequestZda: StateFlow<Boolean>
     private lateinit var espUm980RequestGst: StateFlow<Boolean>
     private var espCompanionManager: EspCompanionManager? = null
+    private var phoneSnapGen: Int = 1
     private var espPanelPort = ExternalApiConstants.DEFAULT_PORT
     private var espApSsid = ""
     private var espApPsk = ""
     private val espSoftApRouterGeneration = AtomicInteger(0)
+    private val udaDtcReadTicket = AtomicInteger(0)
     /** Delays companion USB claim until service startup and HU USB-host settle complete. */
     private var espCompanionStartJob: Job? = null
     private var elm327Manager: Elm327Manager? = null
@@ -279,8 +286,8 @@ class BackgroundService : Service() {
     private val tboxClientReconnectMutex = Mutex()
     /** Serializes [onStartCommand] handling so each intent awaits settings snapshot and runs in order. */
     private val commandRouterMutex = Mutex()
-    private val tripsPersistMutex = Mutex()
-    private val refuelsPersistMutex = Mutex()
+    /** Main-thread only: set once the service has entered the foreground state. */
+    private var foregroundPromoted = false
     private val packetProcessingDispatcher =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "tbox-packet-processor").apply { isDaemon = true }
@@ -335,7 +342,9 @@ class BackgroundService : Service() {
     private var serviceStartupGeneration: Long = 0L
     private var infraBootstrapJob: Job? = null
     private var automationEngine: AutomationEngine? = null
+    private var widgetButtonBindingCoordinator: WidgetButtonBindingCoordinator? = null
     private var externalApiController: ExternalApiController? = null
+    private var phoneDirectServer: PhoneDirectServer? = null
     private var packetSilenceChecks: Int = 0
     private var tboxSwdKeepaliveLastMs: Long = 0L
 
@@ -455,6 +464,7 @@ class BackgroundService : Service() {
         private const val UDA_CODE = 0x38.toByte()
         private const val SELF_CODE = 0x50.toByte()
         private const val DEFAULT_TBOX_IP = "192.168.225.1"
+        @Volatile
         private var isRunning = false
         const val LOCATION_UPDATE_TIME = 1
         const val NOTIFICATION_ID = 50047
@@ -512,8 +522,9 @@ class BackgroundService : Service() {
         const val ACTION_TBOX_APP_RESUME = "vad.dashing.tbox.TBOX_APP_RESUME"
         const val ACTION_TBOX_APP_STOP = "vad.dashing.tbox.TBOX_APP_STOP"
         const val ACTION_GET_INFO = "vad.dashing.tbox.GET_INFO"
-        /** Expert: UDA DiagReq ReadDtc probe (CFG path + zeroed ECU params). */
+        /** Expert: UDA DiagReq ReadDtc for one CFG ecu id. Extra: [EXTRA_UDA_ECU_ID]. */
         const val ACTION_UDA_READ_DTC = "vad.dashing.tbox.UDA_READ_DTC"
+        const val EXTRA_UDA_ECU_ID = "vad.dashing.tbox.EXTRA_UDA_ECU_ID"
         /** Expert: raw CRT vctrl frame (CMD 0x26, 45 bytes). Extra: hex payload or empty for lock-close. */
         const val ACTION_CRT_VCTRL = "vad.dashing.tbox.CRT_VCTRL"
         const val EXTRA_CRT_VCTRL_HEX = "vad.dashing.tbox.EXTRA_CRT_VCTRL_HEX"
@@ -585,9 +596,17 @@ class BackgroundService : Service() {
         const val ACTION_ESP_BLE_LEARN_BEGIN = "vad.dashing.tbox.ESP_BLE_LEARN_BEGIN"
         const val ACTION_ESP_BLE_LEARN_END = "vad.dashing.tbox.ESP_BLE_LEARN_END"
         const val EXTRA_ESP_BLE_LEARN_TIMEOUT_MS = "esp_ble_learn_timeout_ms"
+        const val EXTRA_ESP_BLE_KEY = "esp_ble_key"
+        const val ACTION_ESP_BLE_KEY_SET = "vad.dashing.tbox.ESP_BLE_KEY_SET"
         const val ACTION_ESP_BLE_FORGET = "vad.dashing.tbox.ESP_BLE_FORGET"
         const val EXTRA_ESP_BLE_MAC = "esp_ble_mac"
         const val EXTRA_ESP_BLE_FORGET_ALL = "esp_ble_forget_all"
+        const val ACTION_ESP_PHONE_LEARN_BEGIN = "vad.dashing.tbox.ESP_PHONE_LEARN_BEGIN"
+        const val ACTION_ESP_PHONE_LEARN_END = "vad.dashing.tbox.ESP_PHONE_LEARN_END"
+        const val ACTION_ESP_PHONE_ALLOW = "vad.dashing.tbox.ESP_PHONE_ALLOW"
+        const val ACTION_ESP_PHONE_DENY = "vad.dashing.tbox.ESP_PHONE_DENY"
+        const val ACTION_ESP_PHONE_FORGET = "vad.dashing.tbox.ESP_PHONE_FORGET"
+        const val EXTRA_ESP_PHONE_ID = "esp_phone_id"
         const val ACTION_ESP_REBOOT = "vad.dashing.tbox.ESP_REBOOT"
         const val ACTION_ESP_OTA = "vad.dashing.tbox.ESP_OTA"
         const val EXTRA_ESP_OTA_PATH = "esp_ota_path"
@@ -1004,7 +1023,8 @@ class BackgroundService : Service() {
             combine(dashboardWidgets, floatingDashboards, mainScreenDashboards) { dash, floating, main ->
                 Triple(dash, floating, main)
             },
-        ) { toggleMode, powerCan, widgets ->
+            AutomationRoadMatchTracking.interestRequired,
+        ) { toggleMode, powerCan, widgets, automationRoadInterest ->
             val (toggleOn, mode) = toggleMode
             val (power, canMode) = powerCan
             val (dash, floating, main) = widgets
@@ -1013,6 +1033,7 @@ class BackgroundService : Service() {
                 power = power,
                 canMode = canMode,
                 widgetPresent = RoadMatchWidgetPresence.isPresent(dash, floating, main),
+                automationRoadInterest = automationRoadInterest,
                 mode = mode,
             )
         }.stateIn(scope, eager, RoadMatchDemand.NONE)
@@ -1035,6 +1056,7 @@ class BackgroundService : Service() {
     override fun onCreate() {
         super.onCreate()
 
+        vad.dashing.tbox.adb.AdbShutdownGate.markAppAlive()
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         timingReset()
         timingMark("onCreate_start")
@@ -1062,6 +1084,8 @@ class BackgroundService : Service() {
             controller.start()
             ExternalApiControllerHolder.register(controller)
         }
+        startPhoneCompanionBridge()
+        startPhoneDirectServer()
         SharedMediaControlService.startActiveSessionMonitor(this)
         DriveModeThemeWatcher(this, settingsManager, scope).start()
         scope.launch {
@@ -1235,6 +1259,22 @@ class BackgroundService : Service() {
                         }
                     }
             }
+            // A10 cold start: ThemeObserver may have delivered A9-key light before mode
+            // became Android10Vhal; re-read adayo_skin and bypass lastDeliveredTheme dedup.
+            scope.launch {
+                var previousMode: HeadUnitCanMode? = null
+                UniversalCanRepository.mode.collect { mode ->
+                    val prev = previousMode
+                    previousMode = mode
+                    if (prev != null && prev != mode) {
+                        Log.d(
+                            "Theme Service",
+                            "CAN mode $prev → $mode; resync day/night from head unit",
+                        )
+                        themeObserver?.resyncFromHeadUnit()
+                    }
+                }
+            }
         } catch (e: Exception) {
             TboxRepository.addLog("ERROR", "Theme Service", "Failed to setup theme observer")
             Log.e("Theme Service", "Failed to setup theme observer", e)
@@ -1252,7 +1292,80 @@ class BackgroundService : Service() {
         }
     }
 
+    private fun startPhoneCompanionBridge() {
+        scope.launch {
+            EspCompanionRepository.phoneUsbEvents.collect { event ->
+                val controller = externalApiController ?: return@collect
+                try {
+                    when (event) {
+                        PhoneUsbEvent.SnapReq -> {
+                            val snap = controller.readPhoneSnapshot()
+                            val gen = phoneSnapGen
+                            phoneSnapGen = if (phoneSnapGen >= 255) 1 else phoneSnapGen + 1
+                            espCompanionManager?.sendPhoneSnap(gen, snap)
+                        }
+                        is PhoneUsbEvent.Command -> {
+                            controller.executePhoneCommand(event.op, event.seat, event.arg)
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // One failed command must not stop the collector for the rest of the session.
+                    TboxRepository.addLog("ERROR", "Phone BLE", "Phone event failed: ${e.message}")
+                    Log.e("Phone BLE", "Phone event failed", e)
+                }
+            }
+        }
+    }
+
+    /** RFCOMM link for the phone app without the companion; same snapshot and commands. */
+    private fun startPhoneDirectServer() {
+        scope.launch {
+            settingsManager.phoneDirectEnabledFlow.collect { enabled ->
+                phoneDirectServer?.stop()
+                phoneDirectServer = null
+                val controller = externalApiController ?: return@collect
+                if (!enabled) return@collect
+                phoneDirectServer = PhoneDirectServer(
+                    context = this@BackgroundService,
+                    scope = scope,
+                    readSnapshot = { controller.readPhoneSnapshot() },
+                    executeCommand = { op, seat, arg -> controller.executePhoneCommand(op, seat, arg) },
+                    telemetryDemandProvider = {
+                        val locSrc = if (::locationSource.isInitialized) {
+                            locationSource.value
+                        } else {
+                            vad.dashing.tbox.esp.LocationSource.TBOX
+                        }
+                        val headSrc = if (::mockHeadingSource.isInitialized) {
+                            mockHeadingSource.value
+                        } else {
+                            vad.dashing.tbox.location.MockHeadingSource.GYRO
+                        }
+                        val geoRec = vad.dashing.tbox.location.GeoDebugLogRecorder.isRecording()
+                        vad.dashing.tbox.location.PhoneTelemetryRepository.computeTelemetryDemandMask(
+                            locationSource = locSrc,
+                            headingSource = headSrc,
+                            geoDebugRecording = geoRec,
+                        )
+                    },
+                    activeLocationSourceProvider = {
+                        if (::locationSource.isInitialized) {
+                            locationSource.value
+                        } else {
+                            vad.dashing.tbox.esp.LocationSource.TBOX
+                        }
+                    },
+                ).also { it.start() }
+            }
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Every startForegroundService() must be answered with startForeground() within a few
+        // seconds; the router below may wait on commandRouterMutex (restart, trips reload).
+        ensureForegroundPromoted()
         scope.launch(Dispatchers.Main.immediate + exceptionHandler) {
             commandRouterMutex.withLock {
                 val kickoffStart =
@@ -1413,7 +1526,10 @@ class BackgroundService : Service() {
                 sendControlTboxApplication(appName, "STOP")
             }
             ACTION_GET_INFO -> getInfo()
-            ACTION_UDA_READ_DTC -> udaReadDtcProbe()
+            ACTION_UDA_READ_DTC -> {
+                val ecuId = intent.getStringExtra(EXTRA_UDA_ECU_ID)?.toIntOrNull()
+                if (ecuId != null) udaReadDtc(ecuId)
+            }
             ACTION_CRT_VCTRL -> {
                 val hex = intent.getStringExtra(EXTRA_CRT_VCTRL_HEX).orEmpty().trim()
                 crtVctrlSend(hex)
@@ -1694,7 +1810,21 @@ class BackgroundService : Service() {
             }
             ACTION_ESP_BLE_LEARN_BEGIN -> {
                 val timeout = intent.getLongExtra(EXTRA_ESP_BLE_LEARN_TIMEOUT_MS, 30_000L)
-                espCompanionManager?.beginBleLearn(timeout.coerceIn(5_000L, 120_000L))
+                val key = EspCompanionProtocol.normalizeBleKey(
+                    intent.getStringExtra(EXTRA_ESP_BLE_KEY).orEmpty(),
+                )
+                if (key != null) {
+                    espCompanionManager?.beginBleLearn(timeout.coerceIn(5_000L, 120_000L), key)
+                }
+            }
+            ACTION_ESP_BLE_KEY_SET -> {
+                val mac = intent.getStringExtra(EXTRA_ESP_BLE_MAC).orEmpty()
+                val key = EspCompanionProtocol.normalizeBleKey(
+                    intent.getStringExtra(EXTRA_ESP_BLE_KEY).orEmpty(),
+                )
+                if (mac.isNotBlank() && key != null) {
+                    espCompanionManager?.setBleKey(mac, key)
+                }
             }
             ACTION_ESP_BLE_LEARN_END -> {
                 espCompanionManager?.endBleLearn()
@@ -1708,6 +1838,24 @@ class BackgroundService : Service() {
                         espCompanionManager?.forgetBleMac(mac)
                     }
                 }
+            }
+            ACTION_ESP_PHONE_LEARN_BEGIN -> {
+                espCompanionManager?.beginPhoneLearn(90_000L)
+            }
+            ACTION_ESP_PHONE_LEARN_END -> {
+                espCompanionManager?.endPhoneLearn()
+            }
+            ACTION_ESP_PHONE_ALLOW -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.allowPhone(id)
+            }
+            ACTION_ESP_PHONE_DENY -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.denyPhone(id)
+            }
+            ACTION_ESP_PHONE_FORGET -> {
+                val id = intent.getStringExtra(EXTRA_ESP_PHONE_ID).orEmpty()
+                if (id.isNotBlank()) espCompanionManager?.forgetPhone(id)
             }
             ACTION_GNSS_MODULE_REBOOT -> {
                 scope.launch { runGnssModuleSoftReboot() }
@@ -1902,6 +2050,8 @@ class BackgroundService : Service() {
         isRunning = false
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
         TboxRepository.addLog("INFO", "Service", "Stop service")
+        widgetButtonBindingCoordinator?.stop()
+        widgetButtonBindingCoordinator = null
         automationEngine?.stop()
         automationEngine = null
         stopMockLocationJob()
@@ -1922,7 +2072,14 @@ class BackgroundService : Service() {
         stopDataListener()
         TripTelemetryRepository.stop()
         stopFuelCalibratedLitersWatcher()
-        scope.launch { finalizeTripsOnServiceStop() }
+        // Awaited so a following restart cannot reseed trip state while the stop is still finalizing.
+        try {
+            withContext(Dispatchers.Default) { finalizeTripsOnServiceStop() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Background Service", "finalizeTripsOnServiceStop failed", e)
+        }
         stopStateBroadcastListener()
         stopReadAllSMS()
         disconnectTboxClient()
@@ -2255,6 +2412,14 @@ class BackgroundService : Service() {
                         wheelPulse.confidence,
                     )
                     lastPersistedWheelPulseCalib = wheelPulse
+                    val wheelHeading = settingsManager.loadWheelHeadingCalibration()
+                    vad.dashing.tbox.location.WheelHeadingCalibrationStore.update(wheelHeading)
+                    val phoneGyro = settingsManager.loadPhoneGyroCalibration()
+                    vad.dashing.tbox.location.PhoneGyroCalibrationStore.update(phoneGyro)
+                    val phoneCompass = settingsManager.loadPhoneCompassCalibration()
+                    vad.dashing.tbox.location.PhoneCompassCalibrationStore.update(phoneCompass)
+                    val prefPhoneId = settingsManager.loadPreferredPhoneTelemetryId()
+                    vad.dashing.tbox.location.PhoneTelemetryRepository.setPreferredPhoneIdHex(prefPhoneId)
                     settingsManager.loadGeoCalibrationState()
                 }
                 startWheelPulseFeatureWatcher()
@@ -2345,6 +2510,9 @@ class BackgroundService : Service() {
                 }
                 automationEngine?.stop()
                 automationEngine = newEngine
+                widgetButtonBindingCoordinator?.stop()
+                widgetButtonBindingCoordinator =
+                    WidgetButtonBindingCoordinator(scope).also { it.start() }
                 servicePhase = ServiceLifecyclePhase.Running
                 newEngine.notifyBackgroundServiceStarted()
                 candidateEngine = null
@@ -2397,6 +2565,17 @@ class BackgroundService : Service() {
         manager.createNotificationChannel(channel)
     }
 
+    private fun ensureForegroundPromoted() {
+        if (foregroundPromoted) return
+        try {
+            startForeground(NOTIFICATION_ID, createNotification("Start service"))
+            foregroundPromoted = true
+        } catch (e: Exception) {
+            Log.e("Background Service", "startForeground failed", e)
+            TboxRepository.addLog("ERROR", "Service", "startForeground failed: ${e.message}")
+        }
+    }
+
     private fun createNotification(text: String?): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("TBox Monitor")
@@ -2421,7 +2600,8 @@ class BackgroundService : Service() {
             return
         }
         val callback = object : TBoxClientCallback {
-            override fun onDataReceived(data: ByteArray) {
+            override fun onDataReceived(message: TBoxReceivedMessage) {
+                val data = message.getRawData()
                 lastPacketAtMs = System.currentTimeMillis()
                 scope.launch(packetProcessingDispatcher) {
                     try {
@@ -2441,6 +2621,22 @@ class BackgroundService : Service() {
                 when (type) {
                     LogType.ERROR -> TboxRepository.addLog("ERROR", "TBox Proxy/$tag", message)
                     LogType.WARN -> TboxRepository.addLog("WARN", "TBox Proxy/$tag", message)
+                    else -> Unit
+                }
+            }
+
+            override fun onStatusChanged(status: TBoxStatus) {
+                when (status.type) {
+                    TBoxStatusType.NETWORK_BOUND,
+                    TBoxStatusType.NETWORK_UNBOUND,
+                    TBoxStatusType.TBOX_RESPONDING,
+                    TBoxStatusType.SERVICE_STARTED ->
+                        TboxRepository.addLog("INFO", "TBox Proxy", "${status.type}: ${status.message}")
+                    TBoxStatusType.LEGACY_HOST,
+                    TBoxStatusType.TBOX_SILENT,
+                    TBoxStatusType.UDP_BIND_FAILED,
+                    TBoxStatusType.TCP_SERVER_ERROR ->
+                        TboxRepository.addLog("WARN", "TBox Proxy", "${status.type}: ${status.message}")
                     else -> Unit
                 }
             }
@@ -3304,7 +3500,7 @@ class BackgroundService : Service() {
     }
 
     private fun showRefuelToast(message: CharSequence) {
-        Handler(Looper.getMainLooper()).post {
+        scope.launch(Dispatchers.Main) {
             Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
         }
     }
@@ -3862,26 +4058,20 @@ class BackgroundService : Service() {
 
     private fun maybePersistTrips(force: Boolean) {
         if (!force && !TripRepository.needsPersistence()) return
-        val tripsJson = tripsListToJson(TripRepository.trips.value)
-        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
         scope.launch {
-            tripsPersistMutex.withLock {
-                appDataManager.saveTripsJson(tripsJson)
-                appDataManager.saveTripFavoritesJson(favJson)
-                TripRepository.markPersisted(tripsJson, favJson)
-            }
+            persistTripsNow(onlyIfNeeded = !force)
             persistLastKnownFuelLevel()
         }
     }
 
+    private suspend fun persistTripsNow(onlyIfNeeded: Boolean) {
+        TripRefuelPersistence.persistTrips(appDataManager, onlyIfNeeded)
+    }
+
     private fun maybePersistRefuels(force: Boolean) {
         if (!force && !RefuelRepository.needsPersistence()) return
-        val refuelsJson = refuelsListToJson(RefuelRepository.refuels.value)
         scope.launch {
-            refuelsPersistMutex.withLock {
-                appDataManager.saveRefuelsJson(refuelsJson)
-                RefuelRepository.markPersisted(refuelsJson)
-            }
+            TripRefuelPersistence.persistRefuels(appDataManager, onlyIfNeeded = !force)
         }
     }
 
@@ -4021,13 +4211,7 @@ class BackgroundService : Service() {
                     " ${tripTelemetryDebugSnippet()}",
             )
         }
-        val tripsJson = tripsListToJson(TripRepository.trips.value)
-        val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-        tripsPersistMutex.withLock {
-            appDataManager.saveTripsJson(tripsJson)
-            appDataManager.saveTripFavoritesJson(favJson)
-            TripRepository.markPersisted(tripsJson, favJson)
-        }
+        persistTripsNow(onlyIfNeeded = false)
     }
 
     private suspend fun finalizeTripsOnServiceStop() {
@@ -4054,15 +4238,7 @@ class BackgroundService : Service() {
             tripFirstSampleAfterSessionStart = true
             FuelLevelStableApply.resetDwell()
         }
-        if (TripRepository.needsPersistence()) {
-            val tripsJson = tripsListToJson(TripRepository.trips.value)
-            val favJson = favoritesSetToJson(TripRepository.favoriteIds.value)
-            tripsPersistMutex.withLock {
-                appDataManager.saveTripsJson(tripsJson)
-                appDataManager.saveTripFavoritesJson(favJson)
-                TripRepository.markPersisted(tripsJson, favJson)
-            }
-        }
+        persistTripsNow(onlyIfNeeded = true)
     }
 
     private suspend fun persistMotorHoursToStore() {
@@ -4478,19 +4654,25 @@ class BackgroundService : Service() {
     }
 
     private var wheelPulseFeatureWatchJob: Job? = null
+    private var lateralAccelJob: Job? = null
 
     /**
-     * Subscribe to wheel-pulse CAN/VHAL only while [WheelPulseCalibration.featureEnabled].
-     * Default off — no OEM `onPull` / VHAL pulse props until the user opts in.
+     * Subscribe to wheel-pulse CAN/VHAL while [WheelPulseCalibration.featureEnabled],
+     * or while heading source uses wheels / phone fallback, or during geo-debug recording.
      */
     private fun startWheelPulseFeatureWatcher() {
         wheelPulseFeatureWatchJob?.cancel()
         wheelPulseFeatureWatchJob = scope.launch {
-            vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration
-                .map { it.featureEnabled }
+            combine(
+                vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.calibration.map { it.featureEnabled },
+                mockHeadingSource,
+                vad.dashing.tbox.location.GeoDebugLogRecorder.uiState.map { it.recording },
+            ) { featureOn, heading, geoRec ->
+                featureOn || heading.usesWheels || heading.usesPhone || geoRec
+            }
                 .distinctUntilChanged()
-                .collect { enabled ->
-                    if (enabled) {
+                .collect { needed ->
+                    if (needed) {
                         startWheelPulseCollection()
                     } else {
                         stopWheelPulseCollection()
@@ -4502,23 +4684,26 @@ class BackgroundService : Service() {
     private fun startWheelPulseCollection() {
         wheelPulseJob?.cancel()
         wheelPulseOdometerJob?.cancel()
-        if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
-            return
-        }
+        lateralAccelJob?.cancel()
         scope.launch {
             runCatching {
                 vad.dashing.tbox.mbcan.UniversalCanRepository.setSourceSignals(
                     WHEEL_PULSE_CAN_SOURCE_ID,
-                    setOf(vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse),
+                    setOf(
+                        vad.dashing.tbox.mbcan.MbCanSignal.WheelPulse,
+                        vad.dashing.tbox.mbcan.MbCanSignal.LateralAcceleration,
+                    ),
                 )
+            }
+        }
+        lateralAccelJob = scope.launch {
+            vad.dashing.tbox.mbcan.UniversalCanRepository.lateralAccelerationState.collect { latAcc ->
+                vad.dashing.tbox.location.WheelHeadingIntegrator.onLateralAcceleration(latAcc)
             }
         }
         wheelPulseJob = scope.launch {
             vad.dashing.tbox.mbcan.UniversalCanRepository.wheelPulseState.collect { counters ->
                 if (counters == null) return@collect
-                if (!vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
-                    return@collect
-                }
                 runCatching {
                     val reverse = vad.dashing.tbox.mbcan.VehicleGearDomain.isReverseEngaged(
                         reverseGearSwitch = vad.dashing.tbox.mbcan.UniversalCanRepository.reverseGearSwitchState.value,
@@ -4528,14 +4713,30 @@ class BackgroundService : Service() {
                     val steer = vad.dashing.tbox.mbcan.UniversalCanRepository.steerAngleState.value
                     val speed = TripTelemetryRepository.accountingCarSpeed()
                     val now = SystemClock.elapsedRealtime()
-                    vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                    val latAcc = vad.dashing.tbox.mbcan.UniversalCanRepository.lateralAccelerationState.value
+                        ?: vad.dashing.tbox.mbcan.LateralAccelerationDomain.gToMps2(
+                            CycleDataRepository.freshLateralAcceleration(now),
+                        )
+                    if (vad.dashing.tbox.vehicle.WheelPulseCalibrationStore.isFeatureEnabled()) {
+                        vad.dashing.tbox.vehicle.WheelPulseOdometer.onWheelSample(
+                            counters = counters,
+                            reverse = reverse,
+                            steerDeg = steer,
+                            speedKmh = speed,
+                            nowElapsedMs = now,
+                        )
+                        maybePersistWheelPulseCalibration()
+                    }
+                    val k = vad.dashing.tbox.vehicle.WheelPulseOdometer.peekCalibration().metersPerPulse
+                    vad.dashing.tbox.location.WheelHeadingIntegrator.onWheelSample(
                         counters = counters,
+                        kMetersPerPulse = k,
                         reverse = reverse,
                         steerDeg = steer,
                         speedKmh = speed,
+                        lateralAccelMps2 = latAcc,
                         nowElapsedMs = now,
                     )
-                    maybePersistWheelPulseCalibration()
                 }.onFailure { e ->
                     Log.e("BackgroundService", "Wheel pulse sample failed", e)
                     TboxRepository.addLog("ERROR", "WheelPulse", "Sample failed: ${e.message}")
@@ -4569,6 +4770,8 @@ class BackgroundService : Service() {
         wheelPulseJob = null
         wheelPulseOdometerJob?.cancel()
         wheelPulseOdometerJob = null
+        lateralAccelJob?.cancel()
+        lateralAccelJob = null
         flushWheelPulseCalibrationPersist(force = true)
         scope.launch {
             runCatching {
@@ -4758,6 +4961,27 @@ class BackgroundService : Service() {
                             off.calibratedAtEpochMs.takeIf { it > 0L }
                                 ?: System.currentTimeMillis(),
                         )
+                    }
+                }
+            },
+            onWheelHeadingCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.saveWheelHeadingCalibration(calib)
+                    }
+                }
+            },
+            onPhoneGyroCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.savePhoneGyroCalibration(calib)
+                    }
+                }
+            },
+            onPhoneCompassCalibPersist = { calib ->
+                scope.launch {
+                    runCatching {
+                        settingsManager.savePhoneCompassCalibration(calib)
                     }
                 }
             },
@@ -5281,7 +5505,9 @@ class BackgroundService : Service() {
                     }
                     val workingBaud = EspCompanionRepository.deviceInfo.value.um980Baud.takeIf { it > 0 } ?: 115_200
                     val transport = EspUm980BinaryTransport(mgr)
-                    Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    withContext(Dispatchers.IO) {
+                        Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    }
                 }
                 else -> {
                     val session = usbNmeaLocationSource?.currentSessionOrNull()
@@ -5293,7 +5519,9 @@ class BackgroundService : Service() {
                         ?: usbGnssBaud.value.takeIf { it > 0 }
                         ?: 115_200
                     val transport = UsbUm980BinaryTransport(session)
-                    Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    withContext(Dispatchers.IO) {
+                        Um980FirmwareUpdater(transport).update(file, workingBaud)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -5657,6 +5885,21 @@ class BackgroundService : Service() {
                             startUsbNmeaLocationSource()
                             espCompanionManager?.applyLocationSource(source)
                         }
+                        LocationSource.PHONE -> {
+                            stopAndroidLocationSource()
+                            stopUsbNmeaLocationSource()
+                            locSubscribe(false)
+                            espCompanionManager?.applyLocationSource(source)
+                            vad.dashing.tbox.location.PhoneTelemetryRepository.peekLastLocationValues()
+                                ?.let { (loc, atElapsed) ->
+                                    if (SystemClock.elapsedRealtime() - atElapsed <=
+                                        vad.dashing.tbox.location.PhoneTelemetryRepository.MAX_LOC_AGE_MS
+                                    ) {
+                                        TboxRepository.updateLocationUpdateTime()
+                                        TboxRepository.updateLocValues(loc)
+                                    }
+                                }
+                        }
                     }
                 }
             }
@@ -5698,7 +5941,8 @@ class BackgroundService : Service() {
                         }
                         // DETACH / link drop — drop stale LocValues immediately so Advanced
                         // does not soft-blend a frozen fix while assist restarts.
-                        TboxRepository.clearActiveLocation()
+                        // Keep the last packet clocks so the debug rows do not go blank.
+                        TboxRepository.clearActiveLocation(preserveTimestamps = true)
                         TboxRepository.updateIsLocValuesTrue(false)
                         startUsbNmeaLocationSource()
                     }
@@ -6075,6 +6319,11 @@ class BackgroundService : Service() {
                 }
                 try {
                     // First show after service-start quiet period (cold start / permission race).
+                    // On A10, force theme resync so overlay Compose does not paint with a stale
+                    // light palette from an early A9-key read before VHAL mode resolved.
+                    if (HeadUnitDayNightMapping.usesAdayoKeys()) {
+                        themeObserver?.resyncFromHeadUnit()
+                    }
                     overlayController.ensureFloatingDashboards(floatingDashboards.value)
                 } catch (e: CancellationException) {
                     throw e
@@ -6167,7 +6416,7 @@ class BackgroundService : Service() {
                         val delta = currentTime - (TboxRepository.locationUpdateTime.value?.time
                             ?: 0)
                         if (delta > 10000) {
-                            TboxRepository.updateLocValues(LocValues())
+                            TboxRepository.clearActiveLocation(preserveTimestamps = true)
                             TboxRepository.updateIsLocValuesTrue(false)
                             val nowMs = System.currentTimeMillis()
                             if (vad.dashing.tbox.location.LocSubscribePolicy.shouldPeriodicResubscribe(
@@ -6185,13 +6434,14 @@ class BackgroundService : Service() {
                         }
                     }
                     if (locationSource.value == LocationSource.USB ||
-                        locationSource.value == LocationSource.ESP32
+                        locationSource.value == LocationSource.ESP32 ||
+                        locationSource.value == LocationSource.PHONE
                     ) {
                         val lastAt = TboxRepository.locationUpdateTime.value?.time
                         if (lastAt != null &&
                             currentTime - lastAt > vad.dashing.tbox.location.GnssFreshness.STALE_CLEAR_MS
                         ) {
-                            TboxRepository.clearActiveLocation()
+                            TboxRepository.clearActiveLocation(preserveTimestamps = true)
                             TboxRepository.updateIsLocValuesTrue(false)
                         }
                     }
@@ -6664,30 +6914,86 @@ class BackgroundService : Service() {
         settingsManager.saveCustomString("vin_code", "")
     }
 
-    private fun udaReadDtcProbe() {
+    private fun udaReadDtc(ecuId: Int) {
+        val ecu = UdaEcuCatalog.find(ecuId) ?: return
         if (!TboxRepository.tboxConnected.value) return
+        val ticket = udaDtcReadTicket.incrementAndGet()
+        UdaDtcSession.markPending(ecu.id)
         scope.launch {
             try {
-                val payload = UdaProtocol.buildReadDtcProbe()
+                val payload = UdaProtocol.buildReadDtc(ecu.id)
                 TboxRepository.addLog(
                     "INFO",
                     "UDA send",
-                    "DiagReq ReadDtc probe len=${payload.size}",
+                    "DiagReq ReadDtc ${ecu.name} ecuId=${ecu.id} len=${payload.size}",
                 )
-                sendTboxMessage(
+                val sent = sendTboxMessage(
                     UDA_CODE,
                     SELF_CODE,
                     UdaProtocol.CMD_DIAG_REQ,
                     payload,
                     false,
                 )
+                if (!sent) {
+                    if (ticket == udaDtcReadTicket.get()) {
+                        UdaDtcSession.append(listOf(UdaDtcEntry.Failure(ecu.name, "send")))
+                        UdaDtcSession.finishPending()
+                    }
+                    return@launch
+                }
+                delay(30_000)
+                if (ticket == udaDtcReadTicket.get()) {
+                    UdaDtcSession.append(listOf(UdaDtcEntry.Timeout(ecu.name)))
+                    UdaDtcSession.finishPending()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                TboxRepository.addLog("ERROR", "UDA", "ReadDtc probe failed: ${e.message}")
-                Log.e("UDA", "ReadDtc probe failed", e)
+                if (ticket == udaDtcReadTicket.get()) {
+                    UdaDtcSession.append(listOf(UdaDtcEntry.Failure(ecu.name, e.message ?: "error")))
+                    UdaDtcSession.finishPending()
+                }
+                TboxRepository.addLog("ERROR", "UDA", "ReadDtc ${ecu.name} failed: ${e.message}")
+                Log.e("UDA", "ReadDtc failed", e)
             }
         }
+    }
+
+    private fun onUdaDiagAck(data: ByteArray) {
+        val resp = UdaDiag.parseAckResp(data)
+        TboxRepository.addLog(
+            "INFO",
+            "UDA response",
+            "DiagReq ack: ${toHexString(data)}",
+        )
+        if (resp != null && resp != 0) {
+            udaDtcReadTicket.incrementAndGet()
+            val name = UdaEcuCatalog.nameOf(UdaDtcSession.pendingEcuId.value ?: -1)
+            UdaDtcSession.append(listOf(UdaDtcEntry.Failure(name, "ack 0x${resp.toUInt().toString(16)}")))
+            UdaDtcSession.finishPending()
+        }
+    }
+
+    private fun onUdaDiagReport(data: ByteArray) {
+        val result = UdaDiag.parseResult(data)
+        if (result == null) {
+            TboxRepository.addLog(
+                "WARN",
+                "UDA response",
+                "DiagReport len=${data.size}: ${toHexString(data.copyOfRange(0, minOf(64, data.size)))}",
+            )
+            return
+        }
+        udaDtcReadTicket.incrementAndGet()
+        val name = UdaEcuCatalog.nameOf(result.ecuId)
+        val entries = UdaDiag.entriesFor(name, result)
+        UdaDtcSession.append(entries)
+        UdaDtcSession.finishPending()
+        TboxRepository.addLog(
+            "INFO",
+            "UDA response",
+            "DiagReport ${name} ecuId=${result.ecuId} ${result.resultInfo.ifBlank { "ude=0x${result.udeCode.toString(16)}" }} dtcs=${entries.count { it is UdaDtcEntry.Code }}",
+        )
     }
 
     private fun crtVctrlSend(hexPayload: String) {
@@ -7106,9 +7412,13 @@ class BackgroundService : Service() {
         vad.dashing.tbox.adb.AdbRepository.disconnect()
 
         vad.dashing.tbox.location.SimulatedLocationSourceLoss.reset()
+        widgetButtonBindingCoordinator?.stop()
+        widgetButtonBindingCoordinator = null
         automationEngine?.releaseInterests()
         automationEngine?.requestStop()
         automationEngine = null
+        phoneDirectServer?.stop()
+        phoneDirectServer = null
         externalApiController?.stop()
         ExternalApiControllerHolder.unregister()
         externalApiController = null
@@ -7123,6 +7433,7 @@ class BackgroundService : Service() {
         stopConstantDrAutoCalibJob()
         stopWifiModemPoller()
         stopHuInternetMonitor()
+        OemOverlayAppMonitor.stop()
         vad.dashing.tbox.location.GeoDebugLogRecorder.stop(auto = false)
         vad.dashing.tbox.esp.CompanionProtocolLogRecorder.stop(auto = false)
         vad.dashing.tbox.drsensor.DrSensorRepository.stop()
@@ -7481,20 +7792,11 @@ class BackgroundService : Service() {
                             needEndLog = !ansVersion(tidName, receivedData, requireStatusPrefix = false)
                         }
                         UdaProtocol.RSP_DIAG_REQ -> {
-                            TboxRepository.addLog(
-                                "INFO",
-                                "UDA response",
-                                "DiagReq ack: ${toHexString(receivedData)}",
-                            )
+                            onUdaDiagAck(receivedData)
                             needEndLog = false
                         }
                         UdaProtocol.RSP_DIAG_REPORT -> {
-                            val previewLen = minOf(64, receivedData.size)
-                            TboxRepository.addLog(
-                                "INFO",
-                                "UDA response",
-                                "DiagReport len=${receivedData.size}: ${toHexString(receivedData.copyOfRange(0, previewLen))}",
-                            )
+                            onUdaDiagReport(receivedData)
                             needEndLog = false
                         }
                         UdaProtocol.RSP_DIAG_RESULT, UdaProtocol.RSP_PROCESS_INFO -> {

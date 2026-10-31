@@ -100,6 +100,10 @@ import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
+import vad.dashing.tbox.isFuelLitersDisplayModeWidgetDataKey
+import vad.dashing.tbox.normalizeFuelLitersDisplayMode
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
@@ -133,6 +137,8 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
+import vad.dashing.tbox.normalizeWidgetButtonBinding
+import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.WidgetPickerActivity
 import vad.dashing.tbox.WidgetTypeSectionId
 import vad.dashing.tbox.WidgetTypeSections
@@ -175,14 +181,21 @@ import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP
+import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
+import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
 import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
+import vad.dashing.tbox.normalizePanelCollapseStripLengthPercent
+import vad.dashing.tbox.normalizePanelCollapseStripPositionPercent
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
 import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.normalizeWidgetPaddingPercent
@@ -274,6 +287,13 @@ data class TripMetricFieldDropdownEntry(
 
 internal data class AvgFuelConsumptionSourceDropdownEntry(
     val source: Int,
+    val display: String,
+) {
+    override fun toString(): String = display
+}
+
+internal data class FuelLitersDisplayModeDropdownEntry(
+    val mode: Int,
     val display: String,
 ) {
     override fun toString(): String = display
@@ -495,6 +515,21 @@ internal class WidgetSelectionDialogState(
     var wholePanelCollapseEdge by mutableStateOf(PanelCollapseEdge.NONE.storageValue)
     var wholePanelCollapseStripThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
     var wholePanelCollapseTouchZoneThicknessDp by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP)
+    var wholePanelCollapseStripLengthPercentCollapsed by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    var wholePanelCollapseStripLengthPercentExpanded by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    var wholePanelCollapseStripPositionPercentCollapsed by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    )
+    var wholePanelCollapseStripPositionPercentExpanded by mutableIntStateOf(
+        DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+    )
+    var wholePanelCollapseTouchZoneMatchStrip by mutableStateOf(
+        DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP,
+    )
     var wholePanelCollapseStripColorLight by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT)
     var wholePanelCollapseStripColorDark by mutableIntStateOf(DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK)
     var wholePanelCollapseStripExpandedColorLight by mutableIntStateOf(
@@ -539,6 +574,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = cfg.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = cfg.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed = cfg.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded = cfg.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = cfg.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
@@ -564,6 +604,11 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = cfg.collapseEdge
         wholePanelCollapseStripThicknessDp = cfg.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = cfg.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = cfg.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = cfg.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed = cfg.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded = cfg.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = cfg.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = cfg.collapseStripColorLight
         wholePanelCollapseStripColorDark = cfg.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = cfg.collapseStripExpandedColorLight
@@ -670,6 +715,13 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+    var buttonBinding by mutableStateOf(
+        if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
+            normalizeWidgetButtonBinding(initialConfig.buttonBinding)
+        } else {
+            null
+        },
+    )
 
     var tileBackgroundImageRelPathLight by mutableStateOf(
         initialConfig.tileBackgroundImageRelPathLight?.takeIf {
@@ -708,6 +760,13 @@ internal class WidgetSelectionDialogState(
             normalizeAvgFuelConsumptionSource(initialConfig.avgFuelConsumptionSource)
         } else {
             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        },
+    )
+    var fuelLitersDisplayMode by mutableIntStateOf(
+        if (isFuelLitersDisplayModeWidgetDataKey(initialConfig.dataKey)) {
+            normalizeFuelLitersDisplayMode(initialConfig.fuelLitersDisplayMode)
+        } else {
+            FUEL_LITERS_DISPLAY_REMAINING
         },
     )
     var espRelayMode by mutableStateOf(
@@ -896,6 +955,9 @@ internal class WidgetSelectionDialogState(
         if (!isAverageFuelConsumptionWidgetDataKey(key)) {
             avgFuelConsumptionSource = AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
         }
+        if (!isFuelLitersDisplayModeWidgetDataKey(key)) {
+            fuelLitersDisplayMode = FUEL_LITERS_DISPLAY_REMAINING
+        }
         if (!isTripMetricWidgetDataKey(key)) {
             tripMetricFieldId = ActiveTripCustomWidgetField.DISTANCE.id
         }
@@ -907,6 +969,9 @@ internal class WidgetSelectionDialogState(
         }
         if (!WidgetsRepository.supportsDateTimeFormat(key)) {
             dateTimeFormat = ""
+        }
+        if (!supportsWidgetButtonBinding(key)) {
+            buttonBinding = null
         }
         if (key != DRIVE_MODE_WIDGET_DATA_KEY) {
             selectedDriveMode = DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
@@ -1211,6 +1276,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
             },
+            fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(selectedDataKey)) {
+                normalizeFuelLitersDisplayMode(fuelLitersDisplayMode)
+            } else {
+                FUEL_LITERS_DISPLAY_REMAINING
+            },
             espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
                 espRelayMode
             } else {
@@ -1305,6 +1375,11 @@ internal class WidgetSelectionDialogState(
                 normalizeMapsCamRadarHoldM(mapsCamRadarHoldDistanceM)
             } else {
                 DEFAULT_MAPS_CAM_RADAR_HOLD_M
+            },
+            buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
+                normalizeWidgetButtonBinding(buttonBinding)
+            } else {
+                null
             },
         )
     }
@@ -1513,6 +1588,11 @@ internal class WidgetSelectionDialogState(
         } else {
             ""
         }
+        buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
+            normalizeWidgetButtonBinding(cfg.buttonBinding)
+        } else {
+            null
+        }
         tileBackgroundImageRelPathLight = cfg.tileBackgroundImageRelPathLight?.takeIf {
             TileBackgroundImageStorage.isAllowedStoredRelPath(it)
         }
@@ -1545,6 +1625,11 @@ internal class WidgetSelectionDialogState(
             normalizeAvgFuelConsumptionSource(cfg.avgFuelConsumptionSource)
         } else {
             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
+        }
+        fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(selectedDataKey)) {
+            normalizeFuelLitersDisplayMode(cfg.fuelLitersDisplayMode)
+        } else {
+            FUEL_LITERS_DISPLAY_REMAINING
         }
         espRelayMode = if (WidgetsRepository.supportsEspRelayMode(selectedDataKey)) {
             cfg.espRelayMode
@@ -1663,6 +1748,11 @@ internal class WidgetSelectionDialogState(
             collapseEdge = wholePanelCollapseEdge,
             collapseStripThicknessDp = wholePanelCollapseStripThicknessDp,
             collapseTouchZoneThicknessDp = wholePanelCollapseTouchZoneThicknessDp,
+            collapseStripLengthPercentCollapsed = wholePanelCollapseStripLengthPercentCollapsed,
+            collapseStripLengthPercentExpanded = wholePanelCollapseStripLengthPercentExpanded,
+            collapseStripPositionPercentCollapsed = wholePanelCollapseStripPositionPercentCollapsed,
+            collapseStripPositionPercentExpanded = wholePanelCollapseStripPositionPercentExpanded,
+            collapseTouchZoneMatchStrip = wholePanelCollapseTouchZoneMatchStrip,
             collapseStripColorLight = wholePanelCollapseStripColorLight,
             collapseStripColorDark = wholePanelCollapseStripColorDark,
             collapseStripExpandedColorLight = wholePanelCollapseStripExpandedColorLight,
@@ -1694,6 +1784,13 @@ internal class WidgetSelectionDialogState(
         wholePanelCollapseEdge = snapshot.collapseEdge
         wholePanelCollapseStripThicknessDp = snapshot.collapseStripThicknessDp
         wholePanelCollapseTouchZoneThicknessDp = snapshot.collapseTouchZoneThicknessDp
+        wholePanelCollapseStripLengthPercentCollapsed = snapshot.collapseStripLengthPercentCollapsed
+        wholePanelCollapseStripLengthPercentExpanded = snapshot.collapseStripLengthPercentExpanded
+        wholePanelCollapseStripPositionPercentCollapsed =
+            snapshot.collapseStripPositionPercentCollapsed
+        wholePanelCollapseStripPositionPercentExpanded =
+            snapshot.collapseStripPositionPercentExpanded
+        wholePanelCollapseTouchZoneMatchStrip = snapshot.collapseTouchZoneMatchStrip
         wholePanelCollapseStripColorLight = snapshot.collapseStripColorLight
         wholePanelCollapseStripColorDark = snapshot.collapseStripColorDark
         wholePanelCollapseStripExpandedColorLight = snapshot.collapseStripExpandedColorLight
@@ -2012,6 +2109,103 @@ private fun PanelCollapseWholeSettingsSection(
         minValue = touchZoneMin,
         maxValue = MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP,
         enabled = collapseSettingsEnabled,
+    )
+    SettingSwitch(
+        state.wholePanelCollapseTouchZoneMatchStrip,
+        { state.wholePanelCollapseTouchZoneMatchStrip = it },
+        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_title),
+        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_desc),
+        collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripLengthPercentCollapsed,
+        onValueChange = {
+            val length = normalizePanelCollapseStripLengthPercent(it)
+            state.wholePanelCollapseStripLengthPercentCollapsed = length
+            state.wholePanelCollapseStripPositionPercentCollapsed =
+                normalizePanelCollapseStripPositionPercent(
+                    state.wholePanelCollapseStripPositionPercentCollapsed,
+                    length,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_length_collapsed_title,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
+        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        enabled = collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripPositionPercentCollapsed,
+        onValueChange = {
+            state.wholePanelCollapseStripPositionPercentCollapsed =
+                normalizePanelCollapseStripPositionPercent(
+                    it,
+                    state.wholePanelCollapseStripLengthPercentCollapsed,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_position_collapsed_title,
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
+        minValue = 0,
+        maxValue = (
+            100 - normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentCollapsed,
+            )
+            ).coerceAtLeast(0),
+        enabled = collapseSettingsEnabled &&
+            normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentCollapsed,
+            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripLengthPercentExpanded,
+        onValueChange = {
+            val length = normalizePanelCollapseStripLengthPercent(it)
+            state.wholePanelCollapseStripLengthPercentExpanded = length
+            state.wholePanelCollapseStripPositionPercentExpanded =
+                normalizePanelCollapseStripPositionPercent(
+                    state.wholePanelCollapseStripPositionPercentExpanded,
+                    length,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_length_expanded_title,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
+        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+        enabled = collapseSettingsEnabled,
+    )
+    SettingSliderInt(
+        value = state.wholePanelCollapseStripPositionPercentExpanded,
+        onValueChange = {
+            state.wholePanelCollapseStripPositionPercentExpanded =
+                normalizePanelCollapseStripPositionPercent(
+                    it,
+                    state.wholePanelCollapseStripLengthPercentExpanded,
+                )
+        },
+        text = stringResource(
+            R.string.settings_panel_collapse_strip_position_expanded_title,
+            state.wholePanelCollapseStripPositionPercentExpanded,
+        ),
+        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
+        minValue = 0,
+        maxValue = (
+            100 - normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentExpanded,
+            )
+            ).coerceAtLeast(0),
+        enabled = collapseSettingsEnabled &&
+            normalizePanelCollapseStripLengthPercent(
+                state.wholePanelCollapseStripLengthPercentExpanded,
+            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
     )
     WidgetColorThemeSegmentRow(
         selectedSegment = state.wholePanelCollapseColorThemeSegment,
@@ -2365,11 +2559,17 @@ internal fun WidgetSelectionDialogForm(
     val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
     val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
+    val cruiseControlTypeSetting by settingsViewModel.cruiseControlType.collectAsStateWithLifecycle()
     LaunchedEffect(noTboxConnect) {
         state.preferUseMbCanVhalDefault = noTboxConnect
     }
     val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
-    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(noTboxConnect)
+    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(
+        noTboxConnect = noTboxConnect,
+        climateType = climateControlType,
+        cruiseType = cruiseControlTypeSetting,
+    )
         .filter { it.isNotEmpty() && dataKeyFilter(it) }
         .map { key ->
             key to WidgetsRepository.getTitleUnitForDataKey(context, key)
@@ -2578,6 +2778,10 @@ internal fun WidgetSelectionDialogForm(
                         state = state,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                     )
+                    WidgetButtonBindingSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                    )
                     SettingSwitch(
                         state.showTitle,
                         { state.showTitle = it },
@@ -2762,6 +2966,30 @@ internal fun WidgetSelectionDialogForm(
                             description = "",
                             enabled = state.togglesEnabled,
                             options = avgFuelSourceOptions,
+                            selectorWidth = WidgetDialogDropdownSelectorWidth,
+                        )
+                    }
+                    if (isFuelLitersDisplayModeWidgetDataKey(state.selectedDataKey)) {
+                        val fuelLitersDisplayOptions = listOf(
+                            FuelLitersDisplayModeDropdownEntry(
+                                FUEL_LITERS_DISPLAY_REMAINING,
+                                stringResource(R.string.widget_fuel_liters_display_remaining),
+                            ),
+                            FuelLitersDisplayModeDropdownEntry(
+                                FUEL_LITERS_DISPLAY_TO_FULL,
+                                stringResource(R.string.widget_fuel_liters_display_to_full),
+                            ),
+                        )
+                        val selectedFuelLitersDisplay = fuelLitersDisplayOptions.firstOrNull {
+                            it.mode == normalizeFuelLitersDisplayMode(state.fuelLitersDisplayMode)
+                        } ?: fuelLitersDisplayOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedFuelLitersDisplay,
+                            onValueChange = { state.fuelLitersDisplayMode = it.mode },
+                            text = stringResource(R.string.widget_fuel_liters_display_title),
+                            description = "",
+                            enabled = state.togglesEnabled,
+                            options = fuelLitersDisplayOptions,
                             selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
@@ -2956,34 +3184,6 @@ internal fun WidgetSelectionDialogForm(
                             maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
                             enabled = state.togglesEnabled,
                             step = 1,
-                        )
-                    }
-                    if (isCruiseWidgetDataKey(state.selectedDataKey)) {
-                        val cruiseTypeEntries = listOf(
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.AUTO,
-                                stringResource(R.string.widget_cruise_control_type_auto),
-                            ),
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.ACC,
-                                stringResource(R.string.widget_cruise_control_type_acc),
-                            ),
-                            CruiseControlTypeDropdownEntry(
-                                CruiseControlType.CCS,
-                                stringResource(R.string.widget_cruise_control_type_ccs),
-                            ),
-                        )
-                        val selectedCruiseType = cruiseTypeEntries.find {
-                            it.type == state.cruiseControlType
-                        } ?: cruiseTypeEntries.first { it.type == CruiseControlType.DEFAULT }
-                        SettingDropdownGeneric(
-                            selectedValue = selectedCruiseType,
-                            onValueChange = { state.cruiseControlType = it.type },
-                            text = stringResource(R.string.widget_cruise_control_type_title),
-                            description = stringResource(R.string.widget_cruise_control_type_desc),
-                            enabled = state.togglesEnabled,
-                            options = cruiseTypeEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
                         )
                     }
                     if (isAccCruiseWidgetDataKey(state.selectedDataKey)) {
@@ -4005,6 +4205,21 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
             state.wholePanelCollapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentExpanded,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = state.wholePanelCollapseTouchZoneMatchStrip,
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,
@@ -4042,6 +4257,21 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
             state.wholePanelCollapseTouchZoneThicknessDp,
             normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
         ),
+        collapseStripLengthPercentCollapsed = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripLengthPercentExpanded = normalizePanelCollapseStripLengthPercent(
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseStripPositionPercentCollapsed = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentCollapsed,
+            state.wholePanelCollapseStripLengthPercentCollapsed,
+        ),
+        collapseStripPositionPercentExpanded = normalizePanelCollapseStripPositionPercent(
+            state.wholePanelCollapseStripPositionPercentExpanded,
+            state.wholePanelCollapseStripLengthPercentExpanded,
+        ),
+        collapseTouchZoneMatchStrip = state.wholePanelCollapseTouchZoneMatchStrip,
         collapseStripColorLight = state.wholePanelCollapseStripColorLight,
         collapseStripColorDark = state.wholePanelCollapseStripColorDark,
         collapseStripExpandedColorLight = state.wholePanelCollapseStripExpandedColorLight,

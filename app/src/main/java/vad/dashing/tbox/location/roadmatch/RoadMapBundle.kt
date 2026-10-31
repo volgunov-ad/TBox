@@ -34,6 +34,9 @@ object RoadMapBundle {
     const val INSTALL_SUFFIX = ".tboxroads.d"
     private const val MAX_ENTRIES = 20_000
     private const val MAX_INDEX_BYTES = 4 * 1024 * 1024L
+    /** Tiles are already gzip-compressed, so a legitimate bundle barely grows on extraction. */
+    private const val MAX_EXPANSION_RATIO = 4L
+    private const val EXPANSION_SLACK_BYTES = 16L * 1024 * 1024
 
     fun installDir(mapsDir: File, regionId: String): File =
         File(mapsDir, "$regionId$INSTALL_SUFFIX")
@@ -105,6 +108,8 @@ object RoadMapBundle {
         require(stagingDir.mkdirs()) { "cannot create bundle staging directory" }
         val root = stagingDir.canonicalFile
         var entries = 0
+        val maxExtractedBytes = zipFile.length() * MAX_EXPANSION_RATIO + EXPANSION_SLACK_BYTES
+        var extractedBytes = 0L
         try {
             ZipInputStream(BufferedInputStream(zipFile.inputStream(), 64 * 1024)).use { zip ->
                 while (true) {
@@ -125,6 +130,10 @@ object RoadMapBundle {
                                 checkCancelled()
                                 val read = zip.read(buffer)
                                 if (read <= 0) break
+                                extractedBytes += read
+                                require(extractedBytes <= maxExtractedBytes) {
+                                    "bundle expands beyond size limit"
+                                }
                                 output.write(buffer, 0, read)
                             }
                         }

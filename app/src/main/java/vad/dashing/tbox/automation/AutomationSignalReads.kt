@@ -26,7 +26,7 @@ import vad.dashing.tbox.ui.estimatePlaybackPositionMs
 
 internal object AutomationSignalReads {
     fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =
-        when (key.source) {
+        when (AutomationSignalCatalog.resolveSource(key.signal, key.source)) {
             AutomationSignalSource.TBOX -> tboxFlow(key.signal)?.withAvailability(
                 TboxRepository.tboxConnected,
             )
@@ -37,6 +37,35 @@ internal object AutomationSignalReads {
 
             AutomationSignalSource.APP -> when (key.signal) {
                 AutomationSignalId.GEO_POSITION -> geoDisplayFlow()
+                AutomationSignalId.GEO_ALTITUDE_M ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.altitudeM(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_SPEED_KMH ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.speedKmh(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_SPEED_SOURCE ->
+                    GeoDisplayRepository.state.map { state ->
+                        AutomationSignalValue.State(GeoAutomationSignals.speedSourceKey(state))
+                    }.distinctUntilChanged()
+                AutomationSignalId.GEO_BEARING_DEG ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.bearingDeg(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_SATELLITES_VISIBLE ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.satellitesVisible(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_SATELLITES_USED ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.satellitesUsed(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_FIX_VALID ->
+                    GeoDisplayRepository.state
+                        .map { GeoAutomationSignals.gnssTruthfulState(it) }
+                        .distinctUntilChanged()
+                AutomationSignalId.GEO_SOURCE -> locationSourceSettingFlow()
                 AutomationSignalId.ESP_GPIO_IN_0 -> espGpioInputFlow(0)
                 AutomationSignalId.ESP_GPIO_IN_1 -> espGpioInputFlow(1)
                 AutomationSignalId.ESP_GPIO_IN_2 -> espGpioInputFlow(2)
@@ -117,6 +146,42 @@ internal object AutomationSignalReads {
                     TboxRepository.netState.map { net ->
                         AutomationSignalValue.Number(net.signalLevel.toDouble())
                     }.distinctUntilChanged()
+                AutomationSignalId.MODEM_RSSI_DBM ->
+                    TboxRepository.netState.map { net ->
+                        vad.dashing.tbox.wifimodem.ModemAutomationStates.rssiDbmOrNull(net)
+                            ?.toDouble()
+                            ?.let(AutomationSignalValue::Number)
+                            ?: AutomationSignalValue.Unavailable
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_REGISTERED ->
+                    TboxRepository.netState.map { net ->
+                        AutomationSignalValue.State(
+                            vad.dashing.tbox.wifimodem.ModemAutomationStates.registeredKey(
+                                net.regStatus,
+                            ),
+                        )
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_OPERATOR ->
+                    TboxRepository.netValues.map { values ->
+                        vad.dashing.tbox.wifimodem.ModemAutomationStates.operatorOrNull(values.operator)
+                            ?.let(AutomationSignalValue::State)
+                            ?: AutomationSignalValue.Unavailable
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_SOURCE -> modemSourceSettingFlow()
+                AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS ->
+                    TboxRepository.netState.map { net ->
+                        vad.dashing.tbox.wifimodem.ModemAutomationStates
+                            .throughputKbpsOrNull(net.downloadSpeedBps)
+                            ?.let(AutomationSignalValue::Number)
+                            ?: AutomationSignalValue.Unavailable
+                    }.distinctUntilChanged()
+                AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS ->
+                    TboxRepository.netState.map { net ->
+                        vad.dashing.tbox.wifimodem.ModemAutomationStates
+                            .throughputKbpsOrNull(net.uploadSpeedBps)
+                            ?.let(AutomationSignalValue::Number)
+                            ?: AutomationSignalValue.Unavailable
+                    }.distinctUntilChanged()
                 AutomationSignalId.LOCATE_STATUS ->
                     GeoDisplayRepository.state.map { state ->
                         AutomationSignalValue.State(if (state.locateStatus) "on" else "off")
@@ -152,6 +217,10 @@ internal object AutomationSignalReads {
                 AutomationSignalId.MEDIA_DURATION_MS -> mediaPlaybackNumberFlow { state, _ ->
                     state.durationMs.toDouble()
                 }
+                AutomationSignalId.ROAD_HIGHWAY_CLASS,
+                AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+                AutomationSignalId.ROAD_TUNNEL,
+                -> AutomationRoadMatchSignals.flowFor(key.signal)
                 else -> null
             }
         }

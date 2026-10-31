@@ -138,6 +138,15 @@ class AutomationEvaluator(
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
+    fun onEspGpioBtn(channel: Int, status: AutomationHardKeyStatus): AutomationTriggerFire? {
+        val trigger = definition.triggers.firstOrNull {
+            it is AutomationTrigger.EspGpioBtn &&
+                it.channel == channel &&
+                it.status == status
+        } ?: return null
+        return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
+    }
+
     fun onSignalSample(sample: AutomationSignalSample): AutomationTriggerFire? {
         if (sample.value == AutomationSignalValue.Unavailable) {
             latestSamples.remove(sample.key)
@@ -148,6 +157,7 @@ class AutomationEvaluator(
                         triggerStates.getValue(trigger.id),
                         rearm = trigger.rearmsOnUnavailable() && !rebaseline,
                         rebaseline = rebaseline,
+                        keepLastValue = trigger.keepsStateAcrossGap() && !rebaseline,
                     )
                 }
             }
@@ -244,6 +254,7 @@ class AutomationEvaluator(
             is AutomationTrigger.WidgetPressed,
             is AutomationTrigger.HardKey,
             is AutomationTrigger.EspBleBtn,
+            is AutomationTrigger.EspGpioBtn,
             is AutomationTrigger.Interval,
             is AutomationTrigger.Time,
             is AutomationTrigger.Solar,
@@ -329,7 +340,12 @@ class AutomationEvaluator(
         return beginOrFire(trigger, state, old, value, nowElapsedMillis)
     }
 
-    private fun invalidate(state: RuntimeState, rearm: Boolean = false, rebaseline: Boolean = false) {
+    private fun invalidate(
+        state: RuntimeState,
+        rearm: Boolean = false,
+        rebaseline: Boolean = false,
+        keepLastValue: Boolean = false,
+    ) {
         if (state.initialized) {
             state.initialFireAllowed = false
         }
@@ -345,7 +361,9 @@ class AutomationEvaluator(
             state.armed = true
         }
         state.matchingSinceElapsedMillis = null
-        state.currentValue = null
+        // Tunnel / road class survive a GPS gap; the next fire reports the state before it
+        // (e.g. "in tunnel") as oldValue instead of null.
+        if (!keepLastValue) state.currentValue = null
         state.previousValue = null
         state.pendingInitialFire = false
     }
@@ -433,7 +451,7 @@ class AutomationEvaluator(
                         snapshot[AutomationSignalKey(condition.signal, condition.source)]
                             as? AutomationSignalValue.State
                         )?.value ?: return false
-                    actual.equals(condition.expectedState.trim(), ignoreCase = true)
+                    AutomationSignalStateEncoding.stateMatches(condition.signal, actual, condition.expectedState)
                 }
 
                 is AutomationCondition.TriggeredBy -> context.triggerId in condition.triggerIds
@@ -648,7 +666,15 @@ private fun AutomationTrigger.usesRearmHysteresis(): Boolean = when (this) {
     else -> true
 }
 
-private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = this is AutomationTrigger.StateEquals
+private fun AutomationTrigger.rearmsOnUnavailable(): Boolean = when (this) {
+    is AutomationTrigger.StateEquals ->
+        signal != AutomationSignalId.ROAD_TUNNEL &&
+            signal != AutomationSignalId.ROAD_HIGHWAY_CLASS
+    else -> false
+}
+
+private fun AutomationTrigger.keepsStateAcrossGap(): Boolean =
+    this is AutomationTrigger.StateEquals && !rearmsOnUnavailable()
 
 /** First live sample after a gap is a snapshot of current levels, not an edge. */
 private fun AutomationSignalKey.baselinesAfterGap(): Boolean = when (signal) {
@@ -670,6 +696,7 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
     is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     -> null
@@ -689,7 +716,8 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
         is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspGpioBtn,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -704,7 +732,7 @@ private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
 
         is AutomationTrigger.StateEquals -> {
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
-            state.equals(expectedState.trim(), ignoreCase = true)
+            AutomationSignalStateEncoding.stateMatches(signal, state, expectedState)
         }
 
         is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->
@@ -721,7 +749,8 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
         is AutomationTrigger.SystemEvent,
         is AutomationTrigger.WidgetPressed,
         is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspBleBtn,
+        is AutomationTrigger.EspGpioBtn,
         is AutomationTrigger.Interval,
         is AutomationTrigger.Time,
         is AutomationTrigger.Solar,
@@ -737,7 +766,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 
         is AutomationTrigger.StateEquals -> {
             val state = (value as? AutomationSignalValue.State)?.value ?: return false
-            !state.equals(expectedState.trim(), ignoreCase = true)
+            !AutomationSignalStateEncoding.stateMatches(signal, state, expectedState)
         }
 
         is AutomationTrigger.Geofence -> geofenceDistance(this, value)?.let { distance ->
@@ -753,7 +782,8 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.SystemEvent,
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
-            is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
     is AutomationTrigger.Interval,
     is AutomationTrigger.Time,
     is AutomationTrigger.Solar,
@@ -767,10 +797,17 @@ private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = whe
     is AutomationTrigger.SystemEvent -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.WidgetPressed -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.HardKey,
-    is AutomationTrigger.EspBleBtn -> AutomationStartupBehavior.INITIALIZE_ONLY
+    is AutomationTrigger.EspBleBtn,
+    is AutomationTrigger.EspGpioBtn,
+    -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.Interval -> AutomationStartupBehavior.INITIALIZE_ONLY
     is AutomationTrigger.NumericThreshold -> startupBehavior
-    is AutomationTrigger.StateEquals -> startupBehavior
+    is AutomationTrigger.StateEquals ->
+        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+            AutomationStartupBehavior.INITIALIZE_ONLY
+        } else {
+            startupBehavior
+        }
     is AutomationTrigger.Geofence -> startupBehavior
     is AutomationTrigger.Time -> startupBehavior
     is AutomationTrigger.Solar -> startupBehavior

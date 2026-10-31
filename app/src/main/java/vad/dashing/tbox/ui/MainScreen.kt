@@ -45,7 +45,6 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.freeform.FreeformCompanionSession
-import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.normalizePanelLayoutSnapDp
 
 private const val MAIN_SCREEN_PANEL_FADE_MS = 300
@@ -141,15 +140,11 @@ fun MainScreen(
         }
     }
 
-    var floatingOverlayEditRequest by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    // The bus keeps the request until the editor is dismissed, so a MainActivity recreated or
+    // relaunched by A10 LAUNCH_APP (no edit extras) still reopens it. The window-mode overlay never
+    // touches it: editing there is blocked before posting.
     val pendingFloatingTileEdit by FloatingDashboardTileEditRequestBus.pending
         .collectAsStateWithLifecycle()
-    LaunchedEffect(pendingFloatingTileEdit) {
-        pendingFloatingTileEdit?.let { req ->
-            floatingOverlayEditRequest = req
-            FloatingDashboardTileEditRequestBus.clear()
-        }
-    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -383,21 +378,14 @@ fun MainScreen(
             )
         }
 
-        LaunchedEffect(floatingOverlayEditRequest, windowMode) {
-            if (windowMode && floatingOverlayEditRequest != null) {
-                floatingOverlayEditRequest = null
-                WindowModeUiGuard.toastEditingBlocked(context)
-            }
-        }
-
         if (!windowMode) {
-            floatingOverlayEditRequest?.let { (panelId, widgetIndex) ->
+            pendingFloatingTileEdit?.let { (panelId, widgetIndex) ->
                 MainScreenFloatingOverlayEdit(
                     panelId = panelId,
                     widgetIndex = widgetIndex,
                     settingsViewModel = settingsViewModel,
                     currentTheme = currentTheme,
-                    onDismiss = { floatingOverlayEditRequest = null },
+                    onDismiss = { FloatingDashboardTileEditRequestBus.clear() },
                 )
             }
         }

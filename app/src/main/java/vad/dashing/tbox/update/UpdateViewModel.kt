@@ -39,19 +39,17 @@ class UpdateViewModel(
     }
 
     fun downloadAndVerify() {
-        if (downloadJob?.isActive == true) return
+        val previous = downloadJob
+        if (previous != null && previous.isActive && !previous.isCancelled) return
         downloadJob = viewModelScope.launch {
-            try {
-                repository.downloadAndVerify()
-            } finally {
-                downloadJob = null
-            }
+            // A cancelled download may still be deleting its partial files.
+            previous?.join()
+            repository.downloadAndVerify()
         }
     }
 
     fun cancelDownload() {
         downloadJob?.cancel()
-        downloadJob = null
         repository.cancelDownload()
     }
 

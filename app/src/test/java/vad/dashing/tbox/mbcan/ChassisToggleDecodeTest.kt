@@ -5,11 +5,12 @@ import org.junit.Test
 
 /**
  * Chassis status decode helpers (stock CarSettings ConvertValue / CarCommon1).
+ * A10 AVH/HDC status stays 1|2 → On. A9 Auto Hold is [AvhDomain.decodeEnabled].
  */
 class ChassisToggleDecodeTest {
 
     @Test
-    fun avhHdc_onWhenRawOneOrTwo() {
+    fun a10AvhHdcStatus_onWhenRawOneOrTwo() {
         assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeAvhHdcStatusRaw(1))
         assertEquals(MbCanBinaryState.On, MbCanSignalStateEngine.decodeAvhHdcStatusRaw(2))
         assertEquals(MbCanBinaryState.Off, MbCanSignalStateEngine.decodeAvhHdcStatusRaw(0))

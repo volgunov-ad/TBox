@@ -2,9 +2,12 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.AccCruiseDomain
 import vad.dashing.tbox.mbcan.AccStatusDomain
+import vad.dashing.tbox.mbcan.HuSystemModeDomain
+import vad.dashing.tbox.mbcan.IgnitionKeyDomain
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.WiperStsDomain
 
@@ -59,7 +62,8 @@ object AutomationSignalCatalog {
     private val rearSeatStates = listOf("off", "heat_1", "heat_2", "heat_3")
     private const val windowPositionTypicalRange =
         "Только ГУ. Положение 0…100 %: 0 закрыто, штатная щель 20, комфортное открытие 80, " +
-            "100 полностью открыто. A9 BCM getVehicleWindow; A10 *_WIN_Position."
+            "100 полностью открыто; open (Открыто) — любое открытое положение: 20, 80, 100 и " +
+            "промежуточное (A9 BCM отдаёт там −1). A9 BCM getVehicleWindow; A10 *_WIN_Position."
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(
@@ -81,7 +85,7 @@ object AutomationSignalCatalog {
             "Температура двигателя",
             "°C",
             bothSources,
-            typicalRange = "Значения в °C",
+            typicalRange = "Значения в °C. На Android 9 только TBox: mbCAN всегда отдаёт 0",
         ),
         number(
             AutomationSignalId.OUTSIDE_TEMPERATURE,
@@ -151,7 +155,7 @@ object AutomationSignalCatalog {
             "Скорость вращения руля",
             "°/с",
             bothSources,
-            typicalRange = "Значения в °/с; на ГУ Android 10 часто недоступна",
+            typicalRange = "Значения в °/с. На Android 10 только TBox: в VHAL её нет",
         ),
         number(
             AutomationSignalId.CRUISE_SET_SPEED,
@@ -168,6 +172,37 @@ object AutomationSignalCatalog {
             AccStatusDomain.STATE_OPTIONS,
             typicalRange = "Android 9: AccStatus 4=ACC ON, 5=ON, 0…3=выкл. " +
                 "Android 10: MCU_REPLY_ACC_STATUS 1 и 2=ACC ON, 0 и 3=выкл (шкала не 4/5).",
+        ),
+        state(
+            AutomationSignalId.IGNITION_KEY,
+            "Положение ключа",
+            headUnitOnly,
+            IgnitionKeyDomain.OPTIONS,
+            typicalRange = "Положение ключа CEM_2_KeySts / getIgnSts: " +
+                "0=выключено (off), 1=ACC (acc), 2=зажигание (on), 3=стартер (crank). " +
+                "Android 9 и Android 10 одна шкала. Это не «Статус ACC (ключ)».",
+            namedValues = listOf(
+                AutomationSignalNamedValue("off", "Выключено"),
+                AutomationSignalNamedValue("acc", "ACC"),
+                AutomationSignalNamedValue("on", "Зажигание"),
+                AutomationSignalNamedValue("crank", "Стартер"),
+            ),
+        ),
+        state(
+            AutomationSignalId.HU_SYSTEM_MODE,
+            "Режим головного устройства",
+            headUnitOnly,
+            HuSystemModeDomain.OPTIONS,
+            typicalRange = "Только Android 9, eMBCAN_SYSTEMMODE. " +
+                "1=ожидание (standby), 2=работа (active), " +
+                "6=15 минут работы ГУ после снятия ACC/зажигания (hold_15m), 7=сон (sleep). " +
+                "hold_15m — не дистанционный запуск. На Android 10 значения нет.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("standby", "Ожидание"),
+                AutomationSignalNamedValue("active", "Работа"),
+                AutomationSignalNamedValue("hold_15m", "15 минут работы ГУ"),
+                AutomationSignalNamedValue("sleep", "Сон"),
+            ),
         ),
         state(
             AutomationSignalId.ACC_CRUISE_STATE,
@@ -215,7 +250,7 @@ object AutomationSignalCatalog {
             "",
             bothSources,
             typicalRange = "Подготовленная / целевая передача. " +
-                "A10 VHAL EMS_TargetGearPosition; на A9 mbCAN обычно нет (null). TBox gearBoxPreparedGear.",
+                "A10 VHAL EMS_TargetGearPosition; на Android 9 только TBox gearBoxPreparedGear (в mbCAN нет).",
         ),
         number(
             AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
@@ -319,6 +354,26 @@ object AutomationSignalCatalog {
             typicalRange = "Только ГУ. Бинарный статус: включён/выключен. " +
                 "A9 BCM stLightSts.nHighBeamSts, A10 R_0404_CEM_2_HighBeamSts (CEM 1-bit). " +
                 "Не режим LIGHTCONTROL 1…4.",
+        ),
+        state(
+            AutomationSignalId.HAZARD,
+            "Аварийка",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включена/выключена. " +
+                "A9 BCM nTurnSts+nDirectionLightSts: 3+1 включена (кнопка и открытый багажник), " +
+                "0+0 / 2+2 / 1+1 выключена. Не мигающий объект поворотников и не nHazardLightSts. " +
+                "A10 R_0400_CEM_1_HazardLightSW (CEM 1-bit).",
+        ),
+        state(
+            AutomationSignalId.DRL,
+            "ДХО",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус: включены/выключены. " +
+                "A9 BCM stLightSts.nDRLSts: 2 включены / 1 выключены " +
+                "(журнал: гаснут при аварийке и при открытом багажнике). " +
+                "A10 R_0404_CEM_2_DRLSts — CEM 1-bit, шкала на этой машине не подтверждена.",
         ),
         state(
             AutomationSignalId.EPB_PARK_LAMP,
@@ -517,6 +572,12 @@ object AutomationSignalCatalog {
             AutomationSignalStateEncoding.fcwSensitivityOptions,
         ),
         state(
+            AutomationSignalId.ACC_TIME_GAP,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ACC_TIME_GAP),
+            headUnitOnly,
+            AutomationSignalStateEncoding.accTimeGapOptions,
+        ),
+        state(
             AutomationSignalId.LDW_SENSITIVITY,
             AutomationParameterLabels.signalLabel(AutomationSignalId.LDW_SENSITIVITY),
             headUnitOnly,
@@ -708,6 +769,70 @@ object AutomationSignalCatalog {
             sources = appOnly,
             typicalRange = "Текущая точка GeoDisplay (GNSS или подмена)",
         ),
+        number(
+            AutomationSignalId.GEO_ALTITUDE_M,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_ALTITUDE_M),
+            "м",
+            appOnly,
+            typicalRange = "Высота GeoDisplay, м. Unavailable при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SPEED_KMH,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SPEED_KMH),
+            "км/ч",
+            appOnly,
+            typicalRange = "Отображаемая скорость GeoDisplay (GNSS/CAN/retention). " +
+                "Unavailable при NONE/LOST.",
+        ),
+        state(
+            AutomationSignalId.GEO_SPEED_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SPEED_SOURCE),
+            appOnly,
+            GeoAutomationSignals.SPEED_SOURCE_OPTIONS,
+            typicalRange = "gnss / can / retention — источник скорости GeoDisplay; " +
+                "none — нет LIVE/RETAINING снимка.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("gnss", "GNSS"),
+                AutomationSignalNamedValue("can", "CAN"),
+                AutomationSignalNamedValue("retention", "Удержание"),
+                AutomationSignalNamedValue("none", "Нет данных"),
+            ),
+        ),
+        number(
+            AutomationSignalId.GEO_BEARING_DEG,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_BEARING_DEG),
+            "°",
+            appOnly,
+            typicalRange = "Курс / bearing, градусы. Unavailable без надёжного bearing или при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SATELLITES_VISIBLE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SATELLITES_VISIBLE),
+            "",
+            appOnly,
+            typicalRange = "Спутники в поле зрения. Unavailable при NONE/LOST.",
+        ),
+        number(
+            AutomationSignalId.GEO_SATELLITES_USED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SATELLITES_USED),
+            "",
+            appOnly,
+            typicalRange = "Спутники в решении фикса. Unavailable при NONE/LOST.",
+        ),
+        state(
+            AutomationSignalId.GEO_FIX_VALID,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_FIX_VALID),
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off — правдивость GNSS (gnssTruthful), отдельно от locate_status.",
+        ),
+        state(
+            AutomationSignalId.GEO_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.GEO_SOURCE),
+            appOnly,
+            GeoAutomationSignals.GEO_SOURCE_OPTIONS,
+            typicalRange = "Активный источник геопозиции из настроек: tbox / companion / android / usb / phone.",
+        ),
         state(AutomationSignalId.ESP_GPIO_IN_0, "ESP-вход 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_GPIO_IN_1, "ESP-вход 1", appOnly, binaryStates),
         state(AutomationSignalId.ESP_GPIO_IN_2, "ESP-вход 2", appOnly, binaryStates),
@@ -883,6 +1008,51 @@ object AutomationSignalCatalog {
             typicalRange = "Уровень сигнала модема (CSQ → «палочки»), обычно 0…5; 0 — нет данных. " +
                 "TBox MDC или Wi‑Fi HTTP sink в netState.",
         ),
+        number(
+            AutomationSignalId.MODEM_RSSI_DBM,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_RSSI_DBM),
+            "дБм",
+            appOnly,
+            typicalRange = "RSSI/RSRP дБм: signalDbm с Wi‑Fi модема или CSQ→dBm (2·CSQ−113) " +
+                "для TBox при CSQ 0…31. Unavailable при CSQ 99 / без значения. " +
+                "IMEI/ICCID/IMSI не отдаются.",
+        ),
+        state(
+            AutomationSignalId.MODEM_REGISTERED,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_REGISTERED),
+            appOnly,
+            binaryStates,
+            typicalRange = "on — домашняя сеть или роуминг; off — нет сети / поиск / отказ / иное.",
+        ),
+        state(
+            AutomationSignalId.MODEM_OPERATOR,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_OPERATOR),
+            appOnly,
+            typicalRange = "Имя оператора (строка) или нет значения. Без IMEI/ICCID/IMSI.",
+        ),
+        state(
+            AutomationSignalId.MODEM_SOURCE,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_SOURCE),
+            appOnly,
+            vad.dashing.tbox.wifimodem.ModemAutomationStates.MODEM_SOURCE_OPTIONS,
+            typicalRange = "Активный источник модема из настроек: tbox / wifi_http.",
+        ),
+        number(
+            AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS),
+            "кбит/с",
+            appOnly,
+            typicalRange = "Downlink throughput Wi‑Fi HTTP модема (из bytes/s). " +
+                "Unavailable на пути TBox MDC или когда модем не отдал скорость.",
+        ),
+        number(
+            AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS),
+            "кбит/с",
+            appOnly,
+            typicalRange = "Uplink throughput Wi‑Fi HTTP модема (из bytes/s). " +
+                "Unavailable на пути TBox MDC или когда модем не отдал скорость.",
+        ),
         state(
             AutomationSignalId.LOCATE_STATUS,
             AutomationParameterLabels.signalLabel(AutomationSignalId.LOCATE_STATUS),
@@ -988,14 +1158,86 @@ object AutomationSignalCatalog {
             appOnly,
             typicalRange = "Длительность трека в миллисекундах. 0 — сессия длительность не сообщила.",
         ),
+        state(
+            AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_HIGHWAY_CLASS),
+            appOnly,
+            AutomationRoadMatchSignals.HIGHWAY_CLASS_OPTIONS,
+            typicalRange = "Класс OSM-ребра после привязки к карте (motorway, primary, residential, …). " +
+                "Без match / без ребра — сигнала нет. Поднимает matcher без коррекции позы; " +
+                "не SpeedCam и не SLA с шины.",
+        ),
+        number(
+            AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_SPEED_LIMIT_KMH),
+            "км/ч",
+            appOnly,
+            typicalRange = "Текущий posted OSM maxspeed на matched-ребре (км/ч). " +
+                "Без match или без maxspeed в паке — сигнала нет. Только OSM match, " +
+                "не fallback с радара SpeedCam и не slaSpeedLimitWidget. " +
+                "Смена лимита: NumericThreshold с выключенным rearm (каждое новое число).",
+        ),
+        state(
+            AutomationSignalId.ROAD_TUNNEL,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_TUNNEL),
+            appOnly,
+            binaryStates,
+            typicalRange = "Тоннель / Tunnel (OSM на matched-ребре). " +
+                "Условие: on — в тоннеле, off — вне тоннеля. " +
+                "Триггер: on — въезд в тоннель (off→on), off — выезд из тоннеля (on→off). " +
+                "Без match — сигнала нет. Поднимает matcher без коррекции позы; не SpeedCam.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("off", "Вне тоннеля / Outside"),
+                AutomationSignalNamedValue("on", "В тоннеле / Inside"),
+            ),
+        ),
     )
 
     private val byId = entries.associateBy { it.id }
 
+    /** Mirrors [vad.dashing.tbox.mbcan.UniversalCanRepository.mode]; kept here so the catalog has no Android deps. */
+    @Volatile
+    var headUnitMode: HeadUnitCanMode = HeadUnitCanMode.Android9MbCan
+        private set
+
+    fun setHeadUnitMode(mode: HeadUnitCanMode) {
+        headUnitMode = mode
+    }
+
     fun get(id: AutomationSignalId): AutomationSignalDescriptor = requireNotNull(byId[id])
 
+    /**
+     * HU backends that answer for a signal but never carry it: A9 mbCAN coolant is always 0.0,
+     * A9 has no target gear, A10 VHAL has no steering speed and no HU system mode.
+     * TBox covers coolant, target gear, and steering speed. System mode stays head-unit only.
+     */
+    fun headUnitUnsupported(id: AutomationSignalId, mode: HeadUnitCanMode): Boolean = when (mode) {
+        HeadUnitCanMode.Android9MbCan ->
+            id == AutomationSignalId.ENGINE_TEMPERATURE || id == AutomationSignalId.TARGET_GEAR
+        HeadUnitCanMode.Android10Vhal ->
+            id == AutomationSignalId.STEERING_SPEED || id == AutomationSignalId.HU_SYSTEM_MODE
+    }
+
+    /** Sources that give real values on [mode]. [AutomationSignalDescriptor.sources] is the union over platforms. */
+    fun sources(id: AutomationSignalId, mode: HeadUnitCanMode = headUnitMode): Set<AutomationSignalSource> {
+        val all = get(id).sources
+        if (!headUnitUnsupported(id, mode)) return all
+        val usable = all - AutomationSignalSource.HEAD_UNIT
+        return usable.ifEmpty { all }
+    }
+
+    /** Saved rules and API clients may still name the HU for these signals; read them from what works. */
+    fun resolveSource(
+        id: AutomationSignalId,
+        requested: AutomationSignalSource,
+        mode: HeadUnitCanMode = headUnitMode,
+    ): AutomationSignalSource {
+        val usable = sources(id, mode)
+        return if (requested in usable) requested else preferredSource(usable)
+    }
+
     fun preferredSource(id: AutomationSignalId): AutomationSignalSource =
-        preferredSource(get(id).sources)
+        preferredSource(sources(id))
 
     fun preferredSource(sources: Set<AutomationSignalSource>): AutomationSignalSource {
         require(sources.isNotEmpty()) { "signal sources must not be empty" }
@@ -1003,7 +1245,7 @@ object AutomationSignalCatalog {
     }
 
     fun sourcesForUi(id: AutomationSignalId): List<AutomationSignalSource> =
-        sourcesForUi(get(id).sources)
+        sourcesForUi(sources(id))
 
     fun sourcesForUi(sources: Set<AutomationSignalSource>): List<AutomationSignalSource> {
         val ordered = SOURCE_UI_ORDER.filter { it in sources }
@@ -1019,9 +1261,26 @@ object AutomationSignalCatalog {
             .sortedByAutomationLabel { it.label }
             .map { it.id }
 
-    /** Trigger/condition pickers: hides speed-limiter signals while [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN]. */
+    /**
+     * Trigger/condition pickers: hides speed-limiter signals while
+     * [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN], and the cruise-state signal that does not
+     * match the global [vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType].
+     */
     fun pickerSignalsOfType(valueType: AutomationSignalValueType): List<AutomationSignalId> =
-        signalsOfType(valueType).filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
+        signalsOfType(valueType)
+            .filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
+            .filterNot { isCruiseSignalHiddenFromAutomationPicker(it) }
+
+    private fun isCruiseSignalHiddenFromAutomationPicker(id: AutomationSignalId): Boolean {
+        val global = vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType
+        return when (id) {
+            AutomationSignalId.ACC_CRUISE_STATE ->
+                global != vad.dashing.tbox.GlobalCruiseControlType.ACC
+            AutomationSignalId.CCS_CRUISE_STATE ->
+                global != vad.dashing.tbox.GlobalCruiseControlType.CCS
+            else -> false
+        }
+    }
 
     fun stateOptionLabel(raw: String): String = AutomationSignalStateEncoding.stateOptionLabel(raw)
 
@@ -1047,14 +1306,42 @@ object AutomationSignalCatalog {
         sources: Set<AutomationSignalSource>,
         options: List<String> = emptyList(),
         typicalRange: String = "",
+        namedValues: List<AutomationSignalNamedValue>? = null,
     ) = AutomationSignalDescriptor(
         id = id,
         label = label,
         sources = sources,
         stateOptions = options,
-        namedValues = options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
+        namedValues = namedValues
+            ?: options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
         typicalRange = typicalRange,
     )
+
+    /** UI label for a state option; prefers catalog [AutomationSignalDescriptor.namedValues]. */
+    fun stateOptionLabel(signal: AutomationSignalId, raw: String): String {
+        val named = get(signal).namedValues.firstOrNull {
+            it.value.equals(raw.trim(), ignoreCase = true)
+        }?.label
+        return named?.takeIf { it.isNotBlank() } ?: stateOptionLabel(raw)
+    }
+
+    /** UI label for a state trigger option; uses transition wording for tunnel enter/exit. */
+    fun triggerStateOptionLabel(signal: AutomationSignalId, raw: String): String {
+        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+            return when (raw.trim().lowercase()) {
+                "on" -> "Въезд в тоннель / Enter tunnel"
+                "off" -> "Выезд из тоннеля / Exit tunnel"
+                else -> stateOptionLabel(signal, raw)
+            }
+        }
+        return stateOptionLabel(signal, raw)
+    }
+
+    /** Default state option when a signal is selected in a trigger editor. */
+    fun defaultTriggerStateOption(signal: AutomationSignalId): String? = when (signal) {
+        AutomationSignalId.ROAD_TUNNEL -> "on"
+        else -> get(signal).stateOptions.firstOrNull()
+    }
 }
 
 private fun formatNamedValues(values: List<AutomationSignalNamedValue>): String =

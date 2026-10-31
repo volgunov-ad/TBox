@@ -2,9 +2,11 @@
 """
 Convert TBox Monitor app / deep-diagnostic journals (`tbox_app_log_*.txt`) to Excel.
 
-Parses lines tagged ``MBCAN_TMP.``, ``CANDIAG_MBCAN.``, ``CANDIAG_VHAL.``, and
-optionally ``TripFuel.`` into a timeline sheet plus a summary of distinct cfg /
-property IDs marked known vs unknown against the app catalog
+Parses lines tagged ``MBCAN_TMP.``, ``CANDIAG_MBCAN.``, ``CANDIAG_VHAL.``,
+``CANDIAG_MARK.``, ``EXPERT_CAN.`` and optionally ``TripFuel.`` into a timeline
+sheet, a summary of distinct cfg / property IDs, and a Marks sheet: for each
+journal mark, the signals whose value changed within ±3 seconds.
+Property IDs are marked known vs unknown against the app catalog
 (``MbCanKnownVehiclePropertyId`` / ``MbCanKnownAudioPropertyId`` in
 ``MbCanCatalog.kt``).
 
@@ -58,8 +60,9 @@ DEFAULT_CATALOG_KT = (
 
 LINE_RE = re.compile(
     r"^\[(\d{2}:\d{2}:\d{2})\]\s+(\w+):\s+"
-    r"(MBCAN_TMP|CANDIAG_MBCAN|CANDIAG_VHAL|TripFuel)\.\s*(.*)$"
+    r"(MBCAN_TMP|CANDIAG_MBCAN|CANDIAG_VHAL|CANDIAG_MARK|EXPERT_CAN|TripFuel)\.\s*(.*)$"
 )
+SNAPSHOT_RE = re.compile(r"^snapshot key=(\S+) value=(\S+)")
 CONST_VAL_RE = re.compile(r"const val (\w+)\s*=\s*(-?\d+)")
 OBJECT_BODY_RE = re.compile(
     r"object (MbCanKnownVehiclePropertyId|MbCanKnownAudioPropertyId)\s*\{",
@@ -72,6 +75,7 @@ MODULAR_RE = re.compile(r"\bmodular=(-?\d+)\b")
 REV_RE = re.compile(r"\brev=(-?\d+)\b")
 DT_RE = re.compile(r"\bdt=(\S+)")
 NAME_RE = re.compile(r"\bname=(\S+)")
+FIELD_RE = re.compile(r"\bfield=(\S+)")
 AREA_ID_RE = re.compile(r"\bareaId=(-?\d+)\b")
 TELEMETRY_ENTRY_RE = re.compile(
     r"(?P<key>[A-Za-z0-9_./+-]+)\s+count=(?P<count>\d+)\s+last=(?P<last>.*?)(?=\s*;\s*[^;]+?\s+count=\d+\s+last=|\s*$)"
@@ -276,6 +280,45 @@ def parse_line(line: str, catalog: CatalogIndex, include_trip_fuel: bool) -> lis
     time_s, level, tag, body = m.group(1), m.group(2), m.group(3), m.group(4)
     raw = line.rstrip("\n")
 
+    if tag == "CANDIAG_MARK":
+        text = body[5:].strip() if body.startswith("MARK ") else ""
+        return [
+            LogEvent(
+                time=time_s,
+                level=level,
+                tag=tag,
+                kind="mark",
+                detail=text,
+                raw=raw,
+            )
+        ]
+
+    if tag == "EXPERT_CAN":
+        snap = SNAPSHOT_RE.match(body)
+        if snap is not None:
+            return [
+                LogEvent(
+                    time=time_s,
+                    level=level,
+                    tag=tag,
+                    kind="snapshot",
+                    telemetry_key=snap.group(1),
+                    value=snap.group(2),
+                    detail=body[:500],
+                    raw=raw,
+                )
+            ]
+        return [
+            LogEvent(
+                time=time_s,
+                level=level,
+                tag=tag,
+                kind="snapshot_note",
+                detail=body[:500],
+                raw=raw,
+            )
+        ]
+
     if tag == "TripFuel":
         if not include_trip_fuel:
             return []
@@ -328,6 +371,24 @@ def parse_line(line: str, catalog: CatalogIndex, include_trip_fuel: bool) -> lis
                 known=known,
                 catalog_name=catalog_name or log_name,
                 modular=extract_kv_int(AREA_ID_RE, body),
+                detail=body[:500],
+                raw=raw,
+            )
+        ]
+
+    if tag == "CANDIAG_MBCAN" and FIELD_RE.search(body):
+        # Field-level object mirror: ``mbcan dt=<type> field=<path> value=<any>``
+        vm = re.search(r"\bvalue=(\S+)", body)
+        return [
+            LogEvent(
+                time=time_s,
+                level=level,
+                tag=tag,
+                kind="mbcan_obj",
+                value=vm.group(1) if vm else None,
+                known=True,
+                catalog_name=extract_kv_str(FIELD_RE, body),
+                data_type=extract_kv_str(DT_RE, body),
                 detail=body[:500],
                 raw=raw,
             )
@@ -410,6 +471,72 @@ def parse_line(line: str, catalog: CatalogIndex, include_trip_fuel: bool) -> lis
             raw=raw,
         )
     ]
+
+
+def signal_identity(ev: LogEvent) -> Optional[str]:
+    """Stable key for one decoded signal, or None for lines that are not a value."""
+    if ev.kind == "mbcan_obj" and ev.catalog_name:
+        return f"mbcan:{ev.data_type}:{ev.catalog_name}"
+    if ev.kind in ("mbcan_cfg", "cfgVehiclePush") and ev.item_id is not None:
+        return f"mbcan:{ev.data_type or 'cfg'}:item{ev.item_id}"
+    if ev.kind == "vhal" and ev.property_id is not None:
+        area = 0 if ev.modular is None else ev.modular
+        return f"vhal:{ev.property_id}:{area}"
+    if ev.kind == "push_coalesced" and ev.telemetry_key:
+        return f"tmp:{ev.telemetry_key}"
+    if ev.kind == "snapshot" and ev.telemetry_key:
+        return f"snap:{ev.telemetry_key}"
+    return None
+
+
+def clock_seconds(events: Iterable[LogEvent]) -> list[int]:
+    """Seconds since midnight, plus 24 h after a wrap so a session can cross midnight."""
+    out: list[int] = []
+    offset = 0
+    prev: Optional[int] = None
+    for ev in events:
+        h, m, s = (int(part) for part in ev.time.split(":"))
+        sec = h * 3600 + m * 60 + s + offset
+        if prev is not None and sec < prev - 12 * 3600:
+            offset += 24 * 3600
+            sec += 24 * 3600
+        prev = sec
+        out.append(sec)
+    return out
+
+
+def mark_changes(events: list[LogEvent], window_s: int = 3) -> list[tuple[str, str, str, str, str]]:
+    """
+    For each ``CANDIAG_MARK``, signals that changed inside ±window_s.
+
+    A signal counts when it had a value before the window and a different value
+    inside it, or when it takes two different values inside the window. A single
+    first sighting (a snapshot with no earlier sample) is not a change.
+    """
+    times = clock_seconds(events)
+    rows: list[tuple[str, str, str, str, str]] = []
+    for index, ev in enumerate(events):
+        if ev.kind != "mark":
+            continue
+        center = times[index]
+        before: dict[str, str] = {}
+        inside: dict[str, list[str]] = defaultdict(list)
+        for other_index, other in enumerate(events):
+            key = signal_identity(other)
+            if key is None or other.value is None:
+                continue
+            if times[other_index] < center - window_s:
+                before[key] = other.value
+            elif times[other_index] <= center + window_s:
+                inside[key].append(other.value)
+        for key, samples in inside.items():
+            last = samples[-1]
+            old = before.get(key)
+            if old is not None and old != last:
+                rows.append((ev.time, ev.detail, key, old, last))
+            elif old is None and len(set(samples)) > 1:
+                rows.append((ev.time, ev.detail, key, samples[0], last))
+    return rows
 
 
 def parse_file(
@@ -570,11 +697,20 @@ def write_xlsx(
             for c in range(1, len(SUMMARY_HEADERS) + 1):
                 ws2.cell(row=r, column=c).fill = unknown_fill
 
+    marks = mark_changes(events)
+    ws4 = wb.create_sheet("Marks")
+    ws4.append(["mark_time", "mark_text", "signal", "before", "after"])
+    for col in range(1, 6):
+        ws4.cell(row=1, column=col).font = Font(bold=True)
+    for row in marks:
+        ws4.append(list(row))
+
     ws3 = wb.create_sheet("Meta")
     ws3.append(["key", "value"])
     ws3.append(["catalog_path", str(catalog.source_path) if catalog.source_path else ""])
     ws3.append(["catalog_id_count", len(catalog.id_to_name)])
     ws3.append(["timeline_events", len(events)])
+    ws3.append(["mark_changes", len(marks)])
     ws3.append(["summary_ids", len(summary_rows)])
     unknown_ids = [r["item_or_property_id"] for r in summary_rows if r["known"] is False]
     ws3.append(["unknown_ids", ",".join(str(x) for x in unknown_ids)])

@@ -2,7 +2,7 @@
 
 Приложение для головного устройства (ГУ) Jetour Dashing: мониторинг TBox, CAN и геопозиции, плитки на главном экране и в плавающих окнах, учёт поездок и топлива, климат/багажник/зеркала через mbCAN или VHAL, темы оформления, управление служебными процессами блока TBox.
 
-**Текущая версия:** 1.0.1 (`ru` / `en` flavor).
+**Текущая версия:** 1.1.0 (`ru` / `en` flavor).
 
 == Основные возможности
 
@@ -99,11 +99,19 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md) | Внешний HTTP API: контракт (LAN, pairing, signals/invoke/RunNow) |
 | [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md) | Инструкция API: включение, ручной токен, curl / телефон / Tasker |
 | [docs/VOICE_APK_RU.md](docs/VOICE_APK_RU.md) | План Voice APK: STT/TTS/NLU, этапы MVP |
+| [docs/MQTT_APK_RU.md](docs/MQTT_APK_RU.md) | TBox MQTT (`:mqtt`): брокер, каталог API, Home Assistant discovery |
+| [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §6.8 | «Расширение /data» (`:dataresize`): перенос `userdata` в свободный хвост eMMC на A10 |
+| [tools/hu_rescue/ИНСТРУКЦИЯ.md](tools/hu_rescue/ИНСТРУКЦИЯ.md) | Восстановление ГУ A10 через отладочный UART (`tools/hu_rescue/`: диагностика, Wi-Fi/ADB, откат/ремонт GPT, fastboot) |
+| [docs/USB_AUDIO_A10_RU.md](docs/USB_AUDIO_A10_RU.md) | Звук через USB-карту на A10: хаб-обход бага ядра, защита eMMC, постоянное включение (`:usbaudio`) и временный bind в TBox Monitor |
+| [docs/USB_AUDIO_A10_SIMPLE_RU.md](docs/USB_AUDIO_A10_SIMPLE_RU.md) | То же самое простыми словами: Блокнот + копировать/вставить, без диагностики |
+| [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2 | «Файрвол ГУ» (`:fwunlock`): постоянный белый список сети для приложений на A10 (файрвол Adayo), рантайм-фикс в TBox Monitor — страховка |
+| [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8 | «AA/CarPlay окна ГУ» (`:winpatch`): постоянная установка/откат универсальных патченных AndroidAuto p6 и CarPlayView p6 (и встроенных стоковых резервов) на всех прошивках A10 |
+| [AGENTS.md](AGENTS.md) (`:camview`) | «Тест камер ГУ (Mengbo)» (`:camview`): тестовое приложение превью камер AVM/OMS/DMS через Mengbo SDK и `*_sharecamera` на A9 |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
 | [docs/fuel-refuels-calibration.md](docs/fuel-refuels-calibration.md) | Заправки, калибровка, пороги 4% / 0,3%, gate по активной поездке |
 | [docs/BRANCHING.md](docs/BRANCHING.md) | Ветки `preRelease` / `master`, feature-ветки и релизный процесс |
-| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 1.0.1) |
+| [Changelog.dm](Changelog.dm) | История версий по релизам (0.12 … 1.1.0) |
 | [AGENTS.md](AGENTS.md) | Сборка и окружение для разработки (Cursor Cloud) |
 
 == Архитектура данных
@@ -114,7 +122,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | CAN головного устройства (климат, сиденья, режимы) | [docs/CAN_BACKENDS_RU.md](docs/CAN_BACKENDS_RU.md) |
 | Панели и виджеты | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 | Автоматизации | [docs/AUTOMATIONS_RU.md](docs/AUTOMATIONS_RU.md) |
-| Внешний HTTP API (клиенты / голос) | [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md), [инструкция](docs/EXTERNAL_API_USER_GUIDE_RU.md) |
+| Внешний HTTP API (клиенты / голос / MQTT) | [docs/EXTERNAL_API_RU.md](docs/EXTERNAL_API_RU.md), [инструкция](docs/EXTERNAL_API_USER_GUIDE_RU.md), [MQTT](docs/MQTT_APK_RU.md) |
 
 == Техническая документация по CAN backend
 Подробное описание выбора режима `mbCAN`/`VHAL`, работы `UniversalCanRepository`, подключения и диагностики:

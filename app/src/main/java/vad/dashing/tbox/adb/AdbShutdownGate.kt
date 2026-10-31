@@ -18,6 +18,15 @@ internal object AdbShutdownGate {
         shuttingDown.set(true)
     }
 
+    /**
+     * The process outlives a finished [vad.dashing.tbox.MainActivity] (BackgroundService keeps it),
+     * so a new activity / service instance must clear the flag or every later logcat capture
+     * and script run stops before its first command.
+     */
+    fun markAppAlive() {
+        shuttingDown.set(false)
+    }
+
     fun isAppShuttingDown(): Boolean = shuttingDown.get()
 
     /**

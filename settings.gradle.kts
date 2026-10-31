@@ -23,4 +23,12 @@ dependencyResolutionManagement {
 rootProject.name = "TBox"
 include(":app")
 include(":voice")
+include(":phone")
+include(":mqtt")
+include(":adbcore")
+include(":dataresize")
+include(":usbaudio")
+include(":fwunlock")
+include(":winpatch")
+include(":camview")
  

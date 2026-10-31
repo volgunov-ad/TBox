@@ -165,7 +165,12 @@ fun RefuelsTab(
     val listState = rememberLazyListState()
 
     val sections = RefuelsSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.REFUELS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     Column(

@@ -534,6 +534,17 @@ fun MainScreenDashboardPanel(
                 collapseOnStripDoubleTap = panel.collapseOnStripDoubleTap,
                 isEditMode = isEditMode,
                 onCollapsedChange = { settingsViewModel.setPanelCollapsed(panel.id, it) },
+                stripLengthPercent = if (effectiveCollapsed) {
+                    panel.collapseStripLengthPercentCollapsed
+                } else {
+                    panel.collapseStripLengthPercentExpanded
+                },
+                stripPositionPercent = if (effectiveCollapsed) {
+                    panel.collapseStripPositionPercentCollapsed
+                } else {
+                    panel.collapseStripPositionPercentExpanded
+                },
+                touchZoneMatchStrip = panel.collapseTouchZoneMatchStrip,
                 modifier = Modifier.fillMaxSize(),
             ) {
         DashboardPanelGridAndFrames(
@@ -558,6 +569,7 @@ fun MainScreenDashboardPanel(
             showDialogOpen = showDialogForIndex != null,
             widgetInteractionPolicy = widgetInteractionPolicy,
             widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+            buttonBindingsActive = !effectiveCollapsed && !isEditMode,
             onWidgetClick = { index ->
                 val cfg = widgetConfigs.getOrNull(index)
                 if (isEditMode && !isDraggingMode && !isResizingMode) {

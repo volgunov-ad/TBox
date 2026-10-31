@@ -34,6 +34,8 @@ object FirmwareVehicleJsonMapper {
      * Scale is 0…3, not A9 AccStatus 4/5 — see [AccStatusDomain.decodeMcuReply].
      */
     const val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID = 557_845_540 // MCU_REPLY_ACC_STATUS
+    /** CEM key position: 0 off / 1 ACC / 2 ON / 3 crank. Same scale as A9 getIgnSts(). */
+    const val VHAL_CEM_KEY_STS = 289_412_126 // R_0400_CEM_2_KeySts
     /**
      * A10 steering wheel angle: MCU path (same family as [VHAL_CAR_SPEED_PROPERTY_ID]).
      * INT32 degrees as-is; rate (°/s) not provided by this property.
@@ -61,6 +63,8 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = 289_412_179 // R_0400_ESP_5_RHFPulseCounter
     const val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = 289_412_175 // R_0400_ESP_5_LHRPulseCounter
     const val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = 289_412_177 // R_0400_ESP_5_RHRPulseCounter
+    /** Lateral acceleration (`R_0900_YAS_1_LateraAccaleleration`). */
+    const val VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID = 289_414_960
     /** Instant fuel L/100km counter; UI = raw / 10. */
     const val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID = 289_414_918 // R_0900_ICM_6_FuelRollingCounter
     /** Cluster average fuel L/100km; UI = raw / 10. */
@@ -107,6 +111,11 @@ object FirmwareVehicleJsonMapper {
     const val VHAL_CEM_RAIN_DETECTED = 289_412_139 // R_0400_CEM_2_RainDetected
     /** CEM high beam status 1-bit (1 on / 0 off). */
     const val VHAL_CEM_HIGH_BEAM_STS = 289_412_252 // R_0404_CEM_2_HighBeamSts
+    /**
+     * CEM DRL status. A10 scale is assumed CEM 1-bit (1 on / 0 off), same family as
+     * [VHAL_CEM_HIGH_BEAM_STS]. Not confirmed on this car: DRL journals are A9 (2 on / 1 off).
+     */
+    const val VHAL_CEM_DRL_STS = 289_412_249 // R_0404_CEM_2_DRLSts
     /**
      * ICM EPB warning lamp status — best-effort A10 proxy for A9 BCM EPB park lamp.
      * Scale assumed CEM 1-bit (1 on / 0 off); confirm on car.
@@ -301,8 +310,9 @@ object FirmwareVehicleJsonMapper {
         MbCanKnownVehiclePropertyId.TJA_ICA_SWITCH to 289415716, // R_0B00_FCM_2_TJA_ICA_ON_OFF_Sts
         // MBVehicleProperty.eDVD_LDWSWITCH
         MbCanKnownVehiclePropertyId.LDW_SWITCH to 289415717, // R_0B00_FCM_2_LDWOnOffSts
-        // MBVehicleProperty.eTIMEGAPSET1REQ
-        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415688, // R_0B00_FRM_3_TimeGapSet_DVD
+        // Live ACC gap is the cluster status, same 0/1/2 table as stock launcher.
+        // DVD echo R_0B00_FRM_3_TimeGapSet_DVD (289415688) is the sibling 2-bit signal.
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET to 289415687, // R_0B00_FRM_3_TimeGapSet_ICM
         MbCanKnownVehiclePropertyId.BLIND_AREA_DETECTION to 289415723, // R_0B00_SRR_1_BSDState
         MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING to 289415729,
         MbCanKnownVehiclePropertyId.FCW_SWITCH to 289415696,

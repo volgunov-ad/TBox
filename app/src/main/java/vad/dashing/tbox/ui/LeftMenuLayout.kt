@@ -6,6 +6,20 @@ import org.json.JSONObject
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
 
+/** Expanded left sidebar width. Collapsed icon strip stays 64 dp and is not this setting. */
+const val DEFAULT_LEFT_MENU_WIDTH_DP = 330
+const val MIN_LEFT_MENU_WIDTH_DP = 200
+const val MAX_LEFT_MENU_WIDTH_DP = 480
+const val LEFT_MENU_WIDTH_STEP_DP = 10
+
+/** Clamps to 200–480 dp and snaps to the nearest 10 dp step. */
+fun normalizeLeftMenuWidthDp(raw: Int): Int {
+    val clamped = raw.coerceIn(MIN_LEFT_MENU_WIDTH_DP, MAX_LEFT_MENU_WIDTH_DP)
+    val step = LEFT_MENU_WIDTH_STEP_DP
+    val snapped = ((clamped + step / 2) / step) * step
+    return snapped.coerceIn(MIN_LEFT_MENU_WIDTH_DP, MAX_LEFT_MENU_WIDTH_DP)
+}
+
 /**
  * Identifiers for configurable left-sidebar menu tabs.
  * [id] is persisted in settings JSON.
@@ -181,5 +195,18 @@ data class LeftMenuLayout(
         fun isSidebarTabEnabled(tabKey: String, layout: LeftMenuLayout): Boolean =
             tabKey == SettingsManager.UPDATE_TAB_KEY ||
                 (tabKey != SettingsManager.MAIN_SCREEN_TAB_KEY && tabKey in enabledTabKeys(layout))
+
+        /**
+         * Tab to open when leaving Main Screen for the left-menu console.
+         * Prefers [lastMenuTabKey] when that sidebar tab is still enabled/visible;
+         * otherwise [firstVisibleTabKey].
+         */
+        fun resolveOpenConsoleTab(lastMenuTabKey: String?, layout: LeftMenuLayout): String {
+            val key = parseSelectedTabKey(lastMenuTabKey)
+            if (key == SettingsManager.MAIN_SCREEN_TAB_KEY) {
+                return firstVisibleTabKey(layout)
+            }
+            return if (isSidebarTabEnabled(key, layout)) key else firstVisibleTabKey(layout)
+        }
     }
 }

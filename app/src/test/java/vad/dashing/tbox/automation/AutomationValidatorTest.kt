@@ -210,16 +210,13 @@ class AutomationValidatorTest {
     }
 
     @Test
-    fun mediaActionWithoutPackage_isRejected() {
+    fun mediaActionWithoutPackage_targetsActivePlayer() {
         val definition = validDefinition(
             actions = listOf(
                 AutomationAction.Builtin(AutomationBuiltinActionType.MEDIA_PLAY),
             ),
         )
-        assertTrue(
-            AutomationValidator.validate(definition)
-                .any { it.path.contains("stringValue") },
-        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
     }
 
     @Test

@@ -120,4 +120,108 @@ class PanelCollapseTest {
         assertEquals(PanelCollapseEdge.NONE, PanelCollapseEdge.fromStorage(""))
         assertEquals(PanelCollapseEdge.BOTTOM, PanelCollapseEdge.fromStorage("bottom"))
     }
+
+    @Test
+    fun normalizeLength_clampsTo1_100() {
+        assertEquals(DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT, normalizePanelCollapseStripLengthPercent(100))
+        assertEquals(MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT, normalizePanelCollapseStripLengthPercent(0))
+        assertEquals(MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT, normalizePanelCollapseStripLengthPercent(999))
+        assertEquals(50, normalizePanelCollapseStripLengthPercent(50))
+    }
+
+    @Test
+    fun normalizePosition_clampsTo100MinusLength() {
+        assertEquals(0, normalizePanelCollapseStripPositionPercent(-5, 40))
+        assertEquals(60, normalizePanelCollapseStripPositionPercent(99, 40))
+        assertEquals(0, normalizePanelCollapseStripPositionPercent(50, 100))
+        assertEquals(25, normalizePanelCollapseStripPositionPercent(25, 50))
+    }
+
+    @Test
+    fun alongEdgeSegment_normalize_fullEdgeWhenLength100() {
+        val segment = PanelCollapseAlongEdgeSegment.normalize(100, 40)
+        assertEquals(100, segment.lengthPercent)
+        assertEquals(0, segment.positionPercent)
+        assertTrue(segment.isFullEdge)
+    }
+
+    @Test
+    fun stripBoundsInContainer_bottomExpanded_shortStripFromLeft() {
+        val container = PanelPxBounds(x = 10, y = 20, width = 200, height = 100)
+        val strip = panelCollapseStripBoundsInContainer(
+            container = container,
+            edge = PanelCollapseEdge.BOTTOM,
+            thicknessPx = 32,
+            lengthPercent = 50,
+            positionPercent = 25,
+            collapsed = false,
+        )
+        assertEquals(10 + 50, strip.x) // 25% of 200
+        assertEquals(20 + 100 - 32, strip.y)
+        assertEquals(100, strip.width) // 50% of 200
+        assertEquals(32, strip.height)
+    }
+
+    @Test
+    fun stripBoundsInContainer_leftCollapsed_shortStripFromTop() {
+        // Collapsed LEFT → strip on the right edge of the (collapsed) container.
+        val container = PanelPxBounds(x = 100, y = 20, width = 32, height = 200)
+        val strip = panelCollapseStripBoundsInContainer(
+            container = container,
+            edge = PanelCollapseEdge.LEFT,
+            thicknessPx = 32,
+            lengthPercent = 25,
+            positionPercent = 50,
+            collapsed = true,
+        )
+        // LEFT collapsed: strip at right of container (x + width - t).
+        assertEquals(100, strip.x)
+        assertEquals(20 + 100, strip.y) // 50% of 200
+        assertEquals(32, strip.width)
+        assertEquals(50, strip.height) // 25% of 200
+    }
+
+    @Test
+    fun stripBoundsInContainer_length100_ignoresPosition() {
+        val container = PanelPxBounds(0, 0, 100, 80)
+        val strip = panelCollapseStripBoundsInContainer(
+            container = container,
+            edge = PanelCollapseEdge.TOP,
+            thicknessPx = 16,
+            lengthPercent = 100,
+            positionPercent = 40,
+            collapsed = false,
+        )
+        assertEquals(0, strip.x)
+        assertEquals(0, strip.y)
+        assertEquals(100, strip.width)
+        assertEquals(16, strip.height)
+    }
+
+    @Test
+    fun collapseAlongEdgeFields_defaultsPreserveFullEdgeLegacyPanels() {
+        // Missing / default raw values → full-edge strip (old panels unchanged).
+        assertEquals(
+            DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+            normalizePanelCollapseStripLengthPercent(DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT),
+        )
+        assertEquals(
+            DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+            normalizePanelCollapseStripPositionPercent(
+                DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT,
+                DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
+            ),
+        )
+        assertFalse(DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP)
+
+        // Codec-style clamp: position 70 with length 40 → 60; length 999 → 100 forces position 0.
+        val lengthCollapsed = normalizePanelCollapseStripLengthPercent(40)
+        val positionCollapsed = normalizePanelCollapseStripPositionPercent(70, lengthCollapsed)
+        val lengthExpanded = normalizePanelCollapseStripLengthPercent(999)
+        val positionExpanded = normalizePanelCollapseStripPositionPercent(10, lengthExpanded)
+        assertEquals(40, lengthCollapsed)
+        assertEquals(60, positionCollapsed)
+        assertEquals(100, lengthExpanded)
+        assertEquals(0, positionExpanded)
+    }
 }

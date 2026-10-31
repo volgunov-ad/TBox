@@ -39,11 +39,7 @@ class NetWidget : AppWidgetProvider() {
             action = BackgroundService.ACTION_START
         }
 
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
+        startBackgroundServiceSafely(context, intent, "NetWidget")
         // Запускаем проверку таймаута
         startTimeoutCheck(context)
     }

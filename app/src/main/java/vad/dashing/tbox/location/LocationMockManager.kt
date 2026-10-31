@@ -133,6 +133,7 @@ class LocationMockManager(context: Context) {
             locationManager.setTestProviderLocation(mockProviderName, mockLocation)
             logValueThrottled(locValues, retainingFix)
         } catch (e: SecurityException) {
+            providerActive = false
             logErrorThrottled("Security exception setting mock location", e)
         } catch (e: IllegalArgumentException) {
             logErrorThrottled("Illegal argument setting mock location", e)

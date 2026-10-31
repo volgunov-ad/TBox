@@ -1,6 +1,7 @@
 package vad.dashing.tbox.mbcan
 
 import java.util.concurrent.ConcurrentHashMap
+import vad.dashing.tbox.automation.AutomationSignalCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,6 +35,8 @@ import vad.dashing.tbox.esp.HuCanMarkLog
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 object UniversalCanRepository {
+    /** Gap between expert snapshot reads: ~400–500 rows stay a one-shot burst of a few seconds. */
+    private const val EXPERT_SNAPSHOT_PACING_MS = 15L
     private const val AUTO_BIND_ATTEMPTS_PER_MODE = 3
     private const val AUTO_BIND_ATTEMPT_TIMEOUT_MS = 3_500L
     private const val AUTO_BIND_ATTEMPT_PAUSE_MS = 1_200L
@@ -651,6 +654,26 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val ignitionKeyState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.ignitionKeyState
+            } else {
+                Android10VhalRepository.ignitionKeyState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val huSystemModeState: StateFlow<String?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.huSystemModeState
+            } else {
+                Android10VhalRepository.huSystemModeState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     val accStatusState: StateFlow<String?> = mode
         .flatMapLatest { activeMode ->
             if (activeMode == HeadUnitCanMode.Android9MbCan) {
@@ -707,6 +730,26 @@ object UniversalCanRepository {
                 MbCanRepository.highBeamOnState
             } else {
                 Android10VhalRepository.highBeamOnState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val hazardActiveState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.hazardActiveState
+            } else {
+                Android10VhalRepository.hazardActiveState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val drlOnState: StateFlow<Boolean?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.drlOnState
+            } else {
+                Android10VhalRepository.drlOnState
             }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
@@ -992,6 +1035,16 @@ object UniversalCanRepository {
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    val lateralAccelerationState: StateFlow<Float?> = mode
+        .flatMapLatest { activeMode ->
+            if (activeMode == HeadUnitCanMode.Android9MbCan) {
+                MbCanRepository.lateralAccelerationState
+            } else {
+                Android10VhalRepository.lateralAccelerationState
+            }
+        }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
     /**
      * Cabin door ajar open/closed (FL/FR/RL/RR). Not trunk (see [TrunkDoorRepository]).
      * A9: BCM 1/2 via [MbCanRepository.bcmDoorsState]; A10: CEM2 0/1 via [Android10VhalRepository.vhalDoorAjarRaw].
@@ -1159,7 +1212,9 @@ object UniversalCanRepository {
 
     /**
      * Immediate sequential pull for [signals] (visible Car Settings section first).
-     * Stays on the backend apply thread — not a per-signal IO job.
+     * Stays on the backend apply thread — not a per-signal IO job and not the main thread.
+     * A9 hops inside [MbCanRepository.refreshSignal]. A10 hops once in
+     * [Android10VhalRepository.refreshSignalsNow] (`vhal-a10-state-apply`).
      */
     suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
         val unique = signals.distinct()
@@ -1168,8 +1223,7 @@ object UniversalCanRepository {
             MbCanJobManager.prioritize(unique)
             unique.forEach { MbCanRepository.refreshSignal(it) }
         } else {
-            Android10VhalRepository.prioritize(unique)
-            unique.forEach { Android10VhalRepository.refreshSignal(it) }
+            Android10VhalRepository.refreshSignalsNow(unique)
         }
     }
 
@@ -1209,6 +1263,22 @@ object UniversalCanRepository {
             MbCanRepository.getRawProperty(bus, propertyId)
         } else {
             Android10VhalRepository.getRawProperty(bus, propertyId)
+        }
+    }
+
+    /** Expert snapshot: reads [params] in order, paced, via the active HU backend. */
+    suspend fun readRawSnapshot(
+        params: List<ExpertRawCanParam>,
+        onProgress: (done: Int, total: Int) -> Unit,
+    ): List<Pair<ExpertRawCanParam, ExpertRawGetResult>> {
+        if (_mode.value == HeadUnitCanMode.Android9MbCan) {
+            return MbCanRepository.readRawBatch(params, EXPERT_SNAPSHOT_PACING_MS, onProgress)
+        }
+        return params.mapIndexed { index, param ->
+            val result = Android10VhalRepository.getRawProperty(param.bus, param.mbCanId)
+            onProgress(index + 1, params.size)
+            delay(EXPERT_SNAPSHOT_PACING_MS)
+            param to result
         }
     }
 
@@ -1643,6 +1713,7 @@ object UniversalCanRepository {
     private suspend fun setModeLocked(mode: HeadUnitCanMode, rebindIfBound: Boolean) {
         if (_mode.value == mode) return
         _mode.value = mode
+        AutomationSignalCatalog.setHeadUnitMode(mode)
         if (!rebindIfBound) return
         val scopeToRebind = boundScope ?: return
         when (mode) {

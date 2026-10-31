@@ -218,7 +218,8 @@ object MbCanKnownVehiclePropertyId {
     @JvmField val LDW_SWITCH = 80
     /**
      * [com.mengbo.mbCan.defines.MBVehicleProperty.eTIMEGAPSET1REQ] —
-     * ACC time-gap set request: raw **1…4** (A9 log: 1 with TJA on, 4 with TJA off).
+     * ACC time-gap request: **0** Not_Active, **1** tauGap_0 (medium), **2** tauGap_1 (far),
+     * **3** tauGap_2 (near). **4…7** reserved. Live level is `FRM_3_TimeGapSet_ICM` **0 / 1 / 2**.
      */
     @JvmField val ACC_TIME_GAP_SET = 95
     /** Blind-spot detection: mbCAN 1 off / 2 on; VHAL writes 2 off / 1 on. */
@@ -732,7 +733,7 @@ object MbCanCommandRegistry {
         ),
         MbCanCommandSpec(
             propertyId = MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET,
-            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3, 4)),
+            policy = MbCanCommandPolicy.SetExact(allowedValues = setOf(1, 2, 3)),
             refreshSignal = MbCanSignal.AccTimeGap,
         ),
         MbCanCommandSpec(

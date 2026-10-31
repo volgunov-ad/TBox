@@ -154,7 +154,7 @@ class FirmwareVehicleJsonMapperTest {
     @Test
     fun accTimeGapAndLdwSwitch_resolveStockVhalIds() {
         assertEquals(
-            289_415_688,
+            289_415_687,
             FirmwareVehicleJsonMapper.resolveReadPropertyId(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET),
         )
         assertEquals(

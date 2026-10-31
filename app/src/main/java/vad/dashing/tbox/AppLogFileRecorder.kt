@@ -50,6 +50,7 @@ object AppLogFileRecorder {
     private var scope: CoroutineScope? = null
     private var flushJob: Job? = null
     @Volatile private var flushInFlight: Boolean = false
+    @Volatile private var rotateInFlight: Boolean = false
     private val writeMutex = Mutex()
     private val pending = StringBuilder(FLUSH_BYTES + 4_096)
     private val pendingLock = Any()
@@ -110,15 +111,19 @@ object AppLogFileRecorder {
         flushJob = null
         if (!was && outFile == null) return false
         val sc = scope
-        val path = outFile?.absolutePath
+        val file = outFile
+        val path = file?.absolutePath
+        val tail = synchronized(pendingLock) {
+            pending.append(
+                "\n# stopped=${formatWall(System.currentTimeMillis())}" +
+                    " auto=$auto lines=${_ui.value.lines}\n",
+            )
+            pending.toString().also { pending.clear() }
+        }
         if (sc != null) {
             sc.launch(Dispatchers.IO) {
-                writeMutex.withLock {
-                    pending.append(
-                        "\n# stopped=${formatWall(System.currentTimeMillis())}" +
-                            " auto=$auto lines=${_ui.value.lines}\n",
-                    )
-                    flushPendingLocked()
+                if (file != null) {
+                    writeMutex.withLock { writeChunkLocked(file, tail) }
                 }
                 val ctx = appContext
                 if (ctx != null && path != null) {
@@ -205,16 +210,29 @@ object AppLogFileRecorder {
     }
 
     private fun requestRotateAndFlush() {
-        if (!_ui.value.recording) return
+        if (!_ui.value.recording || rotateInFlight) return
         val sc = scope ?: return
         val ctx = appContext ?: return
+        rotateInFlight = true
         sc.launch(Dispatchers.IO) {
-            writeMutex.withLock {
-                if (!rotateFileLocked(ctx)) {
-                    _ui.value = _ui.value.copy(lastError = "rotate failed")
-                    // Keep buffering; periodic flush will continue on current file if rotate failed.
+            try {
+                writeMutex.withLock {
+                    val stillOver = synchronized(pendingLock) {
+                        GeoDebugLogRotate.shouldRotate(
+                            flushedBytes,
+                            GeoDebugLogRotate.utf8Bytes(pending),
+                            1,
+                            MAX_FILE_BYTES,
+                        )
+                    }
+                    if (stillOver && _ui.value.recording && !rotateFileLocked(ctx)) {
+                        _ui.value = _ui.value.copy(lastError = "rotate failed")
+                        // Keep buffering; periodic flush will continue on current file if rotate failed.
+                    }
+                    flushPendingLocked()
                 }
-                flushPendingLocked()
+            } finally {
+                rotateInFlight = false
             }
         }
     }
@@ -243,21 +261,27 @@ object AppLogFileRecorder {
     }
 
     private fun flushPendingLocked() {
+        val file = outFile
         val chunk: String
         synchronized(pendingLock) {
             if (pending.isEmpty()) return
             chunk = pending.toString()
             pending.clear()
         }
-        val file = outFile ?: return
+        if (file != null) flushedBytes += writeChunkLocked(file, chunk)
+    }
+
+    /** @return bytes written (0 on failure). */
+    private fun writeChunkLocked(file: File, chunk: String): Int {
         val bytes = chunk.toByteArray(StandardCharsets.UTF_8)
-        try {
+        return try {
             FileOutputStream(file, true).use { fos ->
                 fos.write(bytes)
             }
-            flushedBytes += bytes.size
+            bytes.size
         } catch (e: Exception) {
             _ui.value = _ui.value.copy(lastError = e.message)
+            0
         }
     }
 
@@ -278,15 +302,17 @@ object AppLogFileRecorder {
     private fun rotateFileLocked(ctx: Context): Boolean {
         val prev = outFile ?: return false
         val next = createLogFile(ctx) ?: return false
-        pending.append(
-            "\n# stopped=${formatWall(System.currentTimeMillis())}" +
-                " rotated=true next=${next.name} lines=${_ui.value.lines}\n",
-        )
+        synchronized(pendingLock) {
+            pending.append(
+                "\n# stopped=${formatWall(System.currentTimeMillis())}" +
+                    " rotated=true next=${next.name} lines=${_ui.value.lines}\n",
+            )
+        }
         flushPendingLocked()
         outFile = next
         flushedBytes = 0L
         partIndex += 1
-        pending.append(fileHeader(continuedFrom = prev.name))
+        synchronized(pendingLock) { pending.append(fileHeader(continuedFrom = prev.name)) }
         flushPendingLocked()
         _ui.value = _ui.value.copy(filePath = next.absolutePath)
         return true

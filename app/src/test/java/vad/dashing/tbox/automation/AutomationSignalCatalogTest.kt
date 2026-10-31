@@ -4,8 +4,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.mbcan.AccCruiseDomain
+import vad.dashing.tbox.mbcan.BodyComfortDomain
+import vad.dashing.tbox.mbcan.HuSystemModeDomain
+import vad.dashing.tbox.mbcan.IgnitionKeyDomain
+import vad.dashing.tbox.mbcan.MbCanSignal
 
 class AutomationSignalCatalogTest {
     @Test
@@ -71,6 +75,21 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun hazardAndDrl_areHeadUnitBinary() {
+        listOf(AutomationSignalId.HAZARD, AutomationSignalId.DRL).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertEquals(listOf("off", "on"), descriptor.stateOptions)
+            assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+            assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+            assertTrue(descriptor.valueHint().isNotBlank())
+        }
+        assertEquals("Аварийка", AutomationParameterLabels.signalLabel(AutomationSignalId.HAZARD))
+        assertEquals("ДХО", AutomationParameterLabels.signalLabel(AutomationSignalId.DRL))
+        assertEquals(MbCanSignal.Hazard, huInterestForSignal(AutomationSignalId.HAZARD))
+        assertEquals(MbCanSignal.Drl, huInterestForSignal(AutomationSignalId.DRL))
+    }
+
+    @Test
     fun catalog_coversEverySignalId() {
         assertEquals(
             AutomationSignalId.entries.toSet(),
@@ -107,6 +126,30 @@ class AutomationSignalCatalogTest {
         assertTrue(hint, hint.contains("ign"))
         assertTrue(hint, hint.contains("Android 9"))
         assertTrue(hint, hint.contains("Android 10"))
+    }
+
+    @Test
+    fun ignitionKeyAndSystemMode_areHeadUnitStates() {
+        val key = AutomationSignalCatalog.get(AutomationSignalId.IGNITION_KEY)
+        val mode = AutomationSignalCatalog.get(AutomationSignalId.HU_SYSTEM_MODE)
+        assertEquals(IgnitionKeyDomain.OPTIONS, key.stateOptions)
+        assertEquals(HuSystemModeDomain.OPTIONS, mode.stateOptions)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in key.sources)
+        assertFalse(AutomationSignalSource.TBOX in key.sources)
+        assertTrue(key.valueHint().contains("crank"))
+        assertTrue(mode.valueHint().contains("hold_15m"))
+        assertFalse(
+            AutomationSignalCatalog.headUnitUnsupported(
+                AutomationSignalId.IGNITION_KEY,
+                HeadUnitCanMode.Android10Vhal,
+            ),
+        )
+        assertTrue(
+            AutomationSignalCatalog.headUnitUnsupported(
+                AutomationSignalId.HU_SYSTEM_MODE,
+                HeadUnitCanMode.Android10Vhal,
+            ),
+        )
     }
 
     @Test
@@ -428,6 +471,42 @@ class AutomationSignalCatalogTest {
         assertEquals("Связь OK", AutomationSignalCatalog.stateOptionLabel("ok"))
         assertEquals("2G", AutomationSignalCatalog.stateOptionLabel("2g"))
         assertEquals("Готова", AutomationSignalCatalog.stateOptionLabel("ready"))
+    }
+
+    @Test
+    fun geoModemEnrichmentSignals_areAppOnlyReadOnly() {
+        val altitude = AutomationSignalCatalog.get(AutomationSignalId.GEO_ALTITUDE_M)
+        val speedSrc = AutomationSignalCatalog.get(AutomationSignalId.GEO_SPEED_SOURCE)
+        val fixValid = AutomationSignalCatalog.get(AutomationSignalId.GEO_FIX_VALID)
+        val geoSource = AutomationSignalCatalog.get(AutomationSignalId.GEO_SOURCE)
+        val rssi = AutomationSignalCatalog.get(AutomationSignalId.MODEM_RSSI_DBM)
+        val registered = AutomationSignalCatalog.get(AutomationSignalId.MODEM_REGISTERED)
+        val operator = AutomationSignalCatalog.get(AutomationSignalId.MODEM_OPERATOR)
+        val modemSource = AutomationSignalCatalog.get(AutomationSignalId.MODEM_SOURCE)
+        val down = AutomationSignalCatalog.get(AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS)
+        val up = AutomationSignalCatalog.get(AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS)
+
+        assertEquals(AutomationSignalValueType.NUMBER, altitude.id.valueType)
+        assertEquals(listOf("gnss", "can", "retention", "none"), speedSrc.stateOptions)
+        assertEquals(listOf("off", "on"), fixValid.stateOptions)
+        assertEquals(listOf("tbox", "companion", "android", "usb", "phone"), geoSource.stateOptions)
+        assertEquals("Телефон", AutomationSignalCatalog.stateOptionLabel("phone"))
+        assertEquals(AutomationSignalValueType.NUMBER, rssi.id.valueType)
+        assertEquals(listOf("off", "on"), registered.stateOptions)
+        assertTrue(operator.stateOptions.isEmpty())
+        assertEquals(listOf("tbox", "wifi_http"), modemSource.stateOptions)
+        assertEquals(AutomationSignalValueType.NUMBER, down.id.valueType)
+        assertEquals(AutomationSignalValueType.NUMBER, up.id.valueType)
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(altitude.id))
+        assertEquals(AutomationSignalSource.APP, AutomationSignalCatalog.preferredSource(rssi.id))
+        assertEquals(
+            "Нет данных",
+            AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.GEO_SPEED_SOURCE, "none"),
+        )
+        assertEquals("Компаньон", AutomationSignalCatalog.stateOptionLabel("companion"))
+        assertEquals("Wi‑Fi HTTP", AutomationSignalCatalog.stateOptionLabel("wifi_http"))
+        assertTrue(rssi.valueHint().contains("CSQ"))
+        assertTrue(down.valueHint().contains("Wi‑Fi HTTP"))
     }
 
     @Test

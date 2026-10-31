@@ -846,6 +846,18 @@ class SteerCalibrationMathTest {
         assertFalse(MockHeadingSource.GYRO.usesSteer)
         assertFalse(MockHeadingSource.STEER.usesGyro)
         assertTrue(MockHeadingSource.STEER.usesSteer)
+        assertEquals(MockHeadingSource.WHEELS, MockHeadingSource.fromStorage("WHEELS"))
+        assertEquals(MockHeadingSource.WHEELS_STEER, MockHeadingSource.fromStorage("WHEELS_STEER"))
+        assertEquals(MockHeadingSource.PHONE_GYRO, MockHeadingSource.fromStorage("PHONE_GYRO"))
+        assertEquals(MockHeadingSource.PHONE_COMPASS, MockHeadingSource.fromStorage("PHONE_COMPASS"))
+        assertEquals(MockHeadingSource.PHONE_GYRO_COMPASS, MockHeadingSource.fromStorage("PHONE_GYRO_COMPASS"))
+        assertTrue(MockHeadingSource.WHEELS.usesWheels)
+        assertTrue(MockHeadingSource.WHEELS_STEER.usesWheels)
+        assertTrue(MockHeadingSource.WHEELS_STEER.usesSteer)
+        assertTrue(MockHeadingSource.PHONE_GYRO.usesPhoneGyro)
+        assertTrue(MockHeadingSource.PHONE_COMPASS.usesPhoneCompass)
+        assertTrue(MockHeadingSource.PHONE_GYRO_COMPASS.usesPhoneGyro)
+        assertTrue(MockHeadingSource.PHONE_GYRO_COMPASS.usesPhoneCompass)
     }
 
     @Test

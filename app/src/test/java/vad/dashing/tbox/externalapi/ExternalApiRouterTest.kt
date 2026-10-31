@@ -9,6 +9,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import vad.dashing.tbox.automation.AutomationActionResult
+import vad.dashing.tbox.automation.AutomationSignalSource
+import vad.dashing.tbox.automation.AutomationSignalValue
+import vad.dashing.tbox.automation.AutomationSignalValueType
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28])
@@ -25,15 +28,31 @@ class ExternalApiRouterTest {
             automationsProvider = { emptyList() },
             executeActions = { emptyList() },
             runAutomationNow = { null },
+            headUnitPlatform = { "android9" },
         )
         val response = router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "")
         assertEquals(200, response.status)
         val json = JSONObject(response.body)
         assertTrue(json.getBoolean("ok"))
         assertEquals(1, json.getInt("apiVersion"))
-        assertEquals(3, json.getInt("catalogVersion"))
+        assertEquals(5, json.getInt("catalogVersion"))
         assertTrue(json.getBoolean("serverEnabled"))
         assertEquals("0.18.1-test", json.getString("appVersion"))
+        assertEquals("android9", json.getString("headUnit"))
+    }
+
+    @Test
+    fun windowSignalJson_carriesOpenFlag() {
+        fun json(id: String, state: String) = ExternalApiSignalReader.signalToJson(
+            id = id,
+            source = AutomationSignalSource.HEAD_UNIT,
+            valueType = AutomationSignalValueType.STATE,
+            value = AutomationSignalValue.State(state),
+        )
+        assertTrue(json("window_front_left", "open").getBoolean("open"))
+        assertTrue(json("window_front_left", "80%").getBoolean("open"))
+        assertEquals(false, json("window_rear_right", "0%").getBoolean("open"))
+        assertEquals(false, json("hvac_auto", "on").has("open"))
     }
 
     @Test
@@ -111,7 +130,7 @@ class ExternalApiRouterTest {
         )
         assertEquals(200, response.status)
         val json = JSONObject(response.body)
-        assertEquals(3, json.getInt("catalogVersion"))
+        assertEquals(5, json.getInt("catalogVersion"))
         val signals = json.getJSONArray("signals")
         assertTrue(signals.length() > 0)
         var foundOutside = false
@@ -200,12 +219,83 @@ class ExternalApiRouterTest {
     }
 
     @Test
+    fun actionsInvoke_outOfRangeDelay_isRejectedBeforeExecution() {
+        val token = "delay-token"
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "voice",
+                clientName = "Voice",
+                tokenHash = ExternalApiAuth.sha256Hex(token),
+                createdAtEpochMs = 1L,
+            ),
+        )
+        var executed = false
+        val router = ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { clients },
+            dangerousEnabled = { true },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { executed = true; emptyList() },
+            runAutomationNow = { null },
+        )
+        val response = router.handle(
+            "POST",
+            ExternalApiConstants.PATH_ACTIONS_INVOKE,
+            emptyMap(),
+            mapOf("authorization" to "Bearer $token"),
+            """{"actions":[{"type":"delay","durationMillis":${Long.MAX_VALUE}}]}""",
+        )
+        assertEquals(400, response.status)
+        assertFalse(executed)
+    }
+
+    @Test
+    fun actionsInvoke_mediaCommandWithoutPlayer_targetsActiveSession() {
+        val token = "media-token"
+        val clients = listOf(
+            ExternalApiPairedClient(
+                clientId = "panel",
+                clientName = "Panel",
+                tokenHash = ExternalApiAuth.sha256Hex(token),
+                createdAtEpochMs = 1L,
+            ),
+        )
+        var executed = 0
+        val router = ExternalApiRouter(
+            appVersion = "test",
+            serverEnabled = { true },
+            pairingSession = ExternalApiPairingSession(),
+            pairedClients = { clients },
+            dangerousEnabled = { false },
+            signalReader = ExternalApiSignalReader(),
+            automationsProvider = { emptyList() },
+            executeActions = { actions -> executed += actions.size; emptyList() },
+            runAutomationNow = { null },
+        )
+        listOf("media_play_pause", "media_previous", "media_next").forEach { type ->
+            val response = router.handle(
+                "POST",
+                ExternalApiConstants.PATH_ACTIONS_INVOKE,
+                emptyMap(),
+                mapOf("authorization" to "Bearer $token"),
+                """{"actions":[{"type":"builtin","actionType":"$type","intValue":0,"stringValue":"","boolValue":false}]}""",
+            )
+            assertEquals(type, 200, response.status)
+        }
+        assertEquals(3, executed)
+    }
+
+    @Test
     fun webPanel_whenDisabled_isHidden() {
         val router = router(webPanelEnabled = false)
         val response = router.handle("GET", ExternalApiConstants.PATH_WEB_PANEL, emptyMap(), emptyMap(), "")
         assertEquals(404, response.status)
         val health = JSONObject(router.handle("GET", ExternalApiConstants.PATH_HEALTH, emptyMap(), emptyMap(), "").body)
         assertEquals(false, health.getBoolean("webPanelEnabled"))
+        assertEquals("dual_zone", health.getString("climateControlType"))
     }
 
     @Test
@@ -219,6 +309,12 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("hvac_temperature_left"))
         assertTrue(response.body.contains("hvac_auto"))
         assertTrue(response.body.contains("hvac_sync"))
+        assertTrue(response.body.contains("hvac_recirculation"))
+        assertTrue(response.body.contains("hvac_front_off"))
+        assertTrue(response.body.contains("hvac_power"))
+        assertTrue(response.body.contains("toggleFront"))
+        assertTrue(response.body.contains("Рециркуляция"))
+        assertTrue(response.body.contains("Кондиционер"))
         assertTrue(response.body.contains("hvac_fan_direction"))
         assertTrue(response.body.contains("hvac_custom_mode"))
         assertTrue(response.body.contains("hu_media_volume"))
@@ -233,6 +329,13 @@ class ExternalApiRouterTest {
         assertTrue(response.body.contains("modeEco: \"Эко\""))
         assertTrue(response.body.contains("modeEco: \"ECO\""))
         assertTrue(response.body.contains("front_left_seat_mode"))
+        assertTrue(response.body.contains("window_front_left"))
+        assertTrue(response.body.contains("comfort_open"))
+        assertTrue(response.body.contains("\"sunroof\""))
+        assertTrue(response.body.contains("\"sunshade\""))
+        assertTrue(response.body.contains("data-tab"))
+        assertTrue(response.body.contains("tbox.panel.page"))
+        assertTrue(response.body.contains("/v1/health"))
         assertTrue(response.body.contains("lang=\"ru\""))
         assertTrue(response.body.contains("var lang = \"ru\" === \"en\" ? STR.en : STR.ru;"))
         assertFalse(response.body.contains("__APP_LANG__"))

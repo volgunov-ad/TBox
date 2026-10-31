@@ -1,5 +1,7 @@
 package vad.dashing.tbox.adb
 
+import android.content.Context
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -17,6 +19,14 @@ object HuAdbControl {
     private const val PROP_USB_ADB_ENABLE = "persist.usb.adbenable"
     private const val PROP_CTL_RESTART = "ctl.restart"
     private const val ADBD_PROCESS = "adbd"
+
+    // A10: the CarPlay port is a dual-role controller kept in host mode; persist.usb.adbenable
+    // has no consumer there, the adb gadget is always configured and only the data role flips.
+    private const val DUAL_ROLE_DIR = "/sys/class/dual_role_usb/dual-role-usb20"
+    private const val USB_GADGET_UDC = "/config/usb_gadget/g1/UDC"
+    private const val USB_UDC = "13010000.cdncusb"
+    internal const val PORT_MODE_DEVICE = "ufp"
+    internal const val PORT_MODE_HOST = "dfp"
 
     const val TCP_ENABLED_PORT = 5555
     const val TCP_DISABLED_PORT = -1
@@ -48,27 +58,86 @@ object HuAdbControl {
                 _state.value = State(readFailed = true)
                 return@withContext
             }
+            val portMode = readPortMode()
             _state.value = State(
                 tcpEnabled = isTcpPortPropEnabled(persistTcp, serviceTcp),
-                usbEnabled = isUsbAdbPropEnabled(usb),
+                usbEnabled = if (portMode != null) portMode == PORT_MODE_DEVICE else isUsbAdbPropEnabled(usb),
                 readFailed = false,
             )
         }
     }
 
     suspend fun setTcpEnabled(enabled: Boolean) {
-        applyCommands(tcpCommands(enabled))
+        AdbShutdownGate.withIntentionalTransportCloseSuspending {
+            if (applyCommands(tcpCommands(enabled))) {
+                AdbRepository.dropConnectionAfterAdbdRestart("adbd restarted")
+            }
+        }
     }
 
-    suspend fun setUsbEnabled(enabled: Boolean) {
-        applyCommands(usbCommands(enabled))
+    suspend fun setUsbEnabled(context: Context, enabled: Boolean) {
+        if (!File(DUAL_ROLE_DIR, "mode").exists()) {
+            applyCommands(usbCommands(enabled))
+            return
+        }
+        applyMutex.withLock {
+            setUsbPortRole(context.applicationContext, enabled)
+            refresh()
+        }
     }
 
-    private suspend fun applyCommands(commands: List<List<String>>) {
+    private suspend fun setUsbPortRole(app: Context, enabled: Boolean) {
+        val session = LocalhostAdbSession.run(
+            gateway = LocalhostAdbSession.AndroidGateway(),
+            keysDir = app.filesDir.resolve("adb"),
+            clientName = LocalhostAdbSession.defaultClientName(),
+        ) { execute ->
+            execute(usbPortRoleCommand(enabled))
+        }
+        val expected = if (enabled) PORT_MODE_DEVICE else PORT_MODE_HOST
+        val error = when (session) {
+            is LocalhostAdbSession.Result.Failed -> "adb ${session.reason.name}"
+            is LocalhostAdbSession.Result.Ok -> {
+                val mode = session.value.stdout.lineSequence().map { it.trim() }.lastOrNull { it.isNotEmpty() }
+                if (mode == expected) {
+                    null
+                } else {
+                    "USB port mode ${mode ?: "?"} != $expected ${session.value.stderr.trim()}".trim()
+                }
+            }
+        }
+        if (error == null) {
+            TboxRepository.addLog(level = "INFO", tag = TAG, message = "USB port role applied: $expected")
+        } else {
+            _lastError.value = error
+            TboxRepository.addLog(level = "ERROR", tag = TAG, message = "USB port role apply failed: $error")
+        }
+    }
+
+    internal fun usbPortRoleCommand(enabled: Boolean): String {
+        val script = if (enabled) {
+            "echo device > $DUAL_ROLE_DIR/data_role; sleep 1; " +
+                "[ -n \"\$(cat $USB_GADGET_UDC)\" ] || echo $USB_UDC > $USB_GADGET_UDC; " +
+                "cat $DUAL_ROLE_DIR/mode"
+        } else {
+            "echo host > $DUAL_ROLE_DIR/data_role; sleep 1; cat $DUAL_ROLE_DIR/mode"
+        }
+        return "su 0 sh -c '$script'"
+    }
+
+    private fun readPortMode(): String? = try {
+        File(DUAL_ROLE_DIR, "mode").takeIf { it.exists() }?.readText()?.trim()
+    } catch (_: Exception) {
+        null
+    }
+
+    private suspend fun applyCommands(commands: List<List<String>>): Boolean {
+        var applied = false
         applyMutex.withLock {
             withContext(Dispatchers.IO) {
                 val errors = commands.mapNotNull { runCommand(it) }
                 if (errors.isEmpty()) {
+                    applied = true
                     TboxRepository.addLog(
                         level = "INFO",
                         tag = TAG,
@@ -85,6 +154,7 @@ object HuAdbControl {
             }
             refresh()
         }
+        return applied
     }
 
     internal fun tcpCommands(enabled: Boolean): List<List<String>> {

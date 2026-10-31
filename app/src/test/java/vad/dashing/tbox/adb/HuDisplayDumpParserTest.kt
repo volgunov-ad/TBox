@@ -49,6 +49,21 @@ class HuDisplayDumpParserTest {
     }
 
     @Test
+    fun parse_a10AdayoDump_findsLauncherActivityViewDisplay() {
+        val dump = checkNotNull(javaClass.classLoader?.getResource("a10_dumpsys_display.txt"))
+            .readText()
+
+        val displays = HuDisplayDumpParser.parse(dump)
+        assertEquals(
+            listOf(
+                HuDisplayInfo(0, 1920, 1080),
+                HuDisplayInfo(1, 1327, 865),
+            ),
+            displays,
+        )
+    }
+
+    @Test
     fun parse_empty_returnsEmpty() {
         assertTrue(HuDisplayDumpParser.parse("").isEmpty())
         assertTrue(HuDisplayDumpParser.parse("no displays here").isEmpty())

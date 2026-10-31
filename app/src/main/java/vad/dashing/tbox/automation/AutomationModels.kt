@@ -87,6 +87,10 @@ enum class AutomationSignalId(
     CRUISE_SET_SPEED("cruise_set_speed"),
     GEAR_MODE("gear_mode", AutomationSignalValueType.STATE),
     ACC_STATUS("acc_status", AutomationSignalValueType.STATE),
+    /** CEM key position: off / acc / on / crank. A9 getIgnSts, A10 CEM_2_KeySts. */
+    IGNITION_KEY("ignition_key", AutomationSignalValueType.STATE),
+    /** A9 HU power mode. 15 min is the post-key-off hold, not remote start. No A10 analog. */
+    HU_SYSTEM_MODE("hu_system_mode", AutomationSignalValueType.STATE),
     ACC_CRUISE_STATE("acc_cruise_state", AutomationSignalValueType.STATE),
     CCS_CRUISE_STATE("ccs_cruise_state", AutomationSignalValueType.STATE),
     GAS_PEDAL("gas_pedal"),
@@ -108,6 +112,8 @@ enum class AutomationSignalId(
     WIPER_STS("wiper_sts", AutomationSignalValueType.STATE),
     RAIN_DETECTED("rain_detected", AutomationSignalValueType.STATE),
     HIGH_BEAM("high_beam", AutomationSignalValueType.STATE),
+    HAZARD("hazard", AutomationSignalValueType.STATE),
+    DRL("drl", AutomationSignalValueType.STATE),
     EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
     ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
     BRAKE_FLUID("brake_fluid", AutomationSignalValueType.STATE),
@@ -147,6 +153,7 @@ enum class AutomationSignalId(
     DOOR_OPEN_WARNING("door_open_warning", AutomationSignalValueType.STATE),
     FCW("fcw", AutomationSignalValueType.STATE),
     FCW_SENSITIVITY("fcw_sensitivity", AutomationSignalValueType.STATE),
+    ACC_TIME_GAP("acc_time_gap", AutomationSignalValueType.STATE),
     LDW_SENSITIVITY("ldw_sensitivity", AutomationSignalValueType.STATE),
     HVAC_CUSTOM_MODE("hvac_custom_mode", AutomationSignalValueType.STATE),
     FRONT_WINDSCREEN_HEAT("front_windscreen_heat", AutomationSignalValueType.STATE),
@@ -197,6 +204,22 @@ enum class AutomationSignalId(
     REAR_LEFT_SEAT_MODE("rear_left_seat_mode", AutomationSignalValueType.STATE),
     REAR_RIGHT_SEAT_MODE("rear_right_seat_mode", AutomationSignalValueType.STATE),
     GEO_POSITION("geo_position", AutomationSignalValueType.POSITION),
+    /** Altitude m from [GeoDisplayRepository] when LIVE/RETAINING. */
+    GEO_ALTITUDE_M("geo_altitude_m"),
+    /** Display speed km/h from GeoDisplay (GNSS/CAN/retention blend). */
+    GEO_SPEED_KMH("geo_speed_kmh"),
+    /** Speed source key: `gnss` / `can` / `retention` / `none`. */
+    GEO_SPEED_SOURCE("geo_speed_source", AutomationSignalValueType.STATE),
+    /** Course / bearing degrees when known. */
+    GEO_BEARING_DEG("geo_bearing_deg"),
+    /** Satellites in view. */
+    GEO_SATELLITES_VISIBLE("geo_satellites_visible"),
+    /** Satellites used in fix. */
+    GEO_SATELLITES_USED("geo_satellites_used"),
+    /** GNSS receiver trust ([GeoDisplayState.gnssTruthful]), on/off. */
+    GEO_FIX_VALID("geo_fix_valid", AutomationSignalValueType.STATE),
+    /** Active location source setting: `tbox` / `companion` / `android` / `usb`. */
+    GEO_SOURCE("geo_source", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_0("esp_gpio_in_0", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_1("esp_gpio_in_1", AutomationSignalValueType.STATE),
     ESP_GPIO_IN_2("esp_gpio_in_2", AutomationSignalValueType.STATE),
@@ -237,6 +260,21 @@ enum class AutomationSignalId(
     TBOX_CONNECTED("tbox_connected", AutomationSignalValueType.STATE),
     /** Cellular bars / CSQ-derived level from [TboxRepository.netState.signalLevel]. */
     MODEM_SIGNAL_LEVEL("modem_signal_level"),
+    /**
+     * RSSI dBm: [NetState.signalDbm] when set (Wi‑Fi HTTP), else AT+CSQ→dBm for CSQ 0…31.
+     * Unavailable when neither is known (CSQ 99 / empty).
+     */
+    MODEM_RSSI_DBM("modem_rssi_dbm"),
+    /** Home/roaming registration from [NetState.regStatus] (on/off). */
+    MODEM_REGISTERED("modem_registered", AutomationSignalValueType.STATE),
+    /** Operator name from [NetValues.operator] (free-form string). */
+    MODEM_OPERATOR("modem_operator", AutomationSignalValueType.STATE),
+    /** Active modem source setting: `tbox` / `wifi_http`. */
+    MODEM_SOURCE("modem_source", AutomationSignalValueType.STATE),
+    /** Downlink throughput kbps from Wi‑Fi modem HTTP ([NetState.downloadSpeedBps]). */
+    MODEM_THROUGHPUT_DOWN_KBPS("modem_throughput_down_kbps"),
+    /** Uplink throughput kbps from Wi‑Fi modem HTTP ([NetState.uploadSpeedBps]). */
+    MODEM_THROUGHPUT_UP_KBPS("modem_throughput_up_kbps"),
     /** Active geo source has a fix ([GeoDisplayRepository.state.locateStatus]). */
     LOCATE_STATUS("locate_status", AutomationSignalValueType.STATE),
     /** Trip-dwell filtered fuel % ([TripTelemetryRepository.fuelLevelPercentageFiltered]). */
@@ -264,7 +302,23 @@ enum class AutomationSignalId(
     /** Predicted playback position in milliseconds at the moment the signal is read. */
     MEDIA_POSITION_MS("media_position_ms"),
     /** Media session duration in milliseconds. Zero when the session does not report one. */
-    MEDIA_DURATION_MS("media_duration_ms");
+    MEDIA_DURATION_MS("media_duration_ms"),
+    /**
+     * OSM highway class of the matched road edge ([vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState.highwayClass]).
+     * APP-only; Unavailable without a match. Raises road-match demand without pose correction.
+     */
+    ROAD_HIGHWAY_CLASS("road_highway_class", AutomationSignalValueType.STATE),
+    /**
+     * Posted OSM maxspeed (km/h) on the matched edge ([RoadMatchAnchorState.currentLimitKmh]).
+     * APP-only OSM match — not SpeedCam radar fallback and not SLA CAN. Unavailable without match/limit.
+     */
+    ROAD_SPEED_LIMIT_KMH("road_speed_limit_kmh"),
+    /**
+     * Whether the matched road edge is an OSM tunnel ([RoadMatchAnchorState.tunnel]).
+     * APP-only; Unavailable without a match. STATE `on` = inside tunnel, `off` = outside.
+     * Raises road-match demand without pose correction; does not start SpeedCam.
+     */
+    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =
@@ -496,6 +550,18 @@ sealed interface AutomationTrigger {
         val mac: String = "",
         val btn: Int = 1,
         val act: AutomationEspBleBtnAction = AutomationEspBleBtnAction.PRESS,
+    ) : AutomationTrigger
+
+    /**
+     * Fired by ESP companion GPIO inputs 0…3.
+     * Raw edges use [AutomationHardKeyStatus.PRESSED]/[RELEASED] (logical 1 = pressed).
+     * [SINGLE], [DOUBLE], and [LONG] are synthesized like hard keys
+     * ([AUTOMATION_HARD_KEY_DOUBLE_TAP_MS], [AUTOMATION_HARD_KEY_LONG_PRESS_MS]).
+     */
+    data class EspGpioBtn(
+        override val id: String = "1",
+        val channel: Int = 0,
+        val status: AutomationHardKeyStatus = AutomationHardKeyStatus.SINGLE,
     ) : AutomationTrigger
 
     data class Interval(

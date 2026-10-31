@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -34,8 +35,8 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10015
-        versionName = "1.0.1"
+        versionCode = 10018
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
@@ -105,6 +106,21 @@ android {
             isShrinkResources = false
         }
     }
+    applicationVariants.all {
+        val apkBaseName = "tbox-monitor-$versionName-${buildType.name}"
+        outputs.all {
+            (this as BaseVariantOutputImpl).outputFileName = "$apkBaseName.apk"
+        }
+        if (buildType.isMinifyEnabled) {
+            val mappingName = "$apkBaseName-mapping.txt"
+            val copyMapping = tasks.register<Copy>("copy${name.replaceFirstChar { it.uppercase() }}Mapping") {
+                from(mappingFileProvider)
+                into(layout.buildDirectory.dir("outputs/release-mapping"))
+                rename { mappingName }
+            }
+            assembleProvider.configure { finalizedBy(copyMapping) }
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -129,12 +145,15 @@ android {
             java.srcDir(
                 if (mapkitEnabled) "src/mapkitEnabled/java" else "src/mapkitDisabled/java",
             )
+            java.srcDir("../shared/src/main/java")
+            java.srcDir("../shared/localaccess/java")
         }
     }
 }
 
 dependencies {
 
+    implementation(project(":adbcore"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -164,7 +183,12 @@ dependencies {
     if (mapkitEnabled) {
         implementation(libs.yandex.mapkit.lite)
     }
-    implementation("com.github.jsparrow2006:tbox-proxy:v${libs.versions.tboxProxy.get()}")
+    val tboxProxyLocalAar = providers.gradleProperty("tboxProxyLocalAar").orNull
+    if (tboxProxyLocalAar != null) {
+        implementation(files(tboxProxyLocalAar))
+    } else {
+        implementation(libs.tbox.proxy)
+    }
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

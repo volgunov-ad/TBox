@@ -19,6 +19,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -124,6 +127,8 @@ internal class FloatingOverlayController(
 ) {
     private var windowManager: WindowManager? = null
     private val overlayViews = linkedMapOf<String, ComposeView>()
+    /** Main-thread only: panels whose fade-out is running; window is still attached. */
+    private val closingOverlayFinishers = mutableMapOf<String, () -> Unit>()
     private val overlayParams = mutableMapOf<String, WindowManager.LayoutParams>()
     private val overlayRetryCounts = mutableMapOf<String, Int>()
     private val overlayOffIds = mutableSetOf<String>()
@@ -193,7 +198,30 @@ internal class FloatingOverlayController(
     @Volatile
     private var allowBeyondScreen = false
 
+    /**
+     * Main-thread only. Non-null while panels are hosted as [WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY]
+     * (above SystemUI bars) via [OverlayAccessibilityService].
+     */
+    private var accessibilityWindowManager: WindowManager? = null
+
     init {
+        overlayScope.launch {
+            combine(
+                settingsManager.floatingPanelsAboveSystemBarsFlow,
+                OverlayAccessibilityService.windowManager,
+            ) { enabled, a11yWm -> if (enabled) a11yWm else null }
+                .distinctUntilChanged()
+                .collect { a11yWm ->
+                    withContext(Dispatchers.Main) { switchPanelHost(a11yWm) }
+                }
+        }
+        overlayScope.launch {
+            settingsManager.floatingPanelsAboveSystemBarsFlow
+                .filter { it }
+                .collect {
+                    withContext(Dispatchers.IO) { OverlayAccessibilityEnabler.apply(service, true) }
+                }
+        }
         overlayScope.launch {
             settingsManager.floatingPanelsAllowBeyondScreenFlow.collect { enabled ->
                 val previous = allowBeyondScreen
@@ -272,6 +300,7 @@ internal class FloatingOverlayController(
                     Log.e(TAG, "closeAllOverlays failed for $id", e)
                 }
             }
+            finishClosingOverlays()
             try {
                 removeMainScreenWindowImmediate()
             } catch (e: Exception) {
@@ -586,11 +615,52 @@ internal class FloatingOverlayController(
     private fun ensureWindowManager() {
         if (windowManager != null) return
         try {
-            windowManager = service.getSystemService(WindowManager::class.java)
+            windowManager = accessibilityWindowManager
+                ?: service.getSystemService(WindowManager::class.java)
         } catch (e: Exception) {
             Log.e(TAG, "Error creating Window manager", e)
             TboxRepository.addLog("ERROR", TAG, "Error creating Window manager: ${e.message}")
         }
+    }
+
+    private fun panelWindowType(): Int =
+        if (accessibilityWindowManager != null) {
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+        } else {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        }
+
+    /** Re-attaches mounted panels to the accessibility (above bars) or regular overlay layer. */
+    private fun switchPanelHost(a11yWm: WindowManager?) {
+        if (a11yWm === accessibilityWindowManager) return
+        val oldWm = windowManager
+        accessibilityWindowManager = a11yWm
+        windowManager = null
+        ensureWindowManager()
+        val newWm = windowManager ?: return
+        finishClosingOverlays()
+        val type = panelWindowType()
+        for ((panelId, view) in overlayViews.toList()) {
+            val params = overlayParams[panelId] ?: continue
+            try {
+                if (view.isAttachedToWindow) {
+                    oldWm?.removeViewImmediate(view)
+                }
+                params.type = type
+                // The accessibility WindowManager stamps its service token into params; a
+                // stale token would bind the window to (or fail against) the old host.
+                params.token = null
+                newWm.addView(view, params)
+            } catch (e: Exception) {
+                Log.w(TAG, "switchPanelHost failed for $panelId", e)
+                closeOverlay(panelId, immediate = true)
+            }
+        }
+        TboxRepository.addLog(
+            "INFO",
+            TAG,
+            "Panel layer: ${if (a11yWm != null) "accessibility overlay" else "application overlay"}",
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -941,8 +1011,9 @@ internal class FloatingOverlayController(
             TboxRepository.addLog("DEBUG", TAG, "Already shown: ${config.id}")
             return
         }
+        finishClosingOverlays(config.id)
 
-        if (!Settings.canDrawOverlays(service)) {
+        if (accessibilityWindowManager == null && !Settings.canDrawOverlays(service)) {
             TboxRepository.addLog("ERROR", TAG, "Cannot draw overlay")
             return
         }
@@ -959,7 +1030,7 @@ internal class FloatingOverlayController(
         val layoutParams = WindowManager.LayoutParams(
             bounds.width,
             bounds.height,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            panelWindowType(),
             floatingOverlayWindowFlags(allowBeyondScreen),
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -1070,16 +1141,41 @@ internal class FloatingOverlayController(
         }
     }
 
+    /** Ends fade-outs still in flight so their windows are removed before re-open / teardown. */
+    private fun finishClosingOverlays(panelId: String? = null) {
+        val finishers = if (panelId == null) {
+            closingOverlayFinishers.values.toList()
+        } else {
+            listOfNotNull(closingOverlayFinishers[panelId])
+        }
+        finishers.forEach { finish ->
+            try {
+                finish()
+            } catch (e: Exception) {
+                Log.e(TAG, "finishClosingOverlays failed", e)
+            }
+        }
+    }
+
     private fun closeOverlay(panelId: String, immediate: Boolean = false) {
         val view = overlayViews.remove(panelId) ?: return
         overlayParams.remove(panelId)
         overlayRetryCounts.remove(panelId)
         overlayOffIds.remove(panelId)
+        val wm = windowManager
+        var finished = false
 
         fun finishClose() {
+            if (finished) return
+            finished = true
+            closingOverlayFinishers.remove(panelId)
+            try {
+                view.animate().cancel()
+            } catch (_: Exception) {
+            }
             try {
                 if (view.isAttachedToWindow) {
-                    windowManager?.removeView(view)
+                    wm?.removeView(view)
                 }
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", TAG, "Error removing view")
@@ -1098,6 +1194,8 @@ internal class FloatingOverlayController(
         }
 
         if (!immediate && view.isAttachedToWindow && view.alpha > 0f) {
+            finishClosingOverlays(panelId)
+            closingOverlayFinishers[panelId] = { finishClose() }
             try {
                 view.animate()
                     .alpha(0f)

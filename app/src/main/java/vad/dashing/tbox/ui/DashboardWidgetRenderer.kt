@@ -26,6 +26,7 @@ import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ACC_CRUISE_WIDGET_DATA_KEY
 import vad.dashing.tbox.CRUISE_STATUS_WIDGET_DATA_KEY
+import vad.dashing.tbox.VehicleFeatureSettings
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_CUSTOM_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_DATA_KEY
 import vad.dashing.tbox.ACTIVE_TRIP_WIDGET_MINI_DATA_KEY
@@ -42,6 +43,10 @@ import vad.dashing.tbox.AVERAGE_FUEL_CONSUMPTION_WIDGET_DATA_KEY
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
+import vad.dashing.tbox.FUEL_LEVEL_LITERS_WIDGET_DATA_KEY
+import vad.dashing.tbox.FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY
+import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
+import vad.dashing.tbox.normalizeFuelLitersDisplayMode
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
@@ -73,6 +78,12 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
@@ -143,6 +154,7 @@ fun DashboardWidgetRenderer(
     val activeTripCustomLayout by settingsViewModel.activeTripCustomWidgetLayout.collectAsStateWithLifecycle()
     val activeTripSimpleLayout by settingsViewModel.activeTripSimpleWidgetLayout.collectAsStateWithLifecycle()
     val mapkitApiKey by settingsViewModel.mapkitApiKey.collectAsStateWithLifecycle()
+    val globalCruiseType by VehicleFeatureSettings.cruiseControlTypeFlow.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
@@ -435,6 +447,7 @@ fun DashboardWidgetRenderer(
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
                 singleLineDualMetrics = widgetConfig.singleLineDualMetrics,
+                fuelLitersDisplayMode = widgetConfig.fuelLitersDisplayMode,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
             )
@@ -1115,7 +1128,7 @@ fun DashboardWidgetRenderer(
                 targetKmh = widgetConfig.accCruiseTargetKmh,
                 increaseIntervalMs = widgetConfig.accCruiseIncreaseIntervalMs,
                 decreaseIntervalMs = widgetConfig.accCruiseDecreaseIntervalMs,
-                cruiseControlType = widgetConfig.cruiseControlType,
+                cruiseControlType = globalCruiseType.toCruiseControlType(),
                 widgetKey = "$panelStorageId:${widget.id}",
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -1133,7 +1146,7 @@ fun DashboardWidgetRenderer(
 
         CRUISE_STATUS_WIDGET_DATA_KEY -> {
             DashboardCruiseStatusWidgetItem(
-                cruiseControlType = widgetConfig.cruiseControlType,
+                cruiseControlType = globalCruiseType.toCruiseControlType(),
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onDoubleClick = {},
@@ -1470,6 +1483,102 @@ fun DashboardWidgetRenderer(
         MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY -> {
             DashboardMediaVolumeWidgetItem(
                 widget = widget,
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHuScreenBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHuScreenBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardIcmBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardIcmBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardHudBrightnessWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardHudBrightnessWidgetItem(
                 isVertical = true,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,
@@ -1923,6 +2032,37 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 title = widgetConfig.showTitle,
                 titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
+        FUEL_LEVEL_LITERS_WIDGET_DATA_KEY, FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY -> {
+            val toFull = normalizeFuelLitersDisplayMode(widgetConfig.fuelLitersDisplayMode) ==
+                FUEL_LITERS_DISPLAY_TO_FULL
+            val remappedKey = when {
+                toFull && widget.dataKey == FUEL_LEVEL_LITERS_ACTUAL_WIDGET_DATA_KEY ->
+                    FUEL_LEVEL_LITERS_ACTUAL_TO_FULL_FLOW_KEY
+                toFull -> FUEL_LEVEL_LITERS_TO_FULL_FLOW_KEY
+                else -> widget.dataKey
+            }
+            val litersTitleOverride = when {
+                titleOverride.isNotBlank() -> titleOverride
+                toFull -> stringResource(R.string.data_title_fuel_to_full)
+                else -> titleOverride
+            }
+            DashboardWidgetItem(
+                widget = widget.copy(dataKey = remappedKey),
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = litersTitleOverride,
                 units = widgetConfig.showUnit,
                 backgroundColor = widgetBackgroundColor,
                 textColor = widgetTextColor

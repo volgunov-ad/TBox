@@ -19,6 +19,7 @@ import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.ForegroundAppMonitor
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitBrightnessRepository
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.HeadUnitDayNightRepository
 import vad.dashing.tbox.MediaPlayerState
 import vad.dashing.tbox.PlatformAudioDomain
@@ -59,7 +60,9 @@ class AutomationSignalProvider(
 
         val huSignals = keys
             .asSequence()
-            .filter { it.source == AutomationSignalSource.HEAD_UNIT }
+            .filter {
+                AutomationSignalCatalog.resolveSource(it.signal, it.source) == AutomationSignalSource.HEAD_UNIT
+            }
             .mapNotNull { huInterestFor(it.signal) }
             .toSet()
         if (huSignals.isEmpty()) {
@@ -318,6 +321,28 @@ internal fun geoDisplayFlow(): Flow<AutomationSignalValue> =
         }
         .distinctUntilChanged()
 
+internal fun locationSourceSettingFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return vad.dashing.tbox.SettingsManager(context).locationSourceFlow
+        .map { source ->
+            AutomationSignalValue.State(GeoAutomationSignals.locationSourceKey(source))
+        }
+        .distinctUntilChanged()
+}
+
+internal fun modemSourceSettingFlow(): Flow<AutomationSignalValue> {
+    val context = AppContextHolder.appContextOrNull
+        ?: return flowOf(AutomationSignalValue.Unavailable)
+    return vad.dashing.tbox.SettingsManager(context).modemSourceFlow
+        .map { source ->
+            AutomationSignalValue.State(
+                vad.dashing.tbox.wifimodem.ModemAutomationStates.modemSourceKey(source),
+            )
+        }
+        .distinctUntilChanged()
+}
+
 internal fun activeTripDistanceFlow(): Flow<AutomationSignalValue> =
     TripRepository.activeTrip.map { trip ->
         val t = trip?.takeIf { it.isCurrentActive }
@@ -442,10 +467,14 @@ internal fun Flow<BodyComfortRawRead>.shadeRoofStateFlow(
 
 internal fun Flow<BodyComfortRawRead>.windowStateFlow(
     selector: (BodyComfortRawRead) -> Int?,
-): Flow<AutomationSignalValue> = map { raw ->
-    selector(raw)?.takeIf { it in 0..100 }
-        ?.let { AutomationSignalValue.State("$it%") }
-        ?: AutomationSignalValue.Unavailable
+): Flow<AutomationSignalValue> = combine(UniversalCanRepository.mode) { raw, mode ->
+    val value = selector(raw)
+    val state = if (mode == HeadUnitCanMode.Android10Vhal) {
+        BodyComfortDomain.windowStateValueA10(value)
+    } else {
+        BodyComfortDomain.windowStateValue(value)
+    }
+    state?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
 }
 
 internal fun Flow<MbCanSeatModeState>.seatModeFlow(): Flow<AutomationSignalValue> =

@@ -32,6 +32,14 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
     }
+    AutomationSignalId.IGNITION_KEY -> UniversalCanRepository.ignitionKeyState.map { value ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.HU_SYSTEM_MODE -> UniversalCanRepository.huSystemModeState.map { value ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
+            ?: AutomationSignalValue.Unavailable
+    }
     AutomationSignalId.ACC_STATUS -> UniversalCanRepository.accStatusState.map { value ->
         value?.trim()?.takeIf(String::isNotEmpty)?.let(AutomationSignalValue::State)
             ?: AutomationSignalValue.Unavailable
@@ -72,6 +80,14 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
             ?: AutomationSignalValue.Unavailable
     }
     AutomationSignalId.HIGH_BEAM -> UniversalCanRepository.highBeamOnState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.HAZARD -> UniversalCanRepository.hazardActiveState.map {
+        it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
+            ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.DRL -> UniversalCanRepository.drlOnState.map {
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
@@ -167,6 +183,10 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
                 FcwSensitivity.Near -> "near"
             }
         }?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
+    }
+    AutomationSignalId.ACC_TIME_GAP -> UniversalCanRepository.accTimeGap.map { value ->
+        value?.let(AutomationSignalStateEncoding::accTimeGapStateKey)
+            ?.let(AutomationSignalValue::State) ?: AutomationSignalValue.Unavailable
     }
     AutomationSignalId.LDW_SENSITIVITY -> UniversalCanRepository.ldwSensitivity.map { value ->
         value?.let {
@@ -303,6 +323,8 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.CRUISE_SET_SPEED -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise
     AutomationSignalId.GEAR_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.VehicleGear
     AutomationSignalId.ACC_STATUS -> vad.dashing.tbox.mbcan.MbCanSignal.AccStatus
+    AutomationSignalId.IGNITION_KEY -> vad.dashing.tbox.mbcan.MbCanSignal.IgnitionKey
+    AutomationSignalId.HU_SYSTEM_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.HuSystemMode
     AutomationSignalId.ACC_CRUISE_STATE,
     AutomationSignalId.CCS_CRUISE_STATE,
     -> vad.dashing.tbox.mbcan.MbCanSignal.AccCruise
@@ -325,6 +347,8 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.WIPER_STS -> vad.dashing.tbox.mbcan.MbCanSignal.WiperSts
     AutomationSignalId.RAIN_DETECTED -> vad.dashing.tbox.mbcan.MbCanSignal.RainDetected
     AutomationSignalId.HIGH_BEAM -> vad.dashing.tbox.mbcan.MbCanSignal.HighBeam
+    AutomationSignalId.HAZARD -> vad.dashing.tbox.mbcan.MbCanSignal.Hazard
+    AutomationSignalId.DRL -> vad.dashing.tbox.mbcan.MbCanSignal.Drl
     AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp
     AutomationSignalId.ENGINE_OIL_PRESSURE -> vad.dashing.tbox.mbcan.MbCanSignal.EngineOilPressure
     AutomationSignalId.BRAKE_FLUID -> vad.dashing.tbox.mbcan.MbCanSignal.BrakeFluid
@@ -378,6 +402,7 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.DOOR_OPEN_WARNING -> vad.dashing.tbox.mbcan.MbCanSignal.Dow
     AutomationSignalId.FCW -> vad.dashing.tbox.mbcan.MbCanSignal.Fcw
     AutomationSignalId.FCW_SENSITIVITY -> vad.dashing.tbox.mbcan.MbCanSignal.FcwSensitivity
+    AutomationSignalId.ACC_TIME_GAP -> vad.dashing.tbox.mbcan.MbCanSignal.AccTimeGap
     AutomationSignalId.LDW_SENSITIVITY -> vad.dashing.tbox.mbcan.MbCanSignal.LdwSensitivity
     AutomationSignalId.HVAC_CUSTOM_MODE -> vad.dashing.tbox.mbcan.MbCanSignal.HvacCustomMode
     AutomationSignalId.FRONT_WINDSCREEN_HEAT -> vad.dashing.tbox.mbcan.MbCanSignal.FrontWindscreenHeat

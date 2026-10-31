@@ -38,6 +38,7 @@ import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.R
 import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
+import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
@@ -108,6 +109,11 @@ internal fun DashboardPanelGridAndFrames(
      * Floating overlays and the tiles tab leave this true.
      */
     heavySubscriptionsEnabled: Boolean = true,
+    /**
+     * When true, physical-button bindings on tiles are registered (panel on screen,
+     * not collapsed). Main screen + floating only — leave false on the tiles tab.
+     */
+    buttonBindingsActive: Boolean = false,
 ) {
     val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
     val normalizedConfigs = rememberWidgetConfigsForPanel(widgetConfigs, dashboardRows * dashboardCols)
@@ -486,6 +492,19 @@ internal fun DashboardPanelGridAndFrames(
                                 ),
                                 LocalDashboardWidgetInteractionPolicy provides widgetInteractionPolicy,
                                 LocalNotifyPanelTileTap provides onPanelTileTap,
+                                LocalWidgetButtonBindingHost provides WidgetButtonBindingHost(
+                                    binding = if (
+                                        buttonBindingsActive &&
+                                        supportsWidgetButtonBinding(widgetConfig.dataKey)
+                                    ) {
+                                        widgetConfig.buttonBinding
+                                    } else {
+                                        null
+                                    },
+                                    active = buttonBindingsActive &&
+                                        supportsWidgetButtonBinding(widgetConfig.dataKey) &&
+                                        !isEditMode,
+                                ),
                             ) {
                                 DashboardWidgetRenderer(
                                     widget = widget,

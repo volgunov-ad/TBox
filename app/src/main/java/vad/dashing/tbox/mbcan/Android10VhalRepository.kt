@@ -16,6 +16,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -189,7 +190,7 @@ private class CarPropertyBridge(
         pushListener = null
         diagnosticPushListener = null
         deepDiagnosticPushListener = null
-        registeredPushPropertyIds.clear()
+        synchronized(this) { registeredPushPropertyIds.clear() }
         registeredDiagnosticPropertyIds.clear()
         registeredDeepDiagnosticPropertyIds.clear()
         onPushPropertyChanged = null
@@ -208,6 +209,80 @@ private class CarPropertyBridge(
         }.onFailure {
             Android10VhalRepository.logReadFailure(propertyId, areaId, it)
         }.getOrNull()
+    }
+
+    /**
+     * [CarPropertyManager.getProperty]: any value type, not only int. [quiet] skips the
+     * read-failure journal so a baseline sweep of unknown ids does not flood it.
+     */
+    fun getPropertyValue(propertyId: Int, areaId: Int = 0, quiet: Boolean = false): Any? {
+        if (Android10VhalRepository.isPropertyPermissionDenied(propertyId)) return null
+        val manager = propertyManager ?: return null
+        val generic = runCatching {
+            val method = propertyGetMethod ?: manager.javaClass.methods.firstOrNull { candidate ->
+                candidate.name == "getProperty" &&
+                    candidate.parameterTypes.contentEquals(
+                        arrayOf(Int::class.javaPrimitiveType, Int::class.javaPrimitiveType),
+                    )
+            }?.also { propertyGetMethod = it }
+            if (method == null) return@runCatching null
+            val boxed = method.invoke(manager, propertyId, areaId) ?: return@runCatching null
+            boxed.javaClass.methods.firstOrNull { it.name == "getValue" && it.parameterCount == 0 }
+                ?.invoke(boxed)
+        }.onFailure {
+            if (!quiet) Android10VhalRepository.logReadFailure(propertyId, areaId, it)
+        }.getOrNull()
+        if (generic != null || propertyGetMethod != null) return generic
+        // Car stacks without getProperty(int, int): try the typed getters, int first.
+        for (name in listOf("getIntProperty", "getFloatProperty", "getBooleanProperty")) {
+            val value = runCatching {
+                manager.javaClass
+                    .getMethod(name, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                    .invoke(manager, propertyId, areaId)
+            }.getOrNull()
+            if (value != null) return value
+        }
+        return null
+    }
+
+    private var propertyGetMethod: java.lang.reflect.Method? = null
+
+    data class VhalPropertyConfigInfo(
+        val propertyId: Int,
+        val access: Int?,
+        val changeMode: Int?,
+        val areaIds: List<Int>,
+        val typeName: String?,
+    )
+
+    /** Android `VehiclePropertyAccess`: 0 none, 1 read, 2 write, 3 read+write. */
+    fun isReadableAccess(access: Int?): Boolean = access == null || access == 1 || access == 3
+
+    /** Full [CarPropertyManager.getPropertyList], empty when the manager has no such method. */
+    fun listPropertyConfigs(): List<VhalPropertyConfigInfo> {
+        val manager = propertyManager ?: return emptyList()
+        val getPropertyList = manager.javaClass.methods.firstOrNull {
+            it.name == "getPropertyList" && it.parameterCount == 0
+        } ?: return emptyList()
+        val list = runCatching { getPropertyList.invoke(manager) as? Iterable<*> }.getOrNull() ?: return emptyList()
+        return list.mapNotNull { item ->
+            if (item == null) return@mapNotNull null
+            val id = runCatching { item.javaClass.getMethod("getPropertyId").invoke(item) as? Int }.getOrNull()
+                ?: return@mapNotNull null
+            val access = runCatching { item.javaClass.getMethod("getAccess").invoke(item) as? Int }.getOrNull()
+            val changeMode = runCatching { item.javaClass.getMethod("getChangeMode").invoke(item) as? Int }.getOrNull()
+            val typeName = runCatching {
+                (item.javaClass.getMethod("getPropertyType").invoke(item) as? Class<*>)?.simpleName
+            }.getOrNull()
+            val areas = runCatching { item.javaClass.getMethod("getAreaIds").invoke(item) }.getOrNull().let { value ->
+                when (value) {
+                    is IntArray -> value.toList()
+                    is Array<*> -> value.mapNotNull { (it as? Number)?.toInt() }
+                    else -> emptyList()
+                }
+            }
+            VhalPropertyConfigInfo(id, access, changeMode, areas, typeName)
+        }
     }
 
     fun getFloatProperty(propertyId: Int, areaId: Int = 0): Float? {
@@ -246,6 +321,8 @@ private class CarPropertyBridge(
         onPushPropertyError = onError
     }
 
+    /** Interest changes and [disconnect] can race on different threads; the set diff must be atomic. */
+    @Synchronized
     fun syncPushSubscriptions(propertyIds: Set<Int>) {
         val manager = propertyManager ?: return
         val listener = ensurePushListener()
@@ -587,6 +664,8 @@ object Android10VhalRepository {
     private val VHAL_CAR_SPEED_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_CAR_SPEED_PROPERTY_ID
     private val VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID
+    private val VHAL_CEM_KEY_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_KEY_STS
     private val VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EMS_GAS_PEDAL_POSITION
     private val VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID =
@@ -599,6 +678,8 @@ object Android10VhalRepository {
         FirmwareVehicleJsonMapper.VHAL_CEM_RAIN_DETECTED
     private val VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_CEM_HIGH_BEAM_STS
+    private val VHAL_CEM_DRL_STS_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_CEM_DRL_STS
     private val VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_ICM_EPB_WARNING_LAMP_STS
     private val VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID =
@@ -639,6 +720,8 @@ object Android10VhalRepository {
     private val VHAL_RHF_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHF_PULSE_COUNTER_PROPERTY_ID
     private val VHAL_LHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_LHR_PULSE_COUNTER_PROPERTY_ID
     private val VHAL_RHR_PULSE_COUNTER_PROPERTY_ID = FirmwareVehicleJsonMapper.VHAL_RHR_PULSE_COUNTER_PROPERTY_ID
+    private val VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID =
+        FirmwareVehicleJsonMapper.VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID
     private val VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID =
         FirmwareVehicleJsonMapper.VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID
     private val VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID =
@@ -680,6 +763,7 @@ object Android10VhalRepository {
     private const val CLEAR_SOURCE_PUSH_DEBOUNCE_MS = CanInterestClear.UI_DISPOSE_DEBOUNCE_MS
     private const val PUSH_STATE_COALESCE_MS = 200L
     private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
+    private const val MAX_LOGGED_ERROR_KEYS = 512
     private val KEY_DIAGNOSTIC_PROPERTY_IDS = linkedSetOf(
         289475088,
         560991239,
@@ -688,6 +772,8 @@ object Android10VhalRepository {
     )
     private val DEEP_DIAGNOSTIC_BATCH_SIZE = 10
     private val DEEP_DIAGNOSTIC_BATCH_DELAY_MS = 500L
+    private val DEEP_BASELINE_PACE_MS = 5L
+    private val MAX_BASELINE_AREAS = 4
     private val carSettingsZeroToSixRange = 0..6
     private val loggedPropertyConfigs = mutableSetOf<Int>()
 
@@ -831,6 +917,10 @@ object Android10VhalRepository {
     val gearBoxModeState: StateFlow<String?> = _gearBoxModeState.asStateFlow()
     private val _accStatusState = MutableStateFlow<String?>(null)
     val accStatusState: StateFlow<String?> = _accStatusState.asStateFlow()
+    private val _ignitionKeyState = MutableStateFlow<String?>(null)
+    val ignitionKeyState: StateFlow<String?> = _ignitionKeyState.asStateFlow()
+    private val _huSystemModeState = MutableStateFlow<String?>(null)
+    val huSystemModeState: StateFlow<String?> = _huSystemModeState.asStateFlow()
     private val _gasPedalPercentState = MutableStateFlow<Float?>(null)
     val gasPedalPercentState: StateFlow<Float?> = _gasPedalPercentState.asStateFlow()
     private val _brakePedalPressedState = MutableStateFlow<Boolean?>(null)
@@ -841,6 +931,10 @@ object Android10VhalRepository {
     val rainDetectedState: StateFlow<Boolean?> = _rainDetectedState.asStateFlow()
     private val _highBeamOnState = MutableStateFlow<Boolean?>(null)
     val highBeamOnState: StateFlow<Boolean?> = _highBeamOnState.asStateFlow()
+    private val _hazardActiveState = MutableStateFlow<Boolean?>(null)
+    val hazardActiveState: StateFlow<Boolean?> = _hazardActiveState.asStateFlow()
+    private val _drlOnState = MutableStateFlow<Boolean?>(null)
+    val drlOnState: StateFlow<Boolean?> = _drlOnState.asStateFlow()
     private val _epbParkLampOnState = MutableStateFlow<Boolean?>(null)
     val epbParkLampOnState: StateFlow<Boolean?> = _epbParkLampOnState.asStateFlow()
     private val _engineOilPressureWarningState = MutableStateFlow<Boolean?>(null)
@@ -912,6 +1006,8 @@ object Android10VhalRepository {
     val steerSpeedState: StateFlow<Float?> = _steerSpeedState.asStateFlow()
     private val _turnSignalsState = MutableStateFlow(TurnSignalsState())
     val turnSignalsState: StateFlow<TurnSignalsState> = _turnSignalsState.asStateFlow()
+    private val _lateralAccelerationState = MutableStateFlow<Float?>(null)
+    val lateralAccelerationState: StateFlow<Float?> = _lateralAccelerationState.asStateFlow()
 
     private val _frontLeftSeatModeState = MutableStateFlow<MbCanSeatModeState>(MbCanSeatModeState.Unknown)
     val frontLeftSeatModeState: StateFlow<MbCanSeatModeState> = _frontLeftSeatModeState.asStateFlow()
@@ -1099,9 +1195,9 @@ object Android10VhalRepository {
     }
 
     internal fun logReadFailure(propertyId: Int, areaId: Int, throwable: Throwable) {
-        val key = "$propertyId:$areaId:${throwable.javaClass.name}:${throwable.message}"
+        val key = "$propertyId:$areaId:${throwable.javaClass.name}"
         synchronized(readErrorsLogged) {
-            if (!readErrorsLogged.add(key)) return
+            if (readErrorsLogged.size >= MAX_LOGGED_ERROR_KEYS || !readErrorsLogged.add(key)) return
         }
         val root = (throwable.cause ?: throwable)
         val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "READ_FAILED"
@@ -1123,9 +1219,9 @@ object Android10VhalRepository {
     }
 
     internal fun logWriteFailure(propertyId: Int, areaId: Int, value: Int, throwable: Throwable) {
-        val key = "$propertyId:$areaId:$value:${throwable.javaClass.name}:${throwable.message}"
+        val key = "$propertyId:$areaId:$value:${throwable.javaClass.name}"
         synchronized(writeErrorsLogged) {
-            if (!writeErrorsLogged.add(key)) return
+            if (writeErrorsLogged.size >= MAX_LOGGED_ERROR_KEYS || !writeErrorsLogged.add(key)) return
         }
         val root = (throwable.cause ?: throwable)
         val prefix = if (root is SecurityException) "POSSIBLE_PERMISSION" else "WRITE_FAILED"
@@ -1385,9 +1481,45 @@ object Android10VhalRepository {
             return reason
         }
         return withContext(stateApplyDispatcher) {
+            val configs = bridge?.listPropertyConfigs().orEmpty()
+            configs.forEach { cfg ->
+                val areas = if (cfg.areaIds.isEmpty()) "[]" else cfg.areaIds.joinToString(",", "[", "]")
+                val name = DeepDiagnosticsCatalog.annotateVhalPropertyId(cfg.propertyId)?.let { " name=$it" } ?: ""
+                DeepCanDiagnostics.report(
+                    DeepCanDiagnostics.VHAL_TAG,
+                    "vhal config propertyId=${cfg.propertyId} access=${cfg.access ?: "?"} " +
+                        "changeMode=${cfg.changeMode ?: "?"} areas=$areas type=${cfg.typeName ?: "?"}$name",
+                )
+            }
+            val readableIds = configs
+                .filter { bridge?.isReadableAccess(it.access) == true }
+                .map { it.propertyId }
+            val subscribeIds = (ids + readableIds).distinct()
+            var baselined = 0
+            subscribeIds.forEach { propertyId ->
+                if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
+                val areas = configs.firstOrNull { it.propertyId == propertyId }?.areaIds?.ifEmpty { null } ?: listOf(0)
+                areas.take(MAX_BASELINE_AREAS).forEach { areaId ->
+                    val value = bridge?.getPropertyValue(propertyId, areaId, quiet = true) ?: return@forEach
+                    DeepCanDiagnostics.recordVhalEvent(
+                        propertyId = propertyId,
+                        areaId = areaId,
+                        value = value,
+                        valueType = value.javaClass.simpleName,
+                        status = null,
+                        timestampNanos = null,
+                    )
+                    baselined++
+                }
+                delay(DEEP_BASELINE_PACE_MS)
+            }
+            DeepCanDiagnostics.report(
+                DeepCanDiagnostics.VHAL_TAG,
+                "deepDiag vhal baseline values=$baselined configs=${configs.size} subscribe=${subscribeIds.size}",
+            )
             var subscribed = 0
             val failures = mutableListOf<String>()
-            ids.chunked(DEEP_DIAGNOSTIC_BATCH_SIZE).forEach { chunk ->
+            subscribeIds.chunked(DEEP_DIAGNOSTIC_BATCH_SIZE).forEach { chunk ->
                 if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
                 chunk.forEach { propertyId ->
                     val result = bridge?.startDeepDiagnosticSubscription(propertyId)
@@ -1400,7 +1532,7 @@ object Android10VhalRepository {
                 delay(DEEP_DIAGNOSTIC_BATCH_DELAY_MS)
             }
             if (session != deepDiagnosticSession.get()) return@withContext "cancelled"
-            val summary = "deepDiag vhal subscribed=$subscribed failed=${failures.size} ids=${ids.size}"
+            val summary = "deepDiag vhal subscribed=$subscribed failed=${failures.size} ids=${subscribeIds.size}"
             DeepCanDiagnostics.report(
                 DeepCanDiagnostics.VHAL_TAG,
                 if (failures.isEmpty()) summary else "$summary failures=${failures.take(15).joinToString(" | ")}"
@@ -1663,6 +1795,8 @@ object Android10VhalRepository {
             MbCanSignal.CarSpeed -> setOf(VHAL_CAR_SPEED_PROPERTY_ID)
             MbCanSignal.VehicleGear -> setOf(VHAL_GEAR_SELECTION_PROPERTY_ID, VHAL_CURRENT_GEAR_PROPERTY_ID)
             MbCanSignal.AccStatus -> setOf(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID)
+            MbCanSignal.IgnitionKey -> setOf(VHAL_CEM_KEY_STS_PROPERTY_ID)
+            MbCanSignal.HuSystemMode -> emptySet()
             MbCanSignal.GasPedal -> setOf(
                 VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID,
                 VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID,
@@ -1671,6 +1805,8 @@ object Android10VhalRepository {
             MbCanSignal.WiperSts -> setOf(VHAL_CEM_WIPER_STS_PROPERTY_ID)
             MbCanSignal.RainDetected -> setOf(VHAL_CEM_RAIN_DETECTED_PROPERTY_ID)
             MbCanSignal.HighBeam -> setOf(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID)
+            MbCanSignal.Hazard -> setOf(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID)
+            MbCanSignal.Drl -> setOf(VHAL_CEM_DRL_STS_PROPERTY_ID)
             MbCanSignal.EpbParkLamp -> setOf(VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID)
             MbCanSignal.EngineOilPressure -> setOf(VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID)
             MbCanSignal.BrakeFluid -> setOf(
@@ -1724,6 +1860,7 @@ object Android10VhalRepository {
                 VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID,
                 VHAL_HAZARD_LIGHT_SW_PROPERTY_ID,
             )
+            MbCanSignal.LateralAcceleration -> setOf(VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID)
         }
     }
 
@@ -1796,6 +1933,11 @@ object Android10VhalRepository {
     private fun decodeVehicleGear(raw: Any?): String? {
         val value = (raw as? Number)?.toInt() ?: return null
         return VehicleGearDomain.decodePrndBitmask(value)
+    }
+
+    private fun decodeIgnitionKey(raw: Any?): String? {
+        val value = (raw as? Number)?.toInt() ?: return null
+        return IgnitionKeyDomain.decode(value)
     }
 
     private fun decodeAccStatus(raw: Any?): String? {
@@ -1889,8 +2031,8 @@ object Android10VhalRepository {
         applyPosition: (WindowPanePosition) -> Unit,
         copyRaw: (BodyComfortRawRead, Int) -> BodyComfortRawRead,
     ) {
-        val value = BodyComfortDomain.sanitizeStatusRaw(raw)?.takeIf { it in 0..100 } ?: return
-        BodyComfortDomain.decodeWindow(value)?.let(applyPosition)
+        val value = raw?.takeIf { it in BodyComfortDomain.WINDOW_A10_STATUS_RANGE } ?: return
+        BodyComfortDomain.decodeWindowA10Status(value)?.let(applyPosition)
         _bodyComfortRaw.value = copyRaw(_bodyComfortRaw.value, value)
     }
 
@@ -1948,33 +2090,32 @@ object Android10VhalRepository {
 
     private fun applyVhalTirePressureCorner(corner: Int, bar: Float?) {
         val now = SystemClock.elapsedRealtime()
-        _wheelsPressureState.value = TirePressureDomain.mergeWheelsPressureCorner(
-            current = _wheelsPressureState.value,
-            corner = corner,
-            incoming = bar,
-            now = now,
-            debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
-        )
+        _wheelsPressureState.update { current ->
+            TirePressureDomain.mergeWheelsPressureCorner(
+                current = current,
+                corner = corner,
+                incoming = bar,
+                now = now,
+                debounceMs = UniversalCanRepository.wheelPressureNullDebounceMs,
+            )
+        }
     }
 
     /** Disk restore for HU tire pressure (same AppData keys as TBox). */
     fun restoreWheelsPressureFromSaved(saved: Wheels) {
         val now = SystemClock.elapsedRealtime()
-        val cur = _wheelsPressureState.value
-        val merged = TirePressureDomain.restoreMissingPressures(cur, saved, now)
-        if (merged != cur) {
-            _wheelsPressureState.value = merged
-        }
+        _wheelsPressureState.update { cur -> TirePressureDomain.restoreMissingPressures(cur, saved, now) }
     }
 
     private fun applyVhalTireTemperatureCorner(corner: Int, celsius: Float?) {
-        val cur = _wheelsTemperatureState.value
-        _wheelsTemperatureState.value = when (corner) {
-            0 -> cur.copy(wheel1 = celsius)
-            1 -> cur.copy(wheel2 = celsius)
-            2 -> cur.copy(wheel3 = celsius)
-            3 -> cur.copy(wheel4 = celsius)
-            else -> cur
+        _wheelsTemperatureState.update { cur ->
+            when (corner) {
+                0 -> cur.copy(wheel1 = celsius)
+                1 -> cur.copy(wheel2 = celsius)
+                2 -> cur.copy(wheel3 = celsius)
+                3 -> cur.copy(wheel4 = celsius)
+                else -> cur
+            }
         }
     }
 
@@ -2136,8 +2277,7 @@ object Android10VhalRepository {
                 CarSettingsAdasDomain.decodeLdwSensitivityMbCan(mbCanValue)
                     ?.let(CarSettingsAdasDomain::encodeLdwSensitivityVhal)
             MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET ->
-                CarSettingsAdasDomain.decodeAccTimeGapMbCan(mbCanValue)
-                    ?.let(CarSettingsAdasDomain::encodeAccTimeGapVhal)
+                mbCanValue.takeIf { CarSettingsAdasDomain.decodeAccTimeGapRequest(it) != null }
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_LEFT,
             MbCanKnownVehiclePropertyId.HVAC_TEMPERATURE_RIGHT ->
                 HvacClimateDomain.mbCanTempRawToVhalWrite(mbCanValue)
@@ -2314,7 +2454,7 @@ object Android10VhalRepository {
             resolved(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET) ->
                 HoldLastKnown.set(
                     _accTimeGap,
-                    raw?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+                    raw?.let(CarSettingsAdasDomain::decodeAccTimeGapStatus),
                 )
             resolved(MbCanKnownVehiclePropertyId.HMA_SWITCH) ->
                 raw?.let {
@@ -2517,6 +2657,8 @@ object Android10VhalRepository {
                 _gearBoxModeState.value = decodeVehicleGear(rawValue)
             VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID ->
                 _accStatusState.value = decodeAccStatus(rawValue)
+            VHAL_CEM_KEY_STS_PROPERTY_ID ->
+                _ignitionKeyState.value = decodeIgnitionKey(rawValue)
             VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID -> applyGasPedalPosition(rawValue)
             VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID -> applyGasPedalInvalid(rawValue)
             VHAL_CEM_BRAKE_PEDAL_STS_PROPERTY_ID ->
@@ -2527,6 +2669,8 @@ object Android10VhalRepository {
                 _rainDetectedState.value = decodeRainDetected(rawValue)
             VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID ->
                 _highBeamOnState.value = decodeCemBinaryActive(rawValue)
+            VHAL_CEM_DRL_STS_PROPERTY_ID ->
+                _drlOnState.value = decodeCemBinaryActive(rawValue)
             VHAL_ICM_EPB_WARNING_LAMP_STS_PROPERTY_ID ->
                 _epbParkLampOnState.value = decodeCemBinaryActive(rawValue)
             VHAL_ICM_ENGINE_OIL_PRESSURE_PROPERTY_ID ->
@@ -2563,8 +2707,11 @@ object Android10VhalRepository {
                 applyTurnSignalsPatch(leftActive = decodeCemBinaryActive(rawValue))
             VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID ->
                 applyTurnSignalsPatch(rightActive = decodeCemBinaryActive(rawValue))
-            VHAL_HAZARD_LIGHT_SW_PROPERTY_ID ->
-                applyTurnSignalsPatch(hazardActive = decodeCemBinaryActive(rawValue))
+            VHAL_HAZARD_LIGHT_SW_PROPERTY_ID -> {
+                val active = decodeCemBinaryActive(rawValue)
+                _hazardActiveState.value = active
+                applyTurnSignalsPatch(hazardActive = active)
+            }
             VHAL_FUEL_LEVEL_PROPERTY_ID ->
                 _fuelLevelPercentState.value = decodeFuelLevelPercent(rawValue)
             VHAL_TOTAL_ODOMETER_KM_PROPERTY_ID ->
@@ -2577,6 +2724,8 @@ object Android10VhalRepository {
                 applyVhalPulseCorner(2, decodePulseCounter(rawValue))
             VHAL_RHR_PULSE_COUNTER_PROPERTY_ID ->
                 applyVhalPulseCorner(3, decodePulseCounter(rawValue))
+            VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID ->
+                _lateralAccelerationState.value = LateralAccelerationDomain.decodeVhalRaw(rawValue)
             VHAL_EXTERNAL_TEMPERATURE_RAW_PROPERTY_ID ->
                 _outsideTemperatureState.value = decodeOutsideTemperature(rawValue)
             VHAL_FUEL_ROLLING_COUNTER_PROPERTY_ID ->
@@ -2685,6 +2834,20 @@ object Android10VhalRepository {
         logDebug("VHAL push coalesced[$body]")
     }
 
+    /**
+     * One queued pull of [signals] on [stateApplyDispatcher].
+     * [refreshSignal] itself must not hop: the poll loop and [execute] already run there,
+     * and a nested [withContext] on this single thread would deadlock.
+     */
+    suspend fun refreshSignalsNow(signals: Collection<MbCanSignal>) {
+        val unique = signals.distinct()
+        if (unique.isEmpty()) return
+        withContext(stateApplyDispatcher) {
+            prioritize(unique)
+            unique.forEach { refreshSignal(it) }
+        }
+    }
+
     suspend fun refreshSignal(signal: MbCanSignal) {
         permissionDeniedReasonForSignal(signal)?.let { deniedReason ->
             when (signal) {
@@ -2763,11 +2926,15 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.IgnitionKey -> _ignitionKeyState.value = null
+                MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.Hazard -> _hazardActiveState.value = null
+                MbCanSignal.Drl -> _drlOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
                 MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
                 MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
@@ -2805,6 +2972,7 @@ object Android10VhalRepository {
                     _steerSpeedState.value = null
                 }
                 MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
+                MbCanSignal.LateralAcceleration -> _lateralAccelerationState.value = null
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(deniedReason)
@@ -2908,11 +3076,15 @@ object Android10VhalRepository {
                 MbCanSignal.CarSpeed -> _carSpeedState.value = null
                 MbCanSignal.VehicleGear -> _gearBoxModeState.value = null
                 MbCanSignal.AccStatus -> _accStatusState.value = null
+                MbCanSignal.IgnitionKey -> _ignitionKeyState.value = null
+                MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
                 MbCanSignal.GasPedal -> clearGasPedal()
                 MbCanSignal.BrakePedal -> _brakePedalPressedState.value = null
                 MbCanSignal.WiperSts -> _wiperOperatingModeState.value = null
                 MbCanSignal.RainDetected -> _rainDetectedState.value = null
                 MbCanSignal.HighBeam -> _highBeamOnState.value = null
+                MbCanSignal.Hazard -> _hazardActiveState.value = null
+                MbCanSignal.Drl -> _drlOnState.value = null
                 MbCanSignal.EpbParkLamp -> _epbParkLampOnState.value = null
                 MbCanSignal.EngineOilPressure -> _engineOilPressureWarningState.value = null
                 MbCanSignal.BrakeFluid -> _brakeFluidWarningState.value = null
@@ -2950,6 +3122,7 @@ object Android10VhalRepository {
                     _steerSpeedState.value = null
                 }
                 MbCanSignal.TurnSignals -> _turnSignalsState.value = TurnSignalsState()
+                MbCanSignal.LateralAcceleration -> _lateralAccelerationState.value = null
                 MbCanSignal.SlaSpeedLimit -> {
                     _slaRecognizedSpeedLimitKmh.value = null
                     _slaOnOffState.value = MbCanBinaryState.Unavailable(reason)
@@ -3074,7 +3247,7 @@ object Android10VhalRepository {
             MbCanSignal.AccTimeGap -> HoldLastKnown.set(
                 _accTimeGap,
                 readMappedIntProperty(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
-                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapVhal),
+                    ?.let(CarSettingsAdasDomain::decodeAccTimeGapStatus),
             )
             MbCanSignal.HmaSwitch -> {
                 val raw = readMappedIntProperty(MbCanKnownVehiclePropertyId.HMA_SWITCH)
@@ -3358,6 +3531,11 @@ object Android10VhalRepository {
                 _accStatusState.value =
                     decodeAccStatus(bridge?.getIntProperty(VHAL_MCU_REPLY_ACC_STATUS_PROPERTY_ID))
             }
+            MbCanSignal.IgnitionKey -> {
+                _ignitionKeyState.value =
+                    decodeIgnitionKey(bridge?.getIntProperty(VHAL_CEM_KEY_STS_PROPERTY_ID))
+            }
+            MbCanSignal.HuSystemMode -> _huSystemModeState.value = null
             MbCanSignal.GasPedal -> {
                 applyGasPedalPosition(readNumericProperty(VHAL_EMS_GAS_PEDAL_POSITION_PROPERTY_ID))
                 applyGasPedalInvalid(bridge?.getIntProperty(VHAL_EMS_GAS_PEDAL_POSITION_INVALID_PROPERTY_ID))
@@ -3377,6 +3555,14 @@ object Android10VhalRepository {
             MbCanSignal.HighBeam -> {
                 _highBeamOnState.value =
                     decodeCemBinaryActive(bridge?.getIntProperty(VHAL_CEM_HIGH_BEAM_STS_PROPERTY_ID))
+            }
+            MbCanSignal.Hazard -> {
+                _hazardActiveState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID))
+            }
+            MbCanSignal.Drl -> {
+                _drlOnState.value =
+                    decodeCemBinaryActive(bridge?.getIntProperty(VHAL_CEM_DRL_STS_PROPERTY_ID))
             }
             MbCanSignal.EpbParkLamp -> {
                 _epbParkLampOnState.value =
@@ -3495,10 +3681,16 @@ object Android10VhalRepository {
                 val left = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_LEFT_PROPERTY_ID))
                 val right = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_DIRECTION_IND_RIGHT_PROPERTY_ID))
                 val hazard = decodeCemBinaryActive(bridge?.getIntProperty(VHAL_HAZARD_LIGHT_SW_PROPERTY_ID))
+                _hazardActiveState.value = hazard
                 _turnSignalsState.value = TurnSignalsState(
                     leftActive = left,
                     rightActive = right,
                     hazardActive = hazard,
+                )
+            }
+            MbCanSignal.LateralAcceleration -> {
+                _lateralAccelerationState.value = LateralAccelerationDomain.decodeVhalRaw(
+                    readNumericProperty(VHAL_YAS_LATERAL_ACCELERATION_PROPERTY_ID),
                 )
             }
             MbCanSignal.SlaSpeedLimit -> {
@@ -3569,71 +3761,107 @@ object Android10VhalRepository {
 
     /**
      * Expert raw Get: resolve A10 read id for the logical mbCAN id, then
-     * [CarPropertyBridge.getIntProperty]. Bypasses command registry; no decode.
+     * [CarPropertyBridge.getPropertyValue]. Bypasses command registry; no decode.
+     * Binder reads run on [stateApplyDispatcher], same as deep-diagnostics baseline.
      */
     suspend fun getRawProperty(bus: ExpertRawCanBus, propertyId: Int): ExpertRawGetResult {
-        val connection = ensureConnected()
-        if (connection !is MbCanAvailability.Available) {
-            return ExpertRawGetResult(false, message = currentUnavailableReason())
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            return ExpertRawGetResult(false, effectivePropertyId = propertyId, message = "A9-only mbCAN object")
         }
-        val effectiveId = FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId) ?: propertyId
-        permissionDeniedReasonForProperty(effectiveId)?.let {
-            return ExpertRawGetResult(
-                success = false,
-                effectivePropertyId = effectiveId,
-                message = it,
-            )
-        }
-        val raw = bridge?.getIntProperty(effectiveId)
-        return if (raw == null) {
-            ExpertRawGetResult(
-                success = false,
-                effectivePropertyId = effectiveId,
-                message = "Get returned null (bus=$bus)",
-            )
-        } else {
-            ExpertRawGetResult(
-                success = true,
-                rawValue = raw,
-                effectivePropertyId = effectiveId,
-                message = "ok",
-            )
+        return withContext(stateApplyDispatcher) {
+            val connection = ensureConnected()
+            if (connection !is MbCanAvailability.Available) {
+                return@withContext ExpertRawGetResult(false, message = currentUnavailableReason())
+            }
+            val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+                propertyId
+            } else {
+                FirmwareVehicleJsonMapper.resolveReadPropertyId(propertyId)
+                    ?: ExpertRawVhalCandidates.readId(bus, propertyId)
+                    ?: propertyId
+            }
+            permissionDeniedReasonForProperty(effectiveId)?.let {
+                return@withContext ExpertRawGetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = it,
+                )
+            }
+            val value = bridge?.getPropertyValue(effectiveId)
+            if (value == null) {
+                return@withContext ExpertRawGetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = "Get returned null (bus=$bus)",
+                )
+            }
+            val intValue = (value as? Number)?.takeIf { value is Int || value is Short || value is Byte }?.toInt()
+            if (intValue != null && value !is Float && value !is Double) {
+                ExpertRawGetResult(
+                    success = true,
+                    rawValue = intValue,
+                    effectivePropertyId = effectiveId,
+                    message = "ok",
+                )
+            } else {
+                ExpertRawGetResult(
+                    success = true,
+                    effectivePropertyId = effectiveId,
+                    message = "ok ${value.javaClass.simpleName}",
+                    fields = MbCanObjectDump.flatten(value),
+                )
+            }
         }
     }
 
     /**
      * Expert raw Set: resolve A10 write id and send [value] as-is (no VHAL encode /
      * registry policy). Multi-pane window logical ids are rejected — pick a pane id.
+     * Binder writes run on [stateApplyDispatcher].
      */
     suspend fun setRawProperty(bus: ExpertRawCanBus, propertyId: Int, value: Int): ExpertRawSetResult {
-        val connection = ensureConnected()
-        if (connection !is MbCanAvailability.Available) {
-            return ExpertRawSetResult(false, message = currentUnavailableReason())
+        if (bus == ExpertRawCanBus.MbCanObject) {
+            return ExpertRawSetResult(false, propertyId, "A9-only mbCAN object")
         }
-        val windowIds = FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
-        if (windowIds != null && windowIds.size > 1) {
-            return ExpertRawSetResult(
-                success = false,
-                message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
-            )
-        }
-        val effectiveId = windowIds?.singleOrNull()
-            ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
-            ?: propertyId
-        permissionDeniedReasonForProperty(effectiveId)?.let {
-            return ExpertRawSetResult(
-                success = false,
+        return withContext(stateApplyDispatcher) {
+            val connection = ensureConnected()
+            if (connection !is MbCanAvailability.Available) {
+                return@withContext ExpertRawSetResult(false, message = currentUnavailableReason())
+            }
+            val windowIds = if (bus == ExpertRawCanBus.VhalDirect) {
+                null
+            } else {
+                FirmwareVehicleJsonMapper.resolveWindowWritePropertyIds(propertyId)
+            }
+            if (windowIds != null && windowIds.size > 1) {
+                return@withContext ExpertRawSetResult(
+                    success = false,
+                    message = "Multi-pane window id; use a single pane propertyId instead ($windowIds)",
+                )
+            }
+            val effectiveId = if (bus == ExpertRawCanBus.VhalDirect) {
+                propertyId
+            } else {
+                windowIds?.singleOrNull()
+                    ?: FirmwareVehicleJsonMapper.resolveWritePropertyId(propertyId)
+                    ?: ExpertRawVhalCandidates.writeId(bus, propertyId)
+                    ?: propertyId
+            }
+            permissionDeniedReasonForProperty(effectiveId)?.let {
+                return@withContext ExpertRawSetResult(
+                    success = false,
+                    effectivePropertyId = effectiveId,
+                    message = it,
+                )
+            }
+            val ok = bridge?.setIntProperty(effectiveId, value) == true
+            logDebug("expertSetRaw bus=$bus logical=$propertyId effective=$effectiveId value=$value ok=$ok")
+            ExpertRawSetResult(
+                success = ok,
                 effectivePropertyId = effectiveId,
-                message = it,
+                message = if (ok) "Set ok" else "Set failed",
             )
         }
-        val ok = bridge?.setIntProperty(effectiveId, value) == true
-        logDebug("expertSetRaw bus=$bus logical=$propertyId effective=$effectiveId value=$value ok=$ok")
-        return ExpertRawSetResult(
-            success = ok,
-            effectivePropertyId = effectiveId,
-            message = if (ok) "Set ok" else "Set failed",
-        )
     }
 
     suspend fun execute(command: MbCanCommand): MbCanCommandResult {

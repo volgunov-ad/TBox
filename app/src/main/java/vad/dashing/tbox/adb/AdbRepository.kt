@@ -21,16 +21,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
+import android.os.Environment
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.io.FileOutputStream
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.location.GeoDebugLogRotate
 
 object AdbRepository {
     private const val JOURNAL_TAG = "ADB"
     private const val SCRIPT_PAUSE_MS = 1_000L
+    private const val LOGCAT_FLUSH_BYTES = 32 * 1024
 
     const val ACTION_USB_PERMISSION = "vad.dashing.tbox.ADB_USB_PERMISSION"
 
@@ -88,19 +93,31 @@ object AdbRepository {
         val failedCount: Int = 0,
     )
 
+    /**
+     * Full logcat capture to Downloads (`tbox_logcat_…`). Session-only.
+     */
+    data class LogcatCaptureState(
+        val active: Boolean = false,
+        val filePath: String? = null,
+        val bytesWritten: Long = 0L,
+        val lastError: String? = null,
+    )
+
     private const val MAX_LOG_LINES = 500
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
-    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.US)
+    private val timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss", Locale.US)
     private val _state = MutableStateFlow(State())
     private val _usbCandidates = MutableStateFlow<List<UsbCandidate>>(emptyList())
     private val _consoleLog = MutableStateFlow<List<String>>(emptyList())
     private val _scriptRun = MutableStateFlow(ScriptRunState())
+    private val _logcatCapture = MutableStateFlow(LogcatCaptureState())
 
     val state: StateFlow<State> = _state.asStateFlow()
     val usbCandidates: StateFlow<List<UsbCandidate>> = _usbCandidates.asStateFlow()
     val consoleLog: StateFlow<List<String>> = _consoleLog.asStateFlow()
     val scriptRun: StateFlow<ScriptRunState> = _scriptRun.asStateFlow()
+    val logcatCapture: StateFlow<LogcatCaptureState> = _logcatCapture.asStateFlow()
 
     @Volatile private var initialized = false
     private lateinit var appContext: Context
@@ -113,6 +130,9 @@ object AdbRepository {
     private var scriptJob: Job? = null
     private val scriptStopRequested = AtomicBoolean(false)
     @Volatile private var scriptFailureDecision: CompletableDeferred<Boolean>? = null
+    private var logcatJob: Job? = null
+    private val logcatStopRequested = AtomicBoolean(false)
+    private val logcatExclusive = AtomicBoolean(false)
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -143,10 +163,18 @@ object AdbRepository {
                     }
                     ACTION_USB_PERMISSION -> {
                         val device = extraUsbDevice(intent)
-                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        val grantedExtra =
+                            intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                        // Adayo A10 SystemUI auto-grants (CBen_grantUsbPermissions) and closes the
+                        // dialog, but the result broadcast still carries granted=false.
+                        val granted = grantedExtra || (device != null &&
+                            runCatching { usbManager.hasPermission(device) }.getOrDefault(false))
                         refreshUsbDevices()
                         if (device != null && device.deviceId == pendingUsbDeviceId) {
                             pendingUsbDeviceId = null
+                            if (granted && !grantedExtra) {
+                                appendLog("USB permission result says denied, but hasPermission=true; connecting")
+                            }
                             if (granted) {
                                 connectUsb(device.deviceId)
                             } else {
@@ -288,7 +316,10 @@ object AdbRepository {
 
     fun disconnect() {
         cancelScriptRun(ScriptOutcome.CANCELLED)
+        requestLogcatStop()
         scope.launch {
+            // Unblock a stuck logcat stream before tearing down the transport.
+            awaitLogcatJob()
             mutex.withLock {
                 val endpoint = _state.value.endpoint
                 AdbShutdownGate.withIntentionalTransportClose {
@@ -300,11 +331,31 @@ object AdbRepository {
         }
     }
 
+    suspend fun dropConnectionAfterAdbdRestart(reason: String) {
+        cancelScriptRun(ScriptOutcome.CANCELLED)
+        requestLogcatStop()
+        awaitLogcatJob()
+        mutex.withLock {
+            if (connection == null) return@withLock
+            val endpoint = _state.value.endpoint
+            AdbShutdownGate.withIntentionalTransportClose {
+                closeConnection()
+            }
+            _state.value = State()
+            appendLog("Disconnected from $endpoint ($reason)")
+            TboxRepository.addLog("DEBUG", JOURNAL_TAG, "Disconnected from $endpoint ($reason)")
+        }
+    }
+
     fun execute(command: String) {
         val normalized = command.trim()
         if (normalized.isEmpty()) return
         if (_scriptRun.value.active) {
             appendLog("Script run in progress — shell field blocked")
+            return
+        }
+        if (logcatExclusive.get() || _logcatCapture.value.active) {
+            appendLog("Logcat capture in progress — shell field blocked")
             return
         }
         scope.launch {
@@ -321,6 +372,7 @@ object AdbRepository {
     fun startScript(commands: List<String>): Boolean {
         if (commands.isEmpty()) return false
         if (_scriptRun.value.active) return false
+        if (logcatExclusive.get() || _logcatCapture.value.active) return false
         if (_state.value.phase != Phase.CONNECTED || connection == null) return false
         scriptStopRequested.set(false)
         scriptFailureDecision = null
@@ -335,6 +387,49 @@ object AdbRepository {
             runScript(commands)
         }
         return true
+    }
+
+    fun isLogcatCapturing(): Boolean = _logcatCapture.value.active || logcatExclusive.get()
+
+    /**
+     * Starts full logcat capture (`logcat -v threadtime`) to Downloads.
+     * Uses the live ADB-tab connection (TCP or USB).
+     * Returns null when started, otherwise the reason it did not start.
+     */
+    fun startLogcatCapture(clearBufferFirst: Boolean): String? {
+        if (!initialized) return "not initialized"
+        if (_logcatCapture.value.active || logcatExclusive.get()) return "already recording"
+        if (_scriptRun.value.active) return "script is running"
+        if (_state.value.phase != Phase.CONNECTED || connection == null) return "not connected"
+        val file = createLogcatFile() ?: run {
+            _logcatCapture.value = LogcatCaptureState(
+                active = false,
+                lastError = "cannot create Downloads file",
+            )
+            appendLog("Logcat: cannot create Downloads file")
+            return "cannot create Downloads file"
+        }
+        if (!logcatExclusive.compareAndSet(false, true)) return "already recording"
+        logcatStopRequested.set(false)
+        _logcatCapture.value = LogcatCaptureState(
+            active = true,
+            filePath = file.absolutePath,
+            bytesWritten = 0L,
+            lastError = null,
+        )
+        appendLog("Logcat: recording → ${file.name}")
+        TboxRepository.addLog("INFO", JOURNAL_TAG, "Logcat capture start: ${file.name}")
+        logcatJob = scope.launch {
+            runLogcatCapture(file, clearBufferFirst)
+        }
+        return null
+    }
+
+    /** Request stop of an active logcat capture (current stream ends via CLSE). */
+    fun stopLogcatCapture() {
+        if (!_logcatCapture.value.active && logcatJob == null) return
+        requestLogcatStop()
+        appendLog("Logcat: stop requested")
     }
 
     /** Request stop of remaining commands (current command still finishes). */
@@ -378,6 +473,11 @@ object AdbRepository {
      *
      * Used by [LocalhostAdbSession.AndroidGateway] for grants, automations, virtual display,
      * and AppList advanced ADB actions.
+     *
+     * A reused live connection that turns out dead (stale `CONNECTED` state after an adbd
+     * restart / idle drop) is closed, the tab state reset, and the block retried exactly
+     * once on a fresh ephemeral client — consumers are idempotent (grants, dumpsys,
+     * force-stop + am start, package lists).
      */
     suspend fun <T> withTcpShellSession(
         host: String,
@@ -399,7 +499,30 @@ object AdbRepository {
                 block = block,
             )
         }
+        // Logcat holds the live shell stream; never reuse that connection mid-capture.
+        if (logcatExclusive.get() || _logcatCapture.value.active) {
+            return AdbExclusiveTcpShell.openEphemeral(
+                host = host,
+                port = port,
+                connectTimeoutMs = connectTimeoutMs,
+                sessionTimeoutMs = sessionTimeoutMs,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
+        }
         return mutex.withLock {
+            if (logcatExclusive.get() || _logcatCapture.value.active) {
+                return@withLock AdbExclusiveTcpShell.openEphemeral(
+                    host = host,
+                    port = port,
+                    connectTimeoutMs = connectTimeoutMs,
+                    sessionTimeoutMs = sessionTimeoutMs,
+                    keysDir = keysDir,
+                    clientName = clientName,
+                    block = block,
+                )
+            }
             val state = _state.value
             val active = connection
             val mode = AdbExclusiveTcpShell.selectMode(
@@ -415,7 +538,39 @@ object AdbRepository {
                 AdbExclusiveTcpShell.Mode.ReuseLiveTcp -> {
                     val live = checkNotNull(active) { "ReuseLiveTcp without connection" }
                     appendLog("Reusing open TCP session for automation (${AdbEndpoints.format(host, port)})")
-                    block { command -> live.execute(command) }
+                    try {
+                        block { command -> live.execute(command) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        if (!AdbExclusiveTcpShell.shouldFallbackToEphemeral(error)) throw error
+                        // Cached tab connection was dead; the block never completed, so
+                        // drop it and retry once on a fresh ephemeral client.
+                        val message = error.message ?: error.javaClass.simpleName
+                        closeConnection()
+                        _state.value = State()
+                        appendLog("Disconnected ($message)")
+                        appendLog("Reused TCP session was dead; retried with ephemeral session")
+                        TboxRepository.addLog(
+                            "DEBUG",
+                            JOURNAL_TAG,
+                            "Disconnected ($message)",
+                        )
+                        TboxRepository.addLog(
+                            "WARN",
+                            JOURNAL_TAG,
+                            "Reused ADB TCP session was dead ($message); stale tab connection dropped, retried once on ephemeral",
+                        )
+                        AdbExclusiveTcpShell.openEphemeral(
+                            host = host,
+                            port = port,
+                            connectTimeoutMs = connectTimeoutMs,
+                            sessionTimeoutMs = sessionTimeoutMs,
+                            keysDir = keysDir,
+                            clientName = clientName,
+                            block = block,
+                        )
+                    }
                 }
                 AdbExclusiveTcpShell.Mode.Ephemeral -> {
                     AdbExclusiveTcpShell.openEphemeral(
@@ -429,6 +584,203 @@ object AdbRepository {
                     )
                 }
             }
+        }
+    }
+
+    private fun requestLogcatStop() {
+        logcatStopRequested.set(true)
+    }
+
+    private suspend fun awaitLogcatJob() {
+        val job = logcatJob ?: return
+        // Prefer clean CLSE stop; if still stuck, intentional close unblocks receive.
+        if (job.isActive) {
+            requestLogcatStop()
+            val joined = withTimeoutOrNull(2_000L) { job.join() }
+            if (joined == null && job.isActive) {
+                AdbShutdownGate.withIntentionalTransportClose {
+                    runCatching { connection?.close() }
+                }
+                runCatching { job.join() }
+            }
+        }
+    }
+
+    private suspend fun runLogcatCapture(file: File, clearBufferFirst: Boolean) {
+        val pending = StringBuilder(LOGCAT_FLUSH_BYTES + 4_096)
+        var bytesWritten = 0L
+        fun flushPending() {
+            if (pending.isEmpty()) return
+            val chunk = pending.toString()
+            pending.clear()
+            val written = runCatching {
+                FileOutputStream(file, true).use { fos ->
+                    val bytes = chunk.toByteArray(Charsets.UTF_8)
+                    fos.write(bytes)
+                    bytes.size
+                }
+            }.getOrElse { error ->
+                _logcatCapture.value = _logcatCapture.value.copy(lastError = error.message)
+                0
+            }
+            if (written > 0) {
+                bytesWritten += written.toLong()
+                _logcatCapture.value = _logcatCapture.value.copy(bytesWritten = bytesWritten)
+            }
+        }
+        fun onChunk(data: ByteArray) {
+            if (data.isEmpty()) return
+            pending.append(data.toString(Charsets.UTF_8))
+            if (pending.length >= LOGCAT_FLUSH_BYTES) flushPending()
+        }
+        try {
+            val active = mutex.withLock {
+                connection.takeIf { _state.value.phase == Phase.CONNECTED }
+            }
+            if (active == null) {
+                appendLog("Logcat: not connected")
+                setLogcatErrorIfNone("not connected")
+                return
+            }
+            val commands = AdbLogcatCapture.buildCommands(clearBufferFirst)
+            for (command in commands) {
+                if (logcatStopRequested.get()) break
+                if (AdbShutdownGate.isAppShuttingDown()) {
+                    appendLog("Logcat: app is shutting down")
+                    setLogcatErrorIfNone("app is shutting down")
+                    break
+                }
+                if (command == AdbLogcatCapture.CLEAR_COMMAND) {
+                    appendLog("$ $command")
+                    // Short execute still needs exclusive access vs tab shell / scripts.
+                    mutex.withLock {
+                        if (connection !== active || _state.value.phase != Phase.CONNECTED) {
+                            return@withLock
+                        }
+                        runCatching { active.execute(command) }
+                            .onSuccess { result ->
+                                appendOutput(result.stdout)
+                                appendOutput(result.stderr)
+                                result.exitCode?.let { appendLog("Exit code: $it") }
+                            }
+                            .onFailure { error ->
+                                val message = error.message ?: error.javaClass.simpleName
+                                if (AdbIoErrors.isBenignDisconnectMessage(message) &&
+                                    AdbShutdownGate.shouldSuppressBenignDisconnect()
+                                ) {
+                                    appendLog("Logcat: stopped ($message)")
+                                } else {
+                                    appendLog("Logcat clear failed: $message")
+                                    _logcatCapture.value =
+                                        _logcatCapture.value.copy(lastError = message)
+                                }
+                            }
+                    }
+                    continue
+                }
+                appendLog("$ $command")
+                // Stream without holding [mutex] so disconnect / USB detach can proceed;
+                // [logcatExclusive] blocks tab shell and forces ephemeral automation sessions.
+                val end = runCatching {
+                    active.streamShell(
+                        command = command,
+                        shouldStop = {
+                            logcatStopRequested.get() || AdbShutdownGate.isAppShuttingDown()
+                        },
+                        onStdout = ::onChunk,
+                        onStderr = ::onChunk,
+                    )
+                }.fold(
+                    onSuccess = { it },
+                    onFailure = { error ->
+                        val message = error.message ?: error.javaClass.simpleName
+                        if (AdbIoErrors.isBenignDisconnectMessage(message) &&
+                            (
+                                logcatStopRequested.get() ||
+                                    AdbShutdownGate.shouldSuppressBenignDisconnect()
+                                )
+                        ) {
+                            appendLog("Logcat: stopped ($message)")
+                            TboxRepository.addLog(
+                                "DEBUG",
+                                JOURNAL_TAG,
+                                "Logcat stopped ($message)",
+                            )
+                            AdbShellStreamEnd.Stopped
+                        } else if (AdbIoErrors.isBenignDisconnectMessage(message)) {
+                            // Unexpected peer close mid-capture: the file may be cut short, so
+                            // report it instead of the "saved" Toast.
+                            appendLog("Logcat: transport closed ($message)")
+                            setLogcatErrorIfNone("ADB connection closed ($message)")
+                            AdbShellStreamEnd.Stopped
+                        } else {
+                            appendLog("Logcat error: $message")
+                            _logcatCapture.value =
+                                _logcatCapture.value.copy(lastError = message)
+                            null
+                        }
+                    },
+                )
+                when (end) {
+                    AdbShellStreamEnd.Stopped -> appendLog("Logcat: stopped")
+                    is AdbShellStreamEnd.Completed -> {
+                        end.exitCode?.let { appendLog("Logcat exit code: $it") }
+                        appendLog("Logcat: stream ended")
+                    }
+                    null -> Unit
+                }
+            }
+        } catch (e: CancellationException) {
+            appendLog("Logcat: cancelled")
+            throw e
+        } finally {
+            flushPending()
+            val path = file.absolutePath
+            if (bytesWritten == 0L) setLogcatErrorIfNone("no data received, file is empty")
+            appendLog("Logcat: saved $path ($bytesWritten bytes)")
+            TboxRepository.addLog(
+                "INFO",
+                JOURNAL_TAG,
+                "Logcat capture end: ${file.name} bytes=$bytesWritten",
+            )
+            _logcatCapture.value = _logcatCapture.value.copy(
+                active = false,
+                filePath = path,
+                bytesWritten = bytesWritten,
+            )
+            logcatExclusive.set(false)
+            logcatStopRequested.set(false)
+            logcatJob = null
+        }
+    }
+
+    private fun setLogcatErrorIfNone(message: String) {
+        val current = _logcatCapture.value
+        if (current.lastError == null) {
+            _logcatCapture.value = current.copy(lastError = message)
+        }
+    }
+
+    private fun createLogcatFile(): File? {
+        return try {
+            val savePath = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+            } else {
+                Environment.getExternalStorageDirectory().absolutePath + "/Download"
+            }
+            val dir = File(savePath)
+            if (!dir.exists()) dir.mkdirs()
+            val wallMs = System.currentTimeMillis()
+            val preferred = File(dir, AdbLogcatCapture.fileName(wallMs))
+            val file = if (preferred.exists()) {
+                GeoDebugLogRotate.uniqueFile(dir, wallMs, prefix = AdbLogcatCapture.FILE_PREFIX)
+            } else {
+                preferred
+            }
+            FileOutputStream(file, false).use { /* create empty */ }
+            file
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -759,7 +1111,7 @@ object AdbRepository {
     }
 
     private fun appendLog(message: String) {
-        val time = synchronized(timeFormat) { timeFormat.format(Date()) }
+        val time = timeFormat.format(LocalTime.now())
         _consoleLog.value = (_consoleLog.value + "[$time] $message").takeLast(MAX_LOG_LINES)
     }
 

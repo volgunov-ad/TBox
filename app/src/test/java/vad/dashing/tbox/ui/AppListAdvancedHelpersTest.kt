@@ -53,6 +53,73 @@ class AppListAdvancedHelpersTest {
     }
 
     @Test
+    fun formatAppListAdbStatusLine_showsDexoptAndSize() {
+        val status = PackageAdbActions.PackageStatus(
+            packageName = "vad.dashing.tbox",
+            running = true,
+            dexoptFilter = "run-from-apk",
+        )
+        assertEquals(
+            "запущен · из APK · APK 65 МБ",
+            formatAppListAdbStatusLine(
+                status = status,
+                hiddenLabel = "h",
+                disabledLabel = "d",
+                runningLabel = "запущен",
+                fromApkLabel = "из APK",
+                apkSizeLabel = "APK 65 МБ",
+            ),
+        )
+        assertEquals(
+            "компиляция → speed…",
+            formatAppListAdbStatusLine(
+                status = status.copy(running = false),
+                hiddenLabel = "h",
+                disabledLabel = "d",
+                runningLabel = "r",
+                compilingLabel = "компиляция → speed…",
+            ),
+        )
+    }
+
+    @Test
+    fun canCompileSpeed_blocksLargeApk() {
+        assertTrue(canCompileSpeed(null))
+        assertTrue(canCompileSpeed(68L * 1024 * 1024))
+        assertFalse(canCompileSpeed(320L * 1024 * 1024))
+        assertEquals(65, bytesToMb(68_389_641L))
+    }
+
+    @Test
+    fun awaitDexoptFilter_reachedTimeoutAborted() = runBlocking {
+        var checks = 0
+        assertEquals(
+            DexoptWaitResult.Reached,
+            awaitDexoptFilter(
+                check = { checks++; checks >= 3 },
+                isSessionActive = { true },
+                delayFn = {},
+            ),
+        )
+        assertEquals(3, checks)
+        assertEquals(
+            DexoptWaitResult.Timeout,
+            awaitDexoptFilter(
+                check = { false },
+                isSessionActive = { true },
+                delayFn = {},
+                firstPollMs = 10,
+                intervalMs = 10,
+                timeoutMs = 30,
+            ),
+        )
+        assertEquals(
+            DexoptWaitResult.Aborted,
+            awaitDexoptFilter(check = { null }, isSessionActive = { false }, delayFn = {}),
+        )
+    }
+
+    @Test
     fun adbToggleAction_picksOpposite() {
         val hidden = PackageAdbActions.PackageStatus("x", systemHidden = true)
         val disabled = PackageAdbActions.PackageStatus("x", disabled = true)

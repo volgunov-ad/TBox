@@ -283,6 +283,12 @@ object TboxRepository {
         return entryLevel.priority >= threshold.priority
     }
 
+    /** User mark in the journal: a timestamped line the log tool correlates with nearby CAN changes. */
+    fun addJournalMark(text: String) {
+        val clean = text.trim().replace(Regex("\\s+"), " ").take(160)
+        addLog("INFO", "CANDIAG_MARK", if (clean.isEmpty()) "MARK" else "MARK $clean")
+    }
+
     fun addLog(level: String, tag: String, message: String) {
         if (!shouldPersistLogEntry(level)) {
             return
@@ -393,10 +399,24 @@ object TboxRepository {
         _locValues.setIfChanged(newValues)
     }
 
-    /** Clears active GNSS mirror used by UI / truth / mock (all location sources). */
-    fun clearActiveLocation() {
-        _locValues.value = LocValues()
-        _locationUpdateTime.value = null
+    /**
+     * Clears the active GNSS mirror used by truth / mock.
+     *
+     * [preserveTimestamps] keeps the last packet clock and the last fix time so the debug
+     * rows stay visible after the stream goes silent. Coordinates and [LocValues.locateStatus]
+     * are still dropped — a frozen fix must not look live. Source switches and the simulated
+     * loss switch pass false and wipe the clocks too.
+     */
+    fun clearActiveLocation(preserveTimestamps: Boolean = false) {
+        val previousChange = _locValues.value.updateTime
+        _locValues.value = if (preserveTimestamps) {
+            LocValues(updateTime = previousChange)
+        } else {
+            LocValues()
+        }
+        if (!preserveTimestamps) {
+            _locationUpdateTime.value = null
+        }
     }
 
     fun updateIsLocValuesTrue(newValues: Boolean) {

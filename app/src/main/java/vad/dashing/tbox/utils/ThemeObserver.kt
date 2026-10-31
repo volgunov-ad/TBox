@@ -43,7 +43,7 @@ class ThemeObserver(
      * Switch between system Settings observation and app-local theme delivery.
      * When [follow] is false, unregisters ContentObserver and delivers [manualTheme].
      */
-    fun applyFollowMode(follow: Boolean, manualTheme: Int) {
+    fun applyFollowMode(follow: Boolean, manualTheme: Int) = onMain {
         this.manualTheme = HeadUnitDayNightMapping.normalizeTheme(manualTheme)
         this.followSystem = follow
         cancelPendingDelivery()
@@ -57,11 +57,37 @@ class ThemeObserver(
     }
 
     /** App-local day/night toggle while not following the head unit. */
-    fun setManualTheme(themeMode: Int) {
+    fun setManualTheme(themeMode: Int) = onMain {
         manualTheme = HeadUnitDayNightMapping.normalizeTheme(themeMode)
         if (!followSystem) {
             deliverThemeMode(manualTheme)
         }
+    }
+
+    /**
+     * Force a fresh [HeadUnitDayNightRepository.readEffectiveTheme] delivery, bypassing
+     * [lastDeliveredTheme] dedup.
+     *
+     * Needed on A10 cold start: [ThemeObserver] may start while
+     * [vad.dashing.tbox.mbcan.UniversalCanRepository.mode] is still Android9MbCan (API 28
+     * Adayo), so the first read uses A9 `DAY_NIGHT_STATUS` (defaults light). After mode
+     * becomes Android10Vhal — or before the first floating overlay frame — re-read
+     * `adayo_skin` and deliver so transparent floating tiles get the correct palette.
+     * No-op when not following the head unit (manual theme path).
+     *
+     * Callable from any thread. Delivers inside the main-thread hop itself (not via a second
+     * post) so it still lands before a `withContext(Main)` overlay show queued right after.
+     */
+    fun resyncFromHeadUnit() = onMain {
+        if (!followSystem) return@onMain
+        lastDeliveredTheme = null
+        cancelPendingDelivery()
+        deliverReadTheme()
+    }
+
+    /** State is main-thread confined; service callers come from Dispatchers.Default. */
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else debounceHandler.post(block)
     }
 
     fun stopObserving() {
@@ -111,18 +137,22 @@ class ThemeObserver(
         cancelPendingDelivery()
         val delivery = Runnable {
             pendingThemeDelivery = null
-            try {
-                deliverThemeMode(getNormalizedThemeMode())
-            } catch (e: Exception) {
-                Log.e("ThemeObserver", "Error in onChange callback", e)
-                deliverThemeMode(HeadUnitDayNightMapping.THEME_LIGHT)
-            }
+            deliverReadTheme()
         }
         pendingThemeDelivery = delivery
         if (immediate) {
             debounceHandler.post(delivery)
         } else {
             debounceHandler.postDelayed(delivery, THEME_CHANGE_DEBOUNCE_MS)
+        }
+    }
+
+    private fun deliverReadTheme() {
+        try {
+            deliverThemeMode(getNormalizedThemeMode())
+        } catch (e: Exception) {
+            Log.e("ThemeObserver", "Error in onChange callback", e)
+            deliverThemeMode(HeadUnitDayNightMapping.THEME_LIGHT)
         }
     }
 

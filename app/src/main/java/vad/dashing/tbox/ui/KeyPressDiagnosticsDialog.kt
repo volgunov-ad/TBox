@@ -52,6 +52,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.mbcan.Android10VhalRepository
 import vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat
 import vad.dashing.tbox.mbcan.KeyPressDiagnosticLog
+import vad.dashing.tbox.mbcan.MbCanHardKeyUiLabels
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.formatDiagnosticClock
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -125,7 +126,9 @@ fun KeyPressDiagnosticsDialog(
         when (mode) {
             HeadUnitCanMode.Android9MbCan -> {
                 MbCanRepository.startHardKeyDiagnostics { keyCode, keyStatus, keyType ->
-                    append(KeyPressDiagnosticFormat.mbCan(keyCode, keyStatus, keyType))
+                    val technical = KeyPressDiagnosticFormat.mbCan(keyCode, keyStatus, keyType)
+                    val uiLabel = MbCanHardKeyUiLabels.formatLabel(context.resources, keyCode)
+                    append("$uiLabel | $technical")
                 }.fold(
                     onSuccess = { append("A9 mbCAN subscribe OK") },
                     onFailure = {

@@ -1,6 +1,7 @@
 package vad.dashing.tbox
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -12,6 +13,7 @@ import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import vad.dashing.tbox.update.InstallPermissionHelper
+import vad.dashing.tbox.utils.isAppSelectedAsMockProvider
 
 /** User-facing permissions that can be granted via UI and/or ADB. */
 enum class AppPermissionId {
@@ -23,6 +25,8 @@ enum class AppPermissionId {
     InstallPackages,
     Storage,
     Location,
+    /** This app selected as the mock-location provider (`appops` + `settings put`). */
+    MockLocation,
 }
 
 enum class AppPermissionGrantKind {
@@ -108,6 +112,14 @@ object AppPermissions {
                 descriptionRes = R.string.permissions_location_desc,
                 grantKind = AppPermissionGrantKind.RequestRuntime,
             ),
+            AppPermissionStatus(
+                id = AppPermissionId.MockLocation,
+                granted = context.isAppSelectedAsMockProvider(),
+                titleRes = R.string.permissions_mock_location_title,
+                descriptionRes = R.string.permissions_mock_location_desc,
+                grantKind = AppPermissionGrantKind.AdbOnly,
+                adbCommand = buildMockLocationAdbCommand(context.packageName),
+            ),
         )
     }
 
@@ -136,6 +148,7 @@ object AppPermissions {
                 }
             }
             AppPermissionId.WriteSecureSettings,
+            AppPermissionId.MockLocation,
             AppPermissionId.Location -> null
         }
     }
@@ -166,6 +179,18 @@ object AppPermissions {
 
     fun buildWriteSecureSettingsAdbCommand(packageName: String): String {
         return "adb shell ${buildWriteSecureSettingsShellCommand(packageName)}"
+    }
+
+    /** Select this package as the mock-location app (same pair as the HU smoke script). */
+    fun buildMockLocationShellCommands(packageName: String): List<String> {
+        return listOf(
+            "appops set $packageName MOCK_LOCATION allow",
+            "settings put secure mock_location $packageName",
+        )
+    }
+
+    fun buildMockLocationAdbCommand(packageName: String): String {
+        return buildMockLocationShellCommands(packageName).joinToString("\n") { "adb shell $it" }
     }
 
     /**
@@ -215,6 +240,7 @@ object AppPermissions {
                     add("pm grant $packageName android.permission.ACCESS_BACKGROUND_LOCATION")
                 }
             }
+            AppPermissionId.MockLocation -> buildMockLocationShellCommands(packageName)
         }
     }
 
@@ -243,21 +269,18 @@ object AppPermissions {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    fun hasNotificationListenerAccess(context: Context): Boolean {
-        val expected = ComponentName(
+    /**
+     * `cmd notification allow_listener` — the only grant NotificationManagerService honours on
+     * API 28; `settings put secure enabled_notification_listeners` alone is not picked up on A10.
+     */
+    fun buildNotificationListenerAllowCommand(component: String): String =
+        "cmd notification allow_listener $component"
+
+    fun hasNotificationListenerAccess(context: Context): Boolean =
+        isNotificationListenerAccessGranted(
             context,
-            MediaControlNotificationListenerService::class.java,
+            ComponentName(context, MediaControlNotificationListenerService::class.java),
         )
-        val enabledListeners = Settings.Secure.getString(
-            context.contentResolver,
-            "enabled_notification_listeners",
-        ).orEmpty()
-        if (enabledListeners.isBlank()) return false
-        return enabledListeners
-            .split(':')
-            .mapNotNull { ComponentName.unflattenFromString(it) }
-            .any { it == expected }
-    }
 
     fun hasStorageAccess(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -284,4 +307,18 @@ object AppPermissions {
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED
     }
+}
+
+/**
+ * Asks NotificationManagerService, which is what MediaSessionManager checks. The
+ * `enabled_notification_listeners` secure setting can list the component while NMS has not
+ * approved it (A10), and then `getActiveSessions` throws SecurityException.
+ */
+internal fun isNotificationListenerAccessGranted(
+    context: Context,
+    listenerComponent: ComponentName,
+): Boolean {
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+    return runCatching { manager.isNotificationListenerAccessGranted(listenerComponent) }
+        .getOrDefault(false)
 }

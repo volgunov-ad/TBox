@@ -5,8 +5,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.ui.DEFAULT_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.ui.LeftMenuTabField
+import vad.dashing.tbox.ui.MAX_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.MIN_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.normalizeLeftMenuWidthDp
 
 class LeftMenuLayoutTest {
 
@@ -118,6 +122,60 @@ class LeftMenuLayoutTest {
     }
 
     @Test
+    fun resolveOpenConsoleTab_restoresEnabledLastMenuTab() {
+        val layout = LeftMenuLayout(
+            LeftMenuTabField.defaultOrder().map { field ->
+                LeftMenuLayout.Row(
+                    field,
+                    enabled = field == LeftMenuTabField.SETTINGS ||
+                        field == LeftMenuTabField.THEMES ||
+                        field == LeftMenuTabField.MAIN_SCREEN_SETTINGS ||
+                        field == LeftMenuTabField.FLOATING_PANELS_SETTINGS,
+                )
+            },
+        )
+        assertEquals(
+            LeftMenuTabField.THEMES.id,
+            LeftMenuLayout.resolveOpenConsoleTab(LeftMenuTabField.THEMES.id, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_disabledLastMenuTab_fallsBackToFirstVisible() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(LeftMenuTabField.TRIPS.id, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_blankOrMain_fallsBackToFirstVisible() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(null, layout),
+        )
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab("", layout),
+        )
+        assertEquals(
+            LeftMenuTabField.SETTINGS.id,
+            LeftMenuLayout.resolveOpenConsoleTab(SettingsManager.MAIN_SCREEN_TAB_KEY, layout),
+        )
+    }
+
+    @Test
+    fun resolveOpenConsoleTab_updateTab_alwaysRestorable() {
+        val layout = LeftMenuLayout.default()
+        assertEquals(
+            SettingsManager.UPDATE_TAB_KEY,
+            LeftMenuLayout.resolveOpenConsoleTab(SettingsManager.UPDATE_TAB_KEY, layout),
+        )
+    }
+
+    @Test
     fun applyNoTboxConnectDisable_disablesAtCanCarDataAndEnablesModem() {
         val withModemOff = LeftMenuLayout(
             LeftMenuTabField.defaultOrder().map { field ->
@@ -141,5 +199,15 @@ class LeftMenuLayoutTest {
         assertFalse(LeftMenuLayout.isDisabledByNoTboxConnect(LeftMenuTabField.MODEM))
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.SETTINGS }.enabled)
         assertTrue(disabled.rows.first { it.field == LeftMenuTabField.TRIPS }.enabled)
+    }
+
+    @Test
+    fun normalizeLeftMenuWidthDp_clampsAndSnapsToStep() {
+        assertEquals(DEFAULT_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(330))
+        assertEquals(MIN_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(0))
+        assertEquals(MIN_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(204))
+        assertEquals(210, normalizeLeftMenuWidthDp(205))
+        assertEquals(MAX_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(10_000))
+        assertEquals(MAX_LEFT_MENU_WIDTH_DP, normalizeLeftMenuWidthDp(479))
     }
 }

@@ -36,6 +36,29 @@ class PackageAdbActionsTest {
     }
 
     @Test
+    fun compileActions_runDetachedCompileWithFilter() {
+        assertEquals(
+            "trap '' HUP; nohup cmd package compile -m speed -f com.example </dev/null >/dev/null 2>&1 &",
+            PackageAdbActions.commandFor(PackageAdbActions.Action.CompileSpeed, "com.example"),
+        )
+        assertEquals("speed-profile", PackageAdbActions.compileFilterFor(PackageAdbActions.Action.CompileSpeedProfile))
+        assertEquals("verify", PackageAdbActions.compileFilterFor(PackageAdbActions.Action.CompileVerify))
+        assertEquals(null, PackageAdbActions.compileFilterFor(PackageAdbActions.Action.ForceStop))
+    }
+
+    @Test
+    fun buildStatuses_carriesDexoptFilter() {
+        val statuses = PackageAdbActions.buildStatuses(
+            listed = setOf("a"),
+            listedIncludingUninstalled = setOf("a"),
+            disabled = emptySet(),
+            running = emptySet(),
+            dexoptFilters = mapOf("a" to "verify"),
+        )
+        assertEquals("verify", statuses.getValue("a").dexoptFilter)
+    }
+
+    @Test
     fun parsePmListPackages() {
         val out = """
             package:com.android.settings

@@ -280,7 +280,12 @@ fun MainScreenSettingsTab(
     val scrollState = rememberScrollState()
 
     val sections = MainScreenSettingsSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.MAIN_SCREEN_SETTINGS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     Column(

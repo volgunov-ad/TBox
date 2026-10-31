@@ -158,6 +158,12 @@ object AutomationCodec {
                 .put("btn", trigger.btn)
                 .put("act", trigger.act.storageKey)
 
+            is AutomationTrigger.EspGpioBtn -> JSONObject()
+                .put(KEY_TYPE, "esp_gpio_btn")
+                .put("id", trigger.id)
+                .put("channel", trigger.channel)
+                .put("status", trigger.status.storageKey)
+
             is AutomationTrigger.Interval -> JSONObject()
                 .put(KEY_TYPE, "interval")
                 .put("id", trigger.id)
@@ -260,6 +266,14 @@ object AutomationCodec {
                 ) ?: throw IllegalArgumentException("Unknown esp ble btn act"),
             )
 
+            "esp_gpio_btn" -> AutomationTrigger.EspGpioBtn(
+                id = json.requireNonBlankString("id"),
+                channel = json.requireInt("channel"),
+                status = AutomationHardKeyStatus.fromStorageKey(
+                    json.requireNonBlankString("status"),
+                ) ?: throw IllegalArgumentException("Unknown esp gpio btn status"),
+            )
+
             "interval" -> AutomationTrigger.Interval(
                 id = json.requireNonBlankString("id"),
                 intervalMillis = json.requireLong("intervalMillis"),
@@ -317,7 +331,15 @@ object AutomationCodec {
                     startupBehavior = json.requireStorageEnum(
                         "startupBehavior",
                         AutomationStartupBehavior.entries,
-                    ) { it.storageKey },
+                    ) { it.storageKey }.let { stored ->
+                        // Tunnel enter/exit is an edge; the evaluator never fires it on start,
+                        // so imported JSON must not keep a mode that silently does nothing.
+                        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                            AutomationStartupBehavior.INITIALIZE_ONLY
+                        } else {
+                            stored
+                        }
+                    },
                 )
             }
 

@@ -129,7 +129,12 @@ object GeoDebugLogRecorder {
             runCatching {
                 UniversalCanRepository.setSourceSignals(
                     STEERING_INTEREST_SOURCE_ID,
-                    setOf(MbCanSignal.SteeringAngle, MbCanSignal.TurnSignals),
+                    setOf(
+                        MbCanSignal.SteeringAngle,
+                        MbCanSignal.TurnSignals,
+                        MbCanSignal.WheelPulse,
+                        MbCanSignal.LateralAcceleration,
+                    ),
                 )
             }.onFailure {
                 TboxRepository.addLog(
@@ -184,7 +189,8 @@ object GeoDebugLogRecorder {
         UniversalCanRepository.enqueueClearSource(STEERING_INTEREST_SOURCE_ID)
         if (!was && outFile == null) return
         val sc = scope
-        val path = outFile?.absolutePath
+        val file = outFile
+        val path = file?.absolutePath
         if (sc != null) {
             sc.launch(Dispatchers.IO) {
                 writeMutex.withLock {
@@ -192,7 +198,7 @@ object GeoDebugLogRecorder {
                         "\n# stopped=${formatWall(System.currentTimeMillis())}" +
                             " auto=$auto ticks=${_ui.value.ticks}\n",
                     )
-                    flushPendingLocked()
+                    flushPendingLocked(file)
                 }
                 val ctx = appContext
                 if (ctx != null && path != null) {
@@ -281,9 +287,13 @@ object GeoDebugLogRecorder {
         writeMutex.withLock { flushPendingLocked() }
     }
 
-    private fun flushPendingLocked() {
+    /** [file] is passed explicitly by [stop], which clears [outFile] before the final flush runs. */
+    private fun flushPendingLocked(file: File? = outFile) {
         if (pending.isEmpty()) return
-        val file = outFile ?: return
+        if (file == null) {
+            pending.clear()
+            return
+        }
         val bytes = pending.toString().toByteArray(StandardCharsets.UTF_8)
         pending.clear()
         try {
@@ -425,6 +435,7 @@ object GeoDebugLogRecorder {
             .append(" can.telemetryKmh=").append(canFlow ?: "-")
             .append('\n')
         appendWheelPulseDebug(sb)
+        appendHeadingAndPhoneDebug(sb, nowElapsed)
         sb.append("steering.angleDeg=").append(steeringAngle ?: "-")
             .append(" backend=").append(huCanMode.name)
             .append('\n')
@@ -630,7 +641,21 @@ object GeoDebugLogRecorder {
             src = source.name.lowercase(Locale.US),
             accM = accM,
             ageMs = locAgeMs,
-        )
+        ) ?: PhoneTelemetryRepository.peekLastLocationValues()?.let { (phoneLoc, atElapsed) ->
+            val phoneAccM = LocationMockManager.horizontalAccuracyMeters(
+                hdop = phoneLoc.hdop,
+                retainingFix = false,
+                hrms = phoneLoc.hrms,
+            )
+            GeoDebugHiddenTruth.fromPublished(
+                lat = phoneLoc.latitude,
+                lon = phoneLoc.longitude,
+                courseDeg = phoneLoc.trueDirection,
+                src = "phone",
+                accM = phoneAccM,
+                ageMs = (nowElapsed - atElapsed).coerceAtLeast(0L),
+            )
+        }
         val lastKnown = androidLastKnown(nowElapsed)
         val selected = GeoDebugHiddenTruth.select(
             nmea = nmeaFix,
@@ -729,6 +754,37 @@ object GeoDebugLogRecorder {
                     "0"
                 },
             )
+            .append('\n')
+    }
+
+    private fun appendHeadingAndPhoneDebug(sb: StringBuilder, nowElapsed: Long) {
+        val w = WheelHeadingIntegrator.peekDebugSnapshot()
+        val fb = HeadingFallbackStatusRepository.status.value
+        val ph = PhoneTelemetryRepository.uiState.value
+        sb.append("wheels.dPsiDeg=").append(fmt(w.lastDeltaDeg.toDouble()))
+            .append(" omegaDegS=").append(w.lastOmegaWheelsDegPerSec?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" omegaLatDegS=").append(w.lastOmegaLatDegPerSec?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" latAccelMps2=").append(w.lastLateralAccelMps2?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" yasTrust=").append(fmt(w.yasTrustWeight.toDouble()))
+            .append(" slip=").append(if (w.slipRejected) "1" else "0")
+            .append(" trackM=").append(fmt(w.trackWidthM.toDouble()))
+            .append(" heading.effective=").append(fb.effectiveSource.name)
+            .append(" heading.fallback=").append(fb.fallbackReason ?: "-")
+            .append('\n')
+        val yawAge = if (ph.lastYawAtElapsedMs > 0L) (nowElapsed - ph.lastYawAtElapsedMs).coerceAtLeast(0L) else null
+        val magAge = if (ph.lastMagAtElapsedMs > 0L) (nowElapsed - ph.lastMagAtElapsedMs).coerceAtLeast(0L) else null
+        sb.append("phone.id=").append(ph.activePhoneIdHex ?: "-")
+            .append(" omegaDegS=").append(ph.lastYawRateDegPerSec?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" yawAgeMs=").append(yawAge ?: "-")
+            .append(" yawRej=").append(ph.lastYawRejectReason ?: "-")
+            .append(" magAzDeg=").append(ph.lastMagAzimuthDeg?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" compassDeg=").append(ph.lastCalibratedCompassDeg?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" fieldUt=").append(ph.lastFieldStrengthUt?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" magAcc=").append(ph.lastMagAccuracy ?: "-")
+            .append(" magAgeMs=").append(magAge ?: "-")
+            .append(" mountOffDeg=").append(ph.mountYawOffsetDeg?.let { fmt(it.toDouble()) } ?: "-")
+            .append(" mountConf=").append(if (ph.mountOffsetConfirmed) "1" else "0")
+            .append(" magRej=").append(ph.lastMagRejectReason ?: "-")
             .append('\n')
     }
 

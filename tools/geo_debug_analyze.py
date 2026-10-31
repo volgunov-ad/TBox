@@ -762,6 +762,19 @@ CSV_COLUMNS = [
     "turnGyroAbsDeg",
     "lastBiasStep",
     "lastScaleCand",
+    "wheels.dPsiDeg",
+    "omegaLatDegS",
+    "latAccelMps2",
+    "trackM",
+    "heading.effective",
+    "heading.fallback",
+    "phone.id",
+    "compassDeg",
+    "fieldUt",
+    "magAcc",
+    "mountOffDeg",
+    "yawRej",
+    "magRej",
 ]
 
 

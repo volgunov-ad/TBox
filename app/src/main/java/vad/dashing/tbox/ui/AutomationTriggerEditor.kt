@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,7 +28,6 @@ import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_DOUBLE_TAP_MS
 import vad.dashing.tbox.automation.AUTOMATION_HARD_KEY_LONG_PRESS_MS
 import vad.dashing.tbox.automation.AUTOMATION_MAX_INTERVAL_MS
 import vad.dashing.tbox.automation.AUTOMATION_MIN_INTERVAL_MS
-import vad.dashing.tbox.automation.AUTOMATION_SOLAR_MAX_OFFSET_MINUTES
 import vad.dashing.tbox.automation.AutomationEspBleBtnAction
 import vad.dashing.tbox.automation.AutomationGeofenceDirection
 import vad.dashing.tbox.automation.AutomationHardKeyStatus
@@ -39,15 +40,15 @@ import vad.dashing.tbox.automation.AutomationThresholdDirection
 import vad.dashing.tbox.automation.AutomationTimeOfDay
 import vad.dashing.tbox.automation.AutomationTrigger
 import vad.dashing.tbox.automation.AutomationWidgetPressKind
-import vad.dashing.tbox.automation.automationWidgetDoubleTapTimeoutMillis
-import vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat
-import vad.dashing.tbox.mbcan.UniversalCanRepository
-import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.automation.automationGeofenceRearmRadius
+import vad.dashing.tbox.automation.automationWidgetDoubleTapTimeoutMillis
 import vad.dashing.tbox.automation.instant
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.esp.EspCompanionRepository
 import vad.dashing.tbox.location.GeoCoordinateParse
+import vad.dashing.tbox.mbcan.MbCanHardKeyUiLabels
+import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
 
@@ -109,6 +110,7 @@ internal fun AutomationTriggerEditor(
                 is AutomationTrigger.WidgetPressed -> WidgetPressedTriggerFields(trigger, onChange)
                 is AutomationTrigger.HardKey -> HardKeyTriggerFields(trigger, onChange)
                 is AutomationTrigger.EspBleBtn -> EspBleBtnTriggerFields(trigger, onChange)
+                is AutomationTrigger.EspGpioBtn -> EspGpioBtnTriggerFields(trigger, onChange)
                 is AutomationTrigger.Interval -> IntervalTriggerFields(trigger, onChange)
                 is AutomationTrigger.NumericThreshold -> NumericTriggerFields(trigger, onChange)
                 is AutomationTrigger.StateEquals -> StateTriggerFields(trigger, apps, onChange)
@@ -172,26 +174,21 @@ private fun WidgetPressedTriggerFields(
 }
 
 /** Verified A9 mbCAN key codes (docs/MBCAN_VHAL_PARAMETERS_RU.md). */
-private val HARD_KEY_PICKER_CODES = listOf(
-    29, 30, 31, 32, 33, 316,
+internal val HARD_KEY_PICKER_CODES = listOf(
+    29, 30, 31, 32, 33, 216, 316,
     115, 114, 163, 165, 28, 158, 582,
     210, 211, 212,
 )
 
-private fun hardKeyCodeLabel(keyCode: Int): String {
-    val name = KeyPressDiagnosticFormat.mbCanKeyName(keyCode)
-    return if (name == "UNKNOWN") {
-        "$keyCode (не из справочника)"
-    } else {
-        "$keyCode · $name"
-    }
-}
+internal fun hardKeyCodeLabel(resources: Resources, keyCode: Int): String =
+    MbCanHardKeyUiLabels.formatLabel(resources, keyCode)
 
 @Composable
 private fun HardKeyTriggerFields(
     trigger: AutomationTrigger.HardKey,
     onChange: (AutomationTrigger) -> Unit,
 ) {
+    val resources = LocalContext.current.resources
     val options = remember(trigger.keyCode) {
         if (trigger.keyCode in HARD_KEY_PICKER_CODES) {
             HARD_KEY_PICKER_CODES
@@ -203,11 +200,11 @@ private fun HardKeyTriggerFields(
         label = "Кнопка",
         value = trigger.keyCode,
         options = options,
-        optionLabel = ::hardKeyCodeLabel,
+        optionLabel = { hardKeyCodeLabel(resources, it) },
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
     )
     AutomationIntField(
-        label = "Код кнопки вручную (верхняя левая кнопка руля зависит от комплектации)",
+        label = "Код кнопки вручную",
         value = trigger.keyCode,
         onValueChange = { onChange(trigger.copy(keyCode = it)) },
         modifier = Modifier.fillMaxWidth(),
@@ -289,6 +286,49 @@ private fun EspBleBtnTriggerFields(
         text = "Shelly Blu Button 1 / RC Button 4 через компаньон ESP32 " +
             "(вкладка «Компаньон»: BLE → Обучить). Button 1 = кнопка 1; RC4 = кнопки 1…4. " +
             "MAC обязателен; забытый пульт остаётся в правиле, пока не выберете другой.",
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun EspGpioBtnTriggerFields(
+    trigger: AutomationTrigger.EspGpioBtn,
+    onChange: (AutomationTrigger) -> Unit,
+) {
+    AutomationDropdown(
+        label = "ESP-вход",
+        value = trigger.channel,
+        options = (0..3).toList(),
+        optionLabel = { "Вход $it" },
+        onValueChange = { onChange(trigger.copy(channel = it)) },
+    )
+    val pressedLabel = stringResource(R.string.automation_hard_key_status_pressed)
+    val releasedLabel = stringResource(R.string.automation_hard_key_status_released)
+    val singleLabel = stringResource(R.string.automation_hard_key_status_single)
+    val doubleLabel = stringResource(R.string.automation_hard_key_status_double)
+    val longLabel = stringResource(R.string.automation_hard_key_status_long)
+    AutomationDropdown(
+        label = "Событие",
+        value = trigger.status,
+        options = AutomationHardKeyStatus.entries,
+        optionLabel = { status ->
+            when (status) {
+                AutomationHardKeyStatus.PRESSED -> pressedLabel
+                AutomationHardKeyStatus.RELEASED -> releasedLabel
+                AutomationHardKeyStatus.SINGLE -> singleLabel
+                AutomationHardKeyStatus.DOUBLE -> doubleLabel
+                AutomationHardKeyStatus.LONG -> longLabel
+            }
+        },
+        onValueChange = { onChange(trigger.copy(status = it)) },
+    )
+    Text(
+        text = "Входы компаньона ESP32 (активный уровень — замкнуто/нажато). " +
+            "«Нажал» / «Отпустил» — сырые фронты. «Одиночное» / «Двойное» / «Долгое» — " +
+            "как у кнопок руля (двойное окно ${AUTOMATION_HARD_KEY_DOUBLE_TAP_MS} мс, " +
+            "долгое ≥ ${AUTOMATION_HARD_KEY_LONG_PRESS_MS} мс).",
         style = MaterialTheme.typography.tboxCaption,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.fillMaxWidth(),
@@ -381,12 +421,10 @@ private fun NumericTriggerFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val sources = AutomationSignalCatalog.get(signal).sources
             onChange(
                 trigger.copy(
                     signal = signal,
-                    source = trigger.source.takeIf { it in sources }
-                        ?: AutomationSignalCatalog.preferredSource(sources),
+                    source = AutomationSignalCatalog.resolveSource(signal, trigger.source),
                     mac = if (signal == AutomationSignalId.ESP_BLE_BATTERY) {
                         trigger.mac.ifBlank {
                             EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty()
@@ -409,7 +447,7 @@ private fun NumericTriggerFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = trigger.source,
+            value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
             options = AutomationSignalCatalog.sourcesForUi(trigger.signal),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
@@ -502,16 +540,19 @@ private fun StateTriggerFields(
         options = signals,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
-            val descriptor = AutomationSignalCatalog.get(signal)
             onChange(
                 trigger.copy(
                     signal = signal,
-                    source = trigger.source.takeIf { it in descriptor.sources }
-                        ?: AutomationSignalCatalog.preferredSource(descriptor.sources),
-                    expectedState = automationExpectedStateForSignal(
+                    source = AutomationSignalCatalog.resolveSource(signal, trigger.source),
+                    expectedState = automationTriggerExpectedStateForSignal(
                         signal,
                         trigger.expectedState,
                     ),
+                    startupBehavior = if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                        AutomationStartupBehavior.INITIALIZE_ONLY
+                    } else {
+                        trigger.startupBehavior
+                    },
                 ),
             )
         },
@@ -523,8 +564,8 @@ private fun StateTriggerFields(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Источник",
-            value = trigger.source,
-            options = AutomationSignalCatalog.sourcesForUi(descriptor.sources),
+            value = AutomationSignalCatalog.resolveSource(trigger.signal, trigger.source),
+            options = AutomationSignalCatalog.sourcesForUi(descriptor.id),
             optionLabel = ::automationSourceLabel,
             onValueChange = { onChange(trigger.copy(source = it)) },
             modifier = Modifier.weight(1f),
@@ -535,7 +576,7 @@ private fun StateTriggerFields(
                     label = "Состояние",
                     value = trigger.expectedState,
                     options = stateOptionsWithCurrent(descriptor.stateOptions, trigger.expectedState),
-                    optionLabel = ::automationStateLabel,
+                    optionLabel = { automationTriggerStateLabel(trigger.signal, it) },
                     onValueChange = { onChange(trigger.copy(expectedState = it)) },
                     modifier = Modifier.weight(1f),
                 )
@@ -571,8 +612,10 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
-    StartupBehaviorField(trigger.startupBehavior) {
-        onChange(trigger.copy(startupBehavior = it))
+    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL) {
+        StartupBehaviorField(trigger.startupBehavior) {
+            onChange(trigger.copy(startupBehavior = it))
+        }
     }
 }
 
@@ -717,7 +760,7 @@ private fun SolarTriggerFields(
             onChange(
                 trigger.copy(
                     event = next.event,
-                    offsetMinutes = next.offsetMinutes.coerceIn(0, AUTOMATION_SOLAR_MAX_OFFSET_MINUTES),
+                    offsetMinutes = next.offsetMinutes,
                     offsetDirection = next.offsetDirection,
                 ),
             )
@@ -774,6 +817,7 @@ private enum class TriggerUiKind {
     WIDGET_PRESS,
     HARD_KEY,
     ESP_BLE_BTN,
+    ESP_GPIO_BTN,
     INTERVAL,
     NUMERIC_THRESHOLD,
     STATE,
@@ -786,6 +830,7 @@ private enum class TriggerUiKind {
         WIDGET_PRESS -> "Нажатие виджета-триггера"
         HARD_KEY -> "Кнопка на руле / двери (A9)"
         ESP_BLE_BTN -> "Кнопка Shelly Blu (компаньон)"
+        ESP_GPIO_BTN -> "ESP-вход (компаньон)"
         INTERVAL -> "Периодически"
         NUMERIC_THRESHOLD -> "Числовой порог"
         STATE -> "Состояние"
@@ -800,6 +845,7 @@ private fun triggerUiKind(trigger: AutomationTrigger): TriggerUiKind = when (tri
     is AutomationTrigger.WidgetPressed -> TriggerUiKind.WIDGET_PRESS
     is AutomationTrigger.HardKey -> TriggerUiKind.HARD_KEY
     is AutomationTrigger.EspBleBtn -> TriggerUiKind.ESP_BLE_BTN
+    is AutomationTrigger.EspGpioBtn -> TriggerUiKind.ESP_GPIO_BTN
     is AutomationTrigger.Interval -> TriggerUiKind.INTERVAL
     is AutomationTrigger.NumericThreshold -> TriggerUiKind.NUMERIC_THRESHOLD
     is AutomationTrigger.StateEquals -> TriggerUiKind.STATE
@@ -829,6 +875,12 @@ private fun defaultTrigger(kind: TriggerUiKind, id: String): AutomationTrigger =
         mac = EspCompanionRepository.bleMacs.value.firstOrNull().orEmpty(),
         btn = 1,
         act = AutomationEspBleBtnAction.PRESS,
+    )
+
+    TriggerUiKind.ESP_GPIO_BTN -> AutomationTrigger.EspGpioBtn(
+        id = id,
+        channel = 0,
+        status = AutomationHardKeyStatus.SINGLE,
     )
 
     TriggerUiKind.INTERVAL -> AutomationTrigger.Interval(
@@ -873,6 +925,7 @@ private fun AutomationTrigger.withId(id: String): AutomationTrigger = when (this
     is AutomationTrigger.WidgetPressed -> copy(id = id)
     is AutomationTrigger.HardKey -> copy(id = id)
     is AutomationTrigger.EspBleBtn -> copy(id = id)
+    is AutomationTrigger.EspGpioBtn -> copy(id = id)
     is AutomationTrigger.Interval -> copy(id = id)
     is AutomationTrigger.NumericThreshold -> copy(id = id)
     is AutomationTrigger.StateEquals -> copy(id = id)

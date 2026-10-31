@@ -43,6 +43,15 @@ class AdbIoErrorsTest {
         assertFalse(AdbIoErrors.shouldSuppressUserFacingFailure(msg))
         assertFalse(AdbIoErrors.shouldSuppressUserFacingFailure("Permission denial"))
     }
+
+    @Test
+    fun markAppAlive_clearsShutdownAfterActivityFinished() {
+        AdbShutdownGate.markAppShuttingDown()
+        assertTrue(AdbShutdownGate.isAppShuttingDown())
+        AdbShutdownGate.markAppAlive()
+        assertFalse(AdbShutdownGate.isAppShuttingDown())
+        assertFalse(AdbIoErrors.shouldSuppressUserFacingFailure("ADB transport closed"))
+    }
 }
 
 class LocalhostAdbSessionCancellationTest {

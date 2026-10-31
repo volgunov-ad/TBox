@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import android.os.SystemClock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,9 +80,22 @@ object CycleDataRepository {
         _longitudinalAcceleration.value = newValue
     }
 
-    fun updateLateralAcceleration(newValue: Float) {
+    @Volatile
+    private var lateralAccelerationAtElapsedMs: Long = 0L
+
+    fun updateLateralAcceleration(newValue: Float, nowElapsedMs: Long = SystemClock.elapsedRealtime()) {
         _lateralAcceleration.value = newValue
+        lateralAccelerationAtElapsedMs = nowElapsedMs
     }
+
+    /** TBox lateral acceleration (g), or null when the cycle frame went silent. */
+    fun freshLateralAcceleration(nowElapsedMs: Long, maxAgeMs: Long = LATERAL_ACCEL_MAX_AGE_MS): Float? {
+        val at = lateralAccelerationAtElapsedMs
+        if (at <= 0L || nowElapsedMs - at > maxAgeMs) return null
+        return _lateralAcceleration.value
+    }
+
+    const val LATERAL_ACCEL_MAX_AGE_MS = 5_000L
 
     fun updateYawRate(newValue: Float) {
         _yawRate.value = newValue

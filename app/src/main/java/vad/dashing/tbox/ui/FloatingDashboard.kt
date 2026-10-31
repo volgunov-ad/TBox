@@ -113,9 +113,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 @Composable
 private fun FloatingDashboardAppLauncherIconCacheDisposeEffect(panelId: String) {
-    DisposableEffect(panelId) {
-        onDispose { disposeAppLauncherPickerIconCache() }
-    }
+    AppLauncherPickerIconCacheHostEffect(panelId)
 }
 
 @Composable
@@ -639,6 +637,17 @@ fun FloatingDashboard(
                     collapseOnStripDoubleTap = panelConfig.collapseOnStripDoubleTap,
                     isEditMode = isEditMode,
                     onCollapsedChange = { settingsViewModel.setPanelCollapsed(panelId, it) },
+                    stripLengthPercent = if (effectiveCollapsed) {
+                        panelConfig.collapseStripLengthPercentCollapsed
+                    } else {
+                        panelConfig.collapseStripLengthPercentExpanded
+                    },
+                    stripPositionPercent = if (effectiveCollapsed) {
+                        panelConfig.collapseStripPositionPercentCollapsed
+                    } else {
+                        panelConfig.collapseStripPositionPercentExpanded
+                    },
+                    touchZoneMatchStrip = panelConfig.collapseTouchZoneMatchStrip,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                         DashboardPanelGridAndFrames(
@@ -663,6 +672,7 @@ fun FloatingDashboard(
                     showDialogOpen = false,
                     widgetInteractionPolicy = widgetInteractionPolicy,
                     widgetCardElevation = FLOATING_DASHBOARD_DEFAULT_WIDGET_ELEVATION.dp,
+                    buttonBindingsActive = !effectiveCollapsed && !isEditMode,
                     onWidgetClick = { index ->
                         val cfg = widgetConfigs.getOrNull(index)
                         if (isEditMode && !isDraggingMode && !isResizingMode) {

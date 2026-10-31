@@ -9,12 +9,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import vad.dashing.voice.api.ApiCatalog
 import vad.dashing.voice.api.AutomationSummary
+import vad.dashing.tbox.localaccess.LocalAccessClient
+import vad.dashing.tbox.localaccess.LocalAccessContract
+import vad.dashing.tbox.localaccess.LocalAccessResult
 import vad.dashing.voice.api.ExternalApiClient
+import vad.dashing.voice.api.ExternalApiHttpException
 import vad.dashing.voice.api.InvokeActionPayloadBuilder
 import vad.dashing.voice.nlu.AliasNluMatcher
 import vad.dashing.voice.nlu.SignalAnswerFormatter
@@ -59,6 +64,10 @@ class VoiceHomeViewModel(
     @Volatile
     private var lastHeardText: String = ""
 
+    /** Old → new token, so later calls of one phrase skip the token Monitor already replaced. */
+    @Volatile
+    private var renewal: Pair<String, String>? = null
+
     init {
         viewModelScope.launch {
             settingsRepository.settings.collect { settings ->
@@ -74,6 +83,10 @@ class VoiceHomeViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { tts.ensureReady() }
             runCatching { stt.ensureReady() }
+        }
+        viewModelScope.launch {
+            val saved = settingsRepository.settings.first()
+            if (saved.accessToken.isBlank() && isLocalMonitor(saved.host)) requestMonitorAccess()
         }
     }
 
@@ -159,14 +172,13 @@ class VoiceHomeViewModel(
     fun refreshCatalog() {
         val state = _uiState.value
         val port = portOrDefault(state)
-        val token = AccessTokenNormalizer.normalize(state.token)
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, statusMessage = "Загрузка каталога…") }
             val catalogResult = withContext(Dispatchers.IO) {
-                apiClient.catalog(state.host, port, token)
+                withFreshToken(state, port) { token -> apiClient.catalog(state.host, port, token) }
             }
             val autosResult = withContext(Dispatchers.IO) {
-                apiClient.automations(state.host, port, token)
+                withFreshToken(state, port) { token -> apiClient.automations(state.host, port, token) }
             }
             catalogResult.fold(
                 onSuccess = { catalog ->
@@ -281,12 +293,11 @@ class VoiceHomeViewModel(
     fun runPhrase() {
         val state = _uiState.value
         val port = portOrDefault(state)
-        val token = AccessTokenNormalizer.normalize(state.token)
         viewModelScope.launch {
             _uiState.update { it.copy(busy = true, answerMessage = "", statusMessage = "Разбор фразы…") }
             val catalog = cachedCatalog ?: run {
                 val loaded = withContext(Dispatchers.IO) {
-                    apiClient.catalog(state.host, port, token)
+                    withFreshToken(state, port) { token -> apiClient.catalog(state.host, port, token) }
                 }.getOrElse { error ->
                     _uiState.update {
                         it.copy(
@@ -299,7 +310,7 @@ class VoiceHomeViewModel(
                 }
                 cachedCatalog = loaded
                 cachedAutomations = withContext(Dispatchers.IO) {
-                    apiClient.automations(state.host, port, token)
+                    withFreshToken(state, port) { token -> apiClient.automations(state.host, port, token) }
                 }.getOrDefault(emptyList())
                 loaded
             }
@@ -320,13 +331,15 @@ class VoiceHomeViewModel(
                         return@launch
                     }
                     val snapshot = withContext(Dispatchers.IO) {
-                        apiClient.signals(
-                            host = state.host,
-                            port = port,
-                            token = token,
-                            ids = listOf(intent.signal.id),
-                            source = source,
-                        )
+                        withFreshToken(state, port) { token ->
+                            apiClient.signals(
+                                host = state.host,
+                                port = port,
+                                token = token,
+                                ids = listOf(intent.signal.id),
+                                source = source,
+                            )
+                        }
                     }.getOrElse { error ->
                         _uiState.update {
                             it.copy(
@@ -371,7 +384,7 @@ class VoiceHomeViewModel(
                     }
                     val body = InvokeActionPayloadBuilder.wrapActions(payload)
                     val result = withContext(Dispatchers.IO) {
-                        apiClient.invokeActions(state.host, port, token, body)
+                        withFreshToken(state, port) { token -> apiClient.invokeActions(state.host, port, token, body) }
                     }.getOrElse { error ->
                         val msg = "Действие не выполнено: ${error.message ?: error.javaClass.simpleName}"
                         _uiState.update {
@@ -407,7 +420,9 @@ class VoiceHomeViewModel(
 
                 is VoiceIntent.RunAutomation -> {
                     val result = withContext(Dispatchers.IO) {
-                        apiClient.runAutomation(state.host, port, token, intent.automation.id)
+                        withFreshToken(state, port) { token ->
+                            apiClient.runAutomation(state.host, port, token, intent.automation.id)
+                        }
                     }.getOrElse { error ->
                         val msg = "Правило не запущено: ${error.message ?: error.javaClass.simpleName}"
                         _uiState.update {
@@ -480,6 +495,82 @@ class VoiceHomeViewModel(
 
     private fun portOrDefault(state: VoiceHomeUiState): Int =
         state.portText.toIntOrNull() ?: VoiceConnectionSettings.DEFAULT_PORT
+
+    /** Asks TBox Monitor on this head unit for access; Monitor shows its dialog once. */
+    fun requestMonitorAccess() {
+        val state = _uiState.value
+        if (state.busy) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(busy = true, statusMessage = "Запрос доступа у TBox Monitor…") }
+            val result = withContext(Dispatchers.IO) {
+                LocalAccessClient.awaitAccess(getApplication()) {
+                    _uiState.update { it.copy(statusMessage = "Подтвердите доступ в окне TBox Monitor") }
+                }
+            }
+            if (result.granted) {
+                saveMonitorAccess(state, result)
+                _uiState.update {
+                    it.copy(
+                        busy = false,
+                        lastHealthOk = true,
+                        statusMessage = if (result.serverEnabled == false) {
+                            "Доступ разрешён. Включите API в TBox Monitor: Настройки → API"
+                        } else {
+                            "Доступ разрешён"
+                        },
+                    )
+                }
+                return@launch
+            }
+            val message = when (result.status) {
+                LocalAccessContract.STATUS_DENIED -> "Доступ отклонён в TBox Monitor"
+                LocalAccessContract.STATUS_PENDING -> "Время ожидания вышло"
+                LocalAccessContract.STATUS_CONSENT_REQUIRED -> "Окно TBox Monitor закрыто без ответа"
+                LocalAccessContract.STATUS_UNAVAILABLE -> "TBox Monitor не запущен"
+                LocalAccessContract.STATUS_NOT_SUPPORTED ->
+                    "TBox Monitor не найден или старой версии. Вставьте токен вручную"
+                else -> "TBox Monitor ответил: ${result.status}"
+            }
+            _uiState.update { it.copy(busy = false, lastHealthOk = false, statusMessage = message) }
+        }
+    }
+
+    /**
+     * Runs [call] with the current token. On the local Monitor a missing or rejected token is
+     * replaced once without asking the user, as long as Monitor still trusts this app.
+     */
+    private suspend fun <T> withFreshToken(
+        state: VoiceHomeUiState,
+        port: Int,
+        call: (String) -> Result<T>,
+    ): Result<T> {
+        val stateToken = AccessTokenNormalizer.normalize(state.token)
+        val token = renewal?.takeIf { it.first == stateToken }?.second ?: stateToken
+        val first = if (token.isBlank()) null else call(token)
+        val rejected = first == null ||
+            (first.exceptionOrNull() as? ExternalApiHttpException)?.httpStatus == 401
+        if (!rejected || !isLocalMonitor(state.host)) return first ?: call(token)
+        val renewed = LocalAccessClient.getAccess(getApplication(), interactive = false)
+        if (!renewed.granted) return first ?: call(token)
+        val fresh = renewed.accessToken.orEmpty()
+        renewal = stateToken to fresh
+        saveMonitorAccess(state, renewed, fallbackPort = port)
+        return call(fresh)
+    }
+
+    private suspend fun saveMonitorAccess(
+        state: VoiceHomeUiState,
+        result: LocalAccessResult,
+        fallbackPort: Int = portOrDefault(state),
+    ) {
+        val token = result.accessToken.orEmpty()
+        val port = result.port ?: fallbackPort
+        _uiState.update { it.copy(token = token, portText = port.toString()) }
+        settingsRepository.save(state.host, port, token)
+    }
+
+    private fun isLocalMonitor(host: String): Boolean =
+        host.trim().lowercase() in setOf("", "127.0.0.1", "localhost")
 }
 
 class VoiceHomeViewModelFactory(

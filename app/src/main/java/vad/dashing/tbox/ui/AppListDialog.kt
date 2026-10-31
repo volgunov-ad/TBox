@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import java.io.File
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +64,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppContextHolder
 import vad.dashing.tbox.HeadUnitCanMode
@@ -70,6 +74,9 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.adb.AdbIoErrors
 import vad.dashing.tbox.adb.PackageAdbActions
+import vad.dashing.tbox.dexopt.AppDexoptCodec
+import vad.dashing.tbox.dexopt.AppDexoptCompiler
+import vad.dashing.tbox.dexopt.AppDexoptPhase
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -83,6 +90,7 @@ internal data class AppListRow(
     val canUninstall: Boolean,
     val canOpen: Boolean = true,
     val adbStatus: PackageAdbActions.PackageStatus? = null,
+    val apkBytes: Long? = null,
 )
 
 internal data class PendingAdbAction(
@@ -188,14 +196,62 @@ internal fun formatAppListAdbStatusLine(
     hiddenLabel: String,
     disabledLabel: String,
     runningLabel: String,
+    fromApkLabel: String = AppDexoptCodec.STATUS_RUN_FROM_APK,
+    compilingLabel: String? = null,
+    apkSizeLabel: String? = null,
 ): String? {
     if (status == null) return null
     val parts = buildList {
         if (status.systemHidden) add(hiddenLabel)
         if (status.disabled) add(disabledLabel)
         if (status.running) add(runningLabel)
+        when {
+            compilingLabel != null -> add(compilingLabel)
+            status.dexoptFilter == AppDexoptCodec.STATUS_RUN_FROM_APK -> add(fromApkLabel)
+            status.dexoptFilter != null -> add(status.dexoptFilter)
+        }
+        if (apkSizeLabel != null) add(apkSizeLabel)
     }
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+}
+
+/** Base + split APK bytes; null for packages that are not installed for this user. */
+internal fun appApkBytes(pm: PackageManager, packageName: String): Long? = runCatching {
+    val info = pm.getApplicationInfo(packageName, PackageManager.MATCH_UNINSTALLED_PACKAGES)
+    val paths = listOfNotNull(info.sourceDir) + info.splitSourceDirs.orEmpty()
+    paths.sumOf { File(it).length() }.takeIf { it > 0L }
+}.getOrNull()
+
+internal fun bytesToMb(bytes: Long): Int = ((bytes + 512 * 1024) / (1024 * 1024)).toInt()
+
+internal fun canCompileSpeed(apkBytes: Long?): Boolean =
+    apkBytes == null || apkBytes <= AppDexoptCodec.SPEED_MAX_APK_BYTES
+
+internal enum class DexoptWaitResult { Reached, Timeout, Aborted }
+
+/** `verify` lands in seconds, `speed` of a ~70 MB APK in ~1–2 min; dex2oat itself dies at ~570 s. */
+private const val DEXOPT_FIRST_POLL_MS = 20_000L
+private const val DEXOPT_POLL_INTERVAL_MS = 30_000L
+private const val DEXOPT_TIMEOUT_MS = 600_000L
+
+/** Polls [check] until the target filter shows up; stops when the advanced session ends. */
+internal suspend fun awaitDexoptFilter(
+    check: suspend () -> Boolean?,
+    isSessionActive: () -> Boolean,
+    delayFn: suspend (Long) -> Unit = { delay(it) },
+    firstPollMs: Long = DEXOPT_FIRST_POLL_MS,
+    intervalMs: Long = DEXOPT_POLL_INTERVAL_MS,
+    timeoutMs: Long = DEXOPT_TIMEOUT_MS,
+): DexoptWaitResult {
+    var waited = firstPollMs
+    delayFn(firstPollMs)
+    while (true) {
+        if (!isSessionActive()) return DexoptWaitResult.Aborted
+        if (check() == true) return DexoptWaitResult.Reached
+        if (waited >= timeoutMs) return DexoptWaitResult.Timeout
+        delayFn(intervalMs)
+        waited += intervalMs
+    }
 }
 
 internal fun adbActionLabelRes(action: PackageAdbActions.Action, status: PackageAdbActions.PackageStatus?): Int {
@@ -215,6 +271,9 @@ internal fun adbActionLabelRes(action: PackageAdbActions.Action, status: Package
             R.string.app_list_adb_disable
         }
         PackageAdbActions.Action.ForceStop -> R.string.app_list_adb_force_stop
+        PackageAdbActions.Action.CompileSpeed -> R.string.app_list_adb_compile_speed
+        PackageAdbActions.Action.CompileSpeedProfile -> R.string.app_list_adb_compile_speed_profile
+        PackageAdbActions.Action.CompileVerify -> R.string.app_list_adb_compile_verify
     }
 }
 
@@ -246,6 +305,7 @@ internal fun AppListDialog(
     if (!visible) return
 
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val uninstallFailedToast = stringResource(R.string.app_list_uninstall_failed)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -259,6 +319,12 @@ internal fun AppListDialog(
     var pendingAdb by remember { mutableStateOf<PendingAdbAction?>(null) }
     var adbStatuses by remember { mutableStateOf<Map<String, PackageAdbActions.PackageStatus>>(emptyMap()) }
     var adbBusy by remember { mutableStateOf(false) }
+    /** Package → target filter of the background compile this dialog started. */
+    var compiling by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val compilePolls = remember { mutableMapOf<String, Job>() }
+    var apkSizes by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
+    val selfDexopt by AppDexoptCompiler.state.collectAsStateWithLifecycle()
+    val compileBusy = compiling.isNotEmpty() || selfDexopt.phase == AppDexoptPhase.Compiling
     val pm = remember(context) { context.packageManager }
     val homePackage = remember(pm) { resolveHomeLauncherPackage(pm) }
     val selfPackage = remember(context) { context.packageName }
@@ -272,7 +338,16 @@ internal fun AppListDialog(
 
     val apps = if (advancedMode) installedApps else launchableApps
 
-    val rows = remember(apps, hiddenPackages, showHidden, pm, advancedMode, adbStatuses) {
+    LaunchedEffect(advancedMode, installedApps) {
+        if (!advancedMode) return@LaunchedEffect
+        apkSizes = withContext(Dispatchers.IO) {
+            installedApps.mapNotNull { entry ->
+                appApkBytes(pm, entry.packageName)?.let { entry.packageName to it }
+            }.toMap()
+        }
+    }
+
+    val rows = remember(apps, hiddenPackages, showHidden, pm, advancedMode, adbStatuses, apkSizes) {
         apps.map { entry ->
             val hidden = entry.packageName in hiddenPackages
             AppListRow(
@@ -287,6 +362,7 @@ internal fun AppListDialog(
                     true
                 },
                 adbStatus = adbStatuses[entry.packageName],
+                apkBytes = if (advancedMode) apkSizes[entry.packageName] else null,
             )
         }.filter { showHidden || !it.hidden }
             // Advanced mode keeps ADB-hidden/disabled packages visible even when not launchable.
@@ -332,6 +408,54 @@ internal fun AppListDialog(
         }
     }
 
+    fun refreshAdbStatuses() {
+        scope.launch {
+            when (val refresh = PackageAdbActions.refreshStatuses(context)) {
+                is PackageAdbActions.StatusLoadOutcome.Success -> adbStatuses = refresh.statuses
+                is PackageAdbActions.StatusLoadOutcome.Failed -> Unit
+            }
+        }
+    }
+
+    fun stopCompilePolls() {
+        compilePolls.values.forEach { it.cancel() }
+        compilePolls.clear()
+        compiling = emptyMap()
+        AppDexoptCompiler.setExternalCompileActive(false)
+    }
+
+    fun trackCompile(packageName: String, filter: String) {
+        compiling = compiling + (packageName to filter)
+        AppDexoptCompiler.setExternalCompileActive(true)
+        compilePolls.remove(packageName)?.cancel()
+        compilePolls[packageName] = scope.launch {
+            val result = try {
+                awaitDexoptFilter(
+                    check = { PackageAdbActions.hasReachedDexoptFilter(context, packageName, filter) },
+                    isSessionActive = { PackageAdbActions.isAdvancedSessionActive() },
+                )
+            } finally {
+                compilePolls.remove(packageName)
+                compiling = compiling - packageName
+                if (compiling.isEmpty()) AppDexoptCompiler.setExternalCompileActive(false)
+            }
+            when (result) {
+                DexoptWaitResult.Reached -> Toast.makeText(
+                    context,
+                    resources.getString(R.string.app_list_adb_toast_compile_done, packageName, filter),
+                    Toast.LENGTH_LONG,
+                ).show()
+                DexoptWaitResult.Timeout -> Toast.makeText(
+                    context,
+                    resources.getString(R.string.app_list_adb_toast_compile_timeout, packageName),
+                    Toast.LENGTH_LONG,
+                ).show()
+                DexoptWaitResult.Aborted -> return@launch
+            }
+            refreshAdbStatuses()
+        }
+    }
+
     fun tearDownAdvancedAndDismiss() {
         scope.launch {
             if (PackageAdbActions.isAdvancedSessionActive()) {
@@ -361,7 +485,7 @@ internal fun AppListDialog(
                     ) {
                         Toast.makeText(
                             context,
-                            context.getString(R.string.app_list_adb_session_fail, detail),
+                            resources.getString(R.string.app_list_adb_session_fail, detail),
                             Toast.LENGTH_LONG,
                         ).show()
                     }
@@ -371,6 +495,7 @@ internal fun AppListDialog(
             }
             adbBusy = false
         } else if (PackageAdbActions.isAdvancedSessionActive()) {
+            stopCompilePolls()
             PackageAdbActions.exitAdvancedSession(context)
             adbStatuses = emptyMap()
         }
@@ -453,6 +578,8 @@ internal fun AppListDialog(
                                 showHidden = showHidden,
                                 advancedMode = advancedMode,
                                 adbBusy = adbBusy,
+                                compileBusy = compileBusy,
+                                compilingFilter = compiling[row.packageName],
                                 showStockWindowOpen = showStockWindowOpen,
                                 onOpen = {
                                     launchAppFromWidget(context, row.packageName)
@@ -566,6 +693,10 @@ internal fun AppListDialog(
                 append("\n\n")
                 append(stringResource(R.string.app_list_adb_confirm_home_warn))
             }
+            if (PackageAdbActions.compileFilterFor(pending.action) != null) {
+                append("\n\n")
+                append(stringResource(R.string.app_list_adb_confirm_compile_warn))
+            }
         }
         AlertDialog(
             onDismissRequest = { if (!adbBusy) pendingAdb = null },
@@ -592,24 +723,38 @@ internal fun AppListDialog(
                             val outcome = PackageAdbActions.runAction(context, action, pkg)
                             when (outcome) {
                                 is PackageAdbActions.Outcome.Success -> {
-                                    val toastRes = if (action == PackageAdbActions.Action.ForceStop) {
-                                        R.string.app_list_adb_toast_ok_force_stop
+                                    val compileFilter = PackageAdbActions.compileFilterFor(action)
+                                    if (compileFilter != null) {
+                                        Toast.makeText(
+                                            context,
+                                            resources.getString(
+                                                R.string.app_list_adb_toast_compile_started,
+                                                pkg,
+                                                compileFilter,
+                                            ),
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                        trackCompile(pkg, compileFilter)
                                     } else {
-                                        R.string.app_list_adb_toast_ok
-                                    }
-                                    val detail = outcome.detail.ifBlank { pkg }
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(toastRes, detail),
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                    when (
-                                        val refresh = PackageAdbActions.refreshStatuses(context)
-                                    ) {
-                                        is PackageAdbActions.StatusLoadOutcome.Success -> {
-                                            adbStatuses = refresh.statuses
+                                        val toastRes = if (action == PackageAdbActions.Action.ForceStop) {
+                                            R.string.app_list_adb_toast_ok_force_stop
+                                        } else {
+                                            R.string.app_list_adb_toast_ok
                                         }
-                                        is PackageAdbActions.StatusLoadOutcome.Failed -> Unit
+                                        val detail = outcome.detail.ifBlank { pkg }
+                                        Toast.makeText(
+                                            context,
+                                            resources.getString(toastRes, detail),
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                        when (
+                                            val refresh = PackageAdbActions.refreshStatuses(context)
+                                        ) {
+                                            is PackageAdbActions.StatusLoadOutcome.Success -> {
+                                                adbStatuses = refresh.statuses
+                                            }
+                                            is PackageAdbActions.StatusLoadOutcome.Failed -> Unit
+                                        }
                                     }
                                 }
                                 is PackageAdbActions.Outcome.Failed -> {
@@ -623,7 +768,7 @@ internal fun AppListDialog(
                                     ) {
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.app_list_adb_toast_fail, detail),
+                                            resources.getString(R.string.app_list_adb_toast_fail, detail),
                                             Toast.LENGTH_LONG,
                                         ).show()
                                     }
@@ -654,6 +799,8 @@ private fun AppListDialogRow(
     showHidden: Boolean,
     advancedMode: Boolean,
     adbBusy: Boolean,
+    compileBusy: Boolean,
+    compilingFilter: String?,
     showStockWindowOpen: Boolean,
     onOpen: () -> Unit,
     onOpenInStockWindow: () -> Unit,
@@ -666,7 +813,26 @@ private fun AppListDialogRow(
         hiddenLabel = stringResource(R.string.app_list_status_hidden),
         disabledLabel = stringResource(R.string.app_list_status_disabled),
         runningLabel = stringResource(R.string.app_list_status_running),
+        fromApkLabel = stringResource(R.string.app_list_status_dexopt_from_apk),
+        compilingLabel = compilingFilter?.let {
+            stringResource(R.string.app_list_status_compiling, it)
+        },
+        apkSizeLabel = row.apkBytes?.let {
+            stringResource(R.string.app_list_status_apk_size, bytesToMb(it))
+        },
     )
+    val speedAllowed = canCompileSpeed(row.apkBytes)
+    val compileSpeedLabel = stringResource(R.string.app_list_adb_compile_speed)
+    val compileSpeedMenuLabel = if (speedAllowed) {
+        compileSpeedLabel
+    } else {
+        stringResource(
+            R.string.app_list_adb_compile_speed_too_big,
+            bytesToMb(AppDexoptCodec.SPEED_MAX_APK_BYTES),
+        )
+    }
+    val compileProfileLabel = stringResource(R.string.app_list_adb_compile_speed_profile)
+    val compileVerifyLabel = stringResource(R.string.app_list_adb_compile_verify)
     var menuExpanded by remember { mutableStateOf(false) }
     val hideAction = adbToggleAction(hideOrUnhide = true, status = row.adbStatus)
     val disableAction = adbToggleAction(hideOrUnhide = false, status = row.adbStatus)
@@ -835,6 +1001,25 @@ private fun AppListDialogRow(
                             )
                         },
                     )
+                    listOf(
+                        Triple(PackageAdbActions.Action.CompileSpeed, compileSpeedMenuLabel, speedAllowed),
+                        Triple(PackageAdbActions.Action.CompileSpeedProfile, compileProfileLabel, true),
+                        Triple(PackageAdbActions.Action.CompileVerify, compileVerifyLabel, true),
+                    ).forEach { (action, label, allowed) ->
+                        DropdownMenuItem(
+                            enabled = allowed && !compileBusy,
+                            text = {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.tboxBody,
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onRequestAdbAction(action, label)
+                            },
+                        )
+                    }
                 }
             }
         }

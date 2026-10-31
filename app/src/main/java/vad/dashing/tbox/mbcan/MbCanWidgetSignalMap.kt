@@ -23,6 +23,8 @@ import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_BLOW_MODE_PANEL_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_CLIMATE_WIDGET_DATA_KEYS
 import vad.dashing.tbox.HVAC_CUSTOM_MODE_CYCLE_WIDGET_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_FAN_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_SYNC_WIDGET_DATA_KEY
@@ -30,6 +32,8 @@ import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_LEFT_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HVAC_TEMP_RIGHT_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
 import vad.dashing.tbox.PARKING_RADAR_WIDGET_DATA_KEY
@@ -100,6 +104,10 @@ internal object MbCanWidgetSignalMap {
         ACC_CRUISE_WIDGET_DATA_KEY,
         CRUISE_STATUS_WIDGET_DATA_KEY -> MbCanSignal.AccCruise
         GAS_BRAKE_WIDGET_DATA_KEY -> MbCanSignal.GasPedal
+        ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+        ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.IcmManualBrightness
+        HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
+        HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> MbCanSignal.HudBrightness
         else -> null
     }
 
@@ -122,6 +130,20 @@ internal object MbCanWidgetSignalMap {
         }
         if (normalizedKeys.any { it == HIGH_BEAM_WIDGET_DATA_KEY }) {
             signals.add(MbCanSignal.HmaSwitch)
+        }
+        if (normalizedKeys.any {
+                it == ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY ||
+                    it == ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+            }
+        ) {
+            signals.add(MbCanSignal.IcmBrightnessMode)
+        }
+        if (normalizedKeys.any {
+                it == HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY ||
+                    it == HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+            }
+        ) {
+            signals.add(MbCanSignal.HudAutoBrightness)
         }
         return signals
     }

@@ -3,9 +3,12 @@ package vad.dashing.tbox.adb
 import android.content.Context
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.dexopt.AppDexoptCodec
 
 /**
  * ADB package ops for App List advanced mode: hide/unhide, disable/enable, force-stop,
@@ -24,6 +27,9 @@ internal object PackageAdbActions {
         Disable,
         Enable,
         ForceStop,
+        CompileSpeed,
+        CompileSpeedProfile,
+        CompileVerify,
     }
 
     data class PackageStatus(
@@ -31,6 +37,8 @@ internal object PackageAdbActions {
         val systemHidden: Boolean = false,
         val disabled: Boolean = false,
         val running: Boolean = false,
+        /** Primary ART compiler status (`speed`, `verify`, `run-from-apk`, ...); null when unknown. */
+        val dexoptFilter: String? = null,
     )
 
     enum class Reason {
@@ -85,6 +93,23 @@ internal object PackageAdbActions {
         Action.Disable -> buildDisableCommand(packageName)
         Action.Enable -> buildEnableCommand(packageName)
         Action.ForceStop -> buildForceStopCommand(packageName)
+        Action.CompileSpeed -> AppDexoptCodec.compileCommand(packageName, AppDexoptCodec.FILTER_SPEED)
+        Action.CompileSpeedProfile ->
+            AppDexoptCodec.compileCommand(packageName, AppDexoptCodec.FILTER_SPEED_PROFILE)
+        Action.CompileVerify -> AppDexoptCodec.compileCommand(packageName, AppDexoptCodec.FILTER_VERIFY)
+    }
+
+    /** Target compiler filter for compile actions; null for the rest. */
+    fun compileFilterFor(action: Action): String? = when (action) {
+        Action.CompileSpeed -> AppDexoptCodec.FILTER_SPEED
+        Action.CompileSpeedProfile -> AppDexoptCodec.FILTER_SPEED_PROFILE
+        Action.CompileVerify -> AppDexoptCodec.FILTER_VERIFY
+        Action.Hide,
+        Action.Unhide,
+        Action.Disable,
+        Action.Enable,
+        Action.ForceStop,
+        -> null
     }
 
     /**
@@ -131,6 +156,7 @@ internal object PackageAdbActions {
         listedIncludingUninstalled: Set<String>,
         disabled: Set<String>,
         running: Set<String>,
+        dexoptFilters: Map<String, String> = emptyMap(),
     ): Map<String, PackageStatus> {
         val all = linkedSetOf<String>().apply {
             addAll(listed)
@@ -144,6 +170,7 @@ internal object PackageAdbActions {
                 systemHidden = pkg in listedIncludingUninstalled && pkg !in listed,
                 disabled = pkg in disabled,
                 running = pkg in running,
+                dexoptFilter = dexoptFilters[pkg],
             )
         }
     }
@@ -179,10 +206,6 @@ internal object PackageAdbActions {
                 delayMs = delayMs,
             )
         }
-        gateway.refreshHuAdb()
-        val availableBefore =
-            gateway.isTcpEnabled() ||
-                gateway.isTcpPortOpen(host, port, LocalhostAdbSession.TCP_PROBE_TIMEOUT_MS)
         val session = LocalhostAdbSession.run(
             gateway = gateway,
             keysDir = keysDir,
@@ -201,12 +224,12 @@ internal object PackageAdbActions {
                 StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
             is LocalhostAdbSession.Result.Ok -> {
                 sessionActive.set(true)
-                tcpEnabledByUs.set(!availableBefore)
+                tcpEnabledByUs.set(session.tcpEnabledBySession)
                 TboxRepository.addLog(
                     level = "INFO",
                     tag = TAG,
                     message = "App list advanced ADB session started" +
-                        if (!availableBefore) " (TCP enabled by us)" else "",
+                        if (session.tcpEnabledBySession) " (TCP enabled by us)" else "",
                 )
                 StatusLoadOutcome.Success(session.value)
             }
@@ -219,6 +242,11 @@ internal object PackageAdbActions {
     }
 
     internal suspend fun exitAdvancedSessionWith(gateway: LocalhostAdbSession.Gateway) {
+        // Runs from composition teardown; a cancelled caller must not leave persist TCP on.
+        withContext(NonCancellable) { exitAdvancedSessionLocked(gateway) }
+    }
+
+    private suspend fun exitAdvancedSessionLocked(gateway: LocalhostAdbSession.Gateway) {
         sessionMutex.withLock {
             if (!sessionActive.getAndSet(false)) {
                 tcpEnabledByUs.set(false)
@@ -361,6 +389,49 @@ internal object PackageAdbActions {
         }
     }
 
+    /**
+     * Whether [packageName] already reports [filter] as its primary compiler status; null when
+     * the session is gone or ADB failed (polling should just retry).
+     */
+    suspend fun hasReachedDexoptFilter(context: Context, packageName: String, filter: String): Boolean? {
+        val appContext = context.applicationContext
+        return hasReachedDexoptFilterWith(
+            gateway = LocalhostAdbSession.AndroidGateway(),
+            keysDir = appContext.filesDir.resolve("adb"),
+            clientName = LocalhostAdbSession.defaultClientName(),
+            packageName = packageName,
+            filter = filter,
+        )
+    }
+
+    internal suspend fun hasReachedDexoptFilterWith(
+        gateway: LocalhostAdbSession.Gateway,
+        keysDir: File,
+        clientName: String,
+        packageName: String,
+        filter: String,
+        host: String = LocalhostAdbSession.LOCAL_HOST,
+        port: Int = HuAdbControl.TCP_ENABLED_PORT,
+        readyTimeoutMs: Long = LocalhostAdbSession.TCP_READY_TIMEOUT_MS,
+    ): Boolean? = sessionMutex.withLock {
+        if (!sessionActive.get()) return@withLock null
+        val session = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = keysDir,
+            clientName = clientName,
+            host = host,
+            port = port,
+            readyTimeoutMs = readyTimeoutMs,
+            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+        ) { execute ->
+            shellText(execute(AppDexoptCodec.statusCommand(packageName)))
+        }
+        when (session) {
+            is LocalhostAdbSession.Result.Failed -> null
+            is LocalhostAdbSession.Result.Ok -> AppDexoptCodec.hasReachedFilter(session.value, filter)
+        }
+    }
+
     private suspend fun loadStatusesWithUnlocked(
         gateway: LocalhostAdbSession.Gateway,
         keysDir: File,
@@ -407,7 +478,10 @@ internal object PackageAdbActions {
         }
         val psOut = shellText(execute("ps -A"))
         val running = parseRunningPackages(psOut, candidates)
-        return buildStatuses(listed, includingUninstalled, disabled, running)
+        val dexopt = AppDexoptCodec.parseDexoptDump(
+            shellText(execute(AppDexoptCodec.DEXOPT_DUMP_COMMAND)),
+        )
+        return buildStatuses(listed, includingUninstalled, disabled, running, dexopt)
     }
 
     private fun shellText(result: AdbShellResult): String =

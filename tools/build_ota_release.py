@@ -9,6 +9,8 @@
   4. Копирует APK в папку загрузки на Яндекс.Диск
   5. Создаёт version.json с sha256 и размером файлов
      (запись языка, который не собирали, сохраняется из прежнего version.json)
+  6. Для release-сборок сохраняет mapping.txt в release-mapping/<dev|release>
+     (в git не попадает и не публикуется; нужен для разбора падений)
 
 Имена APK в папке назначения:
   tbox_monitor-v.0.16.0-ru.apk, tbox_monitor-v.0.16.0-en.apk
@@ -54,6 +56,7 @@ from pathlib import Path
 DEFAULT_OUTPUT_BASE = Path(r"C:\Users\volgu\AndroidStudioProjects\TBM")
 DEFAULT_GRADLE_JVM_ARGS = "-Xmx8192m -Dfile.encoding=UTF-8"
 GRADLE_FILE = Path("app/build.gradle.kts")
+DEFAULT_MAPPING_DIR = Path("release-mapping")
 CHANGELOG_FILE = Path("Changelog.dm")
 FLAVORS = ("ru", "en")
 FLAVOR_SETS: dict[str, tuple[str, ...]] = {
@@ -209,12 +212,30 @@ def run_gradle(project_dir: Path, tasks: tuple[str, ...], jvm_args: str) -> None
     subprocess.run(command, cwd=project_dir, check=True)
 
 
-def expected_apk_path(project_dir: Path, flavor: str, build_type: str) -> Path:
-    return project_dir / "app/build/outputs/apk" / flavor / build_type / f"app-{flavor}-{build_type}.apk"
+def expected_apk_path(project_dir: Path, flavor: str, build_type: str, version_name: str) -> Path:
+    file_name = f"tbox-monitor-{version_name}-{flavor}-{build_type}.apk"
+    return project_dir / "app/build/outputs/apk" / flavor / build_type / file_name
 
 
-def find_apk(project_dir: Path, flavor: str, build_type: str) -> Path:
-    expected = expected_apk_path(project_dir, flavor, build_type)
+def archive_mapping(
+    project_dir: Path,
+    mapping_dir: Path,
+    flavor: str,
+    build_type: str,
+    version_name: str,
+) -> Path | None:
+    """Keep R8 mapping.txt per published version; it is never copied to the upload folder."""
+    source = project_dir / "app/build/outputs/mapping" / f"{flavor}{build_type.capitalize()}" / "mapping.txt"
+    if not source.is_file():
+        return None
+    mapping_dir.mkdir(parents=True, exist_ok=True)
+    destination = mapping_dir / f"tbox-monitor-{version_name}-{flavor}-mapping.txt"
+    shutil.copy2(source, destination)
+    return destination
+
+
+def find_apk(project_dir: Path, flavor: str, build_type: str, version_name: str) -> Path:
+    expected = expected_apk_path(project_dir, flavor, build_type, version_name)
     if expected.is_file():
         return expected
 
@@ -243,7 +264,7 @@ def build_apk_metadata(
     build_type: str,
     version_name: str,
 ) -> BuiltApk:
-    source = find_apk(project_dir, flavor, build_type)
+    source = find_apk(project_dir, flavor, build_type, version_name)
     file_name = ota_apk_file_name(version_name, flavor)
     return BuiltApk(
         flavor=flavor,
@@ -426,6 +447,15 @@ def parse_args() -> argparse.Namespace:
         help=f"Базовая папка для dev/release (по умолчанию: {DEFAULT_OUTPUT_BASE})",
     )
     parser.add_argument(
+        "--mapping-dir",
+        type=Path,
+        default=project_root() / DEFAULT_MAPPING_DIR,
+        help=(
+            "Куда сохранять mapping.txt release-сборок (не публикуется). "
+            f"По умолчанию: {DEFAULT_MAPPING_DIR}/<dev|release> в репозитории"
+        ),
+    )
+    parser.add_argument(
         "--changelog",
         default=None,
         help="Текст изменений для version.json (иначе — секция версии из Changelog.dm)",
@@ -498,6 +528,18 @@ def main() -> int:
             copied = copy_apk(metadata.source_path, output_dir, metadata.file_name)
             print(f"Copied {metadata.source_path.name} -> {copied}")
             apks.append(metadata)
+            if channel.build_type == "release":
+                mapping = archive_mapping(
+                    root,
+                    args.mapping_dir / channel.output_dir_name,
+                    flavor,
+                    channel.build_type,
+                    version.version_name,
+                )
+                if mapping is None:
+                    print(f"Warning: mapping.txt for {flavor} not found, crash logs of this build cannot be retraced")
+                else:
+                    print(f"Mapping -> {mapping}")
 
         manifest = merge_version_manifest(
             output_dir,

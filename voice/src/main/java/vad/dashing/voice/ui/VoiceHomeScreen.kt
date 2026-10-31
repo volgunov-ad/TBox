@@ -117,6 +117,13 @@ fun VoiceHomeScreen(
             Text(stringResource(R.string.action_save))
         }
         OutlinedButton(
+            onClick = viewModel::requestMonitorAccess,
+            enabled = !state.busy && !state.listening,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_request_access))
+        }
+        OutlinedButton(
             onClick = viewModel::checkHealth,
             enabled = !state.busy && !state.listening,
             modifier = Modifier.fillMaxWidth(),

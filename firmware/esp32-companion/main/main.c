@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/stream_buffer.h"
 #include "freertos/task.h"
 #include "tinyusb.h"
 #include "tusb_cdc_acm.h"
@@ -24,6 +25,11 @@ static const char *TAG = "esp32_companion";
 #define UM980_CMD_QUEUE_LEN 8
 #define UM980_CMD_MAX 256
 
+/* Holds a full OTA ack window (8 frames of up to OTA_FRAME_MAX_PAYLOAD) with headroom. */
+#define USB_RX_STREAM_SIZE (16 * 1024)
+#define USB_RX_SEND_WAIT_MS 10
+#define USB_RX_SEND_MAX_WAITS 100
+
 typedef enum {
     UM980_JOB_CMD = 0,
     UM980_JOB_BAUD = 1,
@@ -37,6 +43,7 @@ typedef struct {
 
 static volatile bool s_pending_reboot = false;
 static QueueHandle_t s_um980_job_q;
+static StreamBufferHandle_t s_usb_rx_stream;
 static bool s_can_present;
 
 static void on_relay_set(uint8_t mask)
@@ -142,14 +149,41 @@ static void on_mag_chip(const char *chip)
     mag_request_chip(c);
 }
 
+/*
+ * The TinyUSB callback only queues bytes. Parsing runs on usb_rx_task because commands can
+ * block for seconds (OTA begin erases flash, CAN TX, UM980 bridge) and a blocked TinyUSB task
+ * stops USB TX/RX entirely.
+ */
 static void tinyusb_cdc_rx_callback(int itf, cdcacm_event_t *event)
 {
     (void)event;
     uint8_t buf[512];
     size_t rx_size = 0;
     esp_err_t ret = tinyusb_cdcacm_read(itf, buf, sizeof(buf), &rx_size);
-    if (ret == ESP_OK && rx_size > 0) {
-        protocol_on_rx_bytes(buf, rx_size);
+    if (ret != ESP_OK || rx_size == 0 || !s_usb_rx_stream) {
+        return;
+    }
+    size_t sent = 0;
+    int waits = 0;
+    while (sent < rx_size) {
+        sent += xStreamBufferSend(s_usb_rx_stream, buf + sent, rx_size - sent,
+                                  pdMS_TO_TICKS(USB_RX_SEND_WAIT_MS));
+        if (sent < rx_size && ++waits >= USB_RX_SEND_MAX_WAITS) {
+            ESP_LOGW(TAG, "USB RX stream full, dropped %u bytes", (unsigned)(rx_size - sent));
+            break;
+        }
+    }
+}
+
+static void usb_rx_task(void *arg)
+{
+    (void)arg;
+    static uint8_t buf[512];
+    while (1) {
+        size_t n = xStreamBufferReceive(s_usb_rx_stream, buf, sizeof(buf), portMAX_DELAY);
+        if (n > 0) {
+            protocol_on_rx_bytes(buf, n);
+        }
     }
 }
 
@@ -202,6 +236,9 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "ESP32 companion %s starting", ESP_COMPANION_FW_VERSION);
 
+    s_usb_rx_stream = xStreamBufferCreate(USB_RX_STREAM_SIZE, 1);
+    configASSERT(s_usb_rx_stream);
+
     const tinyusb_config_t tusb_cfg = {
         .device_descriptor = NULL,
         .string_descriptor = NULL,
@@ -239,6 +276,7 @@ void app_main(void)
     protocol_set_can_filter_callback(on_can_filter);
     protocol_set_can_light_callback(on_can_light);
     protocol_set_mag_chip_callback(on_mag_chip);
+    xTaskCreate(usb_rx_task, "usb_rx", 8192, NULL, 5, NULL);
     um980_uart_init();
     gnss_detect_run();
     protocol_set_gnss_for_hello(gnss_uart_active(), gnss_chip_id(), gnss_model_label(),

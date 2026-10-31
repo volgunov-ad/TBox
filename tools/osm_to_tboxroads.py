@@ -22,7 +22,7 @@ from typing import Any, Hashable, Iterable, List, Sequence
 
 MAGIC = b"TBOXRDS1"
 FORMAT = 1
-USER_AGENT = "TBoxMonitor-roadmaps/0.18 (osm_to_tboxroads)"
+USER_AGENT = "TBoxMonitor-roadmaps/0.19 (osm_to_tboxroads)"
 
 DEFAULT_HIGHWAY_CLASSES = frozenset(
     {
@@ -46,6 +46,18 @@ HIGHWAY_REGEX = (
     "^(motorway|trunk|primary|secondary|tertiary|residential|unclassified|living_street)"
     "($|_link)$"
 )
+
+# OSM Key:tunnel values we keep as pack `tunnel: true`. Skip no/false and rare junk.
+_TUNNEL_YES = frozenset({"yes", "true", "1", "building_passage"})
+
+# Urban 60 (ПДД РФ в НП) — only when the edge has no posted maxspeed*.
+URBAN_DEFAULT_KMH = 60
+# Never invent 60 from settlement polygons on these classes (highways / dual carriageways).
+_URBAN_FALLBACK_EXCLUDE = frozenset(
+    {"motorway", "motorway_link", "trunk", "trunk_link"}
+)
+_URBAN_PLACE = frozenset({"city", "town", "village", "suburb", "hamlet"})
+_URBAN_ZONE_CODES = frozenset({"ru:urban"})
 
 
 def haversine_m(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
@@ -153,6 +165,13 @@ def oneway_from_tags(tags: dict[str, Any] | None) -> int:
     return 0
 
 
+def tunnel_from_tags(tags: dict[str, Any] | None) -> bool:
+    """True for OSM tunnel=yes / building_passage (and boolean aliases)."""
+    tags = tags or {}
+    raw = str(tags.get("tunnel") or "").strip().lower()
+    return raw in _TUNNEL_YES
+
+
 # Non-numeric OSM maxspeed tokens — never guess legal defaults (except RU: below).
 _MAXSPEED_REJECT = frozenset(
     {
@@ -221,6 +240,23 @@ def parse_maxspeed_kmh(raw: Any) -> int | None:
     return kmh if 1 <= kmh <= 200 else None
 
 
+def _normalize_zone_code(raw: Any) -> str | None:
+    if raw is None or isinstance(raw, bool):
+        return None
+    s = str(raw).strip().lower()
+    return s or None
+
+
+def urban_zone_from_tags(tags: dict[str, Any] | None) -> bool:
+    """True when the way itself is tagged as RU urban zone (not a settlement polygon)."""
+    tags = tags or {}
+    for key in ("zone:maxspeed", "source:maxspeed"):
+        code = _normalize_zone_code(tags.get(key))
+        if code in _URBAN_ZONE_CODES:
+            return True
+    return False
+
+
 def speed_fields_from_tags(
     tags: dict[str, Any] | None,
     highway: str | None = None,
@@ -229,6 +265,9 @@ def speed_fields_from_tags(
     maxspeed = parse_maxspeed_kmh(tags.get("maxspeed"))
     fwd = parse_maxspeed_kmh(tags.get("maxspeed:forward"))
     bwd = parse_maxspeed_kmh(tags.get("maxspeed:backward"))
+    # Way-level urban zone without an explicit posted number → ПДД 60.
+    if maxspeed is None and fwd is None and bwd is None and urban_zone_from_tags(tags):
+        maxspeed = URBAN_DEFAULT_KMH
     if maxspeed is None and highway == "motorway":
         maxspeed = MOTORWAY_DEFAULT_KMH
     return (maxspeed, fwd, bwd)
@@ -268,6 +307,7 @@ class WayDraft:
     maxspeed_backward: int | None = None
     ref: str | None = None
     way_id: int | None = None
+    tunnel: bool = False
 
 
 def junction_keys(drafts: Sequence[WayDraft]) -> set[Hashable]:
@@ -318,6 +358,7 @@ def _append_line(
     maxspeed_backward: int | None = None,
     ref: str | None = None,
     way_id: int | None = None,
+    tunnel: bool = False,
 ) -> int:
     edge: dict[str, Any] = {
         "id": edge_id,
@@ -339,6 +380,8 @@ def _append_line(
         edge["ref"] = ref
     if way_id is not None:
         edge["wayId"] = int(way_id)
+    if tunnel:
+        edge["tunnel"] = True
     edges.append(edge)
     return edge_id + 1
 
@@ -362,6 +405,7 @@ def drafts_to_edges(drafts: Sequence[WayDraft], start_id: int = 1) -> List[dict[
                 maxspeed_backward=draft.maxspeed_backward,
                 ref=draft.ref,
                 way_id=draft.way_id,
+                tunnel=draft.tunnel,
             )
     assign_shared_nodes(edges)
     return edges
@@ -390,7 +434,219 @@ def _draft_from_line(
         maxspeed_backward=bwd,
         ref=ref_from_tags(tags),
         way_id=way_id,
+        tunnel=tunnel_from_tags(tags),
     )
+
+
+def _is_urban_area_tags(tags: dict[str, Any] | None) -> bool:
+    """Settlement / RU:urban zone polygons used for maxspeed fallback.
+
+    Highway ways with `source:maxspeed=RU:urban` are *not* areas — they get 60
+    via [urban_zone_from_tags] / [speed_fields_from_tags] instead.
+    """
+    tags = tags or {}
+    if str(tags.get("highway") or "").strip():
+        return False
+    if urban_zone_from_tags(tags):
+        return True
+    place = str(tags.get("place") or "").strip().lower()
+    return place in _URBAN_PLACE
+
+
+def _ring_closed(
+    coords: Sequence[Sequence[float]],
+    *,
+    require_already_closed: bool = True,
+) -> List[List[float]] | None:
+    """Build a closed ring. By default reject open polylines (avoid bogus highway hulls)."""
+    if len(coords) < 3:
+        return None
+    ring = [[float(c[0]), float(c[1])] for c in coords]
+    closed = (
+        abs(ring[0][0] - ring[-1][0]) <= 1e-7
+        and abs(ring[0][1] - ring[-1][1]) <= 1e-7
+    )
+    if not closed:
+        if require_already_closed:
+            return None
+        ring.append([ring[0][0], ring[0][1]])
+    if len(ring) < 4:
+        return None
+    return ring
+
+
+def _point_in_ring(lon: float, lat: float, ring: Sequence[Sequence[float]]) -> bool:
+    """Ray casting; ring is closed [[lon,lat],…] WGS84. Boundary counts as inside."""
+    n = len(ring)
+    if n < 4:
+        return False
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = float(ring[i][0]), float(ring[i][1])
+        xj, yj = float(ring[j][0]), float(ring[j][1])
+        if (yi > lat) != (yj > lat):
+            # Avoid division by zero on horizontal edges.
+            denom = yj - yi
+            if abs(denom) > 1e-18:
+                x_cross = (xj - xi) * (lat - yi) / denom + xi
+                if lon == x_cross:
+                    return True
+                if lon < x_cross:
+                    inside = not inside
+        elif yi == lat and yj == lat and min(xi, xj) <= lon <= max(xi, xj):
+            return True
+        j = i
+    return inside
+
+
+def point_in_any_polygon(lon: float, lat: float, rings: Sequence[Sequence[Sequence[float]]]) -> bool:
+    for ring in rings:
+        if _point_in_ring(lon, lat, ring):
+            return True
+    return False
+
+
+def edge_midpoint(coords: Sequence[Sequence[float]]) -> tuple[float, float] | None:
+    if len(coords) < 2:
+        return None
+    total = polyline_length_m(coords)
+    if total <= 0:
+        return float(coords[0][0]), float(coords[0][1])
+    half = total / 2.0
+    walked = 0.0
+    for i in range(1, len(coords)):
+        lon1, lat1 = float(coords[i - 1][0]), float(coords[i - 1][1])
+        lon2, lat2 = float(coords[i][0]), float(coords[i][1])
+        seg = haversine_m(lon1, lat1, lon2, lat2)
+        if walked + seg >= half and seg > 0:
+            t = (half - walked) / seg
+            return lon1 + (lon2 - lon1) * t, lat1 + (lat2 - lat1) * t
+        walked += seg
+    return float(coords[-1][0]), float(coords[-1][1])
+
+
+def apply_urban_maxspeed_fallback(
+    edges: List[dict[str, Any]],
+    urban_rings: Sequence[Sequence[Sequence[float]]],
+) -> int:
+    """Set maxspeed=60 for untagged edges whose midpoint lies in an urban polygon.
+
+    Does not overwrite existing maxspeed / maxspeedForward / maxspeedBackward.
+    Skips motorway* and trunk* (no blind 60 on high-speed classes).
+    """
+    if not urban_rings or not edges:
+        return 0
+    applied = 0
+    for edge in edges:
+        if edge.get("maxspeed") is not None:
+            continue
+        if edge.get("maxspeedForward") is not None or edge.get("maxspeedBackward") is not None:
+            continue
+        highway = str(edge.get("class") or "")
+        if highway in _URBAN_FALLBACK_EXCLUDE:
+            continue
+        mid = edge_midpoint(edge.get("coords") or [])
+        if mid is None:
+            continue
+        if not point_in_any_polygon(mid[0], mid[1], urban_rings):
+            continue
+        edge["maxspeed"] = URBAN_DEFAULT_KMH
+        applied += 1
+    return applied
+
+
+def urban_rings_from_geojson(path: Path) -> List[List[List[float]]]:
+    root = json.loads(path.read_text(encoding="utf-8"))
+    rings: List[List[List[float]]] = []
+    for feat in root.get("features") or []:
+        props = feat.get("properties") or {}
+        if not _is_urban_area_tags(props):
+            continue
+        geom = feat.get("geometry") or {}
+        gtype = geom.get("type")
+        coords = geom.get("coordinates") or []
+        if gtype == "Polygon":
+            if coords:
+                ring = _ring_closed(coords[0])
+                if ring is not None:
+                    rings.append(ring)
+        elif gtype == "MultiPolygon":
+            for poly in coords:
+                if poly:
+                    ring = _ring_closed(poly[0])
+                    if ring is not None:
+                        rings.append(ring)
+    return rings
+
+
+def _overpass_way_ring(el: dict[str, Any]) -> List[List[float]] | None:
+    geom = el.get("geometry") or []
+    coords = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
+    return _ring_closed(coords)
+
+
+def _overpass_relation_outer_rings(el: dict[str, Any]) -> List[List[List[float]]]:
+    """Build outer rings from Overpass `out body geom` multipolygon / boundary members."""
+    members = el.get("members") or []
+    outers: List[List[List[float]]] = []
+    current: List[List[float]] = []
+
+    def flush() -> None:
+        nonlocal current
+        if current:
+            # Relations often list open outer ways that only close after concat.
+            ring = _ring_closed(current, require_already_closed=False)
+            if ring is not None:
+                outers.append(ring)
+        current = []
+
+    for mem in members:
+        if mem.get("type") != "way":
+            continue
+        role = str(mem.get("role") or "outer").strip().lower()
+        if role == "inner":
+            continue
+        if role not in ("outer", ""):
+            continue
+        geom = mem.get("geometry") or []
+        seg = [[float(p["lon"]), float(p["lat"])] for p in geom if "lon" in p and "lat" in p]
+        if len(seg) < 2:
+            continue
+        if not current:
+            current = seg
+            continue
+        # Concatenate contiguous outer ways into one ring when possible.
+        if current[-1] == seg[0]:
+            current.extend(seg[1:])
+        elif current[-1] == seg[-1]:
+            current.extend(reversed(seg[:-1]))
+        elif current[0] == seg[-1]:
+            current = seg[:-1] + current
+        elif current[0] == seg[0]:
+            current = list(reversed(seg[1:])) + current
+        else:
+            flush()
+            current = seg
+    flush()
+    return outers
+
+
+def urban_rings_from_overpass_json(path: Path) -> List[List[List[float]]]:
+    root = json.loads(path.read_text(encoding="utf-8"))
+    rings: List[List[List[float]]] = []
+    for el in root.get("elements") or []:
+        tags = el.get("tags") or {}
+        if not _is_urban_area_tags(tags):
+            continue
+        etype = el.get("type")
+        if etype == "way":
+            ring = _overpass_way_ring(el)
+            if ring is not None:
+                rings.append(ring)
+        elif etype == "relation":
+            rings.extend(_overpass_relation_outer_rings(el))
+    return rings
 
 
 def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, Any]]:
@@ -423,7 +679,9 @@ def edges_from_geojson(path: Path, allowed: frozenset[str]) -> List[dict[str, An
             )
             if draft is not None:
                 drafts.append(draft)
-    return drafts_to_edges(drafts)
+    edges = drafts_to_edges(drafts)
+    apply_urban_maxspeed_fallback(edges, urban_rings_from_geojson(path))
+    return edges
 
 
 def _overpass_way_keys_and_coords(
@@ -472,16 +730,29 @@ def edges_from_overpass_json(path: Path, allowed: frozenset[str]) -> List[dict[s
         )
         if draft is not None:
             drafts.append(draft)
-    return drafts_to_edges(drafts)
+    edges = drafts_to_edges(drafts)
+    apply_urban_maxspeed_fallback(edges, urban_rings_from_overpass_json(path))
+    return edges
 
 
 def overpass_query_for_bbox(bbox: Sequence[float]) -> str:
     west, south, east, north = [float(x) for x in bbox]
     # Overpass bbox order: south,west,north,east
+    bb = f"({south},{west},{north},{east})"
+    urban = f"""
+  way["zone:maxspeed"="RU:urban"]{bb};
+  way["source:maxspeed"="RU:urban"]{bb};
+  way["place"~"^(city|town|village|suburb|hamlet)$"]{bb};
+  rel["type"="multipolygon"]["zone:maxspeed"="RU:urban"]{bb};
+  rel["type"="multipolygon"]["source:maxspeed"="RU:urban"]{bb};
+  rel["type"="multipolygon"]["place"~"^(city|town|village|suburb|hamlet)$"]{bb};
+  rel["boundary"="administrative"]["place"~"^(city|town|village)$"]{bb};
+""".strip()
     return f"""
-[out:json][timeout:90];
+[out:json][timeout:180];
 (
-  way["highway"~"{HIGHWAY_REGEX}"]({south},{west},{north},{east});
+  way["highway"~"{HIGHWAY_REGEX}"]{bb};
+  {urban}
 );
 out body geom;
 """.strip()
@@ -496,6 +767,15 @@ def overpass_query_for_area(area_name: str, country_code: str) -> str:
     """
     escaped_name = area_name.replace("\\", "\\\\").replace('"', '\\"')
     escaped_country = country_code.replace("\\", "\\\\").replace('"', '\\"')
+    urban = """
+  way(area.searchArea)["zone:maxspeed"="RU:urban"];
+  way(area.searchArea)["source:maxspeed"="RU:urban"];
+  way(area.searchArea)["place"~"^(city|town|village|suburb|hamlet)$"];
+  rel(area.searchArea)["type"="multipolygon"]["zone:maxspeed"="RU:urban"];
+  rel(area.searchArea)["type"="multipolygon"]["source:maxspeed"="RU:urban"];
+  rel(area.searchArea)["type"="multipolygon"]["place"~"^(city|town|village|suburb|hamlet)$"];
+  rel(area.searchArea)["boundary"="administrative"]["place"~"^(city|town|village)$"];
+""".strip()
     return f"""
 [out:json][timeout:900];
 area["ISO3166-1"="{escaped_country}"][admin_level="2"]->.country;
@@ -510,18 +790,29 @@ area["ISO3166-1"="{escaped_country}"][admin_level="2"]->.country;
 map_to_area->.searchArea;
 (
   way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
+  {urban}
 );
 out body geom;
 """.strip()
 
 
 def overpass_query_for_relation(relation_id: int) -> str:
+    urban = """
+  way(area.searchArea)["zone:maxspeed"="RU:urban"];
+  way(area.searchArea)["source:maxspeed"="RU:urban"];
+  way(area.searchArea)["place"~"^(city|town|village|suburb|hamlet)$"];
+  rel(area.searchArea)["type"="multipolygon"]["zone:maxspeed"="RU:urban"];
+  rel(area.searchArea)["type"="multipolygon"]["source:maxspeed"="RU:urban"];
+  rel(area.searchArea)["type"="multipolygon"]["place"~"^(city|town|village|suburb|hamlet)$"];
+  rel(area.searchArea)["boundary"="administrative"]["place"~"^(city|town|village)$"];
+""".strip()
     return f"""
 [out:json][timeout:900];
 rel({relation_id});
 map_to_area->.searchArea;
 (
   way(area.searchArea)["highway"~"{HIGHWAY_REGEX}"];
+  {urban}
 );
 out body geom;
 """.strip()

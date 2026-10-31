@@ -24,6 +24,7 @@ object InvokeActionPayloadBuilder {
             "open_main_screen" -> {
                 JSONObject()
                     .put("type", "open_main_screen")
+                    .put("page", 1)
                     .put("target", "fullscreen")
             }
             "can_command" -> {

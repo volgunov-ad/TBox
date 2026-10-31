@@ -14,6 +14,7 @@ import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.AutomationTriggerContext
+import vad.dashing.tbox.automation.AutomationValidator
 
 class ExternalApiRouter(
     private val appVersion: String,
@@ -28,6 +29,13 @@ class ExternalApiRouter(
     private val webPanelEnabled: () -> Boolean = { false },
     private val pageLanguage: () -> String = { "ru" },
     private val onAuthenticated: (ExternalApiPairedClient) -> Unit = {},
+    /** `android9` / `android10`: which window commands the head unit accepts. */
+    private val headUnitPlatform: () -> String = { "" },
+    /**
+     * Climate layout storage key for the web panel:
+     * `ordinary_ac` / `single_zone` / `dual_zone`.
+     */
+    private val climateControlType: () -> String = { "dual_zone" },
 ) {
     fun handle(
         method: String,
@@ -87,7 +95,9 @@ class ExternalApiRouter(
                 .put("serverEnabled", serverEnabled())
                 .put("webPanelEnabled", webPanelEnabled())
                 .put("pairingActive", pairingSession.isPairingActive())
-                .put("appVersion", appVersion),
+                .put("appVersion", appVersion)
+                .put("headUnit", headUnitPlatform())
+                .put("climateControlType", climateControlType()),
         )
 
     private fun handleWebPanel(method: String): ExternalApiHttpResponse {
@@ -134,7 +144,7 @@ class ExternalApiRouter(
         if (requestId.isEmpty()) {
             return errorResponse(400, "invalid_request", "requestId is required")
         }
-        val request = pairingSession.getRequest(requestId)
+        val request = pairingSession.takeRequestForPoll(requestId)
             ?: return errorResponse(404, "not_found", "Pair request not found")
         val json = JSONObject().put("status", request.status.name.lowercase())
         when (request.status) {
@@ -163,7 +173,7 @@ class ExternalApiRouter(
             val stateOptions = JSONArray()
             descriptor.stateOptions.forEach { stateOptions.put(it) }
             val sources = JSONArray()
-            descriptor.sources.forEach { sources.put(it.storageKey) }
+            AutomationSignalCatalog.sourcesForUi(descriptor.id).forEach { sources.put(it.storageKey) }
             signals.put(
                 JSONObject()
                     .put("id", descriptor.id.storageKey)
@@ -185,20 +195,23 @@ class ExternalApiRouter(
 
         val builtins = JSONArray()
         AutomationBuiltinActionType.entries.forEach { type ->
-            builtins.put(
-                JSONObject()
-                    .put("type", "builtin")
-                    .put("actionType", type.storageKey)
-                    .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey)
-                    .put(
-                        "voiceAliasesRu",
-                        jsonStringArray(ExternalApiVoiceAliasesRu.forBuiltin(type)),
-                    ),
-            )
+            val item = JSONObject()
+                .put("type", "builtin")
+                .put("actionType", type.storageKey)
+                .put("safety", ExternalApiActionSafetyRules.builtinSafety(type).storageKey)
+                .put(
+                    "voiceAliasesRu",
+                    jsonStringArray(ExternalApiVoiceAliasesRu.forBuiltin(type)),
+                )
+            ExternalApiCatalogWrite.builtinWrite(type)?.let { schema ->
+                item.put("write", ExternalApiCatalogWrite.writeJson(schema))
+            }
+            builtins.put(item)
         }
 
         val canCommands = JSONArray()
         AutomationCanCatalog.entries.forEach { entry ->
+            val schema = ExternalApiCatalogWrite.forEntry(entry)
             canCommands.put(
                 JSONObject()
                     .put("type", "can_command")
@@ -206,6 +219,9 @@ class ExternalApiRouter(
                     .put("propertyId", entry.propertyId)
                     .put("label", entry.label)
                     .put("safety", ExternalApiActionSafety.CONFIRM.storageKey)
+                    .put("operations", jsonStringArray(schema.operations))
+                    .put("signalId", schema.signalId ?: JSONObject.NULL)
+                    .put("write", ExternalApiCatalogWrite.writeJson(schema.write))
                     .put(
                         "voiceAliasesRu",
                         jsonStringArray(
@@ -271,6 +287,14 @@ class ExternalApiRouter(
         }
         if (decoded.size > ExternalApiConstants.MAX_ACTIONS_PER_REQUEST) {
             return errorResponse(400, "invalid_request", "Too many actions")
+        }
+        val issues = AutomationValidator.validateActions(decoded)
+        if (issues.isNotEmpty()) {
+            return errorResponse(
+                400,
+                "invalid_request",
+                issues.joinToString("; ") { "${it.path}: ${it.message}" },
+            )
         }
         if (!dangerousEnabled() && decoded.any(ExternalApiActionSafetyRules::isDangerous)) {
             return errorResponse(403, "dangerous_disabled", "Dangerous commands are disabled")

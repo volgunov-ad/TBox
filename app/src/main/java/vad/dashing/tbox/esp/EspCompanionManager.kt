@@ -25,6 +25,7 @@ import vad.dashing.tbox.TboxRepository
 import vad.dashing.tbox.automation.AutomationEspBleBtnEvent
 import vad.dashing.tbox.automation.AutomationTriggerEspBleBtnEventBus
 import vad.dashing.tbox.location.LocationMockManager
+import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.usbgnss.UsbGnssNmeaEnableCommands
 import java.io.File
 import java.io.InputStream
@@ -83,6 +84,10 @@ class EspCompanionManager(
         private const val UM980_POST_SAVE_REFRESH_DELAY_MS = 2_000L
         private const val UM980_ENSURE_SIGNALGROUP_NONE = 0
         private const val UM980_BAUD_SETTLE_MS = 400L
+        /** A lost hello reply leaves board info (UM980, BLE, CAN) empty until the next link. */
+        private const val HELLO_RETRY_MS = 3_000L
+        /** Firmware closes the window itself; this covers a lost closing bleStatus. */
+        private const val PHONE_LEARN_GRACE_MS = 5_000L
     }
 
     private var session: EspUsbSerialSession? = null
@@ -108,6 +113,8 @@ class EspCompanionManager(
     /** While > now, heartbeat watchdog must not tear down USB. */
     private val um980UsbGuardUntilMs = AtomicLong(0L)
     private val relayPulseJobs = arrayOfNulls<Job>(8)
+    private var lastHelloRetryMs = 0L
+    private val phoneLearnDeadlineMs = AtomicLong(0L)
 
     private fun currentReopenIntervalMs(): Long {
         val idx = reopenFailureStreak.coerceIn(0, REOPEN_BACKOFF_MS.lastIndex)
@@ -190,6 +197,22 @@ class EspCompanionManager(
                     lastReconnectAttemptMs = now
                     reopenFailureStreak = (reopenFailureStreak + 1).coerceAtMost(REOPEN_BACKOFF_MS.lastIndex)
                 }
+                if (EspCompanionRepository.connected.value &&
+                    EspCompanionRepository.deviceInfo.value.firmwareVersion.isBlank() &&
+                    now - lastHelloRetryMs >= HELLO_RETRY_MS
+                ) {
+                    lastHelloRetryMs = now
+                    requestHello()
+                }
+                val learnDeadline = phoneLearnDeadlineMs.get()
+                if (learnDeadline > 0L && now >= learnDeadline &&
+                    phoneLearnDeadlineMs.compareAndSet(learnDeadline, 0L)
+                ) {
+                    if (EspCompanionRepository.phoneLearnActive.value) {
+                        EspCompanionRepository.closePhoneLearn()
+                        requestHello()
+                    }
+                }
                 // Periodic restore when option is on (manager only runs if enabled).
                 val reconnectGap = currentReopenIntervalMs()
                 if (!EspCompanionRepository.connected.value &&
@@ -219,6 +242,8 @@ class EspCompanionManager(
         session = null
         loggedFirstLine = false
         lastReconnectAttemptMs = 0L
+        lastHelloRetryMs = 0L
+        phoneLearnDeadlineMs.set(0L)
         reopenFailureStreak = 0
         optionalNmeaEnableSentForLink = false
         canLightRefCount.set(0)
@@ -644,11 +669,18 @@ class EspCompanionManager(
         writeLine(EspCompanionProtocol.encodeBleSet(on))
     }
 
-    fun beginBleLearn(timeoutMs: Long = 30_000L) {
+    /** [key] is a normalized BTHome key or empty; never logged. */
+    fun beginBleLearn(timeoutMs: Long = 30_000L, key: String = "") {
         if (EspCompanionRepository.otaBusy.value) return
-        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs")
+        Log.i(TAG, "BLE learn begin timeoutMs=$timeoutMs encrypted=${key.isNotEmpty()}")
         EspCompanionRepository.setBleLearnActive(true)
-        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs))
+        writeLine(EspCompanionProtocol.encodeBleLearnBegin(timeoutMs, key))
+    }
+
+    fun setBleKey(mac: String, key: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        Log.i(TAG, "BLE key mac=$mac set=${key.isNotEmpty()}")
+        writeLine(EspCompanionProtocol.encodeBleKey(mac, key))
     }
 
     fun endBleLearn() {
@@ -667,6 +699,46 @@ class EspCompanionManager(
         if (EspCompanionRepository.otaBusy.value) return
         Log.i(TAG, "BLE forget all")
         writeLine(EspCompanionProtocol.encodeBleForgetAll())
+    }
+
+    fun beginPhoneLearn(timeoutMs: Long = 90_000L) {
+        if (EspCompanionRepository.otaBusy.value) return
+        // Firmware clamps the window to 60..120 s.
+        val windowMs = timeoutMs.coerceIn(60_000L, 120_000L)
+        phoneLearnDeadlineMs.set(System.currentTimeMillis() + windowMs + PHONE_LEARN_GRACE_MS)
+        writeLine(EspCompanionProtocol.encodePhoneLearnBegin(timeoutMs))
+    }
+
+    fun endPhoneLearn() {
+        if (EspCompanionRepository.otaBusy.value) return
+        phoneLearnDeadlineMs.set(0L)
+        EspCompanionRepository.closePhoneLearn()
+        writeLine(EspCompanionProtocol.encodePhoneLearnEnd())
+    }
+
+    fun allowPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        phoneLearnDeadlineMs.set(0L)
+        EspCompanionRepository.closePhoneLearn()
+        writeLine(EspCompanionProtocol.encodePhoneAllow(id))
+        // Firmware before 0.10.3 keeps the window open after allow.
+        writeLine(EspCompanionProtocol.encodePhoneLearnEnd())
+    }
+
+    fun denyPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        EspCompanionRepository.clearPendingPhone()
+        writeLine(EspCompanionProtocol.encodePhoneDeny(id))
+    }
+
+    fun forgetPhone(id: String) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodePhoneForget(id))
+    }
+
+    fun sendPhoneSnap(gen: Int, snap: PhoneBleCodec.Snapshot) {
+        if (EspCompanionRepository.otaBusy.value) return
+        writeLine(EspCompanionProtocol.encodePhoneSnap(gen, snap))
     }
 
     fun setCanFilterAcceptAll() {
@@ -823,6 +895,9 @@ class EspCompanionManager(
                     "esp_ota_trace.txt",
                 ).delete()
             }
+            if (file.length() > EspCompanionProtocol.OTA_MAX_IMAGE_SIZE) {
+                throw IllegalArgumentException("too_large")
+            }
             val image = file.readBytes()
             val imageSize = image.size.toLong()
             if (image.isEmpty()) throw IllegalArgumentException("empty")
@@ -967,27 +1042,6 @@ class EspCompanionManager(
         }
     }
 
-    private fun extractOtaJson(line: String): String {
-        val markers = arrayOf(
-            "\"t\":\"otaAck\"",
-            "\"t\":\"otaDone\"",
-            "\"t\": \"otaAck\"",
-            "\"t\": \"otaDone\"",
-        )
-        for (marker in markers) {
-            val at = line.indexOf(marker)
-            if (at < 0) continue
-            val start = line.lastIndexOf('{', at)
-            val end = line.indexOf('}', at)
-            if (start >= 0 && end > start) return line.substring(start, end + 1)
-        }
-        val start = line.indexOf('{')
-        if (start < 0) return line
-        val end = line.indexOf('}', start)
-        if (end > start) return line.substring(start, end + 1)
-        return line.substring(start)
-    }
-
     private suspend fun awaitOta(
         channel: Channel<EspMessage>,
         timeoutMs: Long,
@@ -1020,7 +1074,7 @@ class EspCompanionManager(
             otaRxTraceLeft--
             traceOta("rx " + line.take(160).replace('\u0000', '?'))
         }
-        val msg = EspCompanionProtocol.parseLine(extractOtaJson(line)) ?: return
+        val msg = EspCompanionProtocol.parseLine(EspCompanionProtocol.extractMessageJson(line)) ?: return
         EspCompanionRepository.noteRxMessage()
         noteSuccessfulRx()
         logCompanionRx(msg, line)
@@ -1053,7 +1107,9 @@ class EspCompanionManager(
                         ble = msg.ble,
                         bleOn = msg.bleOn,
                         bleMacs = msg.bleMacs,
+                        bleKey = msg.bleKey,
                         ap = msg.ap,
+                        phone = msg.phone,
                     )
                 )
                 sendRememberedApCfg()
@@ -1226,7 +1282,23 @@ class EspCompanionManager(
                     lastBat = msg.lastBat,
                     lastRssi = msg.lastRssi,
                     lastMac = msg.lastMac,
+                    phoneLearn = msg.phoneLearn,
+                    phones = msg.phones,
+                    keyed = msg.keyed,
                 )
+            }
+            is EspMessage.PhonePair -> {
+                Log.i(TAG, "phonePair id=${msg.id} name=${msg.name}")
+                EspCompanionRepository.setPendingPhone(
+                    EspPhoneDevice(id = msg.id, name = msg.name.ifBlank { msg.id }),
+                )
+            }
+            is EspMessage.PhoneCmd -> {
+                Log.i(TAG, "phoneCmd id=${msg.id} op=${msg.op} seat=${msg.seat} arg=${msg.arg}")
+                EspCompanionRepository.emitPhoneCommand(msg.op, msg.seat, msg.arg)
+            }
+            is EspMessage.PhoneSnapReq -> {
+                EspCompanionRepository.emitPhoneSnapReq()
             }
             is EspMessage.BleSeen -> {
                 Log.i(TAG, "bleSeen mac=${msg.mac} rssi=${msg.rssi}")
@@ -1365,6 +1437,9 @@ class EspCompanionManager(
             }
             LocationSource.USB -> {
                 // Direct USB NMEA is owned by BackgroundService / UsbNmeaLocationSource.
+            }
+            LocationSource.PHONE -> {
+                // Phone GPS over RFCOMM is owned by PhoneDirectServer / PhoneTelemetryRepository.
             }
         }
         if (source == LocationSource.ANDROID && mockLocation.value) {

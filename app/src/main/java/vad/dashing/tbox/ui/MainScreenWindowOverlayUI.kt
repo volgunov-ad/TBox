@@ -64,7 +64,6 @@ fun MainScreenWindowOverlayUI(
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
-    val leftMenuLayout by settingsViewModel.leftMenuLayout.collectAsStateWithLifecycle()
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val overlayLayout by MainScreenWindowOverlayLayout.state.collectAsStateWithLifecycle()
     val cropEnabled = overlayLayout.cropEnabled
@@ -125,9 +124,7 @@ fun MainScreenWindowOverlayUI(
                                     appDataViewModel = appDataViewModel,
                                     settingsViewModel = settingsViewModel,
                                     onOpenConsole = {
-                                        settingsViewModel.saveSelectedTab(
-                                            LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                                        )
+                                        settingsViewModel.openConsoleFromMain()
                                         FreeformLaunchHelper.exitWindowModeToFullscreen(
                                             context.applicationContext,
                                         )
@@ -158,9 +155,7 @@ fun MainScreenWindowOverlayUI(
                             appDataViewModel = appDataViewModel,
                             settingsViewModel = settingsViewModel,
                             onOpenConsole = {
-                                settingsViewModel.saveSelectedTab(
-                                    LeftMenuLayout.firstVisibleTabKey(leftMenuLayout),
-                                )
+                                settingsViewModel.openConsoleFromMain()
                                 FreeformLaunchHelper.exitWindowModeToFullscreen(
                                     context.applicationContext,
                                 )

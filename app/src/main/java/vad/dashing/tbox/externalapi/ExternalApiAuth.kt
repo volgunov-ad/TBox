@@ -86,6 +86,8 @@ object ExternalApiAuth {
         clientName: String,
         accessToken: String,
         createdAtEpochMs: Long,
+        packageName: String? = null,
+        certSha256: String? = null,
     ): List<ExternalApiPairedClient> {
         val normalizedId = clientId.trim()
         val withoutExisting = clients.filterNot { it.clientId == normalizedId }
@@ -94,7 +96,21 @@ object ExternalApiAuth {
             clientName = clientName.trim(),
             tokenHash = sha256Hex(accessToken),
             createdAtEpochMs = createdAtEpochMs,
+            packageName = packageName,
+            certSha256 = certSha256,
         )
+    }
+
+    /** A local companion is trusted only with the certificate it had when the user confirmed it. */
+    fun isLocalClientTrusted(
+        clients: List<ExternalApiPairedClient>,
+        clientId: String,
+        packageName: String,
+        certSha256: String,
+    ): Boolean = clients.any {
+        it.clientId == clientId &&
+            it.packageName == packageName &&
+            it.certSha256.equals(certSha256, ignoreCase = true)
     }
 
     private fun ByteArray.toHex(): String =

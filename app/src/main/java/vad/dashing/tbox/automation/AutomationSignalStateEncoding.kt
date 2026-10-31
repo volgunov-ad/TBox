@@ -2,10 +2,12 @@ package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
 import vad.dashing.tbox.HeadlightMode
+import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.CarSettingsAdasDomain
 import vad.dashing.tbox.mbcan.CarSettingsAudioDomain
 import vad.dashing.tbox.mbcan.CarSettingsHudDomain
 import vad.dashing.tbox.mbcan.CarSettingsLocksLightsDomain
+import vad.dashing.tbox.mbcan.AccTimeGap
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.FollowMeHomeMode
 import vad.dashing.tbox.mbcan.HvacBlowMode
@@ -33,6 +35,7 @@ object AutomationSignalStateEncoding {
     val remoteLockFeedbackOptions = listOf("light", "horn", "light_horn")
     val lasModeOptions = listOf("ldw", "lka", "off")
     val fcwSensitivityOptions = listOf("far", "standard", "near")
+    val accTimeGapOptions = listOf("near", "medium", "far")
     val ldwSensitivityOptions = listOf("high", "low")
     val hvacCustomOptions = listOf("eco", "comfort", "strong")
     val fragranceSmellOptions = listOf("meteor", "boss", "tea")
@@ -62,6 +65,23 @@ object AutomationSignalStateEncoding {
         }?.widgetLabel
 
     fun headlightFromRaw(raw: Int): String? = HeadlightMode.fromRaw(raw)?.widgetLabel
+
+    private val windowSignals = setOf(
+        AutomationSignalId.WINDOW_FRONT_LEFT,
+        AutomationSignalId.WINDOW_FRONT_RIGHT,
+        AutomationSignalId.WINDOW_REAR_LEFT,
+        AutomationSignalId.WINDOW_REAR_RIGHT,
+    )
+
+    fun isWindowSignal(signal: AutomationSignalId): Boolean = signal in windowSignals
+
+    /** STATE trigger/condition match. Windows: `open` holds for every open position. */
+    fun stateMatches(signal: AutomationSignalId, actual: String, expected: String): Boolean =
+        if (signal in windowSignals) {
+            BodyComfortDomain.windowStateMatches(actual, expected)
+        } else {
+            actual.equals(expected.trim(), ignoreCase = true)
+        }
 
     fun migrateLegacyStateValue(signal: AutomationSignalId, raw: String): String {
         val trimmed = raw.trim()
@@ -142,6 +162,15 @@ object AutomationSignalStateEncoding {
         FcwSensitivity.Near -> "near"
         null -> null
     }
+
+    fun accTimeGapStateKey(value: AccTimeGap): String = when (value) {
+        AccTimeGap.Near -> "near"
+        AccTimeGap.Medium -> "medium"
+        AccTimeGap.Far -> "far"
+    }
+
+    fun accTimeGapFromRequestRaw(raw: Int): String? =
+        CarSettingsAdasDomain.decodeAccTimeGapRequest(raw)?.let(::accTimeGapStateKey)
 
     fun ldwSensitivityFromRaw(raw: Int): String? = when (CarSettingsAdasDomain.decodeLdwSensitivityMbCan(raw)) {
         LdwSensitivity.High -> "high"
@@ -271,6 +300,9 @@ object AutomationSignalStateEncoding {
         "pin" -> "Нужен PIN"
         "acc" -> "ACC ON"
         "ign" -> "ON"
+        "crank" -> "Стартер"
+        "hold_15m" -> "15 минут работы ГУ"
+        "sleep" -> "Сон"
         "int" -> "INT"
         "low" -> "Low"
         "high" -> "High"
@@ -333,7 +365,16 @@ object AutomationSignalStateEncoding {
         "sand" -> "SAND"
         "mud" -> "MUD"
         "snow_mode" -> "SNOW"
-        else -> raw
+        "gnss" -> "GNSS"
+        "can" -> "CAN"
+        "retention" -> "Удержание"
+        "tbox" -> "TBox"
+        "companion" -> "Компаньон"
+        "android" -> "Android"
+        "usb" -> "USB"
+        "phone" -> "Телефон"
+        "wifi_http" -> "Wi‑Fi HTTP"
+        else -> AutomationRoadMatchSignals.highwayClassOptionLabel(raw) ?: raw
     }
 
     private fun legacyStateFromNumeric(signal: AutomationSignalId, raw: Double): String? {

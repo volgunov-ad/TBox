@@ -2,6 +2,8 @@
 
 Документ описывает, как приложение **TBox Monitor** на головном устройстве (ГУ) обменивается данными с блоком **TBox** Jetour Dashing. Транспорт — **UDP** через библиотеку **[tbox-proxy](https://github.com/jsparrow2006/tbox-proxy)** (зависимость `com.github.jsparrow2006:tbox-proxy`).
 
+> **Временно — форк.** До выхода 3.0.0 у автора ([PR #11](https://github.com/jsparrow2006/tbox-proxy/pull/11)) приложение использует форк [volgunov-ad/tbox-proxy](https://github.com/volgunov-ad/tbox-proxy), версия `3.0.0-fork.1` с JitPack: привязка UDP к сети TBox (`usb0`, исправляет A10 с включённым Wi-Fi), протокол v3 и совместимость с 1.x/2.x. Возврат на оригинал — в `gradle/libs.versions.toml`: `group = "com.github.jsparrow2006"` и версия автора (например, `v3.0.0`). Для проверки локальной сборки библиотеки: `-PtboxProxyLocalAar=<путь к core-release.aar>`.
+
 Пользовательские сценарии (модем, перезагрузки, настройки) — в [USER_GUIDE_RU.md](USER_GUIDE_RU.md). CAN с шины ГУ (mbCAN / VHAL) — отдельный путь, см. [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 
 ---
@@ -128,7 +130,7 @@ TCP-режим (`127.0.0.1:5555` и т.п.) — отдельно, для shell �
 
 DiagReq payload (см. `UdaProtocol.kt`): путь к `libJX65_n720_CFG.so` + type @`0x84` + ecuParam @`0x85` + dataLen @`0x89` + data @`0x8d`.
 
-В UI: «Запросить информацию» читает VERSION UDA; в эксперт-режиме на вкладке Info — кнопка Read DTC probe.
+В UI: «Запросить информацию» читает VERSION UDA. В эксперт-режиме на вкладке «Информация» кнопка «Ошибки блоков» открывает окно: чтение DTC (`19 02`, маска `0xFF`) по `ecuId` из CFG. Ответ `0x86` — `Uda_DiagResultResp_t` (53 байта заголовка: type, ecuId, endCode, resultCode=`ret|0x80000000`, resultInfo, dataLen, затем данные). Строки разных блоков копятся и не затирают друг друга.
 
 ### CRT CMD `0x26` — vctrl (MCU)
 
@@ -291,6 +293,7 @@ APP шлёт удалённое управление как CRT `0x26` с кад
 - в пикере плиток скрыты типы, которые работают только через UDP/CDR (напряжение, точная скорость, КПП, netWidget*, restartTbox и др. — см. `WidgetsRepository.requiresTboxConnection`); уже добавленные плитки не удаляются;
 - для новых/вставленных/импортированных из темы eligible-плиток по умолчанию включается **«Работа через CAN»** (`useMbCanVhal`);
 - подвал меню не показывает статус TBox и версию tbox-proxy; рамки «TBox отключён» на панелях не рисуются; FG-уведомление нейтральное;
+- вкладка **«Информация»** не показывает блок «Информация TBox» (подключение, подтверждения команд, версии, VIN, «Запросить информацию», «Ошибки блоков»); в **«Настройки» → «Автомобиль»** скрыт блок «Настройки предотвращения перезагрузки»;
 - `TboxBroadcastSender` по-прежнему может слать `connected=false` и пустые CDR-extras — это ожидаемо.
 
 При **выкл.** восстанавливаются connect/proxy и типы в пикере; вкладки меню сами не включаются; `useMbCanVhal` не сбрасывается. При флаге выкл. поведение связи — как до этой настройки.
@@ -374,7 +377,7 @@ onDataReceived → поток tbox-packet-processor → responseWork(packet)
 | Состояние | `TboxRepository.kt`, `CanDataRepository.kt` |
 | Декод CAN | `utils/CanFramesProcess.kt` |
 | Формулы raw→физ. | [RAW_VALUE_FORMULAS_RU.md](RAW_VALUE_FORMULAS_RU.md) |
-| Зависимость | `gradle/libs.versions.toml` → `tboxProxy` |
+| Зависимость | `gradle/libs.versions.toml` → `tboxProxy`, `tbox-proxy` (сейчас форк `volgunov-ad`) |
 | Broadcast | `TboxBroadcastSender.kt`, `TBoxBroadcastReceiver.kt` |
 | Boot | `BootCompleteReceiver.kt` |
 

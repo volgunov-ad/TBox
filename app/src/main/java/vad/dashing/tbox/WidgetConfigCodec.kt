@@ -254,6 +254,11 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("automationTriggerId", automationTriggerId)
             }
         }
+        if (supportsWidgetButtonBinding(config.dataKey)) {
+            normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
+                obj.put("buttonBinding", encodeWidgetButtonBinding(binding))
+            }
+        }
         if (config.appWidgetId != null) {
             obj.put("appWidgetId", config.appWidgetId)
         }
@@ -340,6 +345,12 @@ fun serializeWidgetConfigsToJsonArray(
             val source = normalizeAvgFuelConsumptionSource(config.avgFuelConsumptionSource)
             if (source != AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL) {
                 obj.put("avgFuelConsumptionSource", source)
+            }
+        }
+        if (isFuelLitersDisplayModeWidgetDataKey(config.dataKey)) {
+            val mode = normalizeFuelLitersDisplayMode(config.fuelLitersDisplayMode)
+            if (mode != FUEL_LITERS_DISPLAY_REMAINING) {
+                obj.put("fuelLitersDisplayMode", mode)
             }
         }
         if (isEspRelayWidgetDataKey(config.dataKey) &&
@@ -793,6 +804,16 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
                         },
+                        fuelLitersDisplayMode = if (isFuelLitersDisplayModeWidgetDataKey(dataKey)) {
+                            normalizeFuelLitersDisplayMode(
+                                item.optInt(
+                                    "fuelLitersDisplayMode",
+                                    FUEL_LITERS_DISPLAY_REMAINING,
+                                ),
+                            )
+                        } else {
+                            FUEL_LITERS_DISPLAY_REMAINING
+                        },
                         espRelayMode = if (isEspRelayWidgetDataKey(dataKey)) {
                             EspRelayWidgetMode.fromStorageKey(
                                 item.optString("espRelayMode", ""),
@@ -958,6 +979,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             )
                         } else {
                             DEFAULT_MAPS_CAM_RADAR_HOLD_M
+                        },
+                        buttonBinding = if (supportsWidgetButtonBinding(dataKey)) {
+                            decodeWidgetButtonBinding(item.optJSONObject("buttonBinding"))
+                        } else {
+                            null
                         },
                     )
                 )

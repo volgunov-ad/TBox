@@ -48,6 +48,16 @@ object AutomationValidator {
         return issues
     }
 
+    /** Ad-hoc action lists (External API invoke) have no triggers to reference. */
+    fun validateActions(actions: List<AutomationAction>): List<AutomationValidationIssue> {
+        val issues = mutableListOf<AutomationValidationIssue>()
+        val actionCounter = IntArray(1)
+        actions.forEachIndexed { index, action ->
+            validateAction(action, emptySet(), "actions[$index]", 0, actionCounter, issues)
+        }
+        return issues
+    }
+
     fun isRunnable(definition: AutomationDefinition): Boolean =
         definition.enabled && validate(definition).isEmpty()
 
@@ -184,6 +194,14 @@ object AutomationValidator {
                     issues += AutomationValidationIssue(
                         "$path.mac",
                         "Выберите устройство Shelly Blu (MAC)",
+                    )
+                }
+            }
+            is AutomationTrigger.EspGpioBtn -> {
+                if (trigger.channel !in 0..3) {
+                    issues += AutomationValidationIssue(
+                        "$path.channel",
+                        "ESP-вход должен быть 0…3",
                     )
                 }
             }
@@ -753,10 +771,16 @@ object AutomationValidator {
             }
 
             AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET -> {
-                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                // Mode prefix optional (legacy acc/ccs still accepted); runtime uses global type.
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
                     issues += AutomationValidationIssue(
                         "$path.stringValue",
-                        "Круиз: режим ACC или CCS (acc / ccs)",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
                     )
                 }
                 val target = action.intValue
@@ -805,18 +829,30 @@ object AutomationValidator {
             AutomationBuiltinActionType.CRUISE_FULL_OFF,
             AutomationBuiltinActionType.CRUISE_RESUME,
             AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED,
-            -> if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
-                issues += AutomationValidationIssue(
-                    "$path.stringValue",
-                    "Круиз: режим ACC или CCS (acc / ccs)",
-                )
+            -> {
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
+                    )
+                }
             }
 
             AutomationBuiltinActionType.CRUISE_NUDGE -> {
-                if (AutomationCruiseActions.parseForcedMode(action.stringValue) == null) {
+                val modePart = action.stringValue.trim().lowercase()
+                    .substringBefore(':').substringBefore(',')
+                if (
+                    modePart.isNotEmpty() &&
+                    AutomationCruiseActions.parseForcedMode(action.stringValue) == null
+                ) {
                     issues += AutomationValidationIssue(
                         "$path.stringValue",
-                        "Круиз: режим ACC или CCS (acc / ccs)",
+                        "Круиз: режим ACC или CCS (acc / ccs), либо пусто (глобальный тип)",
                     )
                 }
                 if (action.intValue != 1 && action.intValue != -1) {
@@ -914,15 +950,6 @@ object AutomationValidator {
                 )
             }
         }
-        if (
-            action.type in MEDIA_PACKAGE_ACTIONS &&
-            action.stringValue.isBlank()
-        ) {
-            issues += AutomationValidationIssue(
-                "$path.stringValue",
-                "Выберите медиаплеер",
-            )
-        }
         if (action.type in USER_MESSAGE_ACTIONS) {
             val text = action.stringValue.trim()
             if (text.isEmpty()) {
@@ -944,13 +971,6 @@ object AutomationValidator {
         }
     }
 
-    private val MEDIA_PACKAGE_ACTIONS = setOf(
-        AutomationBuiltinActionType.MEDIA_PREVIOUS,
-        AutomationBuiltinActionType.MEDIA_PLAY_PAUSE,
-        AutomationBuiltinActionType.MEDIA_PLAY,
-        AutomationBuiltinActionType.MEDIA_NEXT,
-        AutomationBuiltinActionType.MEDIA_TOGGLE_LIKE,
-    )
 
     private val USER_MESSAGE_ACTIONS = setOf(
         AutomationBuiltinActionType.SHOW_TOAST,

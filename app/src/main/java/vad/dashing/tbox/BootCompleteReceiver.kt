@@ -3,11 +3,13 @@ package vad.dashing.tbox
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 
 class BootCompleteReceiver : BroadcastReceiver() {
     companion object {
         const val ACTION_DEBUG_BOOT_COMPLETED = "vad.dashing.tbox.DEBUG_BOOT_COMPLETED"
         private const val QUICKBOOT_POWERON_ACTION = "android.intent.action.QUICKBOOT_POWERON"
+        private const val TAG = "BootCompleteReceiver"
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -35,7 +37,11 @@ class BootCompleteReceiver : BroadcastReceiver() {
             putExtra(BackgroundService.EXTRA_START_SOURCE_ACTION, bootAction)
         }
 
-        // Для Android 8+ используем startForegroundService
-        context.startForegroundService(intent)
+        try {
+            context.startForegroundService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start BackgroundService ($bootAction)", e)
+            TboxRepository.addLog("ERROR", "Boot receiver", "Start failed: ${e.message}")
+        }
     }
 }

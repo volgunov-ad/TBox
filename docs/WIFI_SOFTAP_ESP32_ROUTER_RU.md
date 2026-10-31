@@ -86,7 +86,7 @@
 - Инструменты: jadx 1.5.3 CLI — `java -cp D:\Tools\JADX\lib\jadx-gui-1.5.3-all.jar jadx.cli.JadxCLI …` (класс `jadx.cli.JadxCLI`);
   carve cdex из `services.vdex` (vdex 019) с офсетами «на глаз» классы не вернул — для разбора system_server нужен
   корректный vdexExtractor/порядок секций.
-- Артефакты: хелпер на ГУ `/data/local/tmp/apset.apk` (source — бэкап `%TEMP%\rufp\companion_backup\`);
+- Артефакты: тестовый хелпер на ГУ `/data/local/tmp/apset.apk` (временный прототип этапа исследования, удалён из репозитория на шаге 0);
   декомпиляции вендора: `D:\Dashing\Android9-mbCan\MB_AIService\sources\…`, `FactoryMode\sources\…`.
 
 ## 4. Целевая архитектура

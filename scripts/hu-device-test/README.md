@@ -54,6 +54,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\hu-device-test\Invoke-HuFullT
 - Клики по тексту надёжнее через `click_from_dump.py` (UTF-8), не через строки внутри PS 5.1.
 - Перед стартом: `am force-stop`; logcat снимать **без** `--pid` (на API 28 иначе почти пусто).
 - `ACCESS_BACKGROUND_LOCATION` на API 28 нет; `WRITE_SETTINGS` — через appops, не `pm grant`.
-- Notification listener: `settings put secure enabled_notification_listeners …MediaControlNotificationListenerService`.
+- Notification listener: `cmd notification allow_listener vad.dashing.tbox/vad.dashing.tbox.MediaControlNotificationListenerService`. Один `settings put secure enabled_notification_listeners` на A10 не доходит до NotificationManagerService — `getActiveSessions` падает с SecurityException, музыкальный виджет пуст.
 - Автоматизации из backup не приедут, пока не закрыт диалог прав и не прошёл импорт JSON.
 - Инструментальные тесты (`connectedRuDebugAndroidTest`) дополняют smoke, не заменяют UI-сценарий.

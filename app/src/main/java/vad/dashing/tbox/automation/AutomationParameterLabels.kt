@@ -36,6 +36,7 @@ object AutomationParameterLabels {
         MbCanKnownVehiclePropertyId.ACC_AUTOBRAKE_SWITCH -> "Автоторможение AEB"
         MbCanKnownVehiclePropertyId.SAFE_DISTANCE_WARNING -> "Предупреждение дистанции"
         MbCanKnownVehiclePropertyId.FCW_SENSITIVITY -> "Чувствительность FCW"
+        MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET -> "Дистанция ACC"
         MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL -> "Чувствительность LDW"
         MbCanKnownVehiclePropertyId.HMA_SWITCH -> "Автоматический дальний свет (HMA)"
         MbCanKnownVehiclePropertyId.HVAC_CUSTOM -> "Режим климата"
@@ -127,6 +128,8 @@ object AutomationParameterLabels {
         AutomationSignalId.CRUISE_SET_SPEED -> "Уставка круиза"
         AutomationSignalId.GEAR_MODE -> "Режим КПП"
         AutomationSignalId.ACC_STATUS -> "Статус ACC (ключ)"
+        AutomationSignalId.IGNITION_KEY -> "Положение ключа"
+        AutomationSignalId.HU_SYSTEM_MODE -> "Режим головного устройства"
         AutomationSignalId.ACC_CRUISE_STATE -> "Состояние ACC (круиз)"
         AutomationSignalId.CCS_CRUISE_STATE -> "Состояние CCS (круиз)"
         AutomationSignalId.GAS_PEDAL -> "Педаль газа"
@@ -148,6 +151,8 @@ object AutomationParameterLabels {
         AutomationSignalId.WIPER_STS -> "Режим дворников"
         AutomationSignalId.RAIN_DETECTED -> "Детектор дождя"
         AutomationSignalId.HIGH_BEAM -> "Дальний свет"
+        AutomationSignalId.HAZARD -> "Аварийка"
+        AutomationSignalId.DRL -> "ДХО"
         AutomationSignalId.EPB_PARK_LAMP -> "Лампа EPB (паркинг)"
         AutomationSignalId.ENGINE_OIL_PRESSURE -> "Давление масла (предупреждение)"
         AutomationSignalId.BRAKE_FLUID -> "Тормозная жидкость (предупреждение)"
@@ -178,6 +183,14 @@ object AutomationParameterLabels {
         AutomationSignalId.REAR_LEFT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_LEFT_SEAT_HEAT_SWITCH)
         AutomationSignalId.REAR_RIGHT_SEAT_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.REAR_RIGHT_SEAT_HEAT_SWITCH)
         AutomationSignalId.GEO_POSITION -> "Геопозиция"
+        AutomationSignalId.GEO_ALTITUDE_M -> "Геопозиция: высота"
+        AutomationSignalId.GEO_SPEED_KMH -> "Геопозиция: скорость"
+        AutomationSignalId.GEO_SPEED_SOURCE -> "Геопозиция: источник скорости"
+        AutomationSignalId.GEO_BEARING_DEG -> "Геопозиция: курс"
+        AutomationSignalId.GEO_SATELLITES_VISIBLE -> "Геопозиция: спутники видимые"
+        AutomationSignalId.GEO_SATELLITES_USED -> "Геопозиция: спутники в решении"
+        AutomationSignalId.GEO_FIX_VALID -> "Геопозиция: правдивость"
+        AutomationSignalId.GEO_SOURCE -> "Геопозиция: источник"
         AutomationSignalId.DOOR_AUTO_LOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_AUTO_LOCK)
         AutomationSignalId.DOOR_IGNOFF_UNLOCK -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_IGNOFF_UNLOCK)
         AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME -> vehicleLabel(MbCanKnownVehiclePropertyId.HEADLIGHTS_HOMELIGHT_DELAY)
@@ -193,6 +206,7 @@ object AutomationParameterLabels {
         AutomationSignalId.DOOR_OPEN_WARNING -> vehicleLabel(MbCanKnownVehiclePropertyId.DOOR_OPEN_WARNING)
         AutomationSignalId.FCW -> vehicleLabel(MbCanKnownVehiclePropertyId.FCW_SWITCH)
         AutomationSignalId.FCW_SENSITIVITY -> vehicleLabel(MbCanKnownVehiclePropertyId.FCW_SENSITIVITY)
+        AutomationSignalId.ACC_TIME_GAP -> vehicleLabel(MbCanKnownVehiclePropertyId.ACC_TIME_GAP_SET)
         AutomationSignalId.LDW_SENSITIVITY -> vehicleLabel(MbCanKnownVehiclePropertyId.LAS_SENSITIVITY_LEVEL)
         AutomationSignalId.HVAC_CUSTOM_MODE -> vehicleLabel(MbCanKnownVehiclePropertyId.HVAC_CUSTOM)
         AutomationSignalId.FRONT_WINDSCREEN_HEAT -> vehicleLabel(MbCanKnownVehiclePropertyId.FRONT_WINDSCREEN_HEAT_SWITCH)
@@ -264,6 +278,12 @@ object AutomationParameterLabels {
         AutomationSignalId.HU_HEADREST_SPEAKER -> "Динамик подголовника"
         AutomationSignalId.TBOX_CONNECTED -> "TBox на связи"
         AutomationSignalId.MODEM_SIGNAL_LEVEL -> "Модем: уровень сигнала"
+        AutomationSignalId.MODEM_RSSI_DBM -> "Модем: RSSI, дБм"
+        AutomationSignalId.MODEM_REGISTERED -> "Модем: регистрация в сети"
+        AutomationSignalId.MODEM_OPERATOR -> "Модем: оператор"
+        AutomationSignalId.MODEM_SOURCE -> "Модем: источник"
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS -> "Модем: скорость вниз, кбит/с"
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS -> "Модем: скорость вверх, кбит/с"
         AutomationSignalId.LOCATE_STATUS -> "Геопозиция: фиксация"
         AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> "Топливо % (фильтр)"
         AutomationSignalId.FUEL_LEVEL_LITERS -> "Топливо, л (калибровка)"
@@ -278,5 +298,8 @@ object AutomationParameterLabels {
         AutomationSignalId.MEDIA_PLAYING -> "Медиа: воспроизведение"
         AutomationSignalId.MEDIA_POSITION_MS -> "Медиа: позиция"
         AutomationSignalId.MEDIA_DURATION_MS -> "Медиа: длительность"
+        AutomationSignalId.ROAD_HIGHWAY_CLASS -> "Дорога: класс (OSM)"
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> "Дорога: лимит по карте (OSM), км/ч"
+        AutomationSignalId.ROAD_TUNNEL -> "Дорога: тоннель"
     }
 }

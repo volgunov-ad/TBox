@@ -1,12 +1,20 @@
 package vad.dashing.tbox
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.cacerts.HuCaCertsClient
+import vad.dashing.tbox.dexopt.AppDexoptCompiler
+import vad.dashing.tbox.huaudio.HuUsbAudioPolicyClient
+import vad.dashing.tbox.hufirewall.HuAppNetworkClient
 import vad.dashing.tbox.mbcan.UniversalCanRepository
+import vad.dashing.tbox.ui.AppIconCache
 import vad.dashing.tbox.ui.LaunchableAppsCatalog
 
 class TboxApplication : Application() {
@@ -27,8 +35,64 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            settingsManager.cruiseControlTypeFlow.collectLatest { type ->
+                VehicleFeatureSettings.updateCruise(type)
+            }
+        }
+        applicationScope.launch {
+            settingsManager.climateControlTypeFlow.collectLatest { type ->
+                VehicleFeatureSettings.updateClimate(type)
+            }
+        }
+        applicationScope.launch {
             settingsManager.launchMainInStockAppWindowFlow.collectLatest { enabled ->
                 LaunchMainInStockAppWindowSetting.update(enabled)
+            }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huCaCertsAutoInstallFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, mode -> enabled && mode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { shouldInstall ->
+                    if (shouldInstall) HuCaCertsClient.ensureInstalled(this@TboxApplication)
+                }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huAppNetworkAutoOpenFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, mode -> enabled && mode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { shouldOpen ->
+                    if (shouldOpen) HuAppNetworkClient.keepOpen(this@TboxApplication)
+                }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huDspAutoApplyFlow,
+                settingsManager.headUnitCanModeFlow,
+                settingsManager.huDspModeFlow,
+            ) { enabled, headUnitMode, mode -> HuDspMode.startupMode(enabled, headUnitMode, mode) }
+                .distinctUntilChanged()
+                .collectLatest { mode ->
+                    if (mode != null) HuDspClient.applyAtStartup(this@TboxApplication, mode)
+                }
+        }
+        applicationScope.launch {
+            combine(
+                settingsManager.huUsbAudioAutoApplyFlow,
+                settingsManager.headUnitCanModeFlow,
+            ) { enabled, headUnitMode -> enabled && headUnitMode == HeadUnitCanMode.Android10Vhal }
+                .distinctUntilChanged()
+                .collectLatest { enabled ->
+                    if (enabled) HuUsbAudioPolicyClient.applyAtStartup(this@TboxApplication)
+                }
+        }
+        applicationScope.launch {
+            settingsManager.appDexoptAutoFlow.collectLatest { enabled ->
+                if (enabled) AppDexoptCompiler.autoCompileAtStartup(this@TboxApplication)
             }
         }
         applicationScope.launch {
@@ -46,6 +110,18 @@ class TboxApplication : Application() {
             } catch (_: Exception) {
                 // [BackgroundService.onCreate] reloads trips; motor hours stay at default until service.
             }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // UI_HIDDEN is skipped: floating panels keep showing tiles after the activity hides.
+        val pressure = level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE
+        if (pressure) {
+            AppIconCache.clear()
         }
     }
 }

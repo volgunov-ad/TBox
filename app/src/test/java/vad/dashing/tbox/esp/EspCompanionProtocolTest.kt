@@ -1,5 +1,6 @@
 package vad.dashing.tbox.esp
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -465,6 +466,49 @@ class EspCompanionProtocolTest {
     }
 
     @Test
+    fun bleKeyMessages() {
+        val hello = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.11.0","ble":true,"bleOn":true,"bleMacs":[],"bleKey":true}""",
+        ) as EspMessage.Hello
+        assertTrue(hello.bleKey)
+        val oldHello = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"hello","fw":"0.10.5","ble":true}""",
+        ) as EspMessage.Hello
+        assertFalse(oldHello.bleKey)
+
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,""" +
+                """"macs":["11:22:33:44:55:66","aa:bb:cc:dd:ee:ff"],"keyed":["AA:BB:CC:DD:EE:FF"]}""",
+        ) as EspMessage.BleStatus
+        assertEquals(listOf("aa:bb:cc:dd:ee:ff"), status.keyed)
+
+        val key = "231d39c1d7cc1ab1aee224cd096db932"
+        val learn = JSONObject(EspCompanionProtocol.encodeBleLearnBegin(20_000L, key))
+        assertEquals("bleLearnBegin", learn.getString("t"))
+        assertEquals(key, learn.getString("key"))
+        assertFalse(JSONObject(EspCompanionProtocol.encodeBleLearnBegin(20_000L)).has("key"))
+
+        val set = JSONObject(EspCompanionProtocol.encodeBleKey("AA:BB:CC:DD:EE:FF", key))
+        assertEquals("bleKey", set.getString("t"))
+        assertEquals("aa:bb:cc:dd:ee:ff", set.getString("mac"))
+        assertEquals(key, set.getString("key"))
+        assertEquals("", JSONObject(EspCompanionProtocol.encodeBleKey("aa:bb:cc:dd:ee:ff", "")).getString("key"))
+    }
+
+    @Test
+    fun normalizeBleKey() {
+        val key = "231d39c1d7cc1ab1aee224cd096db932"
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey(key))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey(" 231D39C1D7CC1AB1AEE224CD096DB932 "))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey("23:1d:39:c1:d7:cc:1a:b1:ae:e2:24:cd:09:6d:b9:32"))
+        assertEquals(key, EspCompanionProtocol.normalizeBleKey("231d 39c1 d7cc 1ab1 aee2 24cd 096d b932"))
+        assertEquals("", EspCompanionProtocol.normalizeBleKey("   "))
+        assertNull(EspCompanionProtocol.normalizeBleKey("231d39c1d7cc1ab1aee224cd096db9"))
+        assertNull(EspCompanionProtocol.normalizeBleKey("231d39c1d7cc1ab1aee224cd096db93g"))
+        assertNull(EspCompanionProtocol.normalizeBleKey("2 31d39c1d7cc1ab1aee224cd096db932"))
+    }
+
+    @Test
     fun parseApStatusAndEncodeApCfg() {
         val status = EspCompanionProtocol.parseLine(
             """{"v":1,"t":"apStatus","on":true,"sta":true,"ssid":"TBox","psk":"tbox8765",""" +
@@ -483,5 +527,58 @@ class EspCompanionProtocolTest {
         assertTrue(cfg.contains("\"port\":9000"))
         assertTrue(cfg.contains("\"apSsid\":\"TBox-ab12\""))
         assertTrue(cfg.contains("\"apPsk\":\"cabin8765\""))
+    }
+
+    @Test
+    fun parsePhoneCompanionUsb() {
+        val pair = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"phonePair","id":"0a1b2c3d","name":"Телефон"}""",
+        ) as EspMessage.PhonePair
+        assertEquals("0a1b2c3d", pair.id)
+        assertEquals("Телефон", pair.name)
+        val cmd = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"phoneCmd","id":"0a1b2c3d","op":1,"seat":0,"arg":230}""",
+        ) as EspMessage.PhoneCmd
+        assertEquals(1, cmd.op)
+        assertEquals(230, cmd.arg)
+        assertTrue(EspCompanionProtocol.parseLine("""{"v":1,"t":"phoneSnapReq"}""") is EspMessage.PhoneSnapReq)
+        val status = EspCompanionProtocol.parseLine(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":true,"macs":[],""" +
+                """"phones":[{"id":"0a1b2c3d","name":"Телефон"}]}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.phoneLearn)
+        assertEquals("Телефон", status.phones.single().name)
+        val allow = EspCompanionProtocol.encodePhoneAllow("0A1B2C3D")
+        assertTrue(allow.contains("\"id\":\"0a1b2c3d\""))
+        assertFalse(allow.contains("key"))
+    }
+
+    private fun parseReceived(line: String): EspMessage? =
+        EspCompanionProtocol.parseLine(EspCompanionProtocol.extractMessageJson(line))
+
+    @Test
+    fun receivedBleStatusKeepsNestedPhones() {
+        val status = parseReceived(
+            """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":true,"macs":[],""" +
+                """"phones":[{"id":"0a1b2c3d","name":"Pixel"},{"id":"11223344","name":"A"}],"lastBat":-1,"lastRssi":0}""",
+        ) as EspMessage.BleStatus
+        assertTrue(status.phoneLearn)
+        assertEquals(listOf("0a1b2c3d", "11223344"), status.phones.map { it.id })
+    }
+
+    @Test
+    fun receivedLineCutByOldFirmwareYieldsTheGluedMessage() {
+        val msg = parseReceived(
+            """{"v":1,"t":"hello","fw":"0.10.2","gpioIn":8,"rel""" +
+                """{"v":1,"t":"bleStatus","on":true,"learn":false,"phoneLearn":false,"macs":[],"phones":[]}""",
+        )
+        assertTrue(msg is EspMessage.BleStatus)
+    }
+
+    @Test
+    fun receivedOtaAckIsCutOutOfBinaryJunk() {
+        val msg = parseReceived("\u0000\u00a5Z{\"v\":1,\"t\":\"otaAck\",\"phase\":\"begin\",\"ok\":true}\u0001\u0002")
+        assertNotNull(msg)
+        assertTrue(msg is EspMessage.OtaAck)
     }
 }

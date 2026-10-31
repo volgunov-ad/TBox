@@ -12,13 +12,10 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Sources are public, so renaming hides nothing and only makes user crash logs unreadable.
+# R8 still shrinks and inlines; inlined frames are resolved with the archived mapping.txt.
+-dontobfuscate
+-keepattributes SourceFile,LineNumberTable
 
 # mbCAN JNI glue resolves Java symbols by exact names/signatures.
 # Keep the full vendor package unobfuscated in release builds.
@@ -46,5 +43,11 @@
     public static <fields>;
 }
 -keep class vad.dashing.tbox.mbcan.MbCanKnownAudioPropertyId {
+    public static <fields>;
+}
+-keep class vad.dashing.tbox.mbcan.MbCanOemVehiclePropertyId {
+    public static <fields>;
+}
+-keep class vad.dashing.tbox.mbcan.MbCanOemAudioPropertyId {
     public static <fields>;
 }

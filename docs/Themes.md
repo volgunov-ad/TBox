@@ -37,6 +37,8 @@
 
 Выбор бэкенда ключей: режим ГУ `HeadUnitCanMode.Android10Vhal` (и/или `SDK_INT >= Q` как запасной признак). Код: `HeadUnitDayNightMapping`, `HeadUnitDayNightRepository`, `ThemeObserver`.
 
+На A10 (часто API 28) `ThemeObserver` может стартовать раньше, чем `UniversalCanRepository.mode` станет `Android10Vhal`, и первый deliver читает A9 `DAY_NIGHT_STATUS` (дефолт light). После смены CAN mode и перед первым показом плавающих панелей вызывается `ThemeObserver.resyncFromHeadUnit()` (сброс `lastDeliveredTheme` + повторное чтение `adayo_skin`), чтобы прозрачные floating-плитки не оставались с «чёрным» текстом light-темы на тёмной шкуре ГУ.
+
 > **Пометка:** «Android 10» в названии режима — линейка Adayo/VHAL. Штатный UI может показывать `Build.VERSION.RELEASE = 10`, тогда как API платформы у прошивки часто остаётся **28** (см. [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md) §«Пометка про Android 10»).
 
 | Роль | Android 9 (mbCAN) | Android 10 (Adayo / VHAL) |
@@ -552,6 +554,7 @@ files/themes/{cacheKey}/
 
 ## См. также
 
+- [SYSTEM_COLORS_PLAN_RU.md](SYSTEM_COLORS_PLAN_RU.md) — план палитры интерфейса и слота темы (не реализовано);
 - [USER_GUIDE_RU.md](USER_GUIDE_RU.md) — пошаговая работа с интерфейсом;
 - [TBOX_PROXY_RU.md](TBOX_PROXY_RU.md) — обмен с TBox;
 - [PANELS_AND_WIDGETS_RU.md](PANELS_AND_WIDGETS_RU.md) — плитки в темах;

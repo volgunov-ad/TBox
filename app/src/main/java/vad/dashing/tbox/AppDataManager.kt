@@ -18,7 +18,10 @@ import kotlinx.coroutines.withContext
 
 private const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
 
-internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(name = APP_DATA_NAME)
+internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = APP_DATA_NAME,
+    corruptionHandler = resetOnCorruption(APP_DATA_NAME),
+)
 
 /** Single read of all startup-critical keys from [appDataStore]. */
 data class AppDataStartupSnapshot(

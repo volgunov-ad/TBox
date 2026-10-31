@@ -31,4 +31,15 @@ class FloatingPanelsAllowBeyondScreenSettingsTest {
         manager.saveFloatingPanelsAllowBeyondScreen(false)
         assertFalse(manager.floatingPanelsAllowBeyondScreenFlow.first())
     }
+
+    @Test
+    fun aboveSystemBars_defaultsToFalseAndPersists() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Application>()
+        val manager = SettingsManager(context)
+        assertFalse(manager.floatingPanelsAboveSystemBarsFlow.first())
+        manager.saveFloatingPanelsAboveSystemBars(true)
+        assertTrue(manager.floatingPanelsAboveSystemBarsFlow.first())
+        manager.saveFloatingPanelsAboveSystemBars(false)
+        assertFalse(manager.floatingPanelsAboveSystemBarsFlow.first())
+    }
 }

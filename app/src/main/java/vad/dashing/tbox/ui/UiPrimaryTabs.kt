@@ -6,6 +6,8 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
+import vad.dashing.tbox.showSafely
+import vad.dashing.tbox.startActivitySafely
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
@@ -33,10 +35,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -47,13 +51,24 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AppDataViewModel
+import vad.dashing.tbox.OverlayAccessibilityEnabler
+import vad.dashing.tbox.OverlayAccessibilityService
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataRepository
+import vad.dashing.tbox.ClimateControlType
+import vad.dashing.tbox.GlobalCruiseControlType
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsManager
+import vad.dashing.tbox.ui.LEFT_MENU_WIDTH_STEP_DP
+import vad.dashing.tbox.ui.MAX_LEFT_MENU_WIDTH_DP
+import vad.dashing.tbox.ui.MIN_LEFT_MENU_WIDTH_DP
 import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
 import vad.dashing.tbox.MIN_PANEL_LAYOUT_SNAP_DP
@@ -71,6 +86,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.adb.HuAdbControl
+import vad.dashing.tbox.adb.HuRebootAdb
+import vad.dashing.tbox.adb.HuRebootResult
 import vad.dashing.tbox.update.UpdateChannel
 import vad.dashing.tbox.update.UpdateViewModel
 import vad.dashing.tbox.mbcan.MbCanAvailability
@@ -96,7 +113,14 @@ import vad.dashing.tbox.usbgnss.UsbGnssDeviceScanner
 import vad.dashing.tbox.usbgnss.UsbGnssRepository
 import vad.dashing.tbox.drsensor.DrSensorRepository
 import vad.dashing.tbox.location.GeoDisplayRepository
+import vad.dashing.tbox.location.GnssFreshness
+import vad.dashing.tbox.location.HeadingFallbackStatusRepository
+import vad.dashing.tbox.location.HeadingMotionDebug
+import vad.dashing.tbox.location.HeadingMotionDebugChannel
 import vad.dashing.tbox.location.LocationIncomingBitRate
+import vad.dashing.tbox.location.PhoneTelemetryRepository
+import vad.dashing.tbox.location.WheelHeadingIntegrator
+import vad.dashing.tbox.location.headingMotionDebug
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
@@ -159,7 +183,12 @@ fun ModemTabContent(
     }
 
     val sections = ModemSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.MODEM.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     Column(
@@ -781,8 +810,16 @@ fun SettingsTabContent(
     val huAdbState by HuAdbControl.state.collectAsStateWithLifecycle()
     val huAdbError by HuAdbControl.lastError.collectAsStateWithLifecycle()
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val cruiseControlType by settingsViewModel.cruiseControlType.collectAsStateWithLifecycle()
+    val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
+    val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
+    val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
+    val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
+    val huDspAutoApply by settingsViewModel.huDspAutoApply.collectAsStateWithLifecycle()
+    val huUsbAudioAutoApply by settingsViewModel.huUsbAudioAutoApply.collectAsStateWithLifecycle()
+    val appDexoptAuto by settingsViewModel.appDexoptAuto.collectAsStateWithLifecycle()
     val isMbCanDiagnosticsEnabled by MbCanDiagnostics.enabled.collectAsStateWithLifecycle()
     val isMbCanDeepDiagnosticsEnabled by MbCanDiagnostics.deepEnabled.collectAsStateWithLifecycle()
 
@@ -811,6 +848,7 @@ fun SettingsTabContent(
     val uiClickSoundsEnabled by settingsViewModel.uiClickSoundsEnabled.collectAsStateWithLifecycle()
     val followSystemDayNight by settingsViewModel.followSystemDayNight.collectAsStateWithLifecycle()
     val appFontFamilyId by settingsViewModel.appFontFamilyId.collectAsStateWithLifecycle()
+    val leftMenuWidthDp by settingsViewModel.leftMenuWidthDp.collectAsStateWithLifecycle()
     val appTextSizeScales by settingsViewModel.appTextSizeScales.collectAsStateWithLifecycle()
     val updateChannel by settingsViewModel.updateChannel.collectAsStateWithLifecycle()
     val updateCheckEnabled by settingsViewModel.updateCheckEnabled.collectAsStateWithLifecycle()
@@ -846,6 +884,10 @@ fun SettingsTabContent(
     var backgroundServiceRestartButtonEnabled by remember { mutableStateOf(true) }
 
     var huRebootButtonEnabled by remember { mutableStateOf(true) }
+    val coroutineScope = rememberCoroutineScope()
+    val huRebootErrorTitle = stringResource(R.string.hu_reboot_error_title)
+    val huRebootErrorNoSu = stringResource(R.string.hu_reboot_error_nosu)
+    val huRebootErrorFailed = stringResource(R.string.hu_reboot_error_failed)
     val mbCanAvailability by UniversalCanRepository.availability.collectAsStateWithLifecycle()
     val mbCanAvailable = mbCanAvailability is MbCanAvailability.Available
 
@@ -857,6 +899,7 @@ fun SettingsTabContent(
     var showNoTboxConnectCanDialog by remember { mutableStateOf(false) }
     var showKeyPressDiagnosticsDialog by remember { mutableStateOf(false) }
     var showExpertRawGetSetDialog by remember { mutableStateOf(false) }
+    var showHuSpecialOptionsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(restartButtonEnabled) {
         if (!restartButtonEnabled) {
@@ -880,7 +923,12 @@ fun SettingsTabContent(
     }
 
     val sections = SettingsSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.SETTINGS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     Column(
@@ -954,6 +1002,101 @@ fun SettingsTabContent(
                 true,
             )
         }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_cruise_type_title))
+        Text(
+            text = stringResource(R.string.settings_cruise_type_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_cruise_type_ccs),
+                isSelected = cruiseControlType == GlobalCruiseControlType.CCS,
+                onClick = { settingsViewModel.saveCruiseControlType(GlobalCruiseControlType.CCS) },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_cruise_type_acc),
+                isSelected = cruiseControlType == GlobalCruiseControlType.ACC,
+                onClick = { settingsViewModel.saveCruiseControlType(GlobalCruiseControlType.ACC) },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        SettingsTitle(stringResource(R.string.settings_climate_type_title))
+        Text(
+            text = stringResource(R.string.settings_climate_type_desc),
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_ordinary),
+                isSelected = climateControlType == ClimateControlType.ORDINARY_AC,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.ORDINARY_AC)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_single),
+                isSelected = climateControlType == ClimateControlType.SINGLE_ZONE,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.SINGLE_ZONE)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+            ModeButton(
+                text = stringResource(R.string.settings_climate_type_dual),
+                isSelected = climateControlType == ClimateControlType.DUAL_ZONE,
+                onClick = {
+                    settingsViewModel.saveClimateControlType(ClimateControlType.DUAL_ZONE)
+                },
+                enabled = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
+        SettingSwitch(
+            noTboxConnect,
+            { enabled ->
+                if (enabled) {
+                    showNoTboxConnectCanDialog = true
+                } else {
+                    settingsViewModel.saveNoTboxConnectSetting(false)
+                }
+            },
+            stringResource(R.string.settings_no_tbox_connect_title),
+            stringResource(R.string.settings_no_tbox_connect_desc),
+            true
+        )
+        SettingSwitch(
+            isGetCanFrameEnabled,
+            { enabled ->
+                settingsViewModel.saveGetCanFrameSetting(enabled)
+            },
+            stringResource(R.string.settings_get_can_data_title),
+            "",
+            !noTboxConnect
+        )
+        if (!noTboxConnect) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_prevent_reboot_title))
         SettingSwitch(
@@ -1045,31 +1188,7 @@ fun SettingsTabContent(
             stringResource(R.string.settings_auto_prevent_restart_swd_desc),
             !noTboxConnect
         )
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsTitle(stringResource(R.string.settings_data_from_tbox_title))
-        SettingSwitch(
-            noTboxConnect,
-            { enabled ->
-                if (enabled) {
-                    showNoTboxConnectCanDialog = true
-                } else {
-                    settingsViewModel.saveNoTboxConnectSetting(false)
-                }
-            },
-            stringResource(R.string.settings_no_tbox_connect_title),
-            stringResource(R.string.settings_no_tbox_connect_desc),
-            true
-        )
-        SettingSwitch(
-            isGetCanFrameEnabled,
-            { enabled ->
-                settingsViewModel.saveGetCanFrameSetting(enabled)
-            },
-            stringResource(R.string.settings_get_can_data_title),
-            "",
-            !noTboxConnect
-        )
+        }
                 }
 
                 SettingsSection.INTERFACE -> {
@@ -1153,6 +1272,15 @@ fun SettingsTabContent(
                 style = MaterialTheme.typography.tboxButton,
             )
         }
+        SettingSliderInt(
+            value = leftMenuWidthDp,
+            onValueChange = { settingsViewModel.saveLeftMenuWidthDp(it) },
+            text = stringResource(R.string.settings_left_menu_width_title, leftMenuWidthDp),
+            description = stringResource(R.string.settings_left_menu_width_desc),
+            minValue = MIN_LEFT_MENU_WIDTH_DP,
+            maxValue = MAX_LEFT_MENU_WIDTH_DP,
+            step = LEFT_MENU_WIDTH_STEP_DP,
+        )
         SettingAppFontFamily(
             selectedFontFamilyId = appFontFamilyId,
             onFontFamilyIdChange = { settingsViewModel.saveAppFontFamilyId(it) },
@@ -1244,6 +1372,11 @@ fun SettingsTabContent(
             modifier = Modifier.padding(bottom = 8.dp),
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        AppDexoptSettingsCard(
+            autoCompile = appDexoptAuto,
+            onAutoCompileChange = settingsViewModel::saveAppDexoptAuto,
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_expert_section_title))
         Button(
             onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
@@ -1251,15 +1384,6 @@ fun SettingsTabContent(
         ) {
             Text(
                 stringResource(R.string.key_press_diagnostics_open),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
-        Button(
-            onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
-            modifier = Modifier.padding(bottom = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.expert_raw_get_set_open),
                 style = MaterialTheme.typography.tboxButton,
             )
         }
@@ -1306,10 +1430,30 @@ fun SettingsTabContent(
                 stringResource(R.string.settings_mbcan_deep_diagnostics_desc),
                 true
             )
+            Button(
+                onClick = rememberWrappedOnClick { showExpertRawGetSetDialog = true },
+                modifier = Modifier.padding(vertical = 8.dp),
+            ) {
+                Text(
+                    stringResource(R.string.expert_raw_get_set_open),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+            if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+                Button(
+                    onClick = rememberWrappedOnClick { showHuSpecialOptionsDialog = true },
+                    modifier = Modifier.padding(vertical = 8.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.hu_special_options_open),
+                        style = MaterialTheme.typography.tboxButton,
+                    )
+                }
+            }
             SettingSwitch(
                 huAdbState.usbEnabled,
                 { enabled ->
-                    settingsViewModel.setHuAdbUsbEnabled(enabled)
+                    settingsViewModel.setHuAdbUsbEnabled(context, enabled)
                 },
                 stringResource(R.string.settings_adb_usb_title),
                 stringResource(R.string.settings_adb_usb_desc),
@@ -1476,16 +1620,30 @@ fun SettingsTabContent(
                 onClick = rememberWrappedOnClick {
                     if (huRebootButtonEnabled) {
                         huRebootButtonEnabled = false
-                        sendSetMbCanProperty(
-                            context,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
-                            MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
-                        )
+                        when (headUnitCanMode) {
+                            HeadUnitCanMode.Android9MbCan -> sendSetMbCanProperty(
+                                context,
+                                MbCanKnownVehiclePropertyId.SYSTEM_REBOOT,
+                                MbCanKnownVehiclePropertyId.SYSTEM_REBOOT_VALUE,
+                            )
+                            HeadUnitCanMode.Android10Vhal -> coroutineScope.launch {
+                                val message = when (val result = HuRebootAdb.reboot(context)) {
+                                    HuRebootResult.Sent -> null
+                                    HuRebootResult.NoSu -> huRebootErrorNoSu
+                                    is HuRebootResult.Failed -> huRebootErrorFailed.format(result.detail)
+                                }
+                                if (message != null) {
+                                    huRebootButtonEnabled = true
+                                    showAlertDialog(huRebootErrorTitle, message, context)
+                                }
+                            }
+                        }
                     }
                 },
-                enabled = huRebootButtonEnabled &&
-                    mbCanAvailable &&
-                    headUnitCanMode == HeadUnitCanMode.Android9MbCan,
+                enabled = huRebootButtonEnabled && when (headUnitCanMode) {
+                    HeadUnitCanMode.Android9MbCan -> mbCanAvailable
+                    HeadUnitCanMode.Android10Vhal -> true
+                },
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
@@ -1500,6 +1658,8 @@ fun SettingsTabContent(
 
                 SettingsSection.API -> {
                     ExternalApiSettingsSection(settingsViewModel = settingsViewModel)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    PhoneDirectSettingsSection(settingsViewModel = settingsViewModel)
                 }
 
                 SettingsSection.HOTSPOT -> {
@@ -1636,11 +1796,31 @@ fun SettingsTabContent(
             onDismiss = { showKeyPressDiagnosticsDialog = false },
         )
         ExpertRawGetSetDialog(
-            visible = showExpertRawGetSetDialog,
+            visible = showExpertRawGetSetDialog && isExpertModeEnabled,
             mode = headUnitCanMode,
             onDismiss = { showExpertRawGetSetDialog = false },
         )
-}
+        HuSpecialOptionsDialog(
+            visible = showHuSpecialOptionsDialog &&
+                isExpertModeEnabled &&
+                headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+            onDismiss = { showHuSpecialOptionsDialog = false },
+            huCaCertsAutoInstall = huCaCertsAutoInstall,
+            onHuCaCertsAutoInstallChange = { enabled ->
+                settingsViewModel.saveHuCaCertsAutoInstall(enabled)
+            },
+            huAppNetworkAutoOpen = huAppNetworkAutoOpen,
+            onHuAppNetworkAutoOpenChange = { enabled ->
+                settingsViewModel.saveHuAppNetworkAutoOpen(enabled)
+            },
+            huDspMode = huDspMode,
+            onHuDspModeChange = settingsViewModel::saveHuDspMode,
+            huDspAutoApply = huDspAutoApply,
+            onHuDspAutoApplyChange = settingsViewModel::saveHuDspAutoApply,
+            huUsbAudioAutoApply = huUsbAudioAutoApply,
+            onHuUsbAudioAutoApplyChange = settingsViewModel::saveHuUsbAudioAutoApply,
+        )
+    }
 
 @Composable
 fun FloatingPanelsSettingsTabContent(
@@ -1660,6 +1840,13 @@ fun FloatingPanelsSettingsTabContent(
         settingsViewModel.floatingPanelsLayoutSnapDp.collectAsStateWithLifecycle()
     val floatingPanelsAllowBeyondScreen by
         settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
+    val floatingPanelsAboveSystemBars by
+        settingsViewModel.floatingPanelsAboveSystemBars.collectAsStateWithLifecycle()
+    val overlayAccessibilityWindowManager by
+        OverlayAccessibilityService.windowManager.collectAsStateWithLifecycle()
+    val overlayAccessibilityConnected = overlayAccessibilityWindowManager != null
+    var floatingPanelsAboveSystemBarsBusy by remember { mutableStateOf(false) }
+    val floatingPanelsScope = rememberCoroutineScope()
     val floatingPanelsShowOnServiceStartDelaySeconds by
         settingsViewModel.floatingPanelsShowOnServiceStartDelaySeconds.collectAsStateWithLifecycle()
     val activeFloatingDashboardId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
@@ -1674,7 +1861,12 @@ fun FloatingPanelsSettingsTabContent(
     var showFloatingPanelOrderDialog by remember { mutableStateOf(false) }
 
     val sections = FloatingPanelsSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.FLOATING_PANELS_SETTINGS.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
 
     Column(
@@ -1910,6 +2102,47 @@ fun FloatingPanelsSettingsTabContent(
             stringResource(R.string.settings_floating_allow_beyond_screen_desc),
             true,
         )
+        val aboveSystemBarsFailedText =
+            stringResource(R.string.settings_floating_above_system_bars_failed)
+        SettingSwitch(
+            floatingPanelsAboveSystemBars,
+            { enabled ->
+                floatingPanelsAboveSystemBarsBusy = true
+                floatingPanelsScope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        OverlayAccessibilityEnabler.apply(context, enabled)
+                    }
+                    if (ok || !enabled) {
+                        settingsViewModel.saveFloatingPanelsAboveSystemBars(enabled)
+                    }
+                    if (!ok) {
+                        Toast.makeText(context, aboveSystemBarsFailedText, Toast.LENGTH_LONG).show()
+                    }
+                    floatingPanelsAboveSystemBarsBusy = false
+                }
+            },
+            stringResource(R.string.settings_floating_above_system_bars_title),
+            stringResource(R.string.settings_floating_above_system_bars_desc),
+            !floatingPanelsAboveSystemBarsBusy,
+        )
+        if (floatingPanelsAboveSystemBars) {
+            Text(
+                text = stringResource(
+                    if (overlayAccessibilityConnected) {
+                        R.string.settings_floating_above_system_bars_connected
+                    } else {
+                        R.string.settings_floating_above_system_bars_not_connected
+                    },
+                ),
+                style = MaterialTheme.typography.tboxBody,
+                color = if (overlayAccessibilityConnected) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp),
+            )
+        }
         var floatingShowDelayDraft by remember {
             mutableStateOf(floatingPanelsShowOnServiceStartDelaySeconds.toString())
         }
@@ -2015,7 +2248,7 @@ private fun showAlertDialog(title: String, message: String, context: Context) {
         .setTitle(title)
         .setMessage(message)
         .setNeutralButton(context.getString(R.string.action_close), null)
-        .show()
+        .showSafely()
 }
 
 private fun showLocationRequirementsDialog(context: Context) {
@@ -2038,11 +2271,10 @@ private fun showLocationRequirementsDialog(context: Context) {
         .setTitle(context.getString(R.string.dialog_mock_location_requirements_title))
         .setMessage(requirements)
         .setPositiveButton(context.getString(R.string.action_configure)) { _, _ ->
-            val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-            context.startActivity(intent)
+            context.startActivitySafely(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
         }
         .setNegativeButton(context.getString(R.string.action_cancel), null)
-        .show()
+        .showSafely()
 }
 
 private fun showOverlayRequirementsDialog(context: Context) {
@@ -2054,10 +2286,10 @@ private fun showOverlayRequirementsDialog(context: Context) {
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 "package:${context.packageName}".toUri()
             )
-            context.startActivity(intent)
+            context.startActivitySafely(intent)
         }
         .setNegativeButton(context.getString(R.string.action_cancel), null)
-        .show()
+        .showSafely()
 }
 
 private fun formatDrFloat(value: Float?): String =
@@ -2076,6 +2308,79 @@ private fun formatDrAccel(x: Float?, y: Float?, z: Float?): String {
         formatDrFloat(y),
         formatDrFloat(z),
     )
+}
+
+@Composable
+private fun headingMotionStatusText(
+    debug: HeadingMotionDebug,
+    drStatus: String,
+    phone: PhoneTelemetryRepository.PhoneTelemetryUiState,
+    steerDeg: Float?,
+    wheelsFresh: Boolean,
+    wheelsDeltaDeg: Float,
+): String {
+    val lines = mutableListOf<String>()
+    if (debug.fallbackReason != null || debug.effective != debug.selected) {
+        lines += stringResource(
+            R.string.settings_mock_heading_fallback_active,
+            stringResource(debug.effective.labelResId()),
+            debug.fallbackReason ?: "—",
+        )
+    }
+    if (HeadingMotionDebugChannel.PHONE in debug.channels) {
+        val nowEl = SystemClock.elapsedRealtime()
+        fun fmtAge(at: Long): String =
+            if (at <= 0L) "—" else "${((nowEl - at).coerceAtLeast(0L) / 1000L)}s"
+        val activeLabel = phone.activePhoneName ?: phone.activePhoneIdHex ?: "—"
+        lines += stringResource(
+            R.string.location_phone_telemetry_status_line,
+            activeLabel,
+            fmtAge(phone.lastLocAtElapsedMs),
+            fmtAge(phone.lastYawAtElapsedMs),
+            fmtAge(phone.lastMagAtElapsedMs),
+        )
+        if (debug.selected.usesPhoneCompass || debug.effective.usesPhoneCompass) {
+            val mountLabel = phone.mountYawOffsetDeg?.let {
+                String.format(Locale.US, "%.1f°", it) +
+                    if (phone.mountOffsetConfirmed) " (OK)" else " (~)"
+            } ?: "—"
+            lines += stringResource(
+                R.string.location_phone_telemetry_compass_line,
+                phone.lastMagAccuracy?.toString() ?: "—",
+                phone.lastFieldStrengthUt?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                mountLabel,
+            )
+        }
+        val reject = listOfNotNull(phone.lastYawRejectReason, phone.lastMagRejectReason)
+            .distinct()
+            .joinToString(", ")
+        if (reject.isNotEmpty()) lines += reject
+    }
+    if (HeadingMotionDebugChannel.STEER in debug.channels) {
+        lines += if (steerDeg != null && steerDeg.isFinite()) {
+            stringResource(
+                R.string.location_heading_debug_steer,
+                String.format(Locale.getDefault(), "%.1f", steerDeg),
+            )
+        } else {
+            stringResource(R.string.location_heading_debug_steer_missing)
+        }
+    }
+    if (HeadingMotionDebugChannel.WHEELS in debug.channels) {
+        lines += if (wheelsFresh) {
+            stringResource(
+                R.string.location_heading_debug_wheels_fresh,
+                String.format(Locale.getDefault(), "%.2f", wheelsDeltaDeg),
+            )
+        } else {
+            stringResource(R.string.location_heading_debug_wheels_stale)
+        }
+    }
+    if (HeadingMotionDebugChannel.HU_IMU in debug.channels) {
+        val hal = drStatus.trim()
+        if (hal.isNotEmpty()) lines += hal
+    }
+    return lines.joinToString("\n").ifBlank { "—" }
 }
 
 
@@ -2153,6 +2458,7 @@ fun LocationTabContent(
     val idleYawBiasCalibEnabled by settingsViewModel.idleYawBiasCalibEnabled.collectAsStateWithLifecycle()
     val mockConsiderReverse by settingsViewModel.mockConsiderReverse.collectAsStateWithLifecycle()
     val drSensor by DrSensorRepository.snapshot.collectAsStateWithLifecycle()
+    val headingFallback by HeadingFallbackStatusRepository.status.collectAsStateWithLifecycle()
     val reverseGearSwitch by UniversalCanRepository.reverseGearSwitchState.collectAsStateWithLifecycle()
     val huGearBoxMode by UniversalCanRepository.gearBoxModeState.collectAsStateWithLifecycle()
     val tboxGearBoxMode by CanDataRepository.gearBoxMode.collectAsStateWithLifecycle()
@@ -2267,7 +2573,12 @@ fun LocationTabContent(
     }
 
     val sections = LocationSection.entries
-    var selectedSectionIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sectionKeys = remember(sections) { sections.map { it.name } }
+    var selectedSectionIndex by rememberPersistedHorizontalSectionIndex(
+        tabKey = LeftMenuTabField.GEOPOSITION.id,
+        sectionKeys = sectionKeys,
+        settingsViewModel = settingsViewModel,
+    )
     val selectedSection = sections[selectedSectionIndex.coerceIn(0, sections.lastIndex)]
     Column(
         modifier = Modifier
@@ -2327,6 +2638,12 @@ fun LocationTabContent(
                             stringResource(R.string.settings_location_source_usb),
                         ),
                     )
+                    add(
+                        LocationSourceOption(
+                            LocationSource.PHONE,
+                            stringResource(R.string.settings_location_source_phone),
+                        ),
+                    )
                 }
                 val selectedLocationSourceOption = locationSourceOptions.firstOrNull { it.source == locationSource }
                     ?: locationSourceOptions.first()
@@ -2378,6 +2695,14 @@ fun LocationTabContent(
                     options = locationSourceOptions,
                     selectorWidth = 300.dp,
                 )
+                if (locationSource == LocationSource.PHONE) {
+                    Text(
+                        text = stringResource(R.string.location_phone_direct_only_hint),
+                        style = MaterialTheme.typography.tboxBody,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                    )
+                }
             }
             // Device list is always visible so the user can pick a receiver before
             // switching the location source to USB (otherwise the gate blocks USB
@@ -2946,10 +3271,17 @@ fun LocationTabContent(
                 ) {
                     override fun toString(): String = label
                 }
+                val huCanMode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
+                val huGyroOk = DrSensorRepository.isHuGyroAvailable(huCanMode, drSensor)
+                val unavailHalSuffix = if (!huGyroOk) {
+                    " (${stringResource(R.string.settings_mock_heading_source_unavailable_hal)})"
+                } else {
+                    ""
+                }
                 val headingOptions = listOf(
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.GYRO,
-                        stringResource(R.string.settings_mock_heading_source_gyro),
+                        stringResource(R.string.settings_mock_heading_source_gyro) + unavailHalSuffix,
                     ),
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.STEER,
@@ -2957,12 +3289,35 @@ fun LocationTabContent(
                     ),
                     HeadingSourceOption(
                         vad.dashing.tbox.location.MockHeadingSource.GYRO_STEER,
-                        stringResource(R.string.settings_mock_heading_source_gyro_steer),
+                        stringResource(R.string.settings_mock_heading_source_gyro_steer) + unavailHalSuffix,
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.WHEELS,
+                        stringResource(R.string.settings_mock_heading_source_wheels),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.WHEELS_STEER,
+                        stringResource(R.string.settings_mock_heading_source_wheels_steer),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_GYRO,
+                        stringResource(R.string.settings_mock_heading_source_phone_gyro),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_COMPASS,
+                        stringResource(R.string.settings_mock_heading_source_phone_compass),
+                    ),
+                    HeadingSourceOption(
+                        vad.dashing.tbox.location.MockHeadingSource.PHONE_GYRO_COMPASS,
+                        stringResource(R.string.settings_mock_heading_source_phone_gyro_compass),
                     ),
                 )
                 val selectedHeading = headingOptions.firstOrNull { it.source == mockHeadingSource }
                     ?: headingOptions.first()
                 val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                val fallbackStatus by vad.dashing.tbox.location.HeadingFallbackStatusRepository.status.collectAsStateWithLifecycle()
+                val phoneTelemetryUi by vad.dashing.tbox.location.PhoneTelemetryRepository.uiState.collectAsStateWithLifecycle()
+                val pairedPhones by vad.dashing.tbox.phoneble.PhoneDirectRepository.phones.collectAsStateWithLifecycle()
                 if (mockEnhanceControlsVisible) {
                     SettingDropdownGeneric(
                         selectedValue = selectedHeading,
@@ -2975,6 +3330,86 @@ fun LocationTabContent(
                         options = headingOptions,
                         selectorWidth = 300.dp,
                     )
+                    if (fallbackStatus.fallbackReason != null && headingEnabled) {
+                        Text(
+                            text = stringResource(
+                                R.string.settings_mock_heading_fallback_active,
+                                fallbackStatus.effectiveSource.name,
+                                fallbackStatus.fallbackReason.orEmpty(),
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                    }
+                    // With the phone as location source the same hint is already under the source selector.
+                    if (locationSource != LocationSource.PHONE && mockHeadingSource.usesPhone && headingEnabled) {
+                        Text(
+                            text = stringResource(R.string.location_phone_direct_only_hint),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+                        )
+                        data class PhonePickOption(val idHex: String?, val label: String) {
+                            override fun toString(): String = label
+                        }
+                        val autoLabel = stringResource(R.string.location_phone_telemetry_auto_first)
+                        val phonePickOptions = buildList {
+                            add(PhonePickOption(null, autoLabel))
+                            pairedPhones.forEach { p ->
+                                add(PhonePickOption(p.id, "${p.name} (${p.id})"))
+                            }
+                        }
+                        val selectedPhonePick = phonePickOptions.firstOrNull {
+                            it.idHex == phoneTelemetryUi.preferredPhoneIdHex
+                        } ?: phonePickOptions.first()
+                        SettingDropdownGeneric(
+                            selectedValue = selectedPhonePick,
+                            onValueChange = { opt ->
+                                settingsViewModel.savePreferredPhoneTelemetryId(opt.idHex)
+                            },
+                            text = stringResource(R.string.location_phone_telemetry_active_phone),
+                            description = stringResource(R.string.location_phone_telemetry_section_title),
+                            enabled = true,
+                            options = phonePickOptions,
+                            selectorWidth = 300.dp,
+                        )
+                        val nowEl = android.os.SystemClock.elapsedRealtime()
+                        fun fmtAge(at: Long): String =
+                            if (at <= 0L) "—" else "${((nowEl - at).coerceAtLeast(0L) / 1000L)}s"
+                        val activeLabel = phoneTelemetryUi.activePhoneName
+                            ?: phoneTelemetryUi.activePhoneIdHex
+                            ?: "—"
+                        Text(
+                            text = stringResource(
+                                R.string.location_phone_telemetry_status_line,
+                                activeLabel,
+                                fmtAge(phoneTelemetryUi.lastLocAtElapsedMs),
+                                fmtAge(phoneTelemetryUi.lastYawAtElapsedMs),
+                                fmtAge(phoneTelemetryUi.lastMagAtElapsedMs),
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
+                        )
+                        val mountLabel = phoneTelemetryUi.mountYawOffsetDeg?.let {
+                            String.format(java.util.Locale.US, "%.1f°", it) +
+                                if (phoneTelemetryUi.mountOffsetConfirmed) " (OK)" else " (~)"
+                        } ?: "—"
+                        Text(
+                            text = stringResource(
+                                R.string.location_phone_telemetry_compass_line,
+                                phoneTelemetryUi.lastMagAccuracy?.toString() ?: "—",
+                                phoneTelemetryUi.lastFieldStrengthUt?.let {
+                                    String.format(java.util.Locale.US, "%.1f", it)
+                                } ?: "—",
+                                mountLabel,
+                            ),
+                            style = MaterialTheme.typography.tboxBody,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     if (mockHeadingSource == vad.dashing.tbox.location.MockHeadingSource.STEER &&
                         headingEnabled &&
                         steerLive == null
@@ -3105,6 +3540,7 @@ fun LocationTabContent(
             }
                 } // Cameras
                 LocationSection.DataDebug -> {
+            val headingDebug = headingMotionDebug(mockHeadingSource, headingFallback)
             item {
                 StatusRow(
                     stringResource(R.string.location_last_update),
@@ -3120,9 +3556,18 @@ fun LocationTabContent(
                 )
             }
             item {
+                // Live receiver fix. geoDisplay.locateStatus stays true while retention
+                // holds the last point, which made this row say «да» after GNSS went silent.
+                val gnssFix = remember(locValues.locateStatus, locationUpdateTime, incomingBitRateTick) {
+                    GnssFreshness.hasLiveFix(
+                        locValues.locateStatus,
+                        locationUpdateTime?.time,
+                        System.currentTimeMillis(),
+                    )
+                }
                 StatusRow(
                     stringResource(R.string.location_fixation),
-                    if (geoDisplay.locateStatus) yesLabel else noLabel,
+                    if (gnssFix) yesLabel else noLabel,
                     labelColumnWidthPercent = 25,
                 )
             }
@@ -3264,16 +3709,28 @@ fun LocationTabContent(
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_source),
-                    stringResource(drSensor.source.labelResId()),
+                    stringResource(headingDebug.selected.labelResId()),
                 )
             }
             item {
+                val phoneTelemetryUi by PhoneTelemetryRepository.uiState.collectAsStateWithLifecycle()
+                val steerLive by UniversalCanRepository.steerAngleState.collectAsStateWithLifecycle()
+                val wheelsDebug = remember(incomingBitRateTick) { WheelHeadingIntegrator.peekDebugSnapshot() }
+                val wheelsFresh = WheelHeadingIntegrator.isFresh(incomingBitRateTick)
                 StatusRow(
                     stringResource(R.string.location_dr_status),
-                    drSensor.statusText.ifBlank { "—" },
-                    valueMaxLines = 3,
+                    headingMotionStatusText(
+                        debug = headingDebug,
+                        drStatus = drSensor.statusText,
+                        phone = phoneTelemetryUi,
+                        steerDeg = steerLive,
+                        wheelsFresh = wheelsFresh,
+                        wheelsDeltaDeg = wheelsDebug.lastDeltaDeg,
+                    ),
+                    valueMaxLines = 6,
                 )
             }
+            if (HeadingMotionDebugChannel.HU_IMU in headingDebug.channels) {
             item {
                 StatusRow(
                     stringResource(R.string.location_dr_gyro_yaw),
@@ -3313,6 +3770,7 @@ fun LocationTabContent(
                         vad.dashing.tbox.location.GyroBiasStore.applyAccelZ(drSensor.accelZ),
                     ),
                 )
+            }
             }
 
             item {
@@ -3455,6 +3913,12 @@ fun InfoTabContent(
     val yesLabel = stringResource(R.string.value_yes)
     val noLabel = stringResource(R.string.value_no)
     val tboxConnected by viewModel.tboxConnected.collectAsStateWithLifecycle()
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val tboxConnectionTime by viewModel.tboxConnectionTime.collectAsStateWithLifecycle()
+    val connectionTimeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    val connectionTime = remember(tboxConnectionTime) {
+        connectionTimeFormat.format(tboxConnectionTime)
+    }
     val preventRestartSend by viewModel.preventRestartSend.collectAsStateWithLifecycle()
     val tboxAppSuspended by viewModel.tboxAppSuspended.collectAsStateWithLifecycle()
     val tboxMdcSuspended by viewModel.tboxMdcSuspended.collectAsStateWithLifecycle()
@@ -3473,6 +3937,7 @@ fun InfoTabContent(
     val vinCode by settingsViewModel.vinCode.collectAsStateWithLifecycle()
     val isExpertModeEnabled by settingsViewModel.isExpertModeEnabled.collectAsStateWithLifecycle()
     var updateVersionButtonEnabled by remember { mutableStateOf(true) }
+    var udaDtcDialogVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(updateVersionButtonEnabled) {
         if (!updateVersionButtonEnabled) {
@@ -3487,10 +3952,28 @@ fun InfoTabContent(
             .padding(18.dp)
     ) {
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item { HuSystemLoadSection() }
             item { HuSystemNetworksSection() }
+            item { HuUsbDevicesSection() }
+            item { MqttStatusInfoSection() }
+            if (!noTboxConnect) {
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 SettingsTitle(stringResource(R.string.info_tbox_section))
+            }
+            item {
+                StatusRow(
+                    label = stringResource(R.string.info_tbox_connection),
+                    value = stringResource(
+                        if (tboxConnected) {
+                            R.string.info_tbox_connected_since
+                        } else {
+                            R.string.info_tbox_disconnected_since
+                        },
+                        connectionTime,
+                    ),
+                    color = if (tboxConnected) Color(0xFF4CAF50) else Color(0xFFFF0000),
+                )
             }
             item {
                 StatusRow(
@@ -3578,20 +4061,13 @@ fun InfoTabContent(
             if (isExpertModeEnabled) {
                 item {
                     Button(
-                        onClick = rememberWrappedOnClick {
-                            onServiceCommand(
-                                BackgroundService.ACTION_UDA_READ_DTC,
-                                "",
-                                "",
-                            )
-                        },
-                        enabled = tboxConnected,
+                        onClick = rememberWrappedOnClick { udaDtcDialogVisible = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp),
                     ) {
                         Text(
-                            text = stringResource(R.string.button_uda_read_dtc),
+                            text = stringResource(R.string.button_uda_dtc),
                             style = MaterialTheme.typography.tboxButton,
                             maxLines = 2,
                             textAlign = TextAlign.Center,
@@ -3599,6 +4075,15 @@ fun InfoTabContent(
                     }
                 }
             }
+            }
+        }
+        if (isExpertModeEnabled && !noTboxConnect) {
+            UdaDtcDialog(
+                visible = udaDtcDialogVisible,
+                tboxConnected = tboxConnected,
+                onServiceCommand = onServiceCommand,
+                onDismiss = { udaDtcDialogVisible = false },
+            )
         }
     }
 }

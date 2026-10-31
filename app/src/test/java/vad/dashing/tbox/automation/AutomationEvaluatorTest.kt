@@ -225,6 +225,53 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun windowOpen_firesOnceAcrossOpenPositions_rearmsOnClose() {
+        val trigger = AutomationTrigger.StateEquals(
+            id = "win",
+            signal = AutomationSignalId.WINDOW_FRONT_LEFT,
+            source = AutomationSignalSource.HEAD_UNIT,
+            expectedState = "open",
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.WINDOW_FRONT_LEFT,
+            AutomationSignalSource.HEAD_UNIT,
+        )
+        fun sample(state: String, at: Long) = AutomationSignalSample(
+            key = key,
+            value = AutomationSignalValue.State(state),
+            observedAtElapsedMillis = at,
+        )
+        assertNull(evaluator.onSignalSample(sample("0%", 0L)))
+        assertEquals("win", evaluator.onSignalSample(sample("open", 1_000L))?.triggerId)
+        assertNull(evaluator.onSignalSample(sample("20%", 2_000L)))
+        assertNull(evaluator.onSignalSample(sample("open", 3_000L)))
+        assertNull(evaluator.onSignalSample(sample("100%", 4_000L)))
+        assertNull(evaluator.onSignalSample(sample("0%", 5_000L)))
+        assertEquals("win", evaluator.onSignalSample(sample("80%", 6_000L))?.triggerId)
+    }
+
+    @Test
+    fun windowOpen_conditionMatchesEveryOpenPosition() {
+        val key = AutomationSignalKey(
+            AutomationSignalId.WINDOW_REAR_RIGHT,
+            AutomationSignalSource.HEAD_UNIT,
+        )
+        val condition = AutomationCondition.State(
+            signal = AutomationSignalId.WINDOW_REAR_RIGHT,
+            source = AutomationSignalSource.HEAD_UNIT,
+            expectedState = "open",
+        )
+        fun matches(state: String) = AutomationEvaluator.evaluateCondition(
+            condition = condition,
+            context = AutomationTriggerContext("a", "1", 0L),
+            snapshot = mapOf(key to AutomationSignalValue.State(state)),
+        )
+        listOf("open", "20%", "80%", "100%").forEach { assertTrue(it, matches(it)) }
+        assertFalse(matches("0%"))
+    }
+
+    @Test
     fun stateEquals_unavailableAfterBaselineRearmsAndFiresOnReturn() {
         val trigger = AutomationTrigger.StateEquals(
             id = "fg",
@@ -875,6 +922,33 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun espGpioBtnTrigger_firesOnExactChannelAndStatus() {
+        val evaluator = evaluator(
+            AutomationTrigger.EspGpioBtn(
+                id = "g0s",
+                channel = 0,
+                status = AutomationHardKeyStatus.SINGLE,
+            ),
+            AutomationTrigger.EspGpioBtn(
+                id = "g1d",
+                channel = 1,
+                status = AutomationHardKeyStatus.DOUBLE,
+            ),
+        )
+        assertEquals(
+            "g0s",
+            evaluator.onEspGpioBtn(0, AutomationHardKeyStatus.SINGLE)?.triggerId,
+        )
+        assertEquals(
+            "g1d",
+            evaluator.onEspGpioBtn(1, AutomationHardKeyStatus.DOUBLE)?.triggerId,
+        )
+        assertNull(evaluator.onEspGpioBtn(0, AutomationHardKeyStatus.DOUBLE))
+        assertNull(evaluator.onEspGpioBtn(2, AutomationHardKeyStatus.SINGLE))
+        assertTrue(evaluator.triggerStillMatching("g0s"))
+    }
+
+    @Test
     fun timeCondition_usesInjectedWallClock() {
         val night = AutomationCondition.Time(
             after = AutomationTimeOfDay(22, 0),
@@ -899,6 +973,285 @@ class AutomationEvaluatorTest {
                 context,
                 emptyMap(),
                 wall(12, 0),
+            ),
+        )
+    }
+
+    @Test
+    fun roadHighwayClass_stateEqualsFiresOnClassChange_notOnUnavailableOrSameClassAfterGap() {
+        val trigger = AutomationTrigger.StateEquals(
+            id = "road_class",
+            signal = AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            source = AutomationSignalSource.APP,
+            expectedState = "residential",
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.State("primary"), 1_000L)),
+        )
+        assertEquals(
+            "road_class",
+            evaluator.onSignalSample(
+                sample(AutomationSignalValue.State("residential"), 2_000L),
+            )?.triggerId,
+        )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_000L)),
+        )
+        // Brief match loss on intersection/stalk must not re-fire on the same highway class.
+        assertNull(
+            evaluator.onSignalSample(
+                sample(AutomationSignalValue.State("residential"), 4_000L),
+            ),
+        )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.State("primary"), 5_000L)),
+        )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 5_500L)),
+        )
+        // Transition from primary across a brief intersection gap onto residential fires once.
+        assertEquals(
+            "road_class",
+            evaluator.onSignalSample(
+                sample(AutomationSignalValue.State("residential"), 6_000L),
+            )?.triggerId,
+        )
+    }
+
+    @Test
+    fun roadHighwayClass_conditionFalseWhenUnavailable() {
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            AutomationSignalSource.APP,
+        )
+        val condition = AutomationCondition.State(
+            signal = AutomationSignalId.ROAD_HIGHWAY_CLASS,
+            source = AutomationSignalSource.APP,
+            expectedState = "motorway",
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.Unavailable),
+            ),
+        )
+        assertTrue(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.State("motorway")),
+            ),
+        )
+    }
+
+    @Test
+    fun roadTunnel_stateEqualsFiresOnEnterAndExit_notOnUnavailableOrStartup() {
+        val enter = AutomationTrigger.StateEquals(
+            id = "tunnel_enter",
+            signal = AutomationSignalId.ROAD_TUNNEL,
+            source = AutomationSignalSource.APP,
+            expectedState = "on",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val exit = AutomationTrigger.StateEquals(
+            id = "tunnel_exit",
+            signal = AutomationSignalId.ROAD_TUNNEL,
+            source = AutomationSignalSource.APP,
+            expectedState = "off",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val enterEval = evaluator(enter, allowStartupFire = true)
+        val exitEval = evaluator(exit, allowStartupFire = true)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_TUNNEL,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        // Cold start outside tunnel (Unavailable -> off) must not fire exit trigger even if FIRE_IF_MATCHING is set.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+
+        // off -> Unavailable -> off while driving outside tunnel must not fire exit trigger.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+
+        // off -> Unavailable -> on at tunnel portal fires enter once and arms exit.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertEquals(
+            "tunnel_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 3_000L),
+            )?.triggerId,
+        )
+        assertNull(
+            exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 3_000L)),
+        )
+
+        // on -> Unavailable -> on while driving inside tunnel must not refire enter trigger.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+
+        // on -> Unavailable -> off at tunnel exit portal fires exit once and rearms enter.
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L)))
+        val exitAfterGap = exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L))
+        assertEquals("tunnel_exit", exitAfterGap?.triggerId)
+        assertEquals(AutomationSignalValue.State("on"), exitAfterGap?.oldValue)
+
+        // Direct off -> on -> off transitions also fire once each.
+        assertEquals(
+            "tunnel_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 6_000L),
+            )?.triggerId,
+        )
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 6_000L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 7_000L)))
+        assertEquals(
+            "tunnel_exit",
+            exitEval.onSignalSample(
+                sample(AutomationSignalValue.State("off"), 7_000L),
+            )?.triggerId,
+        )
+    }
+
+    @Test
+    fun roadTunnel_conditionFalseWhenUnavailable() {
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_TUNNEL,
+            AutomationSignalSource.APP,
+        )
+        val condition = AutomationCondition.State(
+            signal = AutomationSignalId.ROAD_TUNNEL,
+            source = AutomationSignalSource.APP,
+            expectedState = "on",
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.Unavailable),
+            ),
+        )
+        assertTrue(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.State("on")),
+            ),
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.State("off")),
+            ),
+        )
+    }
+
+    @Test
+    fun roadSpeedLimit_numericThresholdFiresOnCrossing_notOnUnavailableReturn() {
+        val trigger = AutomationTrigger.NumericThreshold(
+            id = "osm_limit",
+            signal = AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            source = AutomationSignalSource.APP,
+            direction = AutomationThresholdDirection.ABOVE,
+            threshold = 70.0,
+            resetThreshold = 70.0,
+            holdMillis = 0L,
+            startupBehavior = AutomationStartupBehavior.INITIALIZE_ONLY,
+        )
+        val evaluator = evaluator(trigger, allowStartupFire = false)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Number(60.0), 0L)),
+        )
+        assertEquals(
+            "osm_limit",
+            evaluator.onSignalSample(sample(AutomationSignalValue.Number(90.0), 1_000L))
+                ?.triggerId,
+        )
+        assertNull(evaluator.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_000L)))
+        // After clear, first known matching value is baseline only.
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Number(90.0), 3_000L)),
+        )
+        assertNull(
+            evaluator.onSignalSample(sample(AutomationSignalValue.Number(60.0), 4_000L)),
+        )
+        assertEquals(
+            "osm_limit",
+            evaluator.onSignalSample(sample(AutomationSignalValue.Number(80.0), 5_000L))
+                ?.triggerId,
+        )
+    }
+
+    @Test
+    fun roadSpeedLimit_conditionFalseWhenUnavailable() {
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            AutomationSignalSource.APP,
+        )
+        val condition = AutomationCondition.Numeric(
+            signal = AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+            source = AutomationSignalSource.APP,
+            comparison = AutomationComparison.BELOW,
+            expectedValue = 60.0,
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = emptyMap(),
+            ),
+        )
+        assertFalse(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.Unavailable),
+            ),
+        )
+        assertTrue(
+            AutomationEvaluator.evaluateCondition(
+                condition = condition,
+                context = AutomationTriggerContext("a", "1", 0L),
+                snapshot = mapOf(key to AutomationSignalValue.Number(50.0)),
             ),
         )
     }

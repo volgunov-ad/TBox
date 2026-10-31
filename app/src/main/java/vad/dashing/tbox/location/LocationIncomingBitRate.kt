@@ -15,6 +15,7 @@ object LocationIncomingBitRate {
     private val tbox = RollingBitRateMeter(WINDOW_MS, STALE_MS)
     private val esp = RollingBitRateMeter(WINDOW_MS, STALE_MS)
     private val usb = RollingBitRateMeter(WINDOW_MS, STALE_MS)
+    private val phone = RollingBitRateMeter(WINDOW_MS, STALE_MS)
 
     fun noteBytes(source: LocationSource, byteCount: Int, nowElapsedMs: Long = SystemClock.elapsedRealtime()) {
         if (byteCount <= 0) return
@@ -39,6 +40,7 @@ object LocationIncomingBitRate {
         LocationSource.TBOX -> tbox
         LocationSource.ESP32 -> esp
         LocationSource.USB -> usb
+        LocationSource.PHONE -> phone
         LocationSource.ANDROID -> null
     }
 
@@ -47,6 +49,7 @@ object LocationIncomingBitRate {
         tbox.reset()
         esp.reset()
         usb.reset()
+        phone.reset()
     }
 }
 
