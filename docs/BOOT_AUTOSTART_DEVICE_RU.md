@@ -166,8 +166,52 @@ adb reboot   # iottube остаётся скрытым: iflytek стартует
 | `com.qualcomm.qti.qms.service.telemetry` | телеметрия Qualcomm |
 | `com.wt.smartlog` | сбор логов WT |
 | `com.wt.multimedia.local` | штатный плеер USB-музыки — скрывать, только если не используется |
+| `com.wt.launcher3` | штатный лаунчер — только в порядке `pm enable` → `pm hide`, откат `disable-user` до `unhide` (см. ниже) |
 
-Отдельно `com.wt.launcher3` (штатный лаунчер): он в состоянии `disabled-user`, но всё равно стартует как persistent-пакет (`added application`), почти не грузит CPU и держит ~90 МБ памяти. Остановить его может только `pm hide`; в тесте он не скрывался, последствия не проверены.
+#### Штатный лаунчер `com.wt.launcher3` (A/B, по 2 загрузки на состояние)
+
+`com.wt.launcher3` — штатный «рабочий стол с карточками» WT (`/system/app/WT_Launcher3`, версия 2.1.0.ov): `sharedUserId=android.uid.system` (uid 1000), флаг `PERSISTENT`. В нём HOME-activity и список приложений; в карточки рабочего стола встраиваются activity других приложений (карта и музыка `com.android.launcherWT`, медиа-карточка, климат, ADAS). Наружу он отдаёт провайдер `content://com.wt.launcher3/launcher3` (ссылки на него есть в `WT_MLVideoOpen` и `boot-framework`; при `disabled-user` он и так не публикуется) и два приёмника голосового SDK Tencent WeCar; своих сервисов нет. Запускает его сам system_server как persistent-пакет (`am_proc_start … added application`), другие приложения к нему не биндятся.
+
+На стенде лаунчер был в состоянии `disabled-user`, и, как у iottube/iflytek, это **не мешает старту процесса**: он поднимается на ~12 с и выполняет только инициализацию `Application` (провайдер не публикуется, CPU 0,2–0,3 с за 2 минуты, PSS ~17 МБ; RSS 91 МБ — в основном общие страницы zygote). Остановить его можно только скрытием: `pm enable` + `pm hide` + перезагрузка — после этого процесс не стартует вообще.
+
+| | `disabled-user` (процесс стартует) | `enable` + `hide` |
+|---|---|---|
+| Экран готов (`boot_progress_enable_screen` / `sf_stop_bootanim`) | 11,07–11,20 / 11,09–11,24 с | 11,13–11,19 / 11,16–11,21 с |
+| `framework_boot_completed` | 12,44 / 12,38 с | 12,28 / 12,28 с |
+| Старт процессов DCL / TBox | 12,52 / 12,56 и 12,43 / 12,52 с | 12,34 / 12,36 с (оба прогона) |
+| Процесс `com.wt.launcher3` | стартует на ~12 с | не стартует |
+| Процессов запущено при загрузке (`am_proc_start`) | 61 / 62 | 58 / 60 |
+| Java-приложений на 120 с | 57 | 56 |
+| CPU всех процессов за первые 120 с | 254,6 с | 257,2–258,8 с |
+| Простой CPU (idle) на 120 с | 652,7–654,7 с | 651,8–655,4 с |
+| `MemAvailable` на 120 с | 4,76 ГБ | 4,77 ГБ (+12 МБ) |
+| Free RAM по `dumpsys meminfo` | 4,80 ГБ | +18…33 МБ |
+| Очередь `BOOT_COMPLETED` (51 приёмник) | 13,7–13,8 → 24,08 с | 13,5–13,7 → 24,04–24,24 с |
+| Краши, ANR, перезапуски, ошибки про launcher3 | 0 | 0 |
+
+**Скрытие даёт только память, загрузка не меняется**: разница в маркерах и CPU — в пределах разброса между прогонами (idle одинаковый, расхождения — в kworker'ах ядра и Huawei Maps). После скрытия в логах загрузки launcher3 не упоминается вовсе, набор ошибок тот же, `com.android.launcherWT` стартует как прежде, `KEYCODE_HOME` открывает DCL. Методика — как у `hu_boot_ab.ps1`, плюс после загрузки проверка HOME (`input keyevent KEYCODE_HOME` → `mResumedActivity`), скриншот и подсчёт `FATAL EXCEPTION`/`am_crash`/`am_anr`/«Failed to find provider info» в логах.
+
+**Важно про HOME.** DCL был HOME по умолчанию только потому, что launcher3 выключен (единственный включённый кандидат с `CATEGORY_DEFAULT`; `com.mengbo.electronicmanual` без DEFAULT, `FallbackHome` с приоритетом −1000). Сразу после `pm enable` HOME становится неоднозначным: `cmd package resolve-activity … -c android.intent.category.HOME` возвращает `android/com.android.internal.app.ResolverActivity` (диалог выбора). После `pm hide` HOME снова DCL. В preferred activities остаётся старая запись `com.wt.launcher3/.MainActivity` с `mAlways=false` — на выбор она не влияет. Поэтому `enable` и `hide` выполнять подряд, а при желании закрепить DCL явно, чтобы HOME не зависел от набора включённых лаунчеров:
+
+```
+adb shell pm enable com.wt.launcher3
+adb shell pm hide com.wt.launcher3
+adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME   # ras.dashing.tbox.launcher/...
+adb shell cmd package set-home-activity ras.dashing.tbox.launcher/vad.dashing.tbox.LauncherHomeActivity       # опционально
+adb reboot   # процесс останавливается только после перезагрузки
+```
+
+Откат к прежнему состоянию (`disabled-user`, процесс снова стартует). Порядок важен: `disable-user` — **до** `unhide`, иначе на время между командами HOME станет неоднозначным:
+
+```
+adb shell pm disable-user --user 0 com.wt.launcher3
+adb shell pm unhide com.wt.launcher3
+adb reboot
+```
+
+Полный возврат штатного лаунчера: `adb shell pm unhide com.wt.launcher3` + `adb reboot`; если DCL не закреплён через `set-home-activity`, нажатие HOME покажет диалог выбора лаунчера.
+
+Не проверено на машине: процесс launcher3 подписывался на `com.coagent.intent.action.ACC_CHANGED`, `android.intent.action.POWER_OFF` и `bring_multimedia_card_to_font`. Судя по набору, это обслуживание его собственного рабочего стола, но после скрытия стоит убедиться, что включение/выключение зажигания отрабатывает нормально.
 
 Не трогать — пакеты, связанные с машиной, BT и телефоном: `com.android.car`, `com.mengbo.carsettings`, `com.mengbo.acsettings`, `com.mengbo.avm`, `com.wt.wtservice`, `com.wt.virtualcar`, `com.nforetek.bt`, `com.autopai.car.dialer`, `com.android.phone`. Их нагрузка на загрузку минимальна, а функции ГУ от них зависят.
 
