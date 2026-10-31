@@ -513,7 +513,11 @@ blockdev --setro /dev/block/sde35
 
 Данные получены read-only-инспектом + тремя прогонами root-диагностики через примитив §10.1 (adb 192.168.1.128:5555); после тестов ГУ возвращён в исходное состояние (`sde35` ro=1, `/vendor` ro, флаги сняты), артефакты на `/sdcard` удалены.
 
-## 11. Открытые вопросы
+## 11. SystemUI на A9: плавающая кнопка и шторка (проверено 31.10.2026)
+
+Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
+
+## 12. Открытые вопросы
 
 - Включать ли по умолчанию `main_screen_open_on_boot`, автоустановку сертификатов и открытие файрвола на A10.
 - Почему в некоторых загрузках `DROP` в цепочках Adayo не появлялся.
