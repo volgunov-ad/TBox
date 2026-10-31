@@ -44,7 +44,7 @@ Package name и label сняты через `aapt dump badging` со всех AP
 |------------------|---------|--------|
 | WT_Launcher3 | `com.wt.launcher3` | Главный лаунчер ГУ |
 | MB_NegativeScreen | `com.android.launcherWT` | Список приложений (AppList) |
-| WT_WtSystemUI | `com.android.systemui` | System UI (статусбар / шторка) |
+| WT_WtSystemUI | `com.android.systemui` | System UI (статусбар / шторка / плавающая кнопка «Домой»); отключение без долгой загрузки — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md) |
 | MB_CarSettings | `com.mengbo.carsettings` | Настройки автомобиля (mbCAN) |
 | MB_ACSettings | `com.mengbo.acsettings` | Климат / кондиционер |
 | MB_SystemSettings | `com.mengbo.systemsettings` | Системные настройки ГУ |
