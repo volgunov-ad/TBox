@@ -1,59 +1,34 @@
 package vad.dashing.tbox.ui
 
-import vad.dashing.tbox.ui.theme.tboxTitle
-import vad.dashing.tbox.ui.theme.tboxTabLabel
-import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import android.appwidget.AppWidgetManager
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Context
-import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
@@ -63,11 +38,7 @@ import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
 import vad.dashing.tbox.DashboardManager
 import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_DEFAULT
-import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MAX
-import vad.dashing.tbox.ACC_CRUISE_STEP_INTERVAL_MS_MIN
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
-import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
-import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN
 import vad.dashing.tbox.CruiseControlType
 import vad.dashing.tbox.isAccCruiseWidgetDataKey
 import vad.dashing.tbox.isCruiseWidgetDataKey
@@ -75,11 +46,8 @@ import vad.dashing.tbox.normalizeAccCruiseStepIntervalMs
 import vad.dashing.tbox.normalizeAccCruiseTargetKmh
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DEFAULT_RAW_VALUE
-import vad.dashing.tbox.DRIVE_MODE_WIDGET_OPTIONS
-import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
 import vad.dashing.tbox.normalizeDriveModeCycleSelection
-import vad.dashing.tbox.toggleDriveModeCycleSelection
 import vad.dashing.tbox.isDriveModeCycleWidgetDataKey
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.MainScreenPanelConfig
@@ -94,32 +62,22 @@ import vad.dashing.tbox.obd.ObdPid
 import vad.dashing.tbox.usesTripWidgetSource
 import vad.dashing.tbox.normalizeTripWidgetSource
 import vad.dashing.tbox.TRIP_WIDGET_SOURCE_CURRENT
-import vad.dashing.tbox.TRIP_WIDGET_SOURCE_PERSISTENT
 import vad.dashing.tbox.isAverageFuelConsumptionWidgetDataKey
 import vad.dashing.tbox.normalizeAvgFuelConsumptionSource
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
-import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
-import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.isFuelLitersDisplayModeWidgetDataKey
 import vad.dashing.tbox.normalizeFuelLitersDisplayMode
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
-import vad.dashing.tbox.FUEL_LITERS_DISPLAY_TO_FULL
 import vad.dashing.tbox.isMusicWidgetDataKey
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_RADAR_HOLD_M
-import vad.dashing.tbox.MAPS_CAM_DISTANCE_STEP_M
-import vad.dashing.tbox.MAX_MAPS_CAM_LOOKAHEAD_M
-import vad.dashing.tbox.MAX_MAPS_CAM_RADAR_HOLD_M
-import vad.dashing.tbox.MIN_MAPS_CAM_LOOKAHEAD_M
-import vad.dashing.tbox.MIN_MAPS_CAM_RADAR_HOLD_M
 import vad.dashing.tbox.normalizeMapsCamLookaheadM
 import vad.dashing.tbox.normalizeMapsCamRadarHoldM
 import vad.dashing.tbox.speedcam.DEFAULT_SPEED_CAM_OVERAGE_KMH
 import vad.dashing.tbox.speedcam.normalizeSpeedCamOverageKmh
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
-import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.MusicWidgetAlbumArtDisplay
 import vad.dashing.tbox.MusicWidgetControlsDisplay
 import vad.dashing.tbox.trip.ActiveTripCustomWidgetField
@@ -129,10 +87,8 @@ import vad.dashing.tbox.supportsMusicAlbumArtToggle
 import vad.dashing.tbox.supportsMusicControlsHeightSetting
 import vad.dashing.tbox.supportsMusicPlayerHeaderIconSetting
 import vad.dashing.tbox.normalizeDateTimeWidgetFormat
-import vad.dashing.tbox.previewDateTimeWidgetFormat
 import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
-import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -140,11 +96,8 @@ import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.normalizeWidgetButtonBinding
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.WidgetPickerActivity
-import vad.dashing.tbox.WidgetTypeSectionId
-import vad.dashing.tbox.WidgetTypeSections
 import vad.dashing.tbox.FloatingWholePanelFieldsForWidgetDialogSave
 import vad.dashing.tbox.MainScreenWholePanelFieldsForWidgetDialogSave
-import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizeWidgetConfigs
@@ -157,18 +110,14 @@ import vad.dashing.tbox.normalizeWidgetControlShape
 import vad.dashing.tbox.usesDefaultControlColors
 import vad.dashing.tbox.trip.TripWidgetTileDisplay
 import vad.dashing.tbox.normalizeWidgetScale
-import androidx.compose.ui.graphics.toArgb
 import vad.dashing.tbox.normalizeDriveModeWidgetRawValue
 import vad.dashing.tbox.normalizeWidgetTextAlign
 import vad.dashing.tbox.normalizeWidgetFontWeight
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.normalizeStepperAdjustIconStyle
-import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_HALF_TENTHS
 import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_TENTHS_DEFAULT
-import vad.dashing.tbox.HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS
 import vad.dashing.tbox.normalizeHvacTempWidgetStepTenths
 import vad.dashing.tbox.isHvacTempWidgetDataKey
-import vad.dashing.tbox.STEPPER_ADJUST_ICON_ARROWS
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.isEspRelayWidgetDataKey
@@ -185,13 +134,6 @@ import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_POSITION_PERCENT
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.DEFAULT_PANEL_COLLAPSE_TOUCH_ZONE_MATCH_STRIP
-import vad.dashing.tbox.MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
-import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
-import vad.dashing.tbox.MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP
-import vad.dashing.tbox.MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP
-import vad.dashing.tbox.MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC
-import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT
-import vad.dashing.tbox.MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP
 import vad.dashing.tbox.PanelCollapseEdge
 import vad.dashing.tbox.normalizePanelCollapseOnTileTapDelaySec
 import vad.dashing.tbox.normalizePanelCollapseStripLengthPercent
@@ -199,22 +141,11 @@ import vad.dashing.tbox.normalizePanelCollapseStripPositionPercent
 import vad.dashing.tbox.normalizePanelCollapseStripThicknessDp
 import vad.dashing.tbox.normalizePanelCollapseTouchZoneThicknessDp
 import vad.dashing.tbox.normalizeWidgetPaddingPercent
-import vad.dashing.tbox.WIDGET_TEXT_ALIGN_CENTER
-import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
-import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
-import vad.dashing.tbox.WIDGET_FONT_WEIGHT_NORMAL
-import vad.dashing.tbox.WIDGET_FONT_WEIGHT_MEDIUM
-import vad.dashing.tbox.WIDGET_FONT_WEIGHT_SEMI_BOLD
-import vad.dashing.tbox.WIDGET_TITLE_POSITION_TOP
-import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.DEFAULT_PANEL_GRID_SPACING_DP
-import vad.dashing.tbox.MAX_PANEL_GRID_SPACING_DP
-import vad.dashing.tbox.MAX_WIDGET_PADDING_PERCENT
-import vad.dashing.tbox.MIN_PANEL_GRID_SPACING_DP
-import vad.dashing.tbox.MIN_WIDGET_PADDING_PERCENT
 import vad.dashing.tbox.resolveDefaultTitlePositionForDataKey
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.resolveSelectedMediaPlayerForWidget
+import kotlin.math.roundToInt
 
 /** Width of value dropdowns in the tile / panel settings dialog. */
 val WidgetDialogDropdownSelectorWidth = 300.dp
@@ -331,9 +262,10 @@ internal data class CruiseControlTypeDropdownEntry(
 internal class WidgetSelectionDialogState(
     initialDataKey: String,
     initialConfig: FloatingDashboardWidgetConfig,
-    private val panelDefaultBackgroundLight: Int,
-    private val panelDefaultBackgroundDark: Int,
+    val panelDefaultBackgroundLight: Int,
+    val panelDefaultBackgroundDark: Int,
     initialColorThemeSegment: Int = 0,
+    initialEditingIndex: Int = 0,
 ) {
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
@@ -499,10 +431,22 @@ internal class WidgetSelectionDialogState(
         }
     )
 
-    var showAdvancedSettings by mutableStateOf(false)
-    var showWholePanelSettings by mutableStateOf(false)
-    /** 0 = light theme colors, 1 = dark theme colors (advanced settings only). */
-    var advancedColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
+    /** Grid position of the tile currently loaded into this state. */
+    var editingIndex by mutableIntStateOf(initialEditingIndex.coerceAtLeast(0))
+        private set
+    var level by mutableStateOf(WidgetEditorLevel.TILE)
+    var tileTab by mutableStateOf(TileEditorTab.TYPE)
+    var panelTab by mutableStateOf(PanelEditorTab.GENERAL)
+    /** Theme shown in the preview and preselected in the color table. */
+    var previewDark by mutableStateOf(initialColorThemeSegment == 1)
+    /** Tiles selected on the «Сетка» tab for «Применить вид». */
+    var gridSelection by mutableStateOf<Set<Int>>(emptySet())
+    /** True after another tile was edited, moved or restyled in this session. */
+    var otherTilesDirty by mutableStateOf(false)
+        private set
+
+    val showWholePanelSettings: Boolean
+        get() = level == WidgetEditorLevel.PANEL
     /** Draft for «Вся панель»; persisted only on dialog Save. */
     var wholePanelNameDraft by mutableStateOf("")
     var wholePanelShowTboxDisconnect by mutableStateOf(false)
@@ -551,6 +495,15 @@ internal class WidgetSelectionDialogState(
     var wholePanelBackgroundImageRelPathDark by mutableStateOf<String?>(null)
     var wholePanelShape by mutableIntStateOf(DEFAULT_PANEL_SHAPE)
     var wholePanelBackgroundColorThemeSegment by mutableIntStateOf(initialColorThemeSegment)
+    /** Panel frame draft: percent of the main screen (main-screen panels) or px (floating panels). */
+    var wholePanelPlacement by mutableStateOf<PanelPlacement?>(null)
+    /** Frame as loaded; Save writes the frame only when it differs (keeps sub-percent main-screen layout). */
+    var wholePanelPlacementLoaded by mutableStateOf<PanelPlacement?>(null)
+        private set
+
+    /** Frame to persist, or null when it was not edited. */
+    val editedWholePanelPlacement: PanelPlacement?
+        get() = wholePanelPlacement?.takeIf { it != wholePanelPlacementLoaded }
     /**
      * True after draft was loaded from persisted config when user opened «Вся панель» in this dialog.
      * Not cleared when switching back to Advanced / tile list — Save must still persist whole-panel edits.
@@ -592,6 +545,14 @@ internal class WidgetSelectionDialogState(
         wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
         wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
         wholePanelShape = normalizePanelShape(cfg.panelShape)
+        val placement = PanelPlacement(
+            x = (cfg.relX * 100f).roundToInt(),
+            y = (cfg.relY * 100f).roundToInt(),
+            width = (cfg.relWidth * 100f).roundToInt(),
+            height = (cfg.relHeight * 100f).roundToInt(),
+        )
+        wholePanelPlacement = placement
+        wholePanelPlacementLoaded = placement
     }
 
     fun syncWholePanelDraftFromFloating(cfg: FloatingDashboardConfig) {
@@ -622,6 +583,9 @@ internal class WidgetSelectionDialogState(
         wholePanelBackgroundImageRelPathLight = cfg.panelBackgroundImageRelPathLight
         wholePanelBackgroundImageRelPathDark = cfg.panelBackgroundImageRelPathDark
         wholePanelShape = normalizePanelShape(cfg.panelShape)
+        val placement = PanelPlacement(x = cfg.startX, y = cfg.startY, width = cfg.width, height = cfg.height)
+        wholePanelPlacement = placement
+        wholePanelPlacementLoaded = placement
     }
 
     /** Same defaults as a fresh [FloatingDashboardWidgetConfig] for this panel (main / floating). */
@@ -805,8 +769,6 @@ internal class WidgetSelectionDialogState(
         },
     )
 
-    /** 0 = inactive control colors, 1 = active (paired with [advancedColorThemeSegment]). */
-    var controlStateSegment by mutableIntStateOf(0)
     var controlColorsUseDefaults by mutableStateOf(initialConfig.usesDefaultControlColors())
     var controlInactiveColorLight by mutableIntStateOf(
         initialConfig.controlInactiveColorLight ?: DEFAULT_WIDGET_TEXT_COLOR_LIGHT
@@ -878,49 +840,39 @@ internal class WidgetSelectionDialogState(
         controlActiveBackgroundColorDark = seed.activeBackgroundDark
     }
 
-    fun controlContentColorForEditor(): Int {
-        val light = advancedColorThemeSegment == 0
-        val inactive = controlStateSegment == 0
-        return when {
-            light && inactive -> controlInactiveColorLight
-            light && !inactive -> controlActiveColorLight
-            !light && inactive -> controlInactiveColorDark
-            else -> controlActiveColorDark
-        }
+    fun controlColor(active: Boolean, background: Boolean, dark: Boolean): Int = when {
+        !background && !active && !dark -> controlInactiveColorLight
+        !background && !active && dark -> controlInactiveColorDark
+        !background && active && !dark -> controlActiveColorLight
+        !background && active && dark -> controlActiveColorDark
+        background && !active && !dark -> controlInactiveBackgroundColorLight
+        background && !active && dark -> controlInactiveBackgroundColorDark
+        background && active && !dark -> controlActiveBackgroundColorLight
+        else -> controlActiveBackgroundColorDark
     }
 
-    fun setControlContentColorForEditor(color: Int) {
+    fun setControlColor(active: Boolean, background: Boolean, dark: Boolean, color: Int) {
         controlColorsUseDefaults = false
-        val light = advancedColorThemeSegment == 0
-        val inactive = controlStateSegment == 0
         when {
-            light && inactive -> controlInactiveColorLight = color
-            light && !inactive -> controlActiveColorLight = color
-            !light && inactive -> controlInactiveColorDark = color
-            else -> controlActiveColorDark = color
-        }
-    }
-
-    fun controlBackgroundColorForEditor(): Int {
-        val light = advancedColorThemeSegment == 0
-        val inactive = controlStateSegment == 0
-        return when {
-            light && inactive -> controlInactiveBackgroundColorLight
-            light && !inactive -> controlActiveBackgroundColorLight
-            !light && inactive -> controlInactiveBackgroundColorDark
-            else -> controlActiveBackgroundColorDark
-        }
-    }
-
-    fun setControlBackgroundColorForEditor(color: Int) {
-        controlColorsUseDefaults = false
-        val light = advancedColorThemeSegment == 0
-        val inactive = controlStateSegment == 0
-        when {
-            light && inactive -> controlInactiveBackgroundColorLight = color
-            light && !inactive -> controlActiveBackgroundColorLight = color
-            !light && inactive -> controlInactiveBackgroundColorDark = color
+            !background && !active && !dark -> controlInactiveColorLight = color
+            !background && !active && dark -> controlInactiveColorDark = color
+            !background && active && !dark -> controlActiveColorLight = color
+            !background && active && dark -> controlActiveColorDark = color
+            background && !active && !dark -> controlInactiveBackgroundColorLight = color
+            background && !active && dark -> controlInactiveBackgroundColorDark = color
+            background && active && !dark -> controlActiveBackgroundColorLight = color
             else -> controlActiveBackgroundColorDark = color
+        }
+    }
+
+    /** Copies the day (`toDark = true`) or night text/background colors to the other theme. */
+    fun copyTileColorsBetweenThemes(toDark: Boolean) {
+        if (toDark) {
+            textColorDark = textColorLight
+            backgroundColorDark = backgroundColorLight
+        } else {
+            textColorLight = textColorDark
+            backgroundColorLight = backgroundColorDark
         }
     }
 
@@ -1029,14 +981,20 @@ internal class WidgetSelectionDialogState(
         get() = selectedDataKey.isNotEmpty()
 
     fun toDraftWidgetConfig(): FloatingDashboardWidgetConfig {
+        val draft = buildDraftWidgetConfig()
+        titleScale = draft.titleScale
+        iconScale = draft.iconScale
+        textScale = draft.textScale
+        shape = draft.shape
+        return draft
+    }
+
+    /** Same as [toDraftWidgetConfig] without writing normalized values back (safe in composition). */
+    fun buildDraftWidgetConfig(): FloatingDashboardWidgetConfig {
         val normalizedTitleScale = normalizeWidgetScale(titleScale)
         val normalizedIconScale = normalizeWidgetScale(iconScale)
         val normalizedTextScale = normalizeWidgetScale(textScale)
         val normalizedShape = normalizeWidgetShape(shape)
-        titleScale = normalizedTitleScale
-        iconScale = normalizedIconScale
-        textScale = normalizedTextScale
-        shape = normalizedShape
         val storedValueAccuracy = if (WidgetsRepository.supportsValueAccuracy(selectedDataKey)) {
             valueAccuracy?.takeIf { it in 0..2 }
         } else {
@@ -1808,10 +1766,166 @@ internal class WidgetSelectionDialogState(
         val targetCount = (snapshot.rows * snapshot.cols).coerceAtLeast(1)
         val widgets = normalizeWidgetConfigs(snapshot.widgetsConfig, targetCount)
         wholePanelWidgetsDraft = widgets
+        otherTilesDirty = true
         val tileCfg = widgets.getOrNull(widgetIndex)
             ?: FloatingDashboardWidgetConfig(dataKey = "")
         applyDraftWidgetConfig(tileCfg, preserveDataKey = false)
     }
+
+    /** Call right after [syncWholePanelDraftFromMainScreen] / [syncWholePanelDraftFromFloating]. */
+    fun markWholePanelDraftSeeded() {
+        wholePanelDraftSeeded = true
+        panelBaseline = panelFieldsFingerprint()
+    }
+
+    /** Config written for the edited tile on Save (empty slot when no type is chosen). */
+    fun editingTileConfigForSave(): FloatingDashboardWidgetConfig =
+        if (selectedDataKey.isNotEmpty()) {
+            buildDraftWidgetConfig()
+        } else {
+            FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
+        }
+
+    /** All tiles of the panel as they would be saved now, padded to [tileCount]. */
+    fun workingTileConfigs(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ): List<FloatingDashboardWidgetConfig> {
+        val list = padWidgetConfigs(
+            wholePanelWidgetsDraft ?: currentWidgetConfigs,
+            maxOf(tileCount, editingIndex + 1),
+        ).toMutableList()
+        list[editingIndex] = editingTileConfigForSave()
+        return list
+    }
+
+    val isEditingTileDirty: Boolean
+        get() = buildDraftWidgetConfig() != tileBaseline
+
+    val isPanelDirty: Boolean
+        get() = wholePanelDraftSeeded &&
+            (panelBaseline == null || panelFieldsFingerprint() != panelBaseline)
+
+    val hasUnsavedChanges: Boolean
+        get() = otherTilesDirty || isEditingTileDirty || isPanelDirty
+
+    /** Tile type when the current tile was loaded into the editor (for «Было:»). */
+    val loadedTileDataKey: String
+        get() = tileBaseline.dataKey
+
+    /** Writes pending edits of the current tile into [wholePanelWidgetsDraft] and returns that list. */
+    private fun commitEditingTile(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ): MutableList<FloatingDashboardWidgetConfig> {
+        val list = padWidgetConfigs(
+            wholePanelWidgetsDraft ?: currentWidgetConfigs,
+            maxOf(tileCount, editingIndex + 1),
+        ).toMutableList()
+        if (isEditingTileDirty) {
+            list[editingIndex] = editingTileConfigForSave()
+            tileBaseline = buildDraftWidgetConfig()
+            otherTilesDirty = true
+        }
+        wholePanelWidgetsDraft = list.toList()
+        return list
+    }
+
+    /** Keeps edits of the current tile in the draft and loads tile [target] into the editor. */
+    fun goToTile(
+        target: Int,
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ) {
+        if (target == editingIndex || target < 0 || target >= maxOf(tileCount, 1)) return
+        val list = commitEditingTile(currentWidgetConfigs, tileCount)
+        val cfg = list.getOrNull(target) ?: FloatingDashboardWidgetConfig(dataKey = "")
+        val preferMbCan = preferUseMbCanVhalDefault
+        preferUseMbCanVhalDefault = false
+        applyDraftWidgetConfig(cfg, preserveDataKey = false)
+        preferUseMbCanVhalDefault = preferMbCan
+        editingIndex = target
+        tileBaseline = buildDraftWidgetConfig()
+    }
+
+    /** Swaps two tiles; the editor keeps showing the same tile at its new position. */
+    fun swapTiles(
+        from: Int,
+        to: Int,
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ): Boolean {
+        val list = commitEditingTile(currentWidgetConfigs, tileCount)
+        if (!canSwapTiles(list, from, to)) return false
+        wholePanelWidgetsDraft = swapTileConfigs(list, from, to)
+        otherTilesDirty = true
+        editingIndex = when (editingIndex) {
+            from -> to
+            to -> from
+            else -> editingIndex
+        }
+        gridSelection = emptySet()
+        return true
+    }
+
+    /** Copies the current tile's appearance to the tiles in [gridSelection]; returns how many changed. */
+    fun applyAppearanceToSelection(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ): Int {
+        val source = editingTileConfigForSave()
+        if (source.dataKey.isEmpty()) return 0
+        val list = commitEditingTile(currentWidgetConfigs, tileCount)
+        var changed = 0
+        gridSelection.filter { it != editingIndex && it in list.indices }.forEach { index ->
+            val updated = applyTileAppearance(list[index], source)
+            if (updated != list[index]) {
+                list[index] = updated
+                changed++
+            }
+        }
+        if (changed > 0) {
+            wholePanelWidgetsDraft = list.toList()
+            otherTilesDirty = true
+        }
+        return changed
+    }
+
+    private fun panelFieldsFingerprint(): List<Any?> = listOf(
+        wholePanelNameDraft,
+        wholePanelShowTboxDisconnect,
+        wholePanelRows,
+        wholePanelCols,
+        wholePanelGridSpacingDp,
+        wholePanelPageNumber,
+        wholePanelClickAction,
+        wholePanelCollapseEdge,
+        wholePanelCollapseStripThicknessDp,
+        wholePanelCollapseTouchZoneThicknessDp,
+        wholePanelCollapseStripLengthPercentCollapsed,
+        wholePanelCollapseStripLengthPercentExpanded,
+        wholePanelCollapseStripPositionPercentCollapsed,
+        wholePanelCollapseStripPositionPercentExpanded,
+        wholePanelCollapseTouchZoneMatchStrip,
+        wholePanelCollapseStripColorLight,
+        wholePanelCollapseStripColorDark,
+        wholePanelCollapseStripExpandedColorLight,
+        wholePanelCollapseStripExpandedColorDark,
+        wholePanelCollapseOnStripTap,
+        wholePanelCollapseOnStripDoubleTap,
+        wholePanelCollapseOnTileTap,
+        wholePanelCollapseOnTileTapDelaySec,
+        wholePanelBackgroundColorLight,
+        wholePanelBackgroundColorDark,
+        wholePanelBackgroundImageRelPathLight,
+        wholePanelBackgroundImageRelPathDark,
+        wholePanelShape,
+        wholePanelPlacement,
+    )
+
+    private var panelBaseline by mutableStateOf<List<Any?>?>(null)
+    // Declared after every tile field: the initializer reads all of them.
+    private var tileBaseline by mutableStateOf(buildDraftWidgetConfig())
 
     val canSaveSelection: Boolean
         get() = when {
@@ -1846,13 +1960,13 @@ internal fun rememberWidgetSelectionDialogState(
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
     val initialDataKey = currentWidgets.getOrNull(widgetIndex)?.dataKey ?: ""
+    // currentTheme is read only at creation: a day/night switch must not drop unsaved edits.
     return remember(
         widgetIndex,
         currentWidgets,
         currentWidgetConfigs,
         defaultBackgroundLight,
         defaultBackgroundDark,
-        currentTheme,
     ) {
         WidgetSelectionDialogState(
             initialDataKey = initialDataKey,
@@ -1860,6 +1974,7 @@ internal fun rememberWidgetSelectionDialogState(
             panelDefaultBackgroundLight = defaultBackgroundLight,
             panelDefaultBackgroundDark = defaultBackgroundDark,
             initialColorThemeSegment = colorThemeSegmentFor(currentTheme),
+            initialEditingIndex = widgetIndex,
         )
     }
 }
@@ -1907,21 +2022,6 @@ internal fun WidgetColorThemeSegmentRow(
         enabled = enabled,
         label0 = stringResource(R.string.widget_color_theme_segment_light),
         label1 = stringResource(R.string.widget_color_theme_segment_dark),
-    )
-}
-
-@Composable
-internal fun WidgetControlStateSegmentRow(
-    selectedSegment: Int,
-    onSegmentSelected: (Int) -> Unit,
-    enabled: Boolean,
-) {
-    WidgetTwoSegmentRow(
-        selectedSegment = selectedSegment,
-        onSegmentSelected = onSegmentSelected,
-        enabled = enabled,
-        label0 = stringResource(R.string.widget_control_state_segment_inactive),
-        label1 = stringResource(R.string.widget_control_state_segment_active),
     )
 }
 
@@ -2006,460 +2106,6 @@ private fun WidgetTwoSegmentRow(
     }
 }
 
-@Composable
-private fun PanelCollapseWholeSettingsSection(
-    state: WidgetSelectionDialogState,
-    enabled: Boolean,
-    currentThemeSegment: Int,
-    settingsViewModel: SettingsViewModel,
-    presetSlots: List<Int>,
-) {
-    val edgeOptions = listOf(
-        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.NONE, stringResource(R.string.settings_panel_collapse_edge_none)),
-        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.LEFT, stringResource(R.string.settings_panel_collapse_edge_left)),
-        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.RIGHT, stringResource(R.string.settings_panel_collapse_edge_right)),
-        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.TOP, stringResource(R.string.settings_panel_collapse_edge_top)),
-        PanelCollapseEdgeDropdownOption(PanelCollapseEdge.BOTTOM, stringResource(R.string.settings_panel_collapse_edge_bottom)),
-    )
-    val selectedEdge = edgeOptions.firstOrNull { it.edge.storageValue == state.wholePanelCollapseEdge }
-        ?: edgeOptions.first()
-    SettingDropdownGeneric(
-        selectedValue = selectedEdge,
-        onValueChange = { state.wholePanelCollapseEdge = it.edge.storageValue },
-        text = stringResource(R.string.settings_panel_collapse_edge_title),
-        description = stringResource(R.string.settings_panel_collapse_edge_desc),
-        enabled = enabled,
-        options = edgeOptions,
-        selectorWidth = WidgetDialogDropdownSelectorWidth,
-    )
-    val collapseEdgeSelected =
-        PanelCollapseEdge.fromStorage(state.wholePanelCollapseEdge) != PanelCollapseEdge.NONE
-    val collapseSettingsEnabled = enabled && collapseEdgeSelected
-    SettingSwitch(
-        state.wholePanelCollapseOnStripTap,
-        { state.wholePanelCollapseOnStripTap = it },
-        stringResource(R.string.settings_panel_collapse_on_strip_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_strip_tap_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSwitch(
-        state.wholePanelCollapseOnStripDoubleTap,
-        { state.wholePanelCollapseOnStripDoubleTap = it },
-        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_strip_double_tap_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSwitch(
-        state.wholePanelCollapseOnTileTap,
-        { state.wholePanelCollapseOnTileTap = it },
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_title),
-        stringResource(R.string.settings_panel_collapse_on_tile_tap_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseOnTileTapDelaySec,
-        onValueChange = {
-            state.wholePanelCollapseOnTileTapDelaySec = normalizePanelCollapseOnTileTapDelaySec(it)
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_on_tile_tap_delay_title,
-            state.wholePanelCollapseOnTileTapDelaySec,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_on_tile_tap_delay_desc),
-        minValue = MIN_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        maxValue = MAX_PANEL_COLLAPSE_ON_TILE_TAP_DELAY_SEC,
-        enabled = collapseSettingsEnabled && state.wholePanelCollapseOnTileTap,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseStripThicknessDp,
-        onValueChange = {
-            val strip = normalizePanelCollapseStripThicknessDp(it)
-            state.wholePanelCollapseStripThicknessDp = strip
-            state.wholePanelCollapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
-                state.wholePanelCollapseTouchZoneThicknessDp,
-                strip,
-            )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_thickness_title,
-            state.wholePanelCollapseStripThicknessDp,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_thickness_desc),
-        minValue = MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
-        maxValue = MAX_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
-        enabled = enabled,
-    )
-    val touchZoneMin = maxOf(
-        MIN_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
-        normalizePanelCollapseStripThicknessDp(state.wholePanelCollapseStripThicknessDp),
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseTouchZoneThicknessDp,
-        onValueChange = {
-            state.wholePanelCollapseTouchZoneThicknessDp = normalizePanelCollapseTouchZoneThicknessDp(
-                it,
-                state.wholePanelCollapseStripThicknessDp,
-            )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_touch_zone_thickness_title,
-            state.wholePanelCollapseTouchZoneThicknessDp,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_touch_zone_thickness_desc),
-        minValue = touchZoneMin,
-        maxValue = MAX_PANEL_COLLAPSE_TOUCH_ZONE_THICKNESS_DP,
-        enabled = collapseSettingsEnabled,
-    )
-    SettingSwitch(
-        state.wholePanelCollapseTouchZoneMatchStrip,
-        { state.wholePanelCollapseTouchZoneMatchStrip = it },
-        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_title),
-        stringResource(R.string.settings_panel_collapse_touch_zone_match_strip_desc),
-        collapseSettingsEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseStripLengthPercentCollapsed,
-        onValueChange = {
-            val length = normalizePanelCollapseStripLengthPercent(it)
-            state.wholePanelCollapseStripLengthPercentCollapsed = length
-            state.wholePanelCollapseStripPositionPercentCollapsed =
-                normalizePanelCollapseStripPositionPercent(
-                    state.wholePanelCollapseStripPositionPercentCollapsed,
-                    length,
-                )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_strip_length_collapsed_title,
-            state.wholePanelCollapseStripLengthPercentCollapsed,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
-        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-        enabled = collapseSettingsEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseStripPositionPercentCollapsed,
-        onValueChange = {
-            state.wholePanelCollapseStripPositionPercentCollapsed =
-                normalizePanelCollapseStripPositionPercent(
-                    it,
-                    state.wholePanelCollapseStripLengthPercentCollapsed,
-                )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_strip_position_collapsed_title,
-            state.wholePanelCollapseStripPositionPercentCollapsed,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
-        minValue = 0,
-        maxValue = (
-            100 - normalizePanelCollapseStripLengthPercent(
-                state.wholePanelCollapseStripLengthPercentCollapsed,
-            )
-            ).coerceAtLeast(0),
-        enabled = collapseSettingsEnabled &&
-            normalizePanelCollapseStripLengthPercent(
-                state.wholePanelCollapseStripLengthPercentCollapsed,
-            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseStripLengthPercentExpanded,
-        onValueChange = {
-            val length = normalizePanelCollapseStripLengthPercent(it)
-            state.wholePanelCollapseStripLengthPercentExpanded = length
-            state.wholePanelCollapseStripPositionPercentExpanded =
-                normalizePanelCollapseStripPositionPercent(
-                    state.wholePanelCollapseStripPositionPercentExpanded,
-                    length,
-                )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_strip_length_expanded_title,
-            state.wholePanelCollapseStripLengthPercentExpanded,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_strip_length_desc),
-        minValue = MIN_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-        maxValue = MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-        enabled = collapseSettingsEnabled,
-    )
-    SettingSliderInt(
-        value = state.wholePanelCollapseStripPositionPercentExpanded,
-        onValueChange = {
-            state.wholePanelCollapseStripPositionPercentExpanded =
-                normalizePanelCollapseStripPositionPercent(
-                    it,
-                    state.wholePanelCollapseStripLengthPercentExpanded,
-                )
-        },
-        text = stringResource(
-            R.string.settings_panel_collapse_strip_position_expanded_title,
-            state.wholePanelCollapseStripPositionPercentExpanded,
-        ),
-        description = stringResource(R.string.settings_panel_collapse_strip_position_desc),
-        minValue = 0,
-        maxValue = (
-            100 - normalizePanelCollapseStripLengthPercent(
-                state.wholePanelCollapseStripLengthPercentExpanded,
-            )
-            ).coerceAtLeast(0),
-        enabled = collapseSettingsEnabled &&
-            normalizePanelCollapseStripLengthPercent(
-                state.wholePanelCollapseStripLengthPercentExpanded,
-            ) < MAX_PANEL_COLLAPSE_STRIP_LENGTH_PERCENT,
-    )
-    WidgetColorThemeSegmentRow(
-        selectedSegment = state.wholePanelCollapseColorThemeSegment,
-        onSegmentSelected = { state.wholePanelCollapseColorThemeSegment = it },
-        enabled = enabled,
-    )
-    val editingLight = state.wholePanelCollapseColorThemeSegment == 0
-    WidgetColorSetting(
-        title = stringResource(R.string.settings_panel_collapse_strip_color_collapsed_title),
-        colorValue = if (editingLight) {
-            state.wholePanelCollapseStripColorLight
-        } else {
-            state.wholePanelCollapseStripColorDark
-        },
-        enabled = enabled,
-        onColorChange = {
-            if (editingLight) state.wholePanelCollapseStripColorLight = it
-            else state.wholePanelCollapseStripColorDark = it
-        },
-        presetSlots = presetSlots,
-        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-        valueTextStyle = MaterialTheme.typography.tboxTitle,
-        valueLabelStyle = MaterialTheme.typography.tboxBody,
-    )
-    Text(
-        text = stringResource(R.string.settings_panel_collapse_strip_color_collapsed_desc),
-        style = MaterialTheme.typography.tboxCaption,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 8.dp),
-    )
-    WidgetColorSetting(
-        title = stringResource(R.string.settings_panel_collapse_strip_color_expanded_title),
-        colorValue = if (editingLight) {
-            state.wholePanelCollapseStripExpandedColorLight
-        } else {
-            state.wholePanelCollapseStripExpandedColorDark
-        },
-        enabled = enabled,
-        onColorChange = {
-            if (editingLight) state.wholePanelCollapseStripExpandedColorLight = it
-            else state.wholePanelCollapseStripExpandedColorDark = it
-        },
-        presetSlots = presetSlots,
-        onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-        valueTextStyle = MaterialTheme.typography.tboxTitle,
-        valueLabelStyle = MaterialTheme.typography.tboxBody,
-    )
-    Text(
-        text = stringResource(R.string.settings_panel_collapse_strip_color_expanded_desc),
-        style = MaterialTheme.typography.tboxCaption,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 8.dp),
-    )
-}
-
-@Composable
-private fun MainScreenPanelWholeSettingsSection(
-    state: WidgetSelectionDialogState,
-    pageCount: Int,
-    enabled: Boolean,
-    settingsViewModel: SettingsViewModel,
-    presetSlots: List<Int>,
-    panelStorageId: String,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = state.wholePanelNameDraft,
-            onValueChange = { state.wholePanelNameDraft = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            enabled = enabled,
-            singleLine = true,
-            label = {
-                Text(
-                    text = stringResource(R.string.floating_panel_name_label),
-                    style = MaterialTheme.typography.tboxBody
-                )
-            },
-            textStyle = MaterialTheme.typography.tboxTitle
-        )
-        SettingSwitch(
-            state.wholePanelClickAction,
-            { state.wholePanelClickAction = it },
-            stringResource(R.string.settings_open_app_on_main_screen_panel_click_title),
-            "",
-            enabled
-        )
-        SettingSwitch(
-            state.wholePanelShowTboxDisconnect,
-            { state.wholePanelShowTboxDisconnect = it },
-            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
-            "",
-            enabled
-        )
-        SettingDropdownGeneric(
-            state.wholePanelRows,
-            { state.wholePanelRows = it },
-            stringResource(R.string.settings_main_screen_panel_rows_title),
-            "",
-            enabled,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingDropdownGeneric(
-            state.wholePanelCols,
-            { state.wholePanelCols = it },
-            stringResource(R.string.settings_main_screen_panel_cols_title),
-            "",
-            enabled,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingSliderInt(
-            value = state.wholePanelGridSpacingDp,
-            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(
-                R.string.settings_panel_grid_spacing_title,
-                state.wholePanelGridSpacingDp,
-            ),
-            description = stringResource(R.string.settings_panel_grid_spacing_desc),
-            minValue = MIN_PANEL_GRID_SPACING_DP,
-            maxValue = MAX_PANEL_GRID_SPACING_DP,
-            enabled = enabled,
-        )
-        SettingDropdownGeneric(
-            state.wholePanelPageNumber,
-            { state.wholePanelPageNumber = it },
-            stringResource(R.string.settings_main_screen_panel_page_title),
-            stringResource(R.string.settings_main_screen_panel_page_desc),
-            enabled,
-            (1..pageCount.coerceAtLeast(1)).toList(),
-        )
-        PanelCollapseWholeSettingsSection(
-            state = state,
-            enabled = enabled,
-            currentThemeSegment = state.wholePanelCollapseColorThemeSegment,
-            settingsViewModel = settingsViewModel,
-            presetSlots = presetSlots,
-        )
-        PanelBackgroundAppearanceSettingsSection(
-            panelStorageId = panelStorageId,
-            enabled = enabled,
-            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
-            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
-            backgroundColorLight = state.wholePanelBackgroundColorLight,
-            backgroundColorDark = state.wholePanelBackgroundColorDark,
-            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
-            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
-            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
-            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
-            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
-            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
-            panelShape = state.wholePanelShape,
-            onPanelShapeChange = { state.wholePanelShape = it },
-            settingsViewModel = settingsViewModel,
-            presetSlots = presetSlots,
-        )
-    }
-}
-
-@Composable
-private fun FloatingDashboardWholeSettingsSection(
-    state: WidgetSelectionDialogState,
-    enabled: Boolean,
-    settingsViewModel: SettingsViewModel,
-    presetSlots: List<Int>,
-    panelStorageId: String,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = state.wholePanelNameDraft,
-            onValueChange = { state.wholePanelNameDraft = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 12.dp),
-            enabled = enabled,
-            singleLine = true,
-            label = {
-                Text(
-                    text = stringResource(R.string.floating_panel_name_label),
-                    style = MaterialTheme.typography.tboxBody
-                )
-            },
-            textStyle = MaterialTheme.typography.tboxTitle
-        )
-        SettingSwitch(
-            state.wholePanelClickAction,
-            { state.wholePanelClickAction = it },
-            stringResource(R.string.settings_open_app_on_panel_click_title),
-            "",
-            enabled
-        )
-        SettingSwitch(
-            state.wholePanelShowTboxDisconnect,
-            { state.wholePanelShowTboxDisconnect = it },
-            stringResource(R.string.settings_floating_tbox_disconnect_indicator_title),
-            "",
-            enabled
-        )
-        SettingDropdownGeneric(
-            state.wholePanelRows,
-            { state.wholePanelRows = it },
-            stringResource(R.string.settings_floating_rows_title),
-            "",
-            enabled,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingDropdownGeneric(
-            state.wholePanelCols,
-            { state.wholePanelCols = it },
-            stringResource(R.string.settings_floating_cols_title),
-            "",
-            enabled,
-            SettingsManager.DASHBOARD_PANEL_GRID_OPTIONS
-        )
-        SettingSliderInt(
-            value = state.wholePanelGridSpacingDp,
-            onValueChange = { state.wholePanelGridSpacingDp = normalizePanelGridSpacingDp(it) },
-            text = stringResource(
-                R.string.settings_panel_grid_spacing_title,
-                state.wholePanelGridSpacingDp,
-            ),
-            description = stringResource(R.string.settings_panel_grid_spacing_desc),
-            minValue = MIN_PANEL_GRID_SPACING_DP,
-            maxValue = MAX_PANEL_GRID_SPACING_DP,
-            enabled = enabled,
-        )
-        PanelCollapseWholeSettingsSection(
-            state = state,
-            enabled = enabled,
-            currentThemeSegment = state.wholePanelCollapseColorThemeSegment,
-            settingsViewModel = settingsViewModel,
-            presetSlots = presetSlots,
-        )
-        PanelBackgroundAppearanceSettingsSection(
-            panelStorageId = panelStorageId,
-            enabled = enabled,
-            colorThemeSegment = state.wholePanelBackgroundColorThemeSegment,
-            onColorThemeSegmentChange = { state.wholePanelBackgroundColorThemeSegment = it },
-            backgroundColorLight = state.wholePanelBackgroundColorLight,
-            backgroundColorDark = state.wholePanelBackgroundColorDark,
-            onBackgroundColorLightChange = { state.wholePanelBackgroundColorLight = it },
-            onBackgroundColorDarkChange = { state.wholePanelBackgroundColorDark = it },
-            backgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
-            backgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
-            onBackgroundImageRelPathLightChange = { state.wholePanelBackgroundImageRelPathLight = it },
-            onBackgroundImageRelPathDarkChange = { state.wholePanelBackgroundImageRelPathDark = it },
-            panelShape = state.wholePanelShape,
-            onPanelShapeChange = { state.wholePanelShape = it },
-            settingsViewModel = settingsViewModel,
-            presetSlots = presetSlots,
-        )
-    }
-}
-
 internal data class WidgetSelectionDescriptionResources(
     val descriptionRes: Int,
     val actionsRes: Int?,
@@ -2477,1662 +2123,6 @@ internal fun resolveWidgetSelectionDescriptionResources(
     )
 }
 
-@Composable
-private fun WidgetTypePickerRadioOption(
-    dataKey: String,
-    displayName: String,
-    selectedDataKey: String,
-    onSelect: () -> Unit,
-) {
-    val selectKey = rememberWrappedOnClick(onSelect)
-    val selected = selectedDataKey == dataKey
-    val descriptionResources = resolveWidgetSelectionDescriptionResources(
-        dataKey = dataKey,
-        selectedDataKey = selectedDataKey,
-    )
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickableWithSound(onClick = onSelect)
-            .padding(vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            RadioButton(
-                selected = selected,
-                onClick = selectKey
-            )
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.tboxTitle,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (descriptionResources != null) {
-            Text(
-                text = stringResource(descriptionResources.descriptionRes),
-                style = MaterialTheme.typography.tboxBody,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 56.dp, end = 8.dp)
-            )
-            val actionsRes = descriptionResources.actionsRes
-            if (actionsRes != null) {
-                Text(
-                    text = stringResource(
-                        R.string.widget_actions_template,
-                        stringResource(actionsRes)
-                    ),
-                    style = MaterialTheme.typography.tboxCaption,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(
-                        start = 56.dp,
-                        top = 4.dp,
-                        end = 8.dp
-                    )
-                )
-            }
-        }
-    }
-}
-
-@Composable
-internal fun WidgetSelectionDialogForm(
-    titleText: String,
-    settingsViewModel: SettingsViewModel,
-    state: WidgetSelectionDialogState,
-    modifier: Modifier = Modifier,
-    dataKeyFilter: (String) -> Boolean = { true },
-    bottomContent: (@Composable () -> Unit)? = null,
-    mainScreenPanelId: String = "",
-    floatingDashboardPanelId: String = "",
-    widgetIndex: Int = 0,
-    currentWidgetConfigs: List<FloatingDashboardWidgetConfig> = emptyList(),
-    tileBackgroundPanelStorageId: String = TileBackgroundImageStorage.MAIN_TAB_DASHBOARD_STORAGE_ID,
-) {
-    val context = LocalContext.current
-    val widgetColorPresetSlots by settingsViewModel.widgetColorPresetSlots.collectAsStateWithLifecycle()
-    val mainScreenPageCount by settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
-    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
-    val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
-    val cruiseControlTypeSetting by settingsViewModel.cruiseControlType.collectAsStateWithLifecycle()
-    LaunchedEffect(noTboxConnect) {
-        state.preferUseMbCanVhalDefault = noTboxConnect
-    }
-    val notSelectedLabel = stringResource(R.string.widget_option_not_selected)
-    val widgetPairs = WidgetsRepository.getAvailableDataKeysWidgets(
-        noTboxConnect = noTboxConnect,
-        climateType = climateControlType,
-        cruiseType = cruiseControlTypeSetting,
-    )
-        .filter { it.isNotEmpty() && dataKeyFilter(it) }
-        .map { key ->
-            key to WidgetsRepository.getTitleUnitForDataKey(context, key)
-        }
-    val selectedKey = state.selectedDataKey
-
-    Column(
-        modifier = modifier
-    ) {
-        SettingsTitle(titleText)
-        WidgetDialogClipboardActionsRow(
-            state = state,
-            currentWidgetConfigs = currentWidgetConfigs,
-            widgetIndex = widgetIndex,
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            when {
-                state.showWholePanelSettings && mainScreenPanelId.isNotBlank() -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        MainScreenPanelWholeSettingsSection(
-                            state = state,
-                            pageCount = mainScreenPageCount,
-                            enabled = true,
-                            settingsViewModel = settingsViewModel,
-                            presetSlots = widgetColorPresetSlots,
-                            panelStorageId = mainScreenPanelId,
-                        )
-                    }
-                }
-                state.showWholePanelSettings && floatingDashboardPanelId.isNotBlank() -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        FloatingDashboardWholeSettingsSection(
-                            state = state,
-                            enabled = true,
-                            settingsViewModel = settingsViewModel,
-                            presetSlots = widgetColorPresetSlots,
-                            panelStorageId = floatingDashboardPanelId,
-                        )
-                    }
-                }
-                state.showAdvancedSettings -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    if (state.isMusicWidgetSelected) {
-                        MediaPlayersInlineSelection(
-                            settingsViewModel = settingsViewModel,
-                            selectedPlayers = state.selectedMediaPlayers,
-                            onSelectionChange = { state.selectedMediaPlayers = it },
-                            enabled = state.togglesEnabled,
-                        )
-                        if (state.selectedMediaPlayers.isEmpty()) {
-                            Text(
-                                text = stringResource(R.string.widget_music_players_required),
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.tboxBody
-                            )
-                        }
-                        SettingSwitch(
-                            state.mediaAutoPlayOnInit,
-                            {
-                                state.mediaAutoPlayOnInit = it
-                                if (!it) {
-                                    state.mediaAutoPlayOnlyWhenEngineRunning = false
-                                }
-                            },
-                            stringResource(R.string.widget_music_auto_play_on_init),
-                            "",
-                            state.togglesEnabled
-                        )
-                        SettingSwitch(
-                            state.mediaAutoPlayOnlyWhenEngineRunning,
-                            { state.mediaAutoPlayOnlyWhenEngineRunning = it },
-                            stringResource(R.string.widget_music_auto_play_only_engine),
-                            "",
-                            state.togglesEnabled && state.mediaAutoPlayOnInit
-                        )
-                        // anymani: новая опция для контроля возврата лаунчера
-                        SettingSwitch(
-                            state.mediaKeepPlayerForeground,
-                            { state.mediaKeepPlayerForeground = it },
-                            stringResource(R.string.widget_music_keep_player_foreground),
-                            stringResource(R.string.widget_music_keep_player_foreground_desc),
-                            state.togglesEnabled
-                        )
-                        SettingSwitch(
-                            state.mediaFollowPlayback,
-                            { state.mediaFollowPlayback = it },
-                            stringResource(R.string.widget_music_follow_playback),
-                            stringResource(R.string.widget_music_follow_playback_desc),
-                            state.togglesEnabled
-                        )
-                        SettingSwitch(
-                            state.mediaShowLikeButton,
-                            { state.mediaShowLikeButton = it },
-                            stringResource(R.string.widget_music_show_like_button),
-                            stringResource(R.string.widget_music_show_like_button_desc),
-                            state.togglesEnabled
-                        )
-                        if (supportsMusicAlbumArtToggle(state.selectedDataKey)) {
-                            SettingSwitch(
-                                state.mediaShowAlbumArt,
-                                { state.mediaShowAlbumArt = it },
-                                stringResource(R.string.widget_music_show_album_art),
-                                stringResource(R.string.widget_music_show_album_art_desc),
-                                state.togglesEnabled
-                            )
-                            if (state.mediaShowAlbumArt &&
-                                supportsMusicAlbumArtLayoutSettings(state.selectedDataKey)
-                            ) {
-                                SettingInt(
-                                    value = state.mediaAlbumArtColumnWidthPercent,
-                                    onValueChange = { state.mediaAlbumArtColumnWidthPercent = it },
-                                    text = stringResource(R.string.widget_music_album_art_column_width_title),
-                                    description = stringResource(
-                                        R.string.widget_music_album_art_column_width_desc
-                                    ),
-                                    minValue = MusicWidgetAlbumArtDisplay.MIN_ALBUM_ART_COLUMN_WIDTH_PERCENT,
-                                    maxValue = MusicWidgetAlbumArtDisplay.MAX_ALBUM_ART_COLUMN_WIDTH_PERCENT,
-                                )
-                                val albumArtSideEntries = listOf(
-                                    MusicAlbumArtSideDropdownEntry(
-                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_LEFT,
-                                        stringResource(R.string.widget_music_album_art_side_left),
-                                    ),
-                                    MusicAlbumArtSideDropdownEntry(
-                                        MusicWidgetAlbumArtDisplay.ALBUM_ART_SIDE_RIGHT,
-                                        stringResource(R.string.widget_music_album_art_side_right),
-                                    ),
-                                )
-                                val selectedAlbumArtSide = albumArtSideEntries.firstOrNull {
-                                    it.side == MusicWidgetAlbumArtDisplay.normalizeAlbumArtSide(
-                                        state.mediaAlbumArtSide
-                                    )
-                                } ?: albumArtSideEntries.first()
-                                SettingDropdownGeneric(
-                                    selectedValue = selectedAlbumArtSide,
-                                    onValueChange = { state.mediaAlbumArtSide = it.side },
-                                    text = stringResource(R.string.widget_music_album_art_side_title),
-                                    description = "",
-                                    enabled = state.togglesEnabled,
-                                    options = albumArtSideEntries,
-                                    selectorWidth = WidgetDialogDropdownSelectorWidth,
-                                )
-                            }
-                        }
-                        if (supportsMusicPlayerHeaderIconSetting(state.selectedDataKey)) {
-                            SettingSwitch(
-                                state.mediaShowPlayerHeaderIcon,
-                                { state.mediaShowPlayerHeaderIcon = it },
-                                stringResource(R.string.widget_music_show_player_header_icon),
-                                stringResource(R.string.widget_music_show_player_header_icon_desc),
-                                state.togglesEnabled
-                            )
-                        }
-                        if (state.selectedDataKey == MUSIC_COVER_WIDGET_DATA_KEY) {
-                            SettingSwitch(
-                                state.mediaShowTrackInfo,
-                                { state.mediaShowTrackInfo = it },
-                                stringResource(R.string.widget_music_show_track_info),
-                                stringResource(R.string.widget_music_show_track_info_desc),
-                                state.togglesEnabled
-                            )
-                        }
-                        if (supportsMusicControlsHeightSetting(state.selectedDataKey)) {
-                            SettingInt(
-                                value = state.mediaControlsHeightPercent,
-                                onValueChange = { state.mediaControlsHeightPercent = it },
-                                text = stringResource(R.string.widget_music_controls_height_title),
-                                description = stringResource(R.string.widget_music_controls_height_desc),
-                                minValue = MusicWidgetControlsDisplay.MIN_CONTROLS_HEIGHT_PERCENT,
-                                maxValue = MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT,
-                            )
-                        }
-                    }
-                    AppLauncherWidgetSettingsSection(
-                        state = state,
-                        settingsViewModel = settingsViewModel,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                    )
-                    HttpRequestWidgetSettingsSection(
-                        state = state,
-                        settingsViewModel = settingsViewModel,
-                        panelStorageId = tileBackgroundPanelStorageId,
-                        widgetIndex = widgetIndex,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                    )
-                    AutomationTriggerWidgetSettingsSection(
-                        state = state,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
-                    )
-                    WidgetButtonBindingSettingsSection(
-                        state = state,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                    )
-                    SettingSwitch(
-                        state.showTitle,
-                        { state.showTitle = it },
-                        stringResource(R.string.widget_show_title),
-                        "",
-                        state.togglesEnabled
-                    )
-                    if (state.showTitle) {
-                        val titlePositionEntries = listOf(
-                            WidgetTitlePositionDropdownEntry(
-                                stringResource(R.string.widget_title_position_top),
-                                WIDGET_TITLE_POSITION_TOP,
-                            ),
-                            WidgetTitlePositionDropdownEntry(
-                                stringResource(R.string.widget_title_position_bottom),
-                                WIDGET_TITLE_POSITION_BOTTOM,
-                            ),
-                        )
-                        val selectedTitlePosition = titlePositionEntries.firstOrNull {
-                            it.stored == normalizeWidgetTitlePosition(state.titlePosition)
-                        } ?: titlePositionEntries.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedTitlePosition,
-                            onValueChange = { state.titlePosition = it.stored },
-                            text = stringResource(R.string.widget_title_position_title),
-                            description = "",
-                            enabled = state.togglesEnabled,
-                            options = titlePositionEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    OutlinedTextField(
-                        value = state.customTitle,
-                        onValueChange = { state.customTitle = it },
-                        enabled = state.togglesEnabled,
-                        textStyle = MaterialTheme.typography.tboxTitle,
-                        label = {
-                            Text(
-                                stringResource(R.string.widget_custom_title_label),
-                                style = MaterialTheme.typography.tboxBody
-                            )
-                        },
-                        placeholder = {
-                            Text(
-                                stringResource(R.string.widget_custom_title_hint),
-                                style = MaterialTheme.typography.tboxBody,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        singleLine = false,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 4.dp)
-                    )
-                    if (WidgetsRepository.supportsShowUnit(state.selectedDataKey)) {
-                        SettingSwitch(
-                            state.showUnit,
-                            { state.showUnit = it },
-                            stringResource(R.string.widget_show_unit),
-                            "",
-                            state.togglesEnabled
-                        )
-                    }
-                    if (WidgetsRepository.supportsSingleLineDualMetrics(state.selectedDataKey)) {
-                        SettingSwitch(
-                            state.singleLineDualMetrics,
-                            { state.singleLineDualMetrics = it },
-                            stringResource(R.string.widget_single_line_dual_metrics),
-                            "",
-                            state.togglesEnabled
-                        )
-                    }
-                    if (WidgetsRepository.supportsValueAccuracy(state.selectedDataKey)) {
-                        val accuracyEntries = listOf(
-                            ValueAccuracyDropdownEntry(
-                                stringResource(R.string.widget_value_accuracy_default),
-                                null
-                            ),
-                            ValueAccuracyDropdownEntry(
-                                stringResource(R.string.widget_value_accuracy_0),
-                                0
-                            ),
-                            ValueAccuracyDropdownEntry(
-                                stringResource(R.string.widget_value_accuracy_1),
-                                1
-                            ),
-                            ValueAccuracyDropdownEntry(
-                                stringResource(R.string.widget_value_accuracy_2),
-                                2
-                            ),
-                        )
-                        val selectedAccuracyEntry = accuracyEntries.find { it.stored == state.valueAccuracy }
-                            ?: accuracyEntries.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedAccuracyEntry,
-                            onValueChange = { state.valueAccuracy = it.stored },
-                            text = stringResource(R.string.widget_value_accuracy_title),
-                            description = stringResource(R.string.widget_value_accuracy_desc),
-                            enabled = state.togglesEnabled,
-                            options = accuracyEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth
-                        )
-                    }
-                    if (WidgetsRepository.supportsDateTimeFormat(state.selectedDataKey)) {
-                        val dateTimeFormatError = !isValidDateTimeWidgetFormat(
-                            state.selectedDataKey,
-                            state.dateTimeFormat,
-                        )
-                        val dateTimeFormatPreview = previewDateTimeWidgetFormat(
-                            state.selectedDataKey,
-                            state.dateTimeFormat,
-                        ).orEmpty()
-                        OutlinedTextField(
-                            value = state.dateTimeFormat,
-                            onValueChange = { state.dateTimeFormat = it },
-                            enabled = state.togglesEnabled,
-                            isError = dateTimeFormatError,
-                            textStyle = MaterialTheme.typography.tboxTitle,
-                            label = {
-                                Text(
-                                    stringResource(R.string.widget_datetime_format_label),
-                                    style = MaterialTheme.typography.tboxBody,
-                                )
-                            },
-                            placeholder = {
-                                Text(
-                                    stringResource(R.string.widget_datetime_format_hint),
-                                    style = MaterialTheme.typography.tboxBody,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            },
-                            supportingText = {
-                                Text(
-                                    text = if (dateTimeFormatError) {
-                                        stringResource(R.string.widget_datetime_format_error)
-                                    } else {
-                                        stringResource(
-                                            R.string.widget_datetime_format_preview,
-                                            dateTimeFormatPreview,
-                                        )
-                                    },
-                                    style = MaterialTheme.typography.tboxCaption,
-                                )
-                            },
-                            singleLine = false,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 4.dp),
-                        )
-                    }
-                    if (WidgetsRepository.supportsUseMbCanVhal(state.selectedDataKey)) {
-                        SettingSwitch(
-                            state.useMbCanVhal,
-                            { state.useMbCanVhal = it },
-                            stringResource(R.string.widget_media_volume_use_mbcan_vhal),
-                            "",
-                            state.togglesEnabled
-                        )
-                    }
-                    if (isAverageFuelConsumptionWidgetDataKey(state.selectedDataKey)) {
-                        val avgFuelSourceOptions = listOf(
-                            AvgFuelConsumptionSourceDropdownEntry(
-                                AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL,
-                                stringResource(R.string.widget_avg_fuel_source_mbcan_vhal),
-                            ),
-                            AvgFuelConsumptionSourceDropdownEntry(
-                                AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP,
-                                stringResource(R.string.trips_widget_source_current),
-                            ),
-                            AvgFuelConsumptionSourceDropdownEntry(
-                                AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP,
-                                stringResource(R.string.trips_widget_source_persistent),
-                            ),
-                        )
-                        val selectedAvgFuelSource = avgFuelSourceOptions.firstOrNull {
-                            it.source == normalizeAvgFuelConsumptionSource(state.avgFuelConsumptionSource)
-                        } ?: avgFuelSourceOptions.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedAvgFuelSource,
-                            onValueChange = { state.avgFuelConsumptionSource = it.source },
-                            text = stringResource(R.string.trips_widget_source_title),
-                            description = "",
-                            enabled = state.togglesEnabled,
-                            options = avgFuelSourceOptions,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (isFuelLitersDisplayModeWidgetDataKey(state.selectedDataKey)) {
-                        val fuelLitersDisplayOptions = listOf(
-                            FuelLitersDisplayModeDropdownEntry(
-                                FUEL_LITERS_DISPLAY_REMAINING,
-                                stringResource(R.string.widget_fuel_liters_display_remaining),
-                            ),
-                            FuelLitersDisplayModeDropdownEntry(
-                                FUEL_LITERS_DISPLAY_TO_FULL,
-                                stringResource(R.string.widget_fuel_liters_display_to_full),
-                            ),
-                        )
-                        val selectedFuelLitersDisplay = fuelLitersDisplayOptions.firstOrNull {
-                            it.mode == normalizeFuelLitersDisplayMode(state.fuelLitersDisplayMode)
-                        } ?: fuelLitersDisplayOptions.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedFuelLitersDisplay,
-                            onValueChange = { state.fuelLitersDisplayMode = it.mode },
-                            text = stringResource(R.string.widget_fuel_liters_display_title),
-                            description = "",
-                            enabled = state.togglesEnabled,
-                            options = fuelLitersDisplayOptions,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (WidgetsRepository.supportsStepperAdjustIconStyle(state.selectedDataKey)) {
-                        val stepperIconEntries = listOf(
-                            StepperAdjustIconStyleDropdownEntry(
-                                stringResource(R.string.widget_stepper_adjust_icon_plus_minus),
-                                STEPPER_ADJUST_ICON_PLUS_MINUS,
-                            ),
-                            StepperAdjustIconStyleDropdownEntry(
-                                stringResource(R.string.widget_stepper_adjust_icon_arrows),
-                                STEPPER_ADJUST_ICON_ARROWS,
-                            ),
-                        )
-                        val selectedStepperIconEntry = stepperIconEntries.find {
-                            it.stored == state.stepperAdjustIconStyle
-                        } ?: stepperIconEntries.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedStepperIconEntry,
-                            onValueChange = { state.stepperAdjustIconStyle = it.stored },
-                            text = stringResource(R.string.widget_stepper_adjust_icon_style_title),
-                            description = stringResource(R.string.widget_stepper_adjust_icon_style_desc),
-                            enabled = state.togglesEnabled,
-                            options = stepperIconEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (WidgetsRepository.supportsHvacTempStep(state.selectedDataKey)) {
-                        val tempStepEntries = listOf(
-                            HvacTempStepDropdownEntry(
-                                stringResource(R.string.widget_hvac_temp_step_0_5),
-                                HVAC_TEMP_WIDGET_STEP_HALF_TENTHS,
-                            ),
-                            HvacTempStepDropdownEntry(
-                                stringResource(R.string.widget_hvac_temp_step_1_0),
-                                HVAC_TEMP_WIDGET_STEP_WHOLE_TENTHS,
-                            ),
-                        )
-                        val selectedTempStepEntry = tempStepEntries.find {
-                            it.stored == state.hvacTempStepTenths
-                        } ?: tempStepEntries.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedTempStepEntry,
-                            onValueChange = { state.hvacTempStepTenths = it.stored },
-                            text = stringResource(R.string.widget_hvac_temp_step_title),
-                            description = stringResource(R.string.widget_hvac_temp_step_desc),
-                            enabled = state.togglesEnabled,
-                            options = tempStepEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (WidgetsRepository.supportsEspRelayMode(state.selectedDataKey)) {
-                        val relayModeEntries = listOf(
-                            EspRelayModeDropdownEntry(
-                                EspRelayWidgetMode.BUTTON,
-                                stringResource(R.string.widget_esp_relay_mode_button),
-                            ),
-                            EspRelayModeDropdownEntry(
-                                EspRelayWidgetMode.RELAY,
-                                stringResource(R.string.widget_esp_relay_mode_relay),
-                            ),
-                        )
-                        val selectedRelayMode = relayModeEntries.find {
-                            it.mode == state.espRelayMode
-                        } ?: relayModeEntries.first { it.mode == EspRelayWidgetMode.DEFAULT }
-                        SettingDropdownGeneric(
-                            selectedValue = selectedRelayMode,
-                            onValueChange = { state.espRelayMode = it.mode },
-                            text = stringResource(R.string.widget_esp_relay_mode_title),
-                            description = stringResource(R.string.widget_esp_relay_mode_desc),
-                            enabled = state.togglesEnabled,
-                            options = relayModeEntries,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (isRoadMatchMapWidgetDataKey(state.selectedDataKey)) {
-                        SettingSwitch(
-                            isChecked = state.speedCamShowOnMap,
-                            onCheckedChange = { state.speedCamShowOnMap = it },
-                            text = stringResource(R.string.speed_cam_show_on_map_title),
-                            description = stringResource(R.string.speed_cam_show_on_map_desc),
-                            enabled = state.togglesEnabled,
-                        )
-                    }
-                    if (BuildConfig.MAPKIT_ENABLED &&
-                        isRoadMatchMapWidgetDataKey(state.selectedDataKey)
-                    ) {
-                        SettingSwitch(
-                            isChecked = state.roadMatchMapKitBasemap,
-                            onCheckedChange = { state.roadMatchMapKitBasemap = it },
-                            text = stringResource(R.string.widget_road_match_mapkit_basemap_title),
-                            description = stringResource(R.string.widget_road_match_mapkit_basemap_desc),
-                            enabled = state.togglesEnabled,
-                        )
-                        if (state.roadMatchMapKitBasemap) {
-                            val opacityEntries = vad.dashing.tbox.location.roadmatch.RoadMatchBasemapOpacity
-                                .STEPS
-                                .map { percent ->
-                                    RoadMatchBasemapTransparencyDropdownEntry(
-                                        percent = percent,
-                                        label = if (percent == 0) {
-                                            stringResource(R.string.widget_road_match_basemap_opaque)
-                                        } else {
-                                            stringResource(
-                                                R.string.widget_road_match_basemap_transparency_percent,
-                                                percent,
-                                            )
-                                        },
-                                    )
-                                }
-                            val selectedOpacity = opacityEntries.firstOrNull {
-                                it.percent == state.roadMatchBasemapTransparencyPercent
-                            } ?: opacityEntries.first()
-                            SettingDropdownGeneric(
-                                selectedValue = selectedOpacity,
-                                onValueChange = {
-                                    state.roadMatchBasemapTransparencyPercent = it.percent
-                                },
-                                text = stringResource(R.string.widget_road_match_basemap_opacity_title),
-                                description = stringResource(
-                                    R.string.widget_road_match_basemap_opacity_desc,
-                                ),
-                                enabled = state.togglesEnabled,
-                                options = opacityEntries,
-                                selectorWidth = WidgetDialogDropdownSelectorWidth,
-                            )
-                        }
-                    }
-                    if (isOsmSpeedLimitWidgetDataKey(state.selectedDataKey)) {
-                        SettingSwitch(
-                            isChecked = state.mapsCamShowCameras,
-                            onCheckedChange = { state.mapsCamShowCameras = it },
-                            text = stringResource(R.string.maps_cam_show_cameras_title),
-                            description = stringResource(R.string.maps_cam_show_cameras_desc),
-                            enabled = state.togglesEnabled,
-                        )
-                        SettingSwitch(
-                            isChecked = state.mapsCamShowCurrentLimit,
-                            onCheckedChange = { state.mapsCamShowCurrentLimit = it },
-                            text = stringResource(R.string.maps_cam_show_current_title),
-                            description = stringResource(R.string.maps_cam_show_current_desc),
-                            enabled = state.togglesEnabled,
-                        )
-                        SettingSwitch(
-                            isChecked = state.mapsCamShowAheadLimit,
-                            onCheckedChange = { state.mapsCamShowAheadLimit = it },
-                            text = stringResource(R.string.maps_cam_show_ahead_title),
-                            description = stringResource(R.string.maps_cam_show_ahead_desc),
-                            enabled = state.togglesEnabled,
-                        )
-                        SettingSliderInt(
-                            value = state.mapsCamLookaheadDistanceM,
-                            onValueChange = {
-                                state.mapsCamLookaheadDistanceM = normalizeMapsCamLookaheadM(it)
-                            },
-                            text = stringResource(
-                                R.string.maps_cam_lookahead_title,
-                                state.mapsCamLookaheadDistanceM,
-                            ),
-                            description = stringResource(R.string.maps_cam_lookahead_desc),
-                            minValue = MIN_MAPS_CAM_LOOKAHEAD_M,
-                            maxValue = MAX_MAPS_CAM_LOOKAHEAD_M,
-                            enabled = state.togglesEnabled,
-                            step = MAPS_CAM_DISTANCE_STEP_M,
-                        )
-                        SettingSliderInt(
-                            value = state.mapsCamRadarHoldDistanceM,
-                            onValueChange = {
-                                state.mapsCamRadarHoldDistanceM = normalizeMapsCamRadarHoldM(it)
-                            },
-                            text = stringResource(
-                                R.string.maps_cam_radar_hold_title,
-                                state.mapsCamRadarHoldDistanceM,
-                            ),
-                            description = stringResource(R.string.maps_cam_radar_hold_desc),
-                            minValue = MIN_MAPS_CAM_RADAR_HOLD_M,
-                            maxValue = MAX_MAPS_CAM_RADAR_HOLD_M,
-                            enabled = state.togglesEnabled,
-                            step = MAPS_CAM_DISTANCE_STEP_M,
-                        )
-                        SettingSliderInt(
-                            value = state.speedCamOverageKmh,
-                            onValueChange = {
-                                state.speedCamOverageKmh = normalizeSpeedCamOverageKmh(it)
-                            },
-                            text = stringResource(
-                                R.string.speed_cam_overage_title,
-                                state.speedCamOverageKmh,
-                            ),
-                            description = stringResource(R.string.speed_cam_overage_desc),
-                            minValue = vad.dashing.tbox.speedcam.MIN_SPEED_CAM_OVERAGE_KMH,
-                            maxValue = vad.dashing.tbox.speedcam.MAX_SPEED_CAM_OVERAGE_KMH,
-                            enabled = state.togglesEnabled,
-                            step = 1,
-                        )
-                    }
-                    if (isAccCruiseWidgetDataKey(state.selectedDataKey)) {
-                        SettingInt(
-                            value = state.accCruiseTargetKmh,
-                            onValueChange = {
-                                state.accCruiseTargetKmh = normalizeAccCruiseTargetKmh(it)
-                            },
-                            text = stringResource(R.string.widget_acc_cruise_target_title),
-                            description = stringResource(R.string.widget_acc_cruise_target_desc),
-                            minValue = ACC_CRUISE_TARGET_KMH_MIN,
-                            maxValue = ACC_CRUISE_TARGET_KMH_MAX,
-                        )
-                        SettingInt(
-                            value = state.accCruiseIncreaseIntervalMs,
-                            onValueChange = {
-                                state.accCruiseIncreaseIntervalMs =
-                                    normalizeAccCruiseStepIntervalMs(it)
-                            },
-                            text = stringResource(R.string.widget_acc_cruise_increase_interval_title),
-                            description = stringResource(R.string.widget_acc_cruise_increase_interval_desc),
-                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
-                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
-                        )
-                        SettingInt(
-                            value = state.accCruiseDecreaseIntervalMs,
-                            onValueChange = {
-                                state.accCruiseDecreaseIntervalMs =
-                                    normalizeAccCruiseStepIntervalMs(it)
-                            },
-                            text = stringResource(R.string.widget_acc_cruise_decrease_interval_title),
-                            description = stringResource(R.string.widget_acc_cruise_decrease_interval_desc),
-                            minValue = ACC_CRUISE_STEP_INTERVAL_MS_MIN,
-                            maxValue = ACC_CRUISE_STEP_INTERVAL_MS_MAX,
-                        )
-                    }
-                    if (state.selectedDataKey == DRIVE_MODE_WIDGET_DATA_KEY) {
-                        val selectedOption = DRIVE_MODE_WIDGET_OPTIONS.firstOrNull {
-                            it.rawValue == normalizeDriveModeWidgetRawValue(state.selectedDriveMode)
-                        } ?: DRIVE_MODE_WIDGET_OPTIONS.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedOption,
-                            onValueChange = { state.selectedDriveMode = it.rawValue },
-                            text = stringResource(R.string.widget_drive_mode_target_title),
-                            description = stringResource(R.string.widget_drive_mode_target_desc),
-                            enabled = state.togglesEnabled,
-                            options = DRIVE_MODE_WIDGET_OPTIONS,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth
-                        )
-                    }
-                    if (state.isDriveModeCycleWidgetSelected) {
-                        Text(
-                            text = stringResource(R.string.widget_drive_mode_cycle_modes_title),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_drive_mode_cycle_modes_desc),
-                            style = MaterialTheme.typography.tboxCaption,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        val selectedSet = state.selectedDriveModes.toSet()
-                        DRIVE_MODE_WIDGET_OPTIONS.forEach { option ->
-                            val checked = option.rawValue in selectedSet
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(
-                                    checked = checked,
-                                    onCheckedChange = {
-                                        state.selectedDriveModes = toggleDriveModeCycleSelection(
-                                            state.selectedDriveModes,
-                                            option.rawValue,
-                                        )
-                                    },
-                                    enabled = state.togglesEnabled,
-                                )
-                                Text(
-                                    text = option.label,
-                                    style = MaterialTheme.typography.tboxBody,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                )
-                            }
-                        }
-                    }
-                    if (isActiveTripWidgetDataKey(state.selectedDataKey) ||
-                        isTripMetricWidgetDataKey(state.selectedDataKey)
-                    ) {
-                        val sourceOptions = listOf(
-                            TripWidgetSourceDropdownEntry(
-                                TRIP_WIDGET_SOURCE_CURRENT,
-                                stringResource(R.string.trips_widget_source_current),
-                            ),
-                            TripWidgetSourceDropdownEntry(
-                                TRIP_WIDGET_SOURCE_PERSISTENT,
-                                stringResource(R.string.trips_widget_source_persistent),
-                            ),
-                        )
-                        val selectedSource = sourceOptions.firstOrNull {
-                            it.source == normalizeTripWidgetSource(state.tripWidgetSource)
-                        } ?: sourceOptions.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedSource,
-                            onValueChange = { state.tripWidgetSource = it.source },
-                            text = stringResource(R.string.trips_widget_source_title),
-                            description = "",
-                            enabled = state.togglesEnabled,
-                            options = sourceOptions,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (isTripMetricWidgetDataKey(state.selectedDataKey)) {
-                        val fieldOptions = ActiveTripCustomWidgetField.entries.map { field ->
-                            TripMetricFieldDropdownEntry(
-                                fieldId = field.id,
-                                display = stringResource(field.labelRes),
-                            )
-                        }
-                        val selectedField = fieldOptions.firstOrNull {
-                            it.fieldId == TripMetricFormatter.normalizeFieldId(state.tripMetricFieldId)
-                        } ?: fieldOptions.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedField,
-                            onValueChange = { state.tripMetricFieldId = it.fieldId },
-                            text = stringResource(R.string.trips_metric_field_title),
-                            description = "",
-                            enabled = state.togglesEnabled,
-                            options = fieldOptions,
-                            selectorWidth = WidgetDialogDropdownSelectorWidth,
-                        )
-                    }
-                    if (isObdMetricWidgetDataKey(state.selectedDataKey)) {
-                        val supportedRaw by settingsViewModel.elm327SupportedPids
-                            .collectAsStateWithLifecycle()
-                        val discoveryAtMs by settingsViewModel.elm327DiscoveryAtMs
-                            .collectAsStateWithLifecycle()
-                        val supportedMode01 = remember(supportedRaw) {
-                            vad.dashing.tbox.obd.Elm327Protocol.decodeSupportedPids(supportedRaw)
-                        }
-                        val discoveryDone = discoveryAtMs > 0L
-                        val unsupportedHint =
-                            stringResource(R.string.obd_metric_pid_unsupported_hint)
-                        val pidOptions = ObdPid.entries.map { pid ->
-                            val base = stringResource(pid.labelRes)
-                            val mark = when {
-                                pid.mode01Pid == null -> ""
-                                !discoveryDone -> ""
-                                pid.mode01Pid in supportedMode01 -> ""
-                                else -> " — $unsupportedHint"
-                            }
-                            ObdPidDropdownEntry(
-                                pidId = pid.id,
-                                display = base + mark,
-                            )
-                        }
-                        val selectedPid = pidOptions.firstOrNull {
-                            it.pidId == ObdPid.normalizeId(state.obdPidId)
-                        } ?: pidOptions.first()
-                        SettingDropdownGeneric(
-                            selectedValue = selectedPid,
-                            onValueChange = { state.obdPidId = it.pidId },
-                            text = stringResource(R.string.obd_metric_pid_title),
-                            description = if (discoveryDone) {
-                                stringResource(R.string.obd_metric_pid_discovery_hint)
-                            } else {
-                                ""
-                            },
-                            enabled = state.togglesEnabled,
-                            options = pidOptions,
-                            selectorWidth = WidgetDialogObdPidDropdownSelectorWidth,
-                        )
-                    }
-                    if (isActiveTripWidgetDataKey(state.selectedDataKey)) {
-                        SettingSwitch(
-                            state.tripWidgetShowRowDividers,
-                            { state.tripWidgetShowRowDividers = it },
-                            stringResource(R.string.trips_widget_show_row_dividers_title),
-                            "",
-                            state.togglesEnabled,
-                        )
-                        SettingInt(
-                            value = state.tripWidgetLabelColumnWidthPercent,
-                            onValueChange = { state.tripWidgetLabelColumnWidthPercent = it },
-                            text = stringResource(R.string.trips_widget_label_column_width_title),
-                            description = stringResource(R.string.trips_widget_label_column_width_desc),
-                            minValue = TripWidgetTileDisplay.MIN_LABEL_COLUMN_WIDTH_PERCENT,
-                            maxValue = TripWidgetTileDisplay.MAX_LABEL_COLUMN_WIDTH_PERCENT,
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_title_scale, state.titleScale),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_scale_hint),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.titleScale,
-                            onValueChange = { newValue ->
-                                state.titleScale = normalizeWidgetScale(newValue)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 18,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_icon_scale, state.iconScale),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_scale_hint),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.iconScale,
-                            onValueChange = { newValue ->
-                                state.iconScale = normalizeWidgetScale(newValue)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 18,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_text_scale, state.textScale),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_scale_hint),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.textScale,
-                            onValueChange = { newValue ->
-                                state.textScale = normalizeWidgetScale(newValue)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 18,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                    SettingSliderInt(
-                        value = state.paddingTopPercent,
-                        onValueChange = {
-                            state.paddingTopPercent = normalizeWidgetPaddingPercent(it)
-                        },
-                        text = stringResource(R.string.widget_padding_top, state.paddingTopPercent),
-                        description = stringResource(R.string.widget_padding_hint),
-                        minValue = MIN_WIDGET_PADDING_PERCENT,
-                        maxValue = MAX_WIDGET_PADDING_PERCENT,
-                        enabled = state.togglesEnabled,
-                    )
-                    SettingSliderInt(
-                        value = state.paddingBottomPercent,
-                        onValueChange = {
-                            state.paddingBottomPercent = normalizeWidgetPaddingPercent(it)
-                        },
-                        text = stringResource(
-                            R.string.widget_padding_bottom,
-                            state.paddingBottomPercent,
-                        ),
-                        description = stringResource(R.string.widget_padding_hint),
-                        minValue = MIN_WIDGET_PADDING_PERCENT,
-                        maxValue = MAX_WIDGET_PADDING_PERCENT,
-                        enabled = state.togglesEnabled,
-                    )
-                    SettingSliderInt(
-                        value = state.paddingStartPercent,
-                        onValueChange = {
-                            state.paddingStartPercent = normalizeWidgetPaddingPercent(it)
-                        },
-                        text = stringResource(
-                            R.string.widget_padding_start,
-                            state.paddingStartPercent,
-                        ),
-                        description = stringResource(R.string.widget_padding_hint),
-                        minValue = MIN_WIDGET_PADDING_PERCENT,
-                        maxValue = MAX_WIDGET_PADDING_PERCENT,
-                        enabled = state.togglesEnabled,
-                    )
-                    SettingSliderInt(
-                        value = state.paddingEndPercent,
-                        onValueChange = {
-                            state.paddingEndPercent = normalizeWidgetPaddingPercent(it)
-                        },
-                        text = stringResource(R.string.widget_padding_end, state.paddingEndPercent),
-                        description = stringResource(R.string.widget_padding_hint),
-                        minValue = MIN_WIDGET_PADDING_PERCENT,
-                        maxValue = MAX_WIDGET_PADDING_PERCENT,
-                        enabled = state.togglesEnabled,
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.widget_shape, state.shape),
-                            style = MaterialTheme.typography.tboxTitle,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.widget_shape_hint),
-                            style = MaterialTheme.typography.tboxBody,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = state.shape.toFloat(),
-                            onValueChange = { newValue ->
-                                state.shape = normalizeWidgetShape(newValue.toInt())
-                            },
-                            valueRange = 0f..50f,
-                            steps = 49,
-                            enabled = state.togglesEnabled,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                    }
-                    val textAlignEntries = listOf(
-                        WidgetTextAlignDropdownEntry(
-                            stringResource(R.string.widget_text_align_center),
-                            WIDGET_TEXT_ALIGN_CENTER,
-                        ),
-                        WidgetTextAlignDropdownEntry(
-                            stringResource(R.string.widget_text_align_start),
-                            WIDGET_TEXT_ALIGN_START,
-                        ),
-                        WidgetTextAlignDropdownEntry(
-                            stringResource(R.string.widget_text_align_end),
-                            WIDGET_TEXT_ALIGN_END,
-                        ),
-                    )
-                    val selectedTextAlign = textAlignEntries.firstOrNull {
-                        it.stored == normalizeWidgetTextAlign(state.textAlign)
-                    } ?: textAlignEntries.first()
-                    SettingDropdownGeneric(
-                        selectedValue = selectedTextAlign,
-                        onValueChange = { state.textAlign = it.stored },
-                        text = stringResource(R.string.widget_text_align_title),
-                        description = "",
-                        enabled = state.togglesEnabled,
-                        options = textAlignEntries,
-                        selectorWidth = WidgetDialogDropdownSelectorWidth,
-                    )
-                    val fontWeightEntries = listOf(
-                        WidgetFontWeightDropdownEntry(
-                            stringResource(R.string.widget_font_weight_normal),
-                            WIDGET_FONT_WEIGHT_NORMAL,
-                        ),
-                        WidgetFontWeightDropdownEntry(
-                            stringResource(R.string.widget_font_weight_medium),
-                            WIDGET_FONT_WEIGHT_MEDIUM,
-                        ),
-                        WidgetFontWeightDropdownEntry(
-                            stringResource(R.string.widget_font_weight_semi_bold),
-                            WIDGET_FONT_WEIGHT_SEMI_BOLD,
-                        ),
-                    )
-                    val selectedFontWeight = fontWeightEntries.firstOrNull {
-                        it.stored == normalizeWidgetFontWeight(state.fontWeight)
-                    } ?: fontWeightEntries[1]
-                    SettingDropdownGeneric(
-                        selectedValue = selectedFontWeight,
-                        onValueChange = { state.fontWeight = it.stored },
-                        text = stringResource(R.string.widget_font_weight_title),
-                        description = "",
-                        enabled = state.togglesEnabled,
-                        options = fontWeightEntries,
-                        selectorWidth = WidgetDialogDropdownSelectorWidth,
-                    )
-                    WidgetColorThemeSegmentRow(
-                        selectedSegment = state.advancedColorThemeSegment,
-                        onSegmentSelected = { state.advancedColorThemeSegment = it },
-                        enabled = state.togglesEnabled
-                    )
-                    if (state.advancedColorThemeSegment == 0) {
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_text_color_light),
-                            colorValue = state.textColorLight,
-                            enabled = state.togglesEnabled,
-                            onColorChange = { state.textColorLight = it },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_background_color_light),
-                            colorValue = state.backgroundColorLight,
-                            enabled = state.togglesEnabled,
-                            onColorChange = { state.backgroundColorLight = it },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                    } else {
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_text_color_dark),
-                            colorValue = state.textColorDark,
-                            enabled = state.togglesEnabled,
-                            onColorChange = { state.textColorDark = it },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_background_color_dark),
-                            colorValue = state.backgroundColorDark,
-                            enabled = state.togglesEnabled,
-                            onColorChange = { state.backgroundColorDark = it },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                    }
-                    TileBackgroundImageSettingsSection(
-                        state = state,
-                        settingsViewModel = settingsViewModel,
-                        panelStorageId = tileBackgroundPanelStorageId,
-                        widgetIndex = widgetIndex,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
-                    )
-                    OutlinedButton(
-                        onClick = rememberWrappedOnClick { state.resetTileTextAndBackgroundColors() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 8.dp),
-                        enabled = state.togglesEnabled,
-                    ) {
-                        Text(
-                            stringResource(R.string.widget_reset_text_background_colors),
-                            style = MaterialTheme.typography.tboxBody
-                        )
-                    }
-
-                    Text(
-                        text = stringResource(R.string.widget_control_colors_section),
-                        style = MaterialTheme.typography.tboxTitle,
-                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                    )
-                    val musicStepperBgArgb = MaterialTheme.colorScheme.surfaceVariant
-                        .copy(alpha = DEFAULT_MUSIC_STEPPER_CONTROL_BG_ALPHA)
-                        .toArgb()
-                    SettingSwitch(
-                        state.controlColorsUseDefaults,
-                        { enabled ->
-                            if (enabled) {
-                                state.clearControlColorsToDefaults()
-                            } else {
-                                val kind = controlAppearanceKindForDataKey(state.selectedDataKey)
-                                state.applyControlColorSeed(
-                                    seedControlColorsFromDefaults(
-                                        kind = kind,
-                                        tileTextColorLight = state.textColorLight,
-                                        tileTextColorDark = state.textColorDark,
-                                        musicStepperBgArgb = musicStepperBgArgb,
-                                        dataKey = state.selectedDataKey,
-                                    )
-                                )
-                            }
-                        },
-                        stringResource(R.string.widget_control_colors_use_defaults),
-                        "",
-                        state.togglesEnabled,
-                    )
-                    key(state.controlAppearanceEpoch) {
-                        val controlEditorsEnabled =
-                            state.togglesEnabled && !state.controlColorsUseDefaults
-                        WidgetControlStateSegmentRow(
-                            selectedSegment = state.controlStateSegment,
-                            onSegmentSelected = { state.controlStateSegment = it },
-                            enabled = controlEditorsEnabled,
-                        )
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_control_content_color),
-                            colorValue = state.controlContentColorForEditor(),
-                            enabled = controlEditorsEnabled,
-                            onColorChange = { state.setControlContentColorForEditor(it) },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                        WidgetColorSetting(
-                            title = stringResource(R.string.widget_control_background_color),
-                            colorValue = state.controlBackgroundColorForEditor(),
-                            enabled = controlEditorsEnabled,
-                            onColorChange = { state.setControlBackgroundColorForEditor(it) },
-                            presetSlots = widgetColorPresetSlots,
-                            onPresetSlotColorSave = settingsViewModel::saveWidgetColorPresetSlot,
-                            valueTextStyle = MaterialTheme.typography.tboxTitle,
-                            valueLabelStyle = MaterialTheme.typography.tboxBody,
-                        )
-                    }
-                    val controlShapeDisplay = state.controlShape
-                        ?: defaultControlShapeDpForKind(
-                            controlAppearanceKindForDataKey(state.selectedDataKey)
-                        )
-                    Text(
-                        text = stringResource(R.string.widget_control_shape, controlShapeDisplay),
-                        style = MaterialTheme.typography.tboxTitle,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.widget_control_shape_hint),
-                        style = MaterialTheme.typography.tboxCaption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Slider(
-                        value = controlShapeDisplay.toFloat(),
-                        onValueChange = { newValue ->
-                            state.controlShape = normalizeWidgetControlShape(newValue.toInt())
-                        },
-                        valueRange = 0f..50f,
-                        steps = 49,
-                        enabled = state.togglesEnabled,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                    )
-                    val controlPaddingDisplay = state.controlPadding
-                        ?: defaultControlPaddingDpForDataKey(state.selectedDataKey)
-                    Text(
-                        text = stringResource(R.string.widget_control_padding, controlPaddingDisplay),
-                        style = MaterialTheme.typography.tboxTitle,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                    Text(
-                        text = stringResource(R.string.widget_control_padding_hint),
-                        style = MaterialTheme.typography.tboxCaption,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Slider(
-                        value = controlPaddingDisplay.toFloat(),
-                        onValueChange = { newValue ->
-                            state.controlPadding = normalizeWidgetControlPadding(newValue.toInt())
-                        },
-                        valueRange = 0f..50f,
-                        steps = 49,
-                        enabled = state.togglesEnabled,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                    )
-                }
-                }
-
-                else -> {
-                    var dataKeyFilterText by rememberSaveable { mutableStateOf("") }
-                    val initialListSelectedKey = rememberSaveable {
-                        state.selectedDataKey
-                    }
-                    val needle = dataKeyFilterText.trim().lowercase()
-                    val searching = needle.isNotEmpty()
-                    fun optionMatches(pair: Pair<String, String>): Boolean {
-                        if (!searching) return true
-                        val description = WidgetsRepository
-                            .getDescriptionResForDataKey(pair.first)
-                            ?.let(context::getString)
-                            .orEmpty()
-                        val actions = WidgetsRepository
-                            .getActionsDescriptionResForDataKey(pair.first)
-                            ?.let(context::getString)
-                            .orEmpty()
-                        return pair.second.lowercase().contains(needle) ||
-                            pair.first.lowercase().contains(needle) ||
-                            description.lowercase().contains(needle) ||
-                            actions.lowercase().contains(needle)
-                    }
-                    val selectedPair = widgetPairs.find { it.first == initialListSelectedKey }
-                    val defaultExpandedSection = remember(initialListSelectedKey, widgetPairs) {
-                        WidgetTypeSections.sectionFor(initialListSelectedKey)?.name
-                            ?: widgetPairs.firstNotNullOfOrNull {
-                                WidgetTypeSections.sectionFor(it.first)?.name
-                            }
-                    }
-                    var expandedSectionId by rememberSaveable {
-                        mutableStateOf(defaultExpandedSection)
-                    }
-                    var wasSearching by rememberSaveable { mutableStateOf(false) }
-                    LaunchedEffect(searching, state.selectedDataKey, defaultExpandedSection) {
-                        if (searching) {
-                            wasSearching = true
-                        } else if (wasSearching) {
-                            wasSearching = false
-                            expandedSectionId = WidgetTypeSections.sectionFor(state.selectedDataKey)?.name
-                                ?: defaultExpandedSection
-                        } else if (expandedSectionId == null) {
-                            expandedSectionId = defaultExpandedSection
-                        }
-                    }
-                    val stickyOptions = buildList {
-                        add("" to notSelectedLabel)
-                        if (initialListSelectedKey.isNotEmpty() && selectedPair != null) {
-                            add(selectedPair)
-                        }
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = dataKeyFilterText,
-                            onValueChange = { dataKeyFilterText = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp),
-                            textStyle = MaterialTheme.typography.tboxTitle,
-                            label = {
-                                Text(
-                                    text = stringResource(R.string.widget_app_launcher_search),
-                                    style = MaterialTheme.typography.tboxBody
-                                )
-                            },
-                            singleLine = true,
-                        )
-                        stickyOptions.forEach { (optionKey, displayName) ->
-                            key("sticky-$optionKey") {
-                                WidgetTypePickerRadioOption(
-                                    dataKey = optionKey,
-                                    displayName = displayName,
-                                    selectedDataKey = state.selectedDataKey,
-                                    onSelect = { state.applySelectedDataKey(optionKey) },
-                                )
-                            }
-                        }
-                        WidgetTypeSectionId.entries.forEach { section ->
-                            val sectionItems = widgetPairs
-                                .filter { WidgetTypeSections.sectionFor(it.first) == section }
-                                .filter { it.first != initialListSelectedKey }
-                                .filter { optionMatches(it) }
-                                .sortedBy { it.second }
-                            if (sectionItems.isEmpty()) return@forEach
-                            val sectionExpanded = searching || expandedSectionId == section.name
-                            key(section.name) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickableWithSound(enabled = !searching) {
-                                            expandedSectionId =
-                                                if (expandedSectionId == section.name) null
-                                                else section.name
-                                        }
-                                        .padding(vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = stringResource(section.titleRes),
-                                        style = MaterialTheme.typography.tboxHeadline,
-                                        modifier = Modifier.weight(1f),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Filled.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.rotate(if (sectionExpanded) 180f else 0f),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                                AnimatedVisibility(visible = sectionExpanded) {
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        sectionItems.forEach { (optionKey, displayName) ->
-                                            key(optionKey) {
-                                                WidgetTypePickerRadioOption(
-                                                    dataKey = optionKey,
-                                                    displayName = displayName,
-                                                    selectedDataKey = state.selectedDataKey,
-                                                    onSelect = {
-                                                        state.applySelectedDataKey(optionKey)
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        bottomContent?.invoke()
-    }
-}
-
-@Composable
-internal fun WidgetDialogClipboardActionsRow(
-    state: WidgetSelectionDialogState,
-    currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    widgetIndex: Int,
-    modifier: Modifier = Modifier,
-) {
-    val isWholePanelMode = state.showWholePanelSettings
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (isWholePanelMode) {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    WidgetDialogClipboard.copyPanel(
-                        state.toWholePanelClipboardSnapshot(
-                            currentWidgetConfigs = currentWidgetConfigs,
-                            widgetIndex = widgetIndex,
-                        )
-                    )
-                },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.action_copy),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    WidgetDialogClipboard.panelSnapshot?.let {
-                        state.applyWholePanelFromClipboard(it, widgetIndex = widgetIndex)
-                    }
-                },
-                enabled = WidgetDialogClipboard.hasPanel,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.action_paste),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        } else {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    WidgetDialogClipboard.copyTile(state.toTileClipboardSnapshot())
-                },
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.action_copy),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    WidgetDialogClipboard.tileSnapshot?.let {
-                        state.applyTileClipboardSnapshot(it, preserveDataKey = false)
-                    }
-                },
-                enabled = WidgetDialogClipboard.hasTile,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.action_paste),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    WidgetDialogClipboard.tileSnapshot?.let {
-                        state.applyTileClipboardSnapshot(it, preserveDataKey = true)
-                    }
-                },
-                enabled = WidgetDialogClipboard.hasTile && state.selectedDataKey.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = stringResource(R.string.widget_paste_without_type),
-                    style = MaterialTheme.typography.tboxButton,
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-internal fun WidgetSelectionDialogActions(
-    state: WidgetSelectionDialogState,
-    onDismiss: () -> Unit,
-    onSave: () -> Unit,
-    modifier: Modifier = Modifier,
-    showWholePanelButton: Boolean = false,
-    deleteAfterWholePanel: (@Composable RowScope.() -> Unit)? = null,
-    /** Load whole-panel draft from persisted config once when user opens «Вся панель». */
-    onWholePanelSectionOpened: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedButton(
-                onClick = rememberWrappedOnClick {
-                    val next = !state.showAdvancedSettings
-                    state.showAdvancedSettings = next
-                    if (next) {
-                        state.showWholePanelSettings = false
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                border = BorderStroke(
-                    width = 1.dp,
-                    color = if (state.showAdvancedSettings) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outline
-                    }
-                ),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = if (state.showAdvancedSettings) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                    } else {
-                        Color.Transparent
-                    },
-                    contentColor = if (state.showAdvancedSettings) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-            ) {
-                Text(
-                    text = stringResource(R.string.widget_toggle_advanced),
-                    style = MaterialTheme.typography.tboxButton,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (showWholePanelButton) {
-                OutlinedButton(
-                    onClick = rememberWrappedOnClick {
-                        val next = !state.showWholePanelSettings
-                        state.showWholePanelSettings = next
-                        if (next) {
-                            state.showAdvancedSettings = false
-                            if (!state.wholePanelDraftSeeded) {
-                                onWholePanelSectionOpened?.invoke()
-                            }
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (state.showWholePanelSettings) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        }
-                    ),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (state.showWholePanelSettings) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                        } else {
-                            Color.Transparent
-                        },
-                        contentColor = if (state.showWholePanelSettings) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                ) {
-                    Text(
-                        text = stringResource(R.string.widget_toggle_whole_panel),
-                        style = MaterialTheme.typography.tboxButton,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            deleteAfterWholePanel?.invoke(this)
-        }
-        OutlinedButton(
-            onClick = rememberWrappedOnClick(onDismiss),
-            modifier = Modifier.padding(end = 12.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.action_cancel),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
-        Button(
-            enabled = state.canSaveSelection,
-            onClick = rememberWrappedOnClick(onSave)
-        ) {
-            Text(
-                text = stringResource(R.string.action_save),
-                style = MaterialTheme.typography.tboxButton,
-            )
-        }
-    }
-}
-
 internal fun applyWidgetSelectionChanges(
     context: Context,
     dashboardManager: DashboardManager,
@@ -4141,16 +2131,14 @@ internal fun applyWidgetSelectionChanges(
     widgetIndex: Int,
     state: WidgetSelectionDialogState,
     saveConfigs: (List<FloatingDashboardWidgetConfig>) -> Unit,
-    externalAppWidgetId: Int? = null
+    externalAppWidgetId: Int? = null,
+    /** False keeps the stored config of [widgetIndex] (its new widget is still being picked). */
+    writeEditingTile: Boolean = true,
 ) {
     if (state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
         state.draftAppWidgetId = externalAppWidgetId
     }
-    val draftConfig = if (state.selectedDataKey.isNotEmpty()) {
-        state.toDraftWidgetConfig()
-    } else {
-        FloatingDashboardWidgetConfig(dataKey = "", customTitle = "")
-    }
+    val draftConfig = state.editingTileConfigForSave()
     val targetCount = if (state.wholePanelDraftSeeded) {
         (state.wholePanelRows * state.wholePanelCols).coerceAtLeast(1)
     } else {
@@ -4160,7 +2148,7 @@ internal fun applyWidgetSelectionChanges(
     val normalizedConfigs = normalizeWidgetConfigs(baseConfigs, targetCount).toMutableList()
     val prevAppWidgetIds = normalizedConfigs.mapNotNull { it.appWidgetId }.toSet() +
         currentWidgetConfigs.mapNotNull { it.appWidgetId }
-    if (widgetIndex in normalizedConfigs.indices) {
+    if (writeEditingTile && widgetIndex in normalizedConfigs.indices) {
         normalizedConfigs[widgetIndex] = draftConfig
     }
 
@@ -4180,8 +2168,10 @@ internal fun applyWidgetSelectionChanges(
         }
     }
     saveConfigs(normalizedConfigs)
-    if (widgetIndex in updatedWidgets.indices) {
-        dashboardManager.clearWidgetHistory(updatedWidgets[widgetIndex].id)
+    updatedWidgets.forEachIndexed { index, widget ->
+        if (index == widgetIndex || normalizedConfigs[index] != currentWidgetConfigs.getOrNull(index)) {
+            dashboardManager.clearWidgetHistory(widget.id)
+        }
     }
 }
 
@@ -4189,6 +2179,7 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
     state: WidgetSelectionDialogState
 ): MainScreenWholePanelFieldsForWidgetDialogSave? {
     if (!state.wholePanelDraftSeeded) return null
+    val placement = state.editedWholePanelPlacement
     return MainScreenWholePanelFieldsForWidgetDialogSave(
         name = state.wholePanelNameDraft.trim(),
         rows = state.wholePanelRows,
@@ -4235,6 +2226,10 @@ internal fun mainScreenWholePanelSavePayloadIfSeeded(
         panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
         panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
         panelShape = normalizePanelShape(state.wholePanelShape),
+        relXPercent = placement?.x,
+        relYPercent = placement?.y,
+        relWidthPercent = placement?.width,
+        relHeightPercent = placement?.height,
     )
 }
 
@@ -4242,6 +2237,7 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
     state: WidgetSelectionDialogState
 ): FloatingWholePanelFieldsForWidgetDialogSave? {
     if (!state.wholePanelDraftSeeded) return null
+    val placement = state.editedWholePanelPlacement
     return FloatingWholePanelFieldsForWidgetDialogSave(
         name = state.wholePanelNameDraft.trim(),
         rows = state.wholePanelRows,
@@ -4287,6 +2283,10 @@ internal fun floatingWholePanelSavePayloadIfSeeded(
         panelBackgroundImageRelPathLight = state.wholePanelBackgroundImageRelPathLight,
         panelBackgroundImageRelPathDark = state.wholePanelBackgroundImageRelPathDark,
         panelShape = normalizePanelShape(state.wholePanelShape),
+        width = placement?.width,
+        height = placement?.height,
+        startX = placement?.x,
+        startY = placement?.y,
     )
 }
 
@@ -4297,11 +2297,16 @@ internal fun externalAppWidgetIdForApply(
 ): Int? {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return null
     return state.draftAppWidgetId
-        ?: currentWidgetConfigs.getOrNull(widgetIndex)
+        ?: (state.wholePanelWidgetsDraft ?: currentWidgetConfigs).getOrNull(widgetIndex)
             ?.takeIf { it.dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY }
             ?.appWidgetId
 }
 
+/**
+ * Opens the system widget picker when an external widget tile has no widget yet.
+ * Other pending edits are saved first via [persistOtherChanges]: the picker activity
+ * rewrites the stored panel config and would otherwise drop them.
+ */
 internal fun tryLaunchExternalWidgetPicker(
     context: Context,
     saveTarget: Int,
@@ -4309,11 +2314,15 @@ internal fun tryLaunchExternalWidgetPicker(
     widgetIndex: Int,
     state: WidgetSelectionDialogState,
     currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    persistOtherChanges: () -> Unit = {},
 ): Boolean {
     if (state.selectedDataKey != WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) return false
     val id = externalAppWidgetIdForApply(state, currentWidgetConfigs, widgetIndex)
     if (id != null) return false
+    if (state.otherTilesDirty || state.isPanelDirty) {
+        persistOtherChanges()
+    }
     WidgetPickerActivity.start(
         context = context,
         saveTarget = saveTarget,

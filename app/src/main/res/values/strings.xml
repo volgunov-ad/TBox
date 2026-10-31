@@ -401,8 +401,6 @@
     <string name="widget_type_section_audio">Аудио и медиа</string>
     <string name="widget_type_section_system">Система и интерфейс</string>
     <string name="widget_type_section_esp32">ESP32 и компаньон</string>
-    <string name="widget_select_data_for_tile">Выберите данные для плитки %1$d</string>
-    <string name="widget_additional_settings_for_tile">Дополнительные настройки плитки %1$d</string>
     <string name="widget_show_title">Отображать название</string>
     <string name="widget_title_position_title">Положение заголовка</string>
     <string name="widget_title_position_top">Сверху</string>
@@ -467,22 +465,13 @@
     <string name="widget_external_bind_failed_title">Не удалось привязать виджет</string>
     <string name="widget_external_bind_failed_message">Система не разрешила TBox Monitor показывать виджет «%1$s».\n\nНа головном устройстве через ADB можно выдать разрешение один раз:\n\n%2$s\n\nПосле этого снова выберите виджет в настройках панели.</string>
     <string name="widget_external_bind_failed_ok">Понятно</string>
-    <string name="widget_toggle_advanced">Дополнительно</string>
     <string name="widget_paste_without_type">Вставить без типа плитки</string>
     <string name="widget_toggle_whole_panel">Вся панель</string>
     <string name="widget_panel_settings_title">Настройки панели</string>
     <string name="widget_color_theme_segment_light">Настройки для светлой темы</string>
     <string name="widget_color_theme_segment_dark">Настройки для тёмной темы</string>
-    <string name="widget_title_scale">Масштаб заголовка: %1$.1fx</string>
-    <string name="widget_icon_scale">Масштаб иконок: %1$.1fx</string>
-    <string name="widget_text_scale">Масштаб текста: %1$.1fx</string>
     <string name="widget_scale_hint" formatted="false">0.1..2.0 (1.0 = 100%)</string>
-    <string name="widget_padding_top">Отступ сверху: %1$d%%</string>
-    <string name="widget_padding_bottom">Отступ снизу: %1$d%%</string>
-    <string name="widget_padding_start">Отступ слева: %1$d%%</string>
-    <string name="widget_padding_end">Отступ справа: %1$d%%</string>
     <string name="widget_padding_hint">0–50%% от размера ячейки</string>
-    <string name="widget_shape">Скругление углов: %1$d</string>
     <string name="widget_shape_hint" formatted="false">0..50</string>
     <string name="widget_panel_background_section_title">Фон всей панели</string>
     <string name="widget_panel_background_section_desc">Цвет и картинка рисуются под плитками. Скругление обрезает панель целиком, включая плитки у краёв.</string>
@@ -494,20 +483,10 @@
     <string name="widget_panel_background_image_remove_from_theme">Удалить картинку из темы</string>
     <string name="widget_panel_shape">Скругление углов панели: %1$d</string>
     <string name="widget_panel_shape_hint" formatted="false">0..50</string>
-    <string name="widget_text_color_light">Цвет текста (светлая тема)</string>
-    <string name="widget_text_color_dark">Цвет текста (тёмная тема)</string>
-    <string name="widget_background_color_light">Цвет фона (светлая тема)</string>
-    <string name="widget_background_color_dark">Цвет фона (тёмная тема)</string>
     <string name="widget_reset_text_background_colors">Сбросить цвет текста и фона</string>
     <string name="widget_control_colors_section">Элементы управления</string>
     <string name="widget_control_colors_use_defaults">Цвета по умолчанию</string>
-    <string name="widget_control_state_segment_inactive">Неактивное состояние</string>
-    <string name="widget_control_state_segment_active">Активное состояние</string>
-    <string name="widget_control_content_color">Цвет иконки / текста</string>
-    <string name="widget_control_background_color">Цвет фона</string>
-    <string name="widget_control_shape">Скругление углов элементов управления: %1$d</string>
     <string name="widget_control_shape_hint" formatted="false">0..50</string>
-    <string name="widget_control_padding">Отступ элементов управления: %1$d</string>
     <string name="widget_control_padding_hint" formatted="false">0..50</string>
     <string name="widget_color_value_label">Значение цвета</string>
     <string name="widget_color_value_hint">Формат: #AARRGGBB, #RRGGBB, 0xAARRGGBB или Int</string>
@@ -3314,5 +3293,100 @@
     <string name="road_match_tune_desc_free_stalk_unbind_block_highway">Не отвязывать на профиле шоссе — защита от смены полосы с включённым поворотником.</string>
     <string name="road_match_tune_title_free_stalk_unbind_min_speed_kmh">Мин. скорость для отвязки</string>
     <string name="road_match_tune_desc_free_stalk_unbind_min_speed_kmh">Ниже этой скорости stalk-unbind не стартует (стоянка / ползучий манёвр).</string>
-</resources>
 
+    <!-- Full-screen tile / panel editor -->
+    <string name="widget_editor_tab_type">Тип</string>
+    <string name="widget_editor_tab_view">Вид</string>
+    <string name="widget_editor_tab_colors">Цвета</string>
+    <string name="widget_editor_tab_behavior">Поведение</string>
+    <string name="widget_editor_tab_general">Общее</string>
+    <string name="widget_editor_tab_grid">Сетка</string>
+    <string name="widget_editor_tab_background">Фон</string>
+    <string name="widget_editor_tab_collapse">Сворачивание</string>
+    <string name="widget_editor_level_tile">Плитка</string>
+    <string name="widget_editor_title_tile">Плитка %1$d</string>
+    <string name="widget_editor_section_recent">Недавние</string>
+    <string name="widget_editor_section_on_panel">На этой панели</string>
+    <string name="widget_editor_search_hint">Поиск по всем типам</string>
+    <string name="widget_editor_current_type">Сейчас: %1$s</string>
+    <string name="widget_editor_previous_type">Было: %1$s</string>
+    <string name="widget_editor_restore_type">Вернуть</string>
+    <string name="widget_editor_clear_type">Очистить плитку</string>
+    <string name="widget_editor_no_results">Ничего не найдено</string>
+    <string name="widget_editor_select_type_first">Сначала выберите тип плитки на вкладке «Тип».</string>
+    <string name="widget_editor_card_title_value">Заголовок и значение</string>
+    <string name="widget_editor_card_size">Размеры</string>
+    <string name="widget_editor_scale_title">Заголовок</string>
+    <string name="widget_editor_scale_icons">Иконки</string>
+    <string name="widget_editor_scale_text">Текст значения</string>
+    <string name="widget_editor_card_typography">Шрифт и выравнивание</string>
+    <string name="widget_editor_card_shape">Форма</string>
+    <string name="widget_editor_shape_radius">Скругление углов</string>
+    <string name="widget_editor_card_padding">Внутренние отступы, %</string>
+    <string name="widget_editor_padding_linked">Одинаковые со всех сторон</string>
+    <string name="widget_editor_padding_all">Все стороны</string>
+    <string name="widget_editor_padding_top">Сверху</string>
+    <string name="widget_editor_padding_bottom">Снизу</string>
+    <string name="widget_editor_padding_start">Слева</string>
+    <string name="widget_editor_padding_end">Справа</string>
+    <string name="widget_editor_controls_geometry_desc">Форма и отступ кнопок внутри плитки (для плиток с управлением).</string>
+    <string name="widget_editor_control_shape">Скругление кнопок</string>
+    <string name="widget_editor_control_padding">Отступ кнопок</string>
+    <string name="widget_editor_default_value">По умолчанию (%1$d)</string>
+    <string name="widget_editor_card_tile_colors">Цвета плитки</string>
+    <string name="widget_editor_color_table_hint">Нажмите на ячейку, чтобы изменить цвет. Превью переключится на выбранную тему.</string>
+    <string name="widget_editor_day">День</string>
+    <string name="widget_editor_night">Ночь</string>
+    <string name="widget_editor_copy_day_to_night">Ночь = День</string>
+    <string name="widget_editor_copy_night_to_day">День = Ночь</string>
+    <string name="widget_editor_bg_image_desc">Картинка рисуется под содержимым плитки. Для дня и ночи можно задать разные.</string>
+    <string name="widget_editor_editing_color">Цвет: %1$s — %2$s</string>
+    <string name="widget_editor_row_text">Текст</string>
+    <string name="widget_editor_row_background">Фон</string>
+    <string name="widget_editor_row_control_inactive">Кнопка (выкл.)</string>
+    <string name="widget_editor_row_control_inactive_background">Фон кнопки (выкл.)</string>
+    <string name="widget_editor_row_control_active">Кнопка (вкл.)</string>
+    <string name="widget_editor_row_control_active_background">Фон кнопки (вкл.)</string>
+    <string name="widget_editor_behavior_empty">У этого типа плитки нет дополнительных настроек.</string>
+    <string name="widget_editor_card_panel_name">Название</string>
+    <string name="widget_editor_card_panel_behavior">Поведение панели</string>
+    <string name="widget_editor_grid_size_value">%1$d × %2$d</string>
+    <string name="widget_editor_grid_hint">Нажмите или проведите по сетке, чтобы выбрать размер (строки × столбцы).</string>
+    <string name="widget_editor_grid_overflow">Плиток за пределами новой сетки: %1$d. После сохранения они будут удалены.</string>
+    <string name="widget_editor_spacing">Расстояние между плитками</string>
+    <string name="widget_editor_card_apply_look">Применить вид</string>
+    <string name="widget_editor_apply_look_desc">Отметьте плитки на превью — им будут скопированы вид и цвета плитки %1$d (тип и данные не меняются).</string>
+    <string name="widget_editor_select_all">Выбрать все</string>
+    <string name="widget_editor_select_none">Снять выбор</string>
+    <string name="widget_editor_apply_look_button">Применить к %1$d</string>
+    <string name="widget_editor_apply_look_done">Вид применён к плиткам: %1$d</string>
+    <string name="widget_editor_collapse_diagram_hint">Нажмите на край, чтобы выбрать сторону; потяните полосу, чтобы сдвинуть её.</string>
+    <string name="widget_editor_card_strip">Полоса</string>
+    <string name="widget_editor_strip_expanded">Развёрнута</string>
+    <string name="widget_editor_strip_collapsed">Свёрнута</string>
+    <string name="widget_editor_card_strip_size">Толщина и зона касания</string>
+    <string name="widget_editor_card_gestures">Жесты</string>
+    <string name="widget_editor_preview">Превью</string>
+    <string name="widget_editor_preview_hint_tile">Нажмите на плитку, чтобы настроить её. Удерживайте и перетащите, чтобы поменять местами.</string>
+    <string name="widget_editor_preview_hint_select">Нажимайте на плитки, чтобы отметить их для «Применить вид».</string>
+    <string name="widget_editor_swap_http_blocked">HTTP-плитки нельзя перемещать: их иконки привязаны к позиции.</string>
+    <string name="widget_editor_tile_of">%1$d / %2$d</string>
+    <string name="widget_editor_clipboard_tile">Буфер плитки</string>
+    <string name="widget_editor_clipboard_panel">Буфер панели</string>
+    <string name="widget_editor_type_description">Описание типа</string>
+    <string name="widget_editor_unsaved">Есть несохранённые изменения</string>
+    <string name="widget_editor_cannot_save">Заполните обязательные поля, чтобы сохранить.</string>
+    <string name="widget_editor_delete_panel">Удалить панель</string>
+    <string name="widget_editor_delete_panel_confirm">Точно удалить?</string>
+    <string name="widget_editor_discard_title">Закрыть без сохранения?</string>
+    <string name="widget_editor_discard_text">Несохранённые изменения будут потеряны.</string>
+    <string name="widget_editor_discard_confirm">Не сохранять</string>
+    <string name="widget_editor_keep_editing">Продолжить</string>
+    <string name="widget_editor_tab_placement">Размер и место</string>
+    <string name="widget_editor_card_placement">Положение на экране</string>
+    <string name="widget_editor_placement_hint">Перетащите панель, чтобы сдвинуть её; тяните за уголок справа снизу, чтобы изменить размер. Применится после «Сохранить».</string>
+    <string name="widget_editor_placement_screen_px">Экран: %1$d × %2$d px</string>
+    <string name="widget_editor_card_placement_values">Точные значения</string>
+    <string name="widget_editor_center_horizontal">По центру по горизонтали</string>
+    <string name="widget_editor_center_vertical">По центру по вертикали</string>
+</resources>
