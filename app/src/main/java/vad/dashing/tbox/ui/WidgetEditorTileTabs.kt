@@ -312,8 +312,9 @@ private fun CurrentTypeRow(
     onRestore: () -> Unit,
 ) {
     val context = LocalContext.current
+    val notSelected = stringResource(R.string.widget_option_not_selected)
     fun titleFor(key: String): String = when {
-        key.isEmpty() -> context.getString(R.string.widget_option_not_selected)
+        key.isEmpty() -> notSelected
         else -> widgetPairs.find { it.first == key }?.second
             ?: WidgetsRepository.getTitleUnitForDataKey(context, key)
     }

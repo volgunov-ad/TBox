@@ -170,10 +170,10 @@ private fun FloatingPlacementSteppers(
 ) {
     val beyond = units.allowBeyondScreen
     val originMin = if (beyond) FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX else 0
-    val maxWidth = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenWidth
-    val maxHeight = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenHeight
-    val maxX = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenWidth - MIN_FLOATING_PANEL_SIZE_PX
-    val maxY = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenHeight - MIN_FLOATING_PANEL_SIZE_PX
+    val maxWidth = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenWidth - placement.x
+    val maxHeight = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenHeight - placement.y
+    val maxX = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenWidth - placement.width
+    val maxY = if (beyond) FLOATING_PANEL_MAX_SIZE_BEYOND_SCREEN_PX else units.screenHeight - placement.height
     EditorIntStepper(
         label = stringResource(R.string.floating_panel_width_px),
         value = placement.width,
