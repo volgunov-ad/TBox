@@ -3376,6 +3376,7 @@
     <string name="widget_editor_type_description">Описание типа</string>
     <string name="widget_editor_unsaved">Есть несохранённые изменения</string>
     <string name="widget_editor_cannot_save">Заполните обязательные поля, чтобы сохранить.</string>
+    <string name="widget_editor_fix_tile_first">Сначала заполните обязательные поля этой плитки.</string>
     <string name="widget_editor_delete_panel">Удалить панель</string>
     <string name="widget_editor_delete_panel_confirm">Точно удалить?</string>
     <string name="widget_editor_discard_title">Закрыть без сохранения?</string>

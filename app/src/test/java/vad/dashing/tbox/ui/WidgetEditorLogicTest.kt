@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
@@ -176,6 +177,34 @@ class WidgetEditorLogicTest {
         state.goToTile(1, current, tileCount = 2)
         state.goToTile(0, current, tileCount = 2)
         assertFalse(state.hasUnsavedChanges)
+    }
+
+    @Test
+    fun invalidEditsKeepEditorOnTileAndOutOfDraft() {
+        val current = listOf(tile("speed"), tile("rpm"), tile("fuel"))
+        val state = editorState(current)
+        state.selectedDataKey = APP_LAUNCHER_WIDGET_DATA_KEY
+        state.launcherAppPackage = ""
+        assertFalse(state.canLeaveEditingTile)
+
+        assertFalse(state.goToTile(1, current, tileCount = 3))
+        assertFalse(state.swapTiles(1, 2, current, tileCount = 3))
+        state.gridSelection = setOf(1)
+        assertEquals(0, state.applyAppearanceToSelection(current, tileCount = 3))
+
+        assertEquals(0, state.editingIndex)
+        assertNull(state.wholePanelWidgetsDraft)
+    }
+
+    @Test
+    fun untouchedState_tracksWhatItWasOpenedWith() {
+        val current = listOf(tile("speed"), tile("rpm"))
+        val state = editorState(current)
+        assertTrue(state.isUntouched)
+        assertTrue(state.wasOpenedWith("speed", current[0]))
+        assertFalse(state.wasOpenedWith("speed", current[0].copy(textScale = 1.3f)))
+        state.textScale = 1.5f
+        assertFalse(state.isUntouched)
     }
 
     @Test

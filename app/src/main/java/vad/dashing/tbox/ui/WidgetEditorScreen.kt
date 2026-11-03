@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,6 +76,7 @@ import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxTitle
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen tile / panel editor shared by the Tiles tab, main-screen panels and floating panels.
@@ -206,7 +208,13 @@ private fun WidgetEditorContent(
         ownPathLight = state.tileBackgroundImageRelPathLight,
         ownPathDark = state.tileBackgroundImageRelPathDark,
     )
-    val goToTile: (Int) -> Unit = { index -> state.goToTile(index, currentWidgetConfigs, tileCount) }
+    val context = LocalContext.current
+    val fixTileFirstMessage = stringResource(R.string.widget_editor_fix_tile_first)
+    val goToTile: (Int) -> Boolean = { index ->
+        state.goToTile(index, currentWidgetConfigs, tileCount).also { moved ->
+            if (!moved) Toast.makeText(context, fixTileFirstMessage, Toast.LENGTH_SHORT).show()
+        }
+    }
     val openLevel: (WidgetEditorLevel) -> Unit = { level ->
         if (level == WidgetEditorLevel.PANEL && !state.wholePanelDraftSeeded) {
             onWholePanelOpened()
@@ -255,13 +263,12 @@ private fun WidgetEditorContent(
                                 }
                             }
                             else -> {
-                                goToTile(index)
-                                state.level = WidgetEditorLevel.TILE
+                                if (goToTile(index)) state.level = WidgetEditorLevel.TILE
                             }
                         }
                     },
                 )
-                TileNavigationRow(state = state, tileCount = tileCount, onGoTo = goToTile)
+                TileNavigationRow(state = state, tileCount = tileCount, onGoTo = { goToTile(it) })
                 ClipboardCard(state = state, currentWidgetConfigs = currentWidgetConfigs)
                 if (state.level == WidgetEditorLevel.TILE) {
                     TypeDescriptionCard(state.selectedDataKey)
@@ -410,6 +417,8 @@ private fun EditorHeader(
     }
 }
 
+private const val DELETE_CONFIRM_TIMEOUT_MS = 4_000L
+
 @Composable
 private fun EditorFooter(
     state: WidgetSelectionDialogState,
@@ -418,6 +427,12 @@ private fun EditorFooter(
     onDeletePanel: (() -> Unit)?,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
+    LaunchedEffect(confirmDelete) {
+        if (confirmDelete) {
+            delay(DELETE_CONFIRM_TIMEOUT_MS)
+            confirmDelete = false
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -537,6 +552,7 @@ private fun PreviewCard(
     val context = LocalContext.current
     val gridSelectMode = state.level == WidgetEditorLevel.PANEL && state.panelTab == PanelEditorTab.GRID
     val httpBlockedMessage = stringResource(R.string.widget_editor_swap_http_blocked)
+    val fixTileFirstMessage = stringResource(R.string.widget_editor_fix_tile_first)
     EditorCard(title = null) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -569,6 +585,8 @@ private fun PreviewCard(
                     list.getOrNull(to)?.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY
                 ) {
                     Toast.makeText(context, httpBlockedMessage, Toast.LENGTH_LONG).show()
+                } else if (!state.canLeaveEditingTile) {
+                    Toast.makeText(context, fixTileFirstMessage, Toast.LENGTH_SHORT).show()
                 } else {
                     state.swapTiles(from, to, currentWidgetConfigs, tileCount)
                 }
@@ -608,6 +626,8 @@ private fun PanelPreviewGrid(
     )
     var dragFrom by remember { mutableStateOf<Int?>(null) }
     var dragOver by remember { mutableStateOf<Int?>(null) }
+    val currentOnTileTap by rememberUpdatedState(onTileTap)
+    val currentOnSwap by rememberUpdatedState(onSwap)
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val maxHeight = 300.dp
         val aspect = ((cols * 1.5f) / rows).coerceIn(0.4f, 4f)
@@ -628,13 +648,13 @@ private fun PanelPreviewGrid(
                 .size(width, height)
                 .clip(RoundedCornerShape(normalizePanelShape(grid.panelShape).dp))
                 .background(panelColor)
-                .pointerInput(rows, cols, tileCount, gridSelectMode) {
+                .pointerInput(rows, cols, tileCount, gridSelectMode, spacingPx) {
                     detectTapGestures { offset ->
                         val index = indexAt(offset, size.width.toFloat(), size.height.toFloat())
-                        if (index != null && index < tileCount) onTileTap(index)
+                        if (index != null && index < tileCount) currentOnTileTap(index)
                     }
                 }
-                .pointerInput(rows, cols, tileCount, gridSelectMode) {
+                .pointerInput(rows, cols, tileCount, gridSelectMode, spacingPx) {
                     if (gridSelectMode) return@pointerInput
                     detectDragGesturesAfterLongPress(
                         onDragStart = { offset ->
@@ -647,7 +667,7 @@ private fun PanelPreviewGrid(
                             val to = dragOver
                             dragFrom = null
                             dragOver = null
-                            if (from != null && to != null && from != to) onSwap(from, to)
+                            if (from != null && to != null && from != to) currentOnSwap(from, to)
                         },
                         onDragCancel = {
                             dragFrom = null
@@ -764,18 +784,18 @@ private fun PreviewTile(
             return
         }
         val cfg = config!!
-        if (useTileBackgroundUnderlay) {
-            DashboardTileBackgroundImageUnderlay(
-                relPath = tileBgRelPath,
-                backgroundColor = background.copy(
-                    alpha = if (dragSource) background.alpha * 0.4f else background.alpha,
-                ),
-                shapeDp = shapeDp,
-                settingsViewModel = settingsViewModel,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
         WidgetCellContentPadding(widgetConfig = cfg) {
+            if (useTileBackgroundUnderlay) {
+                DashboardTileBackgroundImageUnderlay(
+                    relPath = tileBgRelPath,
+                    backgroundColor = background.copy(
+                        alpha = if (dragSource) background.alpha * 0.4f else background.alpha,
+                    ),
+                    shapeDp = shapeDp,
+                    settingsViewModel = settingsViewModel,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             CompositionLocalProvider(
                 LocalWidgetTitleScale provides normalizeWidgetScale(cfg.titleScale),
                 LocalWidgetTextScale provides normalizeWidgetScale(cfg.textScale),
@@ -923,7 +943,9 @@ private fun TileNavigationRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OutlinedButton(
-            onClick = rememberWrappedOnClick { onGoTo(state.editingIndex - 1) },
+            onClick = rememberWrappedOnClick {
+                onGoTo(minOf(state.editingIndex - 1, tileCount - 1))
+            },
             enabled = state.editingIndex > 0,
         ) {
             Text("‹", style = MaterialTheme.typography.tboxHeadline)

@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedButton
 import android.appwidget.AppWidgetManager
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -260,13 +261,23 @@ internal data class CruiseControlTypeDropdownEntry(
 
 
 internal class WidgetSelectionDialogState(
-    initialDataKey: String,
-    initialConfig: FloatingDashboardWidgetConfig,
+    private val initialDataKey: String,
+    private val initialConfig: FloatingDashboardWidgetConfig,
     val panelDefaultBackgroundLight: Int,
     val panelDefaultBackgroundDark: Int,
     initialColorThemeSegment: Int = 0,
-    initialEditingIndex: Int = 0,
+    private val initialEditingIndex: Int = 0,
 ) {
+    /** True while the editor still shows exactly what it was opened with. */
+    val isUntouched: Boolean
+        get() = !hasUnsavedChanges &&
+            !wholePanelDraftSeeded &&
+            wholePanelWidgetsDraft == null &&
+            editingIndex == initialEditingIndex.coerceAtLeast(0)
+
+    fun wasOpenedWith(dataKey: String, config: FloatingDashboardWidgetConfig): Boolean =
+        dataKey == initialDataKey && config == initialConfig
+
     var selectedDataKey by mutableStateOf(initialDataKey)
     var showTitle by mutableStateOf(initialConfig.showTitle)
     var showUnit by mutableStateOf(initialConfig.showUnit)
@@ -1831,13 +1842,21 @@ internal class WidgetSelectionDialogState(
         return list
     }
 
-    /** Keeps edits of the current tile in the draft and loads tile [target] into the editor. */
+    /** Save validates only the open tile, so its edits may enter the draft only when valid. */
+    val canLeaveEditingTile: Boolean
+        get() = !isEditingTileDirty || canSaveSelection
+
+    /**
+     * Keeps edits of the current tile in the draft and loads tile [target] into the editor.
+     * Returns false when the current tile has invalid edits and the editor stays on it.
+     */
     fun goToTile(
         target: Int,
         currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
         tileCount: Int,
-    ) {
-        if (target == editingIndex || target < 0 || target >= maxOf(tileCount, 1)) return
+    ): Boolean {
+        if (target == editingIndex || target < 0 || target >= maxOf(tileCount, 1)) return true
+        if (!canLeaveEditingTile) return false
         val list = commitEditingTile(currentWidgetConfigs, tileCount)
         val cfg = list.getOrNull(target) ?: FloatingDashboardWidgetConfig(dataKey = "")
         val preferMbCan = preferUseMbCanVhalDefault
@@ -1846,6 +1865,7 @@ internal class WidgetSelectionDialogState(
         preferUseMbCanVhalDefault = preferMbCan
         editingIndex = target
         tileBaseline = buildDraftWidgetConfig()
+        return true
     }
 
     /** Swaps two tiles; the editor keeps showing the same tile at its new position. */
@@ -1855,6 +1875,7 @@ internal class WidgetSelectionDialogState(
         currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
         tileCount: Int,
     ): Boolean {
+        if (!canLeaveEditingTile) return false
         val list = commitEditingTile(currentWidgetConfigs, tileCount)
         if (!canSwapTiles(list, from, to)) return false
         wholePanelWidgetsDraft = swapTileConfigs(list, from, to)
@@ -1874,7 +1895,7 @@ internal class WidgetSelectionDialogState(
         tileCount: Int,
     ): Int {
         val source = editingTileConfigForSave()
-        if (source.dataKey.isEmpty()) return 0
+        if (source.dataKey.isEmpty() || !canLeaveEditingTile) return 0
         val list = commitEditingTile(currentWidgetConfigs, tileCount)
         var changed = 0
         gridSelection.filter { it != editingIndex && it in list.indices }.forEach { index ->
@@ -1960,23 +1981,27 @@ internal fun rememberWidgetSelectionDialogState(
     val initialConfig = currentWidgetConfigs.getOrNull(widgetIndex)
         ?: FloatingDashboardWidgetConfig(dataKey = "")
     val initialDataKey = currentWidgets.getOrNull(widgetIndex)?.dataKey ?: ""
+    fun newState() = WidgetSelectionDialogState(
+        initialDataKey = initialDataKey,
+        initialConfig = initialConfig,
+        panelDefaultBackgroundLight = defaultBackgroundLight,
+        panelDefaultBackgroundDark = defaultBackgroundDark,
+        initialColorThemeSegment = colorThemeSegmentFor(currentTheme),
+        initialEditingIndex = widgetIndex,
+    )
     // currentTheme is read only at creation: a day/night switch must not drop unsaved edits.
-    return remember(
-        widgetIndex,
-        currentWidgets,
-        currentWidgetConfigs,
-        defaultBackgroundLight,
-        defaultBackgroundDark,
-    ) {
-        WidgetSelectionDialogState(
-            initialDataKey = initialDataKey,
-            initialConfig = initialConfig,
-            panelDefaultBackgroundLight = defaultBackgroundLight,
-            panelDefaultBackgroundDark = defaultBackgroundDark,
-            initialColorThemeSegment = colorThemeSegmentFor(currentTheme),
-            initialEditingIndex = widgetIndex,
-        )
+    val holder = remember(widgetIndex, defaultBackgroundLight, defaultBackgroundDark) {
+        mutableStateOf(newState())
     }
+    // Panels keep running behind the editor and may save their own config (a music tile
+    // following playback stores the player), so reload only an editor nobody has touched yet.
+    LaunchedEffect(holder, initialDataKey, initialConfig) {
+        val state = holder.value
+        if (state.isUntouched && !state.wasOpenedWith(initialDataKey, initialConfig)) {
+            holder.value = newState()
+        }
+    }
+    return holder.value
 }
 
 @Composable

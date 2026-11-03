@@ -3355,6 +3355,7 @@
     <string name="widget_editor_type_description">Type description</string>
     <string name="widget_editor_unsaved">Unsaved changes</string>
     <string name="widget_editor_cannot_save">Fill in the required fields to save.</string>
+    <string name="widget_editor_fix_tile_first">Fill in the required fields of this tile first.</string>
     <string name="widget_editor_delete_panel">Delete panel</string>
     <string name="widget_editor_delete_panel_confirm">Really delete?</string>
     <string name="widget_editor_discard_title">Close without saving?</string>

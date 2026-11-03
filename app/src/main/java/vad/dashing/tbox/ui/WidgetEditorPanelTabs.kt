@@ -215,6 +215,7 @@ internal fun PanelGridTab(
             )
         }
         val doneMessage = stringResource(R.string.widget_editor_apply_look_done)
+        val fixTileFirstMessage = stringResource(R.string.widget_editor_fix_tile_first)
         EditorCard(
             title = stringResource(R.string.widget_editor_card_apply_look),
             description = stringResource(R.string.widget_editor_apply_look_desc, state.editingIndex + 1),
@@ -242,10 +243,14 @@ internal fun PanelGridTab(
                     text = stringResource(R.string.widget_editor_apply_look_button, selected.size),
                     selected = selected.isNotEmpty(),
                     onClick = {
-                        state.gridSelection = selected
-                        val changed = state.applyAppearanceToSelection(currentWidgetConfigs, tileCount)
-                        state.gridSelection = emptySet()
-                        Toast.makeText(context, String.format(doneMessage, changed), Toast.LENGTH_SHORT).show()
+                        if (!state.canLeaveEditingTile) {
+                            Toast.makeText(context, fixTileFirstMessage, Toast.LENGTH_SHORT).show()
+                        } else {
+                            state.gridSelection = selected
+                            val changed = state.applyAppearanceToSelection(currentWidgetConfigs, tileCount)
+                            state.gridSelection = emptySet()
+                            Toast.makeText(context, String.format(doneMessage, changed), Toast.LENGTH_SHORT).show()
+                        }
                     },
                     enabled = selected.isNotEmpty() && state.togglesEnabled,
                     compact = true,
