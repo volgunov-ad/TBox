@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,11 +51,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,13 +61,14 @@ import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
-import vad.dashing.tbox.WIDGET_TEXT_ALIGN_END
-import vad.dashing.tbox.WIDGET_TEXT_ALIGN_START
-import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
+import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.normalizePanelShape
-import vad.dashing.tbox.normalizeWidgetPaddingPercent
+import vad.dashing.tbox.normalizeWidgetFontWeight
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetShape
+import vad.dashing.tbox.normalizeWidgetTextAlign
+import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.resolvePanelBackgroundColorArgb
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -234,6 +234,7 @@ private fun WidgetEditorContent(
             ) {
                 PreviewCard(
                     state = state,
+                    settingsViewModel = settingsViewModel,
                     grid = grid,
                     tileCount = tileCount,
                     workingConfigs = workingConfigs,
@@ -526,6 +527,7 @@ private fun DiscardChangesOverlay(onKeepEditing: () -> Unit, onDiscard: () -> Un
 @Composable
 private fun PreviewCard(
     state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
     grid: WidgetEditorGrid,
     tileCount: Int,
     workingConfigs: List<FloatingDashboardWidgetConfig>,
@@ -555,6 +557,7 @@ private fun PreviewCard(
         Spacer(Modifier.height(8.dp))
         PanelPreviewGrid(
             state = state,
+            settingsViewModel = settingsViewModel,
             grid = grid,
             tileCount = tileCount,
             configs = workingConfigs,
@@ -585,6 +588,7 @@ private fun PreviewCard(
 @Composable
 private fun PanelPreviewGrid(
     state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
     grid: WidgetEditorGrid,
     tileCount: Int,
     configs: List<FloatingDashboardWidgetConfig>,
@@ -592,7 +596,6 @@ private fun PanelPreviewGrid(
     onTileTap: (Int) -> Unit,
     onSwap: (Int, Int) -> Unit,
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     val rows = grid.rows.coerceAtLeast(1)
     val cols = grid.cols.coerceAtLeast(1)
@@ -678,7 +681,7 @@ private fun PanelPreviewGrid(
                                 selected = gridSelectMode && index in state.gridSelection,
                                 dragSource = index == dragFrom,
                                 dragTarget = index == dragOver && dragFrom != null && dragOver != dragFrom,
-                                titleFor = { key -> WidgetsRepository.getTitleUnitForDataKey(context, key) },
+                                settingsViewModel = settingsViewModel,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             )
                         }
@@ -700,11 +703,13 @@ private fun PreviewTile(
     selected: Boolean,
     dragSource: Boolean,
     dragTarget: Boolean,
-    titleFor: (String) -> String,
+    settingsViewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val key = config?.dataKey.orEmpty()
-    val shape = RoundedCornerShape(normalizeWidgetShape(config?.shape ?: 0).dp)
+    val shapeDp = normalizeWidgetShape(config?.shape ?: 0).dp
+    val shape = RoundedCornerShape(shapeDp)
     val borderColor = when {
         dragTarget -> MaterialTheme.colorScheme.tertiary
         editing -> MaterialTheme.colorScheme.primary
@@ -716,80 +721,189 @@ private fun PreviewTile(
         Box(modifier = modifier.clip(shape).background(Color.Transparent))
         return
     }
-    val background = if (key.isEmpty()) {
-        Color.Transparent
+    val backgroundArgb = if (key.isEmpty()) {
+        null
     } else {
-        Color(
-            if (dark) config?.backgroundColorDark ?: defaultBackgroundDark
-            else config?.backgroundColorLight ?: defaultBackgroundLight,
-        )
+        if (dark) config?.backgroundColorDark ?: defaultBackgroundDark
+        else config?.backgroundColorLight ?: defaultBackgroundLight
     }
+    val background = backgroundArgb?.let { Color(it) } ?: Color.Transparent
     val textColor = if (key.isEmpty()) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
         Color(if (dark) config!!.textColorDark else config!!.textColorLight)
     }
-    BoxWithConstraints(
+    val themeCode = if (dark) 2 else 1
+    val tileBgRelPath = (
+        if (dark) config?.tileBackgroundImageRelPathDark else config?.tileBackgroundImageRelPathLight
+        )?.takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+    val useTileBackgroundUnderlay = key.isNotEmpty() && tileBgRelPath != null
+    val contentBackground = when {
+        key.isEmpty() -> Color.Transparent
+        useTileBackgroundUnderlay -> Color.Transparent
+        else -> background.copy(alpha = if (dragSource) background.alpha * 0.4f else background.alpha)
+    }
+    Box(
         modifier = modifier
             .clip(shape)
-            .background(background.copy(alpha = if (dragSource) background.alpha * 0.4f else background.alpha))
             .border(borderWidth, borderColor, shape),
     ) {
         if (key.isEmpty()) {
-            Text(
-                text = "+",
-                color = textColor,
-                fontSize = 20.sp,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            return@BoxWithConstraints
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+",
+                    color = textColor,
+                    style = MaterialTheme.typography.tboxHeadline,
+                )
+            }
+            return
         }
         val cfg = config!!
-        val padTop = maxHeight * (normalizeWidgetPaddingPercent(cfg.paddingTopPercent) / 100f)
-        val padBottom = maxHeight * (normalizeWidgetPaddingPercent(cfg.paddingBottomPercent) / 100f)
-        val padStart = maxWidth * (normalizeWidgetPaddingPercent(cfg.paddingStartPercent) / 100f)
-        val padEnd = maxWidth * (normalizeWidgetPaddingPercent(cfg.paddingEndPercent) / 100f)
-        val align = when (cfg.textAlign) {
-            WIDGET_TEXT_ALIGN_START -> TextAlign.Start
-            WIDGET_TEXT_ALIGN_END -> TextAlign.End
-            else -> TextAlign.Center
+        if (useTileBackgroundUnderlay) {
+            DashboardTileBackgroundImageUnderlay(
+                relPath = tileBgRelPath,
+                backgroundColor = background.copy(
+                    alpha = if (dragSource) background.alpha * 0.4f else background.alpha,
+                ),
+                shapeDp = shapeDp,
+                settingsViewModel = settingsViewModel,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
-        val baseSp = (maxHeight.value / 5f).coerceIn(7f, 14f)
-        val title = cfg.customTitle.ifBlank { titleFor(key) }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(start = padStart, end = padEnd, top = padTop, bottom = padBottom)
-                .padding(2.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            val titleText: @Composable () -> Unit = {
-                if (cfg.showTitle) {
-                    Text(
-                        text = title,
-                        color = textColor,
-                        fontSize = (baseSp * cfg.titleScale.coerceIn(0.5f, 1.6f)).sp,
-                        textAlign = align,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
+        WidgetCellContentPadding(widgetConfig = cfg) {
+            CompositionLocalProvider(
+                LocalWidgetTitleScale provides normalizeWidgetScale(cfg.titleScale),
+                LocalWidgetTextScale provides normalizeWidgetScale(cfg.textScale),
+                LocalWidgetIconScale provides normalizeWidgetScale(cfg.iconScale),
+                LocalWidgetTextAlign provides widgetTextAlignToCompose(normalizeWidgetTextAlign(cfg.textAlign)),
+                LocalWidgetFontWeight provides widgetFontWeightToCompose(normalizeWidgetFontWeight(cfg.fontWeight)),
+                LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(cfg.titlePosition),
+            ) {
+                val sample = remember(cfg.dataKey, cfg.valueAccuracy, cfg.showUnit) {
+                    widgetPreviewSample(
+                        dataKey = cfg.dataKey,
+                        config = cfg,
+                        unit = WidgetsRepository.getUnitForDataKey(context, cfg.dataKey),
                     )
-                } else {
-                    Spacer(Modifier.height(1.dp))
+                }
+                val title = cfg.customTitle.ifBlank {
+                    WidgetsRepository.getTitleForDataKey(context, cfg.dataKey)
+                }
+                val controls = rememberResolvedControlAppearance(
+                    config = cfg,
+                    currentTheme = themeCode,
+                    tileTextColor = textColor,
+                    dataKey = cfg.dataKey,
+                )
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                        .background(contentBackground),
+                ) {
+                    val availableHeight = maxHeight
+                    val textAlign = LocalWidgetTextAlign.current
+                    DashboardWidgetContentWithOptionalTitle(
+                        showTitle = cfg.showTitle,
+                        titleText = title,
+                        availableHeight = availableHeight,
+                        resolvedTextColor = textColor,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(4.dp),
+                    ) { contentModifier ->
+                        when (sample.kind) {
+                            WidgetPreviewKind.CONTROL -> {
+                                PreviewControlHint(
+                                    controls = controls,
+                                    modifier = contentModifier.fillMaxSize(),
+                                )
+                            }
+                            WidgetPreviewKind.METRIC,
+                            WidgetPreviewKind.SPECIAL,
+                            -> {
+                                if (sample.valueText.isEmpty()) {
+                                    Spacer(contentModifier)
+                                } else {
+                                    Text(
+                                        text = sample.valueText,
+                                        style = calculateResponsiveTextStyle(
+                                            containerHeight = availableHeight,
+                                            textType = TextType.VALUE,
+                                        ),
+                                        color = textColor,
+                                        textAlign = textAlign,
+                                        maxLines = 2,
+                                        softWrap = true,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = contentModifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            if (cfg.titlePosition != WIDGET_TITLE_POSITION_BOTTOM) titleText()
-            Text(
-                text = if (cfg.showTitle) "•••" else title,
-                color = textColor,
-                fontSize = (baseSp * 1.3f * cfg.textScale.coerceIn(0.5f, 1.6f)).sp,
-                fontWeight = if (cfg.fontWeight >= 2) FontWeight.SemiBold else FontWeight.Medium,
-                textAlign = align,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
+        }
+    }
+}
+
+@Composable
+private fun PreviewControlHint(
+    controls: ResolvedControlColors,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.padding(controls.paddingDp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val chipModifier = Modifier
+            .weight(1f)
+            .fillMaxHeight(0.55f)
+            .clip(RoundedCornerShape(controls.shapeDp))
+        Box(
+            modifier = chipModifier.background(
+                if (controls.inactiveBackground == Color.Transparent) {
+                    controls.inactiveContent.copy(alpha = 0.18f)
+                } else {
+                    controls.inactiveBackground
+                },
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.35f)
+                    .fillMaxHeight(0.35f)
+                    .clip(RoundedCornerShape(controls.shapeDp))
+                    .background(controls.inactiveContent),
             )
-            if (cfg.titlePosition == WIDGET_TITLE_POSITION_BOTTOM) titleText() else Spacer(Modifier.height(1.dp))
+        }
+        Box(
+            modifier = chipModifier.background(
+                if (controls.activeBackground == Color.Transparent) {
+                    controls.activeContent.copy(alpha = 0.22f)
+                } else {
+                    controls.activeBackground
+                },
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.35f)
+                    .fillMaxHeight(0.35f)
+                    .clip(RoundedCornerShape(controls.shapeDp))
+                    .background(controls.activeContent),
+            )
         }
     }
 }
