@@ -221,7 +221,10 @@ internal object PackageAdbActions {
         }
         return@withLock when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                StatusLoadOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> {
                 sessionActive.set(true)
                 tcpEnabledByUs.set(session.tcpEnabledBySession)
@@ -363,7 +366,10 @@ internal object PackageAdbActions {
             }
             when (session) {
                 is LocalhostAdbSession.Result.Failed ->
-                    Outcome.Failed(mapSessionReason(session.reason), session.detail)
+                    Outcome.Failed(
+                        mapSessionReason(session.reason),
+                        userFacingSessionDetail(session.reason, session.detail),
+                    )
                 is LocalhostAdbSession.Result.Ok -> {
                     val shell = session.value
                     val failure = AdbShellResults.failureDetail(shell)
@@ -457,7 +463,10 @@ internal object PackageAdbActions {
         }
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                StatusLoadOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> StatusLoadOutcome.Success(session.value)
         }
     }
@@ -493,5 +502,14 @@ internal object PackageAdbActions {
         LocalhostAdbSession.Reason.TcpEnableFailed -> Reason.TcpEnableFailed
         LocalhostAdbSession.Reason.TcpNotReady -> Reason.TcpNotReady
         LocalhostAdbSession.Reason.AdbConnectFailed -> Reason.AdbConnectFailed
+    }
+
+    private fun userFacingSessionDetail(
+        reason: LocalhostAdbSession.Reason,
+        detail: String,
+    ): String = when (reason) {
+        LocalhostAdbSession.Reason.AdbConnectFailed ->
+            AdbIoErrors.userFacingAdbConnectDetail(detail)
+        else -> detail
     }
 }

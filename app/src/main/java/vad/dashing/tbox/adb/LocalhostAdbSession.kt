@@ -41,6 +41,8 @@ internal object LocalhostAdbSession {
     const val ADB_CONNECT_TIMEOUT_MS = 8_000
     /** Long enough for the user to accept the one-time «Allow USB debugging» dialog. */
     const val ADB_SESSION_TIMEOUT_MS = 25_000
+    /** Brief pause before one reconnect after a flaky first CNXN / shell open. */
+    const val ADB_CONNECT_RETRY_DELAY_MS = 350L
 
     private val mutex = Mutex()
 
@@ -149,13 +151,13 @@ internal object LocalhostAdbSession {
                 }
 
                 try {
-                    val value = gateway.withShellSession(
+                    val value = openShellSessionWithRetry(
+                        gateway = gateway,
                         host = host,
                         port = port,
-                        connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
-                        sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
                         keysDir = keysDir,
                         clientName = clientName,
+                        delayMs = delayFn,
                         block = block,
                     )
                     Result.Ok(value, tcpEnabledBySession = enabledByUs)
@@ -246,6 +248,52 @@ internal object LocalhostAdbSession {
             val remaining = deadline - nowMs()
             if (remaining <= 0L) return false
             delayMs(minOf(probeIntervalMs, remaining))
+        }
+    }
+
+    /**
+     * Opens one shell session; on a retryable first-connect failure (typical right after
+     * `ctl.restart adbd` / cold Monitor start), waits briefly and tries once more.
+     */
+    private suspend fun <T> openShellSessionWithRetry(
+        gateway: Gateway,
+        host: String,
+        port: Int,
+        keysDir: File,
+        clientName: String,
+        delayMs: suspend (Long) -> Unit,
+        block: (execute: (String) -> AdbShellResult) -> T,
+    ): T {
+        try {
+            return gateway.withShellSession(
+                host = host,
+                port = port,
+                connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
+                sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val detail = e.message ?: e.javaClass.simpleName
+            if (!AdbIoErrors.isRetryableConnectFailure(detail)) throw e
+            TboxRepository.addLog(
+                level = "WARN",
+                tag = TAG,
+                message = "ADB session connect flaky ($detail); retrying once",
+            )
+            delayMs(ADB_CONNECT_RETRY_DELAY_MS)
+            return gateway.withShellSession(
+                host = host,
+                port = port,
+                connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
+                sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
         }
     }
 

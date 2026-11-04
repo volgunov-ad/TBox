@@ -159,9 +159,12 @@ flowchart TB
 
 Одинарный тап по плитке **«Ярлык приложения»** запускает выбранный пакет в настроенном режиме
 (`fullscreen` / `freeform` / `stock_window` / `virtual_display`). **Двойной тап** (любой режим) —
-только `am force-stop <package>` через localhost ADB **без** повторного запуска; при недоступности
-ADB или ошибке команды — toast как в расширенном «Списке программ» (`app_list_adb_toast_fail`).
-Код: `forceStopAppFromWidget` → `AdbAutomationActions.forceStopPackage`.
+только `am force-stop <package>` через localhost ADB **без** повторного запуска (вкладку ADB
+открывать не нужно: ephemeral `LocalhostAdbSession`, при «сыром» сбое connect — один повтор).
+Если сессию ADB открыть не удалось (TCP / connect) — **без toast** (best-effort close; ошибка
+в журнале `LOCAL_ADB`); при ошибке самой команды shell — toast как в расширенном «Списке
+программ» (`app_list_adb_toast_fail`). Код: `forceStopAppFromWidget` →
+`AdbAutomationActions.forceStopPackage`.
 
 ### Выбор страницы главного экрана
 

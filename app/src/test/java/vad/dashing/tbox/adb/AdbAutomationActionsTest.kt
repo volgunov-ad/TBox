@@ -90,6 +90,22 @@ class AdbAutomationActionsTest {
         assertEquals(listOf("am force-stop com.example"), gateway.shellCommands)
     }
 
+    @Test
+    fun runShell_transportClosed_humanizesConnectFailure() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
+        gateway.shellThrows = java.io.EOFException("ADB transport closed")
+        val result = AdbAutomationActions.runShellCommandWith(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb-closed"),
+            clientName = "test@hu",
+            command = "am force-stop com.example",
+            delayMs = { },
+        )
+        assertFalse(result.success)
+        assertEquals(AdbIoErrors.USER_FACING_CONNECT_FAILED_RU, result.message)
+        assertFalse(result.message.contains("transport closed", ignoreCase = true))
+    }
+
     private class FakeGateway(
         var tcpEnabled: Boolean,
         var portOpen: Boolean,
@@ -97,6 +113,7 @@ class AdbAutomationActionsTest {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
         var onShell: () -> AdbShellResult = { AdbShellResult("", "", 0, true) }
+        var shellThrows: Exception? = null
 
         override suspend fun refreshHuAdb() = Unit
 
@@ -118,9 +135,12 @@ class AdbAutomationActionsTest {
             keysDir: File,
             clientName: String,
             block: (execute: (String) -> AdbShellResult) -> T,
-        ): T = block { command ->
-            shellCommands += command
-            onShell()
+        ): T {
+            shellThrows?.let { throw it }
+            return block { command ->
+                shellCommands += command
+                onShell()
+            }
         }
     }
 }

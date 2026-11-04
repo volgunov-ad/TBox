@@ -87,7 +87,10 @@ object VirtualDisplayAdb {
         }
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                RefreshOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                RefreshOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> {
                 val shell = session.value
                 val dump = listOf(shell.stdout, shell.stderr)
@@ -231,7 +234,10 @@ object VirtualDisplayAdb {
 
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                LaunchOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                LaunchOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> when (val step = session.value) {
                 is LaunchStep.ResolveFailed -> {
                     val detail = step.failed.detail.ifBlank { step.failed.reason.name }
@@ -307,5 +313,14 @@ object VirtualDisplayAdb {
         LocalhostAdbSession.Reason.TcpEnableFailed -> Reason.TcpEnableFailed
         LocalhostAdbSession.Reason.TcpNotReady -> Reason.TcpNotReady
         LocalhostAdbSession.Reason.AdbConnectFailed -> Reason.AdbConnectFailed
+    }
+
+    private fun userFacingSessionDetail(
+        reason: LocalhostAdbSession.Reason,
+        detail: String,
+    ): String = when (reason) {
+        LocalhostAdbSession.Reason.AdbConnectFailed ->
+            AdbIoErrors.userFacingAdbConnectDetail(detail)
+        else -> detail
     }
 }
