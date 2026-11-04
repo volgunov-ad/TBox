@@ -108,12 +108,50 @@ class LocalhostAdbSessionTest {
         assertEquals(listOf(true, false), gateway.setTcpCalls)
     }
 
+    @Test
+    fun run_retriesOnceAfterTransportClosedThenSucceeds() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
+        gateway.failShellTimes = 1
+        gateway.shellFailure = java.io.EOFException("ADB transport closed")
+        val result = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb-retry"),
+            clientName = "test@hu",
+            delayMs = { },
+        ) { execute ->
+            execute("am force-stop com.example")
+            "done"
+        }
+        assertEquals(LocalhostAdbSession.Result.Ok("done"), result)
+        assertEquals(2, gateway.shellSessionAttempts)
+        assertEquals(listOf("am force-stop com.example"), gateway.shellCommands)
+    }
+
+    @Test
+    fun run_notEstablishedThenSucceedsOnRetry() = runBlocking {
+        val gateway = FakeGateway(tcpEnabled = true, portOpen = true)
+        gateway.failShellTimes = 1
+        gateway.shellFailure =
+            IllegalStateException("ADB connection is not established")
+        val result = LocalhostAdbSession.run(
+            gateway = gateway,
+            keysDir = tempFolder.newFolder("adb-retry2"),
+            clientName = "test@hu",
+            delayMs = { },
+        ) { "ok" }
+        assertEquals(LocalhostAdbSession.Result.Ok("ok"), result)
+        assertEquals(2, gateway.shellSessionAttempts)
+    }
+
     private class FakeGateway(
         var tcpEnabled: Boolean,
         var portOpen: Boolean,
     ) : LocalhostAdbSession.Gateway {
         val setTcpCalls = mutableListOf<Boolean>()
         val shellCommands = mutableListOf<String>()
+        var failShellTimes: Int = 0
+        var shellFailure: Exception = java.io.EOFException("ADB transport closed")
+        var shellSessionAttempts: Int = 0
 
         override suspend fun refreshHuAdb() = Unit
 
@@ -137,9 +175,16 @@ class LocalhostAdbSessionTest {
             keysDir: File,
             clientName: String,
             block: (execute: (String) -> AdbShellResult) -> T,
-        ): T = block { command ->
-            shellCommands += command
-            AdbShellResult("", "", 0, true)
+        ): T {
+            shellSessionAttempts++
+            if (failShellTimes > 0) {
+                failShellTimes--
+                throw shellFailure
+            }
+            return block { command ->
+                shellCommands += command
+                AdbShellResult("", "", 0, true)
+            }
         }
     }
 }

@@ -156,7 +156,15 @@ internal fun launchAppFromWidget(
                 ) { outcome ->
                     when (outcome) {
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
-                            val detail = outcome.detail.ifBlank { outcome.reason.name }
+                            val raw = outcome.detail.ifBlank { outcome.reason.name }
+                            val detail = if (
+                                outcome.reason ==
+                                vad.dashing.tbox.adb.VirtualDisplayAdb.Reason.AdbConnectFailed
+                            ) {
+                                vad.dashing.tbox.adb.AdbIoErrors.userFacingAdbConnectDetail(raw)
+                            } else {
+                                raw
+                            }
                             if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
                                     detail,
                                     context,
@@ -208,7 +216,9 @@ internal fun forceStopAppFromWidget(
     if (pkg.isBlank()) return
     settingsViewModel.forceStopAppViaAdb(context, pkg) { result ->
         if (result.success) return@forceStopAppViaAdb
-        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
+        // Best-effort close: do not toast when ephemeral ADB could not open (cold start /
+        // flaky adbd). Shell failures still surface. Journal keeps LOCAL_ADB ERROR.
+        if (vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure(
                 result.message,
                 context,
             )

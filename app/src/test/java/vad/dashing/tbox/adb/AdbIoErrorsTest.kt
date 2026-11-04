@@ -30,6 +30,63 @@ class AdbIoErrorsTest {
     }
 
     @Test
+    fun isRetryableConnectFailure_matchesTransportAndNotEstablished() {
+        assertTrue(AdbIoErrors.isRetryableConnectFailure("ADB transport closed"))
+        assertTrue(AdbIoErrors.isRetryableConnectFailure("ADB connection is not established"))
+        assertTrue(AdbIoErrors.isRetryableConnectFailure("Connection reset"))
+        assertTrue(AdbIoErrors.isRetryableConnectFailure("Broken pipe"))
+        assertTrue(AdbIoErrors.isRetryableConnectFailure("Connection refused"))
+        assertFalse(AdbIoErrors.isRetryableConnectFailure("Permission denial"))
+        assertFalse(AdbIoErrors.isRetryableConnectFailure("Bad ADB payload checksum"))
+        assertFalse(AdbIoErrors.isRetryableConnectFailure(null))
+    }
+
+    @Test
+    fun userFacingAdbConnectDetail_hidesRawChannelClosedEnglish() {
+        assertEquals(
+            AdbIoErrors.USER_FACING_CONNECT_FAILED_RU,
+            AdbIoErrors.userFacingAdbConnectDetail("ADB transport closed"),
+        )
+        assertEquals(
+            AdbIoErrors.USER_FACING_CONNECT_FAILED_RU,
+            AdbIoErrors.userFacingAdbConnectDetail("ADB connection is not established"),
+        )
+        assertEquals(
+            AdbIoErrors.USER_FACING_CONNECT_FAILED_RU,
+            AdbIoErrors.userFacingAdbConnectDetail(""),
+        )
+        assertEquals(
+            "Permission denial",
+            AdbIoErrors.userFacingAdbConnectDetail("Permission denial"),
+        )
+    }
+
+    @Test
+    fun shouldSuppressBestEffortAdbCloseFailure_sessionOpenOnly() {
+        assertTrue(
+            AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure("ADB transport closed"),
+        )
+        assertTrue(
+            AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure(
+                AdbIoErrors.USER_FACING_CONNECT_FAILED_RU,
+            ),
+        )
+        assertTrue(
+            AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure(
+                "Не удалось включить ADB TCP",
+            ),
+        )
+        assertTrue(
+            AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure(
+                "ADB TCP не поднялся вовремя",
+            ),
+        )
+        assertFalse(
+            AdbIoErrors.shouldSuppressBestEffortAdbCloseFailure("Permission denial"),
+        )
+    }
+
+    @Test
     fun shouldSuppress_onlyWhenShuttingDownOrIntentionalClose() {
         val msg = "ADB transport closed"
         assertFalse(AdbIoErrors.shouldSuppressUserFacingFailure(msg))

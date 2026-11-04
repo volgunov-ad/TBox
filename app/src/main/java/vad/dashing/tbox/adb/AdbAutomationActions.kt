@@ -85,9 +85,9 @@ object AdbAutomationActions {
                     LocalhostAdbSession.Reason.TcpNotReady ->
                         "ADB TCP не поднялся вовремя"
                     LocalhostAdbSession.Reason.AdbConnectFailed ->
-                        session.detail.ifBlank {
-                            "Не удалось подключиться к localhost ADB"
-                        }
+                        // Hide raw "ADB transport closed" / "not established" — ephemeral
+                        // LocalhostAdbSession does not require the ADB tab to be open.
+                        AdbIoErrors.userFacingAdbConnectDetail(session.detail)
                 }.let { base ->
                     if (session.detail.isNotBlank() &&
                         session.reason != LocalhostAdbSession.Reason.AdbConnectFailed
