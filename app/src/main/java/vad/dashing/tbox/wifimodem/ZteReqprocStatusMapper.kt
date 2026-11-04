@@ -45,7 +45,15 @@ object ZteReqprocStatusMapper {
 
     fun map(fields: Map<String, String>, previous: WifiModemSnapshot? = null): WifiModemSnapshot {
         val networkTypeRaw = firstNonBlank(fields, "network_type", "sub_network_type")
-        val netStatus = mapNetworkType(networkTypeRaw)
+            .ifBlank { previous?.networkTypeRaw.orEmpty() }
+        val mappedNetStatus = mapNetworkType(networkTypeRaw)
+        // Blank network_type means "not populated" (partial HOME / F90-like), not "нет сети".
+        val netStatus = when {
+            mappedNetStatus != "-" -> mappedNetStatus
+            previous?.netState?.netStatus?.takeIf { it.isNotBlank() && it != "-" } != null ->
+                previous.netState.netStatus
+            else -> mappedNetStatus
+        }
         val signalBar = fields["signalbar"]?.toIntOrNull()
         // Tolerant parse (plain "-84" or "-84dBm"); home multi_data often omits radio keys.
         val rssi = HuaweiSignalMetric.parseInt(fields["rssi"])
@@ -69,18 +77,45 @@ object ZteReqprocStatusMapper {
                 previous.netState.signalLevel
             else -> 0
         }
-        val pppRaw = fields["ppp_status"].orEmpty()
-        val apnUp = isPppConnected(pppRaw)
-        val modemMain = fields["modem_main_state"].orEmpty()
+        // Empty ppp_status = not populated (doc + partial HOME). Explicit
+        // ppp_disconnected still clears; blank must not flap modem_mobile_data.
+        val pppRawFromFields = fields["ppp_status"].orEmpty().trim()
+        val pppRaw = pppRawFromFields.ifBlank { previous?.pppStatusRaw.orEmpty() }
+        val apnUp = when {
+            pppRawFromFields.isNotEmpty() -> isPppConnected(pppRawFromFields)
+            previous != null -> previous.apnStatus
+            else -> false
+        }
+        val modemMain = fields["modem_main_state"].orEmpty().trim()
+            .ifBlank { previous?.modemMainStateRaw.orEmpty() }
         val roam = fields["simcard_roam"].orEmpty()
-        val regStatus = mapRegStatus(roam, modemMain, netStatus)
-        val simStatus = mapSimStatus(modemMain, fields)
-        val operator = fields["network_provider"]?.trim().orEmpty().ifBlank { "-" }
-        val imei = fields["imei"]?.trim().orEmpty().ifBlank { "-" }
-        val imsi = firstNonBlank(fields, "sim_imsi", "imsi").ifBlank { "-" }
-        val iccid = firstNonBlank(fields, "ziccid", "iccid").ifBlank { "-" }
+        val regStatus = mapRegStatus(roam, modemMain, netStatus).let { mapped ->
+            if (roam.isBlank() && previous?.netState?.regStatus != null &&
+                (mapped == "нет" || mapped.isBlank())
+            ) {
+                previous.netState.regStatus
+            } else {
+                mapped
+            }
+        }
+        val simStatus = mapSimStatus(modemMain, fields, previous?.netState?.simStatus)
+        val operator = retainIdentity(
+            fields["network_provider"]?.trim().orEmpty(),
+            previous?.netValues?.operator,
+        )
+        val imei = retainIdentity(fields["imei"]?.trim().orEmpty(), previous?.netValues?.imei)
+        val imsi = retainIdentity(
+            firstNonBlank(fields, "sim_imsi", "imsi"),
+            previous?.netValues?.imsi,
+        )
+        val iccid = retainIdentity(
+            firstNonBlank(fields, "ziccid", "iccid"),
+            previous?.netValues?.iccid,
+        )
         val wanIp = firstNonBlank(fields, "wan_ipaddr", "wan_ip")
+            .ifBlank { previous?.apnState?.apnIP.orEmpty() }
         val firmware = firstNonBlank(fields, "cr_version", "wa_inner_version", "hw_version")
+            .ifBlank { previous?.firmware.orEmpty() }
 
         val prevNet = previous?.netState
         val connectionChangeTime = when {
@@ -96,7 +131,7 @@ object ZteReqprocStatusMapper {
             firstNonBlank(fields, "realtime_tx_thrpt", "realtime_tx_throughput"),
         ) ?: previous?.netState?.uploadSpeedBps
         val netState = NetState(
-            csq = csq ?: 99,
+            csq = csq ?: previous?.netState?.csq?.takeIf { it in 0..31 } ?: 99,
             signalLevel = signalLevel,
             signalDbm = signalDbm,
             netStatus = netStatus,
@@ -129,12 +164,14 @@ object ZteReqprocStatusMapper {
             apnState = apnState,
             apnStatus = apnUp,
             firmware = firmware,
-            rssiDbm = rssi ?: rscp ?: lteRssi,
-            rsrpDbm = rsrp,
-            rsrqDb = firstNonBlank(fields, "lte_rsrq", "nv_rsrq").toIntOrNull(),
-            sinrDb = firstNonBlank(fields, "lte_snr", "nv_sinr").toIntOrNull(),
-            lteBand = fields["lte_band"].orEmpty(),
-            cellId = fields["cell_id"].orEmpty(),
+            rssiDbm = rssi ?: rscp ?: lteRssi ?: previous?.rssiDbm,
+            rsrpDbm = rsrp ?: previous?.rsrpDbm,
+            rsrqDb = firstNonBlank(fields, "lte_rsrq", "nv_rsrq").toIntOrNull()
+                ?: previous?.rsrqDb,
+            sinrDb = firstNonBlank(fields, "lte_snr", "nv_sinr").toIntOrNull()
+                ?: previous?.sinrDb,
+            lteBand = fields["lte_band"].orEmpty().ifBlank { previous?.lteBand.orEmpty() },
+            cellId = fields["cell_id"].orEmpty().ifBlank { previous?.cellId.orEmpty() },
             networkTypeRaw = networkTypeRaw,
             pppStatusRaw = pppRaw,
             modemMainStateRaw = modemMain,
@@ -217,7 +254,11 @@ object ZteReqprocStatusMapper {
         return "домашняя сеть"
     }
 
-    internal fun mapSimStatus(modemMain: String, fields: Map<String, String>): String {
+    internal fun mapSimStatus(
+        modemMain: String,
+        fields: Map<String, String>,
+        previousSimStatus: String? = null,
+    ): String {
         val pin = fields["pin_status"]?.trim().orEmpty()
         if (pin == "1" || pin.equals("pin_required", ignoreCase = true)) {
             return "требуется PIN"
@@ -230,14 +271,32 @@ object ZteReqprocStatusMapper {
             m.contains("modem_sim_destroy") || m.contains("error") -> "ошибка SIM"
             m.contains("modem_init_complete") || m.contains("ready") || m.isEmpty() -> {
                 // Home multi_data often lacks IMSI; PPP connected implies a usable SIM.
-                if (isPppConnected(fields["ppp_status"].orEmpty())) "SIM готова"
-                else {
-                    val imsi = firstNonBlank(fields, "sim_imsi", "imsi")
-                    if (imsi.isNotEmpty()) "SIM готова" else "нет SIM"
+                val ppp = fields["ppp_status"].orEmpty().trim()
+                val imsi = firstNonBlank(fields, "sim_imsi", "imsi")
+                when {
+                    isPppConnected(ppp) -> "SIM готова"
+                    imsi.isNotEmpty() -> "SIM готова"
+                    // No SIM evidence in this poll (blank HOME / F90): keep previous.
+                    ppp.isBlank() &&
+                        !previousSimStatus.isNullOrBlank() && previousSimStatus != "-" ->
+                        previousSimStatus
+                    // Explicit disconnect with ready modem still implies a SIM.
+                    ppp.isNotBlank() && m.isNotEmpty() -> "SIM готова"
+                    m.isEmpty() -> "нет SIM"
+                    else -> "SIM готова"
                 }
             }
             else -> "SIM готова"
         }
+    }
+
+    /** Keep previous IMEI/operator when the current multi_data omits the key. */
+    private fun retainIdentity(current: String, previous: String?): String {
+        val cur = current.trim()
+        if (cur.isNotEmpty()) return cur
+        val prev = previous?.trim().orEmpty()
+        if (prev.isNotEmpty() && prev != "-") return prev
+        return "-"
     }
 
     private fun firstNonBlank(fields: Map<String, String>, vararg keys: String): String {
