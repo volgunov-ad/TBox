@@ -515,7 +515,7 @@ blockdev --setro /dev/block/sde35
 
 ## 11. SystemUI на A9: плавающая кнопка и шторка (проверено 31.10.2026)
 
-Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
+Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Скрытый SystemUI также не снимает флаг keyguard у `vold`, и флешки NTFS/exFAT не монтируются; это закрывает [`tools/usb_mount/`](../tools/usb_mount/) (проверено 04.11.2026). Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
 
 ## 12. Открытые вопросы
 

@@ -107,6 +107,8 @@ APK собирается без Gradle (`tools/blank_wallpaper/build.ps1`: aapt2
 
 Вместе с кнопкой и шторкой пропадают: быстрые настройки шторки (Wi-Fi, BT, яркость, громкости), уведомления и heads-up, всплывающий индикатор громкости, меню питания, системные диалоги SystemUI — запрос доступа к USB-устройству (`UsbPermissionActivity`), разрешение на запись экрана, подтверждение отладки по USB; штатные обои и заставка (`DozeService`). Загрузка, Wi-Fi, ADB по сети, mbCAN и сам лаунчер от SystemUI не зависят.
 
+Флешки NTFS/exFAT тоже пропадают, хотя драйверы в `vold` есть (`/system/bin/ntfs-3g`, `/system/bin/mount.exfat`). `vold` стартует с флагом «secure keyguard» и не сканирует новый диск (`Found disk at … but delaying scan due to secure keyguard`), пока кто-нибудь не вызовет `ActivityManager.setLockScreenShown(false)`. На штатной прошивке это делает `WTKeyguard` внутри SystemUI. Диск при этом уже есть в `/dev/block`, поэтому «Файловый менеджер +» видит носитель и пишет, что NTFS/exFAT не поддерживаются. Лечится пакетом [`tools/usb_mount/`](../tools/usb_mount/) (`vad.dashing.usbmount`): на `BOOT_COMPLETED` он через `mb_daemon` (§10 [HEAD_UNITS_DEVICE_NOTES_RU.md](HEAD_UNITS_DEVICE_NOTES_RU.md)) от root вызывает `setLockScreenShown(false)` и `vold.onSecureKeyguardStateChanged(false)`. SystemUI остаётся скрытым. Проверено 04.11.2026 на стенде `192.168.1.128`: после перезагрузки том `public:8,97` смонтирован (`fuseblk`, файлы читаются), `com.android.systemui` по-прежнему `hidden=true`. Диалог `UsbPermissionActivity` этот пакет не заменяет.
+
 ## 6. Возврат
 
 ```
