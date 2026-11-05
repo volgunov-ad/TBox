@@ -320,6 +320,8 @@ class BackgroundService : Service() {
     /** Candidate package awaiting consecutive-poll confirmation before becoming stable. */
     private var usageStatsPendingForegroundPackage: String? = null
     private var usageStatsPendingForegroundStablePolls: Int = 0
+    /** Multi-VD sticky hide reason (watched package kept while another app is last-resumed). */
+    private var usageStatsStickyHideState: UsageStatsStickyHide.State = UsageStatsStickyHide.State.EMPTY
     /**
      * ElapsedRealtime after which usage-stats force-show may open overlays.
      * Set when [servicePhase] becomes [ServiceLifecyclePhase.Running] (+ settle).
@@ -6137,7 +6139,8 @@ class BackgroundService : Service() {
         TboxRepository.addLog(
             "DEBUG",
             "UsageStats",
-            "floating sync fg=${newState.foregroundPackage} prevFg=$prevFg " +
+            "floating sync fg=${newState.foregroundPackage} stickyHide=${newState.stickyHidePackage} " +
+                "prevFg=$prevFg " +
                 "hidePanels=${newState.hidePanelIds.size} showPanels=${newState.showPanelIds.size} " +
                 "suppressHide=${newState.suppressFloatingPanelUsageStatsHide} " +
                 "suppressShow=${newState.suppressFloatingPanelUsageStatsForceShow}",
@@ -6167,6 +6170,7 @@ class BackgroundService : Service() {
         usageStatsStableForegroundPackage = null
         usageStatsPendingForegroundPackage = null
         usageStatsPendingForegroundStablePolls = 0
+        usageStatsStickyHideState = UsageStatsStickyHide.State.EMPTY
         ForegroundAppMonitor.clear()
     }
 
@@ -6231,11 +6235,39 @@ class BackgroundService : Service() {
                 isMainActivityInForeground = isMainActivityInForeground,
             )
         }
+        val stickyHidePackage = if (!hasHideRules || !hasUsageAccess) {
+            usageStatsStickyHideState = UsageStatsStickyHide.State.EMPTY
+            null
+        } else {
+            val prevSticky = usageStatsStickyHideState.stickyHidePackage
+            // Skip the leave probe when focused already enters/transfers sticky.
+            val focusedEntersHide = effectiveForeground != null &&
+                usageStatsWatchContains(watchHide, effectiveForeground)
+            val activitySignal = when {
+                prevSticky.isNullOrBlank() || focusedEntersHide ->
+                    UsageStatsStickyHide.PackageActivitySignal.ABSENT
+                else -> UsageStatsHideFloatingHelper.packageActivitySignalWithin(
+                    this@BackgroundService,
+                    packageName = prevSticky,
+                    windowMs = ForegroundAppMonitor.SAMPLE_WINDOW_MS,
+                )
+            }
+            usageStatsStickyHideState = UsageStatsStickyHide.next(
+                previous = usageStatsStickyHideState,
+                focusedPackage = effectiveForeground,
+                hideWatch = watchHide,
+                stickyPackageActivity = activitySignal,
+                nowElapsedMs = SystemClock.elapsedRealtime(),
+                oemOverlayPackage = overlayPackage,
+            )
+            usageStatsStickyHideState.stickyHidePackage
+        }
         val suppressForceShow = servicePhase != ServiceLifecyclePhase.Running ||
             SystemClock.elapsedRealtime() < usageStatsForceShowAllowedAfterElapsedMs ||
             MainScreenBootOpenStore.isPending(this@BackgroundService)
         return UsageStatsOverlayRulesState(
             foregroundPackage = effectiveForeground,
+            stickyHidePackage = stickyHidePackage,
             // Treat "visible" as resumed/foreground to avoid STARTED-only transition spikes.
             isMainActivityVisible = isMainActivityInForeground,
             suppressFloatingPanelUsageStatsHide =
