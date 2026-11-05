@@ -76,21 +76,42 @@ object HuAdbControl {
     }
 
     suspend fun setUsbEnabled(context: Context, enabled: Boolean) {
-        if (!File(DUAL_ROLE_DIR, "mode").exists()) {
+        setUsbEnabledWith(
+            dualRolePort = File(DUAL_ROLE_DIR, "mode").exists(),
+            gateway = LocalhostAdbSession.AndroidGateway(),
+            keysDir = context.applicationContext.filesDir.resolve("adb"),
+            clientName = LocalhostAdbSession.defaultClientName(),
+            enabled = enabled,
+        )
+    }
+
+    internal suspend fun setUsbEnabledWith(
+        dualRolePort: Boolean,
+        gateway: LocalhostAdbSession.Gateway,
+        keysDir: File,
+        clientName: String,
+        enabled: Boolean,
+    ) {
+        if (!dualRolePort) {
             applyCommands(usbCommands(enabled))
             return
         }
-        applyMutex.withLock {
-            setUsbPortRole(context.applicationContext, enabled)
-            refresh()
-        }
+        // Not under [applyMutex]: the session turns TCP on/off through [applyCommands], and the
+        // mutex is not reentrant. [LocalhostAdbSession] already serializes port-role sessions.
+        setUsbPortRole(gateway, keysDir, clientName, enabled)
+        refresh()
     }
 
-    private suspend fun setUsbPortRole(app: Context, enabled: Boolean) {
+    private suspend fun setUsbPortRole(
+        gateway: LocalhostAdbSession.Gateway,
+        keysDir: File,
+        clientName: String,
+        enabled: Boolean,
+    ) {
         val session = LocalhostAdbSession.run(
-            gateway = LocalhostAdbSession.AndroidGateway(),
-            keysDir = app.filesDir.resolve("adb"),
-            clientName = LocalhostAdbSession.defaultClientName(),
+            gateway = gateway,
+            keysDir = keysDir,
+            clientName = clientName,
         ) { execute ->
             execute(usbPortRoleCommand(enabled))
         }
