@@ -735,6 +735,10 @@
     <string name="permissions_storage_desc">Export backups and logs, save files, pick main-screen wallpapers.</string>
     <string name="permissions_location_title">Location</string>
     <string name="permissions_location_desc">System location access (including HU-related location features). GPS data from TBox over UDP is separate and not controlled by this permission.</string>
+    <string name="permissions_call_phone_title">Phone calls</string>
+    <string name="permissions_call_phone_desc">Outgoing dial tile and place_call / answer_call / hangup_call (automations, External API, voice). Needs CALL_PHONE and ANSWER_PHONE_CALLS. Without a dial tile, grant here or via the action editor button.</string>
+    <string name="permissions_call_phone_grant_button">Grant phone call permission</string>
+    <string name="permissions_call_phone_granted_toast">Phone call permission granted</string>
     <string name="permissions_mock_location_title">Mock location (ADB)</string>
     <string name="permissions_mock_location_desc">Selects TBox Monitor as the mock location app. Required to inject system coordinates. Android settings will not grant this by itself. Location permission and developer options are still required. Commands:</string>
     <string name="permissions_mock_location_auto_hint">If :5555 is not listening yet, briefly enables ADB TCP, connects to localhost, runs appops and settings put, then restores TCP only if this session turned it on. Does not disable an already-open port. On first use, accept «Allow USB debugging» on the head unit.</string>

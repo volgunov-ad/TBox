@@ -45,7 +45,9 @@ import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
 import vad.dashing.tbox.placeCallFailureUserMessage
 import vad.dashing.tbox.placeOutgoingCall
+import vad.dashing.tbox.PlaceCallFailureReason
 import vad.dashing.tbox.PlaceCallResult
+import vad.dashing.tbox.phone.PhoneDialCallActivity
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.voice.VadVoiceLaunchContract
 import android.os.SystemClock
@@ -745,9 +747,15 @@ class AutomationActionExecutor(
     private fun placeCall(rawNumber: String): AutomationActionResult {
         return when (val result = placeOutgoingCall(appContext, rawNumber)) {
             PlaceCallResult.Success -> AutomationActionResult.ok("Звонок начат")
-            is PlaceCallResult.Failure -> AutomationActionResult.failure(
-                placeCallFailureUserMessage(result.reason, result.detail),
-            )
+            is PlaceCallResult.Failure -> {
+                if (result.reason == PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION) {
+                    // First-failure path for API / automation users without a dial tile (S9).
+                    PhoneDialCallActivity.startPermissionRequest(appContext)
+                }
+                AutomationActionResult.failure(
+                    placeCallFailureUserMessage(result.reason, result.detail),
+                )
+            }
         }
     }
 

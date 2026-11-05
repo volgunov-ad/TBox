@@ -26,6 +26,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowToast
 import vad.dashing.tbox.BLUETOOTH_PROFILE_HEADSET_CLIENT
+import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.R
 
 @RunWith(RobolectricTestRunner::class)
@@ -145,6 +146,51 @@ class PhoneDialCallActivityTest {
         }
     }
 
+    @Test
+    fun withConfirm_suspendsFloatingOverlaysWhileDialogVisible() {
+        grantCallPhone()
+        connectHfp()
+        registerCallHandler()
+        val intent = dialIntent(confirm = true)
+        drainStartedActivities()
+        drainStartedServices()
+
+        ActivityScenario.launch<PhoneDialCallActivity>(intent).use {
+            composeRule.waitForIdle()
+            val services = drainStartedServices()
+            assertTrue(
+                services.any {
+                    it.component?.className?.endsWith("BackgroundService") == true &&
+                        it.action == BackgroundService.ACTION_SUSPEND_OVERLAYS
+                },
+            )
+            assertTrue(startedCalls().isEmpty())
+        }
+    }
+
+    @Test
+    fun permissionOnly_requestsPhonePermissions() {
+        assertTrue(PhoneDialCallActivity.startPermissionRequest(app))
+        val intent = shadowOf(app).nextStartedActivity
+        val activity = Robolectric.buildActivity(PhoneDialCallActivity::class.java, intent).setup().get()
+
+        val requested = shadowOf(activity).lastRequestedPermission.requestedPermissions.toSet()
+        assertEquals(setOf(Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS), requested)
+        assertFalse(activity.isFinishing)
+    }
+
+    @Test
+    fun permissionOnly_alreadyGranted_finishesWithToast() {
+        grantCallPhone()
+        shadowOf(app).grantPermissions(Manifest.permission.ANSWER_PHONE_CALLS)
+        assertTrue(PhoneDialCallActivity.startPermissionRequest(app))
+        val intent = shadowOf(app).nextStartedActivity
+        val activity = Robolectric.buildActivity(PhoneDialCallActivity::class.java, intent).setup().get()
+
+        assertTrue(activity.isFinishing)
+        assertEquals(app.getString(R.string.permissions_call_phone_granted_toast), ShadowToast.getTextOfLatestToast())
+    }
+
     private fun dialIntent(number: String = NUMBER, confirm: Boolean): Intent {
         assertTrue(PhoneDialCallActivity.start(app, number, number, confirm))
         return shadowOf(app).nextStartedActivity
@@ -174,6 +220,9 @@ class PhoneDialCallActivityTest {
 
     private fun drainStartedActivities(): List<Intent> =
         generateSequence { shadowOf(app).nextStartedActivity }.toList()
+
+    private fun drainStartedServices(): List<Intent> =
+        generateSequence { shadowOf(app).nextStartedService }.toList()
 
     private fun startedCalls(): List<Uri?> =
         drainStartedActivities().filter { it.action == Intent.ACTION_CALL }.map { it.data }

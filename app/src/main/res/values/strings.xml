@@ -738,6 +738,10 @@
     <string name="permissions_storage_desc">Экспорт резервных копий и логов, сохранение файлов, выбор обоев главного экрана.</string>
     <string name="permissions_location_title">Геолокация</string>
     <string name="permissions_location_desc">Системный доступ к местоположению (в т.ч. для функций, связанных с геопозицией на ГУ). Данные GPS с TBox по UDP работают отдельно и этим разрешением не управляются.</string>
+    <string name="permissions_call_phone_title">Звонки (телефон)</string>
+    <string name="permissions_call_phone_desc">Исходящий звонок с плитки «Набрать номер» и действий place_call / answer_call / hangup_call (автоматизации, внешний API, голос). Нужны CALL_PHONE и ANSWER_PHONE_CALLS. Без плитки выдайте здесь или кнопкой в редакторе действия.</string>
+    <string name="permissions_call_phone_grant_button">Выдать разрешение на звонки</string>
+    <string name="permissions_call_phone_granted_toast">Разрешение на звонки выдано</string>
     <string name="permissions_mock_location_title">Подмена координат (ADB)</string>
     <string name="permissions_mock_location_desc">Выбирает TBox Monitor приложением для фиктивных местоположений. Нужно для подмены системной геопозиции. Через настройки Android само не выдаётся. Отдельно нужны геолокация и включённые настройки разработчика. Команды:</string>
     <string name="permissions_mock_location_auto_hint">Если :5555 ещё не слушает — кратко включит ADB TCP, подключится к localhost, выполнит appops и settings put и вернёт TCP только если включала эта сессия. Уже открытый порт не выключает. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>

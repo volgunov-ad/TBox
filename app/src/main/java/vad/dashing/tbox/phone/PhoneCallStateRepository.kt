@@ -158,16 +158,20 @@ object PhoneCallStateRepository {
             )
         }
         val snap = _snapshot.value
-        if (snap.callState == PhoneCallState.IDLE || snap.callState == PhoneCallState.UNKNOWN) {
-            return PhoneCallControlResult.Failure("Нет активного звонка")
+        hangupImmediateFailureMessage(snap.callState)?.let {
+            return PhoneCallControlResult.Failure(it)
         }
+        val unknown = snap.callState == PhoneCallState.UNKNOWN
+        // UNKNOWN: still try hangup — Telecom endCall is safe with no call (S10).
         if (hangupViaHeadsetClient && invokeHeadsetClientHangup(snap.callState)) {
             return PhoneCallControlResult.Success
         }
         if (hangupViaTelecom && invokeTelecom("endCall")) {
             return PhoneCallControlResult.Success
         }
-        return controlFailure("Не удалось сбросить звонок")
+        return controlFailure(
+            if (unknown) HANGUP_STATE_UNKNOWN_MESSAGE else "Не удалось сбросить звонок",
+        )
     }
 
     private fun controlFailure(message: String): PhoneCallControlResult.Failure {

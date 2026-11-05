@@ -62,3 +62,23 @@ sealed class PhoneCallControlResult {
     data object Success : PhoneCallControlResult()
     data class Failure(val message: String) : PhoneCallControlResult()
 }
+
+/** Immediate hangup failure when the observed state is clearly idle (do not try the stack). */
+internal const val HANGUP_NO_ACTIVE_CALL_MESSAGE = "Нет активного звонка"
+
+/**
+ * After a best-effort hangup attempt while [PhoneCallState.UNKNOWN]: clearer than
+ * [HANGUP_NO_ACTIVE_CALL_MESSAGE] because we do not know whether a call exists.
+ */
+internal const val HANGUP_STATE_UNKNOWN_MESSAGE =
+    "Состояние звонка неизвестно; сброс не подтверждён"
+
+/**
+ * Pre-attempt hangup gate: only [PhoneCallState.IDLE] fails immediately.
+ * [PhoneCallState.UNKNOWN] returns null so the caller can try Telecom / HeadsetClient.
+ */
+internal fun hangupImmediateFailureMessage(state: PhoneCallState): String? =
+    when (state) {
+        PhoneCallState.IDLE -> HANGUP_NO_ACTIVE_CALL_MESSAGE
+        else -> null
+    }
