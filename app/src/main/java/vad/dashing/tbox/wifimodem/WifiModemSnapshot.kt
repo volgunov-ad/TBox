@@ -23,4 +23,17 @@ data class WifiModemSnapshot(
     val networkTypeRaw: String = "",
     val pppStatusRaw: String = "",
     val modemMainStateRaw: String = "",
-)
+) {
+    /**
+     * After CONNECT/DISCONNECT, seed PPP so a following blank HOME poll does not
+     * reinstate the previous [apnStatus] via mapper retention.
+     */
+    fun withOptimisticMobileData(enabled: Boolean): WifiModemSnapshot = copy(
+        apnStatus = enabled,
+        apnState = apnState.copy(
+            apnStatus = enabled,
+            apnType = if (enabled) apnState.apnType.ifBlank { "LTE" } else "",
+        ),
+        pppStatusRaw = if (enabled) "ppp_connected" else "ppp_disconnected",
+    )
+}

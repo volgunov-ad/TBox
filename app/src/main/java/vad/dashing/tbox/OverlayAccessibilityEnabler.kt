@@ -3,6 +3,7 @@ package vad.dashing.tbox
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
+import vad.dashing.tbox.adb.LocalhostAdbBootReady
 import vad.dashing.tbox.adb.WriteSecureSettingsAutoGrant
 
 /**
@@ -32,7 +33,19 @@ object OverlayAccessibilityEnabler {
         }
         if (!AppPermissions.hasWriteSecureSettings(appContext)) {
             if (!enabled) return false
-            val grant = WriteSecureSettingsAutoGrant.grant(appContext)
+            val grant = LocalhostAdbBootReady.runAttempts(
+                shouldRetry = { outcome ->
+                    outcome is WriteSecureSettingsAutoGrant.Outcome.Failed &&
+                        when (outcome.reason) {
+                            WriteSecureSettingsAutoGrant.Reason.TcpEnableFailed,
+                            WriteSecureSettingsAutoGrant.Reason.TcpNotReady,
+                            WriteSecureSettingsAutoGrant.Reason.AdbConnectFailed,
+                            -> true
+                            else -> false
+                        }
+                },
+                attempt = { WriteSecureSettingsAutoGrant.grant(appContext) },
+            )
             if (grant is WriteSecureSettingsAutoGrant.Outcome.Failed) {
                 TboxRepository.addLog("ERROR", TAG, "WRITE_SECURE_SETTINGS unavailable: ${grant.reason}")
                 return false

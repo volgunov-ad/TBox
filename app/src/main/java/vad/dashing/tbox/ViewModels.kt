@@ -543,6 +543,7 @@ object WidgetsRepository {
         APP_LAUNCHER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_launcher_widget),
         APP_LIST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_app_list_widget),
         HTTP_REQUEST_WIDGET_DATA_KEY to DataTitle(R.string.data_title_http_request_widget),
+        PHONE_DIAL_WIDGET_DATA_KEY to DataTitle(R.string.data_title_phone_dial_widget),
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY to DataTitle(
             R.string.data_title_automation_trigger_widget
         ),
@@ -953,6 +954,10 @@ object WidgetsRepository {
             R.string.widget_desc_http_request,
             R.string.widget_actions_http_request,
         ),
+        PHONE_DIAL_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_phone_dial,
+            R.string.widget_actions_phone_dial,
+        ),
         AUTOMATION_TRIGGER_WIDGET_DATA_KEY to WidgetDescription(
             R.string.widget_desc_automation_trigger,
             R.string.widget_actions_automation_trigger,
@@ -1024,11 +1029,12 @@ object WidgetsRepository {
     }
 
     /**
-     * Types offered in the main «Плитки» tab picker. Main-screen page selectors are only useful
-     * on main-screen / floating panels (they switch [SettingsViewModel] current page).
+     * Types offered in the main «Плитки» tab picker. Main-screen page selectors and the phone
+     * dial tile are only useful on main-screen / floating panels.
      */
     fun isOfferedOnMainDashboardTab(dataKey: String): Boolean =
-        !isMainScreenPageSelectorWidgetDataKey(dataKey)
+        !isMainScreenPageSelectorWidgetDataKey(dataKey) &&
+            !isPhoneDialWidgetDataKey(dataKey)
 
     @StringRes
     fun getDescriptionResForDataKey(dataKey: String): Int? {
@@ -1127,6 +1133,7 @@ object WidgetsRepository {
             HIDE_FLOATING_PANELS_WIDGET_DATA_KEY,
             TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
@@ -1169,6 +1176,7 @@ object WidgetsRepository {
             APP_LAUNCHER_WIDGET_DATA_KEY,
             APP_LIST_WIDGET_DATA_KEY,
             HTTP_REQUEST_WIDGET_DATA_KEY,
+            PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,

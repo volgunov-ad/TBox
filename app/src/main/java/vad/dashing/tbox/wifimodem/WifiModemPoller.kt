@@ -126,6 +126,14 @@ class WifiModemPoller(
                         }
                         null -> throw IllegalStateException("No controllable Wi‑Fi modem active")
                     }
+                    // Optimistic PPP so blank HOME polls after a toggle do not
+                    // reinstate the previous apnStatus via mapper retention.
+                    previousSnapshot = previousSnapshot?.withOptimisticMobileData(enabled)
+                        ?: WifiModemSnapshot(
+                            apnStatus = enabled,
+                            apnState = APNState(apnStatus = enabled),
+                            pppStatusRaw = if (enabled) "ppp_connected" else "ppp_disconnected",
+                        )
                     TboxRepository.addLog(
                         "INFO",
                         "Wi‑Fi modem",

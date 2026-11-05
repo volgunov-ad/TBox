@@ -81,6 +81,9 @@
     <string name="adb_connect">Подключиться</string>
     <string name="adb_disconnect">Отключиться</string>
     <string name="adb_connecting">Подключение…</string>
+    <string name="localhost_adb_reason_tcp_enable_failed">Не удалось включить ADB TCP на ГУ</string>
+    <string name="localhost_adb_reason_tcp_not_ready">ADB TCP не поднялся вовремя</string>
+    <string name="localhost_adb_reason_connect_failed">Не удалось подключиться к localhost ADB</string>
     <string name="adb_status_disconnected">Отключено</string>
     <string name="adb_status_connected">Подключено: %1$s</string>
     <string name="adb_status_error">Ошибка: %1$s</string>
@@ -717,6 +720,10 @@
     <string name="permissions_storage_desc">Экспорт резервных копий и логов, сохранение файлов, выбор обоев главного экрана.</string>
     <string name="permissions_location_title">Геолокация</string>
     <string name="permissions_location_desc">Системный доступ к местоположению (в т.ч. для функций, связанных с геопозицией на ГУ). Данные GPS с TBox по UDP работают отдельно и этим разрешением не управляются.</string>
+    <string name="permissions_call_phone_title">Звонки (телефон)</string>
+    <string name="permissions_call_phone_desc">Исходящий звонок с плитки «Набрать номер» и действий place_call / answer_call / hangup_call (автоматизации, внешний API, голос). Нужны CALL_PHONE и ANSWER_PHONE_CALLS. Без плитки выдайте здесь или кнопкой в редакторе действия.</string>
+    <string name="permissions_call_phone_grant_button">Выдать разрешение на звонки</string>
+    <string name="permissions_call_phone_granted_toast">Разрешение на звонки выдано</string>
     <string name="permissions_mock_location_title">Подмена координат (ADB)</string>
     <string name="permissions_mock_location_desc">Выбирает TBox Monitor приложением для фиктивных местоположений. Нужно для подмены системной геопозиции. Через настройки Android само не выдаётся. Отдельно нужны геолокация и включённые настройки разработчика. Команды:</string>
     <string name="permissions_mock_location_auto_hint">Если :5555 ещё не слушает — кратко включит ADB TCP, подключится к localhost, выполнит appops и settings put и вернёт TCP только если включала эта сессия. Уже открытый порт не выключает. При первом запуске подтвердите «Разрешить отладку» на ГУ.</string>
@@ -2467,6 +2474,7 @@
     <string name="data_title_app_launcher_widget">Ярлык приложения</string>
     <string name="data_title_app_list_widget">Список программ</string>
     <string name="data_title_http_request_widget">HTTP-запрос</string>
+    <string name="data_title_phone_dial_widget">Набрать номер</string>
     <string name="data_title_automation_trigger_widget">Триггер автоматизации</string>
     <string name="data_title_empty_tile_widget">Пустая</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
@@ -2490,7 +2498,7 @@
     <string name="widget_app_launcher_launch_mode">Режим запуска</string>
     <string name="widget_app_launcher_launch_mode_desc">Обычный запуск, окно рядом с TBox (freeform) или запуск в виртуальном дисплее через ADB.</string>
     <string name="widget_app_launcher_launch_mode_desc_a10">Обычный запуск, штатное окно приложений лаунчера A10, окно рядом с TBox (freeform) или запуск в виртуальном дисплее через ADB.</string>
-    <string name="widget_app_launcher_double_tap_force_stop_hint">Двойной тап по ярлыку: am force-stop через ADB (без повторного запуска). При ошибке ADB — toast, как в расширенном списке программ.</string>
+    <string name="widget_app_launcher_double_tap_force_stop_hint">Двойной тап по ярлыку: am force-stop через localhost ADB (без повторного запуска; вкладку ADB открывать не нужно). Если ADB недоступен — без toast; при ошибке самой команды — toast, как в расширенном списке программ.</string>
     <string name="widget_app_launcher_mode_fullscreen">Обычный</string>
     <string name="widget_app_launcher_mode_freeform">Рядом с TBox (freeform)</string>
     <string name="widget_app_launcher_mode_stock_window">Окно приложений (лаунчер)</string>
@@ -2506,7 +2514,7 @@
     <string name="widget_app_launcher_virtual_display_refresh_fail">Не удалось обновить список (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Не удалось запустить на дисплее (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_remapped">Дисплей %1$d → %2$d (%3$d×%4$d)</string>
-    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» включает ADB TCP только если порт ещё не слушает, опрашивает дисплеи через localhost и возвращает TCP лишь если эта сессия его включала. Дисплей 0 (панель) в списке скрыт. При запуске ярлыка id сверяется по сохранённому разрешению, TCP остаётся включённым.</string>
+    <string name="widget_app_launcher_virtual_display_hint">«Обновить список» и запуск ярлыка включают ADB TCP только если порт ещё не слушает, работают через localhost и возвращают TCP, если его включала эта сессия. Дисплей 0 (панель) в списке скрыт. При запуске ярлыка id сверяется по сохранённому разрешению.</string>
     <string name="widget_app_launcher_freeform_side">Сторона приложения</string>
     <string name="widget_app_launcher_freeform_side_left">Слева</string>
     <string name="widget_app_launcher_freeform_side_right">Справа</string>
@@ -2525,6 +2533,21 @@
     <string name="widget_app_launcher_freeform_launch_failed">Не удалось запустить приложение в окне</string>
     <string name="freeform_exit_fullscreen">На весь экран</string>
     <string name="freeform_exit_fullscreen_cd">Вернуть TBox Monitor на весь экран</string>
+    <string name="widget_phone_dial_settings_title">Набрать номер</string>
+    <string name="widget_phone_dial_number_label">Номер телефона</string>
+    <string name="widget_phone_dial_number_hint">+79201234567</string>
+    <string name="widget_phone_dial_number_required">Укажите номер (цифры, «+» в начале, «*», «#»), чтобы сохранить виджет</string>
+    <string name="widget_phone_dial_number_placeholder">Нет номера</string>
+    <string name="widget_phone_dial_show_number">Показывать номер на плитке</string>
+    <string name="widget_phone_dial_show_number_desc">Если выключено, на плитке по центру показывается заголовок (имя абонента), а номер остаётся только для звонка.</string>
+    <string name="widget_phone_dial_confirm_before_call">Спрашивать перед звонком</string>
+    <string name="widget_phone_dial_confirm_before_call_desc">Перед исходящим звонком с плитки показать диалог подтверждения.</string>
+    <string name="widget_phone_dial_confirm_title">Позвонить?</string>
+    <string name="widget_phone_dial_confirm_message">Позвонить %1$s?</string>
+    <string name="widget_phone_dial_confirm_call">Позвонить</string>
+    <string name="widget_phone_dial_empty_number">Задайте номер телефона</string>
+    <string name="widget_phone_dial_no_permission">Нет разрешения на звонки</string>
+    <string name="widget_phone_dial_no_hfp">Телефон не подключён по Bluetooth</string>
     <string name="widget_http_request_settings_title">HTTP-запрос</string>
     <string name="widget_http_request_yaml_label">YAML запроса</string>
     <string name="widget_http_request_yaml_hint">Поддерживаются: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding.</string>
@@ -2710,6 +2733,7 @@
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
     <string name="widget_desc_app_list">Список установленных программ с запуском, скрытием и удалением.</string>
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
+    <string name="widget_desc_phone_dial">Исходящий звонок на сохранённый номер через Bluetooth HFP. Только главный экран и плавающие панели.</string>
     <string name="widget_desc_automation_trigger">Кнопка для запуска автоматизаций: активируется действием «Триггер автоматизации (виджет)», а одиночное или двойное нажатие запускает автоматизации с триггером «Нажатие виджета-триггера» (тип нажатия single/double) и совпадающим ID.</string>
     <string name="widget_desc_empty_tile">Пустая плитка для создания свободного места в сетке.</string>
     <string name="widget_desc_restart_tbox">Перезагрузка модуля TBox.</string>
@@ -2790,6 +2814,7 @@
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение; двойное — закрыть (ADB force-stop, без повторного запуска).</string>
     <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>
+    <string name="widget_actions_phone_dial">Одиночное нажатие — позвонить на сохранённый номер (нужны CALL_PHONE и активный HFP). Во время набора / разговора / удержания / входящего — сброс звонка.</string>
     <string name="widget_actions_automation_trigger">Одиночное или двойное нажатие — запустить автоматизации с совпадающим ID и типом нажатия. В режиме редактирования — открыть настройки виджета.</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>

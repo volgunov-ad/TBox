@@ -624,7 +624,13 @@ private fun VirtualDisplayLaunchSettings(
                         refreshOkTemplate.format(pickerCount)
                     }
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
-                        refreshFailTemplate.format(outcome.reason.name)
+                        refreshFailTemplate.format(
+                            vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                context,
+                                outcome.reason,
+                                outcome.detail,
+                            ),
+                        )
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }

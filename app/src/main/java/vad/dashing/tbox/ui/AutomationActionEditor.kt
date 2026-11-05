@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,15 +21,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vad.dashing.tbox.R
-import vad.dashing.tbox.ui.theme.tboxCaption
-import vad.dashing.tbox.ui.theme.tboxTitle
+import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
+import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.phone.PhoneDialCallActivity
+import vad.dashing.tbox.ui.theme.tboxCaption
+import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
 import vad.dashing.tbox.automation.AUTOMATION_MAX_DELAY_MS
 import vad.dashing.tbox.automation.AutomationAction
@@ -547,7 +553,13 @@ private fun LaunchApplicationFields(
                             "Найдено дисплеев: $count"
                         }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
-                            "Не удалось обновить список (${outcome.reason.name})"
+                            "Не удалось обновить список (${
+                                vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                    context,
+                                    outcome.reason,
+                                    outcome.detail,
+                                )
+                            })"
                     }
                     android.widget.Toast.makeText(
                         context,
@@ -1093,7 +1105,66 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.PLACE_CALL -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Номер телефона",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Исходящий звонок через Telecom ACTION_CALL → HFP. Нужны разрешение " +
+                    "CALL_PHONE и активный Bluetooth HFP. Без HFP — ошибка, клавиатура не открывается.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            PhoneCallPermissionGrantButton()
+        }
+
+        AutomationBuiltinActionType.ANSWER_CALL,
+        AutomationBuiltinActionType.HANGUP_CALL,
+        -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "Best-effort через BluetoothHeadsetClient / Telecom. Успех — стек принял " +
+                    "команду, не подтверждение разговора; отказ стека или нет прав — ошибка.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            PhoneCallPermissionGrantButton()
+        }
+
         else -> Unit
+    }
+}
+
+/** Settings / first-failure path for API-only users who never tap the dial tile (S9). */
+@Composable
+private fun PhoneCallPermissionGrantButton() {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var refreshTick by remember { mutableStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val granted = remember(refreshTick) { AppPermissions.hasPhoneCallAccess(context) }
+    if (granted) return
+    OutlinedButton(
+        onClick = rememberWrappedOnClick {
+            PhoneDialCallActivity.startPermissionRequest(context)
+        },
+    ) {
+        AutomationButtonLabel(stringResource(R.string.permissions_call_phone_grant_button))
     }
 }
 
@@ -1254,6 +1325,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
         "Круиз: активировать на текущей скорости (SET−)"
     AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
     AutomationBuiltinActionType.START_VAD_VOICE -> "VAD Voice: слушать"
+    AutomationBuiltinActionType.PLACE_CALL -> "Позвонить (HFP)"
+    AutomationBuiltinActionType.ANSWER_CALL -> "Ответить на звонок (HFP)"
+    AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

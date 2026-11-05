@@ -239,6 +239,10 @@ internal fun TileBehaviorSettings(
                 widgetIndex = widgetIndex,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
             )
+            PhoneDialWidgetSettingsSection(
+                state = state,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+            )
             AutomationTriggerWidgetSettingsSection(
                 state = state,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)

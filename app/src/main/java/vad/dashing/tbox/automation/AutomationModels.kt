@@ -254,6 +254,17 @@ enum class AutomationSignalId(
     HU_VOICE_VOLUME("hu_voice_volume"),
     /** Headrest speaker: `only` / `assist` / `off`. */
     HU_HEADREST_SPEAKER("hu_headrest_speaker", AutomationSignalValueType.STATE),
+    /** HFP Client connected to a bonded phone (`on` / `off`). */
+    PHONE_HFP_CONNECTED("phone_hfp_connected", AutomationSignalValueType.STATE),
+    /**
+     * Normalized call state: idle / dialing / active / incoming / held / unknown.
+     * Observed best-effort via BluetoothHeadsetClient from the app process.
+     */
+    PHONE_CALL_STATE("phone_call_state", AutomationSignalValueType.STATE),
+    /** Call direction: none / outgoing / incoming. */
+    PHONE_CALL_DIRECTION("phone_call_direction", AutomationSignalValueType.STATE),
+    /** Current or last observed call number (string; may be blank). */
+    PHONE_CALL_NUMBER("phone_call_number", AutomationSignalValueType.STATE),
 
     // --- External API / voice gaps G1–G7 (also usable in automations) ---
     /** TBox UDP link up/down; must be `app` (not `tbox`) so offline still yields `off`. */
@@ -826,7 +837,22 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * Start VAD Voice listening session (exported Intent LISTEN).
      * No parameters. Safe — opens [vad.dashing.voice] if installed.
      */
-    START_VAD_VOICE("start_vad_voice");
+    START_VAD_VOICE("start_vad_voice"),
+    /**
+     * Outgoing HFP call via Telecom `ACTION_CALL`.
+     * [AutomationAction.Builtin.stringValue] = phone number.
+     */
+    PLACE_CALL("place_call"),
+    /**
+     * Answer an incoming HFP call (best-effort; may fail without privileges).
+     * No parameters. Gated by [vad.dashing.tbox.phone.PhoneCallStateRepository] capabilities.
+     */
+    ANSWER_CALL("answer_call"),
+    /**
+     * Hang up / reject the current HFP call (best-effort; may fail without privileges).
+     * No parameters. Gated by [vad.dashing.tbox.phone.PhoneCallStateRepository] capabilities.
+     */
+    HANGUP_CALL("hangup_call");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

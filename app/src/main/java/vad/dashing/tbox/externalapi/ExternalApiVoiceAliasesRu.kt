@@ -264,6 +264,25 @@ object ExternalApiVoiceAliasesRu {
             "дневные ходовые огни",
             "ходовые огни",
         ),
+        AutomationSignalId.PHONE_HFP_CONNECTED to listOf(
+            "телефон по блютуз",
+            "hfp",
+            "телефон подключён",
+        ),
+        AutomationSignalId.PHONE_CALL_STATE to listOf(
+            "статус звонка",
+            "состояние звонка",
+            "идёт ли разговор",
+        ),
+        AutomationSignalId.PHONE_CALL_DIRECTION to listOf(
+            "направление звонка",
+            "входящий или исходящий",
+        ),
+        AutomationSignalId.PHONE_CALL_NUMBER to listOf(
+            "номер звонка",
+            "кто звонит",
+            "набранный номер",
+        ),
     )
 
     private val BUILTIN_LABELS: Map<AutomationBuiltinActionType, String> = mapOf(
@@ -315,6 +334,9 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED to "Круиз на текущей скорости",
         AutomationBuiltinActionType.CRUISE_NUDGE to "Подстроить круиз",
         AutomationBuiltinActionType.START_VAD_VOICE to "Голосовой помощник",
+        AutomationBuiltinActionType.PLACE_CALL to "Позвонить",
+        AutomationBuiltinActionType.ANSWER_CALL to "Ответить на звонок",
+        AutomationBuiltinActionType.HANGUP_CALL to "Сбросить звонок",
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(
@@ -334,6 +356,23 @@ object ExternalApiVoiceAliasesRu {
             "вад войс",
             "голосовой помощник",
             "включи голос",
+        ),
+        AutomationBuiltinActionType.PLACE_CALL to listOf(
+            "позвони",
+            "набери",
+            "набрать номер",
+            "позвонить",
+        ),
+        AutomationBuiltinActionType.ANSWER_CALL to listOf(
+            "ответь",
+            "принять звонок",
+            "ответить",
+        ),
+        AutomationBuiltinActionType.HANGUP_CALL to listOf(
+            "сбрось",
+            "положить трубку",
+            "завершить звонок",
+            "сбросить",
         ),
     )
 

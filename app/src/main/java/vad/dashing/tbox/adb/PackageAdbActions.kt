@@ -206,32 +206,44 @@ internal object PackageAdbActions {
                 delayMs = delayMs,
             )
         }
-        val session = LocalhostAdbSession.run(
-            gateway = gateway,
-            keysDir = keysDir,
-            clientName = clientName,
-            host = host,
-            port = port,
-            readyTimeoutMs = readyTimeoutMs,
-            nowMs = nowMs,
-            delayMs = delayMs,
-            afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
-        ) { execute ->
-            collectStatuses(execute)
-        }
-        return@withLock when (session) {
-            is LocalhostAdbSession.Result.Failed ->
-                StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
-            is LocalhostAdbSession.Result.Ok -> {
-                sessionActive.set(true)
-                tcpEnabledByUs.set(session.tcpEnabledBySession)
-                TboxRepository.addLog(
-                    level = "INFO",
-                    tag = TAG,
-                    message = "App list advanced ADB session started" +
-                        if (session.tcpEnabledBySession) " (TCP enabled by us)" else "",
-                )
-                StatusLoadOutcome.Success(session.value)
+        var entered = false
+        try {
+            val session = LocalhostAdbSession.run(
+                gateway = gateway,
+                keysDir = keysDir,
+                clientName = clientName,
+                host = host,
+                port = port,
+                readyTimeoutMs = readyTimeoutMs,
+                nowMs = nowMs,
+                delayMs = delayMs,
+                afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+                onTcpEnabled = { tcpEnabledByUs.set(true) },
+            ) { execute ->
+                collectStatuses(execute)
+            }
+            return@withLock when (session) {
+                is LocalhostAdbSession.Result.Failed ->
+                    StatusLoadOutcome.Failed(
+                        mapSessionReason(session.reason),
+                        userFacingSessionDetail(session.reason, session.detail),
+                    )
+                is LocalhostAdbSession.Result.Ok -> {
+                    sessionActive.set(true)
+                    entered = true
+                    TboxRepository.addLog(
+                        level = "INFO",
+                        tag = TAG,
+                        message = "App list advanced ADB session started" +
+                            if (session.tcpEnabledBySession) " (TCP enabled by us)" else "",
+                    )
+                    StatusLoadOutcome.Success(session.value)
+                }
+            }
+        } finally {
+            // Exit runs only for an active session: a failed or cancelled enter hands TCP back here.
+            if (!entered && tcpEnabledByUs.getAndSet(false)) {
+                LocalhostAdbSession.restoreTcpOff(gateway)
             }
         }
     }
@@ -254,19 +266,7 @@ internal object PackageAdbActions {
             }
             val shouldRestore = tcpEnabledByUs.getAndSet(false)
             if (shouldRestore) {
-                runCatching {
-                    AdbShutdownGate.withIntentionalTransportCloseSuspending {
-                        gateway.setTcpEnabled(false)
-                        gateway.refreshHuAdb()
-                    }
-                }.onFailure { e ->
-                    TboxRepository.addLog(
-                        level = "WARN",
-                        tag = TAG,
-                        message = "Failed to restore ADB TCP after advanced mode: " +
-                            (e.message ?: e.javaClass.simpleName),
-                    )
-                }
+                LocalhostAdbSession.restoreTcpOff(gateway)
                 TboxRepository.addLog(
                     level = "INFO",
                     tag = TAG,
@@ -358,12 +358,16 @@ internal object PackageAdbActions {
                 nowMs = nowMs,
                 delayMs = delayMs,
                 afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+                onTcpEnabled = { tcpEnabledByUs.set(true) },
             ) { execute ->
                 execute(command)
             }
             when (session) {
                 is LocalhostAdbSession.Result.Failed ->
-                    Outcome.Failed(mapSessionReason(session.reason), session.detail)
+                    Outcome.Failed(
+                        mapSessionReason(session.reason),
+                        userFacingSessionDetail(session.reason, session.detail),
+                    )
                 is LocalhostAdbSession.Result.Ok -> {
                     val shell = session.value
                     val failure = AdbShellResults.failureDetail(shell)
@@ -423,6 +427,7 @@ internal object PackageAdbActions {
             port = port,
             readyTimeoutMs = readyTimeoutMs,
             afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+            onTcpEnabled = { tcpEnabledByUs.set(true) },
         ) { execute ->
             shellText(execute(AppDexoptCodec.statusCommand(packageName)))
         }
@@ -452,12 +457,16 @@ internal object PackageAdbActions {
             nowMs = nowMs,
             delayMs = delayMs,
             afterSession = LocalhostAdbSession.AfterSession.LeaveTcpEnabled,
+            onTcpEnabled = { tcpEnabledByUs.set(true) },
         ) { execute ->
             collectStatuses(execute)
         }
         return when (session) {
             is LocalhostAdbSession.Result.Failed ->
-                StatusLoadOutcome.Failed(mapSessionReason(session.reason), session.detail)
+                StatusLoadOutcome.Failed(
+                    mapSessionReason(session.reason),
+                    userFacingSessionDetail(session.reason, session.detail),
+                )
             is LocalhostAdbSession.Result.Ok -> StatusLoadOutcome.Success(session.value)
         }
     }
@@ -494,4 +503,9 @@ internal object PackageAdbActions {
         LocalhostAdbSession.Reason.TcpNotReady -> Reason.TcpNotReady
         LocalhostAdbSession.Reason.AdbConnectFailed -> Reason.AdbConnectFailed
     }
+
+    private fun userFacingSessionDetail(
+        reason: LocalhostAdbSession.Reason,
+        detail: String,
+    ): String = LocalhostAdbReasons.message(context = null, reason = reason, detail = detail)
 }

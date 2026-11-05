@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.APNState
+import vad.dashing.tbox.NetValues
 import java.nio.charset.StandardCharsets
 
 class OlaxReqprocStatusMapperTest {
@@ -88,5 +90,91 @@ class OlaxReqprocStatusMapperTest {
         assertEquals("100", merged["realtime_rx_thrpt"])
         assertEquals("-80", merged["rssi"])
         assertFalse(merged["realtime_rx_thrpt"].isNullOrBlank())
+    }
+
+    @Test
+    fun blankHomeKeepsPreviousPppAndIdentity() {
+        val prev = ZteReqprocStatusMapper.map(
+            OlaxReqprocStatusCmds.mergePreferNonBlank(
+                ZteReqprocStatusMapper.fieldsFromJsonObject(load("home_poll_connected_lte.json")),
+                ZteReqprocStatusMapper.fieldsFromJsonObject(load("status_device.json")),
+            ),
+        )
+        assertTrue(prev.apnStatus)
+
+        // F90-like: RADIO only (HOME fields blank / omitted).
+        val radioOnly = mapOf(
+            "network_type" to "LTE",
+            "sub_network_type" to "FDD_LTE",
+            "rssi" to "-80",
+            "lte_rsrp" to "-90",
+            "nv_rsrq" to "10",
+            "nv_sinr" to "5",
+            "lte_band" to "20",
+            "cell_id" to "1",
+            "ppp_status" to "",
+            "signalbar" to "",
+            "modem_main_state" to "",
+            "network_provider" to "",
+            "imei" to "",
+        )
+        val next = ZteReqprocStatusMapper.map(radioOnly, previous = prev)
+
+        assertTrue(next.apnStatus)
+        assertEquals("ppp_connected", next.pppStatusRaw)
+        assertEquals("REDACTED_IMEI", next.netValues.imei)
+        assertEquals("BeeLine/Vimp", next.netValues.operator)
+        assertEquals("SIM готова", next.netState.simStatus)
+        assertEquals("4G", next.netState.netStatus)
+        assertEquals(-80, next.netState.signalDbm)
+        assertEquals(368304L, next.netState.downloadSpeedBps)
+    }
+
+    @Test
+    fun explicitPppDisconnectedStillClearsApn() {
+        val prev = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "signalbar" to "4",
+                "ppp_status" to "ppp_connected",
+                "modem_main_state" to "modem_init_complete",
+                "sim_imsi" to "1",
+                "simcard_roam" to "Home",
+            ),
+        )
+        val next = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "signalbar" to "4",
+                "ppp_status" to "ppp_disconnected",
+                "modem_main_state" to "modem_init_complete",
+                "sim_imsi" to "1",
+                "simcard_roam" to "Home",
+            ),
+            previous = prev,
+        )
+        assertFalse(next.apnStatus)
+        assertEquals("ppp_disconnected", next.pppStatusRaw)
+    }
+
+    @Test
+    fun optimisticMobileDataSeedsPppForBlankPoll() {
+        val seeded = WifiModemSnapshot(
+            apnStatus = true,
+            apnState = APNState(apnStatus = true),
+            pppStatusRaw = "ppp_connected",
+            netValues = NetValues(imei = "1"),
+        ).withOptimisticMobileData(enabled = false)
+
+        val next = ZteReqprocStatusMapper.map(
+            mapOf(
+                "network_type" to "LTE",
+                "rssi" to "-70",
+                "ppp_status" to "",
+            ),
+            previous = seeded,
+        )
+        assertFalse(next.apnStatus)
+        assertEquals("ppp_disconnected", next.pppStatusRaw)
     }
 }

@@ -43,6 +43,11 @@ import vad.dashing.tbox.mbcan.MbCanCommandResult
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
 import vad.dashing.tbox.parseHttpRequestWidgetYaml
+import vad.dashing.tbox.placeCallFailureUserMessage
+import vad.dashing.tbox.placeOutgoingCall
+import vad.dashing.tbox.PlaceCallFailureReason
+import vad.dashing.tbox.PlaceCallResult
+import vad.dashing.tbox.phone.PhoneDialCallActivity
 import vad.dashing.tbox.ui.LeftMenuLayout
 import vad.dashing.tbox.voice.VadVoiceLaunchContract
 import android.os.SystemClock
@@ -311,7 +316,11 @@ class AutomationActionExecutor(
                         )
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
                         AutomationActionResult.failure(
-                            outcome.detail.ifBlank { outcome.reason.name },
+                            vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                appContext,
+                                outcome.reason,
+                                outcome.detail,
+                            ),
                         )
                 }
             }
@@ -733,6 +742,45 @@ class AutomationActionExecutor(
         -> AutomationCruiseActions.execute(action)
 
         AutomationBuiltinActionType.START_VAD_VOICE -> startVadVoiceListen()
+
+        AutomationBuiltinActionType.PLACE_CALL -> placeCall(action.stringValue)
+        AutomationBuiltinActionType.ANSWER_CALL -> answerCall()
+        AutomationBuiltinActionType.HANGUP_CALL -> hangupCall()
+    }
+
+    private fun placeCall(rawNumber: String): AutomationActionResult {
+        return when (val result = placeOutgoingCall(appContext, rawNumber)) {
+            PlaceCallResult.Success -> AutomationActionResult.ok("Звонок начат")
+            is PlaceCallResult.Failure -> {
+                if (result.reason == PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION) {
+                    // First-failure path for API / automation users without a dial tile (S9).
+                    PhoneDialCallActivity.startPermissionRequest(appContext)
+                }
+                AutomationActionResult.failure(
+                    placeCallFailureUserMessage(result.reason, result.detail),
+                )
+            }
+        }
+    }
+
+    private fun answerCall(): AutomationActionResult {
+        return when (
+            val result = vad.dashing.tbox.phone.PhoneCallStateRepository.answerIncomingCall()
+        ) {
+            vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
+                AutomationActionResult.ok("Ответ на звонок")
+            is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
+                AutomationActionResult.failure(result.message)
+        }
+    }
+
+    private fun hangupCall(): AutomationActionResult {
+        return when (val result = vad.dashing.tbox.phone.PhoneCallStateRepository.hangupCall()) {
+            vad.dashing.tbox.phone.PhoneCallControlResult.Success ->
+                AutomationActionResult.ok("Звонок сброшен")
+            is vad.dashing.tbox.phone.PhoneCallControlResult.Failure ->
+                AutomationActionResult.failure(result.message)
+        }
     }
 
     private fun startVadVoiceListen(): AutomationActionResult {

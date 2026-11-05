@@ -2469,6 +2469,7 @@ class BackgroundService : Service() {
                 }
                 startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
+                vad.dashing.tbox.phone.PhoneCallStateRepository.start(this@BackgroundService)
                 yield()
                 applyModemDataSource()
                 yield()
@@ -7271,7 +7272,12 @@ class BackgroundService : Service() {
         EspCompanionRepository.setRouterError(null)
         espPanelPort = settingsManager.externalApiPortFlow.first()
             .coerceIn(ExternalApiConstants.MIN_PORT, ExternalApiConstants.MAX_PORT)
-        val error = HuSoftApRouter.prepare(this)
+        val error = vad.dashing.tbox.adb.LocalhostAdbBootReady.runAttempts(
+            shouldRetry = { code ->
+                vad.dashing.tbox.adb.LocalhostAdbBootReady.isRetryableAdbErrorCode(code)
+            },
+            attempt = { HuSoftApRouter.prepare(this) },
+        )
         if (ticket != espSoftApRouterGeneration.get()) return
         val push = HuSoftApRouter.current()
         if (push != null && (error == null || error == "band")) {

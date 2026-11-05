@@ -28,8 +28,6 @@ internal object AdbExclusiveTcpShell {
         Ephemeral,
     }
 
-    private val DEAD_TRANSPORT_MARKERS = listOf("connection reset", "broken pipe")
-
     /**
      * Whether [error] from a reused live TCP connection means the cached transport died
      * before the block completed (peer EOF after an adbd restart / idle drop), so a
@@ -38,10 +36,7 @@ internal object AdbExclusiveTcpShell {
      */
     fun shouldFallbackToEphemeral(error: Throwable): Boolean {
         if (error is CancellationException) return false
-        val normalized = error.message?.trim()?.lowercase().orEmpty()
-        if (normalized.isEmpty()) return false
-        return AdbIoErrors.isBenignDisconnectMessage(normalized) ||
-            DEAD_TRANSPORT_MARKERS.any { it in normalized }
+        return AdbIoErrors.isRetryableConnectFailure(error)
     }
 
     /**
@@ -71,6 +66,7 @@ internal object AdbExclusiveTcpShell {
         sessionTimeoutMs: Int,
         keysDir: File,
         clientName: String,
+        maxIdleMs: Long = AdbConnection.DEFAULT_MAX_IDLE_MS,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): T {
         val transport = AdbTcpTransport.connect(
@@ -83,6 +79,7 @@ internal object AdbExclusiveTcpShell {
                 tcp,
                 AdbAuthKeys.loadOrCreate(keysDir),
                 clientName,
+                maxIdleMs = maxIdleMs,
             ).use { connection ->
                 connection.connect()
                 block { command -> connection.execute(command) }

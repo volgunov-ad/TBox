@@ -15,6 +15,7 @@ import vad.dashing.tbox.MUSIC_BUTTONS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.MUSIC_COVER_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_SQUARE_WIDGET_DATA_KEY
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 import vad.dashing.tbox.valueToString
@@ -87,6 +88,7 @@ private fun specialSample(dataKey: String): WidgetPreviewSample? = when (dataKey
     -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "App")
     HTTP_REQUEST_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "HTTP")
     AUTOMATION_TRIGGER_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "▶")
+    PHONE_DIAL_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "☎")
     WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "Ext")
     "netWidget",
     "netWidgetNew",

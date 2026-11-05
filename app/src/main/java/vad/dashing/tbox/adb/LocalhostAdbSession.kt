@@ -20,6 +20,7 @@ import vad.dashing.tbox.TboxRepository
  * without toggling. Otherwise enable TCP via [HuAdbControl], wait for the port
  * (longer after `adbd` restart), run shell commands, disconnect, then optionally
  * restore previous TCP state — but only when this session actually turned TCP on.
+ * If props say TCP is on but the port stays closed, `adbd` is restarted once (props unchanged).
  *
  * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [MockLocationAutoGrant],
  * [VirtualDisplayAdb],
@@ -41,6 +42,13 @@ internal object LocalhostAdbSession {
     const val ADB_CONNECT_TIMEOUT_MS = 8_000
     /** Long enough for the user to accept the one-time «Allow USB debugging» dialog. */
     const val ADB_SESSION_TIMEOUT_MS = 25_000
+    /**
+     * Cap for hung shell / silent adbd on localhost sessions. Default [AdbConnection]
+     * idle budget is 5 minutes and would hold [mutex] that long; 45 s matches audit advice.
+     */
+    const val LOCALHOST_MAX_IDLE_MS = 45_000L
+    /** Brief pause before one reconnect after a flaky first CNXN / shell open. */
+    const val ADB_CONNECT_RETRY_DELAY_MS = 350L
 
     private val mutex = Mutex()
 
@@ -124,21 +132,23 @@ internal object LocalhostAdbSession {
                     onTcpEnabled()
                 }
 
-                val waitMs = if (enabledByUs) {
+                var waitMs = if (enabledByUs) {
                     maxOf(readyTimeoutMs, TCP_READY_AFTER_ENABLE_TIMEOUT_MS)
                 } else {
                     readyTimeoutMs
                 }
-                val ready = waitUntilTcpReady(
-                    host = host,
-                    port = port,
-                    readyTimeoutMs = waitMs,
-                    probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
-                    probeIntervalMs = TCP_PROBE_INTERVAL_MS,
-                    isOpen = gateway::isTcpPortOpen,
-                    nowMs = nowMs,
-                    delayMs = delayFn,
-                )
+                var ready = awaitTcpPort(gateway, host, port, waitMs, nowMs, delayFn)
+                if (!ready && !enabledByUs && restartAdbdIfTcpPropsOn(gateway, host, port)) {
+                    waitMs += TCP_READY_AFTER_ENABLE_TIMEOUT_MS
+                    ready = awaitTcpPort(
+                        gateway,
+                        host,
+                        port,
+                        TCP_READY_AFTER_ENABLE_TIMEOUT_MS,
+                        nowMs,
+                        delayFn,
+                    )
+                }
                 if (!ready) {
                     TboxRepository.addLog(
                         level = "ERROR",
@@ -149,13 +159,13 @@ internal object LocalhostAdbSession {
                 }
 
                 try {
-                    val value = gateway.withShellSession(
+                    val value = openShellSessionWithRetry(
+                        gateway = gateway,
                         host = host,
                         port = port,
-                        connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
-                        sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
                         keysDir = keysDir,
                         clientName = clientName,
+                        delayMs = delayFn,
                         block = block,
                     )
                     Result.Ok(value, tcpEnabledBySession = enabledByUs)
@@ -211,6 +221,10 @@ internal object LocalhostAdbSession {
         }
     }
 
+    /** Explicit TCP toggles outside a session: never restart adbd under a running shell. */
+    suspend fun <T> withSessionLock(block: suspend () -> T): T =
+        withContext(Dispatchers.IO) { mutex.withLock { block() } }
+
     private suspend fun restoreTcpOffUnlocked(gateway: Gateway) {
         // ctl.restart adbd drops live tab/ephemeral clients — expected EOF.
         // NonCancellable: a cancelled caller must not leave persist TCP on.
@@ -246,6 +260,91 @@ internal object LocalhostAdbSession {
             val remaining = deadline - nowMs()
             if (remaining <= 0L) return false
             delayMs(minOf(probeIntervalMs, remaining))
+        }
+    }
+
+    private suspend fun awaitTcpPort(
+        gateway: Gateway,
+        host: String,
+        port: Int,
+        readyTimeoutMs: Long,
+        nowMs: () -> Long,
+        delayMs: suspend (Long) -> Unit,
+    ): Boolean = waitUntilTcpReady(
+        host = host,
+        port = port,
+        readyTimeoutMs = readyTimeoutMs,
+        probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
+        probeIntervalMs = TCP_PROBE_INTERVAL_MS,
+        isOpen = gateway::isTcpPortOpen,
+        nowMs = nowMs,
+        delayMs = delayMs,
+    )
+
+    /**
+     * Props say TCP is on, yet nothing listens on the port: adbd is stopped (A10 stops it when a
+     * phone cable takes the USB port) or not up yet after boot. `ctl.restart adbd` starts it
+     * again; the props stay as found, so the session does not own TCP and never restores it.
+     */
+    private suspend fun restartAdbdIfTcpPropsOn(gateway: Gateway, host: String, port: Int): Boolean {
+        gateway.refreshHuAdb()
+        if (!gateway.isTcpEnabled()) return false
+        TboxRepository.addLog(
+            level = "WARN",
+            tag = TAG,
+            message = "ADB TCP props on but $host:$port closed; restarting adbd",
+        )
+        gateway.setTcpEnabled(true)
+        gateway.refreshHuAdb()
+        return true
+    }
+
+    /**
+     * Opens one shell session; on a retryable first-connect failure (typical right after
+     * `ctl.restart adbd` / cold Monitor start), waits briefly and tries once more.
+     *
+     * The retry re-runs the whole [block] (not only the CNXN handshake). Callers must keep
+     * blocks idempotent (`am force-stop` + `am start`, `pm grant`, dumpsys reads, …).
+     */
+    private suspend fun <T> openShellSessionWithRetry(
+        gateway: Gateway,
+        host: String,
+        port: Int,
+        keysDir: File,
+        clientName: String,
+        delayMs: suspend (Long) -> Unit,
+        block: (execute: (String) -> AdbShellResult) -> T,
+    ): T {
+        try {
+            return gateway.withShellSession(
+                host = host,
+                port = port,
+                connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
+                sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val detail = e.message ?: e.javaClass.simpleName
+            if (!AdbIoErrors.isRetryableConnectFailure(detail)) throw e
+            TboxRepository.addLog(
+                level = "WARN",
+                tag = TAG,
+                message = "ADB session connect flaky ($detail); retrying once",
+            )
+            delayMs(ADB_CONNECT_RETRY_DELAY_MS)
+            return gateway.withShellSession(
+                host = host,
+                port = port,
+                connectTimeoutMs = ADB_CONNECT_TIMEOUT_MS,
+                sessionTimeoutMs = ADB_SESSION_TIMEOUT_MS,
+                keysDir = keysDir,
+                clientName = clientName,
+                block = block,
+            )
         }
     }
 
@@ -291,6 +390,7 @@ internal object LocalhostAdbSession {
             port = port,
             connectTimeoutMs = connectTimeoutMs,
             sessionTimeoutMs = sessionTimeoutMs,
+            maxIdleMs = LOCALHOST_MAX_IDLE_MS,
             keysDir = keysDir,
             clientName = clientName,
             block = block,

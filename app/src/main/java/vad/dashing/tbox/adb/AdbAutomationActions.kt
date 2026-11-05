@@ -2,6 +2,7 @@ package vad.dashing.tbox.adb
 
 import android.content.Context
 import java.io.File
+import kotlinx.coroutines.delay
 import vad.dashing.tbox.automation.AutomationActionResult
 
 /**
@@ -9,15 +10,20 @@ import vad.dashing.tbox.automation.AutomationActionResult
  *
  * Shell uses [LocalhostAdbSession] with [LocalhostAdbSession.AfterSession.RestorePreviousTcp]:
  * enable :5555 only if not already available; restore off only if this session enabled it.
+ *
+ * During the [LocalhostAdbBootReady] window after BACKGROUND_SERVICE_STARTED, session-open
+ * failures are retried with the shared boot backoff.
  */
 object AdbAutomationActions {
     const val MAX_SHELL_COMMAND_CHARS = 4_000
 
     suspend fun setTcpEnabled(enabled: Boolean): AutomationActionResult {
-        HuAdbControl.consumeError()
-        HuAdbControl.setTcpEnabled(enabled)
-        HuAdbControl.refresh()
-        val error = HuAdbControl.lastError.value
+        val error = LocalhostAdbSession.withSessionLock {
+            HuAdbControl.consumeError()
+            HuAdbControl.setTcpEnabled(enabled)
+            HuAdbControl.refresh()
+            HuAdbControl.lastError.value
+        }
         if (error != null) {
             return AutomationActionResult.failure(error)
         }
@@ -64,6 +70,52 @@ object AdbAutomationActions {
                 "Команда длиннее $MAX_SHELL_COMMAND_CHARS символов",
             )
         }
+        // Tests inject delayMs — single attempt keeps FakeGateway deterministic.
+        val delays = if (delayMs != null) {
+            listOf(0L)
+        } else {
+            LocalhostAdbBootReady.delaysForCurrentWindow()
+        }
+        val attempt = LocalhostAdbBootReady.runAttempts(
+            delaysMs = delays,
+            pause = delayMs ?: { ms -> delay(ms) },
+            shouldRetry = { shell ->
+                shell.sessionReason != null &&
+                    LocalhostAdbBootReady.isRetryableSessionReason(shell.sessionReason)
+            },
+            attempt = {
+                runShellOnce(
+                    gateway = gateway,
+                    keysDir = keysDir,
+                    clientName = clientName,
+                    host = host,
+                    port = port,
+                    readyTimeoutMs = readyTimeoutMs,
+                    nowMs = nowMs,
+                    delayMs = delayMs,
+                    trimmed = trimmed,
+                )
+            },
+        )
+        return attempt.result
+    }
+
+    private data class ShellAttempt(
+        val result: AutomationActionResult,
+        val sessionReason: LocalhostAdbSession.Reason? = null,
+    )
+
+    private suspend fun runShellOnce(
+        gateway: LocalhostAdbSession.Gateway,
+        keysDir: File,
+        clientName: String,
+        host: String,
+        port: Int,
+        readyTimeoutMs: Long,
+        nowMs: () -> Long,
+        delayMs: (suspend (Long) -> Unit)?,
+        trimmed: String,
+    ): ShellAttempt {
         val session = LocalhostAdbSession.run(
             gateway = gateway,
             keysDir = keysDir,
@@ -78,31 +130,21 @@ object AdbAutomationActions {
             execute(trimmed)
         }
         return when (session) {
-            is LocalhostAdbSession.Result.Failed -> AutomationActionResult.failure(
-                when (session.reason) {
-                    LocalhostAdbSession.Reason.TcpEnableFailed ->
-                        "Не удалось включить ADB TCP"
-                    LocalhostAdbSession.Reason.TcpNotReady ->
-                        "ADB TCP не поднялся вовремя"
-                    LocalhostAdbSession.Reason.AdbConnectFailed ->
-                        session.detail.ifBlank {
-                            "Не удалось подключиться к localhost ADB"
-                        }
-                }.let { base ->
-                    if (session.detail.isNotBlank() &&
-                        session.reason != LocalhostAdbSession.Reason.AdbConnectFailed
-                    ) {
-                        "$base: ${session.detail}"
-                    } else {
-                        base
-                    }
-                },
+            is LocalhostAdbSession.Result.Failed -> ShellAttempt(
+                result = AutomationActionResult.failure(
+                    LocalhostAdbReasons.message(
+                        context = null,
+                        reason = session.reason,
+                        detail = session.detail,
+                    ),
+                ),
+                sessionReason = session.reason,
             )
             is LocalhostAdbSession.Result.Ok -> {
                 val shell = session.value
                 val failure = AdbShellResults.failureDetail(shell)
                 if (failure != null) {
-                    return AutomationActionResult.failure(failure)
+                    return ShellAttempt(AutomationActionResult.failure(failure))
                 }
                 val output = listOf(shell.stdout, shell.stderr)
                     .firstOrNull { it.isNotBlank() }
@@ -112,12 +154,14 @@ object AdbAutomationActions {
                     .firstOrNull { it.isNotBlank() }
                     .orEmpty()
                     .take(120)
-                AutomationActionResult.ok(
-                    if (output.isBlank()) {
-                        "Команда выполнена"
-                    } else {
-                        "Команда выполнена: $output"
-                    },
+                ShellAttempt(
+                    AutomationActionResult.ok(
+                        if (output.isBlank()) {
+                            "Команда выполнена"
+                        } else {
+                            "Команда выполнена: $output"
+                        },
+                    ),
                 )
             }
         }

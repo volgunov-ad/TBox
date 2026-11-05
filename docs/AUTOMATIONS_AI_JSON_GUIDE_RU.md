@@ -691,6 +691,9 @@
 | Яркость экрана ГУ | `set_hu_screen_brightness` | `intValue`: `1..10` (как Car Settings → Экраны; не HUD/ICM) |
 | Автояркость экрана ГУ | `set_hu_screen_auto_brightness` | `boolValue`: включить/выключить |
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
+| Позвонить (HFP) | `place_call` | `stringValue`: номер телефона — цифры, `+` только в начале, `*`, `#`; пробелы, `-`, `.`, скобки отбрасываются. Буквы или `+` в середине — ошибка валидации (номер не «додумывается»). Нужны `CALL_PHONE` и активный HFP; без HFP — fail, keypad не открывается |
+| Ответить на звонок | `answer_call` | без параметров; best-effort. Успех — стек HFP / Telecom принял команду (не подтверждение, что разговор начался); отказ стека — fail |
+| Сбросить звонок | `hangup_call` | без параметров; best-effort. Входящий (звонит) — отклонение, иначе завершение. Успех — стек принял команду; отказ — fail |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
 | Включить / выключить автоматизацию | `set_automation_enabled` | `stringValue`: id целевого правила; `boolValue`: `true` — включить, `false` — выключить. **Без toggle.** Уже в целевом состоянии → успешный no-op. Правило может выключить само себя (текущий прогон отменяется при reload). Не путать с `set_automation_trigger_widget` (плитка, не `enabled`) |
@@ -881,13 +884,16 @@ TCP :5555 включают только если порт ещё не слуша
 | `media_title` | `app` | название трека или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_artist` | `app` | исполнитель или нет значения. Любая играющая медиасессия, виджет музыки не нужен |
 | `media_playing` | `app` | `on` / `off` — сессия играет или на паузе |
+| `phone_call_state` | `app` | `idle`, `dialing`, `active`, `incoming`, `held`, `unknown` — звонок через Bluetooth HFP телефона. `unknown` — состояние не наблюдается (нет HFP-прокси или скрытый API не отвечает), это не «нет звонка» |
+| `phone_call_direction` | `app` | `none`, `outgoing`, `incoming` |
+| `phone_call_number` | `app` | номер текущего или последнего звонка (строка) или нет значения. Новый звонок без номера (скрытый абонент) предыдущий номер не наследует |
 
 Следующие сигналы имеют только значения `off` / `on`:
 
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `epb_park_lamp`, `engine_oil_pressure`, `brake_fluid`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel`, `phone_hfp_connected` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

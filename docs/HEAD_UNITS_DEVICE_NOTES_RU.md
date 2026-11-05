@@ -446,7 +446,7 @@ if command -v su >/dev/null 2>&1; then setsid su 0 sh -c 'sleep 1; svc power reb
 
 - **Окно приложений лаунчера.** `com.adayo.launcher.LAUNCH_APP` открывает `MainActivity` в ActivityView на виртуальном дисплее ≠ 0 и может перенести уже открытую задачу (`singleTask`) на новый дисплей. Отдельные окна (`Dialog`) в этот момент падают с `BadTokenException`, поэтому редактор плитки рисуется внутри окна (`WidgetEditorScreen` с `inWindow = true`). Виртуальный дисплей существует только пока окно приложения показано. Подробно — [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md).
 - **USB-разрешения.** Доработанный `UsbPermissionActivity` Adayo сам выдаёт разрешение (`CBen_grantUsbPermissions`) и закрывается, но в ответе приходит `granted=false`. Приложение перепроверяет `UsbManager.hasPermission()`.
-- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`).
+- **localhost ADB.** `adbd` на `127.0.0.1:5555` принимает приложение; на этом пути работают поиск дисплеев, выдача разрешений, сертификаты, часовой пояс, файрвол и перезагрузка (`adb/LocalhostAdbSession`). Свойства `persist.adb.tcp.port=5555` не гарантируют, что порт открыт: кабель телефона в USB-порту останавливает `adbd` (`init.svc.adbd=stopped`, [LAUNCHER_WINDOW_AA_CARPLAY_RU.md](LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.5, §7.7), а сразу после загрузки он может ещё не слушать. Если порт закрыт дольше 3 с при включённых свойствах, сеанс один раз делает `setprop ctl.restart adbd` (свойства не меняются) и ждёт порт до 12 с; владельцем TCP такой сеанс не становится и потом его не выключает. Переключение TCP из автоматизации ждёт конца текущего сеанса.
 
 ## 10. Root на A9: примитив `mb_daemon` и защита записи (проверено 31.10.2026)
 
@@ -515,7 +515,7 @@ blockdev --setro /dev/block/sde35
 
 ## 11. SystemUI на A9: плавающая кнопка и шторка (проверено 31.10.2026)
 
-Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
+Штатные плавающая кнопка «Домой» и шторка принадлежат `com.android.systemui`. `pm disable-user` прошивка откатывает при загрузке, работает `pm hide`. Но тогда загрузка удлиняется на ~30 с: окна обоев нет (штатный `ImageWallpaper` — часть SystemUI), и WindowManager снимает заставку по `BOOT TIMEOUT`. Лечится установкой `directBootAware`-обоев [`tools/blank_wallpaper/`](../tools/blank_wallpaper/): экран готов на 11,1 с против 12,7 с штатно и 41,1 с без обоев. Только кнопка без отключения SystemUI — `appops set com.android.systemui SYSTEM_ALERT_WINDOW ignore`. Скрытый SystemUI также не снимает флаг keyguard у `vold`, и флешки NTFS/exFAT не монтируются; это закрывает [`tools/usb_mount/`](../tools/usb_mount/) (проверено 04.11.2026). Разбор, замеры и инструкция — [SYSTEMUI_A9_DISABLE_RU.md](SYSTEMUI_A9_DISABLE_RU.md).
 
 ## 12. Открытые вопросы
 

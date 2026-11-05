@@ -896,6 +896,15 @@ object AutomationValidator {
                 }
             }
 
+            AutomationBuiltinActionType.PLACE_CALL -> {
+                if (vad.dashing.tbox.normalizeDialPhoneNumber(action.stringValue).isEmpty()) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Укажите номер телефона",
+                    )
+                }
+            }
+
             AutomationBuiltinActionType.TOGGLE_HIDE_FLOATING_PANELS,
             AutomationBuiltinActionType.TOGGLE_FLOATING_PANELS_ENABLED,
             -> {
