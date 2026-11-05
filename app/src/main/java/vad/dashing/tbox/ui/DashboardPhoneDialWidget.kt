@@ -32,6 +32,7 @@ import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.hasCallPhonePermission
 import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.normalizeDialPhoneNumber
+import vad.dashing.tbox.normalizeWidgetScale
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.phone.PhoneCallControlResult
 import vad.dashing.tbox.phone.PhoneCallState
@@ -40,6 +41,15 @@ import vad.dashing.tbox.phone.PhoneDialCallActivity
 import vad.dashing.tbox.phoneDialFailureMessage
 import vad.dashing.tbox.placeCallFailureUserMessage
 import vad.dashing.tbox.placeOutgoingCall
+
+/** Call-state indicator diameter at icon scale 1.0 (2× the original 10.dp). */
+internal const val PHONE_DIAL_CALL_INDICATOR_BASE_DP = 20f
+
+/** Diameter of the dial-widget call-state circle, scaled by widget «Иконка» / icon scale. */
+internal fun phoneDialCallIndicatorSizeDp(iconScale: Float): Float {
+    val scale = iconScale.takeIf { it.isFinite() && it > 0f } ?: 1f
+    return PHONE_DIAL_CALL_INDICATOR_BASE_DP * scale
+}
 
 @Composable
 internal fun DashboardPhoneDialWidgetItem(
@@ -226,11 +236,12 @@ internal fun DashboardPhoneDialWidgetItem(
                 }
             }
             if (indicatorColor != null) {
+                val iconScale = normalizeWidgetScale(LocalWidgetIconScale.current)
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(2.dp)
-                        .size(10.dp)
+                        .size(phoneDialCallIndicatorSizeDp(iconScale).dp)
                         .background(indicatorColor, CircleShape),
                 )
             }
