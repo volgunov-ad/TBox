@@ -67,6 +67,11 @@ data class MainScreenWholePanelFieldsForWidgetDialogSave(
     val panelBackgroundImageRelPathLight: String? = null,
     val panelBackgroundImageRelPathDark: String? = null,
     val panelShape: Int = DEFAULT_PANEL_SHAPE,
+    /** Panel frame in percent of the main screen; null keeps the stored layout. */
+    val relXPercent: Int? = null,
+    val relYPercent: Int? = null,
+    val relWidthPercent: Int? = null,
+    val relHeightPercent: Int? = null,
 )
 
 data class FloatingWholePanelFieldsForWidgetDialogSave(
@@ -97,6 +102,11 @@ data class FloatingWholePanelFieldsForWidgetDialogSave(
     val panelBackgroundImageRelPathLight: String? = null,
     val panelBackgroundImageRelPathDark: String? = null,
     val panelShape: Int = DEFAULT_PANEL_SHAPE,
+    /** Panel frame in px; null keeps the stored geometry. */
+    val width: Int? = null,
+    val height: Int? = null,
+    val startX: Int? = null,
+    val startY: Int? = null,
 )
 
 /** Merges widget list and optional whole-panel draft; used by [SettingsViewModel] and unit tests. */
@@ -153,6 +163,14 @@ internal fun mergeMainScreenPanelForWidgetDialogSave(
         panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
             ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
         panelShape = normalizePanelShape(w.panelShape),
+        relX = w.relXPercent?.let { it.coerceIn(0, 100) / 100f } ?: current.relX,
+        relY = w.relYPercent?.let { it.coerceIn(0, 100) / 100f } ?: current.relY,
+        relWidth = w.relWidthPercent
+            ?.let { it.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) / 100f }
+            ?: current.relWidth,
+        relHeight = w.relHeightPercent
+            ?.let { it.coerceIn(MIN_MAIN_SCREEN_PANEL_REL_PERCENT, 100) / 100f }
+            ?: current.relHeight,
     )
 }
 
@@ -208,6 +226,10 @@ internal fun mergeFloatingDashboardForWidgetDialogSave(
         panelBackgroundImageRelPathDark = w.panelBackgroundImageRelPathDark
             ?.takeIf { PanelBackgroundImageStorage.isAllowedStoredRelPath(it) },
         panelShape = normalizePanelShape(w.panelShape),
+        width = w.width?.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX) ?: current.width,
+        height = w.height?.coerceAtLeast(MIN_FLOATING_PANEL_SIZE_PX) ?: current.height,
+        startX = w.startX?.coerceAtLeast(FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX) ?: current.startX,
+        startY = w.startY?.coerceAtLeast(FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX) ?: current.startY,
     )
 }
 

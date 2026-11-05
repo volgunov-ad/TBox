@@ -184,4 +184,82 @@ class WholePanelWidgetDialogSaveMergeTest {
         assertEquals("panel_backgrounds/f1_dark", merged.panelBackgroundImageRelPathDark)
         assertEquals(50, merged.panelShape)
     }
+
+    private fun mainDraft() = MainScreenWholePanelFieldsForWidgetDialogSave(
+        name = baseMain.name,
+        rows = baseMain.rows,
+        cols = baseMain.cols,
+        showTboxDisconnectIndicator = false,
+        clickAction = false,
+        pageNumber = 1,
+        gridSpacingDp = DEFAULT_PANEL_GRID_SPACING_DP,
+        collapseEdge = PanelCollapseEdge.NONE.storageValue,
+        collapseStripThicknessDp = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        collapseTouchZoneThicknessDp = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        collapseStripColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+        collapseStripColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+        collapseStripExpandedColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+        collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+        collapseOnStripTap = false,
+        collapseOnStripDoubleTap = false,
+        collapseOnTileTap = false,
+        collapseOnTileTapDelaySec = 0,
+    )
+
+    private fun floatingDraft() = FloatingWholePanelFieldsForWidgetDialogSave(
+        name = baseFloat.name,
+        rows = baseFloat.rows,
+        cols = baseFloat.cols,
+        showTboxDisconnectIndicator = true,
+        clickAction = true,
+        gridSpacingDp = DEFAULT_PANEL_GRID_SPACING_DP,
+        collapseEdge = PanelCollapseEdge.NONE.storageValue,
+        collapseStripThicknessDp = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        collapseTouchZoneThicknessDp = DEFAULT_PANEL_COLLAPSE_STRIP_THICKNESS_DP,
+        collapseStripColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_LIGHT,
+        collapseStripColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_COLOR_DARK,
+        collapseStripExpandedColorLight = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_LIGHT,
+        collapseStripExpandedColorDark = DEFAULT_PANEL_COLLAPSE_STRIP_EXPANDED_COLOR_DARK,
+        collapseOnStripTap = false,
+        collapseOnStripDoubleTap = false,
+        collapseOnTileTap = false,
+        collapseOnTileTapDelaySec = 0,
+    )
+
+    @Test
+    fun mergeMainScreen_withPlacement_appliesAndClampsLayout() {
+        val draft = mainDraft().copy(relXPercent = 30, relYPercent = 150, relWidthPercent = 1, relHeightPercent = 40)
+        val merged = mergeMainScreenPanelForWidgetDialogSave(baseMain, emptyList(), draft)
+        assertEquals(0.3f, merged.relX, 0.0001f)
+        assertEquals(1f, merged.relY, 0.0001f)
+        assertEquals(MIN_MAIN_SCREEN_PANEL_REL_FRACTION, merged.relWidth, 0.0001f)
+        assertEquals(0.4f, merged.relHeight, 0.0001f)
+    }
+
+    @Test
+    fun mergeMainScreen_withoutPlacement_keepsExactLayout() {
+        val precise = baseMain.copy(relX = 0.4567f, relWidth = 0.3333f)
+        val merged = mergeMainScreenPanelForWidgetDialogSave(precise, emptyList(), mainDraft())
+        assertEquals(0.4567f, merged.relX, 0f)
+        assertEquals(0.3333f, merged.relWidth, 0f)
+    }
+
+    @Test
+    fun mergeFloating_withPlacement_appliesAndClampsGeometry() {
+        val draft = floatingDraft().copy(width = 5, height = 300, startX = -500, startY = 40)
+        val merged = mergeFloatingDashboardForWidgetDialogSave(baseFloat, emptyList(), draft)
+        assertEquals(MIN_FLOATING_PANEL_SIZE_PX, merged.width)
+        assertEquals(300, merged.height)
+        assertEquals(-500, merged.startX)
+        assertEquals(40, merged.startY)
+    }
+
+    @Test
+    fun mergeFloating_withoutPlacement_keepsGeometry() {
+        val merged = mergeFloatingDashboardForWidgetDialogSave(baseFloat, emptyList(), floatingDraft())
+        assertEquals(baseFloat.width, merged.width)
+        assertEquals(baseFloat.height, merged.height)
+        assertEquals(baseFloat.startX, merged.startX)
+        assertEquals(baseFloat.startY, merged.startY)
+    }
 }
