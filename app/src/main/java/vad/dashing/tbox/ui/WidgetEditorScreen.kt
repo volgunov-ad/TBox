@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -842,23 +843,31 @@ private fun PreviewTile(
                     val textAlign = LocalWidgetTextAlign.current
                     when (sample.kind) {
                         WidgetPreviewKind.CENTERED_TITLE -> {
-                            // Live phone-dial hides the number: title alone, centered.
-                            Text(
-                                text = title,
-                                style = calculateResponsiveTextStyle(
-                                    containerHeight = availableHeight,
-                                    textType = TextType.TITLE,
-                                    forWidgetTitle = true,
-                                ),
-                                color = textColor,
-                                textAlign = TextAlign.Center,
-                                maxLines = 3,
-                                softWrap = true,
-                                overflow = TextOverflow.Ellipsis,
+                            // Match live DashboardPhoneDialWidgetItem centerOnlyTitle:
+                            // Box + align(Center), not fillMaxSize Text (that top-aligns glyphs).
+                            Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(8.dp),
-                            )
+                                    .padding(4.dp),
+                            ) {
+                                Text(
+                                    text = title,
+                                    style = calculateResponsiveTextStyle(
+                                        containerHeight = availableHeight,
+                                        textType = TextType.TITLE,
+                                        forWidgetTitle = true,
+                                    ),
+                                    color = textColor,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 3,
+                                    softWrap = true,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                )
+                            }
                         }
                         else -> {
                             DashboardWidgetContentWithOptionalTitle(
@@ -904,9 +913,11 @@ private fun PreviewTile(
                                                 maxLines = 2,
                                                 softWrap = true,
                                                 overflow = TextOverflow.Ellipsis,
+                                                // Same as live DashboardWidget value row:
+                                                // weight(1f) from contentModifier + vertical center.
                                                 modifier = contentModifier
                                                     .fillMaxWidth()
-                                                    .fillMaxHeight(),
+                                                    .wrapContentHeight(Alignment.CenterVertically),
                                             )
                                         }
                                     }
