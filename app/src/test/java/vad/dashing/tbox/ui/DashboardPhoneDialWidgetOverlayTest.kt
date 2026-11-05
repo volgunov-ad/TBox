@@ -16,8 +16,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +32,10 @@ import vad.dashing.tbox.BLUETOOTH_PROFILE_HEADSET_CLIENT
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
+import vad.dashing.tbox.isHfpClientConnected
+import vad.dashing.tbox.phone.PhoneCallSnapshot
+import vad.dashing.tbox.phone.PhoneCallState
+import vad.dashing.tbox.phone.PhoneCallStateRepository
 import vad.dashing.tbox.phone.PhoneDialCallActivity
 
 /**
@@ -43,6 +50,19 @@ class DashboardPhoneDialWidgetOverlayTest {
     val composeRule = createComposeRule()
 
     private val app: Application = ApplicationProvider.getApplicationContext()
+
+    @Before
+    fun resetPhoneState() {
+        PhoneCallStateRepository.replaceSnapshotForTest(PhoneCallSnapshot())
+        PhoneCallStateRepository.setHeadsetClientBroadcastConnectedForTest(null)
+        ShadowToast.reset()
+    }
+
+    @After
+    fun clearPhoneState() {
+        PhoneCallStateRepository.replaceSnapshotForTest(PhoneCallSnapshot())
+        PhoneCallStateRepository.setHeadsetClientBroadcastConnectedForTest(null)
+    }
 
     @Test
     fun composesWithoutActivityInContext() {
@@ -101,6 +121,63 @@ class DashboardPhoneDialWidgetOverlayTest {
 
         assertTrue(drainStartedActivities().isEmpty())
         assertEquals(app.getString(R.string.widget_phone_dial_no_hfp), ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
+    fun hfpGate_acceptsHeadsetClientBroadcastWhenAdapterProfileStale() {
+        // Simulates OEM: stock dialer / Telecom HFP Connected, getProfileConnectionState(16) false.
+        PhoneCallStateRepository.setHeadsetClientBroadcastConnectedForTest(true)
+        assertTrue(isHfpClientConnected())
+    }
+
+    @Test
+    fun tapWhileActive_hangsUpInsteadOfDialing() {
+        grantCallPhone()
+        connectHfp()
+        registerCallHandler()
+        PhoneCallStateRepository.replaceSnapshotForTest(
+            PhoneCallSnapshot(
+                hfpConnected = true,
+                callState = PhoneCallState.ACTIVE,
+                hangupSupported = false, // force Failure toast; still must not dial
+            ),
+        )
+        setTile(confirmBeforeCall = false)
+        drainStartedActivities()
+
+        composeRule.onNodeWithText(NUMBER).performClick()
+
+        assertTrue(drainStartedActivities().isEmpty())
+        assertNotEquals(Intent.ACTION_CALL, ShadowToast.getTextOfLatestToast())
+        // Hangup capability missing → Russian failure from repository, not NO_HFP / dial.
+        assertEquals(
+            "Сброс звонка недоступен на этой прошивке / без привилегий",
+            ShadowToast.getTextOfLatestToast(),
+        )
+    }
+
+    @Test
+    fun tapWhileIncoming_hangsUpInsteadOfDialing() {
+        grantCallPhone()
+        connectHfp()
+        registerCallHandler()
+        PhoneCallStateRepository.replaceSnapshotForTest(
+            PhoneCallSnapshot(
+                hfpConnected = true,
+                callState = PhoneCallState.INCOMING,
+                hangupSupported = false,
+            ),
+        )
+        setTile(confirmBeforeCall = false)
+        drainStartedActivities()
+
+        composeRule.onNodeWithText(NUMBER).performClick()
+
+        assertTrue(drainStartedActivities().isEmpty())
+        assertEquals(
+            "Сброс звонка недоступен на этой прошивке / без привилегий",
+            ShadowToast.getTextOfLatestToast(),
+        )
     }
 
     private fun setTile(confirmBeforeCall: Boolean) {

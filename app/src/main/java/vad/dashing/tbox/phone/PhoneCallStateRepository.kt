@@ -19,8 +19,9 @@ import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.BLUETOOTH_PROFILE_HEADSET_CLIENT
 import vad.dashing.tbox.hasAnswerPhoneCallsPermission
 import vad.dashing.tbox.hasBluetoothConnectPermission
-import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.normalizeDialPhoneNumber
+import vad.dashing.tbox.readAdapterHfpProfileConnected
+import vad.dashing.tbox.resolveHfpClientConnected
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -62,6 +63,14 @@ object PhoneCallStateRepository {
     @Volatile
     private var hangupViaTelecom: Boolean = false
 
+    /**
+     * Last seen HEADSET_CLIENT profile connection from
+     * `BluetoothHeadsetClient.ACTION_CONNECTION_STATE_CHANGED` (`EXTRA_STATE`).
+     * Null until the first such broadcast; not updated from adapter ACL broadcasts.
+     */
+    @Volatile
+    private var lastHeadsetClientBroadcastConnected: Boolean? = null
+
     private var callChangedReceiver: BroadcastReceiver? = null
     private var connectionReceiver: BroadcastReceiver? = null
 
@@ -76,9 +85,10 @@ object PhoneCallStateRepository {
         override fun onServiceDisconnected(profile: Int) {
             if (profile != BLUETOOTH_PROFILE_HEADSET_CLIENT) return
             headsetClientProxy = null
+            lastHeadsetClientBroadcastConnected = false
             publish {
                 it.copy(
-                    hfpConnected = false,
+                    hfpConnected = computeHfpConnected(connectedDevices = 0),
                     callState = if (it.observerActive) PhoneCallState.IDLE else PhoneCallState.UNKNOWN,
                     direction = PhoneCallDirection.NONE,
                     answerSupported = answerCapability(),
@@ -88,13 +98,25 @@ object PhoneCallStateRepository {
         }
     }
 
+    /** Devices currently reported by the bound `BluetoothHeadsetClient` proxy (0 if unbound). */
+    fun connectedHeadsetClientDeviceCount(): Int =
+        runCatching {
+            (headsetClientProxy as? BluetoothProfile)?.connectedDevices?.size ?: 0
+        }.getOrDefault(0)
+
+    /**
+     * Last HEADSET_CLIENT connection broadcast: `true` / `false` / `null` if never seen.
+     * Used by [vad.dashing.tbox.isHfpClientConnected] when adapter profile state is stale.
+     */
+    fun lastHeadsetClientConnectionBroadcast(): Boolean? = lastHeadsetClientBroadcastConnected
+
     fun start(context: Context) {
         if (!started.compareAndSet(false, true)) return
         appContext = context.applicationContext
         probeCapabilities()
         publish {
             it.copy(
-                hfpConnected = isHfpClientConnected(),
+                hfpConnected = computeHfpConnected(),
                 callState = PhoneCallState.UNKNOWN,
                 answerSupported = answerCapability(),
                 hangupSupported = hangupCapability(),
@@ -123,6 +145,7 @@ object PhoneCallStateRepository {
             runCatching { adapter.closeProfileProxy(BLUETOOTH_PROFILE_HEADSET_CLIENT, proxy) }
         }
         headsetClientProxy = null
+        lastHeadsetClientBroadcastConnected = null
         started.set(false)
         publish {
             PhoneCallSnapshot(
@@ -260,9 +283,10 @@ object PhoneCallStateRepository {
         }
         connectionReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                applyConnectionBroadcast(intent)
                 publish {
                     it.copy(
-                        hfpConnected = isHfpClientConnected(),
+                        hfpConnected = computeHfpConnected(),
                         answerSupported = answerCapability(),
                         hangupSupported = hangupCapability(),
                     )
@@ -272,7 +296,8 @@ object PhoneCallStateRepository {
         }
         val callFilter = IntentFilter(callAction)
         val connFilter = IntentFilter(connAction)
-        // Also listen to adapter ACL as a coarse HFP hint.
+        // Adapter ACL still refreshes proxy/profile state; only HEADSET_CLIENT extras update
+        // lastHeadsetClientBroadcastConnected (ACL connected ≠ HFP).
         connFilter.addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
         runCatching {
             if (Build.VERSION.SDK_INT >= 33) {
@@ -298,7 +323,12 @@ object PhoneCallStateRepository {
 
     private fun refreshFromProxy(intent: Intent? = null) {
         val proxy = headsetClientProxy
-        val hfp = isHfpClientConnected()
+        val deviceCount = connectedHeadsetClientDeviceCount()
+        // Proxy with devices is live HFP even when adapter getProfileConnectionState is stale.
+        if (deviceCount > 0) {
+            lastHeadsetClientBroadcastConnected = true
+        }
+        val hfp = computeHfpConnected(connectedDevices = deviceCount)
         // null: no proxy, or getCurrentCalls is hidden / refused — an empty list would claim «idle».
         val calls = proxy?.let(::readCurrentCalls)
         if (calls == null) {
@@ -341,6 +371,40 @@ object PhoneCallStateRepository {
         // Prefer INCOMING > ACTIVE > DIALING/ALERTING > HELD > first.
         val preferred = pickPreferredCall(calls) ?: return
         applyParsedCall(preferred, hfpConnected = hfp, observerActive = true)
+    }
+
+    /**
+     * Record HEADSET_CLIENT connection extras. Adapter ACL
+     * [BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED] is ignored here (bonded/ACL ≠ HFP).
+     */
+    private fun applyConnectionBroadcast(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action.orEmpty()
+        val headsetClientAction = headsetClientAction("ACTION_CONNECTION_STATE_CHANGED")
+            ?: "android.bluetooth.headsetclient.profile.action.CONNECTION_STATE_CHANGED"
+        if (action != headsetClientAction) return
+        val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, Int.MIN_VALUE)
+        if (state == Int.MIN_VALUE) return
+        lastHeadsetClientBroadcastConnected = state == BluetoothProfile.STATE_CONNECTED
+    }
+
+    private fun computeHfpConnected(
+        connectedDevices: Int = connectedHeadsetClientDeviceCount(),
+    ): Boolean =
+        resolveHfpClientConnected(
+            adapterProfileConnected = readAdapterHfpProfileConnected(),
+            headsetClientConnectedDevices = connectedDevices,
+            connectionBroadcastConnected = lastHeadsetClientBroadcastConnected,
+        )
+
+    /** Test-only: inject observed call snapshot (indicator / tap-to-hangup UI tests). */
+    internal fun replaceSnapshotForTest(snapshot: PhoneCallSnapshot) {
+        _snapshot.value = snapshot
+    }
+
+    /** Test-only: seed HEADSET_CLIENT connection broadcast cache for HFP gate tests. */
+    internal fun setHeadsetClientBroadcastConnectedForTest(connected: Boolean?) {
+        lastHeadsetClientBroadcastConnected = connected
     }
 
     private fun applyCallExtra(intent: Intent, hfpConnected: Boolean, observerActive: Boolean) {
