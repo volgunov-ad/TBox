@@ -38,8 +38,12 @@ internal object AdbIoErrors {
         "adb tcp не поднялся",
     )
 
-    const val USER_FACING_CONNECT_FAILED_RU =
-        "Не удалось подключиться к localhost ADB"
+    /**
+     * Russian fallback for connect failures when no [android.content.Context] is available
+     * (JVM unit tests / journal). Prefer [userFacingAdbConnectDetail] with a Context so
+     * the EN flavor resolves [vad.dashing.tbox.R.string.localhost_adb_reason_connect_failed].
+     */
+    const val USER_FACING_CONNECT_FAILED_RU = LocalhostAdbReasons.FALLBACK_CONNECT_FAILED
 
     fun isBenignDisconnectMessage(message: String?): Boolean {
         val normalized = message?.trim()?.lowercase().orEmpty()
@@ -60,16 +64,18 @@ internal object AdbIoErrors {
         isRetryableConnectFailure(error?.message)
 
     /**
-     * Replace raw English transport / connect exceptions with a stable RU string so
-     * Toasts do not imply the ADB Settings tab channel must already be open.
+     * Replace raw English transport / connect exceptions with a stable user-facing
+     * string so Toasts do not imply the ADB Settings tab channel must already be open.
+     * Pass [context] from UI so RU/EN flavors resolve the string resource.
      */
-    fun userFacingAdbConnectDetail(detail: String?): String {
-        val trimmed = detail?.trim().orEmpty()
-        if (trimmed.isEmpty() || isRetryableConnectFailure(trimmed)) {
-            return USER_FACING_CONNECT_FAILED_RU
-        }
-        return trimmed
-    }
+    fun userFacingAdbConnectDetail(
+        detail: String?,
+        context: android.content.Context? = null,
+    ): String = LocalhostAdbReasons.message(
+        context = context,
+        reason = LocalhostAdbSession.Reason.AdbConnectFailed,
+        detail = detail.orEmpty(),
+    )
 
     /**
      * Whether a failure detail should be shown as Toast / alert.

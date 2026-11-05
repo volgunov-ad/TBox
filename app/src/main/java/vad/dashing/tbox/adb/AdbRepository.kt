@@ -491,6 +491,7 @@ object AdbRepository {
         sessionTimeoutMs: Int,
         keysDir: File,
         clientName: String,
+        maxIdleMs: Long = AdbConnection.DEFAULT_MAX_IDLE_MS,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): T {
         if (!initialized) {
@@ -501,6 +502,7 @@ object AdbRepository {
                 sessionTimeoutMs = sessionTimeoutMs,
                 keysDir = keysDir,
                 clientName = clientName,
+                maxIdleMs = maxIdleMs,
                 block = block,
             )
         }
@@ -513,6 +515,7 @@ object AdbRepository {
                 sessionTimeoutMs = sessionTimeoutMs,
                 keysDir = keysDir,
                 clientName = clientName,
+                maxIdleMs = maxIdleMs,
                 block = block,
             )
         }
@@ -525,6 +528,7 @@ object AdbRepository {
                     sessionTimeoutMs = sessionTimeoutMs,
                     keysDir = keysDir,
                     clientName = clientName,
+                    maxIdleMs = maxIdleMs,
                     block = block,
                 )
             }
@@ -573,6 +577,7 @@ object AdbRepository {
                             sessionTimeoutMs = sessionTimeoutMs,
                             keysDir = keysDir,
                             clientName = clientName,
+                            maxIdleMs = maxIdleMs,
                             block = block,
                         )
                     }
@@ -585,6 +590,7 @@ object AdbRepository {
                         sessionTimeoutMs = sessionTimeoutMs,
                         keysDir = keysDir,
                         clientName = clientName,
+                        maxIdleMs = maxIdleMs,
                         block = block,
                     )
                 }

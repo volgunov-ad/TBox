@@ -316,7 +316,11 @@ class AutomationActionExecutor(
                         )
                     is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed ->
                         AutomationActionResult.failure(
-                            outcome.detail.ifBlank { outcome.reason.name },
+                            vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                appContext,
+                                outcome.reason,
+                                outcome.detail,
+                            ),
                         )
                 }
             }

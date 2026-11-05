@@ -156,15 +156,11 @@ internal fun launchAppFromWidget(
                 ) { outcome ->
                     when (outcome) {
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
-                            val raw = outcome.detail.ifBlank { outcome.reason.name }
-                            val detail = if (
-                                outcome.reason ==
-                                vad.dashing.tbox.adb.VirtualDisplayAdb.Reason.AdbConnectFailed
-                            ) {
-                                vad.dashing.tbox.adb.AdbIoErrors.userFacingAdbConnectDetail(raw)
-                            } else {
-                                raw
-                            }
+                            val detail = vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                context,
+                                outcome.reason,
+                                outcome.detail,
+                            )
                             if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
                                     detail,
                                     context,

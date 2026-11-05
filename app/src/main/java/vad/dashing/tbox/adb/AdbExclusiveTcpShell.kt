@@ -66,6 +66,7 @@ internal object AdbExclusiveTcpShell {
         sessionTimeoutMs: Int,
         keysDir: File,
         clientName: String,
+        maxIdleMs: Long = AdbConnection.DEFAULT_MAX_IDLE_MS,
         block: (execute: (String) -> AdbShellResult) -> T,
     ): T {
         val transport = AdbTcpTransport.connect(
@@ -78,6 +79,7 @@ internal object AdbExclusiveTcpShell {
                 tcp,
                 AdbAuthKeys.loadOrCreate(keysDir),
                 clientName,
+                maxIdleMs = maxIdleMs,
             ).use { connection ->
                 connection.connect()
                 block { command -> connection.execute(command) }

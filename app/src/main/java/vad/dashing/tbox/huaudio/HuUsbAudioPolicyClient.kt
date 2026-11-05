@@ -113,7 +113,9 @@ internal object HuUsbAudioPolicyClient {
             execute(command)
         }
         val result = when (session) {
-            is LocalhostAdbSession.Result.Failed -> HuUsbAudioResult.AdbFailed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuUsbAudioResult.AdbFailed(
+                vad.dashing.tbox.adb.LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok -> HuUsbAudioResult.Done(
                 HuUsbAudioPolicyCodec.parseOutcome("${session.value.stdout}\n${session.value.stderr}"),
             )

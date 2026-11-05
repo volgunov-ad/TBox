@@ -117,7 +117,8 @@ object HuAdbControl {
         }
         val expected = if (enabled) PORT_MODE_DEVICE else PORT_MODE_HOST
         val error = when (session) {
-            is LocalhostAdbSession.Result.Failed -> "adb ${session.reason.name}"
+            is LocalhostAdbSession.Result.Failed ->
+                LocalhostAdbReasons.message(null, session.reason, session.detail)
             is LocalhostAdbSession.Result.Ok -> {
                 val mode = session.value.stdout.lineSequence().map { it.trim() }.lastOrNull { it.isNotEmpty() }
                 if (mode == expected) {
