@@ -2038,7 +2038,8 @@ object Android10VhalRepository {
 
     private fun decodeReverseGearSwitch(raw: Any?): Boolean? {
         val value = (raw as? Number)?.toInt() ?: return null
-        return VehicleGearDomain.decodeReverseGearSwitch(value)
+        // A10 VHAL polarity is opposite of A9 mbCAN for raw 0/1 — do not share decodeReverseGearSwitch.
+        return VehicleGearDomain.decodeVhalReverseGearSwitch(value)
     }
 
     private fun decodeCemBinaryActive(raw: Any?): Boolean? {
