@@ -568,7 +568,8 @@ private fun PreviewCard(
                 ),
                 selectedIndex = if (state.previewDark) 1 else 0,
                 onSelect = { state.previewDark = it == 1 },
-                modifier = Modifier.width(220.dp),
+                // 24sp tboxButton «День»/«Ночь» (and EN Day/Night) need ~300.dp; 220 wrapped mid-word.
+                modifier = Modifier.width(300.dp),
             )
         }
         Spacer(Modifier.height(8.dp))

@@ -79,12 +79,13 @@ internal fun EditorToggleButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     compact: Boolean = false,
+    contentPadding: PaddingValues? = null,
 ) {
     OutlinedButton(
         onClick = rememberWrappedOnClick(onClick),
         enabled = enabled,
         modifier = modifier.heightIn(min = if (compact) 40.dp else 48.dp),
-        contentPadding = if (compact) {
+        contentPadding = contentPadding ?: if (compact) {
             PaddingValues(horizontal = 12.dp, vertical = 4.dp)
         } else {
             ButtonDefaults.ContentPadding
@@ -110,7 +111,8 @@ internal fun EditorToggleButton(
             text = text,
             style = if (compact) MaterialTheme.typography.tboxCaption else MaterialTheme.typography.tboxButton,
             textAlign = TextAlign.Center,
-            maxLines = 2,
+            maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
         )
     }
@@ -135,6 +137,8 @@ internal fun EditorSegmented(
                 selected = index == selectedIndex,
                 onClick = { onSelect(index) },
                 enabled = enabled,
+                // Tighter padding so short RU/EN labels (День/Ночь, Day/Night) fit one line.
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 modifier = Modifier.weight(1f),
             )
         }
