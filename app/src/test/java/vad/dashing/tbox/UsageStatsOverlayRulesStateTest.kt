@@ -10,6 +10,7 @@ class UsageStatsOverlayRulesStateTest {
 
     private fun state(
         fg: String? = null,
+        stickyHide: String? = null,
         mainVisible: Boolean = false,
         suppressHide: Boolean = false,
         suppressShow: Boolean = false,
@@ -19,6 +20,7 @@ class UsageStatsOverlayRulesStateTest {
         showPanels: Set<String> = emptySet(),
     ) = UsageStatsOverlayRulesState(
         foregroundPackage = fg,
+        stickyHidePackage = stickyHide,
         isMainActivityVisible = mainVisible,
         suppressFloatingPanelUsageStatsHide = suppressHide,
         suppressFloatingPanelUsageStatsForceShow = suppressShow,
@@ -153,6 +155,38 @@ class UsageStatsOverlayRulesStateTest {
             showWatch = setOf("com.maps.app"),
             showPanels = setOf("nav_panel"),
         )
+        assertFalse(s.isUsageStatsForceShowing("nav_panel", myPkg))
+    }
+
+    @Test
+    fun forceHide_keepsApplying_whenStickyHideDiffersFromFocused_dualVd() {
+        // Maps was the hide reason; Settings is now last-resumed on another VD.
+        val s = state(
+            fg = "com.android.settings",
+            stickyHide = "com.maps.app",
+            hideWatch = setOf("com.maps.app"),
+            hidePanels = setOf("nav_panel"),
+            showWatch = setOf("com.android.settings"),
+            showPanels = setOf("nav_panel"),
+        )
+        assertTrue(s.isUsageStatsForceHidden("nav_panel", myPkg))
+        // Force-show stays focused-only: Settings is focused and in show-watch, but hide wins.
+        assertFalse(s.isUsageStatsForceShowing("nav_panel", myPkg))
+    }
+
+    @Test
+    fun forceShow_usesFocusedOnly_notStickyHidePackage() {
+        val s = state(
+            fg = "com.android.settings",
+            stickyHide = "com.maps.app",
+            hideWatch = setOf("com.maps.app"),
+            hidePanels = setOf("other_panel"),
+            showWatch = setOf("com.maps.app"),
+            showPanels = setOf("nav_panel"),
+        )
+        // Sticky maps keeps hide for other_panel only; nav_panel is not force-shown
+        // because focused Settings is not in show-watch (force-show = focused-only).
+        assertFalse(s.isUsageStatsForceHidden("nav_panel", myPkg))
         assertFalse(s.isUsageStatsForceShowing("nav_panel", myPkg))
     }
 }
