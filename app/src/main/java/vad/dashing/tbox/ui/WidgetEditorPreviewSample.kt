@@ -18,6 +18,7 @@ import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.ROAD_MATCH_MAP_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
+import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.valueToString
 
 /** How the editor preview draws a tile (fake data, not live feeds). */
@@ -28,6 +29,11 @@ internal enum class WidgetPreviewKind {
     CONTROL,
     /** Title + short fixed label (time, gear letter, music, map…). */
     SPECIAL,
+    /**
+     * Title alone, centered — matches live [PHONE_DIAL_WIDGET_DATA_KEY] when
+     * [FloatingDashboardWidgetConfig.dialShowNumber] is false (`titlePosition` ignored).
+     */
+    CENTERED_TITLE,
 }
 
 internal data class WidgetPreviewSample(
@@ -39,14 +45,19 @@ internal data class WidgetPreviewSample(
 /**
  * Builds the fake value shown in the panel-editor preview.
  * [unit] is already localized; applied only when [FloatingDashboardWidgetConfig.showUnit] is true.
+ * [dialNumberPlaceholder] is the live empty-number label for [PHONE_DIAL_WIDGET_DATA_KEY].
  */
 internal fun widgetPreviewSample(
     dataKey: String,
     config: FloatingDashboardWidgetConfig,
     unit: String,
+    dialNumberPlaceholder: String = "☎",
 ): WidgetPreviewSample {
     if (dataKey.isEmpty()) {
         return WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "")
+    }
+    if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+        return phoneDialPreviewSample(config, dialNumberPlaceholder)
     }
     specialSample(dataKey)?.let { return it }
     if (!WidgetsRepository.supportsValueAccuracy(dataKey)) {
@@ -61,6 +72,22 @@ internal fun widgetPreviewSample(
         formatted
     }
     return WidgetPreviewSample(WidgetPreviewKind.METRIC, withUnit)
+}
+
+/** Same display rules as [vad.dashing.tbox.ui.DashboardPhoneDialWidgetItem]. */
+internal fun phoneDialPreviewSample(
+    config: FloatingDashboardWidgetConfig,
+    emptyNumberPlaceholder: String,
+): WidgetPreviewSample {
+    if (!config.dialShowNumber) {
+        return WidgetPreviewSample(WidgetPreviewKind.CENTERED_TITLE, "")
+    }
+    val display = normalizeDialPhoneNumber(config.dialPhoneNumber)
+        .ifBlank { config.dialPhoneNumber.trim() }
+    return WidgetPreviewSample(
+        kind = WidgetPreviewKind.SPECIAL,
+        valueText = display.ifBlank { emptyNumberPlaceholder },
+    )
 }
 
 private fun specialSample(dataKey: String): WidgetPreviewSample? = when (dataKey) {
@@ -88,7 +115,6 @@ private fun specialSample(dataKey: String): WidgetPreviewSample? = when (dataKey
     -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "App")
     HTTP_REQUEST_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "HTTP")
     AUTOMATION_TRIGGER_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "▶")
-    PHONE_DIAL_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "☎")
     WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "Ext")
     "netWidget",
     "netWidgetNew",
