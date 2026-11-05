@@ -12,7 +12,8 @@
         tools:targetApi="s" />
     <!-- Outgoing HFP call via Telecom ACTION_CALL (phoneDialWidget / place_call). -->
     <uses-permission android:name="android.permission.CALL_PHONE"/>
-    <!-- Best-effort answer/hangup via TelecomManager (gated by capability flags at runtime). -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false"/>
+    <!-- Best-effort answer/hangup via TelecomManager; requested together with CALL_PHONE. -->
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -252,6 +253,15 @@
 
         <activity
             android:name="vad.dashing.tbox.externalapi.ExternalApiLocalConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- phoneDialWidget: CALL_PHONE request + confirm dialog; overlay tiles have no Activity. -->
+        <activity
+            android:name="vad.dashing.tbox.phone.PhoneDialCallActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:launchMode="singleTop"

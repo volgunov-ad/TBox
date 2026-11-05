@@ -274,12 +274,15 @@ SSID выбирается из **сохранённых** сетей ГУ.
 (idle / dialing / active / incoming / held / unknown), `phone_call_direction`
 (none / outgoing / incoming), `phone_call_number` (текущий/последний номер).
 Наблюдение — best-effort из процесса Monitor через `BluetoothHeadsetClient` (reflection);
-`unknown` — observer не поднят / нет permission / API молчит.
+`unknown` — observer не поднят / нет permission / список звонков не читается (это не «нет звонка»).
 
 Действия: `place_call` (номер в `stringValue`, safety `confirm`) — исходящий через
-`ACTION_CALL`; без HFP — ошибка. `answer_call` / `hangup_call` — best-effort, могут
-вернуть ошибку без привилегий default dialer (silent success нет). Не путать с
-`hu_phone_volume` / `set_phone_volume` (микшер громкости ГУ) и `modem_*` (LTE/Wi‑Fi данные).
+`ACTION_CALL`; без HFP — ошибка. Номер: цифры, `+` в начале, `*`, `#`; разделители
+(пробел, `-`, `.`, скобки) отбрасываются, любой другой символ — ошибка валидации.
+`answer_call` / `hangup_call` — best-effort: успех значит, что стек HFP (`BluetoothHeadsetClient`)
+или Telecom принял команду, а не что разговор начался / закончился; отказ стека, отсутствие API
+или прав (`ANSWER_PHONE_CALLS` для Telecom) — ошибка. `hangup_call` на входящем (звонит) — отклонение.
+Не путать с `hu_phone_volume` / `set_phone_volume` (микшер громкости ГУ) и `modem_*` (LTE/Wi‑Fi данные).
 
 ### Геопозиция
 

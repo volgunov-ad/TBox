@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.R
+import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
 
@@ -37,7 +38,7 @@ internal fun PhoneDialWidgetSettingsSection(
             placeholder = { Text(stringResource(R.string.widget_phone_dial_number_hint)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
         )
-        if (state.dialPhoneNumber.isBlank()) {
+        if (normalizeDialPhoneNumber(state.dialPhoneNumber).isEmpty()) {
             Text(
                 text = stringResource(R.string.widget_phone_dial_number_required),
                 style = MaterialTheme.typography.tboxCaption,

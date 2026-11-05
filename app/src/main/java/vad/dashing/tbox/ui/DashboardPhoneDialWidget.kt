@@ -1,9 +1,6 @@
 package vad.dashing.tbox.ui
 
-import android.Manifest
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,18 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,10 +30,13 @@ import vad.dashing.tbox.PlaceCallResult
 import vad.dashing.tbox.R
 import vad.dashing.tbox.WIDGET_TITLE_POSITION_BOTTOM
 import vad.dashing.tbox.hasCallPhonePermission
+import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetTitlePosition
 import vad.dashing.tbox.phone.PhoneCallState
 import vad.dashing.tbox.phone.PhoneCallStateRepository
+import vad.dashing.tbox.phone.PhoneDialCallActivity
+import vad.dashing.tbox.phoneDialFailureMessage
 import vad.dashing.tbox.placeCallFailureUserMessage
 import vad.dashing.tbox.placeOutgoingCall
 
@@ -61,99 +58,41 @@ internal fun DashboardPhoneDialWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val callSnap by PhoneCallStateRepository.snapshot.collectAsStateWithLifecycle()
-    var pendingPermissionAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var showConfirmDialog by remember { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        val next = pendingPermissionAction
-        pendingPermissionAction = null
-        if (granted) {
-            next?.invoke()
-        } else {
-            Toast.makeText(
-                context,
-                context.getString(R.string.widget_phone_dial_no_permission),
-                Toast.LENGTH_LONG,
-            ).show()
-        }
-    }
 
-    val displayNumber = remember(phoneNumber) { normalizeDialPhoneNumber(phoneNumber).ifBlank { phoneNumber.trim() } }
+    val dialNumber = remember(phoneNumber) { normalizeDialPhoneNumber(phoneNumber) }
+    val displayNumber = dialNumber.ifBlank { phoneNumber.trim() }
     val titleLine = titleOverride.trim().ifBlank { defaultTitle }
     val centerOnlyTitle = !showNumber
 
-    fun runPlaceCall() {
-        when (val result = placeOutgoingCall(context, phoneNumber)) {
-            PlaceCallResult.Success -> Unit
-            is PlaceCallResult.Failure -> {
-                val msg = when (result.reason) {
-                    PlaceCallFailureReason.EMPTY_NUMBER ->
-                        context.getString(R.string.widget_phone_dial_empty_number)
-                    PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION ->
-                        context.getString(R.string.widget_phone_dial_no_permission)
-                    PlaceCallFailureReason.NO_HFP ->
-                        context.getString(R.string.widget_phone_dial_no_hfp)
-                    else -> placeCallFailureUserMessage(result.reason, result.detail)
-                }
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-            }
-        }
+    fun showToast(message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_LONG).show()
     }
 
+    // Permission and confirm UI live in PhoneDialCallActivity: on floating panels this tile is
+    // composed in a Service context (no ActivityResultRegistry, no Dialog window token).
     fun requestCall() {
-        if (displayNumber.isBlank()) {
-            Toast.makeText(
-                context,
-                context.getString(R.string.widget_phone_dial_empty_number),
-                Toast.LENGTH_LONG,
-            ).show()
+        if (dialNumber.isEmpty()) {
+            showToast(resources.getString(R.string.widget_phone_dial_empty_number))
             return
         }
-        val start = {
-            if (confirmBeforeCall) {
-                showConfirmDialog = true
-            } else {
-                runPlaceCall()
+        val granted = hasCallPhonePermission(context)
+        if (granted && !isHfpClientConnected()) {
+            showToast(resources.getString(R.string.widget_phone_dial_no_hfp))
+            return
+        }
+        if (granted && !confirmBeforeCall) {
+            val result = placeOutgoingCall(context, dialNumber)
+            if (result is PlaceCallResult.Failure) {
+                showToast(phoneDialFailureMessage(resources, result))
             }
+            return
         }
-        if (!hasCallPhonePermission(context)) {
-            pendingPermissionAction = start
-            permissionLauncher.launch(Manifest.permission.CALL_PHONE)
-        } else {
-            start()
+        val confirmLabel = if (showNumber) dialNumber else titleLine
+        if (!PhoneDialCallActivity.start(context, dialNumber, confirmLabel, confirmBeforeCall)) {
+            showToast(placeCallFailureUserMessage(PlaceCallFailureReason.START_FAILED))
         }
-    }
-
-    if (showConfirmDialog) {
-        val confirmLabel = if (showNumber && displayNumber.isNotBlank()) {
-            displayNumber
-        } else {
-            titleLine
-        }
-        AlertDialog(
-            onDismissRequest = { showConfirmDialog = false },
-            title = { Text(stringResource(R.string.widget_phone_dial_confirm_title)) },
-            text = {
-                Text(stringResource(R.string.widget_phone_dial_confirm_message, confirmLabel))
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showConfirmDialog = false
-                        runPlaceCall()
-                    },
-                ) {
-                    Text(stringResource(R.string.widget_phone_dial_confirm_call))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmDialog = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
     }
 
     val indicatorColor = when (callSnap.callState) {

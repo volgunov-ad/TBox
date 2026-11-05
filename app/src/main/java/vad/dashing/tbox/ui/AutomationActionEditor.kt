@@ -1113,8 +1113,8 @@ private fun BuiltinActionFields(
         AutomationBuiltinActionType.ANSWER_CALL,
         AutomationBuiltinActionType.HANGUP_CALL,
         -> Text(
-            text = "Best-effort через BluetoothHeadsetClient / Telecom. На части прошивок " +
-                "без роли dialer вызов вернёт ошибку — это ожидаемо, silent success нет.",
+            text = "Best-effort через BluetoothHeadsetClient / Telecom. Успех — стек принял " +
+                "команду, не подтверждение разговора; отказ стека или нет прав — ошибка.",
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),

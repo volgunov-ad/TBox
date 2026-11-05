@@ -138,6 +138,7 @@ import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
+import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetButtonBinding
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.WidgetPickerActivity
@@ -1883,7 +1884,7 @@ internal class WidgetSelectionDialogState(
                         )
             }
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
-            isPhoneDialWidgetSelected -> dialPhoneNumber.trim().isNotEmpty()
+            isPhoneDialWidgetSelected -> normalizeDialPhoneNumber(dialPhoneNumber).isNotEmpty()
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
             else -> true

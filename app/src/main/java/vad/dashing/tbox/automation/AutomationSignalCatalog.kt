@@ -902,7 +902,7 @@ object AutomationSignalCatalog {
             vad.dashing.tbox.phone.PhoneCallState.OPTIONS,
             typicalRange = "idle / dialing / active / incoming / held / unknown. " +
                 "Наблюдение через BluetoothHeadsetClient (best-effort из процесса Monitor); " +
-                "unknown — observer не поднят / нет permission / API молчит.",
+                "unknown — observer не поднят / нет permission / список звонков не читается.",
         ),
         state(
             AutomationSignalId.PHONE_CALL_DIRECTION,

@@ -2573,7 +2573,7 @@
     <string name="widget_phone_dial_settings_title">Dial number</string>
     <string name="widget_phone_dial_number_label">Phone number</string>
     <string name="widget_phone_dial_number_hint">+79201234567</string>
-    <string name="widget_phone_dial_number_required">Enter a number to save the widget</string>
+    <string name="widget_phone_dial_number_required">Enter a number (digits, leading «+», «*», «#») to save the widget</string>
     <string name="widget_phone_dial_number_placeholder">No number</string>
     <string name="widget_phone_dial_show_number">Show number on tile</string>
     <string name="widget_phone_dial_show_number_desc">When off, the tile shows the title (contact name) centered; the number is kept only for calling.</string>

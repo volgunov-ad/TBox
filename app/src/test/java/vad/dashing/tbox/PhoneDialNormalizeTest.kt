@@ -23,6 +23,21 @@ class PhoneDialNormalizeTest {
     }
 
     @Test
+    fun normalize_dotsAndNbspAreSeparators() {
+        assertEquals("88005553535", normalizeDialPhoneNumber("8.800.555.35.35"))
+        assertEquals("+79200287693", normalizeDialPhoneNumber("+7\u00A0920\u00A0028\u00A076\u00A093"))
+    }
+
+    @Test
+    fun normalize_rejectsInsteadOfDialingAnotherNumber() {
+        assertEquals("", normalizeDialPhoneNumber("+7 920 abc 0287693"))
+        assertEquals("", normalizeDialPhoneNumber("++79200287693"))
+        assertEquals("", normalizeDialPhoneNumber("8 920 028+7693"))
+        assertEquals("", normalizeDialPhoneNumber("８９２０"))
+        assertEquals("", normalizeDialPhoneNumber("tel:+79200287693"))
+    }
+
+    @Test
     fun phoneDial_hiddenFromMainDashboardTab() {
         assertTrue(isPhoneDialWidgetDataKey(PHONE_DIAL_WIDGET_DATA_KEY))
         assertTrue(!WidgetsRepository.isOfferedOnMainDashboardTab(PHONE_DIAL_WIDGET_DATA_KEY))

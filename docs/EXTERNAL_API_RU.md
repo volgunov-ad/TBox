@@ -498,7 +498,8 @@ UI правил и HTTP API получали их одновременно. Су
 (`idle`/`dialing`/`active`/`incoming`/`held`/`unknown`), `phone_call_direction`,
 `phone_call_number` (`source=app`); действия builtin `place_call` (номер в `stringValue`),
 `answer_call`, `hangup_call` — класс **`confirm`**. Answer/hangup — best-effort
-(BluetoothHeadsetClient / Telecom); при отсутствии прав/API возвращают ошибку, не silent success.
+(BluetoothHeadsetClient / Telecom): `ok` значит «стек принял команду», не подтверждение смены
+состояния — смотрите `phone_call_state`. Отказ стека, отсутствие прав/API — ошибка, не silent success.
 `phone_call_number` — PII, отдаётся только по явному `ids=`.
 
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче

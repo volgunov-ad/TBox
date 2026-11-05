@@ -15,7 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.update
 import vad.dashing.tbox.BLUETOOTH_PROFILE_HEADSET_CLIENT
+import vad.dashing.tbox.hasAnswerPhoneCallsPermission
 import vad.dashing.tbox.hasBluetoothConnectPermission
 import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.normalizeDialPhoneNumber
@@ -140,15 +142,13 @@ object PhoneCallStateRepository {
         if (snap.callState != PhoneCallState.INCOMING) {
             return PhoneCallControlResult.Failure("Нет входящего звонка")
         }
-        if (answerViaHeadsetClient) {
-            val ok = invokeHeadsetClientAnswer()
-            if (ok) return PhoneCallControlResult.Success
+        if (answerViaHeadsetClient && invokeHeadsetClientAnswer()) {
+            return PhoneCallControlResult.Success
         }
-        if (answerViaTelecom) {
-            val ok = invokeTelecomAccept()
-            if (ok) return PhoneCallControlResult.Success
+        if (answerViaTelecom && invokeTelecom("acceptRingingCall")) {
+            return PhoneCallControlResult.Success
         }
-        return PhoneCallControlResult.Failure("Не удалось ответить на звонок")
+        return controlFailure("Не удалось ответить на звонок")
     }
 
     fun hangupCall(): PhoneCallControlResult {
@@ -161,15 +161,23 @@ object PhoneCallStateRepository {
         if (snap.callState == PhoneCallState.IDLE || snap.callState == PhoneCallState.UNKNOWN) {
             return PhoneCallControlResult.Failure("Нет активного звонка")
         }
-        if (hangupViaHeadsetClient) {
-            val ok = invokeHeadsetClientHangup()
-            if (ok) return PhoneCallControlResult.Success
+        if (hangupViaHeadsetClient && invokeHeadsetClientHangup(snap.callState)) {
+            return PhoneCallControlResult.Success
         }
-        if (hangupViaTelecom) {
-            val ok = invokeTelecomEndCall()
-            if (ok) return PhoneCallControlResult.Success
+        if (hangupViaTelecom && invokeTelecom("endCall")) {
+            return PhoneCallControlResult.Success
         }
-        return PhoneCallControlResult.Failure("Не удалось сбросить звонок")
+        return controlFailure("Не удалось сбросить звонок")
+    }
+
+    private fun controlFailure(message: String): PhoneCallControlResult.Failure {
+        val ctx = appContext
+        val hint = if (ctx != null && !hasAnswerPhoneCallsPermission(ctx)) {
+            ": нет разрешения на управление звонками (ANSWER_PHONE_CALLS)"
+        } else {
+            ""
+        }
+        return PhoneCallControlResult.Failure(message + hint)
     }
 
     private fun answerCapability(): Boolean = answerViaHeadsetClient || answerViaTelecom
@@ -200,7 +208,7 @@ object PhoneCallStateRepository {
                 clientClass.getMethod(
                     "terminateCall",
                     BluetoothDevice::class.java,
-                    Class.forName("android.bluetooth.BluetoothHeadsetClientCall"),
+                    Class.forName(HeadsetClientCommands.HEADSET_CLIENT_CALL_CLASS),
                 )
                 true
             }.getOrDefault(false) || runCatching {
@@ -287,23 +295,25 @@ object PhoneCallStateRepository {
     private fun refreshFromProxy(intent: Intent? = null) {
         val proxy = headsetClientProxy
         val hfp = isHfpClientConnected()
-        if (proxy == null) {
+        // null: no proxy, or getCurrentCalls is hidden / refused — an empty list would claim «idle».
+        val calls = proxy?.let(::readCurrentCalls)
+        if (calls == null) {
+            val proxyLost = proxy == null
             publish {
                 it.copy(
                     hfpConnected = hfp,
-                    callState = if (it.observerActive) PhoneCallState.IDLE else PhoneCallState.UNKNOWN,
-                    direction = if (it.observerActive) PhoneCallDirection.NONE else it.direction,
+                    callState = if (proxyLost && it.observerActive) PhoneCallState.IDLE else PhoneCallState.UNKNOWN,
+                    direction = if (proxyLost && it.observerActive) PhoneCallDirection.NONE else it.direction,
                     answerSupported = answerCapability(),
                     hangupSupported = hangupCapability(),
                     observerActive = false,
                 )
             }
-            // Still try to parse EXTRA_CALL from the broadcast without a proxy.
+            // Still try to parse EXTRA_CALL from the broadcast without a readable proxy.
             intent?.let { applyCallExtra(it, hfpConnected = hfp, observerActive = false) }
             return
         }
 
-        val calls = readCurrentCalls(proxy)
         if (calls.isEmpty()) {
             val fromIntent = intent?.let { parseCallExtra(it) }
             if (fromIntent != null) {
@@ -325,7 +335,7 @@ object PhoneCallStateRepository {
         }
 
         // Prefer INCOMING > ACTIVE > DIALING/ALERTING > HELD > first.
-        val preferred = pickPreferredCall(calls)
+        val preferred = pickPreferredCall(calls) ?: return
         applyParsedCall(preferred, hfpConnected = hfp, observerActive = true)
     }
 
@@ -345,7 +355,7 @@ object PhoneCallStateRepository {
                 hfpConnected = hfpConnected,
                 callState = parsed.state,
                 direction = parsed.direction,
-                number = if (number.isNotBlank()) number else it.number,
+                number = nextObservedCallNumber(it.callState, it.number, parsed.state, number),
                 answerSupported = answerCapability(),
                 hangupSupported = hangupCapability(),
                 observerActive = observerActive,
@@ -361,7 +371,7 @@ object PhoneCallStateRepository {
         val device: BluetoothDevice? = null,
     )
 
-    private fun pickPreferredCall(calls: List<ParsedCall>): ParsedCall {
+    private fun pickPreferredCall(calls: List<ParsedCall>): ParsedCall? {
         fun rank(state: PhoneCallState): Int = when (state) {
             PhoneCallState.INCOMING -> 5
             PhoneCallState.ACTIVE -> 4
@@ -370,28 +380,33 @@ object PhoneCallStateRepository {
             PhoneCallState.IDLE -> 1
             PhoneCallState.UNKNOWN -> 0
         }
-        return calls.maxByOrNull { rank(it.state) } ?: calls.first()
+        return calls.maxByOrNull { rank(it.state) }
     }
 
-    private fun readCurrentCalls(proxy: Any): List<ParsedCall> {
+    /** `null` when no connected device's calls could be read (hidden API, binder error). */
+    private fun readCurrentCalls(proxy: Any): List<ParsedCall>? {
         val devices = runCatching {
             @Suppress("UNCHECKED_CAST")
             (proxy as BluetoothProfile).connectedDevices as? List<BluetoothDevice>
-        }.getOrNull().orEmpty()
+        }.getOrNull() ?: return null
         if (devices.isEmpty()) return emptyList()
+        val getCurrentCalls = runCatching {
+            proxy.javaClass.getMethod("getCurrentCalls", BluetoothDevice::class.java)
+        }.getOrNull() ?: return null
 
+        var readable = false
         val results = ArrayList<ParsedCall>()
         for (device in devices) {
             val rawCalls = runCatching {
-                proxy.javaClass.getMethod("getCurrentCalls", BluetoothDevice::class.java)
-                    .invoke(proxy, device) as? List<*>
-            }.getOrNull().orEmpty()
+                getCurrentCalls.invoke(proxy, device) as? List<*>
+            }.getOrNull() ?: continue
+            readable = true
             for (raw in rawCalls) {
                 if (raw == null) continue
                 results += parseCallObject(raw, device)
             }
         }
-        return results
+        return if (readable) results else null
     }
 
     private fun parseCallExtra(intent: Intent): ParsedCall? {
@@ -448,76 +463,25 @@ object PhoneCallStateRepository {
 
     private fun invokeHeadsetClientAnswer(): Boolean {
         val proxy = headsetClientProxy ?: return false
-        val device = firstConnectedDevice(proxy) ?: return false
-        // acceptCall(device, flag) — flag 0 = accept audio
-        val withFlag = runCatching {
-            proxy.javaClass.getMethod(
-                "acceptCall",
-                BluetoothDevice::class.java,
-                Int::class.javaPrimitiveType,
-            ).invoke(proxy, device, 0)
-            true
-        }.getOrDefault(false)
-        if (withFlag) return true
-        return runCatching {
-            proxy.javaClass.getMethod("acceptCall", BluetoothDevice::class.java)
-                .invoke(proxy, device)
-            true
-        }.getOrDefault(false)
+        val calls = readCurrentCalls(proxy).orEmpty()
+        val device = calls.firstOrNull { it.state == PhoneCallState.INCOMING }?.device
+            ?: firstConnectedDevice(proxy)
+            ?: return false
+        return HeadsetClientCommands.accept(proxy, device)
     }
 
-    private fun invokeHeadsetClientHangup(): Boolean {
+    private fun invokeHeadsetClientHangup(observedState: PhoneCallState): Boolean {
         val proxy = headsetClientProxy ?: return false
-        val device = firstConnectedDevice(proxy) ?: return false
-        val calls = readCurrentCalls(proxy)
-        val active = pickPreferredCall(calls)
-        // terminateCall(device, call) preferred
-        if (active.rawCall != null) {
-            val ok = runCatching {
-                val callClass = Class.forName("android.bluetooth.BluetoothHeadsetClientCall")
-                proxy.javaClass.getMethod(
-                    "terminateCall",
-                    BluetoothDevice::class.java,
-                    callClass,
-                ).invoke(proxy, device, active.rawCall)
-                true
-            }.getOrDefault(false)
-            if (ok) return true
-        }
-        val byIndex = runCatching {
-            proxy.javaClass.getMethod(
-                "terminateCall",
-                BluetoothDevice::class.java,
-                Int::class.javaPrimitiveType,
-            ).invoke(proxy, device, 0)
-            true
-        }.getOrDefault(false)
-        if (byIndex) return true
-        if (active.state == PhoneCallState.INCOMING) {
-            return runCatching {
-                proxy.javaClass.getMethod("rejectCall", BluetoothDevice::class.java)
-                    .invoke(proxy, device)
-                true
-            }.getOrDefault(false)
-        }
-        return false
+        val target = pickPreferredCall(readCurrentCalls(proxy).orEmpty())
+        val device = target?.device ?: firstConnectedDevice(proxy) ?: return false
+        val ringing = (target?.state ?: observedState) == PhoneCallState.INCOMING
+        return HeadsetClientCommands.hangup(proxy, device, target?.rawCall, ringing)
     }
 
-    private fun invokeTelecomAccept(): Boolean {
-        val ctx = appContext ?: return false
-        val tm = ctx.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
-        return runCatching {
-            tm.javaClass.getMethod("acceptRingingCall").invoke(tm)
-            true
-        }.getOrDefault(false)
-    }
-
-    private fun invokeTelecomEndCall(): Boolean {
-        val ctx = appContext ?: return false
-        val tm = ctx.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
-        return runCatching {
-            tm.javaClass.getMethod("endCall").invoke(tm) as? Boolean ?: true
-        }.getOrDefault(false)
+    /** `acceptRingingCall` (void) / `endCall` (boolean); a missing method or SecurityException is a failure. */
+    private fun invokeTelecom(method: String): Boolean {
+        val tm = appContext?.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return false
+        return invokeStackCommand(tm, method, emptyArray()) == true
     }
 
     private fun firstConnectedDevice(proxy: Any): BluetoothDevice? =
@@ -526,6 +490,6 @@ object PhoneCallStateRepository {
         }.getOrNull()
 
     private fun publish(transform: (PhoneCallSnapshot) -> PhoneCallSnapshot) {
-        _snapshot.value = transform(_snapshot.value)
+        _snapshot.update(transform)
     }
 }

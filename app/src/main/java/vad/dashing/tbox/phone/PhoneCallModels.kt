@@ -42,6 +42,22 @@ data class PhoneCallSnapshot(
     val observerActive: Boolean = false,
 )
 
+/**
+ * `phone_call_number` keeps the last number after a call ends, but a new call that arrives
+ * without a number (withheld caller) must not inherit the previous caller's number.
+ */
+internal fun nextObservedCallNumber(
+    previousState: PhoneCallState,
+    previousNumber: String,
+    newState: PhoneCallState,
+    observedNumber: String,
+): String = when {
+    observedNumber.isNotBlank() -> observedNumber
+    newState == PhoneCallState.IDLE || newState == PhoneCallState.UNKNOWN -> previousNumber
+    previousState == PhoneCallState.IDLE || previousState == PhoneCallState.UNKNOWN -> ""
+    else -> previousNumber
+}
+
 sealed class PhoneCallControlResult {
     data object Success : PhoneCallControlResult()
     data class Failure(val message: String) : PhoneCallControlResult()

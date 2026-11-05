@@ -2,10 +2,10 @@ package vad.dashing.tbox
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.ContextCompat
@@ -20,8 +20,9 @@ fun isPhoneDialWidgetDataKey(dataKey: String): Boolean =
     dataKey == PHONE_DIAL_WIDGET_DATA_KEY
 
 /**
- * Minimal cleanup for a dial string: trim; drop spaces / dashes / parentheses;
- * keep digits, leading `+`, and `*` / `#`. Empty / no digits → invalid.
+ * Minimal cleanup for a dial string: trim; drop spaces / dashes / dots / parentheses;
+ * keep ASCII digits, a leading `+`, and `*` / `#`. Empty, no digits, or any other character
+ * (letters, a `+` in the middle) → invalid, so a typo never dials a different number.
  */
 fun normalizeDialPhoneNumber(raw: String): String {
     val trimmed = raw.trim()
@@ -30,14 +31,14 @@ fun normalizeDialPhoneNumber(raw: String): String {
     var sawDigit = false
     for (c in trimmed) {
         when {
-            c.isDigit() -> {
+            c in '0'..'9' -> {
                 out.append(c)
                 sawDigit = true
             }
             c == '+' && out.isEmpty() -> out.append(c)
             c == '*' || c == '#' -> out.append(c)
-            c == ' ' || c == '-' || c == '(' || c == ')' || c == '\u00A0' -> Unit
-            // Other characters dropped (minimal cleanup, not a full E.164 parser).
+            c == ' ' || c == '-' || c == '.' || c == '(' || c == ')' || c == '\u00A0' -> Unit
+            else -> return ""
         }
     }
     return if (sawDigit) out.toString() else ""
@@ -53,11 +54,15 @@ fun hasCallPhonePermission(context: Context): Boolean =
  */
 fun isHfpClientConnected(): Boolean {
     val adapter = runCatching { BluetoothAdapter.getDefaultAdapter() }.getOrNull() ?: return false
-    if (!adapter.isEnabled) return false
-    return runCatching {
-        adapter.getProfileConnectionState(BLUETOOTH_PROFILE_HEADSET_CLIENT) ==
-            BluetoothProfile.STATE_CONNECTED
-    }.getOrDefault(false)
+    return try {
+        adapter.isEnabled &&
+            adapter.getProfileConnectionState(BLUETOOTH_PROFILE_HEADSET_CLIENT) ==
+            BluetoothAdapter.STATE_CONNECTED
+    } catch (_: SecurityException) {
+        false
+    } catch (_: RuntimeException) {
+        false
+    }
 }
 
 sealed class PlaceCallResult {
@@ -116,6 +121,21 @@ fun placeCallFailureUserMessage(reason: PlaceCallFailureReason, detail: String? 
         PlaceCallFailureReason.START_FAILED ->
             detail?.takeIf { it.isNotBlank() } ?: "Не удалось начать звонок"
     }
+
+/** Toast text for the dial tile (localized for the reasons a user can fix). */
+fun phoneDialFailureMessage(resources: Resources, failure: PlaceCallResult.Failure): String =
+    when (failure.reason) {
+        PlaceCallFailureReason.EMPTY_NUMBER ->
+            resources.getString(R.string.widget_phone_dial_empty_number)
+        PlaceCallFailureReason.NO_CALL_PHONE_PERMISSION ->
+            resources.getString(R.string.widget_phone_dial_no_permission)
+        PlaceCallFailureReason.NO_HFP -> resources.getString(R.string.widget_phone_dial_no_hfp)
+        else -> placeCallFailureUserMessage(failure.reason, failure.detail)
+    }
+
+fun hasAnswerPhoneCallsPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ANSWER_PHONE_CALLS) ==
+        PackageManager.PERMISSION_GRANTED
 
 /** True when we should request runtime BT connect permission before probing HFP (API 31+). */
 fun needsBluetoothConnectPermission(): Boolean = Build.VERSION.SDK_INT >= 31
