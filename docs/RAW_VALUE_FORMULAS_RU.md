@@ -11,7 +11,8 @@
 | **mbCAN (Android 9)** | `MbCanEngineFacade`, `HvacClimateDomain`, `SlaSpeedLimitDomain` |
 | **VHAL (Android 10)** | `Android10VhalRepository`, те же домены |
 
-> **Важно:** для RPM и t° ОЖ масштаб на шинах **разный**: TBox CAN — `raw/4` и `raw×0.75−48`; VHAL RPM — `raw×4`, VHAL coolant — та же `raw×0.75−48`. mbCAN telemetry часто отдаёт уже готовые float (RPM/скорость as-is; coolant на практике `0.0`).
+> **Важно:** для RPM и t° ОЖ масштаб на шинах **разный**: TBox CAN — `raw/4` и `raw×0.75−48`; VHAL RPM — `raw×4`, VHAL coolant — та же `raw×0.75−48`. mbCAN telemetry часто отдаёт уже готовые float (RPM/скорость as-is; coolant на практике `0.0`).  
+> **ReverseGearSwitch** — дискретный enum: A9 mbCAN **0/2 engaged, 1 not**; A10 VHAL **1 (и 2) engaged, 0 not** — см. [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md) (`VehicleGearDomain.decodeReverseGearSwitch` / `decodeVhalReverseGearSwitch`).
 
 ---
 

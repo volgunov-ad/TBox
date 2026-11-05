@@ -17,7 +17,7 @@ object VehicleGearDomain {
     }
 
     /**
-     * CEM reverse gear switch (`getReverseGearSwitch` / `R_0400_CEM_2_ReverseGearSwitch`).
+     * CEM reverse gear switch on **A9 mbCAN** (`getReverseGearSwitch`).
      *
      * Jetour Dashing: raw **0** and **2** = reverse engaged, raw **1** = not reverse.
      * **0** stays from the earlier CEM observation (geo log 2026-08-05: the old
@@ -25,10 +25,27 @@ object VehicleGearDomain {
      * (`tbox_app_log_20261010_115553`, `tbox_app_log_20261010_162750`): raw 2 while
      * `nGear=2`, raw 1 otherwise. Until 2 was engaged, [isReverseEngaged] saw a
      * missing switch exactly in reverse when HU PRND was absent.
+     *
+     * A10 VHAL uses [decodeVhalReverseGearSwitch] — opposite 0/1 polarity.
      */
     fun decodeReverseGearSwitch(raw: Int): Boolean? = when (raw) {
         0, 2 -> true
         1 -> false
+        else -> null
+    }
+
+    /**
+     * A10 VHAL `R_0400_CEM_2_ReverseGearSwitch` (**289412135**): classic CEM 1-bit
+     * **1** = reverse engaged, **0** = not reverse.
+     *
+     * Field log `tbox_app_log_20261102_192540` (P→R→D): raw **1** only in the reverse
+     * window, **0** on P/D — opposite of A9 [decodeReverseGearSwitch] for 0/1.
+     * Raw **2** was not observed; keep **2→engaged** as a safe rare-enum mirror of
+     * the A9 domain so an unexpected CEM ternary does not become null mid-R.
+     */
+    fun decodeVhalReverseGearSwitch(raw: Int): Boolean? = when (raw) {
+        1, 2 -> true
+        0 -> false
         else -> null
     }
 
