@@ -55,6 +55,7 @@ import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
 import vad.dashing.tbox.TOGGLE_FLOATING_PANELS_ENABLED_WIDGET_DATA_KEY
 import vad.dashing.tbox.FRONT_LEFT_SEAT_HEAT_VENT_SINGLE_WIDGET_DATA_KEY
@@ -1333,6 +1334,25 @@ fun DashboardWidgetRenderer(
                 shape = shape,
                 textColor = widgetTextColor,
                 backgroundColor = widgetBackgroundColor
+            )
+        }
+
+        PHONE_DIAL_WIDGET_DATA_KEY -> {
+            DashboardPhoneDialWidgetItem(
+                widget = widget,
+                phoneNumber = widgetConfig.dialPhoneNumber,
+                showNumber = widgetConfig.dialShowNumber,
+                confirmBeforeCall = widgetConfig.dialConfirmBeforeCall,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                defaultTitle = stringResource(R.string.data_title_phone_dial_widget),
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
             )
         }
 

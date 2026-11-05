@@ -37,6 +37,7 @@ class PermissionsAutoGrantTest {
                 AppPermissionId.InstallPackages,
                 AppPermissionId.Storage,
                 AppPermissionId.Location,
+                AppPermissionId.CallPhone,
                 AppPermissionId.MockLocation,
             ),
             packageName = "vad.dashing.tbox",
@@ -52,6 +53,8 @@ class PermissionsAutoGrantTest {
         assertTrue(commands.any { it.contains("REQUEST_INSTALL_PACKAGES") })
         assertTrue(commands.any { it.contains("READ_EXTERNAL_STORAGE") })
         assertTrue(commands.any { it.contains("ACCESS_FINE_LOCATION") })
+        assertTrue(commands.any { it.contains("CALL_PHONE") })
+        assertTrue(commands.any { it.contains("ANSWER_PHONE_CALLS") })
         assertTrue(commands.none { it.contains("ACCESS_BACKGROUND_LOCATION") })
         assertTrue(commands.none { it.contains("MOCK_LOCATION") })
         assertTrue(commands.none { it.contains("mock_location") })

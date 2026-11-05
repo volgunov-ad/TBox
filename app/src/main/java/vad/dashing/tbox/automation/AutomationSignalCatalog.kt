@@ -888,6 +888,37 @@ object AutomationSignalCatalog {
                 "ok / auth_failed / unreachable / error; idle — источник TBox или поллер не запущен.",
         ),
         state(
+            AutomationSignalId.PHONE_HFP_CONNECTED,
+            "Телефон HFP",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off — профиль Headset Client подключён к телефону. " +
+                "Нужен для исходящего place_call и плитки «Набрать номер».",
+        ),
+        state(
+            AutomationSignalId.PHONE_CALL_STATE,
+            "Состояние звонка",
+            appOnly,
+            vad.dashing.tbox.phone.PhoneCallState.OPTIONS,
+            typicalRange = "idle / dialing / active / incoming / held / unknown. " +
+                "Наблюдение через BluetoothHeadsetClient (best-effort из процесса Monitor); " +
+                "unknown — observer не поднят / нет permission / список звонков не читается.",
+        ),
+        state(
+            AutomationSignalId.PHONE_CALL_DIRECTION,
+            "Направление звонка",
+            appOnly,
+            vad.dashing.tbox.phone.PhoneCallDirection.OPTIONS,
+            typicalRange = "none / outgoing / incoming по текущему HFP-вызову.",
+        ),
+        state(
+            AutomationSignalId.PHONE_CALL_NUMBER,
+            "Номер звонка",
+            appOnly,
+            typicalRange = "Текущий или последний известный номер (строка). Может быть пустым. " +
+                "PII: отдаётся в /v1/signals по запросу ids.",
+        ),
+        state(
             AutomationSignalId.MODEM_MOBILE_DATA,
             "Модем: передача данных",
             appOnly,

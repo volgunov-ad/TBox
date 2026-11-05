@@ -136,7 +136,9 @@ import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
+import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetButtonBinding
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.WidgetPickerActivity
@@ -708,6 +710,27 @@ internal class WidgetSelectionDialogState(
             false
         }
     )
+    var dialPhoneNumber by mutableStateOf(
+        if (initialConfig.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            initialConfig.dialPhoneNumber
+        } else {
+            ""
+        },
+    )
+    var dialShowNumber by mutableStateOf(
+        if (initialConfig.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            initialConfig.dialShowNumber
+        } else {
+            true
+        },
+    )
+    var dialConfirmBeforeCall by mutableStateOf(
+        if (initialConfig.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            initialConfig.dialConfirmBeforeCall
+        } else {
+            false
+        },
+    )
     var automationTriggerId by mutableStateOf(
         if (initialConfig.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
             normalizeAutomationTriggerId(initialConfig.automationTriggerId)
@@ -1019,6 +1042,9 @@ internal class WidgetSelectionDialogState(
     val isHttpRequestWidgetSelected: Boolean
         get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
 
+    val isPhoneDialWidgetSelected: Boolean
+        get() = selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY
+
     val isAutomationTriggerWidgetSelected: Boolean
         get() = selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 
@@ -1193,6 +1219,21 @@ internal class WidgetSelectionDialogState(
             },
             httpOpenBrowser = if (selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                 httpOpenBrowser
+            } else {
+                false
+            },
+            dialPhoneNumber = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                dialPhoneNumber.trim()
+            } else {
+                ""
+            },
+            dialShowNumber = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                dialShowNumber
+            } else {
+                true
+            },
+            dialConfirmBeforeCall = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                dialConfirmBeforeCall
             } else {
                 false
             },
@@ -1583,6 +1624,21 @@ internal class WidgetSelectionDialogState(
         } else {
             false
         }
+        dialPhoneNumber = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            cfg.dialPhoneNumber
+        } else {
+            ""
+        }
+        dialShowNumber = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            cfg.dialShowNumber
+        } else {
+            true
+        }
+        dialConfirmBeforeCall = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            cfg.dialConfirmBeforeCall
+        } else {
+            false
+        }
         automationTriggerId = if (selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
             normalizeAutomationTriggerId(cfg.automationTriggerId)
         } else {
@@ -1828,6 +1884,7 @@ internal class WidgetSelectionDialogState(
                         )
             }
             isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
+            isPhoneDialWidgetSelected -> normalizeDialPhoneNumber(dialPhoneNumber).isNotEmpty()
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)
             else -> true
@@ -2773,6 +2830,10 @@ internal fun WidgetSelectionDialogForm(
                         panelStorageId = tileBackgroundPanelStorageId,
                         widgetIndex = widgetIndex,
                         modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    PhoneDialWidgetSettingsSection(
+                        state = state,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
                     )
                     AutomationTriggerWidgetSettingsSection(
                         state = state,

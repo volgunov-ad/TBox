@@ -25,6 +25,11 @@ enum class AppPermissionId {
     InstallPackages,
     Storage,
     Location,
+    /**
+     * Outgoing HFP dial (`CALL_PHONE`) and Telecom answer/hangup (`ANSWER_PHONE_CALLS`).
+     * Needed for the dial tile, `place_call` / `answer_call` / `hangup_call`, and External API.
+     */
+    CallPhone,
     /** This app selected as the mock-location provider (`appops` + `settings put`). */
     MockLocation,
 }
@@ -113,6 +118,13 @@ object AppPermissions {
                 grantKind = AppPermissionGrantKind.RequestRuntime,
             ),
             AppPermissionStatus(
+                id = AppPermissionId.CallPhone,
+                granted = hasPhoneCallAccess(context),
+                titleRes = R.string.permissions_call_phone_title,
+                descriptionRes = R.string.permissions_call_phone_desc,
+                grantKind = AppPermissionGrantKind.RequestRuntime,
+            ),
+            AppPermissionStatus(
                 id = AppPermissionId.MockLocation,
                 granted = context.isAppSelectedAsMockProvider(),
                 titleRes = R.string.permissions_mock_location_title,
@@ -149,7 +161,8 @@ object AppPermissions {
             }
             AppPermissionId.WriteSecureSettings,
             AppPermissionId.MockLocation,
-            AppPermissionId.Location -> null
+            AppPermissionId.Location,
+            AppPermissionId.CallPhone -> null
         }
     }
 
@@ -158,6 +171,10 @@ object AppPermissions {
             AppPermissionId.Location -> arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+            AppPermissionId.CallPhone -> arrayOf(
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.ANSWER_PHONE_CALLS,
             )
             AppPermissionId.Storage -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -240,6 +257,10 @@ object AppPermissions {
                     add("pm grant $packageName android.permission.ACCESS_BACKGROUND_LOCATION")
                 }
             }
+            AppPermissionId.CallPhone -> listOf(
+                "pm grant $packageName android.permission.CALL_PHONE",
+                "pm grant $packageName android.permission.ANSWER_PHONE_CALLS",
+            )
             AppPermissionId.MockLocation -> buildMockLocationShellCommands(packageName)
         }
     }
@@ -305,6 +326,18 @@ object AppPermissions {
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /** Both phone-group runtime grants used by dial / answer / hangup. */
+    fun hasPhoneCallAccess(context: Context): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CALL_PHONE,
+        ) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ANSWER_PHONE_CALLS,
             ) == PackageManager.PERMISSION_GRANTED
     }
 }
