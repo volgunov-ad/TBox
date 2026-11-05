@@ -10,6 +10,10 @@
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
+    <!-- Outgoing HFP call via Telecom ACTION_CALL (phoneDialWidget / place_call). -->
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    <!-- Best-effort answer/hangup via TelecomManager (gated by capability flags at runtime). -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS"/>
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- App List widget: required since Android 9 for ACTION_UNINSTALL_PACKAGE / ACTION_DELETE. -->

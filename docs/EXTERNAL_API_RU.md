@@ -266,7 +266,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 5,
+  "catalogVersion": 6,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -324,7 +324,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **5** — read-only обогащение гео/модема отдельными signal id;
+- `catalogVersion` (сейчас **6** — HFP phone dial: builtin `place_call` / `answer_call` / `hangup_call` + сигналы `phone_*`;
+  **5** — read-only обогащение гео/модема отдельными signal id;
   **4** — у `can_command` добавлены `operations`, `signalId` и `write`, а у builtin `set_media_volume` — `write`).
 
 `write` — схема записи для сопряжённого клиента (TBox MQTT). Поле аддитивное: голосовой клиент его не читает.
@@ -493,9 +494,17 @@ UI правил и HTTP API получали их одновременно. Су
 (`geo_altitude_m` … `geo_source`, `modem_rssi_dbm` … `modem_throughput_*_kbps`). Без PII
 (IMEI/ICCID/IMSI) и без debug NMEA/DR.
 
+**Телефония HFP** (`catalogVersion` **6**): сигналы `phone_hfp_connected`, `phone_call_state`
+(`idle`/`dialing`/`active`/`incoming`/`held`/`unknown`), `phone_call_direction`,
+`phone_call_number` (`source=app`); действия builtin `place_call` (номер в `stringValue`),
+`answer_call`, `hangup_call` — класс **`confirm`**. Answer/hangup — best-effort
+(BluetoothHeadsetClient / Telecom); при отсутствии прав/API возвращают ошибку, не silent success.
+`phone_call_number` — PII, отдаётся только по явному `ids=`.
+
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
 `/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
-действий). `catalogVersion = 3` (+ aliases); схема write — 4; гео/модем enrichment — **5**.
+действий). `catalogVersion = 3` (+ aliases); схема write — 4; гео/модем enrichment — **5**;
+HFP phone — **6**.
 
 ### Не в блокирующем списке v1
 
@@ -510,7 +519,7 @@ UI правил и HTTP API получали их одновременно. Су
 | Класс | Примеры | Поведение API |
 |-------|---------|----------------|
 | `safe` | чтение; медиа play/pause; `set_media_volume`; `show_toast`; `open_main_screen`; `delay` | invoke при базовом токене |
-| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
+| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, `place_call` / `answer_call` / `hangup_call`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
 | `dangerous` | `adb_set_tcp`, `adb_shell`, `adb_force_stop` | только если в Monitor включён тумблер опасных команд |
 
 Точная разметка `safety` по каждому builtin/can_command — в `ExternalApiActionSafety.kt` + поле `safety` в `/v1/catalog`.

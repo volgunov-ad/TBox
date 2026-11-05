@@ -1093,6 +1093,33 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.PLACE_CALL -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Номер телефона",
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Исходящий звонок через Telecom ACTION_CALL → HFP. Нужны разрешение " +
+                    "CALL_PHONE и активный Bluetooth HFP. Без HFP — ошибка, клавиатура не открывается.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        AutomationBuiltinActionType.ANSWER_CALL,
+        AutomationBuiltinActionType.HANGUP_CALL,
+        -> Text(
+            text = "Best-effort через BluetoothHeadsetClient / Telecom. На части прошивок " +
+                "без роли dialer вызов вернёт ошибку — это ожидаемо, silent success нет.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         else -> Unit
     }
 }
@@ -1254,6 +1281,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
         "Круиз: активировать на текущей скорости (SET−)"
     AutomationBuiltinActionType.CRUISE_NUDGE -> "Круиз: уставка ±1"
     AutomationBuiltinActionType.START_VAD_VOICE -> "VAD Voice: слушать"
+    AutomationBuiltinActionType.PLACE_CALL -> "Позвонить (HFP)"
+    AutomationBuiltinActionType.ANSWER_CALL -> "Ответить на звонок (HFP)"
+    AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

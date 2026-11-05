@@ -691,6 +691,9 @@
 | Яркость экрана ГУ | `set_hu_screen_brightness` | `intValue`: `1..10` (как Car Settings → Экраны; не HUD/ICM) |
 | Автояркость экрана ГУ | `set_hu_screen_auto_brightness` | `boolValue`: включить/выключить |
 | Короткий Toast | `show_toast` | `stringValue`: непустой текст до 1000 символов |
+| Позвонить (HFP) | `place_call` | `stringValue`: номер телефона (минимальная чистка; пустой / без цифр — ошибка валидации). Нужны `CALL_PHONE` и активный HFP; без HFP — fail, keypad не открывается |
+| Ответить на звонок | `answer_call` | без параметров; best-effort (может fail без привилегий dialer) |
+| Сбросить звонок | `hangup_call` | без параметров; best-effort (может fail без привилегий dialer) |
 | Сообщение с кнопкой «Закрыть» | `show_alert` | `stringValue`: непустой текст до 1000 символов; `intValue`: автозакрытие `0..86400000` мс, 0 — только вручную |
 | Триггер автоматизации (виджет) | `set_automation_trigger_widget` | `stringValue`: непустой ID триггера до 32 символов; `boolValue`: `true` — активировать плитку, `false` — деактивировать; `intValue`: `2` — переключить плитку в противоположное состояние (инвертировать), любое другое значение — режим по `boolValue`. Состояние runtime-only, сбрасывается перезапуском приложения |
 | Включить / выключить автоматизацию | `set_automation_enabled` | `stringValue`: id целевого правила; `boolValue`: `true` — включить, `false` — выключить. **Без toggle.** Уже в целевом состоянии → успешный no-op. Правило может выключить само себя (текущий прогон отменяется при reload). Не путать с `set_automation_trigger_widget` (плитка, не `enabled`) |

@@ -2469,6 +2469,7 @@ class BackgroundService : Service() {
                 }
                 startConstantDrAutoCalibJob()
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
+                vad.dashing.tbox.phone.PhoneCallStateRepository.start(this@BackgroundService)
                 yield()
                 applyModemDataSource()
                 yield()

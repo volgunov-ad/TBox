@@ -43,6 +43,9 @@ object ExternalApiActionSafetyRules {
         AutomationBuiltinActionType.SHOW_ALERT,
         AutomationBuiltinActionType.SET_AUTOMATION_ENABLED,
         AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET,
+        AutomationBuiltinActionType.PLACE_CALL,
+        AutomationBuiltinActionType.ANSWER_CALL,
+        AutomationBuiltinActionType.HANGUP_CALL,
         -> ExternalApiActionSafety.CONFIRM
 
         else -> ExternalApiActionSafety.SAFE

@@ -268,6 +268,19 @@ SSID выбирается из **сохранённых** сетей ГУ.
 Состояния выше (`wifi_modem_link_status`, `modem_*`) доступны в условиях и триггерах;
 `modem_mobile_data` / `modem_net_type` / `modem_sim_status` работают и для источника TBox.
 
+### Телефон (HFP)
+
+Сигналы (`source=app`): `phone_hfp_connected` (on/off), `phone_call_state`
+(idle / dialing / active / incoming / held / unknown), `phone_call_direction`
+(none / outgoing / incoming), `phone_call_number` (текущий/последний номер).
+Наблюдение — best-effort из процесса Monitor через `BluetoothHeadsetClient` (reflection);
+`unknown` — observer не поднят / нет permission / API молчит.
+
+Действия: `place_call` (номер в `stringValue`, safety `confirm`) — исходящий через
+`ACTION_CALL`; без HFP — ошибка. `answer_call` / `hangup_call` — best-effort, могут
+вернуть ошибку без привилегий default dialer (silent success нет). Не путать с
+`hu_phone_volume` / `set_phone_volume` (микшер громкости ГУ) и `modem_*` (LTE/Wi‑Fi данные).
+
 ### Геопозиция
 
 Триггер **геозоны** использует текущую точку из `GeoDisplayRepository`: выбранный GNSS-источник,

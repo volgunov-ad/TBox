@@ -248,6 +248,18 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
         }
+        if (config.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+            val number = config.dialPhoneNumber.trim()
+            if (number.isNotEmpty()) {
+                obj.put("dialPhoneNumber", number)
+            }
+            if (!config.dialShowNumber) {
+                obj.put("dialShowNumber", false)
+            }
+            if (config.dialConfirmBeforeCall) {
+                obj.put("dialConfirmBeforeCall", true)
+            }
+        }
         if (config.dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY) {
             val automationTriggerId = normalizeAutomationTriggerId(config.automationTriggerId)
             if (automationTriggerId.isNotBlank()) {
@@ -717,6 +729,21 @@ private fun parseWidgetConfigsFromJsonArray(
                         },
                         httpOpenBrowser = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
                             item.optBoolean("httpOpenBrowser", false)
+                        } else {
+                            false
+                        },
+                        dialPhoneNumber = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optString("dialPhoneNumber", "").trim()
+                        } else {
+                            ""
+                        },
+                        dialShowNumber = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optBoolean("dialShowNumber", true)
+                        } else {
+                            true
+                        },
+                        dialConfirmBeforeCall = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
+                            item.optBoolean("dialConfirmBeforeCall", false)
                         } else {
                             false
                         },

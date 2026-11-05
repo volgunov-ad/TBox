@@ -38,7 +38,7 @@ class AdbIoErrorsTest {
         assertTrue(AdbIoErrors.isRetryableConnectFailure("Connection refused"))
         assertFalse(AdbIoErrors.isRetryableConnectFailure("Permission denial"))
         assertFalse(AdbIoErrors.isRetryableConnectFailure("Bad ADB payload checksum"))
-        assertFalse(AdbIoErrors.isRetryableConnectFailure(null))
+        assertFalse(AdbIoErrors.isRetryableConnectFailure(null as String?))
     }
 
     @Test

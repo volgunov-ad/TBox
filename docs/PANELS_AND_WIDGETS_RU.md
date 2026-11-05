@@ -168,7 +168,13 @@ flowchart TB
 
 ### Выбор страницы главного экрана
 
-Виджеты **«Выбор страницы главного экрана»** (`mainScreenPageSelectorWidgetHorizontal` / `mainScreenPageSelectorWidgetVertical`, раздел «Система»): ряд или колонка из **1…N** кнопок с номером страницы (`N` = `mainScreenPageCount` в настройках). Активная страница подсвечивается control active/inactive colors (как панель обдува). Тап по номеру переключает главную; повторный тап по уже активной — no-op. В **оконном режиме** (overlay) пишет в `currentPageWindowMode` и снимает freeform session pin, как ручной свайп страниц. В каталоге вкладки **«Плитки»** типы скрыты (`WidgetsRepository.isOfferedOnMainDashboardTab`); доступны только на панелях главного экрана и плавающих панелях. Панель с виджетом по-прежнему привязана к одной странице (на другую автоматически не переносится).
+Виджеты **«Выбор страницы главного экрана»** (`mainScreenPageSelectorWidgetHorizontal` / `mainScreenPageSelectorWidgetVertical`, раздел «Система»): ряд или колонка из **1…N** кнопок с номером страницы (`N` = `mainScreenPageCount` в настройках). Активная страница подсвечивается control active/inactive colors (как панель обдува). Тап по номеру переключает главную; повторный тап по уже активной — no-op. В **оконном режиме** (overlay) пишет в `currentPageWindowMode` и снимает freeform session pin, как ручной свайп страниц. В каталоге вкладки **«Плитки»** типы скрыты (`WidgetsRepository.isOfferedOnMainDashboardTab`); доступны только на панелях главного экрана и плавающих панелей. Панель с виджетом по-прежнему привязана к одной странице (на другую автоматически не переносится).
+
+### Набрать номер (HFP)
+
+Виджет **«Набрать номер»** (`phoneDialWidget`, раздел «Система»): одиночный тап → исходящий звонок через штатный Telecom (`Intent.ACTION_CALL` + `tel:`) на сохранённый номер при активном Bluetooth HFP Client. Одинаковый путь на A9 и A10. В каталоге вкладки **«Плитки»** тип скрыт (`isOfferedOnMainDashboardTab`); доступен только на панелях главного экрана и плавающих панелей.
+
+Поля конфига: `dialPhoneNumber`, `dialShowNumber` (по умолчанию вкл.), `dialConfirmBeforeCall` (по умолчанию выкл.), плюс обычные `showTitle` / `customTitle`. Если номер скрыт — на лице плитки по центру показывается заголовок (имя абонента); `titlePosition` в этом режиме не применяется. Без HFP — toast с ошибкой, keypad не открывается. Нужны манифест и runtime `CALL_PHONE`. Индикатор состояния звонка (точка) берётся из `PhoneCallStateRepository` (best-effort через `BluetoothHeadsetClient`).
 
 ### Список программ
 

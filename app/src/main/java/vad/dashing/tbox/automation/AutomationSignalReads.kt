@@ -102,6 +102,22 @@ internal object AutomationSignalReads {
                             vad.dashing.tbox.wifimodem.ModemAutomationStates.linkStatusKey(status),
                         )
                     }.distinctUntilChanged()
+                AutomationSignalId.PHONE_HFP_CONNECTED ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(if (snap.hfpConnected) "on" else "off")
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_STATE ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.callState.storageKey)
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_DIRECTION ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.direction.storageKey)
+                    }.distinctUntilChanged()
+                AutomationSignalId.PHONE_CALL_NUMBER ->
+                    vad.dashing.tbox.phone.PhoneCallStateRepository.snapshot.map { snap ->
+                        AutomationSignalValue.State(snap.number)
+                    }.distinctUntilChanged()
                 AutomationSignalId.MODEM_MOBILE_DATA ->
                     TboxRepository.apnStatus.map { up ->
                         AutomationSignalValue.State(

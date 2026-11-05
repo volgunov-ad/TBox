@@ -187,6 +187,12 @@ data class FloatingDashboardWidgetConfig(
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /** Phone number for [PHONE_DIAL_WIDGET_DATA_KEY] (`tel:` / ACTION_CALL). */
+    val dialPhoneNumber: String = "",
+    /** When true, show [dialPhoneNumber] on the tile face. Default on. */
+    val dialShowNumber: Boolean = true,
+    /** When true, ask before placing a call from the tile. Default off. */
+    val dialConfirmBeforeCall: Boolean = false,
     /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
     val automationTriggerId: String = "",
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
