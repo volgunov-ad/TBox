@@ -14,10 +14,12 @@ object AdbAutomationActions {
     const val MAX_SHELL_COMMAND_CHARS = 4_000
 
     suspend fun setTcpEnabled(enabled: Boolean): AutomationActionResult {
-        HuAdbControl.consumeError()
-        HuAdbControl.setTcpEnabled(enabled)
-        HuAdbControl.refresh()
-        val error = HuAdbControl.lastError.value
+        val error = LocalhostAdbSession.withSessionLock {
+            HuAdbControl.consumeError()
+            HuAdbControl.setTcpEnabled(enabled)
+            HuAdbControl.refresh()
+            HuAdbControl.lastError.value
+        }
         if (error != null) {
             return AutomationActionResult.failure(error)
         }
