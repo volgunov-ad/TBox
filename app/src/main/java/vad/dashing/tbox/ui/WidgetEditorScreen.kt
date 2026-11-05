@@ -60,6 +60,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TileBackgroundImageStorage
@@ -804,11 +805,21 @@ private fun PreviewTile(
                 LocalWidgetFontWeight provides widgetFontWeightToCompose(normalizeWidgetFontWeight(cfg.fontWeight)),
                 LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(cfg.titlePosition),
             ) {
-                val sample = remember(cfg.dataKey, cfg.valueAccuracy, cfg.showUnit) {
+                val dialNumberPlaceholder =
+                    stringResource(R.string.widget_phone_dial_number_placeholder)
+                val sample = remember(
+                    cfg.dataKey,
+                    cfg.valueAccuracy,
+                    cfg.showUnit,
+                    cfg.dialPhoneNumber,
+                    cfg.dialShowNumber,
+                    dialNumberPlaceholder,
+                ) {
                     widgetPreviewSample(
                         dataKey = cfg.dataKey,
                         config = cfg,
                         unit = WidgetsRepository.getUnitForDataKey(context, cfg.dataKey),
+                        dialNumberPlaceholder = dialNumberPlaceholder,
                     )
                 }
                 val title = cfg.customTitle.ifBlank {
@@ -828,43 +839,77 @@ private fun PreviewTile(
                 ) {
                     val availableHeight = maxHeight
                     val textAlign = LocalWidgetTextAlign.current
-                    DashboardWidgetContentWithOptionalTitle(
-                        showTitle = cfg.showTitle,
-                        titleText = title,
-                        availableHeight = availableHeight,
-                        resolvedTextColor = textColor,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(4.dp),
-                    ) { contentModifier ->
-                        when (sample.kind) {
-                            WidgetPreviewKind.CONTROL -> {
-                                PreviewControlHint(
-                                    controls = controls,
-                                    modifier = contentModifier.fillMaxSize(),
-                                )
-                            }
-                            WidgetPreviewKind.METRIC,
-                            WidgetPreviewKind.SPECIAL,
-                            -> {
-                                if (sample.valueText.isEmpty()) {
-                                    Spacer(contentModifier)
-                                } else {
-                                    Text(
-                                        text = sample.valueText,
-                                        style = calculateResponsiveTextStyle(
-                                            containerHeight = availableHeight,
-                                            textType = TextType.VALUE,
-                                        ),
-                                        color = textColor,
-                                        textAlign = textAlign,
-                                        maxLines = 2,
-                                        softWrap = true,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = contentModifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight(),
-                                    )
+                    when (sample.kind) {
+                        WidgetPreviewKind.CENTERED_TITLE -> {
+                            // Live phone-dial hides the number: title alone, centered.
+                            Text(
+                                text = title,
+                                style = calculateResponsiveTextStyle(
+                                    containerHeight = availableHeight,
+                                    textType = TextType.TITLE,
+                                    forWidgetTitle = true,
+                                ),
+                                color = textColor,
+                                textAlign = TextAlign.Center,
+                                maxLines = 3,
+                                softWrap = true,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(8.dp),
+                            )
+                        }
+                        else -> {
+                            DashboardWidgetContentWithOptionalTitle(
+                                showTitle = cfg.showTitle,
+                                titleText = title,
+                                availableHeight = availableHeight,
+                                resolvedTextColor = textColor,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(4.dp),
+                            ) { contentModifier ->
+                                when (sample.kind) {
+                                    WidgetPreviewKind.CONTROL -> {
+                                        PreviewControlHint(
+                                            controls = controls,
+                                            modifier = contentModifier.fillMaxSize(),
+                                        )
+                                    }
+                                    WidgetPreviewKind.METRIC,
+                                    WidgetPreviewKind.SPECIAL,
+                                    -> {
+                                        if (sample.valueText.isEmpty()) {
+                                            Spacer(contentModifier)
+                                        } else {
+                                            val faded =
+                                                sample.valueText == dialNumberPlaceholder
+                                            Text(
+                                                text = sample.valueText,
+                                                style = calculateResponsiveTextStyle(
+                                                    containerHeight = availableHeight,
+                                                    textType = TextType.VALUE,
+                                                ),
+                                                color = textColor.copy(
+                                                    alpha = if (faded) 0.45f else 1f,
+                                                ),
+                                                textAlign = if (faded ||
+                                                    cfg.dataKey == PHONE_DIAL_WIDGET_DATA_KEY
+                                                ) {
+                                                    TextAlign.Center
+                                                } else {
+                                                    textAlign
+                                                },
+                                                maxLines = 2,
+                                                softWrap = true,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = contentModifier
+                                                    .fillMaxWidth()
+                                                    .fillMaxHeight(),
+                                            )
+                                        }
+                                    }
+                                    WidgetPreviewKind.CENTERED_TITLE -> Unit
                                 }
                             }
                         }

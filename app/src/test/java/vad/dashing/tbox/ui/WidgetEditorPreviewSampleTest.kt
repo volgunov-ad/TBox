@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.MUSIC_WIDGET_DATA_KEY
+import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.WidgetsRepository
 
 class WidgetEditorPreviewSampleTest {
@@ -80,5 +81,52 @@ class WidgetEditorPreviewSampleTest {
         assertEquals(0, sampleMetricNumber("engineRPM").second)
         assertEquals(87.0, sampleMetricNumber("carSpeed").first)
         assertEquals(22.5, sampleMetricNumber("outsideTemperature").first)
+    }
+
+    @Test
+    fun phoneDial_showsNormalizedNumberWhenVisible() {
+        val sample = widgetPreviewSample(
+            dataKey = PHONE_DIAL_WIDGET_DATA_KEY,
+            config = FloatingDashboardWidgetConfig(
+                dataKey = PHONE_DIAL_WIDGET_DATA_KEY,
+                dialPhoneNumber = "+7 (920) 028-76-93",
+                dialShowNumber = true,
+            ),
+            unit = "",
+            dialNumberPlaceholder = "Нет номера",
+        )
+        assertEquals(WidgetPreviewKind.SPECIAL, sample.kind)
+        assertEquals("+79200287693", sample.valueText)
+    }
+
+    @Test
+    fun phoneDial_usesPlaceholderWhenNumberEmpty() {
+        val sample = widgetPreviewSample(
+            dataKey = PHONE_DIAL_WIDGET_DATA_KEY,
+            config = FloatingDashboardWidgetConfig(
+                dataKey = PHONE_DIAL_WIDGET_DATA_KEY,
+                dialPhoneNumber = "",
+                dialShowNumber = true,
+            ),
+            unit = "",
+            dialNumberPlaceholder = "Нет номера",
+        )
+        assertEquals(WidgetPreviewKind.SPECIAL, sample.kind)
+        assertEquals("Нет номера", sample.valueText)
+    }
+
+    @Test
+    fun phoneDial_hidesNumberAsCenteredTitle() {
+        val sample = phoneDialPreviewSample(
+            FloatingDashboardWidgetConfig(
+                dataKey = PHONE_DIAL_WIDGET_DATA_KEY,
+                dialPhoneNumber = "900",
+                dialShowNumber = false,
+                customTitle = "Дом",
+            ),
+            emptyNumberPlaceholder = "Нет номера",
+        )
+        assertEquals(WidgetPreviewKind.CENTERED_TITLE, sample.kind)
+        assertEquals("", sample.valueText)
     }
 }
