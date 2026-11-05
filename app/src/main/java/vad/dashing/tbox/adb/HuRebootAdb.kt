@@ -42,7 +42,9 @@ internal object HuRebootAdb {
             execute(SHELL_COMMAND)
         }
         val result = when (session) {
-            is LocalhostAdbSession.Result.Failed -> HuRebootResult.Failed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuRebootResult.Failed(
+                LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok ->
                 parseOutput("${session.value.stdout}\n${session.value.stderr}")
         }

@@ -81,6 +81,9 @@
     <string name="adb_connect">Connect</string>
     <string name="adb_disconnect">Disconnect</string>
     <string name="adb_connecting">Connecting…</string>
+    <string name="localhost_adb_reason_tcp_enable_failed">Could not enable ADB TCP on the head unit</string>
+    <string name="localhost_adb_reason_tcp_not_ready">ADB TCP did not come up in time</string>
+    <string name="localhost_adb_reason_connect_failed">Could not connect to localhost ADB</string>
     <string name="adb_status_disconnected">Disconnected</string>
     <string name="adb_status_connected">Connected: %1$s</string>
     <string name="adb_status_error">Error: %1$s</string>
@@ -2518,7 +2521,7 @@
     <string name="widget_app_launcher_virtual_display_refresh_fail">Could not refresh list (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_launch_fail">Could not launch on display (%1$s)</string>
     <string name="widget_app_launcher_virtual_display_remapped">Display %1$d → %2$d (%3$d×%4$d)</string>
-    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” enables ADB TCP only if the port is not already listening, queries displays over localhost, then restores TCP only if this session turned it on. Display 0 (panel) is hidden from the list. Shortcut launch remaps id by stored resolution and leaves TCP enabled.</string>
+    <string name="widget_app_launcher_virtual_display_hint">“Refresh list” and shortcut launch enable ADB TCP only if the port is not already listening, run over localhost, then restore TCP if this session turned it on. Display 0 (panel) is hidden from the list. Shortcut launch remaps id by stored resolution.</string>
     <string name="widget_app_launcher_freeform_side">App side</string>
     <string name="widget_app_launcher_freeform_side_left">Left</string>
     <string name="widget_app_launcher_freeform_side_right">Right</string>

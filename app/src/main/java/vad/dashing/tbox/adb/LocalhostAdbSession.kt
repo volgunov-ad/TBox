@@ -42,6 +42,11 @@ internal object LocalhostAdbSession {
     const val ADB_CONNECT_TIMEOUT_MS = 8_000
     /** Long enough for the user to accept the one-time «Allow USB debugging» dialog. */
     const val ADB_SESSION_TIMEOUT_MS = 25_000
+    /**
+     * Cap for hung shell / silent adbd on localhost sessions. Default [AdbConnection]
+     * idle budget is 5 minutes and would hold [mutex] that long; 45 s matches audit advice.
+     */
+    const val LOCALHOST_MAX_IDLE_MS = 45_000L
     /** Brief pause before one reconnect after a flaky first CNXN / shell open. */
     const val ADB_CONNECT_RETRY_DELAY_MS = 350L
 
@@ -297,6 +302,9 @@ internal object LocalhostAdbSession {
     /**
      * Opens one shell session; on a retryable first-connect failure (typical right after
      * `ctl.restart adbd` / cold Monitor start), waits briefly and tries once more.
+     *
+     * The retry re-runs the whole [block] (not only the CNXN handshake). Callers must keep
+     * blocks idempotent (`am force-stop` + `am start`, `pm grant`, dumpsys reads, …).
      */
     private suspend fun <T> openShellSessionWithRetry(
         gateway: Gateway,
@@ -382,6 +390,7 @@ internal object LocalhostAdbSession {
             port = port,
             connectTimeoutMs = connectTimeoutMs,
             sessionTimeoutMs = sessionTimeoutMs,
+            maxIdleMs = LOCALHOST_MAX_IDLE_MS,
             keysDir = keysDir,
             clientName = clientName,
             block = block,

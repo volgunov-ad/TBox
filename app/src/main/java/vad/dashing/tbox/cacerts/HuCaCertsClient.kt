@@ -76,7 +76,9 @@ internal object HuCaCertsClient {
             execute(command)
         }
         when (session) {
-            is LocalhostAdbSession.Result.Failed -> HuCaInstallResult.AdbFailed(session.reason.name)
+            is LocalhostAdbSession.Result.Failed -> HuCaInstallResult.AdbFailed(
+                vad.dashing.tbox.adb.LocalhostAdbReasons.message(app, session.reason, session.detail),
+            )
             is LocalhostAdbSession.Result.Ok -> HuCaInstallResult.Done(
                 HuCaCertsCodec.parseOutcome("${session.value.stdout}\n${session.value.stderr}"),
             )

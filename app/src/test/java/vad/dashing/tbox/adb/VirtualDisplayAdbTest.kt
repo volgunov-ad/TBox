@@ -113,7 +113,8 @@ class VirtualDisplayAdbTest {
         assertTrue(outcome is VirtualDisplayAdb.LaunchOutcome.Success)
         val success = outcome as VirtualDisplayAdb.LaunchOutcome.Success
         assertEquals(5, success.displayId)
-        assertEquals(listOf(true), gateway.setTcpCalls)
+        // Launch restores TCP after am start (no longer LeaveTcpEnabled).
+        assertEquals(listOf(true, false), gateway.setTcpCalls)
         assertEquals(
             listOf(
                 VirtualDisplayAdb.DUMPSYS_DISPLAY_COMMAND,

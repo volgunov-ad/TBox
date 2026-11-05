@@ -553,7 +553,13 @@ private fun LaunchApplicationFields(
                             "Найдено дисплеев: $count"
                         }
                         is vad.dashing.tbox.adb.VirtualDisplayAdb.RefreshOutcome.Failed ->
-                            "Не удалось обновить список (${outcome.reason.name})"
+                            "Не удалось обновить список (${
+                                vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
+                                    context,
+                                    outcome.reason,
+                                    outcome.detail,
+                                )
+                            })"
                     }
                     android.widget.Toast.makeText(
                         context,

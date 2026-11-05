@@ -374,6 +374,7 @@ class AutomationEngine(
         serviceReady = true
         serviceReadyElapsedMillis = elapsedMillis
         AutomationUiSnapshot.setServiceRunning(true)
+        vad.dashing.tbox.adb.LocalhostAdbBootReady.markServiceReady(elapsedMillis)
         val now = SystemClock.elapsedRealtime()
         evaluators.values.forEach { evaluator ->
             evaluator.initializeIntervals(

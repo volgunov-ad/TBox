@@ -507,9 +507,5 @@ internal object PackageAdbActions {
     private fun userFacingSessionDetail(
         reason: LocalhostAdbSession.Reason,
         detail: String,
-    ): String = when (reason) {
-        LocalhostAdbSession.Reason.AdbConnectFailed ->
-            AdbIoErrors.userFacingAdbConnectDetail(detail)
-        else -> detail
-    }
+    ): String = LocalhostAdbReasons.message(context = null, reason = reason, detail = detail)
 }

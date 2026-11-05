@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import vad.dashing.tbox.TboxRepository
+import vad.dashing.tbox.adb.LocalhostAdbReasons
 import vad.dashing.tbox.adb.LocalhostAdbSession
 
 internal enum class AppDexoptPhase {
@@ -209,11 +210,6 @@ internal object AppDexoptCompiler {
         setPhase(AppDexoptPhase.Failed, "timeout")
     }
 
-    /** Tracks whether any session of a compile run turned ADB TCP on. */
-    private class TcpHold {
-        val enabled = AtomicBoolean(false)
-    }
-
     private suspend fun queryStatus(app: Context, startCompile: Boolean, tcpEnabled: AtomicBoolean?): Check {
         val packageName = app.packageName
         val session = LocalhostAdbSession.run(
@@ -240,7 +236,8 @@ internal object AppDexoptCompiler {
             }
         }
         return when (session) {
-            is LocalhostAdbSession.Result.Failed -> Check.Failed("adb ${session.reason.name}")
+            is LocalhostAdbSession.Result.Failed ->
+                Check.Failed(LocalhostAdbReasons.message(app, session.reason, session.detail))
             is LocalhostAdbSession.Result.Ok -> session.value
         }
     }
