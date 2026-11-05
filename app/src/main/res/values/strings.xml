@@ -2835,7 +2835,7 @@
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение; двойное — закрыть (ADB force-stop, без повторного запуска).</string>
     <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>
-    <string name="widget_actions_phone_dial">Одиночное нажатие — позвонить на сохранённый номер (нужны CALL_PHONE и активный HFP).</string>
+    <string name="widget_actions_phone_dial">Одиночное нажатие — позвонить на сохранённый номер (нужны CALL_PHONE и активный HFP). Во время набора / разговора / удержания / входящего — сброс звонка.</string>
     <string name="widget_actions_automation_trigger">Одиночное или двойное нажатие — запустить автоматизации с совпадающим ID и типом нажатия. В режиме редактирования — открыть настройки виджета.</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>

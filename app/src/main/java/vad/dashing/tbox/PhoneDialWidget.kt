@@ -9,6 +9,7 @@ import android.content.res.Resources
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.ContextCompat
+import vad.dashing.tbox.phone.PhoneCallStateRepository
 
 /** Dashboard widget: one-tap HFP outgoing call via Telecom `ACTION_CALL`. */
 const val PHONE_DIAL_WIDGET_DATA_KEY = "phoneDialWidget"
@@ -49,10 +50,44 @@ fun hasCallPhonePermission(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED
 
 /**
- * Best-effort HFP Client connected check via [BluetoothAdapter.getProfileConnectionState]
- * for profile id [BLUETOOTH_PROFILE_HEADSET_CLIENT].
+ * Whether HFP Client (car role, profile [BLUETOOTH_PROFILE_HEADSET_CLIENT]) looks connected
+ * enough for `ACTION_CALL` → Telecom → `HfpClientConnectionService`.
+ *
+ * Combines three signals (any one is enough):
+ * 1. [BluetoothAdapter.getProfileConnectionState] for HEADSET_CLIENT
+ * 2. `BluetoothHeadsetClient.connectedDevices` from the bound proxy in
+ *    [vad.dashing.tbox.phone.PhoneCallStateRepository]
+ * 3. Last HEADSET_CLIENT `CONNECTION_STATE_CHANGED` broadcast (`EXTRA_STATE`)
+ *
+ * On A9/A10 OEM stacks (nFore), (1) alone can stay DISCONNECTED while the stock dialer and
+ * Telecom HFP path are Connected — that was the false «Телефон не подключён» toast (S8).
+ * Bonded ≠ connected; ACL/`BluetoothHeadset` (profile 1) is not used here.
  */
-fun isHfpClientConnected(): Boolean {
+fun isHfpClientConnected(): Boolean =
+    resolveHfpClientConnected(
+        adapterProfileConnected = readAdapterHfpProfileConnected(),
+        headsetClientConnectedDevices = PhoneCallStateRepository.connectedHeadsetClientDeviceCount(),
+        connectionBroadcastConnected = PhoneCallStateRepository.lastHeadsetClientConnectionBroadcast(),
+    )
+
+/**
+ * Pure HFP-connected decision used by [isHfpClientConnected] and the call-state observer.
+ * Prefer the same inputs Telecom's HFP Client path effectively needs: a live HEADSET_CLIENT
+ * device (proxy / broadcast), not merely a bonded phone.
+ */
+internal fun resolveHfpClientConnected(
+    adapterProfileConnected: Boolean,
+    headsetClientConnectedDevices: Int,
+    connectionBroadcastConnected: Boolean?,
+): Boolean {
+    if (adapterProfileConnected) return true
+    if (headsetClientConnectedDevices > 0) return true
+    if (connectionBroadcastConnected == true) return true
+    return false
+}
+
+/** Adapter-only HEADSET_CLIENT profile state (may be stale on OEM Bluetooth). */
+internal fun readAdapterHfpProfileConnected(): Boolean {
     val adapter = runCatching { BluetoothAdapter.getDefaultAdapter() }.getOrNull() ?: return false
     return try {
         adapter.isEnabled &&

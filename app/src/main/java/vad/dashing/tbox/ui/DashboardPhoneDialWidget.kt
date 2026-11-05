@@ -33,6 +33,7 @@ import vad.dashing.tbox.hasCallPhonePermission
 import vad.dashing.tbox.isHfpClientConnected
 import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetTitlePosition
+import vad.dashing.tbox.phone.PhoneCallControlResult
 import vad.dashing.tbox.phone.PhoneCallState
 import vad.dashing.tbox.phone.PhoneCallStateRepository
 import vad.dashing.tbox.phone.PhoneDialCallActivity
@@ -72,7 +73,25 @@ internal fun DashboardPhoneDialWidgetItem(
 
     // Permission and confirm UI live in PhoneDialCallActivity: on floating panels this tile is
     // composed in a Service context (no ActivityResultRegistry, no Dialog window token).
+    // During dialing / active / held / incoming, tap ends the call (hangup / reject) instead of
+    // placing another outgoing call.
     fun requestCall() {
+        when (callSnap.callState) {
+            PhoneCallState.DIALING,
+            PhoneCallState.ACTIVE,
+            PhoneCallState.HELD,
+            PhoneCallState.INCOMING,
+            -> {
+                when (val hangup = PhoneCallStateRepository.hangupCall()) {
+                    is PhoneCallControlResult.Success -> Unit
+                    is PhoneCallControlResult.Failure -> showToast(hangup.message)
+                }
+                return
+            }
+            PhoneCallState.IDLE,
+            PhoneCallState.UNKNOWN,
+            -> Unit
+        }
         if (dialNumber.isEmpty()) {
             showToast(resources.getString(R.string.widget_phone_dial_empty_number))
             return
