@@ -20,6 +20,7 @@ import vad.dashing.tbox.TboxRepository
  * without toggling. Otherwise enable TCP via [HuAdbControl], wait for the port
  * (longer after `adbd` restart), run shell commands, disconnect, then optionally
  * restore previous TCP state — but only when this session actually turned TCP on.
+ * If props say TCP is on but the port stays closed, `adbd` is restarted once (props unchanged).
  *
  * Shared by [PermissionsAutoGrant], [WriteSecureSettingsAutoGrant], [MockLocationAutoGrant],
  * [VirtualDisplayAdb],
@@ -126,21 +127,23 @@ internal object LocalhostAdbSession {
                     onTcpEnabled()
                 }
 
-                val waitMs = if (enabledByUs) {
+                var waitMs = if (enabledByUs) {
                     maxOf(readyTimeoutMs, TCP_READY_AFTER_ENABLE_TIMEOUT_MS)
                 } else {
                     readyTimeoutMs
                 }
-                val ready = waitUntilTcpReady(
-                    host = host,
-                    port = port,
-                    readyTimeoutMs = waitMs,
-                    probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
-                    probeIntervalMs = TCP_PROBE_INTERVAL_MS,
-                    isOpen = gateway::isTcpPortOpen,
-                    nowMs = nowMs,
-                    delayMs = delayFn,
-                )
+                var ready = awaitTcpPort(gateway, host, port, waitMs, nowMs, delayFn)
+                if (!ready && !enabledByUs && restartAdbdIfTcpPropsOn(gateway, host, port)) {
+                    waitMs += TCP_READY_AFTER_ENABLE_TIMEOUT_MS
+                    ready = awaitTcpPort(
+                        gateway,
+                        host,
+                        port,
+                        TCP_READY_AFTER_ENABLE_TIMEOUT_MS,
+                        nowMs,
+                        delayFn,
+                    )
+                }
                 if (!ready) {
                     TboxRepository.addLog(
                         level = "ERROR",
@@ -213,6 +216,10 @@ internal object LocalhostAdbSession {
         }
     }
 
+    /** Explicit TCP toggles outside a session: never restart adbd under a running shell. */
+    suspend fun <T> withSessionLock(block: suspend () -> T): T =
+        withContext(Dispatchers.IO) { mutex.withLock { block() } }
+
     private suspend fun restoreTcpOffUnlocked(gateway: Gateway) {
         // ctl.restart adbd drops live tab/ephemeral clients — expected EOF.
         // NonCancellable: a cancelled caller must not leave persist TCP on.
@@ -249,6 +256,42 @@ internal object LocalhostAdbSession {
             if (remaining <= 0L) return false
             delayMs(minOf(probeIntervalMs, remaining))
         }
+    }
+
+    private suspend fun awaitTcpPort(
+        gateway: Gateway,
+        host: String,
+        port: Int,
+        readyTimeoutMs: Long,
+        nowMs: () -> Long,
+        delayMs: suspend (Long) -> Unit,
+    ): Boolean = waitUntilTcpReady(
+        host = host,
+        port = port,
+        readyTimeoutMs = readyTimeoutMs,
+        probeTimeoutMs = TCP_PROBE_TIMEOUT_MS,
+        probeIntervalMs = TCP_PROBE_INTERVAL_MS,
+        isOpen = gateway::isTcpPortOpen,
+        nowMs = nowMs,
+        delayMs = delayMs,
+    )
+
+    /**
+     * Props say TCP is on, yet nothing listens on the port: adbd is stopped (A10 stops it when a
+     * phone cable takes the USB port) or not up yet after boot. `ctl.restart adbd` starts it
+     * again; the props stay as found, so the session does not own TCP and never restores it.
+     */
+    private suspend fun restartAdbdIfTcpPropsOn(gateway: Gateway, host: String, port: Int): Boolean {
+        gateway.refreshHuAdb()
+        if (!gateway.isTcpEnabled()) return false
+        TboxRepository.addLog(
+            level = "WARN",
+            tag = TAG,
+            message = "ADB TCP props on but $host:$port closed; restarting adbd",
+        )
+        gateway.setTcpEnabled(true)
+        gateway.refreshHuAdb()
+        return true
     }
 
     /**
