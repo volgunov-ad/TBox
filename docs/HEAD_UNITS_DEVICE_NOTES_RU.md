@@ -467,7 +467,7 @@ adb shell rm /sdcard/autorun.sh /sdcard/autorun.flag
 adb shell setprop vendor.autorun.sdcard.logfile ''
 ```
 
-Скрипты должны быть с **LF** (см. §2). Повторный запуск в тот же файл: сначала `rm` старого `autorun.sh`/флага. Возможная интеграция в TBox Monitor: `BOOT_COMPLETED` → `setprop` тем же способом — даёт root-скрипт на каждом старте без записи в `/system`.
+Скрипты должны быть с **LF** (см. §2). Повторный запуск в тот же файл: сначала `rm` старого `autorun.sh`/флага. Возможная интеграция в TBox Monitor: `BOOT_COMPLETED` → `setprop` тем же способом — даёт root-скрипт на каждом старте без записи в `/system`. Тот же примитив 6 ноября 2026 запускал клиент камер `qcarcam_test`: сокет AIS пускает только root — [CAMERAS_A9_RU.md](CAMERAS_A9_RU.md).
 
 ### 10.2. Verified Boot на A9 (UFS, слоты A/B, активный `_b`)
 

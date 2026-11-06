@@ -106,6 +106,8 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/USB_AUDIO_A10_SIMPLE_RU.md](docs/USB_AUDIO_A10_SIMPLE_RU.md) | То же самое простыми словами: Блокнот + копировать/вставить, без диагностики |
 | [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §5.2 | «Файрвол ГУ» (`:fwunlock`): постоянный белый список сети для приложений на A10 (файрвол Adayo), рантайм-фикс в TBox Monitor — страховка |
 | [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8 | «AA/CarPlay окна ГУ» (`:winpatch`): постоянная установка/откат универсальных патченных AndroidAuto p6 и CarPlayView p6 (и встроенных стоковых резервов) на всех прошивках A10 |
+| [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md) | Камеры A9: чистый кадр `ais_server`, XML-окна `qcarcam_test`, запрет сокета (только root) |
+| [docs/CAMD_RU.md](docs/CAMD_RU.md) | Приложение «Камеры ГУ» (`:camd`): описание, план, что сделано и чего нет |
 | [AGENTS.md](AGENTS.md) (`:camview`) | «Тест камер ГУ (Mengbo)» (`:camview`): тестовое приложение превью камер AVM/OMS/DMS через Mengbo SDK и `*_sharecamera` на A9 |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |

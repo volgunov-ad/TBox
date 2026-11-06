@@ -27,6 +27,7 @@ This is an Android application (**TBox Monitor** for Jetour Dashing, v1.1.0). Th
 | **Dashboard / widgets** | `ui/Dashboard*.kt`, `WidgetConfigCodec.kt` | [docs/PANELS_AND_WIDGETS_RU.md](docs/PANELS_AND_WIDGETS_RU.md) |
 | **Boot / autostart** | `BootCompleteReceiver`, `MainScreenBootOpen.kt`, `BackgroundService` | [docs/BOOT_AUTOSTART_DEVICE_RU.md](docs/BOOT_AUTOSTART_DEVICE_RU.md) |
 | **Wi-Fi SoftAP → ESP32 router** | (firmware research, `app_process` helper) | [docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md](docs/WIFI_SOFTAP_ESP32_ROUTER_RU.md) (A9), [docs/WIFI_SOFTAP_A10_RU.md](docs/WIFI_SOFTAP_A10_RU.md) (A10) |
+| **A9 camera preview (AIS)** | `:camview` (processed `*_sharecamera`); `:camd` (clean qcarcam window) | [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md) — `ais_server` sockets, qcarcam XML windows, root-only connect, inputs 0/1/3/4/5/8/9 |
 
 Trips and refuels are tightly coupled: filtered fuel % and calibrated liters are computed **only during an active trip** (`CanFramesProcess` gate); refuel records are created inside `BackgroundService.applyActiveTripFuelStep`.
 
@@ -70,6 +71,7 @@ Debug and release APKs are signed with the repo keystore `keystore/debug.keystor
 - `tools/hu_perf/` — HU startup / CPU / window-switch benchmark over ADB (reboot, logs, `/proc/stat` sampling, `am start -W` + BACK cycles, `gfxinfo`) and side-by-side summary (`hu_perf_analyze.py`, stdlib). Used for before/after `cmd package compile -m speed`. Method and A9 results: [docs/HU_PERF_TESTS_RU.md](docs/HU_PERF_TESTS_RU.md). `hu_boot_markers.ps1` — one reboot with boot markers (`enable_screen`, `sf_stop_bootanim`, launcher/TBox process start, `BOOT TIMEOUT`) in seconds from kernel start; used for the SystemUI-off A/B in [docs/SYSTEMUI_A9_DISABLE_RU.md](docs/SYSTEMUI_A9_DISABLE_RU.md). `hu_proc_cpu.ps1` (+ on-device `hu_proc_cpu.sh`) — per-process snapshot from `/proc/<pid>/stat` (start time, cumulative CPU, RSS); `hu_boot_ab.ps1` — one A/B boot run: reboot, snapshots at 45/120 s, `MemAvailable`, boot markers, `am_proc_start` reasons and the `BOOT_COMPLETED` receiver queue. Stock-package A/B on A9: [docs/BOOT_AUTOSTART_DEVICE_RU.md](docs/BOOT_AUTOSTART_DEVICE_RU.md) §5.
 - `tools/blank_wallpaper/` (`build.ps1`, `BlankWallpaper.apk`, `ИНСТРУКЦИЯ.md`) — Gradle-free build (aapt2 + javac + d8 + apksigner, repo keystore) of the `directBootAware` blank live wallpaper `vad.dashing.blankwallpaper` that keeps A9 boot fast with SystemUI hidden. The committed APK is the bench-tested binary. See [docs/SYSTEMUI_A9_DISABLE_RU.md](docs/SYSTEMUI_A9_DISABLE_RU.md).
 - `tools/usb_mount/` (`build.ps1`, `UsbMount.apk`, `ИНСТРУКЦИЯ.md`) — Gradle-free build (aapt + javac + d8 + apksigner, repo keystore) of `vad.dashing.usbmount`. With SystemUI hidden, vold never leaves its default secure-keyguard state and will not scan USB disks (NTFS via `ntfs-3g`, exFAT via `mount.exfat`). On `BOOT_COMPLETED` the receiver arms `mb_daemon` (`/sdcard/autorun.sh`) to call `setLockScreenShown(false)` and `vold.onSecureKeyguardStateChanged(false)` as root. The committed APK is the bench-tested binary. See [docs/SYSTEMUI_A9_DISABLE_RU.md](docs/SYSTEMUI_A9_DISABLE_RU.md).
+- `tools/dcl_install/` (`build.ps1`, `DclInstall.apk`, `ИНСТРУКЦИЯ.md`) — Gradle-free on-HU installer `vad.dashing.dclinstall` for A9: installs a chosen DCL APK, grants its special permissions, hides SystemUI and `com.wt.launcher3` (`pm enable` then `pm hide`), installs UsbMount, sets its own directBootAware wallpaper (bundled picture, black, or a user image in device-protected storage) via `mb_daemon` (no livepicker tap), and optionally hides iottube, iFlytek, `com.mengbo.speechclient`, and the electronic manual. Reboots at the end. See [docs/SYSTEMUI_A9_DISABLE_RU.md](docs/SYSTEMUI_A9_DISABLE_RU.md).
 - `tools/hu_rescue/` (`Запуск.cmd`, `Проверка без записи.cmd`, `start.ps1`, `hu_rescue.ps1`, `ИНСТРУКЦИЯ.md`, `gpt_2026-10-20/`, `gpt_2026-10-14/`, `platform-tools/`) — A10 HU recovery over the debug UART (Windows PowerShell 5.1, auto-detects CP210x/CH340/CH9102/FT232/PL2303 at 921600): boot-stage watcher, diagnostics, ADB/Wi-Fi/USB recovery, LK fastboot, GPT repair (move `userdata`, rebuild one copy from the other, reference tables from 20.10 and 14.10 dumps), partition write from a USB stick, `-DryRun`. GPT is rebuilt from the tables on disk, as in `:dataresize`. See [tools/hu_rescue/ИНСТРУКЦИЯ.md](tools/hu_rescue/ИНСТРУКЦИЯ.md) and [docs/HEAD_UNITS_DEVICE_NOTES_RU.md](docs/HEAD_UNITS_DEVICE_NOTES_RU.md) §2.1, §6.4–6.5.
 - `tools/winpatch/` (`build_p6.py`, `src/`, `patches/`, `certs/`, `scripts/`) — reproducible builder, Java helper sources (`AAWindowPatch.java`, `WindowSurface.java`), smali overlays, and AOSP platform test-key certificates for the patched `AndroidAuto_p6.apk` and `CarPlayView_p6.apk` bundled in `:winpatch`. See [docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md](docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md) §7.8, §8.
 - `tools/tbox_external_api_pair.py` — pair with External HTTP API and smoke-check (`/v1/health`, catalog+`voiceAliasesRu`, signals, automations, safe `actions/invoke`, automations/run probe). Stdlib only. Default host `192.168.1.128:8765`. Optional `--run-automation <id|name>` for real RunNow. Manual token: Settings → API → «Создать токен», then put `accessToken` into `~/.tbox_external_api_token.json` and use `--check-only`. See [docs/EXTERNAL_API_USER_GUIDE_RU.md](docs/EXTERNAL_API_USER_GUIDE_RU.md).
@@ -137,10 +139,19 @@ Separate app **AA/CarPlay окна ГУ** (`vad.dashing.winpatch`) for A10 HUs: 
 
 ### Mengbo Camera Preview Test APK (`:camview`)
 
-Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing.camview`, `arm64-v8a`) for A9 HUs: live preview and pixel format decoding (`ARGB_8888`, `RGB_565`, `UYVY`, `YUYV`, `NV12`) from the Mengbo native SDKs (`MBAvm`, `MBOms`, `MBDms`) and direct shared-memory files (`/early_services/earlydata/*_sharecamera`), with AVM view switching (`nativeSendViewCtrol`) and a draggable/resizable in-app or system overlay window (`TYPE_APPLICATION_OVERLAY`).
+Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing.camview`, `arm64-v8a`) for A9 HUs: live preview and pixel format decoding (`ARGB_8888`, `RGB_565`, `UYVY`, `YUYV`, `NV12`) from the Mengbo native SDKs (`MBAvm`, `MBOms`, `MBDms`) and direct shared-memory files (`/early_services/earlydata/*_sharecamera`), with AVM view switching (`nativeSendViewCtrol`) and a draggable/resizable in-app or system overlay window (`TYPE_APPLICATION_OVERLAY`). The clean sensor frames (AIS sockets, qcarcam XML, root-only connect) are [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md); `:camview` reads the processed share buffer, not `ais_server`.
 
 ```
 ./gradlew :camview:assembleDebug
+```
+
+### Camera window app (`:camd`)
+
+Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). Skeleton so far: one qcarcam window via a root daemon, local API `127.0.0.1:8766`. Recording, several windows, and the TBox/DCL clients are not built.
+
+```
+./gradlew :camd:testDebugUnitTest
+./gradlew :camd:assembleDebug
 ```
 
 ### Git branches
