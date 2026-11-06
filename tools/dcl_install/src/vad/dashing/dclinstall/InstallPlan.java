@@ -140,8 +140,10 @@ final class InstallPlan {
     }
 
     private static void appops(StringBuilder sh, String op) {
-        sh.append("appops set ").append(DCL_PACKAGE).append(' ').append(op).append(" allow || fail appops_");
+        sh.append("appops set --user 0 ").append(DCL_PACKAGE).append(' ').append(op).append(" allow || fail appops_");
         sh.append(op).append("\n");
+        sh.append("appops get --user 0 ").append(DCL_PACKAGE).append(' ').append(op);
+        sh.append(" | grep -F allow >/dev/null || fail appops_").append(op).append("\n");
     }
 
     private static void hideIf(StringBuilder sh, boolean hide, String pkg) {

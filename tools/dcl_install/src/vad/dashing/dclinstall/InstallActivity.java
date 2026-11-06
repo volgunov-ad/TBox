@@ -65,10 +65,10 @@ public class InstallActivity extends Activity {
         column.setPadding(pad, pad, pad, pad);
         column.setBackgroundColor(0xFF121417);
 
-        TextView title = text("Установка DCL для A9", 26, 0xFFF4F6F8);
+        TextView title = text("Установка DCL для A9", 32, 0xFFF4F6F8);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         column.addView(title);
-        status = text("", 16, 0xFFB7C0C8);
+        status = text("", 22, 0xFFB7C0C8);
         status.setPadding(0, dp(6), 0, dp(8));
         column.addView(status);
         statusList = new LinearLayout(this);
@@ -83,7 +83,7 @@ public class InstallActivity extends Activity {
             }
         });
         column.addView(pick);
-        apkLabel = text("APK не выбран", 18, 0xFFF4F6F8);
+        apkLabel = text("APK не выбран", 22, 0xFFF4F6F8);
         apkLabel.setPadding(0, dp(8), 0, dp(8));
         column.addView(apkLabel);
 
@@ -122,7 +122,7 @@ public class InstallActivity extends Activity {
             }
         });
         column.addView(pickImage);
-        wallpaperNote = text("", 16, 0xFFE0A045);
+        wallpaperNote = text("", 22, 0xFFE0A045);
         wallpaperNote.setPadding(0, dp(4), 0, dp(8));
         column.addView(wallpaperNote);
 
@@ -168,7 +168,7 @@ public class InstallActivity extends Activity {
         installParams.topMargin = dp(12);
         column.addView(install, installParams);
 
-        log = text("", 14, 0xFFD5DDE4);
+        log = text("", 20, 0xFFD5DDE4);
         log.setTypeface(Typeface.MONOSPACE);
         log.setPadding(0, dp(12), 0, 0);
         column.addView(log);
@@ -226,7 +226,7 @@ public class InstallActivity extends Activity {
         }
         String summaryText = "Для работы DCL: " + done + " из " + required;
         if (unknown > 0) summaryText = summaryText + ", ещё проверяется " + unknown;
-        TextView summary = text(summaryText, 18, 0xFFF4F6F8);
+        TextView summary = text(summaryText, 24, 0xFFF4F6F8);
         summary.setTypeface(Typeface.DEFAULT_BOLD);
         summary.setPadding(0, dp(8), 0, dp(4));
         statusList.addView(summary);
@@ -234,7 +234,7 @@ public class InstallActivity extends Activity {
         for (int i = 0; i < items.size(); i++) {
             DclStatus item = items.get(i);
             if (item.optional && !optionalHeader) {
-                TextView header = text("По желанию", 18, 0xFFF4F6F8);
+                TextView header = text("По желанию", 24, 0xFFF4F6F8);
                 header.setTypeface(Typeface.DEFAULT_BOLD);
                 header.setPadding(0, dp(8), 0, dp(4));
                 statusList.addView(header);
@@ -246,7 +246,7 @@ public class InstallActivity extends Activity {
             String mark = item.done ? "● " : "○ ";
             String line = mark + item.title;
             if (item.detail != null && item.detail.length() > 0) line = line + " — " + item.detail;
-            TextView row = text(line, 16, color);
+            TextView row = text(line, 22, color);
             row.setPadding(0, dp(2), 0, dp(2));
             statusList.addView(row);
         }
@@ -594,14 +594,14 @@ public class InstallActivity extends Activity {
     }
 
     private TextView heading(String value) {
-        TextView view = text(value, 20, 0xFFF4F6F8);
+        TextView view = text(value, 26, 0xFFF4F6F8);
         view.setTypeface(Typeface.DEFAULT_BOLD);
         view.setPadding(0, dp(10), 0, dp(4));
         return view;
     }
 
     private TextView note(String value) {
-        TextView view = text(value, 15, 0xFFB7C0C8);
+        TextView view = text(value, 22, 0xFFB7C0C8);
         view.setPadding(0, 0, 0, dp(6));
         return view;
     }
@@ -617,7 +617,7 @@ public class InstallActivity extends Activity {
     private Button button(String label) {
         Button view = new Button(this);
         view.setText(label);
-        view.setTextSize(18);
+        view.setTextSize(24);
         view.setAllCaps(false);
         return view;
     }
@@ -626,7 +626,7 @@ public class InstallActivity extends Activity {
         RadioButton view = new RadioButton(this);
         view.setText(label);
         view.setTextColor(0xFFF4F6F8);
-        view.setTextSize(18);
+        view.setTextSize(24);
         return view;
     }
 
@@ -634,7 +634,7 @@ public class InstallActivity extends Activity {
         CheckBox view = new CheckBox(this);
         view.setText(label);
         view.setTextColor(0xFFF4F6F8);
-        view.setTextSize(18);
+        view.setTextSize(24);
         view.setChecked(checked);
         return view;
     }

@@ -48,7 +48,7 @@ public class ApkPickerActivity extends ListActivity {
         root.setPadding(pad, pad, pad, pad);
         title = new TextView(this);
         title.setTextColor(0xFFF4F6F8);
-        title.setTextSize(22);
+        title.setTextSize(28);
         title.setPadding(0, 0, 0, dp(12));
         root.addView(title);
         ListView list = new ListView(this);
@@ -156,7 +156,7 @@ public class ApkPickerActivity extends ListActivity {
                 view.setBackgroundColor(0xFF121417);
                 TextView text = (TextView) view.findViewById(android.R.id.text1);
                 text.setTextColor(0xFFF4F6F8);
-                text.setTextSize(20);
+                text.setTextSize(26);
                 text.setPadding(dp(8), dp(14), dp(8), dp(14));
                 return view;
             }
