@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class InstallActivity extends Activity {
     private static final int PICK_APK = 42;
     private static final int PICK_IMAGE = 43;
-    private static final long TIMEOUT_MS = 5 * 60 * 1000L;
+    private static final long TIMEOUT_MS = 15 * 60 * 1000L;
 
     private TextView status;
     private LinearLayout statusList;
@@ -52,6 +52,8 @@ public class InstallActivity extends Activity {
     private Button grantPermissions;
     private Button hideSelected;
     private Button changeWallpaper;
+    private Button compileDcl;
+    private Button restoreStock;
     private TextView log;
     private String apkPath;
     private String customImagePath;
@@ -203,12 +205,33 @@ public class InstallActivity extends Activity {
             }
         });
         column.addView(changeWallpaper, extraParams);
+        compileDcl = button("Скомпилировать DCL");
+        compileDcl.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onCompileClicked();
+            }
+        });
+        column.addView(compileDcl, extraParams);
+        restoreStock = button("Удалить DCL и вернуть штатное");
+        restoreStock.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onRestoreClicked();
+            }
+        });
+        column.addView(restoreStock, extraParams);
         column.addView(note(
                 "Эти кнопки нужны, если DCL уже установлен. "
                         + "Разрешения применяются сразу. "
                         + "Картинка обоев берётся из текущего выбора: по умолчанию, чёрный фон или свой файл. "
+                        + "Компиляция собирает код лаунчера целиком и занимает несколько минут. "
+                        + "На этом ГУ сама она не запускается, поэтому после установки лаунчер тормозит. "
                         + "Скрытие останавливает постоянные пакеты после перезагрузки. "
-                        + "Штатный лаунчер скрывается всегда, остальные пакеты — по галочкам."));
+                        + "Штатный лаунчер скрывается всегда, остальные пакеты — по галочкам. "
+                        + "Возврат удаляет DCL, программу флешек и старые пустые обои, "
+                        + "показывает штатный лаунчер, System UI, голос, IoT Tube и руководство "
+                        + "и ставит штатные обои. Сама программа установки остаётся."));
 
         log = text("", 20, 0xFFD5DDE4);
         log.setTypeface(Typeface.MONOSPACE);
@@ -323,6 +346,7 @@ public class InstallActivity extends Activity {
         if (grantPermissions != null) grantPermissions.setEnabled(false);
         if (hideSelected != null) hideSelected.setEnabled(false);
         if (changeWallpaper != null) changeWallpaper.setEnabled(false);
+        if (compileDcl != null) compileDcl.setEnabled(false);
         install.setText("Проверка APK…");
         final String path = apkPath;
         new Thread(new Runnable() {
@@ -391,6 +415,61 @@ public class InstallActivity extends Activity {
         setBusy(true);
         hideSelected.setText("Скрытие… ГУ перезагрузится");
         startRoot(currentPlan(false).toHideScript());
+    }
+
+    private void onCompileClicked() {
+        if (running || !isA9()) return;
+        if (installedDcl() == null) {
+            log.setText("DCL ещё не установлен.");
+            return;
+        }
+        expectReboot = false;
+        setBusy(true);
+        compileDcl.setText("Компиляция… несколько минут");
+        startRoot(currentPlan(false).toCompileScript());
+    }
+
+    private void onRestoreClicked() {
+        if (running || !isA9()) return;
+        new AlertDialog.Builder(this)
+                .setTitle("Вернуть штатное состояние")
+                .setMessage("Удалить DCL, программу флешек и пустые обои? "
+                        + "Штатный лаунчер, System UI, голосовой помощник, IoT Tube и руководство "
+                        + "снова появятся. Головное устройство перезагрузится. "
+                        + "TBox Monitor и эта программа установки останутся.")
+                .setPositiveButton("Удалить и вернуть", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface dialog, int which) {
+                        expectReboot = true;
+                        setBusy(true);
+                        restoreStock.setText("Возврат… ГУ перезагрузится");
+                        log.setText("Подготовка…");
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    File dir = new File(InstallPlan.PAYLOAD_DIR);
+                                    if (!dir.exists() && !dir.mkdirs()) {
+                                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+                                    }
+                                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
+                                    arm(currentPlan(false).toRestoreScript());
+                                    poll();
+                                } catch (Exception e) {
+                                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            failUi(message);
+                                        }
+                                    });
+                                }
+                            }
+                        }, "dcl-restore").start();
+                    }
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
     }
 
     private void onWallpaperClicked() {
@@ -566,7 +645,7 @@ public class InstallActivity extends Activity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                failUi("mb_daemon не ответил за 5 минут. Журнал: " + InstallPlan.LOG_FILE);
+                failUi("Команда не ответила за 15 минут. Журнал: " + InstallPlan.LOG_FILE);
             }
         });
     }
@@ -585,6 +664,8 @@ public class InstallActivity extends Activity {
             if (grantPermissions != null) grantPermissions.setEnabled(false);
             if (hideSelected != null) hideSelected.setEnabled(false);
             if (changeWallpaper != null) changeWallpaper.setEnabled(false);
+            if (compileDcl != null) compileDcl.setEnabled(false);
+            if (restoreStock != null) restoreStock.setEnabled(false);
             return;
         }
         status.setTextColor(0xFFB7C0C8);
@@ -607,6 +688,14 @@ public class InstallActivity extends Activity {
         if (changeWallpaper != null) {
             changeWallpaper.setEnabled(!running && wallpaperChosen());
             changeWallpaper.setText("Поменять картинку обоев");
+        }
+        if (compileDcl != null) {
+            compileDcl.setEnabled(!running && installed != null);
+            compileDcl.setText("Скомпилировать DCL");
+        }
+        if (restoreStock != null) {
+            restoreStock.setEnabled(!running);
+            restoreStock.setText("Удалить DCL и вернуть штатное");
         }
     }
 

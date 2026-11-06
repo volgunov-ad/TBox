@@ -9,11 +9,12 @@ import java.lang.reflect.Method;
 public class SetWallpaper {
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.out.println("FAIL usage: SetWallpaper pkg/cls");
+            System.out.println("FAIL usage: SetWallpaper pkg/cls | default");
             System.exit(1);
         }
-        ComponentName component = ComponentName.unflattenFromString(args[0]);
-        if (component == null) {
+        boolean useDefault = "default".equals(args[0]);
+        ComponentName component = useDefault ? null : ComponentName.unflattenFromString(args[0]);
+        if (!useDefault && component == null) {
             System.out.println("FAIL bad component " + args[0]);
             System.exit(1);
         }
@@ -27,7 +28,7 @@ public class SetWallpaper {
             Class<?> stub = Class.forName("android.app.IWallpaperManager$Stub");
             Object wallpaper = stub.getMethod("asInterface", IBinder.class).invoke(null, binder);
             invoke(wallpaper, component);
-            System.out.println("OK " + component.flattenToString());
+            System.out.println(useDefault ? "OK default" : "OK " + component.flattenToString());
             System.exit(0);
         } catch (Throwable t) {
             t.printStackTrace(System.out);

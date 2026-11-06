@@ -75,6 +75,7 @@ final class InstallPlan {
         appendHides(sh);
         sh.append("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | grep -F ");
         sh.append(q(DCL_PACKAGE)).append(" >/dev/null || fail home_check\n");
+        appendCompile(sh);
         finishScript(sh, true);
         return sh.toString();
     }
@@ -103,6 +104,55 @@ final class InstallPlan {
         sh.append("dumpsys wallpaper | grep -F ").append(q(wallpaperComponent())).append(" >/dev/null || fail wallpaper_check\n");
         finishScript(sh, false);
         return sh.toString();
+    }
+
+    String toCompileScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        appendCompile(sh);
+        sh.append("am force-stop ").append(DCL_PACKAGE).append("\n");
+        sh.append("am start -n ").append(q(DCL_HOME)).append(" || echo WARN start\n");
+        finishScript(sh, false);
+        return sh.toString();
+    }
+
+    /** Undo installer changes and return the head unit to the stock launcher. */
+    String toRestoreScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("echo STEP restore\n");
+        sh.append("remove_secure() {\n");
+        sh.append("  cur=`settings get secure \"$1\"`\n");
+        sh.append("  if [ -z \"$cur\" ] || [ \"$cur\" = null ]; then return; fi\n");
+        sh.append("  out=\"\"\n");
+        sh.append("  IFS=:\n");
+        sh.append("  for part in $cur; do\n");
+        sh.append("    if [ \"$part\" = \"$2\" ]; then continue; fi\n");
+        sh.append("    if [ -z \"$out\" ]; then out=\"$part\"; else out=\"$out:$part\"; fi\n");
+        sh.append("  done\n");
+        sh.append("  unset IFS\n");
+        sh.append("  settings put secure \"$1\" \"$out\" || fail \"put $1\"\n");
+        sh.append("}\n");
+        sh.append("remove_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
+        sh.append("remove_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
+        unhide(sh, SYSTEMUI);
+        unhide(sh, LAUNCHER);
+        unhide(sh, IOTTUBE);
+        unhide(sh, VOICE);
+        unhide(sh, SPEECH_CLIENT);
+        unhide(sh, MANUAL);
+        sh.append("cmd package set-home-activity ").append(q("com.wt.launcher3/.MainActivity")).append(" || echo WARN home\n");
+        sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
+        sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
+        sh.append("pm uninstall ").append(DCL_PACKAGE).append(" || echo WARN uninstall_dcl\n");
+        sh.append("pm uninstall vad.dashing.usbmount || echo WARN uninstall_usb\n");
+        sh.append("pm uninstall vad.dashing.blankwallpaper || echo WARN uninstall_blank\n");
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    private static void unhide(StringBuilder sh, String pkg) {
+        sh.append("pm unhide ").append(pkg).append(" || echo WARN unhide_").append(pkg).append("\n");
+        sh.append("pm enable ").append(pkg).append(" || echo WARN enable_").append(pkg).append("\n");
     }
 
     private StringBuilder scriptHeader() {
@@ -154,6 +204,11 @@ final class InstallPlan {
         sh.append("append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
         sh.append("append_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
         sh.append("settings put secure accessibility_enabled 1 || fail accessibility\n");
+    }
+
+    private void appendCompile(StringBuilder sh) {
+        sh.append("echo STEP compile\n");
+        sh.append("cmd package compile -m speed -f ").append(DCL_PACKAGE).append(" || fail compile\n");
     }
 
     private void appendHides(StringBuilder sh) {
