@@ -16,6 +16,16 @@ import java.io.FileInputStream;
  * so this service has to draw before the user is unlocked.
  */
 public class BootWallpaperService extends WallpaperService {
+    private static final java.util.List<BootEngine> ENGINES = new java.util.ArrayList<BootEngine>();
+
+    static void reload() {
+        synchronized (ENGINES) {
+            for (int i = 0; i < ENGINES.size(); i++) {
+                ENGINES.get(i).reload();
+            }
+        }
+    }
+
     @Override
     public Engine onCreateEngine() {
         return new BootEngine();
@@ -30,6 +40,9 @@ public class BootWallpaperService extends WallpaperService {
             super.onCreate(surfaceHolder);
             setTouchEventsEnabled(false);
             setOffsetNotificationsEnabled(false);
+            synchronized (ENGINES) {
+                ENGINES.add(this);
+            }
             bitmap = load();
         }
 
@@ -47,11 +60,22 @@ public class BootWallpaperService extends WallpaperService {
 
         @Override
         public void onDestroy() {
+            synchronized (ENGINES) {
+                ENGINES.remove(this);
+            }
             if (bitmap != null) {
                 bitmap.recycle();
                 bitmap = null;
             }
             super.onDestroy();
+        }
+
+        private void reload() {
+            Bitmap next = load();
+            Bitmap previous = bitmap;
+            bitmap = next;
+            if (previous != null && previous != next) previous.recycle();
+            draw(getSurfaceHolder());
         }
 
         private void draw(SurfaceHolder holder) {

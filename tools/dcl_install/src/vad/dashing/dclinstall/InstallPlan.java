@@ -55,7 +55,57 @@ final class InstallPlan {
     }
 
     String toScript() {
-        String wallpaper = wallpaperComponent();
+        StringBuilder sh = scriptHeader();
+        if (uninstallExisting) {
+            sh.append("echo STEP uninstall\n");
+            sh.append("pm uninstall ").append(DCL_PACKAGE).append(" || fail uninstall\n");
+        }
+        sh.append("echo STEP install_dcl\n");
+        sh.append("pm install -r -d -g -t ").append(q(dclApkPath)).append(" || fail install_dcl\n");
+        appendGrants(sh);
+        sh.append("echo STEP home\n");
+        sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
+        sh.append("echo STEP usbmount\n");
+        sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
+        sh.append("echo STEP wallpaper\n");
+        sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
+        sh.append(" app_process /system/bin SetWallpaper ").append(q(wallpaperComponent())).append(" || fail wallpaper\n");
+        sh.append("sleep 1\n");
+        sh.append("dumpsys wallpaper | grep -F ").append(q(wallpaperComponent())).append(" >/dev/null || fail wallpaper_check\n");
+        appendHides(sh);
+        sh.append("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | grep -F ");
+        sh.append(q(DCL_PACKAGE)).append(" >/dev/null || fail home_check\n");
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    String toGrantScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        appendGrants(sh);
+        finishScript(sh, false);
+        return sh.toString();
+    }
+
+    String toHideScript() {
+        StringBuilder sh = scriptHeader();
+        appendHides(sh);
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    String toWallpaperScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("echo STEP wallpaper\n");
+        sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
+        sh.append(" app_process /system/bin SetWallpaper ").append(q(wallpaperComponent())).append(" || fail wallpaper\n");
+        sh.append("sleep 1\n");
+        sh.append("dumpsys wallpaper | grep -F ").append(q(wallpaperComponent())).append(" >/dev/null || fail wallpaper_check\n");
+        finishScript(sh, false);
+        return sh.toString();
+    }
+
+    private StringBuilder scriptHeader() {
         StringBuilder sh = new StringBuilder();
         sh.append("#!/system/bin/sh\n");
         sh.append("LOG=").append(q(LOG_FILE)).append("\n");
@@ -81,12 +131,10 @@ final class InstallPlan {
         sh.append("    settings put secure \"$1\" \"$cur:$2\" || fail \"put $1\"\n");
         sh.append("  fi\n");
         sh.append("}\n");
-        if (uninstallExisting) {
-            sh.append("echo STEP uninstall\n");
-            sh.append("pm uninstall ").append(DCL_PACKAGE).append(" || fail uninstall\n");
-        }
-        sh.append("echo STEP install_dcl\n");
-        sh.append("pm install -r -d -g -t ").append(q(dclApkPath)).append(" || fail install_dcl\n");
+        return sh;
+    }
+
+    private void appendGrants(StringBuilder sh) {
         sh.append("echo STEP grants\n");
         grant(sh, "android.permission.ACCESS_FINE_LOCATION");
         grant(sh, "android.permission.ACCESS_COARSE_LOCATION");
@@ -106,15 +154,9 @@ final class InstallPlan {
         sh.append("append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
         sh.append("append_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
         sh.append("settings put secure accessibility_enabled 1 || fail accessibility\n");
-        sh.append("echo STEP home\n");
-        sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
-        sh.append("echo STEP usbmount\n");
-        sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
-        sh.append("echo STEP wallpaper\n");
-        sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
-        sh.append(" app_process /system/bin SetWallpaper ").append(q(wallpaper)).append(" || fail wallpaper\n");
-        sh.append("sleep 1\n");
-        sh.append("dumpsys wallpaper | grep -F ").append(q(wallpaper)).append(" >/dev/null || fail wallpaper_check\n");
+    }
+
+    private void appendHides(StringBuilder sh) {
         sh.append("echo STEP hide\n");
         sh.append("pm enable ").append(LAUNCHER).append(" || fail enable_launcher\n");
         sh.append("pm hide ").append(LAUNCHER).append(" || fail hide_launcher\n");
@@ -123,15 +165,15 @@ final class InstallPlan {
         hideIf(sh, hideVoice, VOICE);
         hideIf(sh, hideSpeechClient, SPEECH_CLIENT);
         hideIf(sh, hideManual, MANUAL);
-        sh.append("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | grep -F ");
-        sh.append(q(DCL_PACKAGE)).append(" >/dev/null || fail home_check\n");
+    }
+
+    private void finishScript(StringBuilder sh, boolean reboot) {
         sh.append("echo OK\n");
         sh.append("echo OK > \"$RES\"\n");
         sh.append("rm -rf ").append(q(PAYLOAD_DIR)).append(' ').append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
         sh.append("setprop ").append(PROP).append(" ''\n");
         sh.append("sync\n");
-        sh.append("reboot\n");
-        return sh.toString();
+        if (reboot) sh.append("reboot\n");
     }
 
     private static void grant(StringBuilder sh, String permission) {
