@@ -120,6 +120,8 @@ final class InstallPlan {
     String toRestoreScript() {
         StringBuilder sh = scriptHeader();
         sh.append("echo STEP restore\n");
+        sh.append("settings delete global enable_freeform_support || echo WARN freeform\n");
+        sh.append("settings delete global policy_control || echo WARN policy_control\n");
         sh.append("remove_secure() {\n");
         sh.append("  cur=`settings get secure \"$1\"`\n");
         sh.append("  if [ -z \"$cur\" ] || [ \"$cur\" = null ]; then return; fi\n");
