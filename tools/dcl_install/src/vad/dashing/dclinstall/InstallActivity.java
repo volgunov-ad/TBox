@@ -43,6 +43,7 @@ public class InstallActivity extends Activity {
     private RadioButton pictureWallpaper;
     private RadioButton blackWallpaper;
     private RadioButton customWallpaper;
+    private CheckBox systemUi;
     private CheckBox iottube;
     private CheckBox voice;
     private CheckBox speechClient;
@@ -86,7 +87,13 @@ public class InstallActivity extends Activity {
         apkLabel.setPadding(0, dp(8), 0, dp(8));
         column.addView(apkLabel);
 
-        column.addView(text("Обои", 20, 0xFFF4F6F8));
+        column.addView(heading("Обои"));
+        column.addView(note(
+                "Штатные обои находятся внутри System UI. Когда System UI скрыт, их нет, "
+                        + "и каждое включение ждёт окно обоев около 30 секунд. "
+                        + "Свои обои готовы ещё до входа в систему, поэтому экран открывается сразу. "
+                        + "Картинка видна в конце загрузки, пока лаунчер не нарисовал свой экран, "
+                        + "и там, где окно не закрывает фон."));
         RadioGroup wallpapers = new RadioGroup(this);
         pictureWallpaper = radio("Картинка по умолчанию");
         pictureWallpaper.setChecked(true);
@@ -119,15 +126,35 @@ public class InstallActivity extends Activity {
         wallpaperNote.setPadding(0, dp(4), 0, dp(8));
         column.addView(wallpaperNote);
 
-        column.addView(text("Скрыть по желанию. Снятая галочка пакет не трогает.", 16, 0xFFB7C0C8));
-        iottube = check("IoT Tube — крашится, не находит сервер", true);
+        column.addView(heading("Всегда скрывается"));
+        column.addView(note(
+                "Штатный лаунчер — рабочий стол с карточками: карта, музыка, климат, ADAS. "
+                        + "Его нужно именно скрыть. Если только выключить, процесс всё равно стартует. "
+                        + "Кнопка HOME после этого открывает DCL. "
+                        + "Климат, телефон, камера и настройки автомобиля остаются отдельными программами."));
+        column.addView(heading("Скрыть по желанию"));
+        column.addView(note("Снятая галочка пакет не трогает."));
+        systemUi = check("System UI", true);
+        iottube = check("IoT Tube", true);
         voice = check("Штатный голосовой помощник", false);
-        speechClient = check("Клиент голоса speechclient", false);
+        speechClient = check("Клиент голоса", false);
         manual = check("Электронное руководство", false);
+        column.addView(systemUi);
+        column.addView(note(
+                "Плавающая кнопка «Домой» и шторка сверху принадлежат System UI. "
+                        + "Скрытие убирает их с экрана лаунчера. "
+                        + "Вместе с ними пропадают уведомления, всплывающая громкость "
+                        + "и системные вопросы, например доступ программы к USB-устройству. "
+                        + "Флешки после этого подключает отдельная программа, её установщик ставит сам. "
+                        + "Без своих обоев загрузка тогда ждёт около 30 секунд."));
         column.addView(iottube);
+        column.addView(note("Телематика. Постоянно падает, потому что не находит сервер, и заполняет системный журнал."));
         column.addView(voice);
+        column.addView(note("Голосовой помощник iFlytek. Пока он работает, занимает заметную долю процессора."));
         column.addView(speechClient);
+        column.addView(note("Служба рядом с помощником. Если помощник скрыт, она может остаться и при этом не падает."));
         column.addView(manual);
+        column.addView(note("Руководство по автомобилю. После скрытия пропадает из списка программ."));
 
         install = button("Установить и перезагрузить");
         install.setOnClickListener(new View.OnClickListener() {
@@ -306,6 +333,7 @@ public class InstallActivity extends Activity {
         final InstallPlan plan = new InstallPlan(
                 apkPath,
                 uninstallExisting,
+                systemUi.isChecked(),
                 iottube.isChecked(),
                 voice.isChecked(),
                 speechClient.isChecked(),
@@ -424,13 +452,13 @@ public class InstallActivity extends Activity {
 
     private void updateWallpaperNote() {
         if (blackWallpaper.isChecked()) {
-            wallpaperNote.setText("Чёрный фон. Обои готовы до входа в систему, загрузка не ждёт 30 секунд.");
+            wallpaperNote.setText("Чёрный фон.");
         } else if (customWallpaper.isChecked()) {
             wallpaperNote.setText(customImagePath == null
-                    ? "Выберите jpg или png. Файл сохранится в программе и будет на месте при загрузке."
+                    ? "Выберите jpg или png."
                     : customImagePath);
         } else {
-            wallpaperNote.setText("Картинка по умолчанию. Обои готовы до входа в систему, загрузка не ждёт 30 секунд.");
+            wallpaperNote.setText("Встроенная картинка.");
         }
     }
 
@@ -563,6 +591,19 @@ public class InstallActivity extends Activity {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private TextView heading(String value) {
+        TextView view = text(value, 20, 0xFFF4F6F8);
+        view.setTypeface(Typeface.DEFAULT_BOLD);
+        view.setPadding(0, dp(10), 0, dp(4));
+        return view;
+    }
+
+    private TextView note(String value) {
+        TextView view = text(value, 15, 0xFFB7C0C8);
+        view.setPadding(0, 0, 0, dp(6));
+        return view;
     }
 
     private TextView text(String value, int sp, int color) {

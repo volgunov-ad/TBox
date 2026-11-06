@@ -57,8 +57,8 @@ final class DclStatus {
         rows.add(row("Служба специальных возможностей", accessibility(context), false, ""));
         rows.add(row("Обои для быстрой загрузки", wallpaperReady(context), false, ""));
         rows.add(row("Программа флешек", versionName(packages, "vad.dashing.usbmount") != null, false, ""));
-        rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), false, ""));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
+        rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
         rows.add(row("IoT Tube скрыт", hidden(packages, InstallPlan.IOTTUBE), true, ""));
         rows.add(row("Голосовой помощник скрыт", hidden(packages, InstallPlan.VOICE), true, ""));
         rows.add(row("Клиент голоса скрыт", hidden(packages, InstallPlan.SPEECH_CLIENT), true, ""));

@@ -27,6 +27,7 @@ final class InstallPlan {
 
     final String dclApkPath;
     final boolean uninstallExisting;
+    final boolean hideSystemUi;
     final boolean hideIottube;
     final boolean hideVoice;
     final boolean hideSpeechClient;
@@ -35,12 +36,14 @@ final class InstallPlan {
     InstallPlan(
             String dclApkPath,
             boolean uninstallExisting,
+            boolean hideSystemUi,
             boolean hideIottube,
             boolean hideVoice,
             boolean hideSpeechClient,
             boolean hideManual) {
         this.dclApkPath = dclApkPath;
         this.uninstallExisting = uninstallExisting;
+        this.hideSystemUi = hideSystemUi;
         this.hideIottube = hideIottube;
         this.hideVoice = hideVoice;
         this.hideSpeechClient = hideSpeechClient;
@@ -115,7 +118,7 @@ final class InstallPlan {
         sh.append("echo STEP hide\n");
         sh.append("pm enable ").append(LAUNCHER).append(" || fail enable_launcher\n");
         sh.append("pm hide ").append(LAUNCHER).append(" || fail hide_launcher\n");
-        sh.append("pm hide ").append(SYSTEMUI).append(" || fail hide_systemui\n");
+        hideIf(sh, hideSystemUi, SYSTEMUI);
         hideIf(sh, hideIottube, IOTTUBE);
         hideIf(sh, hideVoice, VOICE);
         hideIf(sh, hideSpeechClient, SPEECH_CLIENT);
