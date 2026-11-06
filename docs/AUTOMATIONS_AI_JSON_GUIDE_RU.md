@@ -1,11 +1,17 @@
 # Инструкция для ИИ: создание JSON-автоматизаций TBox Monitor
 
-Версия инструкции: 1 (формат автоматизаций `formatVersion: 1`).
+Версия инструкции: 2 (формат автоматизаций `formatVersion: 1`).
 
 Этот файл целиком передают нейросети, у которой нет доступа к исходному коду TBox Monitor.
 После этого пользователь может обычными словами описать желаемую автоматизацию. Задача
 нейросети — уточнить только недостающие данные и выдать готовый JSON для импорта через
 **TBox Monitor → Автоматизации → Импорт**.
+
+Та же схема сигналов и действий используется внешним HTTP API TBox Monitor
+(`GET /v1/catalog`, `GET /v1/signals`, `POST /v1/actions/invoke`; `catalogVersion` 6+):
+форма элементов `actions[]` совпадает с JSON автоматизаций. Подключение и токены —
+в пользовательской инструкции API; здесь — только канонический JSON. Не выдумывай
+отдельные id «для API»: каталог один.
 
 ---
 
@@ -717,6 +723,14 @@ Wi-Fi-команды работают с клиентским Wi-Fi головн
 Android 10 и новее стороннее приложение обычно не может само включить Wi-Fi; на головном
 устройстве с API 28 (в том числе Adayo с надписью «Android 10») — может.
 
+**Плавающие панели:** `toggle_hide_floating_panels` / `toggle_floating_panels_enabled` —
+это действия автоматизаций (временное скрытие или сохранённый флаг панелей). Не путай их с
+**sticky-hide** в настройках панелей (Usage Stats / списки скрытия по foreground-приложению,
+в т.ч. на нескольких виртуальных дисплеях): sticky-hide — только UI-логика видимости, не
+тип триггера, условия или действия автоматизации. Для «скрыть панели, пока открыто
+приложение X» в автоматизациях используй триггер/условие `foreground_app` плюс
+`toggle_hide_floating_panels`, а не sticky-hide.
+
 `adb_shell` — произвольная shell-команда через localhost ADB (тот же уровень, что вкладка ADB).
 TCP :5555 включают только если порт ещё не слушает; после команды возвращают только если
 эта сессия его включала. `adb_force_stop` — то же для `am force-stop <package>`
@@ -805,7 +819,20 @@ TCP :5555 включают только если порт ещё не слуша
 | `motor_hours` | `app` | ч, накопленные моточасы приложения |
 | `media_position_ms` | `app` | позиция, мс, на момент чтения (между событиями плеера дорисовывается по скорости, как у виджета музыки) |
 | `media_duration_ms` | `app` | длительность, мс; `0` если плеер её не сообщил |
-| `road_speed_limit_kmh` | `app` | км/ч, лимит OSM на привязанном ребре; без привязки или без maxspeed в пакете значения нет |
+| `road_speed_limit_kmh` | `app` | км/ч, posted OSM maxspeed на привязанном ребре; без привязки или без maxspeed в пакете значения нет. Только OSM match — не SpeedCam и не SLA с шины. Для срабатывания на **смену** лимита используй `numeric_threshold` с `"rearmEnabled": false` (каждое новое число), а не гистерезис |
+
+### Сигнал позиции (не для порогов и state-условий)
+
+| `signal` | Источники | Форма значения |
+|---|---|---|
+| `geo_position` | `app` | текущая точка GeoDisplay: широта/долгота. В External API — объект `{ "latitude", "longitude" }`; при NONE/LOST значения нет |
+
+`geo_position` имеет тип **позиции**, не числа и не state. Его **нельзя** ставить в
+`numeric_threshold` / `numeric` / `state_equals` / `state` — валидатор отклонит правило.
+Для «въехал/выехал около точки» используй триггер или условие **геозоны** (они сами читают
+ту же GeoDisplay-точку). Отдельные числовые/state id (`geo_altitude_m`, `geo_speed_kmh`,
+`geo_bearing_deg`, `geo_satellites_*`, `geo_speed_source`, `geo_source`, `geo_fix_valid`,
+`locate_status`) — enrichment рядом с позицией, без замены `geo_position`.
 
 ### Сигналы состояния
 
@@ -858,8 +885,8 @@ TCP :5555 включают только если порт ещё не слуша
 | `epb_park_lamp` | `head_unit` | `off`, `on` — лампа EPB / паркинг |
 | `engine_oil_pressure` | `head_unit` | `off`, `on` — `on` значит предупреждение о давлении масла, `off` норма |
 | `brake_fluid` | `head_unit` | `off`, `on` — `on` значит предупреждение о тормозной жидкости, `off` норма |
-| `road_highway_class` | `app` | класс OSM-ребра: `motorway`, `motorway_link`, `trunk`, `trunk_link`, `primary`, `primary_link`, `secondary`, `secondary_link`, `tertiary`, `tertiary_link`, `unclassified`, `residential`, `living_street`, `service`, `track`. Без привязки к карте значения нет |
-| `road_tunnel` | `app` | `off` (вне тоннеля), `on` (в тоннеле) по OSM на привязанном ребре. Без привязки значения нет |
+| `road_highway_class` | `app` | класс OSM-ребра: `motorway`, `motorway_link`, `trunk`, `trunk_link`, `primary`, `primary_link`, `secondary`, `secondary_link`, `tertiary`, `tertiary_link`, `unclassified`, `residential`, `living_street`, `service`, `track`. Без привязки к карте (road map pack / match) значения нет. Не SpeedCam и не SLA с шины. Краткий провал GNSS не сбрасывает последнее значение класса для edge-триггера |
+| `road_tunnel` | `app` | `off` (вне тоннеля), `on` (в тоннеле) по OSM на привязанном ребре. Без привязки значения нет. **Условие** `state`: `on` = сейчас в тоннеле, `off` = вне. **Триггер** `state_equals`: `on` = **въезд** (`off`→`on`), `off` = **выезд** (`on`→`off`) — только переход, не «уже были в тоннеле». Для `road_tunnel` триггер всегда с `"startupBehavior": "initialize_only"` (даже если в JSON написали иное — импорт принудительно так). Краткий провал GNSS не забывает «в тоннеле» / «вне» до следующего валидного match |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_radar_alarm_volume` | `head_unit` | `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
@@ -1252,7 +1279,9 @@ Legacy `"value": 2` (A9 on) тоже валиден и на A10 перекоди
 4. Все ссылки `triggered_by` указывают только на существующие ID этого правила.
 5. Каждый тип содержит точный обязательный набор полей и правильные JSON-типы.
 6. `signal` соответствует типу триггера/условия и разрешён выбранным `source`.
+   Не используй `geo_position` в numeric/state триггерах и условиях.
 7. Каждое `expectedState` взято из каталога либо является подтверждённым package name/SSID.
+   Для `road_tunnel` в триггере — только edge въезд/выезд и `startupBehavior: initialize_only`.
 8. Все времена, радиусы, выдержки, задержки, глубина, число действий и `maxRuns` в диапазоне.
 9. Геозона имеет реальные числовые координаты и правильное соотношение двух радиусов.
 10. CAN-команда дословно соответствует строке каталога, backend и разрешённой операции.
