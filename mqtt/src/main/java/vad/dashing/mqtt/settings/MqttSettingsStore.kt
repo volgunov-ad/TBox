@@ -35,6 +35,8 @@ class MqttSettingsStore private constructor(context: Context) {
         wireguardEnabled = prefs.getBoolean(KEY_WG_ENABLED, false),
         wireguardConf = prefs.getString(KEY_WG_CONF, "").orEmpty(),
         wireguardFileName = prefs.getString(KEY_WG_FILE, "").orEmpty(),
+        wqttApiToken = prefs.getString(KEY_WQTT_TOKEN, "").orEmpty(),
+        wqttRoom = prefs.getString(KEY_WQTT_ROOM, DEFAULT_WQTT_ROOM).orEmpty(),
     ).normalized()
 
     fun save(normalized: MqttSettings) {
@@ -63,6 +65,8 @@ class MqttSettingsStore private constructor(context: Context) {
             .putBoolean(KEY_WG_ENABLED, normalized.wireguardEnabled)
             .putString(KEY_WG_CONF, normalized.wireguardConf)
             .putString(KEY_WG_FILE, normalized.wireguardFileName)
+            .putString(KEY_WQTT_TOKEN, normalized.wqttApiToken)
+            .putString(KEY_WQTT_ROOM, normalized.wqttRoom)
             .apply()
     }
 
@@ -159,6 +163,8 @@ class MqttSettingsStore private constructor(context: Context) {
         private const val KEY_WG_ENABLED = "wg_enabled"
         private const val KEY_WG_CONF = "wg_conf"
         private const val KEY_WG_FILE = "wg_file"
+        private const val KEY_WQTT_TOKEN = "wqtt_api_token"
+        private const val KEY_WQTT_ROOM = "wqtt_room"
 
         private fun openPrefs(context: Context): SharedPreferences {
             return try {

@@ -25,6 +25,11 @@ import vad.dashing.mqtt.settings.BrokerWarning
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.settings.MqttSettingsStore
 import vad.dashing.mqtt.settings.connectionChanged
+import vad.dashing.mqtt.wqtt.WqttApi
+import vad.dashing.mqtt.wqtt.WqttDeviceAction
+import vad.dashing.mqtt.wqtt.WqttDeviceResult
+import vad.dashing.mqtt.wqtt.WqttPackId
+import vad.dashing.mqtt.wqtt.WqttProvisioner
 import vad.dashing.tbox.localaccess.LocalAccessClient
 import vad.dashing.tbox.localaccess.LocalAccessContract
 
@@ -43,11 +48,21 @@ data class MqttHomeState(
     val connectionDraft: MqttSettings = MqttSettings(),
     val connectionMessage: String = "",
     val bridge: BridgeStatus = BridgeStatus(),
+    val wqttOpen: Boolean = false,
+    val wqttTokenDraft: String = "",
+    val wqttRoomDraft: String = "",
+    val wqttPacks: Set<WqttPackId> = setOf(WqttPackId.CLIMATE, WqttPackId.SENSORS),
+    val wqttBusy: Boolean = false,
+    val wqttMessage: String = "",
+    val wqttBrokerHint: String = "",
+    val wqttResults: List<WqttDeviceResult> = emptyList(),
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
     private val store = MqttSettingsStore.get(app)
     private val api = MonitorApi()
+    private val wqttApi = WqttApi()
+    private val wqttProvisioner = WqttProvisioner(wqttApi)
     private val _state = MutableStateFlow(MqttHomeState())
     val state: StateFlow<MqttHomeState> = _state
     private var pairJob: Job? = null
@@ -59,6 +74,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             settings = settings,
             connectionDraft = settings,
             tab = startTab,
+            wqttTokenDraft = settings.wqttApiToken,
+            wqttRoomDraft = settings.wqttRoom,
         )
         viewModelScope.launch {
             BridgeStatusStore.state.collect { status ->
@@ -363,6 +380,202 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             null
         }
+    }
+
+    fun toggleWqtt() {
+        _state.update { current ->
+            current.copy(
+                wqttOpen = !current.wqttOpen,
+                wqttTokenDraft = current.settings.wqttApiToken,
+                wqttRoomDraft = current.settings.wqttRoom,
+            )
+        }
+    }
+
+    fun setWqttTokenDraft(value: String) {
+        _state.update { it.copy(wqttTokenDraft = value) }
+    }
+
+    fun setWqttRoomDraft(value: String) {
+        _state.update { it.copy(wqttRoomDraft = value) }
+    }
+
+    fun toggleWqttPack(id: WqttPackId, enabled: Boolean) {
+        _state.update { current ->
+            val next = current.wqttPacks.toMutableSet()
+            if (enabled) next += id else next -= id
+            current.copy(wqttPacks = next)
+        }
+    }
+
+    fun saveWqttCredentials() {
+        val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+        val room = _state.value.wqttRoomDraft
+        update { it.copy(wqttApiToken = token, wqttRoom = room) }
+        _state.update {
+            it.copy(
+                wqttTokenDraft = token,
+                wqttRoomDraft = it.settings.wqttRoom,
+                wqttMessage = if (token.isBlank()) "Токен очищен" else "Токен WQTT сохранён",
+            )
+        }
+    }
+
+    fun testWqttConnection() {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
+                return@launch
+            }
+            updateUi { it.copy(wqttBusy = true, wqttMessage = "Проверка WQTT…", wqttBrokerHint = "") }
+            try {
+                val broker = wqttApi.testConnection(token)
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = "WQTT отвечает",
+                        wqttBrokerHint = brokerHint(broker.server, broker.portTls, broker.port, broker.user),
+                    )
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = error.message ?: "Не удалось подключиться к WQTT",
+                        wqttBrokerHint = "",
+                    )
+                }
+            }
+        }
+    }
+
+    fun applyWqttBrokerToDraft() {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Сначала вставьте токен WQTT") }
+                return@launch
+            }
+            updateUi { it.copy(wqttBusy = true, wqttMessage = "Читаю данные брокера…") }
+            try {
+                val broker = wqttApi.broker(token)
+                withContext(Dispatchers.Main) {
+                    editConnection { draft ->
+                        draft.copy(
+                            brokerHost = broker.server,
+                            brokerPort = if (broker.portTls > 0) broker.portTls else broker.port,
+                            username = broker.user,
+                            password = broker.password,
+                            tlsEnabled = broker.portTls > 0,
+                            wireguardEnabled = false,
+                        )
+                    }
+                    updateUi {
+                        it.copy(
+                            wqttBusy = false,
+                            wqttMessage = "Поля брокера заполнены. Проверьте и нажмите «Сохранить» на вкладке «Подключение».",
+                            wqttBrokerHint = brokerHint(broker.server, broker.portTls, broker.port, broker.user),
+                            tab = 0,
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttMessage = error.message ?: "Не удалось прочитать брокер",
+                    )
+                }
+            }
+        }
+    }
+
+    fun createWqttDevices(onSettingsSaved: () -> Unit) {
+        if (_state.value.wqttBusy) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = _state.value
+            val token = WqttApi.normalizeToken(current.wqttTokenDraft)
+            if (token.isBlank()) {
+                updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
+                return@launch
+            }
+            if (current.wqttPacks.isEmpty()) {
+                updateUi { it.copy(wqttMessage = "Выберите хотя бы один набор") }
+                return@launch
+            }
+            updateUi {
+                it.copy(
+                    wqttBusy = true,
+                    wqttMessage = "Создаю устройства…",
+                    wqttResults = emptyList(),
+                )
+            }
+            val settings = withStoredAccess(current.settings)
+            val report = wqttProvisioner.provision(
+                token = token,
+                packs = current.wqttPacks,
+                entities = current.entities,
+                topicPrefix = settings.topicPrefix,
+                deviceId = settings.deviceId,
+                room = current.wqttRoomDraft.ifBlank { settings.wqttRoom },
+            ) { step ->
+                updateUi { it.copy(wqttMessage = step) }
+            }
+            withContext(Dispatchers.Main) {
+                update { saved ->
+                    saved.copy(
+                        wqttApiToken = token,
+                        wqttRoom = current.wqttRoomDraft.ifBlank { saved.wqttRoom },
+                        selectedObjectIds = saved.selectedObjectIds + report.enabledObjectIds,
+                        acceptCommands = if (report.enabledObjectIds.any { id ->
+                            current.entities.any { entity -> entity.objectId == id && entity.writable }
+                        }) {
+                            true
+                        } else {
+                            saved.acceptCommands
+                        },
+                    )
+                }
+                onSettingsSaved()
+                val summary = summarize(report.devices)
+                updateUi {
+                    it.copy(
+                        wqttBusy = false,
+                        wqttTokenDraft = token,
+                        wqttResults = report.devices,
+                        wqttMessage = buildString {
+                            append(summary)
+                            if (report.refreshMessage.isNotBlank()) {
+                                if (isNotEmpty()) append(". ")
+                                append(report.refreshMessage)
+                            }
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun summarize(results: List<WqttDeviceResult>): String {
+        if (results.isEmpty()) return "Устройств не создано"
+        val created = results.count { it.action == WqttDeviceAction.CREATED }
+        val updated = results.count { it.action == WqttDeviceAction.UPDATED }
+        val skipped = results.count { it.action == WqttDeviceAction.SKIPPED }
+        val failed = results.count { it.action == WqttDeviceAction.FAILED }
+        return buildList {
+            if (created > 0) add("создано $created")
+            if (updated > 0) add("обновлено $updated")
+            if (skipped > 0) add("без изменений $skipped")
+            if (failed > 0) add("ошибок $failed")
+        }.joinToString(", ")
+    }
+
+    private fun brokerHint(server: String, portTls: Int, port: Int, user: String): String {
+        val portText = if (portTls > 0) "TLS $portTls" else "TCP $port"
+        return listOf(server, portText, user).filter { it.isNotBlank() }.joinToString(" · ")
     }
 
     private fun startBridgeIfReady() {

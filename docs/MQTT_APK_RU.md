@@ -7,8 +7,12 @@
 их в MQTT-брокер, который выбирает пользователь. Home Assistant подхватывает сущности
 через MQTT Discovery, если пользователь включил эту опцию.
 
-Дальше автомобиль попадает в Яндекс Умный дом уже средствами Home Assistant
-(интеграция Yandex Smart Home). Этот APK с облаком Яндекса не разговаривает.
+Дальше автомобиль может попасть в Яндекс Умный дом двумя путями:
+
+1. **Home Assistant** + интеграция Yandex Smart Home (MQTT Discovery).
+2. **WQTT.ru** — облачный брокер и навык «WQTT.RU». Мастер на вкладке «Сущности»
+   создаёт устройства через REST API кабинета (`Authorization: Token …`); HA Discovery
+   для этого пути не используется.
 
 Связанные документы:
 
@@ -685,6 +689,7 @@ mqtt/
     settings/
     bridge/              # опрос, публикация по изменению, подписка
     ha/                  # выбор компонента, JSON discovery, топики
+    wqtt/                # API WQTT.ru, пресеты Алисы, маппинг → POST /api/devices
     ui/                  # вкладки, строки настроек
     ui/theme/            # копия схем и ролей текста Monitor
   src/test/java/vad/dashing/mqtt/
@@ -692,6 +697,7 @@ mqtt/
     ha/DiscoveryPayloadTest.kt
     ha/DiscoveryCleanupTest.kt
     ha/EntityKindTest.kt
+    wqtt/WqttDeviceMapperTest.kt
     bridge/SignalPollBatchTest.kt
     bridge/CommandPayloadTest.kt
     bridge/CommandGuardTest.kt
@@ -700,7 +706,7 @@ mqtt/
 Юнит-тесты без брокера и без Android-эмулятора: раскладка топиков, JSON discovery,
 очистка лишних config-топиков, выбор компонента, нарезка опроса по source и 50 id,
 перевод значения из Home Assistant в тело invoke через пары `write`, отказ на значение
-вне списка, лимит одной команды в секунду.
+вне списка, лимит одной команды в секунду, маппинг TBox → JSON устройств WQTT.
 
 Для ручной проверки с ПК — `tools/tbox_mqtt_smoke.py`. Ему нужен `paho-mqtt`
 в `requirements.txt`. Скрипт подписывается на `tbox/<deviceId>/#` и `homeassistant/#`,
@@ -739,19 +745,47 @@ mqtt/
 
 ---
 
-## 10. Вне первой версии
+## 10. Мастер WQTT.ru → Алиса
 
-- Сводная сущность `climate` и `cover` с положением окна в процентах.
+Статус: **MVP в `:mqtt`**. HA Discovery не трогаем и не удаляем.
+
+WQTT **не** разбирает `homeassistant/…/config`. Устройства для навыка «WQTT.RU»
+живут в кабинете `dash.wqtt.ru` и создаются через REST API:
+
+| Шаг | API |
+|-----|-----|
+| Auth | `Authorization: Token <token>` (токен из кабинета; отдельного login→token в публичной доке нет) |
+| Проверка / брокер | `GET /api/broker` — server, `port_tls`, user, password |
+| Типы | `GET /api/devices/types` — числовые id устройств и `sensor_float` / `range` |
+| Список / деталь | `GET /api/devices`, `GET /api/devices/<id>` |
+| Создать / обновить | `POST /api/devices`, `PUT /api/devices/<id>` |
+| Уведомить Яндекс | `GET /api/devices/refresh` |
+
+На вкладке **«Сущности»** блок «Яндекс Алиса (WQTT.ru)»:
+
+1. Вставить токен API, сохранить (EncryptedSharedPreferences, как пароль брокера).
+2. «Проверить» — `GET /api/broker`.
+3. Опционально «Подставить брокер из WQTT» в черновик вкладки «Подключение» (TLS-порт, WireGuard выкл.).
+4. Наборы: **Климат** (один термостат: `hvac_power` + `hvac_temperature_left`), **Датчики** (улица / салон / топливо % / запас хода), **Кузов** (окна и багажник, с предупреждением).
+5. «Создать в WQTT» — идемпотентно по имени+топикам, затем `refresh`; отмеченные objectId включаются в локальный выбор сущностей.
+
+Топики те же, что у HA-пути: `tbox/<deviceId>/<objectId>/state` и `…/set`, payload switch `ON`/`OFF`.
+
+Прямой навык Яндекса в APK по-прежнему вне скоупа.
+
+## 11. Вне первой версии
+
+- Сводная сущность `climate` и `cover` с положением окна в процентах (для HA).
 - Яркость экрана и громкости телефона, навигации и голоса — когда в каталоге появится их схема. Громкость медиа уже есть отдельным датчиком и на карточке «Музыка».
 - Поток сигналов (WebSocket / SSE) в Monitor. Пока хватает опроса.
 - Второй брокер, MQTT over WebSocket, MQTT 5.
 - Прямой доступ к mbCAN или VHAL из этого процесса.
 - Замок дверей и дистанционный пуск: в каталоге команд нет.
-- Навык Яндекса внутри APK. Путь в Умный дом: Home Assistant и уже существующая интеграция Yandex Smart Home поверх этих сущностей.
+- Расширение мастера WQTT: больше наборов, режимы вентилятора/климата, точный openable без on_off-эмуляции окон.
 
 ---
 
-## 11. Критерий «первая версия готова»
+## 12. Критерий «первая версия готова»
 
 На ГУ с включённым API Monitor и брокером в LAN:
 
