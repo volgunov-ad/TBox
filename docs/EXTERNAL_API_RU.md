@@ -44,7 +44,7 @@ catalog/signals/invoke/run, ручной токен, `voiceAliasesRu`, клие�
 
 | Клиент | Типичный доступ |
 |--------|-----------------|
-| TBox MQTT / VAD Voice на том же ГУ | `http://127.0.0.1:<port>` + токен/порт через локальный провайдер `content://vad.dashing.tbox.localaccess` |
+| TBox MQTT / VAD Voice / Dashing Club Launcher на том же ГУ | `http://127.0.0.1:<port>` + токен/порт через локальный провайдер `content://vad.dashing.tbox.localaccess` |
 | Веб-панель / внешний клиент в LAN | `http://<ip_гу>:<port>` в той же Wi‑Fi / hotspot |
 
 Типичный голосовой цикл (без подписки на поток):
@@ -144,10 +144,11 @@ HTTP pairing и управление доверенными клиентами**
    - `ExternalApiLocalAccessProvider` определяет вызывающий пакет через `callingPackage` и проверяет, что он принадлежит `Binder.getCallingUid()` (`PackageManager.getPackagesForUid`). В отличие от поля `clientName` в HTTP-запросе, подделать имя пакета нельзя.
    - Разрешены только известные пакеты из `ExternalApiLocalClients`:
      - `vad.dashing.mqtt` → имя `"TBox MQTT"`, `clientId = "local:vad.dashing.mqtt"`;
-     - `vad.dashing.voice` → имя `"VAD Voice"`, `clientId = "local:vad.dashing.voice"`.
-   - Для пакета вычисляется SHA-256 сертификата подписи APK (`PackageManager.GET_SIGNING_CERTIFICATES` → `certSha256`).
+     - `vad.dashing.voice` → имя `"VAD Voice"`, `clientId = "local:vad.dashing.voice"`;
+     - `ras.dashing.tbox.launcher` → имя `"Dashing Club Launcher"`, `clientId = "local:ras.dashing.tbox.launcher"`.
+   - Для пакета вычисляется SHA-256 сертификата подписи APK (`PackageManager.GET_SIGNING_CERTIFICATES` → `certSha256`, lowercase hex без двоеточий). Сертификат в `ExternalApiLocalClients` не прошивается: при первом «Разрешить» Monitor запоминает digest вызвавшего APK. Эталонный digest релизной подписи DCL (`launcher-ru-release.apk`, apksigner): `c78bcd6ff57fa4ea119cae592e145c0ec6b8bc2222b36ec7320972a40544a512` (ранее фигурировал `55c85c…` от другого артефакта/ключа — в allowlist не используется).
 2. **Однократное подтверждение пользователем (`getAccess`, `interactive = true`):**
-   - При первом открытии TBox MQTT или VAD Voice без сохранённого токена (либо по кнопке «Отправить запрос») клиент вызывает `LocalAccessClient.awaitAccess(context)`: сначала `getAccess(interactive = true)`, затем опрос `getAccess(interactive = false)` раз в `1 с` (до `120 с`), пока статус равен `"pending"`.
+   - При первом открытии TBox MQTT, VAD Voice или Dashing Club Launcher без сохранённого токена (либо по кнопке «Отправить запрос») клиент вызывает `LocalAccessClient.awaitAccess(context)`: сначала `getAccess(interactive = true)`, затем опрос `getAccess(interactive = false)` раз в `1 с` (до `120 с`), пока статус равен `"pending"`.
    - Если клиент `local:<packageName>` с этим `certSha256` ещё не в списке доверенных, Monitor запускает прозрачную `ExternalApiLocalConsentActivity` поверх текущего экрана с диалогом подтверждения («Разрешить приложению „TBox MQTT“ (`vad.dashing.mqtt`) доступ к API?») — включать режим pairing в «Настройки → API» не нужно.
    - При нажатии **«Разрешить»** (`approveLocalConsent`) Monitor регистрирует доверенного клиента `local:<packageName>` с привязкой к `packageName` и `certSha256`. При **«Отклонить»** пакет помечается отклонённым (`status = "denied"`) до следующей интерактивной попытки; при закрытии окна без ответа возвращается `status = "consent_required"`.
 3. **Выдача и автоматическая ротация токена (`getAccess`):**
@@ -235,7 +236,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 - Открытый bind в LAN **обязательно** сочетается с авторизацией по токену; без сопряжённого токена
   телеметрия и команды недоступны.
 - Локальный провайдер (`content://vad.dashing.tbox.localaccess`) проверяет вызывающий пакет через
-  `Binder.getCallingUid()`, разрешает только `vad.dashing.mqtt` и `vad.dashing.voice`, требует
+  `Binder.getCallingUid()`, разрешает только пакеты из `ExternalApiLocalClients`
+  (`vad.dashing.mqtt`, `vad.dashing.voice`, `ras.dashing.tbox.launcher`), требует
   однократного подтверждения пользователем на ГУ и фиксирует SHA-256 сертификата подписи (`certSha256`).
 - Лимиты HTTP-сервера (`ExternalApiConstants` / `ExternalApiHttpServer`): пул до `8` параллельных
   клиентов (`MAX_CONCURRENT_CLIENTS = 8`), сокет-таймаут `30 с`, стартовая строка до `8 КБ`
@@ -527,9 +529,9 @@ HFP phone — **6**.
 
 ---
 
-## 10. Клиенты-спутники на ГУ: VAD Voice (`:voice`) и TBox MQTT (`:mqtt`)
+## 10. Клиенты-спутники на ГУ: VAD Voice (`:voice`), TBox MQTT (`:mqtt`) и DCL
 
-Оба приложения работают на том же ГУ, подключаются к `http://127.0.0.1:<port>/v1` и автоматически получают токен и актуальный порт API через локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1).
+Приложения на том же ГУ подключаются к `http://127.0.0.1:<port>/v1` и автоматически получают токен и актуальный порт API через локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1). Dashing Club Launcher (`ras.dashing.tbox.launcher`) — внешний лаунчер; инструкция по стороне DCL: [DCL_LOCAL_API_ACCESS_RU.md](DCL_LOCAL_API_ACCESS_RU.md).
 
 ### 10.1. Голосовой клиент VAD Voice (`vad.dashing.voice`, модуль `:voice`)
 
@@ -587,7 +589,7 @@ HFP phone — **6**.
 | 5 | Pairing + token store + revoke **в разделе API** | Чужой без pairing не читает сигналы | **сделано** (код) |
 | 5a | Ручная генерация токена в UI | Телефон/Tasker без pair/request | **сделано** |
 | 5b | Пользовательская инструкция | `docs/EXTERNAL_API_USER_GUIDE_RU.md` | **сделано** |
-| 5c | Локальный провайдер `content://vad.dashing.tbox.localaccess` | Автоподключение `:mqtt` и `:voice` на ГУ с 1 окном подтверждения и автообновлением токена/порта | **сделано** |
+| 5c | Локальный провайдер `content://vad.dashing.tbox.localaccess` | Автоподключение `:mqtt`, `:voice` и DCL (`ras.dashing.tbox.launcher`) на ГУ с 1 окном подтверждения и автообновлением токена/порта | **сделано** |
 | 6 | `GET /catalog`, `GET /signals` | Snapshot совпадает с каталогом автоматизаций | **сделано** (код) |
 | 7 | `POST /actions/invoke` → validator + executor; тумблер dangerous в разделе API | Safe-команды работают; dangerous закрыты | **сделано** (код) |
 | 8 | `GET /automations`, `POST .../run` → `requestRunNow` | Паритет с кнопкой UI | **сделано** (код) |
@@ -606,7 +608,7 @@ HFP phone — **6**.
 ## 12. Принятые решения при реализации
 
 1. ~~Точный default port и диапазон допустимых портов в UI~~ — по умолчанию `8765`, допустимый диапазон `1024..65535` (`ExternalApiConstants`).
-2. ~~Pairing: long-poll vs `202 pending` + status poll~~ — реализован `202 Accepted` (`pending`) + опрос `GET /v1/pair/status?requestId=`. Финальный ответ (`approved`/`denied`) выдаётся один раз (`takeRequestForPoll`) и хранится до `10 минут` (`PAIR_RESULT_TTL_MS`). Для приложений на самом ГУ (`:mqtt`, `:voice`) основным сделан локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1).
+2. ~~Pairing: long-poll vs `202 pending` + status poll~~ — реализован `202 Accepted` (`pending`) + опрос `GET /v1/pair/status?requestId=`. Финальный ответ (`approved`/`denied`) выдаётся один раз (`takeRequestForPoll`) и хранится до `10 минут` (`PAIR_RESULT_TTL_MS`). Для приложений на самом ГУ (`:mqtt`, `:voice`, DCL) основным сделан локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1).
 3. TTL access token: ручной revoke, плюс удаление, если токен не использовался больше 6 календарных месяцев (`TOKEN_IDLE_MONTHS = 6`). Проверка — через 1 минуту после запуска сервера API (`TOKEN_EXPIRY_CHECK_DELAY_MS = 60_000L`). Успешный запрос с Bearer обновляет время в памяти сразу, а на диск — не чаще раза в час (`TOKEN_USAGE_PERSIST_INTERVAL_MS`); локальные приложения на ГУ при `401` автоматически получают новый токен через `localaccess`.
 4. ~~Форма `geo_position`~~ — `{latitude,longitude}` + enrichment id в §7.4; G6 — в каталоге.
 5. Нужен ли позже mDNS / QR с URL для телефона — открыто (опционально).
