@@ -31,6 +31,8 @@ data class MqttSettings(
     /** Pasteable WQTT cabinet API token (`Authorization: Token …`). */
     val wqttApiToken: String = "",
     val wqttRoom: String = DEFAULT_WQTT_ROOM,
+    /** Numeric WQTT device ids remembered after a successful «Создать в WQTT». */
+    val wqttDeviceIds: Set<Int> = emptySet(),
 ) {
     fun normalized(): MqttSettings {
         val conf = wireguardConf.trim().removePrefix("\uFEFF").replace("\r\n", "\n")
@@ -51,6 +53,7 @@ data class MqttSettings(
             wireguardEnabled = wireguardEnabled && conf.isNotBlank(),
             wqttApiToken = wqttApiToken.trim(),
             wqttRoom = wqttRoom.trim().ifEmpty { DEFAULT_WQTT_ROOM }.take(64),
+            wqttDeviceIds = wqttDeviceIds.filter { it > 0 }.toSet(),
         )
     }
 

@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -727,6 +729,7 @@ private fun WqttWizardSection(
         )
     }
     val selectedCount = state.settings.selectedObjectIds.size
+    val hasWqttToken = state.wqttTokenDraft.isNotBlank()
     Button(
         onClick = { viewModel.createWqttDevices(onSettingsSaved) },
         enabled = !state.wqttBusy && selectedCount > 0,
@@ -736,11 +739,43 @@ private fun WqttWizardSection(
     ) {
         Text(
             if (state.wqttBusy) {
-                "Создаю…"
+                "Подождите…"
             } else {
                 "Создать в WQTT ($selectedCount)"
             },
             style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    OutlinedButton(
+        onClick = viewModel::prepareWqttDelete,
+        enabled = !state.wqttBusy && hasWqttToken,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text("Удалить устройства TBox", style = MaterialTheme.typography.tboxButton)
+    }
+    val deletePending = state.wqttDeletePending
+    if (deletePending != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::cancelWqttDelete,
+            title = { Text("Удалить устройства TBox?") },
+            text = {
+                Text(
+                    "Будет удалено ${deletePending.size} устройств в кабинете WQTT " +
+                        "с топиками текущего префикса MQTT. Действие необратимо.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmWqttDelete(onSettingsSaved) }) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelWqttDelete) {
+                    Text("Отмена")
+                }
+            },
         )
     }
     if (state.wqttMessage.isNotBlank()) {

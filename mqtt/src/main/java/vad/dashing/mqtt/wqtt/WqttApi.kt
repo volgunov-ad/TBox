@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * Client for https://dash.wqtt.ru/api/…
  * Auth: `Authorization: Token <token>` (pasteable token from the WQTT cabinet).
  */
-class WqttApi(
+open class WqttApi(
     private val client: OkHttpClient = defaultClient(),
     private val baseUrl: String = DEFAULT_BASE,
 ) {
@@ -28,7 +28,7 @@ class WqttApi(
         )
     }
 
-    fun listDevices(token: String): List<WqttDeviceSummary> {
+    open fun listDevices(token: String): List<WqttDeviceSummary> {
         val json = JSONObject(get("/api/devices", token))
         val array = json.optJSONArray("devices") ?: return emptyList()
         return buildList {
@@ -48,7 +48,7 @@ class WqttApi(
         }
     }
 
-    fun deviceDetail(token: String, id: Int): WqttDeviceDetail {
+    open fun deviceDetail(token: String, id: Int): WqttDeviceDetail {
         val json = JSONObject(get("/api/devices/$id", token))
         val device = json.optJSONObject("device")
             ?: throw WqttApiException(0, "WQTT не вернул устройство $id")
@@ -65,7 +65,16 @@ class WqttApi(
         return deviceIdOf(body)
     }
 
-    fun refresh(token: String): Int {
+    open fun deleteDevice(token: String, id: Int) {
+        val body = delete("/api/devices/$id", token)
+        val json = JSONObject(body.ifBlank { "{}" })
+        val result = json.optString("result")
+        if (result.isNotBlank() && !result.equals("ok", ignoreCase = true)) {
+            throw WqttApiException(0, "WQTT не подтвердил удаление устройства $id")
+        }
+    }
+
+    open fun refresh(token: String): Int {
         val json = JSONObject(get("/api/devices/refresh", token))
         return json.optInt("yandex_status_code", 0)
     }
@@ -171,6 +180,16 @@ class WqttApi(
                 .header("Accept", "application/json")
                 .header("Authorization", authHeader(token))
                 .put(json.toRequestBody(JSON))
+                .build(),
+        )
+
+    private fun delete(path: String, token: String): String =
+        execute(
+            Request.Builder()
+                .url(baseUrl + path)
+                .header("Accept", "application/json")
+                .header("Authorization", authHeader(token))
+                .delete()
                 .build(),
         )
 
