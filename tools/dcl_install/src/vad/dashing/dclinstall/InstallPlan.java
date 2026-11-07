@@ -21,6 +21,8 @@ final class InstallPlan {
     static final String PAYLOAD_DIR = "/sdcard/dcl_install";
     static final String LOG_FILE = "/sdcard/dcl_install_log.txt";
     static final String RESULT_FILE = "/sdcard/dcl_install_result.txt";
+    static final String BOOT_LOG_FILE = "/sdcard/dcl_boot_log.txt";
+    static final String BOOT_RESULT_FILE = "/sdcard/dcl_boot_result.txt";
     static final String AUTORUN = "/sdcard/autorun.sh";
     static final String FLAG = "/sdcard/autorun.flag";
     static final String PROP = "vendor.autorun.sdcard.logfile";
@@ -91,6 +93,8 @@ final class InstallPlan {
 
     String toHideScript() {
         StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
         appendHides(sh);
         finishScript(sh, true);
         return sh.toString();
@@ -118,28 +122,33 @@ final class InstallPlan {
     }
 
     /**
-     * After unlock: let vold scan USB sticks, then put back the two grants boot drops.
+     * After unlock: let vold scan USB sticks, put back the two grants boot drops,
+     * and, if the system dropped the boot wallpaper, set it again.
      * The USB package is installed stopped, so its own receiver misses BOOT_COMPLETED.
+     * Own log and result files, and no payload cleanup, so a running install is untouched.
      */
-    String toBootScript(String helperDex, String unlockDex) {
-        StringBuilder sh = scriptHeader();
+    String toBootScript(String helperDex, String unlockDex, boolean restoreWallpaper) {
+        StringBuilder sh = scriptHeader(BOOT_LOG_FILE, BOOT_RESULT_FILE);
         sh.append("echo STEP usb\n");
         appendUnstopUsb(sh, helperDex, false);
         sh.append("CLASSPATH=").append(q(unlockDex));
         sh.append(" app_process /system/bin UnlockUsb || echo WARN unlock_usb\n");
-        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || {\n");
-        sh.append("  echo OK\n");
-        sh.append("  echo OK > \"$RES\"\n");
-        sh.append("  rm -rf ").append(q(PAYLOAD_DIR)).append(' ').append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
-        sh.append("  setprop ").append(PROP).append(" ''\n");
-        sh.append("  exit 0\n");
-        sh.append("}\n");
-        sh.append("echo STEP listeners\n");
-        sh.append("cmd notification allow_listener ").append(q(DCL_NOTIFICATION)).append(" || fail notification\n");
-        sh.append("append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
-        sh.append("append_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
-        sh.append("settings put secure accessibility_enabled 1 || fail accessibility\n");
-        finishScript(sh, false);
+        if (restoreWallpaper) {
+            sh.append("echo STEP wallpaper\n");
+            sh.append("CLASSPATH=").append(q(helperDex));
+            sh.append(" app_process /system/bin SetWallpaper ").append(q(BOOT_WALLPAPER)).append(" || echo WARN wallpaper\n");
+        }
+        sh.append("if pm path ").append(DCL_PACKAGE).append(" >/dev/null; then\n");
+        sh.append("  echo STEP listeners\n");
+        sh.append("  cmd notification allow_listener ").append(q(DCL_NOTIFICATION)).append(" || echo WARN notification\n");
+        sh.append("  append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
+        sh.append("  append_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
+        sh.append("  settings put secure accessibility_enabled 1 || echo WARN accessibility\n");
+        sh.append("fi\n");
+        sh.append("echo OK\n");
+        sh.append("echo OK > \"$RES\"\n");
+        sh.append("rm -f \"$0\" ").append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
+        sh.append("setprop ").append(PROP).append(" ''\n");
         return sh.toString();
     }
 
@@ -185,10 +194,14 @@ final class InstallPlan {
     }
 
     private StringBuilder scriptHeader() {
+        return scriptHeader(LOG_FILE, RESULT_FILE);
+    }
+
+    private StringBuilder scriptHeader(String logFile, String resultFile) {
         StringBuilder sh = new StringBuilder();
         sh.append("#!/system/bin/sh\n");
-        sh.append("LOG=").append(q(LOG_FILE)).append("\n");
-        sh.append("RES=").append(q(RESULT_FILE)).append("\n");
+        sh.append("LOG=").append(q(logFile)).append("\n");
+        sh.append("RES=").append(q(resultFile)).append("\n");
         sh.append(": > \"$LOG\"\n");
         sh.append("rm -f \"$RES\"\n");
         sh.append("exec >>\"$LOG\" 2>&1\n");
@@ -196,7 +209,7 @@ final class InstallPlan {
         sh.append("fail() {\n");
         sh.append("  echo \"FAIL $1\"\n");
         sh.append("  echo \"FAIL $1\" > \"$RES\"\n");
-        sh.append("  rm -f ").append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
+        sh.append("  rm -f \"$0\" ").append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
         sh.append("  setprop ").append(PROP).append(" ''\n");
         sh.append("  exit 1\n");
         sh.append("}\n");
@@ -254,7 +267,7 @@ final class InstallPlan {
     private void finishScript(StringBuilder sh, boolean reboot) {
         sh.append("echo OK\n");
         sh.append("echo OK > \"$RES\"\n");
-        sh.append("rm -rf ").append(q(PAYLOAD_DIR)).append(' ').append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
+        sh.append("rm -rf \"$0\" ").append(q(PAYLOAD_DIR)).append(' ').append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
         sh.append("setprop ").append(PROP).append(" ''\n");
         sh.append("sync\n");
         if (reboot) sh.append("reboot\n");

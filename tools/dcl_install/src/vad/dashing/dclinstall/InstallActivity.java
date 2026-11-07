@@ -2,6 +2,7 @@ package vad.dashing.dclinstall;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -9,6 +10,8 @@ import android.content.pm.Signature;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -25,8 +28,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
-
 /**
  * On-HU installer for Dashing Club Launcher on A9.
  * Root steps go through mb_daemon (/sdcard/autorun.sh), the same path as UsbMount.
@@ -35,6 +36,7 @@ public class InstallActivity extends Activity {
     private static final int PICK_APK = 42;
     private static final int PICK_IMAGE = 43;
     private static final long TIMEOUT_MS = 15 * 60 * 1000L;
+    private static final long CHECKLIST_REFRESH_MS = 3000L;
 
     private TextView status;
     private LinearLayout statusList;
@@ -250,11 +252,32 @@ public class InstallActivity extends Activity {
     }
 
     private boolean appOpsProbeStarted;
+    private boolean resumed;
+    private boolean checklistLoading;
+    private String checklistShown;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable checklistTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!resumed) return;
+            if (!running) showChecklist();
+            handler.postDelayed(this, CHECKLIST_REFRESH_MS);
+        }
+    };
+
+    @Override
+    protected void onPause() {
+        resumed = false;
+        handler.removeCallbacks(checklistTick);
+        super.onPause();
+    }
 
     @Override
     protected void onResume() {
         super.onResume();
-        showChecklist();
+        resumed = true;
+        handler.removeCallbacks(checklistTick);
+        handler.post(checklistTick);
         if (running || appOpsProbeStarted) return;
         if (getPackageManager().checkPermission(
                 "android.permission.GET_APP_OPS_STATS", getPackageName())
@@ -276,10 +299,35 @@ public class InstallActivity extends Activity {
         }, "dcl-appops").start();
     }
 
+    /** Reads the checklist off the main thread; appops queries start processes. */
     private void showChecklist() {
-        if (statusList == null) return;
+        if (statusList == null || checklistLoading) return;
+        checklistLoading = true;
+        final Context app = getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final List<DclStatus> items = DclStatus.collect(app);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        checklistLoading = false;
+                        if (!isFinishing()) renderChecklist(items);
+                    }
+                });
+            }
+        }, "dcl-status").start();
+    }
+
+    private void renderChecklist(List<DclStatus> items) {
+        StringBuilder key = new StringBuilder();
+        for (int i = 0; i < items.size(); i++) {
+            DclStatus item = items.get(i);
+            key.append(item.title).append(item.done).append(item.unknown).append(item.detail).append('\n');
+        }
+        if (key.toString().equals(checklistShown)) return;
+        checklistShown = key.toString();
         statusList.removeAllViews();
-        List<DclStatus> items = DclStatus.collect(this);
         int done = 0;
         int required = 0;
         int unknown = 0;
@@ -338,6 +386,7 @@ public class InstallActivity extends Activity {
     @Override
     protected void onDestroy() {
         stopPoll = true;
+        handler.removeCallbacks(checklistTick);
         super.onDestroy();
     }
 
@@ -414,6 +463,10 @@ public class InstallActivity extends Activity {
 
     private void onHideClicked() {
         if (running || !isA9()) return;
+        if (installedDcl() == null) {
+            log.setText("Сначала установите DCL. Штатный лаунчер скрывается всегда, без DCL не останется рабочего стола.");
+            return;
+        }
         expectReboot = true;
         setBusy(true);
         hideSelected.setText("Скрытие… ГУ перезагрузится");
@@ -598,17 +651,7 @@ public class InstallActivity extends Activity {
     private void arm(String script) throws Exception {
         new File(InstallPlan.RESULT_FILE).delete();
         new File(InstallPlan.LOG_FILE).delete();
-        FileOutputStream out = new FileOutputStream(InstallPlan.AUTORUN);
-        try {
-            out.write(script.getBytes("UTF-8"));
-        } finally {
-            out.close();
-        }
-        exec(new String[] {"chmod", "777", InstallPlan.AUTORUN});
-        new File(InstallPlan.FLAG).createNewFile();
-        exec(new String[] {"setprop", InstallPlan.PROP, ""});
-        Thread.sleep(300);
-        exec(new String[] {"setprop", InstallPlan.PROP, InstallPlan.FLAG});
+        MbDaemon.run(script, MbDaemon.INSTALL_BODY);
     }
 
     private void poll() throws Exception {
@@ -685,7 +728,7 @@ public class InstallActivity extends Activity {
             grantPermissions.setText("Выдать разрешения");
         }
         if (hideSelected != null) {
-            hideSelected.setEnabled(!running);
+            hideSelected.setEnabled(!running && installed != null);
             hideSelected.setText("Скрыть выбранные приложения");
         }
         if (changeWallpaper != null) {
@@ -804,17 +847,6 @@ public class InstallActivity extends Activity {
             }
         } finally {
             in.close();
-        }
-    }
-
-    private static void exec(String[] cmd) throws Exception {
-        Process process = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        if (!process.waitFor(8, TimeUnit.SECONDS)) {
-            process.destroy();
-            throw new IllegalStateException("Таймаут: " + cmd[0]);
-        }
-        if (process.exitValue() != 0) {
-            throw new IllegalStateException(cmd[0] + " завершилась с кодом " + process.exitValue());
         }
     }
 

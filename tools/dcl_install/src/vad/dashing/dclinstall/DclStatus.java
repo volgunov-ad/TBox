@@ -7,9 +7,11 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.Log;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,9 +56,11 @@ final class DclStatus {
         rows.add(row("Чтение журнала", permission(packages, "android.permission.READ_LOGS"), false, ""));
         rows.add(row("Свободные окна", "1".equals(global(context, "enable_freeform_support")), false, ""));
         rows.add(row("Полный экран", "immersive.full=*".equals(global(context, "policy_control")), false, ""));
-        rows.add(row("Доступ к уведомлениям", secureContains(context, "enabled_notification_listeners", InstallPlan.DCL_NOTIFICATION), false, ""));
-        rows.add(row("Служба специальных возможностей", accessibility(context), false, ""));
-        rows.add(row("Обои для быстрой загрузки", wallpaperReady(context), false, ""));
+        boolean bootPending = installed && bootFixPending();
+        rows.add(afterBoot("Доступ к уведомлениям",
+                secureContains(context, "enabled_notification_listeners", InstallPlan.DCL_NOTIFICATION), bootPending));
+        rows.add(afterBoot("Служба специальных возможностей", accessibility(context), bootPending));
+        rows.add(wallpaperRow(context));
         rows.add(row("Программа флешек", usbReady(packages), false, usbDetail(packages)));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
         rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
@@ -138,23 +142,13 @@ final class DclStatus {
                 + "pm grant " + context.getPackageName() + " " + OP_READ
                 + " > /sdcard/dcl_appops_grant.txt 2>&1\n"
                 + "echo EXIT:$? >> /sdcard/dcl_appops_grant.txt\n"
-                + "rm -f " + InstallPlan.AUTORUN + " " + InstallPlan.FLAG + "\n"
+                + "rm -f \"$0\" " + InstallPlan.AUTORUN + " " + InstallPlan.FLAG + "\n"
                 + "setprop " + InstallPlan.PROP + " ''\n";
         try {
-            new java.io.File("/sdcard/dcl_appops_grant.txt").delete();
-            java.io.FileOutputStream out = new java.io.FileOutputStream(InstallPlan.AUTORUN);
-            try {
-                out.write(script.getBytes("UTF-8"));
-            } finally {
-                out.close();
-            }
-            command("chmod", "777", InstallPlan.AUTORUN);
-            new java.io.File(InstallPlan.FLAG).createNewFile();
-            command("setprop", InstallPlan.PROP, "");
-            Thread.sleep(300);
-            command("setprop", InstallPlan.PROP, InstallPlan.FLAG);
+            new File("/sdcard/dcl_appops_grant.txt").delete();
+            MbDaemon.run(script, MbDaemon.INSTALL_BODY);
             long deadline = System.currentTimeMillis() + 15000L;
-            java.io.File result = new java.io.File("/sdcard/dcl_appops_grant.txt");
+            File result = new File("/sdcard/dcl_appops_grant.txt");
             while (System.currentTimeMillis() < deadline && !result.isFile()) {
                 Thread.sleep(300);
             }
@@ -206,14 +200,42 @@ final class DclStatus {
         return value == null ? "" : value.trim();
     }
 
-    private static boolean wallpaperReady(Context context) {
+    private static final String WALLPAPER_TITLE = "Обои для быстрой загрузки";
+    private static final long BOOT_FIX_WINDOW_MS = 3 * 60 * 1000L;
+
+    /** Boot drops these two grants; BootReceiver writes them back about 20 s after unlock. */
+    private static DclStatus afterBoot(String title, boolean done, boolean pending) {
+        if (done || !pending) return row(title, done, false, "");
+        Log.i(TAG, "pending " + title);
+        return new DclStatus(title, false, true, false, "вписываются после загрузки");
+    }
+
+    private static boolean bootFixPending() {
+        long uptime = SystemClock.elapsedRealtime();
+        if (uptime >= BOOT_FIX_WINDOW_MS) return false;
+        File result = new File(InstallPlan.BOOT_RESULT_FILE);
+        long bootAt = System.currentTimeMillis() - uptime;
+        return !result.isFile() || result.lastModified() < bootAt;
+    }
+
+    private static DclStatus wallpaperRow(Context context) {
+        android.app.WallpaperInfo info;
         try {
-            android.app.WallpaperInfo info = WallpaperManager.getInstance(context).getWallpaperInfo();
-            if (info == null || info.getComponent() == null) return false;
-            return InstallPlan.BOOT_WALLPAPER.equals(info.getComponent().flattenToString());
-        } catch (Throwable ignored) {
-            return false;
+            info = WallpaperManager.getInstance(context).getWallpaperInfo();
+        } catch (Throwable t) {
+            Log.i(TAG, "wallpaper info failed", t);
+            return new DclStatus(WALLPAPER_TITLE, false, true, false, "не удалось проверить");
         }
+        if (info == null || info.getComponent() == null) {
+            return row(WALLPAPER_TITLE, false, false,
+                    "сейчас стоят штатные; нажмите «Поменять картинку обоев», "
+                            + "после перезагрузки установщик вернёт свои сам");
+        }
+        String component = info.getComponent().flattenToString();
+        if (InstallPlan.BOOT_WALLPAPER.equals(component)) return row(WALLPAPER_TITLE, true, false, "");
+        String owner = InstallPlan.DCL_PACKAGE.equals(info.getPackageName()) ? "DCL" : info.getPackageName();
+        return row(WALLPAPER_TITLE, false, false, "сейчас стоят обои " + owner
+                + ", они не готовы до входа в систему; нажмите «Поменять картинку обоев»");
     }
 
     /**

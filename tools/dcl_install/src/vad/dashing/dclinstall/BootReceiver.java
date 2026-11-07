@@ -1,18 +1,24 @@
 package vad.dashing.dclinstall;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.app.WallpaperManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.SystemClock;
 import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.util.concurrent.TimeUnit;
 
 /**
- * After unlock, let vold scan USB sticks and put DCL's notification listener
- * and accessibility service back. Waits on boot so UsbMount can use
- * /sdcard/autorun.sh first; this script then unlocks USB again.
+ * After unlock, let vold scan USB sticks, put DCL's notification listener
+ * and accessibility service back, and restore the boot wallpaper if the system
+ * dropped it. BOOT_COMPLETED is ordered: holding it would delay every later
+ * receiver, UsbMount included. So boot only sets an alarm, and the alarm arms
+ * the script once UsbMount has used /sdcard/autorun.sh.
  */
 public class BootReceiver extends BroadcastReceiver {
     static final String ACTION_ARM = "vad.dashing.dclinstall.ARM";
@@ -21,14 +27,16 @@ public class BootReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        final PendingResult pending = goAsync();
         final Context app = context.getApplicationContext();
-        final boolean fromBoot = intent != null && !ACTION_ARM.equals(intent.getAction());
+        if (intent == null || !ACTION_ARM.equals(intent.getAction())) {
+            scheduleArm(app);
+            return;
+        }
+        final PendingResult pending = goAsync();
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    if (fromBoot) Thread.sleep(USB_MOUNT_DELAY_MS);
                     arm(app);
                 } catch (Exception e) {
                     Log.e(TAG, "boot fix failed", e);
@@ -39,25 +47,48 @@ public class BootReceiver extends BroadcastReceiver {
         }, "dcl-boot-fix").start();
     }
 
+    private static void scheduleArm(Context context) {
+        Intent arm = new Intent(ACTION_ARM).setClass(context, BootReceiver.class);
+        PendingIntent operation = PendingIntent.getBroadcast(
+                context, 0, arm, PendingIntent.FLAG_UPDATE_CURRENT);
+        AlarmManager alarms = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        alarms.setExact(AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + USB_MOUNT_DELAY_MS, operation);
+        Log.i(TAG, "boot fix scheduled");
+    }
+
     private static void arm(Context context) throws Exception {
         File helper = new File(context.getFilesDir(), "setwallpaper.dex");
         File unlock = new File(context.getFilesDir(), "unlockusb.dex");
         copyAsset(context, "setwallpaper.dex", helper);
         copyAsset(context, "unlockusb.dex", unlock);
+        boolean restoreWallpaper = wallpaperLost(context);
+        Log.i(TAG, "restore wallpaper " + restoreWallpaper);
         String script = new InstallPlan("", false, false, false, false, false, false)
-                .toBootScript(helper.getAbsolutePath(), unlock.getAbsolutePath());
-        FileOutputStream out = new FileOutputStream(InstallPlan.AUTORUN);
-        try {
-            out.write(script.getBytes("UTF-8"));
-        } finally {
-            out.close();
-        }
-        exec(new String[] {"chmod", "777", InstallPlan.AUTORUN});
-        new File(InstallPlan.FLAG).createNewFile();
-        exec(new String[] {"setprop", InstallPlan.PROP, ""});
-        Thread.sleep(300);
-        exec(new String[] {"setprop", InstallPlan.PROP, InstallPlan.FLAG});
+                .toBootScript(helper.getAbsolutePath(), unlock.getAbsolutePath(), restoreWallpaper);
+        MbDaemon.run(script, MbDaemon.BOOT_BODY);
         Log.i(TAG, "boot fix armed");
+    }
+
+    /**
+     * Force-stopping this package makes the system drop its wallpaper back to the stock one,
+     * which lives in SystemUI. With SystemUI hidden that costs a 30 s wait on every boot.
+     * Another live wallpaper is the user's choice and is left alone.
+     */
+    private static boolean wallpaperLost(Context context) {
+        if (!WallpaperStore.modeFile(context).isFile()) return false;
+        try {
+            context.getPackageManager().getPackageInfo(InstallPlan.SYSTEMUI, 0);
+            return false;
+        } catch (PackageManager.NameNotFoundException hidden) {
+            // SystemUI is hidden, so the stock wallpaper cannot draw.
+        }
+        try {
+            return WallpaperManager.getInstance(context).getWallpaperInfo() == null;
+        } catch (Throwable t) {
+            Log.i(TAG, "wallpaper info failed", t);
+            return false;
+        }
     }
 
     private static void copyAsset(Context context, String name, File dest) throws Exception {
@@ -73,17 +104,6 @@ public class BootReceiver extends BroadcastReceiver {
             }
         } finally {
             in.close();
-        }
-    }
-
-    private static void exec(String[] cmd) throws Exception {
-        Process process = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-        if (!process.waitFor(8, TimeUnit.SECONDS)) {
-            process.destroy();
-            throw new IllegalStateException("timeout: " + cmd[0]);
-        }
-        if (process.exitValue() != 0) {
-            throw new IllegalStateException(cmd[0] + " exit " + process.exitValue());
         }
     }
 }
