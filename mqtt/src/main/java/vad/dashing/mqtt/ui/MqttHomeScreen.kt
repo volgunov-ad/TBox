@@ -1,12 +1,17 @@
 package vad.dashing.mqtt.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,13 +48,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import vad.dashing.mqtt.ha.EntityGroup
+import vad.dashing.mqtt.ha.entityTopicPaths
+import vad.dashing.mqtt.ha.formatEntityTopicCaption
 import vad.dashing.mqtt.settings.MqttSettings
 import vad.dashing.mqtt.wireguard.parseWgConf
 import vad.dashing.mqtt.ui.theme.tboxBody
@@ -554,8 +563,23 @@ private fun EntitiesTab(
     EntityGroup.entries.forEach { group ->
         val inGroup = state.entities.filter { it.group == group }
         val rows = inGroup.filter { entity ->
+            val topics = entityTopicPaths(
+                settings.topicPrefix,
+                settings.deviceId,
+                entity.objectId,
+                entity.writable,
+                entity.component,
+            )
             (!onlySelected || entity.objectId in settings.selectedObjectIds) &&
-                entityMatchesFilter(entity.label, entity.description, entity.objectId, group.title, filterText)
+                entityMatchesFilter(
+                    entity.label,
+                    entity.description,
+                    entity.objectId,
+                    group.title,
+                    filterText,
+                    topics.stateTopic,
+                    topics.commandTopic.orEmpty(),
+                )
         }
         if (rows.isEmpty()) return@forEach
         any = true
@@ -579,10 +603,18 @@ private fun EntitiesTab(
             }
         }
         rows.forEach { entity ->
+            val topics = entityTopicPaths(
+                settings.topicPrefix,
+                settings.deviceId,
+                entity.objectId,
+                entity.writable,
+                entity.component,
+            )
             SettingSwitch(
                 checked = entity.objectId in settings.selectedObjectIds,
                 title = entity.label,
                 description = entity.description,
+                topicsCaption = formatEntityTopicCaption(topics),
                 onChecked = { enabled ->
                     viewModel.toggleEntity(entity.objectId, enabled)
                     onSettingsSaved()
@@ -742,20 +774,24 @@ private fun WqttWizardSection(
     }
 }
 
-/** Same match as the widget picker: title, description and the stored key. */
+/** Same match as the widget picker: title, description, key, and MQTT topics. */
 internal fun entityMatchesFilter(
     label: String,
     description: String,
     objectId: String,
     groupTitle: String,
     query: String,
+    stateTopic: String = "",
+    commandTopic: String = "",
 ): Boolean {
     val needle = query.trim().lowercase()
     if (needle.isEmpty()) return true
     return label.lowercase().contains(needle) ||
         description.lowercase().contains(needle) ||
         objectId.lowercase().contains(needle) ||
-        groupTitle.lowercase().contains(needle)
+        groupTitle.lowercase().contains(needle) ||
+        stateTopic.lowercase().contains(needle) ||
+        commandTopic.lowercase().contains(needle)
 }
 
 @Composable
@@ -828,13 +864,16 @@ internal fun linkText(up: Boolean, sinceMs: Long, zone: ZoneId = ZoneId.systemDe
     return "$state с ${clockText(sinceMs, zone)}"
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SettingSwitch(
     checked: Boolean,
     title: String,
     description: String,
     onChecked: (Boolean) -> Unit,
+    topicsCaption: String = "",
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -857,6 +896,29 @@ private fun SettingSwitch(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (topicsCaption.isNotBlank()) {
+                Text(
+                    topicsCaption,
+                    style = MaterialTheme.typography.tboxBody.copy(
+                        fontSize = 18.sp,
+                        lineHeight = 24.sp,
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(top = 4.dp)
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("mqtt topics", topicsCaption))
+                                Toast.makeText(context, "Топики скопированы", Toast.LENGTH_SHORT).show()
+                            },
+                        ),
                 )
             }
         }
