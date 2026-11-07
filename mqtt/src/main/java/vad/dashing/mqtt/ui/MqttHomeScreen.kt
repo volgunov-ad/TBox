@@ -57,6 +57,8 @@ import vad.dashing.mqtt.ui.theme.tboxButton
 import vad.dashing.mqtt.ui.theme.tboxHeadline
 import vad.dashing.mqtt.ui.theme.tboxTabLabel
 import vad.dashing.mqtt.ui.theme.tboxTitle
+import vad.dashing.mqtt.wqtt.WqttDeviceAction
+import vad.dashing.mqtt.wqtt.WqttPacks
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -513,6 +515,8 @@ private fun EntitiesTab(
         return
     }
     val settings = state.settings
+    WqttWizardSection(state, viewModel, onSettingsSaved)
+    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
     TextField("Имя в Home Assistant", settings.deviceName) {
         viewModel.update { current -> current.copy(deviceName = it) }
         onSettingsSaved()
@@ -520,7 +524,7 @@ private fun EntitiesTab(
     SettingSwitch(
         checked = settings.discoveryEnabled,
         title = "Показывать в Home Assistant",
-        description = "Отправлять конфигурацию MQTT Discovery",
+        description = "Отправлять конфигурацию MQTT Discovery. Для Алисы через WQTT.ru это не нужно",
         onChecked = {
             viewModel.update { current -> current.copy(discoveryEnabled = it) }
             onSettingsSaved()
@@ -529,7 +533,7 @@ private fun EntitiesTab(
     SettingSwitch(
         checked = settings.acceptCommands,
         title = "Принимать команды",
-        description = "Выключено — команды в Home Assistant недоступны, датчики продолжают обновляться",
+        description = "Выключено — команды в Home Assistant и WQTT недоступны, датчики продолжают обновляться",
         onChecked = {
             viewModel.update { current -> current.copy(acceptCommands = it) }
             onSettingsSaved()
@@ -592,6 +596,127 @@ private fun EntitiesTab(
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun WqttWizardSection(
+    state: MqttHomeState,
+    viewModel: MqttHomeViewModel,
+    onSettingsSaved: () -> Unit,
+) {
+    SectionTitle("Яндекс Алиса (WQTT.ru)")
+    Text(
+        "WQTT не читает Home Assistant Discovery. Мастер создаёт устройства в кабинете dash.wqtt.ru по топикам TBox MQTT.",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+    OutlinedButton(onClick = viewModel::toggleWqtt) {
+        Text(
+            if (state.wqttOpen) "Скрыть мастер WQTT" else "Мастер WQTT → Алиса",
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    if (!state.wqttOpen) return
+    Text(
+        "Токен API: кабинет dash.wqtt.ru → настройки аккаунта / API. Заголовок Authorization: Token …",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+    TextField("Токен API WQTT", state.wqttTokenDraft, password = true) {
+        viewModel.setWqttTokenDraft(it)
+    }
+    TextField("Комната в Алисе", state.wqttRoomDraft) {
+        viewModel.setWqttRoomDraft(it)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = {
+                viewModel.saveWqttCredentials()
+                onSettingsSaved()
+            },
+            modifier = Modifier.weight(1f),
+            enabled = !state.wqttBusy,
+        ) {
+            Text("Сохранить токен", style = MaterialTheme.typography.tboxButton)
+        }
+        OutlinedButton(
+            onClick = viewModel::testWqttConnection,
+            modifier = Modifier.weight(1f),
+            enabled = !state.wqttBusy,
+        ) {
+            Text("Проверить", style = MaterialTheme.typography.tboxButton)
+        }
+    }
+    OutlinedButton(
+        onClick = viewModel::applyWqttBrokerToDraft,
+        enabled = !state.wqttBusy,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text("Подставить брокер из WQTT", style = MaterialTheme.typography.tboxButton)
+    }
+    if (state.wqttBrokerHint.isNotBlank()) {
+        Text(
+            state.wqttBrokerHint,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+    SectionTitle("Наборы устройств")
+    WqttPacks.ALL.forEach { pack ->
+        SettingSwitch(
+            checked = pack.id in state.wqttPacks,
+            title = pack.title,
+            description = if (pack.warns) {
+                "${pack.description}. Внимание: голосовые команды кузова"
+            } else {
+                pack.description
+            },
+            onChecked = { enabled -> viewModel.toggleWqttPack(pack.id, enabled) },
+        )
+    }
+    Button(
+        onClick = { viewModel.createWqttDevices(onSettingsSaved) },
+        enabled = !state.wqttBusy && state.wqttPacks.isNotEmpty(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        Text(
+            if (state.wqttBusy) "Создаю…" else "Создать в WQTT",
+            style = MaterialTheme.typography.tboxButton,
+        )
+    }
+    if (state.wqttMessage.isNotBlank()) {
+        Text(
+            state.wqttMessage,
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+    state.wqttResults.forEach { row ->
+        val color = when (row.action) {
+            WqttDeviceAction.FAILED -> MaterialTheme.colorScheme.error
+            WqttDeviceAction.SKIPPED -> MaterialTheme.colorScheme.onSurfaceVariant
+            WqttDeviceAction.CREATED, WqttDeviceAction.UPDATED -> MaterialTheme.colorScheme.primary
+        }
+        Text(
+            "${row.name}: ${row.message.ifBlank { row.action.name.lowercase() }}",
+            style = MaterialTheme.typography.tboxBody,
+            color = color,
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }
