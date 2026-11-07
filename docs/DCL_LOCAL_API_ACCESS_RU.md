@@ -2,7 +2,15 @@
 
 Инструкция для разработчика Dashing Club Launcher. После этих правок лаунчер получает токен API сам. Пользователь один раз нажимает «Разрешить» в TBox Monitor. Копировать токен и включать режим «Подключить приложение» не нужно.
 
-Сейчас это уже работает у **TBox MQTT** (`vad.dashing.mqtt`) и **VAD Voice** (`vad.dashing.voice`). DCL `0.7.7` так не делает: в нём есть только HTTP `POST /v1/pair/request` и поля `tbm_api_token` / `tbm_api_port`. Пока пакет не добавлен в Monitor, вызов провайдера отвечает `unknown_client`.
+Так же уже работают **TBox MQTT** (`vad.dashing.mqtt`) и **VAD Voice** (`vad.dashing.voice`). Пакет DCL зарегистрирован в `ExternalApiLocalClients` Monitor:
+
+| Поле | Значение |
+|------|----------|
+| Package Name | `ras.dashing.tbox.launcher` |
+| Display Name (диалог) | `Dashing Club Launcher` |
+| Signer #1 certificate SHA-256 digest (эталон с `launcher-ru-release.apk`) | `c78bcd6ff57fa4ea119cae592e145c0ec6b8bc2222b36ec7320972a40544a512` |
+
+Digest в код Monitor не прошивается: при первом «Разрешить» сохраняется SHA-256 сертификата реально установленного APK (формат — lowercase hex без двоеточий, как у `apksigner`). Смена ключа снова показывает диалог. Ранее сообщали digest `55c85c124c1d20d15ff130e7645738e0bd702bbfe535182fe679c9f2eca33cb5` — он от другого артефакта/ключа; для релизного `launcher-ru-release.apk` верен `c78bcd6f…`. DCL `0.7.7` ещё ходит только через HTTP `POST /v1/pair/request` и поля `tbm_api_token` / `tbm_api_port`; для провайдера нужна сборка DCL с `LocalAccessClient` (ниже) и Monitor с DCL в `ExternalApiLocalClients`.
 
 ## Что сделать в DCL
 
@@ -49,21 +57,14 @@
 
 8. HTTP-сопряжение `POST /v1/pair/request` оставить запасным путём, если провайдер вернул `not_supported`.
 
-## Что прислать нам
+## Регистрация в Monitor
 
-Одного описания недостаточно: пока пакет не записан в Monitor, DCL получает `unknown_client`.
+Пакет уже добавлен в `ExternalApiLocalClients` (см. таблицу выше). На головном устройстве нужны сборка Monitor с этой записью и DCL, который вызывает `LocalAccessClient`. Первый запрос показывает один диалог Monitor. Дальше токен обновляется сам.
 
-1. Имя пакета. Если это по-прежнему `ras.dashing.tbox.launcher`, так и напишите.
-2. Подпись, которой подписывается APK для пользователей, и её SHA-256. Сертификат не прошивается в Monitor заранее: при первом «Разрешить» Monitor запоминает сертификат вызвавшего APK. Следующий токен выдаётся только тому же пакету с тем же сертификатом. Смена ключа снова показывает диалог.
-3. Текст имени в диалоге, например «Dashing Club Launcher».
-4. Тестовый APK, в котором вызов провайдера уже есть. Подойдёт сборка, которая при отсутствии токена вызывает `awaitAccess` и пишет в logcat статус (`granted`, `pending`, `unknown_client`).
-
-SHA-256 сертификата:
+Если сменится ключ подписи релизных APK, пришлите новый `Signer #1 certificate SHA-256 digest` из:
 
 ```
-apksigner verify --print-certs DCLv077ru.apk
+apksigner verify --print-certs <dcl.apk>
 ```
 
-Нужна строка `Signer #1 certificate SHA-256 digest`.
-
-После этого мы добавляем пакет в `ExternalApiLocalClients` и выпускаем сборку TBox Monitor. На головном устройстве должны стоять эта сборка Monitor и новый DCL. Первый запуск лаунчера показывает один диалог Monitor. Дальше токен обновляется сам.
+Повторно править `ExternalApiLocalClients` не нужно: достаточно, чтобы пользователь снова нажал «Разрешить» на ГУ.

@@ -8,6 +8,7 @@ object ExternalApiLocalClients {
     private val names = mapOf(
         "vad.dashing.mqtt" to "TBox MQTT",
         "vad.dashing.voice" to "VAD Voice",
+        "ras.dashing.tbox.launcher" to "Dashing Club Launcher",
     )
 
     fun nameOf(packageName: String): String? = names[packageName]
