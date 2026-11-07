@@ -107,12 +107,15 @@ public class InstallActivity extends Activity {
                         + "и там, где окно не закрывает фон."));
         RadioGroup wallpapers = new RadioGroup(this);
         pictureWallpaper = radio("Картинка по умолчанию");
-        pictureWallpaper.setChecked(true);
         blackWallpaper = radio("Чёрный фон");
         customWallpaper = radio("Своя картинка");
+        pictureWallpaper.setId(View.generateViewId());
+        blackWallpaper.setId(View.generateViewId());
+        customWallpaper.setId(View.generateViewId());
         wallpapers.addView(pictureWallpaper);
         wallpapers.addView(blackWallpaper);
         wallpapers.addView(customWallpaper);
+        wallpapers.check(pictureWallpaper.getId());
         wallpapers.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(RadioGroup group, int checkedId) {
