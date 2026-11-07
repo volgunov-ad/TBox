@@ -66,8 +66,23 @@ internal object KeyPressDiagnosticFormat {
             "value=${rawValue(event.value)} type=${event.valueType} timestamp=$timestamp status=$status"
     }
 
-    fun adayo(action: String, hardKey: String?): String =
-        "A10 Adayo keyEvent action=$action hardKey=${hardKey ?: "-"}"
+    /** `InputKey` is the int code from `android.car.input.service`. `hardKey` is the older string extra. */
+    fun adayo(action: String, hardKey: String?, inputKey: Int?): String {
+        val input = if (inputKey != null) {
+            val name = runCatching { KeyEvent.keyCodeToString(inputKey) }.getOrNull()
+                ?.takeIf { it.isNotBlank() && it != inputKey.toString() }
+            if (name != null) " InputKey=$inputKey $name" else " InputKey=$inputKey"
+        } else {
+            ""
+        }
+        val named = hardKey?.takeIf { it.isNotBlank() }
+        val hard = when {
+            named != null -> " hardKey=$named"
+            inputKey == null -> " hardKey=-"
+            else -> ""
+        }
+        return "A10 Adayo keyEvent action=$action$input$hard"
+    }
 
     fun android(action: String, keyCode: Long, nativeEvent: KeyEvent?): String {
         val native = if (nativeEvent != null) {

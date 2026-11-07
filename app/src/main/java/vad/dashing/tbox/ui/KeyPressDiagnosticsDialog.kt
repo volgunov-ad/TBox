@@ -91,7 +91,8 @@ fun KeyPressDiagnosticsDialog(
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(receiveContext: Context, intent: Intent) {
                     val action = intent.action ?: return
-                    append(KeyPressDiagnosticFormat.adayo(action, intent.getStringExtra("hardKey")))
+                    val inputKey = if (intent.hasExtra("InputKey")) intent.getIntExtra("InputKey", 0) else null
+                    append(KeyPressDiagnosticFormat.adayo(action, intent.getStringExtra("hardKey"), inputKey))
                 }
             }
             val filter = IntentFilter().apply {

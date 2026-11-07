@@ -79,11 +79,20 @@ class KeyPressDiagnosticsTest {
 
     @Test
     fun adayoFormat_includesActionAndHardKey() {
-        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", "K_PTT")
+        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", "K_PTT", null)
 
         assertTrue(line.contains("action=adayo.keyEvent.onKeyDown"))
         assertTrue(line.contains("hardKey=K_PTT"))
-        assertTrue(KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyUp", null).contains("hardKey=-"))
+        assertTrue(KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyUp", null, null).contains("hardKey=-"))
+    }
+
+    @Test
+    fun adayoFormat_includesCarInputKeyCode() {
+        val line = KeyPressDiagnosticFormat.adayo("adayo.keyEvent.onKeyDown", null, 24)
+
+        assertTrue(line.contains("action=adayo.keyEvent.onKeyDown"))
+        assertTrue(line.contains("InputKey=24"))
+        assertFalse(line.contains("hardKey=-"))
     }
 
     @Test
