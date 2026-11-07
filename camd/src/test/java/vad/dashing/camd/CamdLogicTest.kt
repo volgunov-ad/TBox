@@ -62,6 +62,14 @@ class DaemonScriptTest {
     }
 }
 
+class CamdPortTest {
+    @Test
+    fun apiPortDoesNotCollideWithMonitorOrMqtt() {
+        assertTrue(DaemonScripts.API_PORT != 8765)
+        assertTrue(DaemonScripts.API_PORT != 8766)
+    }
+}
+
 class CamdApiReplyTest {
     @Test
     fun statusDoesNotNeedTheHeadUnit() {

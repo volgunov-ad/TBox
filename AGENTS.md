@@ -147,7 +147,7 @@ Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing
 
 ### Camera window app (`:camd`)
 
-Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). Skeleton so far: one qcarcam window via a root daemon, local API `127.0.0.1:8766`. Recording, several windows, and the TBox/DCL clients are not built.
+Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). Skeleton so far: one qcarcam window via a root daemon, local API `127.0.0.1:8770` (`8766` is TBox MQTT). Recording, several windows, and the TBox/DCL clients are not built.
 
 ```
 ./gradlew :camd:testDebugUnitTest

@@ -19,7 +19,8 @@ object DaemonScripts {
     const val AUTORUN = "/sdcard/autorun.sh"
     const val AUTORUN_FLAG = "/sdcard/autorun.flag"
     const val AUTORUN_PROP = "vendor.autorun.sdcard.logfile"
-    const val API_PORT = 8766
+    /** 8765 is TBox Monitor, 8766 is TBox MQTT local status. */
+    const val API_PORT = 8770
 
     fun daemon(): String = lf(
         "#!/system/bin/sh",
