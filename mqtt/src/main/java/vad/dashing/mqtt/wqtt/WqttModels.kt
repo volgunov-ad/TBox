@@ -108,6 +108,21 @@ data class WqttProvisionReport(
     val skipped: List<WqttSkippedEntity> = emptyList(),
 )
 
+data class WqttCleanupCandidate(
+    val id: Int,
+    val name: String,
+    val room: String,
+)
+
+data class WqttCleanupReport(
+    val deleted: Int,
+    val failed: Int,
+    val candidates: List<WqttCleanupCandidate> = emptyList(),
+    val refreshed: Boolean = false,
+    val refreshMessage: String = "",
+    val errors: List<String> = emptyList(),
+)
+
 class WqttApiException(
     val httpStatus: Int,
     message: String,
