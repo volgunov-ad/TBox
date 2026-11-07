@@ -116,6 +116,23 @@ final class InstallPlan {
         return sh.toString();
     }
 
+    /**
+     * Re-apply the two grants that boot drops: notification listener and the
+     * launcher accessibility service. DCL is not directBootAware, so the system
+     * removes both while user 0 is still locked.
+     */
+    String toListenerScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || exit 0\n");
+        sh.append("echo STEP listeners\n");
+        sh.append("cmd notification allow_listener ").append(q(DCL_NOTIFICATION)).append(" || fail notification\n");
+        sh.append("append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
+        sh.append("append_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
+        sh.append("settings put secure accessibility_enabled 1 || fail accessibility\n");
+        finishScript(sh, false);
+        return sh.toString();
+    }
+
     /** Undo installer changes and return the head unit to the stock launcher. */
     String toRestoreScript() {
         StringBuilder sh = scriptHeader();
