@@ -3,6 +3,7 @@ package vad.dashing.mqtt.wqtt
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.HaComponent
 import vad.dashing.mqtt.ha.MEDIA_OBJECT_ID
+import vad.dashing.mqtt.ha.OptionLabels
 import vad.dashing.mqtt.ha.Topics
 import vad.dashing.mqtt.ha.WritePair
 
@@ -283,7 +284,7 @@ object WqttDeviceMapper {
                 return MapOutcome.Devices(out)
             }
             pairs.forEach { pair ->
-                val action = optionActionLabel(pair.state)
+                val action = optionActionLabel(pair.state, pair)
                 out += WqttDevicePayload(
                     stableKey = "entity_${entity.objectId}_opt_${Topics.safeObjectId(pair.state)}",
                     name = "$label: $action",
@@ -293,6 +294,7 @@ object WqttDeviceMapper {
                         WqttOnOff(
                             topicCmd = Topics.set(base, entity.objectId),
                             topicState = "",
+                            // Set payload stays the raw option key Alice/WQTT must publish.
                             cmdOn = pair.state,
                             cmdOff = pair.state,
                         ),
@@ -506,14 +508,9 @@ object WqttDeviceMapper {
         }
     }
 
-    /** Russian action labels for common window/cover/mode option keys. */
-    internal fun optionActionLabel(state: String): String = when (state.lowercase()) {
-        "opened", "open" -> "открыть"
-        "closed", "close" -> "закрыть"
-        "vent" -> "щель"
-        "comfort_open", "comfort" -> "comfort"
-        else -> state
-    }
+    /** Alice-facing option name; see [OptionLabels]. Payload stays [state]. */
+    internal fun optionActionLabel(state: String, pair: WritePair? = null): String =
+        OptionLabels.actionLabel(state, pair)
 
     private val RANGE_LIKE_NEEDLES = listOf(
         "brightness", "backlight", "volume", "fan_speed",

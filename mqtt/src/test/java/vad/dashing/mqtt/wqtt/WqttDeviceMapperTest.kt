@@ -441,11 +441,67 @@ class WqttDeviceMapperTest {
     }
 
     @Test
-    fun optionActionLabelsPreferRussianForWindows() {
+    fun optionActionLabelsPreferRussianForWindowsAndSeats() {
         assertEquals("открыть", WqttDeviceMapper.optionActionLabel("opened"))
         assertEquals("закрыть", WqttDeviceMapper.optionActionLabel("closed"))
         assertEquals("щель", WqttDeviceMapper.optionActionLabel("vent"))
+        assertEquals("Подогрев 1", WqttDeviceMapper.optionActionLabel("heat_1"))
+        assertEquals("Вентиляция 1", WqttDeviceMapper.optionActionLabel("vent_1"))
         assertEquals("ECO", WqttDeviceMapper.optionActionLabel("ECO"))
+        assertEquals("Комфорт", WqttDeviceMapper.optionActionLabel("comfort"))
+        assertEquals("Лицо и ноги", WqttDeviceMapper.optionActionLabel("face_foot"))
+        // Human text on WritePair wins; raw set payload stays pair.state (tested below).
+        assertEquals(
+            "свой текст",
+            WqttDeviceMapper.optionActionLabel(
+                "heat_1",
+                WritePair("heat_1", 1.0, "свой текст"),
+            ),
+        )
+        assertEquals(
+            "Подогрев 1",
+            WqttDeviceMapper.optionActionLabel(
+                "heat_1",
+                WritePair("heat_1", null, "open"), // invoke key — not a display label
+            ),
+        )
+    }
+
+    @Test
+    fun seatModeButtonsUseRussianNamesButRawSetPayload() {
+        val types = catalog(devices = listOf(WqttNamedType(19, "Кнопка")))
+        val seat = CatalogEntity(
+            objectId = "front_left_seat_mode",
+            label = "Сиденье водителя",
+            description = "",
+            group = EntityGroup.BODY,
+            component = HaComponent.SELECT,
+            writable = true,
+            options = listOf("off", "heat_1", "vent_1"),
+            pairs = listOf(
+                WritePair("off", 0.0, null),
+                WritePair("heat_1", 1.0, null),
+                WritePair("vent_1", 4.0, null),
+            ),
+            canCommand = CanCommandBinding("vehicle", 80, "set"),
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("front_left_seat_mode"),
+            entities = listOf(seat),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        val heat = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_heat_1" }
+        assertEquals("Сиденье водителя: Подогрев 1", heat.name)
+        assertEquals("heat_1", heat.onOff.single().cmdOn)
+        val vent = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_vent_1" }
+        assertEquals("Сиденье водителя: Вентиляция 1", vent.name)
+        assertEquals("vent_1", vent.onOff.single().cmdOn)
+        val off = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_off" }
+        assertEquals("Сиденье водителя: Выключено", off.name)
+        assertEquals("off", off.onOff.single().cmdOn)
     }
 
     @Test

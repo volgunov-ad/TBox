@@ -258,11 +258,7 @@ private fun mergeCommand(
     }
     if (kind != "pulse") return
     pairs.forEach { pair ->
-        val action = when (pair.state) {
-            "open" -> "Открыть"
-            "close" -> "Закрыть"
-            else -> pair.state
-        }
+        val action = OptionLabels.actionLabel(pair.state, pair)
         rows += CatalogEntity(
             objectId = Topics.safeObjectId("can_${bus}_${propertyId}_${pair.state}"),
             label = "$label: $action",
