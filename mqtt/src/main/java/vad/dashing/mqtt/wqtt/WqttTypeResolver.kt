@@ -14,6 +14,13 @@ object WqttTypeResolver {
     fun switchType(catalog: WqttTypeCatalog): Int =
         find(catalog.devices, "выключ", "реле", "переключ") ?: FALLBACK_SWITCH
 
+    /**
+     * Momentary actions (trunk pulse, automations, builtins). Prefer «Кнопка» from
+     * GET /api/devices/types; fall back to switch — both use on_off + PRESS in our bridge.
+     */
+    fun buttonType(catalog: WqttTypeCatalog): Int =
+        find(catalog.devices, "кнопк") ?: switchType(catalog)
+
     fun thermostatType(catalog: WqttTypeCatalog): Int =
         find(catalog.devices, "термостат")
             ?: find(catalog.devices, "кондиционер")

@@ -751,7 +751,10 @@ private fun WqttWizardSection(
             modifier = Modifier.padding(top = 8.dp),
         )
     }
-    state.wqttResults.forEach { row ->
+    // SELECT expands to many WQTT cards; keep the result list readable.
+    val resultPreviewLimit = 40
+    val visibleResults = state.wqttResults.take(resultPreviewLimit)
+    visibleResults.forEach { row ->
         val color = when (row.action) {
             WqttDeviceAction.FAILED -> MaterialTheme.colorScheme.error
             WqttDeviceAction.SKIPPED -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -764,9 +767,29 @@ private fun WqttWizardSection(
             modifier = Modifier.padding(top = 2.dp),
         )
     }
-    state.wqttSkipped.forEach { row ->
+    val hiddenResults = state.wqttResults.size - visibleResults.size
+    if (hiddenResults > 0) {
+        Text(
+            "… и ещё $hiddenResults устройств (см. кабинет WQTT)",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    val skipPreviewLimit = 20
+    val visibleSkipped = state.wqttSkipped.take(skipPreviewLimit)
+    visibleSkipped.forEach { row ->
         Text(
             "${row.name}: пропуск — ${row.reason}",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    val hiddenSkipped = state.wqttSkipped.size - visibleSkipped.size
+    if (hiddenSkipped > 0) {
+        Text(
+            "… и ещё $hiddenSkipped пропусков",
             style = MaterialTheme.typography.tboxBody,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp),
