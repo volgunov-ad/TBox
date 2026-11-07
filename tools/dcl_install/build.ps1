@@ -21,11 +21,18 @@ New-Item -ItemType Directory -Force "$b\wallpaper-classes", "$b\app-classes", "$
 Copy-Item "$repo\tools\usb_mount\UsbMount.apk" "$b\assets\usbmount.apk"
 Copy-Item "$here\assets\default_wallpaper.jpg" "$b\assets\default_wallpaper.jpg"
 
-& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\wallpaper-classes" "$here\src\SetWallpaper.java"
+& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\wallpaper-classes" "$here\src\SetWallpaper.java" "$here\src\Unstop.java"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\wallpaper-classes\SetWallpaper.class"
+& "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\wallpaper-classes\SetWallpaper.class" "$b\wallpaper-classes\Unstop.class"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Move-Item "$b\assets\classes.dex" "$b\assets\setwallpaper.dex"
+
+New-Item -ItemType Directory -Force "$b\unlock-classes" | Out-Null
+& javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\unlock-classes" "$repo\tools\usb_mount\src\UnlockUsb.java"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& "$BuildTools\d8.bat" --min-api 22 --lib $androidJar --output "$b\assets" "$b\unlock-classes\UnlockUsb.class"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Move-Item "$b\assets\classes.dex" "$b\assets\unlockusb.dex"
 
 & javac -Xlint:-options -source 8 -target 8 -bootclasspath $androidJar -d "$b\app-classes" (Get-ChildItem -Recurse "$here\src\vad" -Filter *.java).FullName
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

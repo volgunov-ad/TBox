@@ -3,6 +3,7 @@ package vad.dashing.dclinstall;
 import android.app.WallpaperManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -56,7 +57,7 @@ final class DclStatus {
         rows.add(row("Доступ к уведомлениям", secureContains(context, "enabled_notification_listeners", InstallPlan.DCL_NOTIFICATION), false, ""));
         rows.add(row("Служба специальных возможностей", accessibility(context), false, ""));
         rows.add(row("Обои для быстрой загрузки", wallpaperReady(context), false, ""));
-        rows.add(row("Программа флешек", versionName(packages, "vad.dashing.usbmount") != null, false, ""));
+        rows.add(row("Программа флешек", usbReady(packages), false, usbDetail(packages)));
         rows.add(row("Штатный лаунчер скрыт", hidden(packages, InstallPlan.LAUNCHER), false, ""));
         rows.add(row("System UI скрыт", hidden(packages, InstallPlan.SYSTEMUI), true, ""));
         rows.add(row("IoT Tube скрыт", hidden(packages, InstallPlan.IOTTUBE), true, ""));
@@ -64,6 +65,30 @@ final class DclStatus {
         rows.add(row("Клиент голоса скрыт", hidden(packages, InstallPlan.SPEECH_CLIENT), true, ""));
         rows.add(row("Электронное руководство скрыто", hidden(packages, InstallPlan.MANUAL), true, ""));
         return rows;
+    }
+
+    private static boolean usbReady(PackageManager packages) {
+        PackageInfo info = usbPackage(packages);
+        if (info == null || info.applicationInfo == null) return false;
+        return (info.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) == 0;
+    }
+
+    private static String usbDetail(PackageManager packages) {
+        PackageInfo info = usbPackage(packages);
+        if (info == null) return "не установлена";
+        if (info.applicationInfo != null
+                && (info.applicationInfo.flags & ApplicationInfo.FLAG_STOPPED) != 0) {
+            return "установлена, но не запускается после загрузки";
+        }
+        return info.versionName == null ? "" : info.versionName;
+    }
+
+    private static PackageInfo usbPackage(PackageManager packages) {
+        try {
+            return packages.getPackageInfo("vad.dashing.usbmount", 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
     }
 
     private static DclStatus row(String title, boolean done, boolean optional, String detail) {

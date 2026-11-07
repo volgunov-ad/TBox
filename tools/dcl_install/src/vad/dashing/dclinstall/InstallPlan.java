@@ -67,6 +67,7 @@ final class InstallPlan {
         sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
         sh.append("echo STEP usbmount\n");
         sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
+        appendUnstopUsb(sh, PAYLOAD_DIR + "/setwallpaper.dex", true);
         sh.append("echo STEP wallpaper\n");
         sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
         sh.append(" app_process /system/bin SetWallpaper ").append(q(wallpaperComponent())).append(" || fail wallpaper\n");
@@ -117,13 +118,22 @@ final class InstallPlan {
     }
 
     /**
-     * Re-apply the two grants that boot drops: notification listener and the
-     * launcher accessibility service. DCL is not directBootAware, so the system
-     * removes both while user 0 is still locked.
+     * After unlock: let vold scan USB sticks, then put back the two grants boot drops.
+     * The USB package is installed stopped, so its own receiver misses BOOT_COMPLETED.
      */
-    String toListenerScript() {
+    String toBootScript(String helperDex, String unlockDex) {
         StringBuilder sh = scriptHeader();
-        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || exit 0\n");
+        sh.append("echo STEP usb\n");
+        appendUnstopUsb(sh, helperDex, false);
+        sh.append("CLASSPATH=").append(q(unlockDex));
+        sh.append(" app_process /system/bin UnlockUsb || echo WARN unlock_usb\n");
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || {\n");
+        sh.append("  echo OK\n");
+        sh.append("  echo OK > \"$RES\"\n");
+        sh.append("  rm -rf ").append(q(PAYLOAD_DIR)).append(' ').append(q(AUTORUN)).append(' ').append(q(FLAG)).append("\n");
+        sh.append("  setprop ").append(PROP).append(" ''\n");
+        sh.append("  exit 0\n");
+        sh.append("}\n");
         sh.append("echo STEP listeners\n");
         sh.append("cmd notification allow_listener ").append(q(DCL_NOTIFICATION)).append(" || fail notification\n");
         sh.append("append_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
@@ -260,6 +270,12 @@ final class InstallPlan {
         sh.append(op).append("\n");
         sh.append("appops get --user 0 ").append(DCL_PACKAGE).append(' ').append(op);
         sh.append(" | grep -F allow >/dev/null || fail appops_").append(op).append("\n");
+    }
+
+    private static void appendUnstopUsb(StringBuilder sh, String helperDex, boolean fail) {
+        sh.append("CLASSPATH=").append(q(helperDex));
+        sh.append(" app_process /system/bin Unstop vad.dashing.usbmount || ");
+        sh.append(fail ? "fail unstop_usb\n" : "echo WARN unstop_usb\n");
     }
 
     private static void hideIf(StringBuilder sh, boolean hide, String pkg) {
