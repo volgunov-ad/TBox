@@ -260,7 +260,9 @@ object WqttDeviceMapper {
         room: String,
         types: WqttTypeCatalog,
     ): MapOutcome {
-        if (entity.objectId.startsWith("window_") || entity.objectId.contains("sunroof") ||
+        if (entity.objectId.startsWith("window_") ||
+            entity.objectId.contains("sunroof") ||
+            entity.objectId.contains("sunshade") ||
             entity.objectId.contains("curtain")
         ) {
             if (!entity.writable) {
@@ -423,7 +425,7 @@ object WqttDeviceMapper {
     ): WqttDevicePayload = WqttDevicePayload(
         stableKey = "entity_${entity.objectId}",
         name = entity.label.ifBlank { entity.objectId },
-        type = WqttTypeResolver.switchType(types),
+        type = WqttTypeResolver.buttonType(types),
         room = room,
         onOff = listOf(
             WqttOnOff(
