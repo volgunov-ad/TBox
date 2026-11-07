@@ -27,6 +27,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.createDateTimeWidgetDateFormat
 import vad.dashing.tbox.fuelLitersForDisplay
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.trip.TripRepository
 import vad.dashing.tbox.seatModeToString
@@ -50,6 +51,7 @@ interface DataProvider {
 /** Keys for composite tiles only — same CAN data as public keys, different default decimal places. */
 object DashboardCompositeTileFlowKeys {
     const val ENGINE_TEMP_VOLTAGE_ENGINE = "engineTemperature_voltageEngineTile"
+    const val ENGINE_TEMP_VOLTAGE_ENGINE_CAN = "engineTemperature_voltageEngineTile_can"
     const val GEARBOX_OIL_TEMP_GEAR_TILE = "gearBoxOilTemperature_gearBoxTile"
     const val WHEEL1_PRESSURE_WHEELS_TILE = "wheel1Pressure_wheelsTile"
     const val WHEEL2_PRESSURE_WHEELS_TILE = "wheel2Pressure_wheelsTile"
@@ -61,6 +63,7 @@ object DashboardCompositeTileFlowKeys {
     const val WHEEL4_PRESSURE_WHEELS_TILE_CAN = "wheel4Pressure_wheelsTile_can"
 }
 
+const val VOLTAGE_CAN_FLOW_KEY = "voltage_can"
 const val ENGINE_RPM_CAN_FLOW_KEY = "engineRPM_can"
 const val ENGINE_TEMPERATURE_CAN_FLOW_KEY = "engineTemperature_can"
 const val CAR_SPEED_CAN_FLOW_KEY = "carSpeed_can"
@@ -155,7 +158,10 @@ class TboxDataProvider(
     private fun createFlowForKey(key: String, accuracy: Int?, dateTimeFormat: String): StateFlow<String> {
         fun eff(defaultDigits: Int) = effectiveDecimalPlaces(defaultDigits, accuracy)
         return when (key) {
-            "voltage" -> canViewModel.voltage.mapState { valueToString(it, eff(1)) }
+            "voltage" -> combine(canViewModel.voltage, HuMcuBoardVoltage.state) { fromTbox, fromHeadUnit ->
+                valueToString(fromTbox ?: fromHeadUnit, eff(1))
+            }.mapState { it }
+            VOLTAGE_CAN_FLOW_KEY -> HuMcuBoardVoltage.state.mapState { valueToString(it, eff(1)) }
             "steerAngle" -> canViewModel.steerAngle.mapState { valueToString(it, eff(1)) }
             STEER_ANGLE_CAN_FLOW_KEY ->
                 UniversalCanRepository.steerAngleState.mapState { valueToString(it, eff(1)) }
@@ -322,6 +328,8 @@ class TboxDataProvider(
             DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE -> canViewModel.engineTemperature.mapState {
                 valueToString(it, eff(0))
             }
+            DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE_CAN ->
+                UniversalCanRepository.engineTemperatureState.mapState { valueToString(it, eff(0)) }
             "gearBoxOilTemperature" -> canViewModel.gearBoxOilTemperature.mapState {
                 valueToString(it, eff(1))
             }
@@ -330,8 +338,12 @@ class TboxDataProvider(
                 valueToString(it, eff(0))
             }
             "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it, eff(1)) }
-            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY ->
-                UniversalCanRepository.currentGearNumberState.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY -> combine(
+                HuMcuBoardVoltage.currentGear,
+                UniversalCanRepository.currentGearNumberState,
+            ) { fromMcu, fromVhal ->
+                fromMcu ?: fromVhal
+            }.mapState { valueToString(it, eff(1)) }
             "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it, eff(1)) }
             GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY ->
                 UniversalCanRepository.targetGearNumberState.mapState { valueToString(it, eff(1)) }

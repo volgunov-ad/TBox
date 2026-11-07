@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.R
+import vad.dashing.tbox.boardVoltageFromHeadUnit
 import vad.dashing.tbox.AppDataViewModel
 import vad.dashing.tbox.BackgroundService
 import vad.dashing.tbox.CanDataViewModel
@@ -158,6 +159,8 @@ fun DashboardWidgetRenderer(
     val globalCruiseType by VehicleFeatureSettings.cruiseControlTypeFlow.collectAsStateWithLifecycle()
     val titleOverride = widgetConfig.customTitle
     val valueAccuracy = widgetConfig.valueAccuracy
+    val noTboxConnect by settingsViewModel.noTboxConnect.collectAsStateWithLifecycle()
+    val voltageFromHeadUnit = widgetConfig.boardVoltageFromHeadUnit(noTboxConnect)
     val currentTheme by tboxViewModel.currentTheme.collectAsStateWithLifecycle()
     val controlAppearance = rememberResolvedControlAppearance(
         config = widgetConfig,
@@ -315,9 +318,32 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "voltage" -> {
+            DashboardWidgetItem(
+                widget = if (voltageFromHeadUnit) {
+                    widget.copy(dataKey = VOLTAGE_CAN_FLOW_KEY)
+                } else {
+                    widget
+                },
+                dataProvider = dataProvider,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = dashboardChart,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         "voltage+engineTemperatureWidget" -> {
             DashboardVoltEngTempWidgetItem(
                 widget = widget,
+                useHeadUnit = voltageFromHeadUnit,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 dataProvider = dataProvider,
@@ -1901,7 +1927,7 @@ fun DashboardWidgetRenderer(
 
         "gearBoxCurrentGear" -> {
             DashboardWidgetItem(
-                widget = if (widgetConfig.useMbCanVhal) {
+                widget = if (widgetConfig.useMbCanVhal || noTboxConnect) {
                     widget.copy(dataKey = GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY)
                 } else {
                     widget

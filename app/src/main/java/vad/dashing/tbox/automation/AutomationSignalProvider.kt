@@ -33,6 +33,7 @@ import vad.dashing.tbox.location.GeoDisplayRepository
 import vad.dashing.tbox.location.LocIndicatorState
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.BodyComfortRawRead
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.MbCanAvailability
 import vad.dashing.tbox.mbcan.MbCanBinaryState
 import vad.dashing.tbox.mbcan.MbCanSeatModeState
@@ -70,6 +71,14 @@ class AutomationSignalProvider(
         } else {
             UniversalCanRepository.setSourceSignals(SOURCE_ID, huSignals)
         }
+        HuMcuBoardVoltage.setHeld(
+            SOURCE_ID,
+            keys.any { key ->
+                (key.signal == AutomationSignalId.VOLTAGE || key.signal == AutomationSignalId.CURRENT_GEAR) &&
+                    AutomationSignalCatalog.resolveSource(key.signal, key.source) ==
+                    AutomationSignalSource.HEAD_UNIT
+            },
+        )
 
         keys.forEach { key ->
             val flow = flowFor(key) ?: return@forEach
@@ -103,6 +112,7 @@ class AutomationSignalProvider(
         activeKeys = emptySet()
         ForegroundAppMonitor.setAutomationWatching(false)
         UniversalCanRepository.clearSourceNow(SOURCE_ID)
+        HuMcuBoardVoltage.setHeld(SOURCE_ID, false)
     }
 
     private fun flowFor(key: AutomationSignalKey): Flow<AutomationSignalValue>? =

@@ -140,8 +140,8 @@ object AutomationSignalCatalog {
             AutomationSignalId.VOLTAGE,
             "Напряжение",
             "В",
-            tboxOnly,
-            typicalRange = "Значения в В, обычно 11…15",
+            bothSources,
+            typicalRange = "Значения в В, обычно 11…15. На Android 10 головное устройство отдаёт кадр MCU 0x8305 (шаг 0.1 В)",
         ),
         number(
             AutomationSignalId.STEERING_ANGLE,
@@ -242,7 +242,8 @@ object AutomationSignalCatalog {
             "",
             bothSources,
             typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0. " +
-                "A9 BCM getGSM_GearShiftPos / A10 VHAL GSM_GearShiftPos; TBox gearBoxCurrentGear.",
+                "A9 BCM getGSM_GearShiftPos. A10: MCU 0x8300 байт gear, иначе VHAL GSM_GearShiftPos. " +
+                "TBox gearBoxCurrentGear.",
         ),
         number(
             AutomationSignalId.TARGET_GEAR,
@@ -1239,12 +1240,14 @@ object AutomationSignalCatalog {
 
     /**
      * HU backends that answer for a signal but never carry it: A9 mbCAN coolant is always 0.0,
-     * A9 has no target gear, A10 VHAL has no steering speed and no HU system mode.
+     * A9 has no target gear and no MCU board-voltage frame, A10 VHAL has no steering speed and no HU system mode.
      * TBox covers coolant, target gear, and steering speed. System mode stays head-unit only.
      */
     fun headUnitUnsupported(id: AutomationSignalId, mode: HeadUnitCanMode): Boolean = when (mode) {
         HeadUnitCanMode.Android9MbCan ->
-            id == AutomationSignalId.ENGINE_TEMPERATURE || id == AutomationSignalId.TARGET_GEAR
+            id == AutomationSignalId.ENGINE_TEMPERATURE ||
+                id == AutomationSignalId.TARGET_GEAR ||
+                id == AutomationSignalId.VOLTAGE
         HeadUnitCanMode.Android10Vhal ->
             id == AutomationSignalId.STEERING_SPEED || id == AutomationSignalId.HU_SYSTEM_MODE
     }

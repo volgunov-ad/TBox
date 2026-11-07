@@ -41,7 +41,10 @@ import vad.dashing.tbox.isSeatHeatVentSingleWidgetDataKey
 import vad.dashing.tbox.supportsWidgetButtonBinding
 import vad.dashing.tbox.TboxViewModel
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.isBoardVoltageWidgetDataKey
+import vad.dashing.tbox.needsHeadUnitEngineTemperature
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
@@ -123,8 +126,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalEngineRpm = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalEngineRpmEnabled() }
     }
-    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs) {
-        widgetConfigs.any { it.isMbCanVhalEngineTemperatureEnabled() }
+    val panelNeedsMbCanVhalEngineTemperature = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsHeadUnitEngineTemperature(noTboxConnect) }
     }
     val panelNeedsMbCanVhalCarSpeed = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalCarSpeedEnabled() }
@@ -166,6 +169,12 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsMbCanVhalSteering = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalSteeringEnabled() }
+    }
+    val panelNeedsBoardVoltage = remember(widgetConfigs) {
+        widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
+    }
+    val panelNeedsMcuGear = remember(widgetConfigs) {
+        widgetConfigs.any { it.dataKey == "gearBoxCurrentGear" }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
@@ -388,6 +397,20 @@ internal fun DashboardPanelGridAndFrames(
             onDispose {
                 UniversalCanRepository.enqueueClearSource("$mbCanInterestSourceId-pm25")
             }
+        }
+    }
+    LaunchedEffect(mbCanInterestSourceId, panelNeedsBoardVoltage, heavySubscriptionsEnabled) {
+        val hold = heavySubscriptionsEnabled && panelNeedsBoardVoltage
+        HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", hold)
+    }
+    LaunchedEffect(mbCanInterestSourceId, panelNeedsMcuGear, heavySubscriptionsEnabled) {
+        val hold = heavySubscriptionsEnabled && panelNeedsMcuGear
+        HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-mcu-gear", hold)
+    }
+    DisposableEffect(mbCanInterestSourceId) {
+        onDispose {
+            HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", false)
+            HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-mcu-gear", false)
         }
     }
     if (panelNeedsMbCanVhalSteering) {

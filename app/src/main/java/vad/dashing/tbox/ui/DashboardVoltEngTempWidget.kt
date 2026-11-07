@@ -36,14 +36,25 @@ fun DashboardVoltEngTempWidgetItem(
     showTitle: Boolean = false,
     titleOverride: String = "",
     singleLineDualMetrics: Boolean = false,
+    useHeadUnit: Boolean = false,
     textColor: Color? = null,
     backgroundColor: Color? = null
 ) {
-    val voltageFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow("voltage", valueAccuracy)
+    val voltageFlow = remember(valueAccuracy, useHeadUnit) {
+        dataProvider.getValueFlow(
+            if (useHeadUnit) VOLTAGE_CAN_FLOW_KEY else "voltage",
+            valueAccuracy,
+        )
     }
-    val engineTempFlow = remember(valueAccuracy) {
-        dataProvider.getValueFlow(DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE, valueAccuracy)
+    val engineTempFlow = remember(valueAccuracy, useHeadUnit) {
+        dataProvider.getValueFlow(
+            if (useHeadUnit) {
+                DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE_CAN
+            } else {
+                DashboardCompositeTileFlowKeys.ENGINE_TEMP_VOLTAGE_ENGINE
+            },
+            valueAccuracy,
+        )
     }
     val voltageStr by voltageFlow.collectAsStateWithLifecycle()
     val engineTempStr by engineTempFlow.collectAsStateWithLifecycle()

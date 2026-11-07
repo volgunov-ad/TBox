@@ -13,6 +13,7 @@ class AutomationSignalPlatformSourcesTest {
 
     @Test
     fun a9KeepsBrokenMbCanSignalsOnTbox() {
+        assertEquals(tboxOnly, AutomationSignalCatalog.sources(AutomationSignalId.VOLTAGE, a9))
         assertEquals(tboxOnly, AutomationSignalCatalog.sources(AutomationSignalId.ENGINE_TEMPERATURE, a9))
         assertEquals(tboxOnly, AutomationSignalCatalog.sources(AutomationSignalId.TARGET_GEAR, a9))
         assertEquals(both, AutomationSignalCatalog.sources(AutomationSignalId.STEERING_SPEED, a9))
@@ -22,6 +23,7 @@ class AutomationSignalPlatformSourcesTest {
     @Test
     fun a10KeepsSteeringSpeedOnTbox() {
         assertEquals(tboxOnly, AutomationSignalCatalog.sources(AutomationSignalId.STEERING_SPEED, a10))
+        assertEquals(both, AutomationSignalCatalog.sources(AutomationSignalId.VOLTAGE, a10))
         assertEquals(both, AutomationSignalCatalog.sources(AutomationSignalId.ENGINE_TEMPERATURE, a10))
         assertEquals(both, AutomationSignalCatalog.sources(AutomationSignalId.TARGET_GEAR, a10))
     }

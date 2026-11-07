@@ -1290,6 +1290,8 @@ object WidgetsRepository {
             AIR_QUALITY_WIDGET_DATA_KEY,
             STEER_ANGLE_WIDGET_DATA_KEY,
             STEER_SPEED_WIDGET_DATA_KEY,
+            "voltage",
+            "voltage+engineTemperatureWidget",
         )
     }
 
@@ -1300,7 +1302,6 @@ object WidgetsRepository {
     fun requiresTboxConnection(dataKey: String): Boolean {
         if (dataKey.isBlank()) return false
         return dataKey in setOf(
-            "voltage",
             "carSpeedAccurate",
             "cruiseSetSpeed",
             "breakingForce",
@@ -1311,7 +1312,6 @@ object WidgetsRepository {
             "gearBoxWidget",
             GEARBOX_MODE_CURRENT_GEAR_DATA_KEY,
             "insideTemperature",
-            "voltage+engineTemperatureWidget",
             "tempInOutWidget",
             "restartTbox",
         )

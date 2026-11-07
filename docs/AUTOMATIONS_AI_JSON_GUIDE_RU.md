@@ -790,7 +790,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `current_fuel_consumption` | `head_unit`, `tbox` | л/100 км |
 | `distance_to_empty_km` | `head_unit`, `tbox` | км |
 | `distance_to_maintenance_km` | `head_unit`, `tbox` | км |
-| `voltage` | `tbox` | В, обычно 11..15 |
+| `voltage` | `tbox` или `headUnit` (Android 10, кадр MCU `0x8305`, шаг 0.1 В; на Android 9 только `tbox`) | В, обычно 11..15 |
 | `steering_angle` | `head_unit`, `tbox` | градусы |
 | `steering_speed` | `head_unit`, `tbox` | °/с; на некоторых A10 недоступно |
 | `cruise_set_speed` | `head_unit`, `tbox` | км/ч |

@@ -13,6 +13,7 @@ import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationSignalValue
 import vad.dashing.tbox.automation.AutomationSignalValueType
 import vad.dashing.tbox.automation.huInterestForSignal
+import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.mbcan.BodyComfortDomain
 import vad.dashing.tbox.mbcan.MbCanSignal
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -69,6 +70,13 @@ class ExternalApiSignalReader {
      * climate/body set every ~2 s; on A10 that took 1–4 s and ran off the VHAL apply thread.
      */
     private suspend fun ensureHeadUnitSignals(ids: List<String>) {
+        val wantsDevStatus = ids.any { rawId ->
+            val signal = AutomationSignalId.fromStorageKey(rawId) ?: return@any false
+            (signal == AutomationSignalId.VOLTAGE || signal == AutomationSignalId.CURRENT_GEAR) &&
+                AutomationSignalCatalog.resolveSource(signal, AutomationSignalSource.HEAD_UNIT) ==
+                AutomationSignalSource.HEAD_UNIT
+        }
+        HuMcuBoardVoltage.setHeld(HEAD_UNIT_SOURCE_ID, wantsDevStatus)
         val signals = ids.mapNotNull { rawId ->
             AutomationSignalId.fromStorageKey(rawId)
                 ?.takeIf {

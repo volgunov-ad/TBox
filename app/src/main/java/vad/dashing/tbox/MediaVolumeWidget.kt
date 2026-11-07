@@ -130,7 +130,22 @@ fun isEngineTemperatureWidgetDataKey(dataKey: String): Boolean {
 }
 
 fun FloatingDashboardWidgetConfig.isMbCanVhalEngineTemperatureEnabled(): Boolean {
-    return isEngineTemperatureWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
+    return (isEngineTemperatureWidgetDataKey(dataKey) || dataKey == "voltage+engineTemperatureWidget") &&
+        isMbCanVhalWidgetEnabled()
+}
+
+fun isBoardVoltageWidgetDataKey(dataKey: String): Boolean {
+    return dataKey == "voltage" || dataKey == "voltage+engineTemperatureWidget"
+}
+
+/** Head-unit volts when the tile asks for CAN, or whenever TBox is switched off. */
+fun FloatingDashboardWidgetConfig.boardVoltageFromHeadUnit(noTboxConnect: Boolean): Boolean {
+    return isBoardVoltageWidgetDataKey(dataKey) && (useMbCanVhal || noTboxConnect)
+}
+
+fun FloatingDashboardWidgetConfig.needsHeadUnitEngineTemperature(noTboxConnect: Boolean): Boolean {
+    return isMbCanVhalEngineTemperatureEnabled() ||
+        (noTboxConnect && dataKey == "voltage+engineTemperatureWidget")
 }
 
 fun isCarSpeedWidgetDataKey(dataKey: String): Boolean {

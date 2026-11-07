@@ -504,7 +504,7 @@ UI ограничителя (раздел автонастроек «Огран�
 | **Android 9** — Brake fluid warning | `MBCanVehicleIcmDriverInfo.getICM_Brakefluid()` (type **44**) / `readIcmDriverWarningLamps()` | OEM текст «please add brake fluid» → warning lamp. CEM 1-bit (TBD): **1** warning / **0** ok (`IcmWarningLampDomain`) | — | **Только poll/pull** (тот же type 44, один read на оба сигнала). StateFlow `brakeFluidWarningState`. Автоматизации: HU-only `brake_fluid`; виджет `brakeFluidWidget` (Danger/красный; тап — no-op) |
 | **Android 10** — Brake fluid warning | VHAL **289414936** `R_0900_ICM_4_Brake_Fuel_Level` (OEM typo Fuel=Fluid) | CEM 1-bit **1** warning / **0** ok (`decodeCemBinaryActive`). **TBD на машине** | — | onChange + pull; `MbCanSignal.BrakeFluid` |
 | **Android 9** — Gear numbers (текущая) | `MBCanVehicleBcmStatus.getGSM_GearShiftPos()` (type **21**) | Сырое неотрицательное int as-is (`GearNumberDomain.decode`); target на A9 недоступен → null | — | **Push:** BCM + pull. StateFlows `currentGearNumberState` / `targetGearNumberState`. Виджеты `gearBoxCurrentGear` / `gearBoxPreparedGear` с `useMbCanVhal`. Автоматизации: `current_gear` / `target_gear` (bothSources) |
-| **Android 10** — Gear numbers | VHAL **289414947** `GSM_GearShiftPos`, **289414953** `EMS_TargetGearPosition` | Сырые int as-is | — | onChange + pull; `MbCanSignal.GearNumbers` (оба свойства). Target gear доступен только на A10 |
+| **Android 10** — Gear numbers | Текущая: MCU `0x8300` байт `gear` (0…15), иначе VHAL **289414947** `GSM_GearShiftPos`. Целевая: **289414953** `EMS_TargetGearPosition` | Сырые int as-is | — | onChange + pull; `MbCanSignal.GearNumbers`. Текущая на плитке `gearBoxCurrentGear` и в `current_gear` сначала из MCU. Target gear только VHAL, только на A10 |
 | **Android 9** — FRM DxTarObj | FRM `getFRM_3_DxTarObj` + `getFRM_3_ObjValid` | ObjValid **1 или 2** → dx raw; **0**/иное → null (`FrmDxTarObjDomain`). В журнале всегда `dx=` + `valid=` (единицы dx **не** подтверждены как метры). A9: интересные dx чаще при valid=**2** | — | **Push:** тот же FRM listener, что ACC (`syncFrmDectInfoListener`); interest `FrmTargetDistance` или `AccCruise`. StateFlow `frmDxTarObjState`. Виджет `frmDxTarObj` (только ГУ). Автоматизации: HU-only `frm_dx_tar_obj` |
 | **Android 10** — FRM DxTarObj | VHAL **289415681** `R_0B00_FRM_3_DxTarObj`, **289415683** `R_0B00_FRM_3_ObjValid` | то же | — | onChange + pull; `MbCanSignal.FrmTargetDistance` |
 | **Android 9** — FRM TimeGapSet_ICM | FRM `getFRM_3_TimeGapSet_ICM` | **0** средняя / **1** дальняя / **2** ближняя / **3** нет иконки. Тот же `accTimeGap`, что и строка настроек | — | **Push:** FRM listener → `AccTimeGap` |
@@ -538,6 +538,39 @@ UI ограничителя (раздел автонастроек «Огран�
 | **Android 10** — Steering angle | VHAL **557845548** `MCU_REPLY_STEERING_WHEEL_ANGLE` | **° = raw as-is** (`SteeringAngleDomain.decodeMcuReplyDeg`); °/с нет | — | onChange (continuous) + pull; `steerSpeed` на A10 всегда null; те же interest id, что на A9 |
 | **Android 9** — Lateral acceleration (YAS) | `MBCanVehicleSpeed.getfLateraAccaleleration()` (type **1** `eMBCAN_VEHICLE_SPEED`) | float **g** (±2 g; на шине не м/с²: по журналам 10.10.2026 `fYAS_2_LongitudinalAcceleration` ≈ (dv/dt)/9.81) → м/с² ×9.80665 (`LateralAccelerationDomain.decodeMbCanFloat`) | — | **Push:** `onCanVehicleSpeed` + pull `readLateralAccelerationMps2()`; `MbCanSignal.LateralAcceleration` (`WheelHeadingIntegrator`, geo-debug) |
 | **Android 10** — Lateral acceleration (YAS) | VHAL **289414960** `R_0900_YAS_1_LateraAccaleleration` | **g** → м/с² ×9.80665 (`LateralAccelerationDomain.decodeVhalRaw`: float в g при \|v\| ≤ 2 или raw CAN int 100..4000 → `raw / 1000 − 2` g; 0xFFFF и прочее — null). TBox cycle (`CycleDataRepository.lateralAcceleration`) — тот же сигнал в g | — | onChange + pull (`MbCanSignal.LateralAcceleration`); `WheelHeadingIntegrator`, geo-debug |
+| **Android 10** — Напряжение бортовой сети | MCU dev-status **`0x8305`** (`HuMcuBoardVoltage`, JNI `libmcucommproxy_jni`, functionId 3) | В колбэке uint16 **LE** (на проводе в журнале `fgemcucomm` тот же short BE), **В = raw / 10**; 0, `0xFFFF` и вне 6…18 В → null. В VHAL вольт нет. Виджет без флага: TBox, иначе это значение. `useMbCanVhal` или «Не подключаться к TBox» — только ГУ. Android 9: см. ниже, в виджет не подключено | — | callback, пока на экране виджет напряжения или автоматизация/API просит источник ГУ |
+
+### Напряжение бортовой сети
+
+Проверено 7.11.2026 на A10 `192.168.1.7:5555`, MCU `HMA214A-V03.00.23-251015`. Журнал `/sdcard/AdayoLog/logcat/128_004.log`.
+
+**A10.** Вольты не являются свойством VHAL. `MCU_REPLY_BATTERY_STATUS` (`0x21400C23`) — целый статус. `R_0400_CEM_UnderVoltageSts` — 1 бит предупреждения, `R_0400_FRAG_VoltageSt` — 2 бита. Константы диагностического APK `PERF_BCM_BAT_VOLTAGE`, `VEHICLE_CAN_TO_IVI_BAT_VOLTAGE`, `VEHICLE_CAN_TO_IVI_INPUT_VOLTAGE` на этом HAL не зарегистрированы.
+
+Измерение сидит в периодическом ответе MCU **dev-status `0x8305`** (раз в секунду, functionId 3 = `PROTOCOL_CMD_DEV_STATUS`). Разбор: `BoardVoltageCodec`. Живой кадр на стоянке с выключенным ACC: в журнале `fgemcucomm` `830500760076` (short big-endian `0x0076`). В JNI-колбэк `McuProtocolLibDevStatus::mcuBattValue` отдаёт этот short уже в порядке хоста: `830576000076`, little-endian 118 → **11.8 В**. Чтение байтов 2–3 как big-endian даёт 3020.8 В и отбрасывается фильтром 6…18 В. Явного деления в прошивке нет; шаг 0.1 В — единственный масштаб, при котором число попадает в диапазон 12 В. Класс `McuCommMsg0x8305.battValue` — этот short.
+
+Рядом по UART, не вольты:
+
+| Кадр | Что наблюдалось |
+|---|---|
+| `0x8300` | Статус питания. В JNI-колбэке 17 байт; номер текущей передачи — байт 6 (`McuCommMsg0x8300.gear`), на стоянке 0. Принимается 0…15. Это источник плитки `gearBoxCurrentGear` и автоматизации `current_gear` с источником ГУ; если байта нет, остаётся VHAL `GSM_GearShiftPos`. Режим P/R/N/D этим кадром не подменяется. Целевой передачи, масла и режима езды в кадре нет. |
+| `0x8B20` | Байт `batteryVoltage` в снимке питания. В диагностике кладётся в `PowerStatus` как есть. В этом журнале периодического `0x8B20` не было. |
+| `0x8302` | Гироскоп и INS (`MCU_SEND_INS_*` в HAL есть). За сессию кадров не было. |
+| `0x8504` | Сопротивление и объём датчика топлива. В эфире только неизменный `8506020000`. |
+| `0x8900` | Счётчик, хвост `06000B020B` постоянный. |
+| `0x8B30` | Heartbeat. |
+| `0x8401` | Часы ГУ, в дампе залипли на `2021-01-01`. |
+
+В VHAL есть, в приложении ещё не разобраны как телеметрия: `R_0900_BCM_13_EBS_SOC` (8 бит), `R_0900_YAS_2_LongitudinalAcceleration` (16 бит), `R_0900_ICM_1_DisplayVehicleSpeed` и `R_0900_ICM_4_AverageVehicleSpeed` (по 13 бит), `R_0900_ICM_7_Average_fuel_consumption2` (8 бит). Штатные `ENGINE_OIL_TEMP` / `ENGINE_RPM` / `ENGINE_COOLANT_TEMP` в списке свойств есть, `receive.json` их не кормит.
+
+**A9.** Кадра `0x8305` и библиотеки `libmcucommproxy_jni` нет: UART другой (`mb_can_service`). Ближайший объект — mbCAN тип **39** `eMBCAN_VEHICLE_EBS_SOC`, класс `MBCanVehicleEbsSoc`:
+
+| Поле | Смысл в штатном коде |
+|---|---|
+| `nEbs_Soc` | Байт. Виджет `MBEbsSocView` рисует его как процент 0…100. Это заряд, не вольты. |
+| `fBMS_BattVoltDisp` | float, уже после масштаба mbCAN. Имя — напряжение BMS на дисплее (на PHEV это тяговая батарея). На бензиновом Dashing как 12 В не проверялось. |
+| `fBMS_BattCurrDisp` | float, ток того же дисплея. Тоже не проверялся. |
+
+`SET_UnderVoltage` на A9 — только тумблер предупреждения, не измерение. Единственный подтверждённый путь вольт бортовой сети на A9 — TBox: байт кадра `0x430` / 10 и три напряжения CRT `ansCRTPowVol` (`raw / 1000`).
 
 Поездки/заправки читают `TripTelemetryRepository` (смесь HU+TBox); `CanDataRepository` — только TBox. Приоритет HU для RPM/speed/odo/fuel/outside; ОЖ: на **Android 9** только TBox; на **Android 10** — TBox first, HU если TBox stale. Масло КПП — только TBox (в CDR). Смешивание с окном **45 с**; учёт в `BackgroundService` через `accounting*` держит кэш, пока жив путь (TBox UDP или HU collectors), и даёт `null` только при потере обоих путей. CDR не очищается. TPMS / instant fuel / DTE / maintenance / PM2.5 / steering / **PRND (`gearBoxMode`)** через CAN — только виджеты с `useMbCanVhal` (не поездки). Виджет **средний расход** (`averageFuelConsumption`) читает HU ICM_4, когда в «Дополнительно» выбран источник mbCAN/VHAL (не флаг `useMbCanVhal`); иначе — средняя по текущей или суточной поездке (`fuel_used * 100 / distance`). Давления TBox и HU **не смешиваются** на диске (`wheel*_pressure_last` vs `wheel*_pressure_last_hu`).
 
