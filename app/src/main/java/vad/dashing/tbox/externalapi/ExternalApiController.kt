@@ -93,6 +93,12 @@ class ExternalApiController(
 
     @Volatile
     private var pairedClients: List<ExternalApiPairedClient> = emptyList()
+
+    /** False until the first clients JSON from disk has been applied. Writes before that would save []. */
+    @Volatile
+    private var clientsHydrated = false
+    private var clientsRevision = 0L
+    private var persistedRevision = 0L
     private var enabled: Boolean = false
     private var port: Int = ExternalApiConstants.DEFAULT_PORT
     private var dangerousEnabled: Boolean = false
@@ -153,10 +159,13 @@ class ExternalApiController(
                 dangerousEnabled = settings.dangerousEnabled
                 climatePanelEnabled = settings.webPanelEnabled
                 synchronized(clientsLock) {
-                    pairedClients = ExternalApiAuth.mergeNewerUsage(
-                        incoming = ExternalApiPairedClient.decodeList(settings.clientsJson),
-                        current = pairedClients,
+                    pairedClients = ExternalApiAuth.reconcileStoredClients(
+                        disk = ExternalApiPairedClient.decodeList(settings.clientsJson),
+                        memory = pairedClients,
+                        hydrated = clientsHydrated,
+                        dirty = clientsRevision != persistedRevision,
                     )
+                    clientsHydrated = true
                 }
                 syncServer()
                 publishStatus()
@@ -224,6 +233,7 @@ class ExternalApiController(
                 createdAtEpochMs = createdAt,
             )
             lastPersistedUseAt[request.clientId] = createdAt
+            clientsRevision++
         }
         persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Pair approved: ${request.clientName}")
@@ -242,6 +252,10 @@ class ExternalApiController(
      * A confirmed caller gets a fresh token every time; its previous token stops working.
      */
     fun localAccess(packageName: String, certSha256: String, interactive: Boolean): ExternalApiLocalAnswer {
+        // Empty memory before the first disk read is not "this app was never approved".
+        if (!clientsHydrated) {
+            return localAnswer(LocalAccessContract.STATUS_UNAVAILABLE)
+        }
         val clientName = ExternalApiLocalClients.nameOf(packageName)
             ?: return ExternalApiLocalAnswer(LocalAccessContract.STATUS_UNKNOWN_CLIENT)
         val clientId = ExternalApiLocalClients.clientId(packageName)
@@ -261,6 +275,7 @@ class ExternalApiController(
                     certSha256 = certSha256,
                 )
                 lastPersistedUseAt[clientId] = now
+                clientsRevision++
                 token
             }
         }
@@ -314,6 +329,7 @@ class ExternalApiController(
                 certSha256 = consent.certSha256,
             )
             lastPersistedUseAt[clientId] = now
+            clientsRevision++
         }
         persistClients()
         publishStatus()
@@ -343,6 +359,7 @@ class ExternalApiController(
         synchronized(clientsLock) {
             pairedClients = ExternalApiAuth.revokeClient(pairedClients, clientId)
             lastPersistedUseAt.remove(clientId.trim())
+            clientsRevision++
         }
         persistClients()
         publishStatus()
@@ -366,6 +383,7 @@ class ExternalApiController(
                 createdAtEpochMs = createdAt,
             )
             lastPersistedUseAt[clientId] = createdAt
+            clientsRevision++
         }
         persistClients()
         TboxRepository.addLog("INFO", "ExternalApi", "Manual token created: $name")
@@ -475,6 +493,7 @@ class ExternalApiController(
             val removedIds = before.map { it.clientId }.toSet() - kept.map { it.clientId }.toSet()
             lastPersistedUseAt.keys.retainAll(kept.map { it.clientId }.toSet())
             kept.forEach { lastPersistedUseAt[it.clientId] = now }
+            if (removedIds.isNotEmpty()) clientsRevision++
             before.filter { it.clientId in removedIds }
         }
         removed.forEach { client ->
@@ -491,10 +510,30 @@ class ExternalApiController(
     private fun persistClients() {
         scope.launch {
             persistMutex.withLock {
-                val snapshot = synchronized(clientsLock) { pairedClients }
-                settingsManager.saveExternalApiClientsJson(
-                    ExternalApiPairedClient.encodeList(snapshot),
-                )
+                while (true) {
+                    val encoded: String
+                    val revision: Long
+                    val ready: Boolean
+                    synchronized(clientsLock) {
+                        ready = clientsHydrated
+                        encoded = ExternalApiPairedClient.encodeList(pairedClients)
+                        revision = clientsRevision
+                    }
+                    // Service stop during an update can run before DataStore emits. Saving then
+                    // would replace every token with [].
+                    if (!ready) {
+                        if (revision == 0L || observeJob?.isActive != true) return@withLock
+                        delay(50)
+                        continue
+                    }
+                    settingsManager.saveExternalApiClientsJson(encoded)
+                    synchronized(clientsLock) {
+                        if (clientsRevision == revision) {
+                            persistedRevision = revision
+                            return@withLock
+                        }
+                    }
+                }
             }
         }
     }

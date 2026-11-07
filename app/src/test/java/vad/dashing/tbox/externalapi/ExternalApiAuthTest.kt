@@ -112,6 +112,51 @@ class ExternalApiAuthTest {
     }
 
     @Test
+    fun mergeUnsavedClients_keepsDiskTokensAndANewerMemoryToken() {
+        val disk = listOf(client("phone", 10L), client("launcher", 10L))
+        val rotated = client("launcher", 50L).copy(
+            tokenHash = "hash-launcher-new",
+            createdAtEpochMs = 50L,
+        )
+        val fresh = client("mqtt", 40L).copy(createdAtEpochMs = 40L)
+        val merged = ExternalApiAuth.mergeUnsavedClients(disk, listOf(rotated, fresh))
+        assertEquals(listOf("phone", "launcher", "mqtt"), merged.map { it.clientId })
+        assertEquals("hash-phone", merged[0].tokenHash)
+        assertEquals("hash-launcher-new", merged[1].tokenHash)
+        assertEquals("hash-mqtt", merged[2].tokenHash)
+    }
+
+    @Test
+    fun reconcileStoredClients_doesNotHideSavedTokensBeforeHydrate() {
+        val disk = listOf(client("phone", 10L))
+        val reconciled = ExternalApiAuth.reconcileStoredClients(
+            disk = disk,
+            memory = emptyList(),
+            hydrated = false,
+            dirty = false,
+        )
+        assertEquals(listOf("phone"), reconciled.map { it.clientId })
+    }
+
+    @Test
+    fun reconcileStoredClients_keepsDirtyMemoryOverStaleDisk() {
+        val disk = listOf(client("launcher", 10L))
+        val memory = listOf(
+            client("launcher", 80L).copy(
+                tokenHash = "hash-launcher-new",
+                createdAtEpochMs = 80L,
+            ),
+        )
+        val reconciled = ExternalApiAuth.reconcileStoredClients(
+            disk = disk,
+            memory = memory,
+            hydrated = true,
+            dirty = true,
+        )
+        assertEquals("hash-launcher-new", reconciled.single().tokenHash)
+    }
+
+    @Test
     fun mergeNewerUsage_keepsInMemoryUseAndIncomingMembership() {
         val disk = listOf(client("kept", 10L), client("new", 20L))
         val memory = listOf(client("kept", 50L), client("revoked-only-in-memory", 40L))
