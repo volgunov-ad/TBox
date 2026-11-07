@@ -2,6 +2,7 @@ package vad.dashing.mqtt.wqtt
 
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.HaComponent
+import vad.dashing.mqtt.ha.MEDIA_OBJECT_ID
 import vad.dashing.mqtt.ha.Topics
 
 enum class WqttPackId {
@@ -17,12 +18,23 @@ data class WqttPack(
     val warns: Boolean = false,
 )
 
+data class WqttSkippedEntity(
+    val objectId: String,
+    val name: String,
+    val reason: String,
+)
+
+data class WqttMapResult(
+    val devices: List<WqttDevicePayload>,
+    val skipped: List<WqttSkippedEntity> = emptyList(),
+)
+
 object WqttPacks {
     val ALL = listOf(
         WqttPack(
             id = WqttPackId.CLIMATE,
             title = "Климат",
-            description = "Один термостат: питание климата и уставка слева",
+            description = "Отмечает питание и уставку; при создании — термостат для Алисы",
         ),
         WqttPack(
             id = WqttPackId.SENSORS,
@@ -38,134 +50,335 @@ object WqttPacks {
     )
 
     fun byId(id: WqttPackId): WqttPack = ALL.first { it.id == id }
+
+    /** ObjectIds a pack convenience toggle should check/uncheck in the entity list. */
+    fun objectIdsForPack(id: WqttPackId, entities: List<CatalogEntity>): Set<String> {
+        val known = entities.map { it.objectId }.toSet()
+        return when (id) {
+            WqttPackId.CLIMATE -> setOf(HVAC_POWER, HVAC_TEMP_LEFT).filter { it in known }.toSet()
+            WqttPackId.SENSORS -> SENSOR_OBJECT_IDS.filter { it in known }.toSet()
+            WqttPackId.BODY -> bodyObjectIds(entities).filter { it in known }.toSet()
+        }
+    }
+
+    fun isPackFullySelected(id: WqttPackId, selected: Set<String>, entities: List<CatalogEntity>): Boolean {
+        val ids = objectIdsForPack(id, entities)
+        return ids.isNotEmpty() && selected.containsAll(ids)
+    }
+
+    private fun bodyObjectIds(entities: List<CatalogEntity>): Set<String> = buildSet {
+        addAll(BODY_WINDOWS)
+        entities.forEach { entity ->
+            if (entity.isButton && isTrunkButton(entity)) add(entity.objectId)
+            if (entity.objectId == "trunk_door") add(entity.objectId)
+        }
+    }
 }
 
+private const val HVAC_POWER = "hvac_power"
+private const val HVAC_TEMP_LEFT = "hvac_temperature_left"
+private const val CLIMATE_KEY = "climate_thermostat"
+
+private val SENSOR_OBJECT_IDS = setOf(
+    "outside_temperature",
+    "inside_temperature",
+    "fuel_level_percent",
+    "distance_to_empty_km",
+)
+
+private val BODY_WINDOWS = listOf(
+    "window_front_left",
+    "window_front_right",
+    "window_rear_left",
+    "window_rear_right",
+)
+
 /**
- * Builds WQTT device payloads for selected packs from the live TBox entity list.
- * Missing entities are skipped (HU may not expose every signal).
+ * Builds WQTT payloads from the **currently selected** MQTT entities (1:1),
+ * plus a climate thermostat composite when both power and left setpoint are selected.
  */
 object WqttDeviceMapper {
     const val DEFAULT_ROOM = "Автомобиль"
-    private const val CLIMATE_KEY = "climate_thermostat"
-    private const val HVAC_POWER = "hvac_power"
-    private const val HVAC_TEMP_LEFT = "hvac_temperature_left"
 
-    private val SENSOR_SPECS = listOf(
-        SensorSpec("outside_temperature", "Температура снаружи", temperature = true),
-        SensorSpec("inside_temperature", "Температура в салоне", temperature = true),
-        SensorSpec("fuel_level_percent", "Топливо", temperature = false),
-        SensorSpec("distance_to_empty_km", "Запас хода", temperature = false),
-    )
-
-    private val BODY_WINDOWS = listOf(
-        "window_front_left",
-        "window_front_right",
-        "window_rear_left",
-        "window_rear_right",
-    )
-
-    fun buildDevices(
-        packs: Set<WqttPackId>,
+    fun buildFromSelected(
+        selectedObjectIds: Set<String>,
         entities: List<CatalogEntity>,
         topicPrefix: String,
         deviceId: String,
         room: String,
         types: WqttTypeCatalog,
-    ): List<WqttDevicePayload> {
+        /** When true and both climate entities are selected, emit thermostat instead of 1:1 for them. */
+        compositeClimate: Boolean = true,
+    ): WqttMapResult {
         val byId = entities.associateBy { it.objectId }
         val base = Topics.base(topicPrefix, deviceId)
         val roomName = room.trim().ifEmpty { DEFAULT_ROOM }
-        val out = mutableListOf<WqttDevicePayload>()
-        if (WqttPackId.CLIMATE in packs) {
-            climateDevice(byId, base, roomName, types)?.let { out += it }
+        val selected = selectedObjectIds.filter { it.isNotBlank() }.toSet()
+        if (selected.isEmpty()) {
+            return WqttMapResult(devices = emptyList(), skipped = emptyList())
         }
-        if (WqttPackId.SENSORS in packs) {
-            out += sensorDevices(byId, base, roomName, types)
-        }
-        if (WqttPackId.BODY in packs) {
-            out += bodyDevices(byId, base, roomName, types)
-        }
-        return out
-    }
 
-    /** ObjectIds that a pack needs enabled in local MQTT selection. */
-    fun objectIdsForPacks(packs: Set<WqttPackId>, entities: List<CatalogEntity>): Set<String> {
-        val devices = buildDevices(
-            packs = packs,
-            entities = entities,
-            topicPrefix = Topics.DEFAULT_TOPIC_PREFIX,
-            deviceId = Topics.DEFAULT_DEVICE_ID,
-            room = DEFAULT_ROOM,
-            types = WqttTypeCatalog(),
-        )
-        return devices.flatMap { it.objectIds }.toSet()
-    }
+        val devices = mutableListOf<WqttDevicePayload>()
+        val skipped = mutableListOf<WqttSkippedEntity>()
+        val coveredByComposite = linkedSetOf<String>()
 
-    private fun climateDevice(
-        byId: Map<String, CatalogEntity>,
-        base: String,
-        room: String,
-        types: WqttTypeCatalog,
-    ): WqttDevicePayload? {
-        val power = byId[HVAC_POWER] ?: return null
+        val power = byId[HVAC_POWER]
         val temp = byId[HVAC_TEMP_LEFT]
-        val objectIds = buildSet {
-            add(power.objectId)
-            if (temp != null) add(temp.objectId)
+        if (compositeClimate &&
+            HVAC_POWER in selected &&
+            HVAC_TEMP_LEFT in selected &&
+            power != null &&
+            temp != null &&
+            temp.component == HaComponent.NUMBER
+        ) {
+            devices += climateComposite(power, temp, base, roomName, types)
+            coveredByComposite += HVAC_POWER
+            coveredByComposite += HVAC_TEMP_LEFT
         }
-        val onOff = WqttOnOff(
-            topicCmd = Topics.set(base, power.objectId),
-            topicState = Topics.state(base, power.objectId),
-            cmdOn = "ON",
-            cmdOff = "OFF",
-        )
-        val ranges = if (temp != null && temp.component == HaComponent.NUMBER) {
-            listOf(
-                WqttRange(
-                    type = WqttTypeResolver.temperatureRangeType(types),
-                    topicCmd = Topics.set(base, temp.objectId),
-                    topicState = Topics.state(base, temp.objectId),
-                    min = temp.numberMin ?: 16.0,
-                    max = temp.numberMax ?: 30.0,
-                    precision = temp.numberStep ?: 0.5,
-                    multiplier = 1.0,
-                ),
-            )
-        } else {
-            emptyList()
+
+        selected.sorted().forEach { objectId ->
+            if (objectId in coveredByComposite) return@forEach
+            val entity = byId[objectId]
+            if (entity == null) {
+                skipped += WqttSkippedEntity(objectId, objectId, "нет в каталоге Monitor")
+                return@forEach
+            }
+            when (val mapped = mapEntity(entity, base, roomName, types)) {
+                is MapOutcome.Device -> devices += mapped.payload
+                is MapOutcome.Skip -> skipped += WqttSkippedEntity(
+                    objectId = entity.objectId,
+                    name = entity.label.ifBlank { entity.objectId },
+                    reason = mapped.reason,
+                )
+            }
         }
-        return WqttDevicePayload(
-            stableKey = CLIMATE_KEY,
-            name = "Климат",
-            type = WqttTypeResolver.thermostatType(types),
-            room = room,
-            onOff = listOf(onOff),
-            range = ranges,
-            objectIds = objectIds,
-        )
+        return WqttMapResult(devices = devices, skipped = skipped)
     }
 
-    private fun sensorDevices(
-        byId: Map<String, CatalogEntity>,
+    /** Pack objectIds for tests / UI helpers. */
+    fun objectIdsForPacks(packs: Set<WqttPackId>, entities: List<CatalogEntity>): Set<String> =
+        packs.flatMap { WqttPacks.objectIdsForPack(it, entities) }.toSet()
+
+    private fun climateComposite(
+        power: CatalogEntity,
+        temp: CatalogEntity,
         base: String,
         room: String,
         types: WqttTypeCatalog,
-    ): List<WqttDevicePayload> {
-        return SENSOR_SPECS.mapNotNull { spec ->
-            val entity = byId[spec.objectId] ?: return@mapNotNull null
-            val floatType = if (spec.temperature) {
+    ): WqttDevicePayload = WqttDevicePayload(
+        stableKey = CLIMATE_KEY,
+        name = "Климат",
+        type = WqttTypeResolver.thermostatType(types),
+        room = room,
+        onOff = listOf(
+            WqttOnOff(
+                topicCmd = Topics.set(base, power.objectId),
+                topicState = Topics.state(base, power.objectId),
+                cmdOn = "ON",
+                cmdOff = "OFF",
+            ),
+        ),
+        range = listOf(
+            WqttRange(
+                type = WqttTypeResolver.temperatureRangeType(types),
+                topicCmd = Topics.set(base, temp.objectId),
+                topicState = Topics.state(base, temp.objectId),
+                min = temp.numberMin ?: 16.0,
+                max = temp.numberMax ?: 30.0,
+                precision = temp.numberStep ?: 0.5,
+                multiplier = 1.0,
+            ),
+        ),
+        objectIds = setOf(power.objectId, temp.objectId),
+    )
+
+    private fun mapEntity(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): MapOutcome {
+        if (entity.objectId == MEDIA_OBJECT_ID || entity.media != null) {
+            return MapOutcome.Skip("карточка «Музыка» — составной JSON, не тип WQTT")
+        }
+        return when (entity.component) {
+            HaComponent.SWITCH -> MapOutcome.Device(switchDevice(entity, base, room, types))
+            HaComponent.BINARY_SENSOR -> MapOutcome.Device(binarySensorDevice(entity, base, room, types))
+            HaComponent.SENSOR -> mapSensor(entity, base, room, types)
+            HaComponent.NUMBER -> MapOutcome.Device(numberDevice(entity, base, room, types))
+            HaComponent.SELECT -> mapSelect(entity, base, room, types)
+            HaComponent.BUTTON -> MapOutcome.Device(buttonDevice(entity, base, room, types))
+            HaComponent.DEVICE_TRACKER -> MapOutcome.Skip("местоположение — нет типа WQTT")
+        }
+    }
+
+    private fun mapSensor(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): MapOutcome {
+        val unit = entity.unit.trim()
+        val temperature = unit == "°C" || entity.deviceClass == "temperature" ||
+            entity.objectId.contains("temperature", ignoreCase = true)
+        if (temperature || unit.isNotEmpty() || looksNumericSensor(entity)) {
+            val floatType = if (temperature) {
                 WqttTypeResolver.temperatureFloatType(types)
             } else {
                 WqttTypeResolver.genericFloatType(types)
             }
-            val deviceType = if (spec.temperature) {
+            val deviceType = if (temperature) {
                 WqttTypeResolver.temperatureSensorType(types)
             } else {
                 WqttTypeResolver.floatSensorType(types)
             }
-            WqttDevicePayload(
-                stableKey = "sensor_${entity.objectId}",
-                name = entity.label.ifBlank { spec.fallbackName },
+            return MapOutcome.Device(
+                WqttDevicePayload(
+                    stableKey = "entity_${entity.objectId}",
+                    name = entity.label.ifBlank { entity.objectId },
+                    type = deviceType,
+                    room = room,
+                    sensorFloat = listOf(
+                        WqttSensorFloat(
+                            type = floatType,
+                            topicState = Topics.state(base, entity.objectId),
+                        ),
+                    ),
+                    objectIds = setOf(entity.objectId),
+                ),
+            )
+        }
+        if (entity.options.isNotEmpty()) {
+            return MapOutcome.Device(eventSensorDevice(entity, base, room, types))
+        }
+        return MapOutcome.Skip("текстовый датчик без единицы — нет типа WQTT")
+    }
+
+    private fun mapSelect(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): MapOutcome {
+        if (entity.objectId.startsWith("window_") || entity.objectId.contains("sunroof") ||
+            entity.objectId.contains("curtain")
+        ) {
+            if (!entity.writable) {
+                return MapOutcome.Skip("окно только для чтения")
+            }
+            return MapOutcome.Device(
+                WqttDevicePayload(
+                    stableKey = "entity_${entity.objectId}",
+                    name = entity.label.ifBlank { entity.objectId },
+                    type = WqttTypeResolver.openableType(types),
+                    room = room,
+                    onOff = listOf(
+                        WqttOnOff(
+                            topicCmd = Topics.set(base, entity.objectId),
+                            topicState = Topics.state(base, entity.objectId),
+                            cmdOn = "opened",
+                            cmdOff = "closed",
+                        ),
+                    ),
+                    objectIds = setOf(entity.objectId),
+                ),
+            )
+        }
+        return MapOutcome.Skip("select (${entity.options.take(4).joinToString("/")}) — нет режима WQTT")
+    }
+
+    private fun switchDevice(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): WqttDevicePayload = WqttDevicePayload(
+        stableKey = "entity_${entity.objectId}",
+        name = entity.label.ifBlank { entity.objectId },
+        type = WqttTypeResolver.switchType(types),
+        room = room,
+        onOff = listOf(
+            WqttOnOff(
+                topicCmd = if (entity.writable) Topics.set(base, entity.objectId) else "",
+                topicState = Topics.state(base, entity.objectId),
+                cmdOn = "ON",
+                cmdOff = "OFF",
+            ),
+        ),
+        objectIds = setOf(entity.objectId),
+    )
+
+    private fun binarySensorDevice(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): WqttDevicePayload {
+        val openLike = entity.objectId.contains("door") ||
+            entity.objectId.contains("trunk") ||
+            entity.objectId.contains("window") ||
+            entity.objectId.contains("hood")
+        if (openLike) {
+            return eventSensorDevice(entity, base, room, types)
+        }
+        return WqttDevicePayload(
+            stableKey = "entity_${entity.objectId}",
+            name = entity.label.ifBlank { entity.objectId },
+            type = WqttTypeResolver.switchType(types),
+            room = room,
+            onOff = listOf(
+                WqttOnOff(
+                    topicCmd = "",
+                    topicState = Topics.state(base, entity.objectId),
+                    cmdOn = "ON",
+                    cmdOff = "OFF",
+                ),
+            ),
+            objectIds = setOf(entity.objectId),
+        )
+    }
+
+    private fun eventSensorDevice(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): WqttDevicePayload = WqttDevicePayload(
+        stableKey = "entity_${entity.objectId}",
+        name = entity.label.ifBlank { entity.objectId },
+        type = WqttTypeResolver.floatSensorType(types),
+        room = room,
+        sensorEvent = listOf(
+            WqttSensorEvent(
+                type = WqttTypeResolver.openEventType(types),
+                topicState = Topics.state(base, entity.objectId),
+            ),
+        ),
+        objectIds = setOf(entity.objectId),
+    )
+
+    private fun numberDevice(
+        entity: CatalogEntity,
+        base: String,
+        room: String,
+        types: WqttTypeCatalog,
+    ): WqttDevicePayload {
+        val temperature = entity.unit == "°C" || entity.deviceClass == "temperature" ||
+            entity.objectId.contains("temperature", ignoreCase = true)
+        if (!entity.writable) {
+            val floatType = if (temperature) {
+                WqttTypeResolver.temperatureFloatType(types)
+            } else {
+                WqttTypeResolver.genericFloatType(types)
+            }
+            val deviceType = if (temperature) {
+                WqttTypeResolver.temperatureSensorType(types)
+            } else {
+                WqttTypeResolver.floatSensorType(types)
+            }
+            return WqttDevicePayload(
+                stableKey = "entity_${entity.objectId}",
+                name = entity.label.ifBlank { entity.objectId },
                 type = deviceType,
                 room = room,
                 sensorFloat = listOf(
@@ -177,87 +390,71 @@ object WqttDeviceMapper {
                 objectIds = setOf(entity.objectId),
             )
         }
+        // Range lives on thermostat/light-like device types in WQTT.
+        return WqttDevicePayload(
+            stableKey = "entity_${entity.objectId}",
+            name = entity.label.ifBlank { entity.objectId },
+            type = WqttTypeResolver.thermostatType(types),
+            room = room,
+            range = listOf(
+                WqttRange(
+                    type = if (temperature) {
+                        WqttTypeResolver.temperatureRangeType(types)
+                    } else {
+                        WqttTypeResolver.FALLBACK_RANGE_BRIGHTNESS
+                    },
+                    topicCmd = Topics.set(base, entity.objectId),
+                    topicState = Topics.state(base, entity.objectId),
+                    min = entity.numberMin ?: 0.0,
+                    max = entity.numberMax ?: 100.0,
+                    precision = entity.numberStep ?: 1.0,
+                    multiplier = 1.0,
+                ),
+            ),
+            objectIds = setOf(entity.objectId),
+        )
     }
 
-    private fun bodyDevices(
-        byId: Map<String, CatalogEntity>,
+    private fun buttonDevice(
+        entity: CatalogEntity,
         base: String,
         room: String,
         types: WqttTypeCatalog,
-    ): List<WqttDevicePayload> {
-        val out = mutableListOf<WqttDevicePayload>()
-        val openableType = WqttTypeResolver.openableType(types)
-        BODY_WINDOWS.forEach { objectId ->
-            val entity = byId[objectId] ?: return@forEach
-            if (!entity.writable) return@forEach
-            out += WqttDevicePayload(
-                stableKey = "body_$objectId",
-                name = entity.label.ifBlank { objectId },
-                type = openableType,
-                room = room,
-                onOff = listOf(
-                    WqttOnOff(
-                        topicCmd = Topics.set(base, entity.objectId),
-                        topicState = Topics.state(base, entity.objectId),
-                        // Window select uses closed/opened; Alice open/close maps poorly —
-                        // publish opened/closed as ON/OFF stand-ins for a relay-like card.
-                        cmdOn = "opened",
-                        cmdOff = "closed",
-                    ),
-                ),
-                objectIds = setOf(entity.objectId),
-            )
-        }
-        byId.values
-            .filter { entity ->
-                entity.isButton && (
-                    entity.canCommand?.operation == "trunk_pulse" ||
-                        entity.objectId.contains("trunk", ignoreCase = true) ||
-                        entity.label.contains("багажник", ignoreCase = true)
-                    )
-            }
-            .sortedBy { it.objectId }
-            .forEach { entity ->
-                out += WqttDevicePayload(
-                    stableKey = "body_${entity.objectId}",
-                    name = entity.label.ifBlank { entity.objectId },
-                    type = WqttTypeResolver.switchType(types),
-                    room = room,
-                    onOff = listOf(
-                        WqttOnOff(
-                            topicCmd = Topics.set(base, entity.objectId),
-                            topicState = "",
-                            cmdOn = "PRESS",
-                            cmdOff = "PRESS",
-                        ),
-                    ),
-                    objectIds = setOf(entity.objectId),
-                )
-            }
-        val trunk = byId["trunk_door"]
-        if (trunk != null &&
-            (trunk.component == HaComponent.BINARY_SENSOR || trunk.component == HaComponent.SENSOR)
-        ) {
-            out += WqttDevicePayload(
-                stableKey = "body_trunk_door",
-                name = trunk.label.ifBlank { "Багажник" },
-                type = WqttTypeResolver.floatSensorType(types),
-                room = room,
-                sensorEvent = listOf(
-                    WqttSensorEvent(
-                        type = WqttTypeResolver.openEventType(types),
-                        topicState = Topics.state(base, trunk.objectId),
-                    ),
-                ),
-                objectIds = setOf(trunk.objectId),
-            )
-        }
-        return out
+    ): WqttDevicePayload = WqttDevicePayload(
+        stableKey = "entity_${entity.objectId}",
+        name = entity.label.ifBlank { entity.objectId },
+        type = WqttTypeResolver.switchType(types),
+        room = room,
+        onOff = listOf(
+            WqttOnOff(
+                topicCmd = Topics.set(base, entity.objectId),
+                topicState = "",
+                cmdOn = "PRESS",
+                cmdOff = "PRESS",
+            ),
+        ),
+        objectIds = setOf(entity.objectId),
+    )
+
+    private fun looksNumericSensor(entity: CatalogEntity): Boolean {
+        val unit = entity.unit.trim()
+        if (unit.isEmpty()) return false
+        return unit in setOf("%", "км", "км/ч", "об/мин", "В", "л", "л/100км", "бар", "кПа") ||
+            entity.objectId.contains("fuel") ||
+            entity.objectId.contains("speed") ||
+            entity.objectId.contains("odometer") ||
+            entity.objectId.contains("distance") ||
+            entity.objectId.contains("voltage") ||
+            entity.objectId.contains("rpm")
     }
 
-    private data class SensorSpec(
-        val objectId: String,
-        val fallbackName: String,
-        val temperature: Boolean,
-    )
+    private sealed class MapOutcome {
+        data class Device(val payload: WqttDevicePayload) : MapOutcome()
+        data class Skip(val reason: String) : MapOutcome()
+    }
 }
+
+private fun isTrunkButton(entity: CatalogEntity): Boolean =
+    entity.canCommand?.operation == "trunk_pulse" ||
+        entity.objectId.contains("trunk", ignoreCase = true) ||
+        entity.label.contains("багажник", ignoreCase = true)

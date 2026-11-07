@@ -3,15 +3,15 @@ package vad.dashing.mqtt.wqtt
 import vad.dashing.mqtt.ha.CatalogEntity
 
 /**
- * Creates or updates WQTT devices for selected packs, then calls `/api/devices/refresh`.
- * Idempotent by matching existing devices on name + overlapping topics.
+ * Creates or updates WQTT devices for currently selected MQTT entities,
+ * then calls `/api/devices/refresh`. Idempotent by name + overlapping topics.
  */
 class WqttProvisioner(
     private val api: WqttApi = WqttApi(),
 ) {
     fun provision(
         token: String,
-        packs: Set<WqttPackId>,
+        selectedObjectIds: Set<String>,
         entities: List<CatalogEntity>,
         topicPrefix: String,
         deviceId: String,
@@ -27,28 +27,34 @@ class WqttProvisioner(
                 refreshMessage = "Вставьте токен API WQTT",
             )
         }
-        if (packs.isEmpty()) {
+        if (selectedObjectIds.isEmpty()) {
             return WqttProvisionReport(
                 devices = emptyList(),
                 refreshed = false,
-                refreshMessage = "Выберите хотя бы один набор",
+                refreshMessage = "Отметьте сущности на вкладке «Сущности»",
             )
         }
         onProgress("Читаю типы устройств WQTT")
         val catalog = types ?: runCatching { api.types(cleaned) }.getOrDefault(WqttTypeCatalog())
-        val payloads = WqttDeviceMapper.buildDevices(
-            packs = packs,
+        val mapped = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = selectedObjectIds,
             entities = entities,
             topicPrefix = topicPrefix,
             deviceId = deviceId,
             room = room,
             types = catalog,
         )
-        if (payloads.isEmpty()) {
+        if (mapped.devices.isEmpty()) {
+            val skipHint = if (mapped.skipped.isEmpty()) {
+                "Нет отмеченных сущностей для WQTT"
+            } else {
+                "Ничего не создано: пропущено ${mapped.skipped.size}"
+            }
             return WqttProvisionReport(
                 devices = emptyList(),
                 refreshed = false,
-                refreshMessage = "В каталоге Monitor нет сущностей для выбранных наборов",
+                refreshMessage = skipHint,
+                skipped = mapped.skipped,
             )
         }
         onProgress("Читаю список устройств WQTT")
@@ -57,6 +63,7 @@ class WqttProvisioner(
                 devices = emptyList(),
                 refreshed = false,
                 refreshMessage = error.message ?: "Не удалось прочитать устройства",
+                skipped = mapped.skipped,
             )
         }
         val detailsById = HashMap<Int, WqttDeviceDetail>()
@@ -68,7 +75,7 @@ class WqttProvisioner(
         }
 
         val results = mutableListOf<WqttDeviceResult>()
-        for (payload in payloads) {
+        for (payload in mapped.devices) {
             onProgress("Устройство: ${payload.name}")
             val match = findMatch(existing, payload, ::detailOf)
             val result = try {
@@ -129,12 +136,17 @@ class WqttProvisioner(
         } else {
             refreshMessage = "нечего обновлять: все устройства с ошибкой"
         }
+        if (mapped.skipped.isNotEmpty()) {
+            val skipPart = "пропущено ${mapped.skipped.size}"
+            refreshMessage = if (refreshMessage.isBlank()) skipPart else "$refreshMessage; $skipPart"
+        }
 
         return WqttProvisionReport(
             devices = results,
             refreshed = refreshed,
             refreshMessage = refreshMessage,
-            enabledObjectIds = payloads.flatMap { it.objectIds }.toSet(),
+            enabledObjectIds = mapped.devices.flatMap { it.objectIds }.toSet(),
+            skipped = mapped.skipped,
         )
     }
 
