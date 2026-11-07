@@ -29,7 +29,9 @@ import vad.dashing.mqtt.wqtt.WqttApi
 import vad.dashing.mqtt.wqtt.WqttDeviceAction
 import vad.dashing.mqtt.wqtt.WqttDeviceResult
 import vad.dashing.mqtt.wqtt.WqttPackId
+import vad.dashing.mqtt.wqtt.WqttPacks
 import vad.dashing.mqtt.wqtt.WqttProvisioner
+import vad.dashing.mqtt.wqtt.WqttSkippedEntity
 import vad.dashing.tbox.localaccess.LocalAccessClient
 import vad.dashing.tbox.localaccess.LocalAccessContract
 
@@ -51,11 +53,11 @@ data class MqttHomeState(
     val wqttOpen: Boolean = false,
     val wqttTokenDraft: String = "",
     val wqttRoomDraft: String = "",
-    val wqttPacks: Set<WqttPackId> = setOf(WqttPackId.CLIMATE, WqttPackId.SENSORS),
     val wqttBusy: Boolean = false,
     val wqttMessage: String = "",
     val wqttBrokerHint: String = "",
     val wqttResults: List<WqttDeviceResult> = emptyList(),
+    val wqttSkipped: List<WqttSkippedEntity> = emptyList(),
 )
 
 class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -400,13 +402,29 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         _state.update { it.copy(wqttRoomDraft = value) }
     }
 
+    /** Convenience: check/uncheck the pack's entities in the MQTT selection. */
     fun toggleWqttPack(id: WqttPackId, enabled: Boolean) {
-        _state.update { current ->
-            val next = current.wqttPacks.toMutableSet()
-            if (enabled) next += id else next -= id
-            current.copy(wqttPacks = next)
+        val ids = WqttPacks.objectIdsForPack(id, _state.value.entities)
+        if (ids.isEmpty()) {
+            _state.update {
+                it.copy(wqttMessage = "В каталоге Monitor нет сущностей набора «${WqttPacks.byId(id).title}»")
+            }
+            return
+        }
+        setEntities(ids, enabled)
+        _state.update {
+            it.copy(
+                wqttMessage = if (enabled) {
+                    "Отмечено ${ids.size} из «${WqttPacks.byId(id).title}»"
+                } else {
+                    "Снято ${ids.size} из «${WqttPacks.byId(id).title}»"
+                },
+            )
         }
     }
+
+    fun isWqttPackSelected(id: WqttPackId): Boolean =
+        WqttPacks.isPackFullySelected(id, _state.value.settings.selectedObjectIds, _state.value.entities)
 
     fun saveWqttCredentials() {
         val token = WqttApi.normalizeToken(_state.value.wqttTokenDraft)
@@ -502,8 +520,9 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                 updateUi { it.copy(wqttMessage = "Вставьте токен API из кабинета dash.wqtt.ru") }
                 return@launch
             }
-            if (current.wqttPacks.isEmpty()) {
-                updateUi { it.copy(wqttMessage = "Выберите хотя бы один набор") }
+            val selected = current.settings.selectedObjectIds
+            if (selected.isEmpty()) {
+                updateUi { it.copy(wqttMessage = "Отметьте сущности ниже — в WQTT уйдут все отмеченные") }
                 return@launch
             }
             updateUi {
@@ -511,12 +530,13 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                     wqttBusy = true,
                     wqttMessage = "Создаю устройства…",
                     wqttResults = emptyList(),
+                    wqttSkipped = emptyList(),
                 )
             }
             val settings = withStoredAccess(current.settings)
             val report = wqttProvisioner.provision(
                 token = token,
-                packs = current.wqttPacks,
+                selectedObjectIds = selected,
                 entities = current.entities,
                 topicPrefix = settings.topicPrefix,
                 deviceId = settings.deviceId,
@@ -529,7 +549,6 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                     saved.copy(
                         wqttApiToken = token,
                         wqttRoom = current.wqttRoomDraft.ifBlank { saved.wqttRoom },
-                        selectedObjectIds = saved.selectedObjectIds + report.enabledObjectIds,
                         acceptCommands = if (report.enabledObjectIds.any { id ->
                             current.entities.any { entity -> entity.objectId == id && entity.writable }
                         }) {
@@ -540,12 +559,13 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
                 onSettingsSaved()
-                val summary = summarize(report.devices)
+                val summary = summarize(report.devices, report.skipped.size)
                 updateUi {
                     it.copy(
                         wqttBusy = false,
                         wqttTokenDraft = token,
                         wqttResults = report.devices,
+                        wqttSkipped = report.skipped,
                         wqttMessage = buildString {
                             append(summary)
                             if (report.refreshMessage.isNotBlank()) {
@@ -559,8 +579,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun summarize(results: List<WqttDeviceResult>): String {
-        if (results.isEmpty()) return "Устройств не создано"
+    private fun summarize(results: List<WqttDeviceResult>, unmapped: Int): String {
+        if (results.isEmpty() && unmapped == 0) return "Устройств не создано"
         val created = results.count { it.action == WqttDeviceAction.CREATED }
         val updated = results.count { it.action == WqttDeviceAction.UPDATED }
         val skipped = results.count { it.action == WqttDeviceAction.SKIPPED }
@@ -570,7 +590,8 @@ class MqttHomeViewModel(app: Application) : AndroidViewModel(app) {
             if (updated > 0) add("обновлено $updated")
             if (skipped > 0) add("без изменений $skipped")
             if (failed > 0) add("ошибок $failed")
-        }.joinToString(", ")
+            if (unmapped > 0) add("не удалось сопоставить $unmapped")
+        }.joinToString(", ").ifBlank { "Устройств не создано" }
     }
 
     private fun brokerHint(server: String, portTls: Int, port: Int, user: String): String {

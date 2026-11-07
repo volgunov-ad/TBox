@@ -105,6 +105,7 @@ data class WqttProvisionReport(
     val refreshed: Boolean,
     val refreshMessage: String = "",
     val enabledObjectIds: Set<String> = emptySet(),
+    val skipped: List<WqttSkippedEntity> = emptyList(),
 )
 
 class WqttApiException(

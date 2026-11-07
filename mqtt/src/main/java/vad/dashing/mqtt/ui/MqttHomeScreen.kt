@@ -608,7 +608,7 @@ private fun WqttWizardSection(
 ) {
     SectionTitle("Яндекс Алиса (WQTT.ru)")
     Text(
-        "WQTT не читает Home Assistant Discovery. Мастер создаёт устройства в кабинете dash.wqtt.ru по топикам TBox MQTT.",
+        "WQTT не читает Home Assistant Discovery. «Создать в WQTT» отправляет все отмеченные ниже сущности (1:1), плюс термостат «Климат», если отмечены питание и уставка.",
         style = MaterialTheme.typography.tboxBody,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 4.dp),
@@ -673,28 +673,41 @@ private fun WqttWizardSection(
             modifier = Modifier.padding(top = 4.dp),
         )
     }
-    SectionTitle("Наборы устройств")
+    SectionTitle("Быстрый выбор")
+    Text(
+        "Наборы только отмечают сущности в списке ниже. В кабинет уходит всё отмеченное.",
+        style = MaterialTheme.typography.tboxBody,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     WqttPacks.ALL.forEach { pack ->
         SettingSwitch(
-            checked = pack.id in state.wqttPacks,
+            checked = viewModel.isWqttPackSelected(pack.id),
             title = pack.title,
             description = if (pack.warns) {
                 "${pack.description}. Внимание: голосовые команды кузова"
             } else {
                 pack.description
             },
-            onChecked = { enabled -> viewModel.toggleWqttPack(pack.id, enabled) },
+            onChecked = { enabled ->
+                viewModel.toggleWqttPack(pack.id, enabled)
+                onSettingsSaved()
+            },
         )
     }
+    val selectedCount = state.settings.selectedObjectIds.size
     Button(
         onClick = { viewModel.createWqttDevices(onSettingsSaved) },
-        enabled = !state.wqttBusy && state.wqttPacks.isNotEmpty(),
+        enabled = !state.wqttBusy && selectedCount > 0,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp),
     ) {
         Text(
-            if (state.wqttBusy) "Создаю…" else "Создать в WQTT",
+            if (state.wqttBusy) {
+                "Создаю…"
+            } else {
+                "Создать в WQTT ($selectedCount)"
+            },
             style = MaterialTheme.typography.tboxButton,
         )
     }
@@ -716,6 +729,14 @@ private fun WqttWizardSection(
             "${row.name}: ${row.message.ifBlank { row.action.name.lowercase() }}",
             style = MaterialTheme.typography.tboxBody,
             color = color,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+    state.wqttSkipped.forEach { row ->
+        Text(
+            "${row.name}: пропуск — ${row.reason}",
+            style = MaterialTheme.typography.tboxBody,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp),
         )
     }
