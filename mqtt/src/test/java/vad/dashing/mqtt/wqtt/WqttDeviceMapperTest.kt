@@ -11,107 +11,111 @@ import vad.dashing.mqtt.ha.HaComponent
 import vad.dashing.mqtt.ha.WritePair
 
 class WqttDeviceMapperTest {
+
     @Test
-    fun selectedSetMapsOneDevicePerEntity() {
+    fun climateAndSensorsMapToWqttPayloads() {
         val types = catalog(
             devices = listOf(
                 WqttNamedType(2, "Выключатель"),
-                WqttNamedType(19, "Датчик температуры"),
-                WqttNamedType(20, "Датчик"),
-                WqttNamedType(21, "Кнопка"),
+                WqttNamedType(7, "Термостат"),
+                WqttNamedType(19, "Кнопка"),
             ),
-            floats = listOf(
-                WqttNamedType(1, "temperature"),
-                WqttNamedType(9, "произвольный"),
-            ),
-        )
-        val entities = listOf(
-            hvacPower(),
-            sensor("outside_temperature", "Улица", "°C"),
-            sensor("fuel_level_percent", "Топливо", "%"),
-            button("builtin_open_menu", "Открыть меню"),
+            ranges = listOf(WqttNamedType(3, "Температура")),
+            floats = listOf(WqttNamedType(1, "Температура")),
         )
         val result = WqttDeviceMapper.buildFromSelected(
-            selectedObjectIds = entities.map { it.objectId }.toSet(),
-            entities = entities,
+            selectedObjectIds = setOf("hvac_power", "outside_temperature"),
+            entities = listOf(hvacPower(), sensor("outside_temperature", "Улица", "°C")),
             topicPrefix = "tbox",
             deviceId = "dashing",
             room = "Автомобиль",
             types = types,
             compositeClimate = false,
         )
-        assertEquals(4, result.devices.size)
+        assertEquals(2, result.devices.size)
         assertTrue(result.skipped.isEmpty())
-        assertEquals(
-            setOf(
-                "entity_hvac_power",
-                "entity_outside_temperature",
-                "entity_fuel_level_percent",
-                "entity_builtin_open_menu",
-            ),
-            result.devices.map { it.stableKey }.toSet(),
-        )
         val power = result.devices.single { it.stableKey == "entity_hvac_power" }
+        assertEquals(2, power.type)
         assertEquals("ON", power.onOff.single().cmdOn)
-        assertEquals("tbox/dashing/hvac_power/set", power.onOff.single().topicCmd)
         val outside = result.devices.single { it.stableKey == "entity_outside_temperature" }
-        assertEquals("tbox/dashing/outside_temperature/state", outside.sensorFloat.single().topicState)
-        val button = result.devices.single { it.stableKey == "entity_builtin_open_menu" }
-        assertEquals("PRESS", button.onOff.single().cmdOn)
-        assertEquals(21, button.type)
+        assertEquals(1, outside.sensorFloat.single().type)
     }
 
     @Test
-    fun trunkPulseAndAutomationUseButtonTypeWithPress() {
+    fun buttonPrefersNamedButtonType() {
         val types = catalog(
             devices = listOf(
-                WqttNamedType(2, "Выключатель / реле"),
-                WqttNamedType(21, "Кнопка"),
-            ),
-        )
-        val entities = listOf(
-            CatalogEntity(
-                objectId = "can_vehicle_99_close",
-                label = "Багажник: Закрыть",
-                description = "Кнопка",
-                group = EntityGroup.BODY,
-                component = HaComponent.BUTTON,
-                writable = true,
-                canCommand = CanCommandBinding("vehicle", 99, "trunk_pulse", fixedText = "close"),
-            ),
-            CatalogEntity(
-                objectId = "automation_abc",
-                label = "Прогрев",
-                description = "Выполнить сейчас",
-                group = EntityGroup.OTHER,
-                component = HaComponent.BUTTON,
-                writable = true,
-                automationId = "abc",
+                WqttNamedType(2, "Выключатель"),
+                WqttNamedType(19, "Кнопка"),
             ),
         )
         val result = WqttDeviceMapper.buildFromSelected(
-            selectedObjectIds = entities.map { it.objectId }.toSet(),
-            entities = entities,
+            selectedObjectIds = setOf("can_vehicle_99_open"),
+            entities = listOf(
+                CatalogEntity(
+                    objectId = "can_vehicle_99_open",
+                    label = "Багажник: Открыть",
+                    description = "Кнопка",
+                    group = EntityGroup.BODY,
+                    component = HaComponent.BUTTON,
+                    writable = true,
+                    canCommand = CanCommandBinding("vehicle", 99, "trunk_pulse", fixedText = "open"),
+                ),
+            ),
             topicPrefix = "tbox",
             deviceId = "dashing",
             room = "Автомобиль",
             types = types,
         )
-        assertEquals(2, result.devices.size)
-        result.devices.forEach { device ->
-            assertEquals(21, device.type)
-            assertEquals("PRESS", device.onOff.single().cmdOn)
-            assertEquals("PRESS", device.onOff.single().cmdOff)
-            assertTrue(device.onOff.single().topicCmd.endsWith("/set"))
-            assertEquals("", device.onOff.single().topicState)
-        }
-        assertEquals(21, WqttTypeResolver.buttonType(types))
-        assertEquals(2, WqttTypeResolver.buttonType(catalog(devices = listOf(WqttNamedType(2, "Выключатель")))))
+        val device = result.devices.single()
+        assertEquals(19, device.type)
+        assertEquals("PRESS", device.onOff.single().cmdOn)
+        assertEquals("PRESS", device.onOff.single().cmdOff)
+        assertEquals("tbox/dashing/can_vehicle_99_open/set", device.onOff.single().topicCmd)
     }
 
     @Test
-    fun sunshadeMapsLikeWindowOpenable() {
-        val types = catalog(devices = listOf(WqttNamedType(11, "Штора"), WqttNamedType(2, "Выключатель")))
+    fun windowExpandsToStateSensorAndOptionButtons() {
+        val types = catalog(
+            devices = listOf(WqttNamedType(19, "Кнопка"), WqttNamedType(2, "Выключатель")),
+            floats = listOf(WqttNamedType(5, "Событие")),
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("window_front_left"),
+            entities = listOf(window("window_front_left", "Окно водителя")),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        assertEquals(4, result.devices.size)
+        assertTrue(result.skipped.isEmpty())
+        val state = result.devices.single { it.stableKey == "entity_window_front_left_state" }
+        assertEquals("Окно водителя", state.name)
+        assertEquals(1, state.sensorEvent.size)
+        assertEquals("tbox/dashing/window_front_left/state", state.sensorEvent.single().topicState)
+
+        val open = result.devices.single { it.stableKey == "entity_window_front_left_opt_opened" }
+        assertEquals("Окно водителя: открыть", open.name)
+        assertEquals(19, open.type)
+        assertEquals("opened", open.onOff.single().cmdOn)
+        assertEquals("tbox/dashing/window_front_left/set", open.onOff.single().topicCmd)
+
+        val close = result.devices.single { it.stableKey == "entity_window_front_left_opt_closed" }
+        assertEquals("Окно водителя: закрыть", close.name)
+        assertEquals("closed", close.onOff.single().cmdOn)
+
+        val vent = result.devices.single { it.stableKey == "entity_window_front_left_opt_vent" }
+        assertEquals("Окно водителя: щель", vent.name)
+        assertEquals("vent", vent.onOff.single().cmdOn)
+    }
+
+    @Test
+    fun sunshadeExpandsLikeWindow() {
+        val types = catalog(
+            devices = listOf(WqttNamedType(19, "Кнопка")),
+            floats = listOf(WqttNamedType(5, "Событие")),
+        )
         val shade = CatalogEntity(
             objectId = "sunshade",
             label = "Шторка",
@@ -134,16 +138,52 @@ class WqttDeviceMapperTest {
             room = "Автомобиль",
             types = types,
         )
-        assertEquals(1, result.devices.size)
-        assertTrue(result.skipped.isEmpty())
-        val device = result.devices.single()
-        assertEquals(11, device.type)
-        assertEquals("opened", device.onOff.single().cmdOn)
-        assertEquals("closed", device.onOff.single().cmdOff)
+        assertEquals(3, result.devices.size)
+        assertTrue(result.devices.any { it.stableKey == "entity_sunshade_state" })
+        assertTrue(result.devices.any { it.name == "Шторка: открыть" && it.onOff.single().cmdOn == "opened" })
+        assertTrue(result.devices.any { it.name == "Шторка: закрыть" && it.onOff.single().cmdOn == "closed" })
     }
 
     @Test
-    fun climateCompositeWhenBothPowerAndTempSelected() {
+    fun driveModeExpandsToStateSensorAndOptionButtons() {
+        val types = catalog(devices = listOf(WqttNamedType(19, "Кнопка")))
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("drive_mode"),
+            entities = listOf(
+                CatalogEntity(
+                    objectId = "drive_mode",
+                    label = "Режим вождения",
+                    description = "",
+                    group = EntityGroup.MOTION,
+                    component = HaComponent.SELECT,
+                    writable = true,
+                    options = listOf("ECO", "NOR", "SPT"),
+                    pairs = listOf(
+                        WritePair("ECO", 1.0, null),
+                        WritePair("NOR", 0.0, null),
+                        WritePair("SPT", 2.0, null),
+                    ),
+                    canCommand = CanCommandBinding("vehicle", 10, "set"),
+                ),
+            ),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        assertEquals(4, result.devices.size)
+        assertTrue(result.skipped.isEmpty())
+        assertEquals("Режим вождения", result.devices.single { it.stableKey == "entity_drive_mode_state" }.name)
+        val eco = result.devices.single { it.stableKey == "entity_drive_mode_opt_ECO" }
+        assertEquals("Режим вождения: ECO", eco.name)
+        assertEquals("ECO", eco.onOff.single().cmdOn)
+        assertEquals("tbox/dashing/drive_mode/set", eco.onOff.single().topicCmd)
+        assertTrue(result.devices.any { it.name == "Режим вождения: NOR" })
+        assertTrue(result.devices.any { it.name == "Режим вождения: SPT" })
+    }
+
+    @Test
+    fun climateCompositePlusIndividualCards() {
         val types = catalog(
             devices = listOf(WqttNamedType(7, "Термостат"), WqttNamedType(2, "Выключатель")),
             ranges = listOf(WqttNamedType(3, "Температура")),
@@ -156,33 +196,70 @@ class WqttDeviceMapperTest {
             room = "Автомобиль",
             types = types,
         )
-        assertEquals(2, result.devices.size)
+        assertEquals(4, result.devices.size)
         val climate = result.devices.single { it.stableKey == "climate_thermostat" }
         assertEquals("Климат", climate.name)
         assertEquals(7, climate.type)
         assertEquals(setOf("hvac_power", "hvac_temperature_left"), climate.objectIds)
         assertEquals("tbox/dashing/hvac_power/set", climate.onOff.single().topicCmd)
         assertEquals(16.0, climate.range.single().min, 0.0)
-        assertTrue(result.devices.none { it.stableKey == "entity_hvac_power" })
+        assertTrue(result.devices.any { it.stableKey == "entity_hvac_power" })
+        assertTrue(result.devices.any { it.stableKey == "entity_hvac_temperature_left" })
         assertTrue(result.devices.any { it.stableKey == "entity_outside_temperature" })
+    }
+
+    @Test
+    fun trunkPulseButtonsStaySeparateFromTrunkDoorSensor() {
+        val types = catalog(
+            devices = listOf(WqttNamedType(19, "Кнопка")),
+            floats = listOf(WqttNamedType(5, "Событие")),
+        )
+        val trunkDoor = CatalogEntity(
+            objectId = "trunk_door",
+            label = "Багажник",
+            description = "Открыт/закрыт",
+            group = EntityGroup.BODY,
+            component = HaComponent.BINARY_SENSOR,
+            deviceClass = "door",
+            signalId = "trunk_door",
+        )
+        val openBtn = CatalogEntity(
+            objectId = "can_vehicle_99_open",
+            label = "Багажник: Открыть",
+            description = "Кнопка",
+            group = EntityGroup.BODY,
+            component = HaComponent.BUTTON,
+            writable = true,
+            canCommand = CanCommandBinding("vehicle", 99, "trunk_pulse", fixedText = "open"),
+        )
+        val closeBtn = CatalogEntity(
+            objectId = "can_vehicle_99_close",
+            label = "Багажник: Закрыть",
+            description = "Кнопка",
+            group = EntityGroup.BODY,
+            component = HaComponent.BUTTON,
+            writable = true,
+            canCommand = CanCommandBinding("vehicle", 99, "trunk_pulse", fixedText = "close"),
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("trunk_door", "can_vehicle_99_open", "can_vehicle_99_close"),
+            entities = listOf(trunkDoor, openBtn, closeBtn),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        assertEquals(3, result.devices.size)
+        assertTrue(result.devices.any { it.stableKey == "entity_trunk_door" && it.sensorEvent.isNotEmpty() })
+        assertTrue(result.devices.any { it.stableKey == "entity_can_vehicle_99_open" && it.onOff.single().cmdOn == "PRESS" })
+        assertTrue(result.devices.any { it.stableKey == "entity_can_vehicle_99_close" && it.onOff.single().cmdOn == "PRESS" })
     }
 
     @Test
     fun unmappedEntitiesAreSkippedWithReason() {
         val result = WqttDeviceMapper.buildFromSelected(
-            selectedObjectIds = setOf("drive_mode", "geo_position", "media", "missing_id"),
+            selectedObjectIds = setOf("geo_position", "media", "missing_id"),
             entities = listOf(
-                CatalogEntity(
-                    objectId = "drive_mode",
-                    label = "Режим вождения",
-                    description = "",
-                    group = EntityGroup.MOTION,
-                    component = HaComponent.SELECT,
-                    writable = true,
-                    options = listOf("ECO", "NOR", "SPT"),
-                    pairs = listOf(WritePair("NOR", 0.0, null)),
-                    canCommand = CanCommandBinding("vehicle", 10, "set"),
-                ),
                 CatalogEntity(
                     objectId = "geo_position",
                     label = "Местоположение",
@@ -217,8 +294,7 @@ class WqttDeviceMapperTest {
             types = WqttTypeCatalog(),
         )
         assertTrue(result.devices.isEmpty())
-        assertEquals(4, result.skipped.size)
-        assertTrue(result.skipped.any { it.objectId == "drive_mode" && it.reason.contains("select") })
+        assertEquals(3, result.skipped.size)
         assertTrue(result.skipped.any { it.objectId == "geo_position" && it.reason.contains("местоположение") })
         assertTrue(result.skipped.any { it.objectId == "media" && it.reason.contains("Музыка") })
         assertTrue(result.skipped.any { it.objectId == "missing_id" && it.reason.contains("каталоге") })
@@ -267,26 +343,31 @@ class WqttDeviceMapperTest {
     }
 
     @Test
-    fun windowAndNumberMapIndividually() {
+    fun numberAloneMapsIndividually() {
         val types = catalog(
-            devices = listOf(WqttNamedType(11, "Окно"), WqttNamedType(7, "Термостат")),
+            devices = listOf(WqttNamedType(7, "Термостат")),
             ranges = listOf(WqttNamedType(3, "Температура")),
         )
         val result = WqttDeviceMapper.buildFromSelected(
-            selectedObjectIds = setOf("window_front_left", "hvac_temperature_left"),
-            entities = listOf(window("window_front_left", "Окно водителя"), hvacTemp()),
+            selectedObjectIds = setOf("hvac_temperature_left"),
+            entities = listOf(hvacTemp()),
             topicPrefix = "tbox",
             deviceId = "dashing",
             room = "Автомобиль",
             types = types,
         )
-        assertEquals(2, result.devices.size)
-        val win = result.devices.single { it.stableKey == "entity_window_front_left" }
-        assertEquals(11, win.type)
-        assertEquals("opened", win.onOff.single().cmdOn)
+        assertEquals(1, result.devices.size)
         val temp = result.devices.single { it.stableKey == "entity_hvac_temperature_left" }
         assertEquals(7, temp.type)
         assertEquals(1, temp.range.size)
+    }
+
+    @Test
+    fun optionActionLabelsPreferRussianForWindows() {
+        assertEquals("открыть", WqttDeviceMapper.optionActionLabel("opened"))
+        assertEquals("закрыть", WqttDeviceMapper.optionActionLabel("closed"))
+        assertEquals("щель", WqttDeviceMapper.optionActionLabel("vent"))
+        assertEquals("ECO", WqttDeviceMapper.optionActionLabel("ECO"))
     }
 
     @Test
@@ -376,15 +457,5 @@ class WqttDeviceMapperTest {
             WritePair("opened", null, "open"),
         ),
         canCommand = CanCommandBinding("vehicle", 5, "set"),
-    )
-
-    private fun button(objectId: String, label: String) = CatalogEntity(
-        objectId = objectId,
-        label = label,
-        description = "Кнопка",
-        group = EntityGroup.OTHER,
-        component = HaComponent.BUTTON,
-        writable = true,
-        builtinAction = "open_menu",
     )
 }
