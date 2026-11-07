@@ -3,6 +3,7 @@ package vad.dashing.mqtt.wqtt
 import vad.dashing.mqtt.ha.CatalogEntity
 import vad.dashing.mqtt.ha.HaComponent
 import vad.dashing.mqtt.ha.MEDIA_OBJECT_ID
+import vad.dashing.mqtt.ha.OptionLabels
 import vad.dashing.mqtt.ha.Topics
 import vad.dashing.mqtt.ha.WritePair
 
@@ -217,9 +218,9 @@ object WqttDeviceMapper {
         types: WqttTypeCatalog,
     ): MapOutcome {
         val unit = entity.unit.trim()
-        val temperature = unit == "°C" || entity.deviceClass == "temperature" ||
-            entity.objectId.contains("temperature", ignoreCase = true)
-        if (temperature || unit.isNotEmpty() || looksNumericSensor(entity)) {
+        val temperature = isTemperature(entity)
+        // Empty-unit volume/brightness/EQ etc. still map as sensor_float (not skip).
+        if (temperature || unit.isNotEmpty() || looksNumericSensor(entity) || isRangeLike(entity)) {
             val floatType = if (temperature) {
                 WqttTypeResolver.temperatureFloatType(types)
             } else {
@@ -283,7 +284,7 @@ object WqttDeviceMapper {
                 return MapOutcome.Devices(out)
             }
             pairs.forEach { pair ->
-                val action = optionActionLabel(pair.state)
+                val action = optionActionLabel(pair.state, pair)
                 out += WqttDevicePayload(
                     stableKey = "entity_${entity.objectId}_opt_${Topics.safeObjectId(pair.state)}",
                     name = "$label: $action",
@@ -293,6 +294,7 @@ object WqttDeviceMapper {
                         WqttOnOff(
                             topicCmd = Topics.set(base, entity.objectId),
                             topicState = "",
+                            // Set payload stays the raw option key Alice/WQTT must publish.
                             cmdOn = pair.state,
                             cmdOff = pair.state,
                         ),
@@ -382,8 +384,7 @@ object WqttDeviceMapper {
         room: String,
         types: WqttTypeCatalog,
     ): WqttDevicePayload {
-        val temperature = entity.unit == "°C" || entity.deviceClass == "temperature" ||
-            entity.objectId.contains("temperature", ignoreCase = true)
+        val temperature = isTemperature(entity)
         if (!entity.writable) {
             val floatType = if (temperature) {
                 WqttTypeResolver.temperatureFloatType(types)
@@ -409,23 +410,28 @@ object WqttDeviceMapper {
                 objectIds = setOf(entity.objectId),
             )
         }
-        // Range lives on thermostat/light-like device types in WQTT.
+        // Temperature → thermostat; volume/brightness/EQ/fan → light/dimmer slider.
+        val (min, max) = defaultRangeBounds(entity)
         return WqttDevicePayload(
             stableKey = "entity_${entity.objectId}",
             name = entity.label.ifBlank { entity.objectId },
-            type = WqttTypeResolver.thermostatType(types),
+            type = if (temperature) {
+                WqttTypeResolver.thermostatType(types)
+            } else {
+                WqttTypeResolver.dimmerType(types)
+            },
             room = room,
             range = listOf(
                 WqttRange(
                     type = if (temperature) {
                         WqttTypeResolver.temperatureRangeType(types)
                     } else {
-                        WqttTypeResolver.FALLBACK_RANGE_BRIGHTNESS
+                        WqttTypeResolver.brightnessRangeType(types)
                     },
                     topicCmd = Topics.set(base, entity.objectId),
                     topicState = Topics.state(base, entity.objectId),
-                    min = entity.numberMin ?: 0.0,
-                    max = entity.numberMax ?: 100.0,
+                    min = entity.numberMin ?: min,
+                    max = entity.numberMax ?: max,
                     precision = entity.numberStep ?: 1.0,
                     multiplier = 1.0,
                 ),
@@ -457,24 +463,63 @@ object WqttDeviceMapper {
 
     private fun looksNumericSensor(entity: CatalogEntity): Boolean {
         val unit = entity.unit.trim()
-        if (unit.isEmpty()) return false
-        return unit in setOf("%", "км", "км/ч", "об/мин", "В", "л", "л/100км", "бар", "кПа") ||
-            entity.objectId.contains("fuel") ||
-            entity.objectId.contains("speed") ||
-            entity.objectId.contains("odometer") ||
-            entity.objectId.contains("distance") ||
-            entity.objectId.contains("voltage") ||
-            entity.objectId.contains("rpm")
+        if (unit.isNotEmpty()) {
+            if (unit in setOf("%", "км", "км/ч", "об/мин", "В", "л", "л/100км", "бар", "кПа")) {
+                return true
+            }
+        }
+        val id = entity.objectId.lowercase()
+        return id.contains("fuel") ||
+            id.contains("speed") ||
+            id.contains("odometer") ||
+            id.contains("distance") ||
+            id.contains("voltage") ||
+            id.contains("rpm") ||
+            isRangeLike(entity)
     }
 
-    /** Russian action labels for common window/cover/mode option keys. */
-    internal fun optionActionLabel(state: String): String = when (state.lowercase()) {
-        "opened", "open" -> "открыть"
-        "closed", "close" -> "закрыть"
-        "vent" -> "щель"
-        "comfort_open", "comfort" -> "comfort"
-        else -> state
+    private fun isTemperature(entity: CatalogEntity): Boolean =
+        entity.unit.trim() == "°C" ||
+            entity.deviceClass == "temperature" ||
+            entity.objectId.contains("temperature", ignoreCase = true)
+
+    /**
+     * Volume / brightness / EQ / fan / balance — numeric sliders even when catalog unit is empty.
+     * Detection is mapper-side (objectId + label); does not invent units in AutomationSignalCatalog.
+     */
+    internal fun isRangeLike(entity: CatalogEntity): Boolean {
+        val hay = "${entity.objectId} ${entity.label}".lowercase()
+        return RANGE_LIKE_NEEDLES.any { hay.contains(it) }
     }
+
+    /** Defaults when [CatalogEntity.numberMin]/[CatalogEntity.numberMax] are absent. */
+    internal fun defaultRangeBounds(entity: CatalogEntity): Pair<Double, Double> {
+        val id = entity.objectId.lowercase()
+        val label = entity.label.lowercase()
+        val hay = "$id $label"
+        return when {
+            hay.contains("brightness") || hay.contains("яркост") || hay.contains("backlight") ->
+                1.0 to 10.0
+            hay.contains("volume") || hay.contains("громк") ->
+                0.0 to 31.0
+            hay.contains("fan_speed") || (hay.contains("fan") && hay.contains("speed")) ->
+                0.0 to 7.0
+            else -> 0.0 to 100.0
+        }
+    }
+
+    /** Alice-facing option name; see [OptionLabels]. Payload stays [state]. */
+    internal fun optionActionLabel(state: String, pair: WritePair? = null): String =
+        OptionLabels.actionLabel(state, pair)
+
+    private val RANGE_LIKE_NEEDLES = listOf(
+        "brightness", "backlight", "volume", "fan_speed",
+        "audio_eq", "eq_bass", "eq_middle", "eq_treble",
+        "balance", "fader",
+        "яркост", "громк", "подсвет",
+        "hud_brightness", "icm_brightness",
+        "fragrance_concentration",
+    )
 
     private sealed class MapOutcome {
         data class Devices(val payloads: List<WqttDevicePayload>) : MapOutcome()

@@ -345,8 +345,8 @@ class WqttDeviceMapperTest {
     @Test
     fun numberAloneMapsIndividually() {
         val types = catalog(
-            devices = listOf(WqttNamedType(7, "Термостат")),
-            ranges = listOf(WqttNamedType(3, "Температура")),
+            devices = listOf(WqttNamedType(0, "Свет"), WqttNamedType(7, "Термостат")),
+            ranges = listOf(WqttNamedType(3, "Температура"), WqttNamedType(0, "Яркость")),
         )
         val result = WqttDeviceMapper.buildFromSelected(
             selectedObjectIds = setOf("hvac_temperature_left"),
@@ -359,15 +359,149 @@ class WqttDeviceMapperTest {
         assertEquals(1, result.devices.size)
         val temp = result.devices.single { it.stableKey == "entity_hvac_temperature_left" }
         assertEquals(7, temp.type)
+        assertEquals(3, temp.range.single().type)
         assertEquals(1, temp.range.size)
     }
 
     @Test
-    fun optionActionLabelsPreferRussianForWindows() {
+    fun emptyUnitVolumeSensorMapsAsFloatNotSkipped() {
+        val types = catalog(
+            devices = listOf(WqttNamedType(19, "Датчик")),
+            floats = listOf(WqttNamedType(4, "Произвольное")),
+        )
+        val volume = CatalogEntity(
+            objectId = "hu_media_volume",
+            label = "Громкость медиа",
+            description = "",
+            group = EntityGroup.OTHER,
+            component = HaComponent.SENSOR,
+            unit = "",
+            signalId = "hu_media_volume",
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("hu_media_volume"),
+            entities = listOf(volume),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        assertTrue(result.skipped.isEmpty())
+        val device = result.devices.single()
+        assertEquals("entity_hu_media_volume", device.stableKey)
+        assertEquals(1, device.sensorFloat.size)
+        assertEquals(4, device.sensorFloat.single().type)
+        assertTrue(WqttDeviceMapper.isRangeLike(volume))
+    }
+
+    @Test
+    fun writableBrightnessMapsToDimmerWithRangeDefaults() {
+        val types = catalog(
+            devices = listOf(WqttNamedType(0, "Свет"), WqttNamedType(7, "Термостат")),
+            ranges = listOf(WqttNamedType(3, "Температура"), WqttNamedType(1, "Яркость")),
+        )
+        val brightness = CatalogEntity(
+            objectId = "hu_screen_brightness",
+            label = "Яркость экрана",
+            description = "",
+            group = EntityGroup.OTHER,
+            component = HaComponent.NUMBER,
+            unit = "",
+            writable = true,
+            canCommand = CanCommandBinding("vehicle", 50, "set"),
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("hu_screen_brightness"),
+            entities = listOf(brightness),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        assertTrue(result.skipped.isEmpty())
+        val device = result.devices.single()
+        assertEquals(0, device.type)
+        assertEquals(1, device.range.single().type)
+        assertEquals(1.0, device.range.single().min, 0.0)
+        assertEquals(10.0, device.range.single().max, 0.0)
+        assertEquals("tbox/dashing/hu_screen_brightness/set", device.range.single().topicCmd)
+        assertEquals(1.0 to 10.0, WqttDeviceMapper.defaultRangeBounds(brightness))
+        assertEquals(
+            0.0 to 31.0,
+            WqttDeviceMapper.defaultRangeBounds(
+                CatalogEntity(
+                    objectId = "hu_phone_volume",
+                    label = "Телефон",
+                    description = "",
+                    group = EntityGroup.OTHER,
+                    component = HaComponent.NUMBER,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun optionActionLabelsPreferRussianForWindowsAndSeats() {
         assertEquals("открыть", WqttDeviceMapper.optionActionLabel("opened"))
         assertEquals("закрыть", WqttDeviceMapper.optionActionLabel("closed"))
         assertEquals("щель", WqttDeviceMapper.optionActionLabel("vent"))
+        assertEquals("Подогрев 1", WqttDeviceMapper.optionActionLabel("heat_1"))
+        assertEquals("Вентиляция 1", WqttDeviceMapper.optionActionLabel("vent_1"))
         assertEquals("ECO", WqttDeviceMapper.optionActionLabel("ECO"))
+        assertEquals("Комфорт", WqttDeviceMapper.optionActionLabel("comfort"))
+        assertEquals("Лицо и ноги", WqttDeviceMapper.optionActionLabel("face_foot"))
+        // Human text on WritePair wins; raw set payload stays pair.state (tested below).
+        assertEquals(
+            "свой текст",
+            WqttDeviceMapper.optionActionLabel(
+                "heat_1",
+                WritePair("heat_1", 1.0, "свой текст"),
+            ),
+        )
+        assertEquals(
+            "Подогрев 1",
+            WqttDeviceMapper.optionActionLabel(
+                "heat_1",
+                WritePair("heat_1", null, "open"), // invoke key — not a display label
+            ),
+        )
+    }
+
+    @Test
+    fun seatModeButtonsUseRussianNamesButRawSetPayload() {
+        val types = catalog(devices = listOf(WqttNamedType(19, "Кнопка")))
+        val seat = CatalogEntity(
+            objectId = "front_left_seat_mode",
+            label = "Сиденье водителя",
+            description = "",
+            group = EntityGroup.BODY,
+            component = HaComponent.SELECT,
+            writable = true,
+            options = listOf("off", "heat_1", "vent_1"),
+            pairs = listOf(
+                WritePair("off", 0.0, null),
+                WritePair("heat_1", 1.0, null),
+                WritePair("vent_1", 4.0, null),
+            ),
+            canCommand = CanCommandBinding("vehicle", 80, "set"),
+        )
+        val result = WqttDeviceMapper.buildFromSelected(
+            selectedObjectIds = setOf("front_left_seat_mode"),
+            entities = listOf(seat),
+            topicPrefix = "tbox",
+            deviceId = "dashing",
+            room = "Автомобиль",
+            types = types,
+        )
+        val heat = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_heat_1" }
+        assertEquals("Сиденье водителя: Подогрев 1", heat.name)
+        assertEquals("heat_1", heat.onOff.single().cmdOn)
+        val vent = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_vent_1" }
+        assertEquals("Сиденье водителя: Вентиляция 1", vent.name)
+        assertEquals("vent_1", vent.onOff.single().cmdOn)
+        val off = result.devices.single { it.stableKey == "entity_front_left_seat_mode_opt_off" }
+        assertEquals("Сиденье водителя: Выключено", off.name)
+        assertEquals("off", off.onOff.single().cmdOn)
     }
 
     @Test

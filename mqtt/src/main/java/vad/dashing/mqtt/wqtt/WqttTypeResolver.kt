@@ -26,6 +26,14 @@ object WqttTypeResolver {
             ?: find(catalog.devices, "кондиционер")
             ?: FALLBACK_LIGHT
 
+    /**
+     * Volume / brightness / EQ sliders — prefer light/dimmer from GET /api/devices/types,
+     * not thermostat (Alice would treat them as climate).
+     */
+    fun dimmerType(catalog: WqttTypeCatalog): Int =
+        find(catalog.devices, "диммер", "яркость", "ламп", "свет")
+            ?: FALLBACK_LIGHT
+
     fun temperatureSensorType(catalog: WqttTypeCatalog): Int =
         find(catalog.devices, "температур")
             ?: find(catalog.devices, "датчик")
@@ -43,6 +51,11 @@ object WqttTypeResolver {
 
     fun temperatureRangeType(catalog: WqttTypeCatalog): Int =
         find(catalog.ranges, "температур", "temperature", "уставк")
+            ?: FALLBACK_RANGE_BRIGHTNESS
+
+    /** Brightness / volume / generic slider range capability. */
+    fun brightnessRangeType(catalog: WqttTypeCatalog): Int =
+        find(catalog.ranges, "яркост", "brightness", "диммер", "громк", "volume")
             ?: FALLBACK_RANGE_BRIGHTNESS
 
     fun temperatureFloatType(catalog: WqttTypeCatalog): Int =
