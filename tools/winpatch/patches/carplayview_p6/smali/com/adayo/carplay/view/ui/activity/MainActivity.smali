@@ -611,6 +611,8 @@
     .line 88
     invoke-virtual {p0}, Lcom/adayo/carplay/view/ui/activity/MainActivity;->hideBottomUIMenu()V
 
+    invoke-static {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->keepBars(Landroid/app/Activity;)V
+
     .line 89
     invoke-virtual {p0}, Lcom/adayo/carplay/view/ui/activity/MainActivity;->getWindow()Landroid/view/Window;
 
@@ -871,6 +873,8 @@
 
     .line 63
     invoke-virtual {p0}, Lcom/adayo/carplay/view/ui/activity/MainActivity;->hideBottomUIMenu()V
+
+    invoke-static {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->keepBars(Landroid/app/Activity;)V
 
     .line 65
     :cond_0

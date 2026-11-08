@@ -42,6 +42,8 @@ data class WinPatchState(
     val facts: List<Pair<String, String>> = emptyList(),
     val targets: List<WinPatchTargetPanel> = emptyList(),
     val actions: Set<WinPatchAction> = emptySet(),
+    val layout: WinPatchCodec.Layout = WinPatchCodec.Layout.Window,
+    val layoutReady: Boolean = false,
     val busy: Boolean = false,
     val banner: WinPatchBanner? = null,
 )
@@ -66,6 +68,12 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
         WinPatchCodec.targetById(id) ?: throw IOException("неизвестная цель $id")
 
     fun reboot() = launch { runReboot() }
+
+    fun setLayout(layout: WinPatchCodec.Layout) {
+        val current = _state.value
+        if (current.busy || !current.layoutReady || current.layout == layout) return
+        launch { writeLayout(layout) }
+    }
 
     private fun launch(block: suspend () -> Unit) {
         if (job?.isActive == true) return
@@ -147,11 +155,13 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
     private fun inspect() {
         val paths = WinPatchCodec.TARGETS.flatMap { listOf(it.systemPath, it.backupPath, it.legacyBackupPath) } +
             WinPatchCodec.CARPLAY_CONFIG
-        val (md5Output, incremental) = openShell().use { shell ->
+        val (md5Output, incremental, layoutRaw) = openShell().use { shell ->
             val md5s = shell.rootText(paths.joinToString(" ") { "md5sum $it" } + " 2>/dev/null; true")
             val inc = shell.rootText("getprop ro.build.version.incremental").trim()
-            md5s to inc
+            val layout = shell.rootText("settings get global ${WinPatchCodec.LAYOUT_SETTING}")
+            Triple(md5s, inc, layout)
         }
+        val layout = WinPatchCodec.parseLayout(layoutRaw)
         val md5s = WinPatchCodec.parseMd5Map(md5Output)
         val infos = WinPatchCodec.TARGETS.map { t ->
             val sysMd5 = md5s[t.systemPath]
@@ -168,8 +178,10 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         val configMd5 = md5s[WinPatchCodec.CARPLAY_CONFIG]
+        val layoutReady = infos.any { it.system == FileState.Patched }
         val facts = listOf(
             "Прошивка ГУ" to WinPatchCodec.firmwareNameForIncremental(incremental),
+            "Режим запуска" to if (layout == WinPatchCodec.Layout.Bars) "почти весь экран" else "окно лаунчера",
             "CarPlayManagerConfig.json" to
                 (configMd5?.let { "не изменяется установщиком (${it.take(8)}…)" } ?: "не найден"),
             "Резервные копии стока" to "вшиты в приложение для V00.03.07, 03.16, 05.09 и 07.12",
@@ -186,10 +198,11 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             WinPatchBanner(
                 "Android Auto (${WinPatchCodec.ANDROID_AUTO.patchLabel}, база V00.07.12 + режим парковки P) и CarPlay " +
-                    "(${WinPatchCodec.CAR_PLAY.patchLabel}, автоперевод в окно лаунчера) ставятся и откатываются отдельно: " +
+                    "(${WinPatchCodec.CAR_PLAY.patchLabel}) ставятся и откатываются отдельно: " +
                     "запись в /system со снятием защиты eMMC, очистка dalvik-cache и перезапуск процесса. " +
+                    "Один патч открывает приложения либо в окне лаунчера, либо почти на весь экран между барами. " +
                     "Эталонные стоковые APK для всех версий прошивки вшиты в приложение." +
-                    if (anyPatched) " Если окно не подхватилось после установки — перезагрузите ГУ." else "",
+                    if (anyPatched) " Если режим не подхватился после установки — перезагрузите ГУ." else "",
                 WinPatchBannerKind.Info,
             )
         }
@@ -197,7 +210,40 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
             if (anyPatched) add(WinPatchAction.Reboot)
             add(WinPatchAction.Refresh)
         }
-        _state.update { it.copy(facts = facts, targets = panels, banner = banner, actions = actions) }
+        _state.update {
+            it.copy(
+                facts = facts,
+                targets = panels,
+                banner = banner,
+                actions = actions,
+                layout = layout,
+                layoutReady = layoutReady,
+            )
+        }
+    }
+
+    private fun writeLayout(layout: WinPatchCodec.Layout) {
+        val value = if (layout == WinPatchCodec.Layout.Bars) WinPatchCodec.LAYOUT_BARS else WinPatchCodec.LAYOUT_WINDOW
+        openShell().use { shell ->
+            if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
+            val saved = shell.rootText(
+                "settings put global ${WinPatchCodec.LAYOUT_SETTING} $value; settings get global ${WinPatchCodec.LAYOUT_SETTING}",
+            )
+            if (WinPatchCodec.parseLayout(saved) != layout) {
+                throw IOException("настройка не сохранилась (${saved.trim()})")
+            }
+            shell.rootText(
+                "am force-stop ${WinPatchCodec.ANDROID_AUTO.processName}; " +
+                    "am force-stop ${WinPatchCodec.CAR_PLAY.processName}",
+            )
+        }
+        inspect()
+        val text = if (layout == WinPatchCodec.Layout.Bars) {
+            "Сохранён режим «почти весь экран». Откройте Android Auto или CarPlay заново — выбор останется после перезагрузки."
+        } else {
+            "Сохранён режим «окно лаунчера». Откройте Android Auto или CarPlay заново — выбор останется после перезагрузки."
+        }
+        _state.update { it.copy(banner = WinPatchBanner(text, WinPatchBannerKind.Success)) }
     }
 
     private fun panelOf(info: TargetInfo): WinPatchTargetPanel {

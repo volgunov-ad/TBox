@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import vad.dashing.winpatch.WinPatchAction
 import vad.dashing.winpatch.WinPatchBannerKind
+import vad.dashing.winpatch.WinPatchCodec
 import vad.dashing.winpatch.WinPatchState
 import vad.dashing.winpatch.WinPatchTargetPanel
 
@@ -35,6 +36,7 @@ fun WinPatchScreen(
     onRefresh: () -> Unit,
     onApply: (String) -> Unit,
     onRestore: (String) -> Unit,
+    onLayout: (WinPatchCodec.Layout) -> Unit,
     onReboot: () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -48,10 +50,12 @@ fun WinPatchScreen(
             Text(text = "AA/CarPlay окна ГУ", style = MaterialTheme.typography.headlineSmall)
             Text(
                 text = "Постоянная установка пропатченных Android Auto (${WinPatchLabel.AA}) и CarPlayView " +
-                    "(${WinPatchLabel.CP}) в /system ГУ A10 (Adayo/VHAL): оба приложения сразу открываются в окне " +
-                    "лаунчера (1327×865) со штатными барами и корректным тачем; в Android Auto также снята блокировка " +
-                    "стояночного тормоза (работает на стенде и в движении). Каждый ставится и откатывается отдельно. " +
-                    "Эталонные штатные APK для всех прошивок (V00.03.07, 03.16, 05.09, 07.12) зашиты в приложение.",
+                    "(${WinPatchLabel.CP}) в /system ГУ A10 (Adayo/VHAL). Один патч: кнопка ниже выбирает, " +
+                    "открывать Android Auto и CarPlay в окне лаунчера (1327×865) или почти на весь экран " +
+                    "между верхним и нижним барами (1920×864). Выбор пишется в настройки ГУ и сохраняется " +
+                    "после перезагрузки. В Android Auto также снята блокировка стояночного тормоза. " +
+                    "Каждый патч ставится и откатывается отдельно. Эталонные штатные APK для всех прошивок " +
+                    "(V00.03.07, 03.16, 05.09, 07.12) зашиты в приложение.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -103,6 +107,12 @@ fun WinPatchScreen(
                     }
                 }
             }
+            LayoutCard(
+                layout = state.layout,
+                ready = state.layoutReady,
+                busy = state.busy,
+                onLayout = onLayout,
+            )
             state.targets.forEach { panel ->
                 TargetCard(
                     panel = panel,
@@ -135,6 +145,74 @@ fun WinPatchScreen(
                     textAlign = TextAlign.Center,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun LayoutCard(
+    layout: WinPatchCodec.Layout,
+    ready: Boolean,
+    busy: Boolean,
+    onLayout: (WinPatchCodec.Layout) -> Unit,
+) {
+    Card {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(text = "Режим запуска", style = MaterialTheme.typography.titleLarge)
+            Text(
+                text = if (ready) {
+                    "Окно лаунчера оставляет левую колонку карточек. Почти весь экран закрывает её и " +
+                        "оставляет верхний и нижний бары. Android Auto заполняет область между барами. " +
+                        "CarPlay остаётся 16:9 по центру, по бокам могут быть поля."
+                } else {
+                    "Кнопки включатся после установки актуального патча. Старая сборка всегда открывает окно лаунчера."
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                LayoutButton(
+                    text = "Окно лаунчера",
+                    selected = layout == WinPatchCodec.Layout.Window,
+                    enabled = ready && !busy,
+                    onClick = { onLayout(WinPatchCodec.Layout.Window) },
+                    modifier = Modifier.weight(1f),
+                )
+                LayoutButton(
+                    text = "Почти весь экран",
+                    selected = layout == WinPatchCodec.Layout.Bars,
+                    enabled = ready && !busy,
+                    onClick = { onLayout(WinPatchCodec.Layout.Bars) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LayoutButton(
+    text: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (selected) {
+        Button(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
         }
     }
 }

@@ -7,12 +7,15 @@ import android.content.Intent;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import java.lang.ref.WeakReference;
 
 public final class AAWindowPatch {
@@ -23,6 +26,61 @@ public final class AAWindowPatch {
     }
 
     private static final String REDIRECTED = "com.adayo.androidauto.patch.REDIRECTED";
+    /** Same key the winpatch app writes with `settings put global`. */
+    static final String LAYOUT_KEY = "tbox_winpatch_layout";
+
+    /**
+     * A10 content rect between the status bar and the bottom bar:
+     * DisplayFrames mContent=[0,96][1920,960] → 1920×864.
+     * Physical millimetres follow the stock 285×160 panel, scaled to that height
+     * (160×864/1080 = 128) so the phone lays the UI out for this rectangle.
+     */
+    private static final int BARS_WIDTH = 1920;
+    private static final int BARS_HEIGHT = 864;
+    private static final int BARS_WIDTH_MM = 285;
+    private static final int BARS_HEIGHT_MM = 128;
+    private static final int WINDOW_WIDTH = 1327;
+    private static final int WINDOW_HEIGHT = 865;
+    private static final int WINDOW_WIDTH_MM = 197;
+    private static final int WINDOW_HEIGHT_MM = 128;
+
+    public static boolean barsMode(Context context) {
+        try {
+            return "bars".equals(Settings.Global.getString(context.getContentResolver(), LAYOUT_KEY));
+        } catch (RuntimeException error) {
+            Log.e("AAWindowPatch", "layout read failed", error);
+            return false;
+        }
+    }
+
+    public static int videoWidth(Context context) {
+        return barsMode(context) ? BARS_WIDTH : WINDOW_WIDTH;
+    }
+
+    public static int videoHeight(Context context) {
+        return barsMode(context) ? BARS_HEIGHT : WINDOW_HEIGHT;
+    }
+
+    public static int videoWidthMm(Context context) {
+        return barsMode(context) ? BARS_WIDTH_MM : WINDOW_WIDTH_MM;
+    }
+
+    public static int videoHeightMm(Context context) {
+        return barsMode(context) ? BARS_HEIGHT_MM : WINDOW_HEIGHT_MM;
+    }
+
+    /** Keep the status bar and the bottom bar when the activity is on the main display. */
+    public static void keepBars(Activity activity) {
+        if (!barsMode(activity)) return;
+        if (activity.getWindowManager().getDefaultDisplay().getDisplayId() != 0) return;
+        Window window = activity.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        window.addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        Log.d("AAWindowPatch", "keepBars");
+    }
 
     private static int windowDisplay(Context context) {
         DisplayManager manager = (DisplayManager) context.getSystemService(Context.DISPLAY_SERVICE);
@@ -36,19 +94,48 @@ public final class AAWindowPatch {
         return -1;
     }
 
-    private static void startOnDisplay(Context context, Intent intent, int display) {
+    private static void startOnDisplay(Context context, Intent intent, int display, boolean multipleTask) {
         Intent target = intent != null ? new Intent(intent) : new Intent();
         target.setClassName("com.adayo.androidauto", "com.adayo.androidauto.ui.AAActivity");
-        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        int flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        if (multipleTask) flags |= Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
+        target.setFlags(flags);
         target.putExtra(REDIRECTED, true);
         ActivityOptions options = ActivityOptions.makeBasic();
         options.setLaunchDisplayId(display);
         context.getApplicationContext().startActivity(target, options.toBundle());
-        Log.d("AAWindowPatch", "start display=" + display);
+        Log.d("AAWindowPatch", "start display=" + display + " bars=" + barsMode(context));
+    }
+
+    private static boolean alreadyRedirected(Activity activity) {
+        Intent intent = activity.getIntent();
+        return intent != null && intent.getBooleanExtra(REDIRECTED, false);
     }
 
     public static boolean interceptOnCreate(Activity activity) {
         int displayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
+        if (barsMode(activity)) {
+            if (displayId == 0) {
+                keepBars(activity);
+                track(activity);
+                return false;
+            }
+            if (alreadyRedirected(activity)) {
+                Log.e("AAWindowPatch", "interceptOnCreate: bars redirect did not reach the main display");
+                track(activity);
+                return false;
+            }
+            try {
+                activity.finish();
+                startOnDisplay(activity.getApplicationContext(), activity.getIntent(), 0, false);
+                Log.d("AAWindowPatch", "interceptOnCreate display=" + displayId + " -> main");
+                return true;
+            } catch (RuntimeException error) {
+                Log.e("AAWindowPatch", "interceptOnCreate bars redirect failed", error);
+                track(activity);
+                return false;
+            }
+        }
         if (displayId > 0) {
             track(activity);
             return false;
@@ -67,7 +154,7 @@ public final class AAWindowPatch {
         }
         try {
             activity.finish();
-            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay);
+            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay, true);
             Log.d("AAWindowPatch", "interceptOnCreate display=0 -> display=" + targetDisplay);
             return true;
         } catch (RuntimeException error) {
@@ -79,9 +166,26 @@ public final class AAWindowPatch {
 
     public static void ensureWindow(Activity activity) {
         int display = activity.getWindowManager().getDefaultDisplay().getDisplayId();
-        Log.d("AAWindowPatch", "activity display=" + display);
+        Log.d("AAWindowPatch", "activity display=" + display + " bars=" + barsMode(activity));
+        if (barsMode(activity)) {
+            if (display == 0) {
+                keepBars(activity);
+                return;
+            }
+            if (activity.isFinishing() || alreadyRedirected(activity)) {
+                Log.e("AAWindowPatch", "bars redirect did not reach the main display");
+                return;
+            }
+            try {
+                activity.finish();
+                startOnDisplay(activity.getApplicationContext(), activity.getIntent(), 0, false);
+            } catch (RuntimeException error) {
+                Log.e("AAWindowPatch", "bars redirect failed", error);
+            }
+            return;
+        }
         if (display != 0 || activity.isFinishing()) return;
-        if (activity.getIntent().getBooleanExtra(REDIRECTED, false)) {
+        if (alreadyRedirected(activity)) {
             Log.e("AAWindowPatch", "redirect did not reach window; refusing retry");
             return;
         }
@@ -92,13 +196,22 @@ public final class AAWindowPatch {
         }
         try {
             activity.finish();
-            startOnDisplay(activity.getApplicationContext(), activity.getIntent(), targetDisplay);
+            startOnDisplay(activity.getApplicationContext(), activity.getIntent(), targetDisplay, true);
         } catch (RuntimeException error) {
             Log.e("AAWindowPatch", "window redirect failed", error);
         }
     }
 
     public static void start(Context context, Intent intent) {
+        if (barsMode(context)) {
+            Activity existing = current.get();
+            if (existing != null && !existing.isFinishing()) {
+                int d = existing.getWindowManager().getDefaultDisplay().getDisplayId();
+                if (d != 0) existing.finish();
+            }
+            startOnDisplay(context, intent, 0, false);
+            return;
+        }
         Activity existing = current.get();
         if (existing != null && !existing.isFinishing()) {
             int d = existing.getWindowManager().getDefaultDisplay().getDisplayId();
@@ -113,7 +226,7 @@ public final class AAWindowPatch {
         }
         int display = windowDisplay(context);
         if (display > 0) {
-            startOnDisplay(context, intent, display);
+            startOnDisplay(context, intent, display, true);
             return;
         }
         Intent window = new Intent("com.adayo.launcher.LAUNCH_APP");

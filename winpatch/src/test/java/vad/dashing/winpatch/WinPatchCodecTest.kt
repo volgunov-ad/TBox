@@ -249,6 +249,18 @@ class WinPatchCodecTest {
         WinPatchCodec.applyScript(mapOf(WinPatchCodec.ANDROID_AUTO to aaStage, WinPatchCodec.CAR_PLAY to cpStage))
 
     @Test
+    fun parseLayoutTreatsOnlyBarsAsFullscreenBetweenBars() {
+        assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout(null))
+        assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout(""))
+        assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout("null"))
+        assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout("window"))
+        assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout("WINDOW"))
+        assertEquals(WinPatchCodec.Layout.Bars, WinPatchCodec.parseLayout("bars"))
+        assertEquals(WinPatchCodec.Layout.Bars, WinPatchCodec.parseLayout("  BARS  "))
+        assertEquals(WinPatchCodec.Layout.Bars, WinPatchCodec.parseLayout("settings put\nbars"))
+    }
+
+    @Test
     fun parsesOutcomeMarkers() {
         assertEquals(WinPatchCodec.Outcome.Applied, WinPatchCodec.parseOutcome("x\n${WinPatchCodec.APPLIED_MARKER}"))
         assertEquals(WinPatchCodec.Outcome.Restored, WinPatchCodec.parseOutcome(WinPatchCodec.RESTORED_MARKER))

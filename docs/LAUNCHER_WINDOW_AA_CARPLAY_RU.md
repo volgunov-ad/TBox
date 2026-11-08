@@ -679,8 +679,8 @@ Display #1; прямой `am start -n` был доставлен существ�
 
 - **Поддержка всех прошивок A10 (`V00.03.07`, `V00.03.16`, `V00.05.09`, `V00.07.12`):**
   - В `assets` модуля зашиты единые универсальные патченные сборки `p6`:
-    - `AndroidAuto_p6.apk` (`7de94e8e0a80bd17af4ce097913fc9eb`) — собран на базе самого свежего стокового `AndroidAuto.apk` из прошивки `V00.07.12`, принудительно отдаёт `mParkBreakEngaged = true` (`DRIVE_STATUS_UNRESTRICTED`) и `CarAdapter.isParking() = true` (позволяет пройти первичную настройку AA на стенде без имитации CAN и снимает блокировки в движении), содержит `interceptOnCreate` с немедленным переводом с `Display #0` на виртуальный дисплей `ActivityViewVirtualDisplay@` (`Display #1`), принудительное обновление `mPromptView` и `mSurfaceView` от текущего оконного экземпляра `AAActivity`, отключение `MSG_ACTIVITY_DELAY_PAUSE` (`0x66`) и таймера самоубийства `MSG_IS_RESTART_APP` (`0x2716`), защиту `CmsProxy.setStatus` от NPE и установку `SO_REUSEADDR` до `bind(9527)`. Видео заполняет окно 1327×865 без верхних и нижних полос: `widthPixel/heightPixel` для `calSreen` — 1327×865, телефон получает `widthMargin` и рисует интерфейс в пропорции окна; `SurfaceView` расширен до 1536×865 и обрезан по бокам. Тач вычитает половину этого `widthMargin`, чтобы попадание совпало с картинкой. Проверено на ГУ `192.168.1.7` 2026-10-23. CarPlayView остаётся с aspect-fit 16:9 и полями. Предыдущая сборка с полосами — `2b38bc58847269d66a56d269137e38a1`.
-    - `CarPlayView_p6.apk` (`0841e6252eb54c88c98ef561dafd2857`) — содержит `WindowSurface.interceptOnCreate()` в начале `MainActivity.onCreate()`, который при любом запуске на `Display #0` (со штатной иконки лаунчера `full=true` или от `SourceMngService`) сохраняет `surfaceId`, ставит `needTake=false`, закрывает экземпляр на `Display #0` (до создания `SurfaceView`, чтобы `surfaceDestroyed` не вызывал `takeCarPlay()` / `setSurface(null)`) и перезапускает `MainActivity` на виртуальный дисплей `Display #1` (`1327×865`) с флагами `NEW_TASK | MULTIPLE_TASK`.
+    - `AndroidAuto_p6.apk` (`22619227b2df11c30c76a49dee268c29`) — собран на базе самого свежего стокового `AndroidAuto.apk` из прошивки `V00.07.12`, принудительно отдаёт `mParkBreakEngaged = true` (`DRIVE_STATUS_UNRESTRICTED`) и `CarAdapter.isParking() = true` (позволяет пройти первичную настройку AA на стенде без имитации CAN и снимает блокировки в движении), содержит `interceptOnCreate`, отключение `MSG_ACTIVITY_DELAY_PAUSE` (`0x66`) и таймера самоубийства `MSG_IS_RESTART_APP` (`0x2716`), защиту `CmsProxy.setStatus` от NPE и установку `SO_REUSEADDR` до `bind(9527)`. Размер видео читается из `tbox_winpatch_layout`: окно `1327×865` / `197×128` мм или почти весь экран `1920×864` / `285×128` мм. В окне `SurfaceView` расширяется и обрезается по бокам, тач вычитает половину `widthMargin`. Предыдущая сборка только с окном — `7de94e8e0a80bd17af4ce097913fc9eb`.
+    - `CarPlayView_p6.apk` (`af0888794b02440a499ee22f83f12842`) — `WindowSurface.interceptOnCreate()` в начале `MainActivity.onCreate()`. В режиме окна при запуске на `Display #0` сохраняет `surfaceId`, ставит `needTake=false`, закрывает экземпляр на `Display #0` (до создания `SurfaceView`, чтобы `surfaceDestroyed` не вызывал `takeCarPlay()` / `setSurface(null)`) и перезапускает `MainActivity` на виртуальный дисплей `Display #1` (`1327×865`). В режиме «почти весь экран» остаётся на дисплее 0 и не прячет бары. Предыдущая сборка только с окном — `0841e6252eb54c88c98ef561dafd2857`.
   - В `assets/stock/` зашиты эталонные стоковые APK для всех ревизий прошивок A10:
     - `stock/CarPlayView_stock.apk` (`2718803663e016a969e6d2fa0d2b4c16`, единый для `03.07`, `03.16`, `05.09`, `07.12`);
     - `stock/AndroidAuto_v0307.apk` (`ed05e3db4ac59fbf82bf9d7018c0b01a`, для `V00.03.07` и `V00.03.16`, `incremental` `1719404309` / `1725521697`);
@@ -688,6 +688,9 @@ Display #1; прямой `am start -n` был доставлен существ�
     - `stock/AndroidAuto_v0712.apk` (`5bbdbcb35d8c895912534ef3f9e46dee`, для `V00.07.12`, `incremental` `1763366978`).
   - Установщик определяет прошивку по `ro.build.version.incremental` (и/или MD5 файла в `/system`) и автоматически использует соответствующий стоковый APK из `assets/stock/` для резерва и отката — даже если `/data/local/tmp` была очищена или в `/system` стояла старая сборка `p1..p5`.
 - Применение и откат выполняют атомарную запись через `<apk>.new` + `mv`, очищают `/data/dalvik-cache/*/...` и `oat`, и перезапускают процесс цели (`am force-stop` + `kill`).
+- **Два режима одного патча.** Кнопки «Окно лаунчера» и «Почти весь экран» в `:winpatch` пишут `settings put global tbox_winpatch_layout window|bars`. Настройка живёт в settings-провайдере и сохраняется после перезагрузки. Патч читает её при каждом запуске; смена режима останавливает процессы AA и CarPlay, следующий запуск уже в новом режиме.
+  - `window` (значение по умолчанию, в том числе если ключ не задан): прежнее поведение — перевод на виртуальный дисплей ActivityView `1327×865`. Android Auto сообщает телефону `1327×865` / `197×128` мм.
+  - `bars`: активность остаётся на основном дисплее (если лаунчер успел положить её в окно — один перевод обратно на дисплей 0). Скрывающие бары флаги снимаются (`FLAG_FORCE_NOT_FULLSCREEN`, `SYSTEM_UI_FLAG_VISIBLE`). На этом ГУ контентная область между барами — `DisplayFrames mContent=[0,96][1920,960]`, то есть **1920×864**. Android Auto сообщает телефону этот прямоугольник (`285×128` мм, высота от штатных `160×864/1080`). CarPlay по-прежнему рисует 1920×1080 и вписывает 16:9 в эту область, поэтому по бокам могут остаться поля.
 
 ## 8. Артефакты в репозитории (`winpatch/` и `tools/winpatch/`)
 
@@ -729,15 +732,14 @@ CarPlay и Android Auto — открываются в окне лаунчера 
 - **Оконный режим с барами (патчи APK, §7.8)**: подпись прошивки — публичный AOSP
   platform test-key (§7.1), поэтому пропатченные APK переподписываются им и ставятся в
   `/system` без root-костылей вокруг подписей.
-- `CarPlayView` **p6** (`0841e6252eb54c88c98ef561dafd2857`): `WindowSurface.interceptOnCreate()`
-  автоматически переводит запуск с `Display #0` на виртуальный дисплей `Display #1`
-  (`1327×865`) до создания `SurfaceView`, видео — aspect-fit 16:9 (1327×746) с полями,
-  тач масштабируется под окно.
-- `AndroidAuto` **p6** (`7de94e8e0a80bd17af4ce097913fc9eb`, на базе стока `V00.07.12`):
-  автоперевод на `Display #1`, отключение `MSG_ACTIVITY_DELAY_PAUSE` и таймера
-  `MSG_IS_RESTART_APP`, принудительный `mParkBreakEngaged = true` (снята блокировка
-  ручника на стенде и в движении), заполнение окна `1327×865` без верхних/нижних полос
-  (`SurfaceView` 1536×865 с компенсацией `widthMargin` в таче). Проверено на ГУ 2026-10-23.
+- `CarPlayView` **p6**: `WindowSurface.interceptOnCreate()` в режиме окна переводит запуск
+  с `Display #0` на виртуальный дисплей `Display #1` (`1327×865`) до создания `SurfaceView`,
+  видео — aspect-fit 16:9 с полями, тач масштабируется под окно. В режиме «почти весь экран»
+  остаётся на основном дисплее между барами.
+- `AndroidAuto` **p6** (на базе стока `V00.07.12`): тот же выбор режима, отключение
+  `MSG_ACTIVITY_DELAY_PAUSE` и таймера `MSG_IS_RESTART_APP`, принудительный
+  `mParkBreakEngaged = true` (снята блокировка ручника на стенде и в движении).
+  В окне видео заполняет `1327×865`; в режиме баров — `1920×864`.
 - Постоянная установка и откат — приложение **`:winpatch`** (§7.8): универсальные сборки
   `AndroidAuto_p6.apk` и `CarPlayView_p6.apk` + эталонные стоковые APK для всех прошивок
   A10 (`V00.03.07`, `V00.03.16`, `V00.05.09`, `V00.07.12`) в `assets/stock/`, автовыбор

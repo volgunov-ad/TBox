@@ -5,17 +5,45 @@ import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
+import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import com.adayo.carplay.view.ui.activity.MainActivity;
 import java.util.Collection;
 
 public final class WindowSurface extends SurfaceView {
     private static final String REDIRECTED = "com.adayo.carplay.view.patch.REDIRECTED";
+    /** Same key the winpatch app writes with `settings put global`. */
+    private static final String LAYOUT_KEY = "tbox_winpatch_layout";
     private static volatile long pendingSurfaceId = 0L;
+
+    public static boolean barsMode(Context context) {
+        try {
+            return "bars".equals(Settings.Global.getString(context.getContentResolver(), LAYOUT_KEY));
+        } catch (RuntimeException error) {
+            Log.e("CPViewPatch", "layout read failed", error);
+            return false;
+        }
+    }
+
+    /** Keep the status bar and the bottom bar when the activity is on the main display. */
+    public static void keepBars(Activity activity) {
+        if (!barsMode(activity)) return;
+        if (activity.getWindowManager().getDefaultDisplay().getDisplayId() != 0) return;
+        Window window = activity.getWindow();
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        window.addFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN
+                | WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        Log.d("CPViewPatch", "keepBars");
+    }
 
     private boolean tracking;
     private int lastX;
@@ -37,10 +65,12 @@ public final class WindowSurface extends SurfaceView {
         return -1;
     }
 
-    private static void startOnDisplay(Context context, Intent sourceIntent, int displayId) {
+    private static void startOnDisplay(Context context, Intent sourceIntent, int displayId, boolean multipleTask) {
         Intent target = sourceIntent != null ? new Intent(sourceIntent) : new Intent(context, MainActivity.class);
         target.setClassName("com.adayo.carplay.view", "com.adayo.carplay.view.ui.activity.MainActivity");
-        target.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+        int flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+        if (multipleTask) flags |= Intent.FLAG_ACTIVITY_MULTIPLE_TASK;
+        target.setFlags(flags);
         target.putExtra(REDIRECTED, true);
         long sid = pendingSurfaceId;
         if (sid != 0L && target.getLongExtra("surfaceId", 0L) == 0L) {
@@ -51,13 +81,44 @@ public final class WindowSurface extends SurfaceView {
         context.getApplicationContext().startActivity(target, options.toBundle());
     }
 
+    private static void rememberSurfaceId(Intent intent) {
+        if (intent == null) return;
+        long sid = intent.getLongExtra("surfaceId", 0L);
+        if (sid != 0L) pendingSurfaceId = sid;
+    }
+
+    private static boolean alreadyRedirected(Activity activity) {
+        Intent intent = activity.getIntent();
+        return intent != null && intent.getBooleanExtra(REDIRECTED, false);
+    }
+
     public static boolean interceptOnCreate(MainActivity activity) {
         int displayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
+        Intent intent = activity.getIntent();
+        if (barsMode(activity)) {
+            if (displayId == 0) {
+                keepBars(activity);
+                return false;
+            }
+            if (alreadyRedirected(activity)) {
+                Log.e("CPViewPatch", "interceptOnCreate: bars redirect did not reach the main display");
+                return false;
+            }
+            rememberSurfaceId(intent);
+            activity.setNeedTake(false);
+            activity.finish();
+            try {
+                startOnDisplay(activity.getApplicationContext(), intent, 0, false);
+                Log.d("CPViewPatch", "interceptOnCreate display=" + displayId + " -> main");
+            } catch (RuntimeException error) {
+                Log.e("CPViewPatch", "interceptOnCreate bars redirect failed", error);
+            }
+            return true;
+        }
         if (displayId > 0) {
             return false;
         }
-        Intent intent = activity.getIntent();
-        if (intent != null && intent.getBooleanExtra(REDIRECTED, false)) {
+        if (alreadyRedirected(activity)) {
             Log.e("CPViewPatch", "interceptOnCreate: redirect already attempted, staying on display=0");
             return false;
         }
@@ -66,17 +127,12 @@ public final class WindowSurface extends SurfaceView {
             Log.w("CPViewPatch", "interceptOnCreate: virtual display not ready, allowing display=0");
             return false;
         }
-        long sid = 0L;
-        if (intent != null) {
-            sid = intent.getLongExtra("surfaceId", 0L);
-            if (sid != 0L) {
-                pendingSurfaceId = sid;
-            }
-        }
+        rememberSurfaceId(intent);
+        long sid = intent != null ? intent.getLongExtra("surfaceId", 0L) : 0L;
         activity.setNeedTake(false);
         activity.finish();
         try {
-            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay);
+            startOnDisplay(activity.getApplicationContext(), intent, targetDisplay, true);
             Log.d("CPViewPatch", "interceptOnCreate display=0 -> display=" + targetDisplay + " surfaceId=" + sid);
         } catch (RuntimeException error) {
             Log.e("CPViewPatch", "interceptOnCreate redirect failed", error);
@@ -101,6 +157,20 @@ public final class WindowSurface extends SurfaceView {
         long sid = intent != null ? intent.getLongExtra("surfaceId", 0L) : 0L;
         if (sid != 0L) {
             pendingSurfaceId = sid;
+        }
+        if (barsMode(context)) {
+            for (Object item : activities) {
+                Activity activity = (Activity) item;
+                if (activity.isFinishing()) continue;
+                if (activity.getWindowManager().getDefaultDisplay().getDisplayId() == 0) continue;
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).setNeedTake(false);
+                }
+                activity.finish();
+            }
+            startOnDisplay(context, intent, 0, false);
+            Log.d("CPViewPatch", "startInWindow main surfaceId=" + sid);
+            return;
         }
         int displayId = -1;
         for (Object item : activities) {
@@ -129,7 +199,7 @@ public final class WindowSurface extends SurfaceView {
             }
             int targetDisplay = findWindowDisplayId(context);
             if (targetDisplay > 0) {
-                startOnDisplay(context, intent, targetDisplay);
+                startOnDisplay(context, intent, targetDisplay, true);
                 displayId = targetDisplay;
             } else {
                 Intent window = new Intent("com.adayo.launcher.LAUNCH_APP");

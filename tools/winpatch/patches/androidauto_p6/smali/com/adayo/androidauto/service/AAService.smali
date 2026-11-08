@@ -3593,19 +3593,27 @@
 
     move-result v0
 
-    const/16 v0, 0x52f
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->videoWidth(Landroid/content/Context;)I
+
+    move-result v0
 
     iput v0, p0, Lcom/adayo/androidauto/service/AAService;->widthPixel:I
 
-    const/16 v0, 0x361
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->videoHeight(Landroid/content/Context;)I
+
+    move-result v0
 
     iput v0, p0, Lcom/adayo/androidauto/service/AAService;->heightPixel:I
 
-    const/16 v0, 0xc5
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->videoWidthMm(Landroid/content/Context;)I
+
+    move-result v0
 
     iput v0, p0, Lcom/adayo/androidauto/service/AAService;->widthPhysical:I
 
-    const/16 v0, 0x80
+    invoke-static {p0}, Lcom/adayo/androidauto/patch/AAWindowPatch;->videoHeightMm(Landroid/content/Context;)I
+
+    move-result v0
 
     iput v0, p0, Lcom/adayo/androidauto/service/AAService;->heightPhysical:I
 
