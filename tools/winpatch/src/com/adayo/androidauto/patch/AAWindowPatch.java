@@ -2,8 +2,12 @@ package com.adayo.androidauto.patch;
 
 import android.app.Activity;
 import android.app.ActivityOptions;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Handler;
+import android.os.Looper;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
@@ -43,6 +47,79 @@ public final class AAWindowPatch {
     private static final int WINDOW_HEIGHT = 865;
     private static final int WINDOW_WIDTH_MM = 197;
     private static final int WINDOW_HEIGHT_MM = 128;
+    /** Ignition off. SourceMng then asks for the clock and waits for the door. */
+    private static final String ACC_OFF = "com.device.accoff";
+    private static final String POWER_OFF = "com.device.poweroff";
+    private static final String ACC_ON = "com.device.accon";
+    private static final String POWER_ON = "com.device.poweron";
+    private static volatile boolean suppressUi;
+    private static boolean receiverRegistered;
+    /** Sticky ACC_OFF from an earlier stop is delivered inside registerReceiver. Ignore that copy. */
+    private static volatile boolean accWatchReady;
+
+    /**
+     * While Android Auto is the foreground app, SourceMng cannot enter the stock
+     * fake-shutdown (clock until the door opens) and the head unit powers off at once.
+     * Leaving the screen on ignition-off restores that wait.
+     */
+    private static void watchAccOff(Context context) {
+        if (receiverRegistered) return;
+        receiverRegistered = true;
+        final IntentFilter filter = new IntentFilter();
+        filter.addAction(ACC_OFF);
+        filter.addAction(POWER_OFF);
+        filter.addAction(ACC_ON);
+        filter.addAction(POWER_ON);
+        final BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context app, Intent intent) {
+                if (!accWatchReady) return;
+                String action = intent == null ? null : intent.getAction();
+                if (ACC_ON.equals(action) || POWER_ON.equals(action)) {
+                    suppressUi = false;
+                    Log.d("AAWindowPatch", "ui allowed " + action);
+                    return;
+                }
+                suppressUi = true;
+                Log.d("AAWindowPatch", "release ui " + action);
+                releaseUi(app);
+            }
+        };
+        Runnable register = new Runnable() {
+            @Override
+            public void run() {
+                context.getApplicationContext().registerReceiver(receiver, filter);
+            }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            register.run();
+            accWatchReady = true;
+        } else {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    register.run();
+                    accWatchReady = true;
+                }
+            });
+        }
+    }
+
+    private static void releaseUi(Context context) {
+        Activity activity = current.get();
+        if (activity != null && !activity.isFinishing()) {
+            activity.finish();
+        }
+        Intent home = new Intent(Intent.ACTION_MAIN);
+        home.addCategory(Intent.CATEGORY_HOME);
+        home.setPackage("com.adayo.launcher");
+        home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            context.startActivity(home);
+        } catch (RuntimeException error) {
+            Log.e("AAWindowPatch", "home after acc off failed", error);
+        }
+    }
 
     public static boolean barsMode(Context context) {
         try {
@@ -113,6 +190,12 @@ public final class AAWindowPatch {
     }
 
     public static boolean interceptOnCreate(Activity activity) {
+        watchAccOff(activity);
+        if (suppressUi) {
+            Log.d("AAWindowPatch", "interceptOnCreate suppressed, acc off");
+            activity.finish();
+            return true;
+        }
         int displayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
         if (barsMode(activity)) {
             if (displayId == 0) {
@@ -165,6 +248,11 @@ public final class AAWindowPatch {
     }
 
     public static void ensureWindow(Activity activity) {
+        watchAccOff(activity);
+        if (suppressUi) {
+            if (!activity.isFinishing()) activity.finish();
+            return;
+        }
         int display = activity.getWindowManager().getDefaultDisplay().getDisplayId();
         Log.d("AAWindowPatch", "activity display=" + display + " bars=" + barsMode(activity));
         if (barsMode(activity)) {
@@ -203,6 +291,11 @@ public final class AAWindowPatch {
     }
 
     public static void start(Context context, Intent intent) {
+        watchAccOff(context);
+        if (suppressUi) {
+            Log.d("AAWindowPatch", "start suppressed, acc off");
+            return;
+        }
         if (barsMode(context)) {
             Activity existing = current.get();
             if (existing != null && !existing.isFinishing()) {

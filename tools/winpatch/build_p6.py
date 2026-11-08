@@ -63,6 +63,18 @@ def copy_tree_overlay(src: Path, dst: Path) -> None:
             shutil.copy2(Path(root) / f, target_dir / f)
 
 
+def copy_helper_smali(src_dir: Path, dest_dir: Path, class_prefix: str) -> None:
+    """Copy the helper and its inner classes. A single .smali file drops $1/$2 and the process crashes."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for old in dest_dir.glob(class_prefix + "*.smali"):
+        old.unlink()
+    copied = list(src_dir.glob(class_prefix + "*.smali"))
+    if not copied:
+        raise FileNotFoundError(f"no {class_prefix}*.smali under {src_dir}")
+    for smali in copied:
+        shutil.copy2(smali, dest_dir / smali.name)
+
+
 def compile_java_helpers(apktool_jar: Path, sdk: Path, bt: Path, work: Path) -> None:
     android_jar = sdk / "platforms" / "android-28" / "android.jar"
     d8 = bt / ("d8.bat" if os.name == "nt" else "d8")
@@ -93,13 +105,15 @@ def compile_java_helpers(apktool_jar: Path, sdk: Path, bt: Path, work: Path) -> 
     dec_dir = work / "helpers_dec"
     subprocess.check_call(["java", "-jar", str(apktool_jar), "d", "-f", str(dummy_apk), "-o", str(dec_dir)])
 
-    shutil.copy2(
-        dec_dir / "smali" / "com" / "adayo" / "androidauto" / "patch" / "AAWindowPatch.smali",
-        PATCHES_DIR / "androidauto_p6" / "smali" / "com" / "adayo" / "androidauto" / "patch" / "AAWindowPatch.smali",
+    copy_helper_smali(
+        dec_dir / "smali" / "com" / "adayo" / "androidauto" / "patch",
+        PATCHES_DIR / "androidauto_p6" / "smali" / "com" / "adayo" / "androidauto" / "patch",
+        "AAWindowPatch",
     )
-    shutil.copy2(
-        dec_dir / "smali" / "com" / "adayo" / "carplay" / "view" / "patch" / "WindowSurface.smali",
-        PATCHES_DIR / "carplayview_p6" / "smali" / "com" / "adayo" / "carplay" / "view" / "patch" / "WindowSurface.smali",
+    copy_helper_smali(
+        dec_dir / "smali" / "com" / "adayo" / "carplay" / "view" / "patch",
+        PATCHES_DIR / "carplayview_p6" / "smali" / "com" / "adayo" / "carplay" / "view" / "patch",
+        "WindowSurface",
     )
 
 

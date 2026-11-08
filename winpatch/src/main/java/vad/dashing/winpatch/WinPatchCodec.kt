@@ -117,7 +117,7 @@ object WinPatchCodec {
         legacyBackupPath = "/data/local/tmp/AndroidAuto_orig_backup.apk",
         assetName = "AndroidAuto_p6.apk",
         stockMd5 = "821cf2db51435747bd974a81fd52d1bb",
-        patchedMd5 = "22619227b2df11c30c76a49dee268c29",
+        patchedMd5 = "4627daaf718dc7565d5bb2e2392aba73",
         processName = "com.adayo.androidauto",
         stockVariants = ANDROID_AUTO_STOCK_VARIANTS,
         legacyPatchedMd5s = mapOf(
@@ -133,6 +133,8 @@ object WinPatchCodec {
             "83063975c2463d3a6a1c5a517381a939" to "p6-test4",
             "eec23bafc74cfa1542a5e890c4b993ef" to "p6-test5",
             "7de94e8e0a80bd17af4ce097913fc9eb" to "p6",
+            "22619227b2df11c30c76a49dee268c29" to "p6-mode",
+            "8aceab907534f273e93a37d6b851dc02" to "p6-crash",
         ),
     )
 
@@ -145,7 +147,7 @@ object WinPatchCodec {
         legacyBackupPath = "/data/local/tmp/CarPlayView_orig_backup.apk",
         assetName = "CarPlayView_p6.apk",
         stockMd5 = "2718803663e016a969e6d2fa0d2b4c16",
-        patchedMd5 = "af0888794b02440a499ee22f83f12842",
+        patchedMd5 = "a00fc1a55bbbbe52977833b217663f09",
         processName = "com.adayo.carplay.view",
         stockVariants = CARPLAY_STOCK_VARIANTS,
         legacyPatchedMd5s = mapOf(
@@ -157,6 +159,8 @@ object WinPatchCodec {
             "bc5ce29096eef28d8a68709bf90f9dfc" to "p5",
             "da365136a431d56e179d24135cac9ee1" to "p6",
             "0841e6252eb54c88c98ef561dafd2857" to "p6-window",
+            "af0888794b02440a499ee22f83f12842" to "p6-mode",
+            "a03971924667e2d8972b3acd63d634e4" to "p6-crash",
         ),
     )
 

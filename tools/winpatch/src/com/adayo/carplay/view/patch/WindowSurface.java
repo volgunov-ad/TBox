@@ -2,8 +2,12 @@ package com.adayo.carplay.view.patch;
 
 import android.app.Activity;
 import android.app.ActivityOptions;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.Handler;
+import android.os.Looper;
 import android.hardware.display.DisplayManager;
 import android.provider.Settings;
 import android.util.AttributeSet;
@@ -15,6 +19,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import com.adayo.carplay.view.ui.activity.MainActivity;
+import java.lang.ref.WeakReference;
 import java.util.Collection;
 
 public final class WindowSurface extends SurfaceView {
@@ -22,6 +27,82 @@ public final class WindowSurface extends SurfaceView {
     /** Same key the winpatch app writes with `settings put global`. */
     private static final String LAYOUT_KEY = "tbox_winpatch_layout";
     private static volatile long pendingSurfaceId = 0L;
+    private static final String ACC_OFF = "com.device.accoff";
+    private static final String POWER_OFF = "com.device.poweroff";
+    private static final String ACC_ON = "com.device.accon";
+    private static final String POWER_ON = "com.device.poweron";
+    private static final WeakReference<Activity> NONE = new WeakReference<Activity>(null);
+    private static volatile WeakReference<Activity> shown = NONE;
+    private static volatile boolean suppressUi;
+    private static boolean receiverRegistered;
+    /** Sticky ACC_OFF from an earlier stop is delivered inside registerReceiver. Ignore that copy. */
+    private static volatile boolean accWatchReady;
+
+    /**
+     * While CarPlay is the foreground app, SourceMng cannot enter the stock
+     * fake-shutdown (clock until the door opens) and the head unit powers off at once.
+     */
+    private static void watchAccOff(Context context) {
+        if (receiverRegistered) return;
+        receiverRegistered = true;
+        final IntentFilter filter = new IntentFilter();
+        filter.addAction(ACC_OFF);
+        filter.addAction(POWER_OFF);
+        filter.addAction(ACC_ON);
+        filter.addAction(POWER_ON);
+        final BroadcastReceiver receiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context app, Intent intent) {
+                if (!accWatchReady) return;
+                String action = intent == null ? null : intent.getAction();
+                if (ACC_ON.equals(action) || POWER_ON.equals(action)) {
+                    suppressUi = false;
+                    Log.d("CPViewPatch", "ui allowed " + action);
+                    return;
+                }
+                suppressUi = true;
+                Log.d("CPViewPatch", "release ui " + action);
+                releaseUi(app);
+            }
+        };
+        Runnable register = new Runnable() {
+            @Override
+            public void run() {
+                context.getApplicationContext().registerReceiver(receiver, filter);
+            }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            register.run();
+            accWatchReady = true;
+        } else {
+            new Handler(Looper.getMainLooper()).post(new Runnable() {
+                @Override
+                public void run() {
+                    register.run();
+                    accWatchReady = true;
+                }
+            });
+        }
+    }
+
+    private static void releaseUi(Context context) {
+        Activity activity = shown.get();
+        if (activity instanceof MainActivity && !activity.isFinishing()) {
+            ((MainActivity) activity).setNeedTake(false);
+        }
+        if (activity != null && !activity.isFinishing()) {
+            activity.finish();
+        }
+        Intent home = new Intent(Intent.ACTION_MAIN);
+        home.addCategory(Intent.CATEGORY_HOME);
+        home.setPackage("com.adayo.launcher");
+        home.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            context.startActivity(home);
+        } catch (RuntimeException error) {
+            Log.e("CPViewPatch", "home after acc off failed", error);
+        }
+    }
 
     public static boolean barsMode(Context context) {
         try {
@@ -93,6 +174,14 @@ public final class WindowSurface extends SurfaceView {
     }
 
     public static boolean interceptOnCreate(MainActivity activity) {
+        watchAccOff(activity);
+        shown = new WeakReference<Activity>(activity);
+        if (suppressUi) {
+            Log.d("CPViewPatch", "interceptOnCreate suppressed, acc off");
+            activity.setNeedTake(false);
+            activity.finish();
+            return true;
+        }
         int displayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
         Intent intent = activity.getIntent();
         if (barsMode(activity)) {
@@ -154,6 +243,11 @@ public final class WindowSurface extends SurfaceView {
     }
 
     public static void startInWindow(Context context, Intent intent, Collection<?> activities) {
+        watchAccOff(context);
+        if (suppressUi) {
+            Log.d("CPViewPatch", "startInWindow suppressed, acc off");
+            return;
+        }
         long sid = intent != null ? intent.getLongExtra("surfaceId", 0L) : 0L;
         if (sid != 0L) {
             pendingSurfaceId = sid;
