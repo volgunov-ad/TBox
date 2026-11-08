@@ -48,8 +48,8 @@ import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
-import vad.dashing.tbox.isMbCanVhalGearBoxCurrentGearEnabled
-import vad.dashing.tbox.isMbCanVhalGearBoxPreparedGearEnabled
+import vad.dashing.tbox.needsHeadUnitGearNumbers
+import vad.dashing.tbox.needsMcuCurrentGear
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
@@ -135,10 +135,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalGearBoxMode = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
     }
-    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs) {
-        widgetConfigs.any {
-            it.isMbCanVhalGearBoxCurrentGearEnabled() || it.isMbCanVhalGearBoxPreparedGearEnabled()
-        }
+    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsHeadUnitGearNumbers(noTboxConnect) }
     }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
@@ -173,8 +171,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsBoardVoltage = remember(widgetConfigs) {
         widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
     }
-    val panelNeedsMcuGear = remember(widgetConfigs) {
-        widgetConfigs.any { it.dataKey == "gearBoxCurrentGear" }
+    val panelNeedsMcuGear = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsMcuCurrentGear(noTboxConnect) }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
