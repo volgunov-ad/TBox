@@ -50,7 +50,9 @@ class CamdEngine(private val filesDir: File) {
             val nonce = "p${System.currentTimeMillis()}"
             val result = File(ProbeScripts.RESULT_FILE)
             if (result.exists()) result.delete()
-            writeText(File(DaemonScripts.AUTORUN), ProbeScripts.script(stopAvm, input, nonce))
+            val body = File(filesDir, "camd-probe-$nonce.sh")
+            writeText(body, ProbeScripts.body(stopAvm, input, nonce))
+            writeText(File(DaemonScripts.AUTORUN), ProbeScripts.launcher(ProbeScripts.bodyPath(nonce)))
             exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
             File(DaemonScripts.AUTORUN_FLAG).createNewFile()
             exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, ""))
@@ -65,7 +67,7 @@ class CamdEngine(private val filesDir: File) {
                 }
                 Thread.sleep(500)
             }
-            "state=error error=probe_timeout"
+            "state=error error=probe_timeout смотрите Загрузки camd-probe-*.txt"
         }.getOrElse { "state=error error=${it.message}" }
     }
 

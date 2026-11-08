@@ -64,24 +64,35 @@ class DaemonScriptTest {
 
 class ProbeScriptTest {
     @Test
-    fun keepAvmScriptDoesNotStopTheService() {
-        val script = ProbeScripts.script(false, KnownInputs.byId(4)!!, "nonce1")
+    fun keepAvmScriptDoesNotStopTheServiceAndLogsFirst() {
+        val script = ProbeScripts.body(false, KnownInputs.byId(4)!!, "nonce1")
         assertFalse(script.contains("\r"))
         assertFalse(script.contains("ctl.stop"))
         assertTrue(script.contains("variant=nostop input=4"))
         assertTrue(script.contains("/sdcard/Download/camd-probe-nostop-4-"))
         assertTrue(script.contains("-seconds=20"))
         assertTrue(script.contains("input_id=\"4\""))
+        assertTrue(script.contains("logcat -s qcarcam_test:V"))
+        assertTrue(script.indexOf("variant=nostop") < script.indexOf("qcarcam_test -config"))
     }
 
     @Test
-    fun stopAvmScriptRestartsTheServiceOnExit() {
-        val script = ProbeScripts.script(true, KnownInputs.byId(0)!!, "nonce2")
+    fun stopAvmScriptWritesTheLogBeforeStoppingAndRestartsAfter() {
+        val script = ProbeScripts.body(true, KnownInputs.byId(0)!!, "nonce2")
         assertTrue(script.contains("setprop ctl.stop AVMapp"))
-        assertTrue(script.contains("trap finish EXIT"))
         assertTrue(script.contains("setprop ctl.start AVMapp"))
         assertTrue(script.contains("variant=stopavm input=0"))
         assertTrue(script.contains("nonce2"))
+        assertTrue(script.indexOf("variant=stopavm") < script.indexOf("ctl.stop"))
+        assertTrue(script.indexOf("qcarcam_exit") < script.indexOf("ctl.start"))
+    }
+
+    @Test
+    fun launcherReturnsWithoutWaitingForTheProbe() {
+        val launcher = ProbeScripts.launcher(ProbeScripts.bodyPath("nonce1"))
+        assertTrue(launcher.contains("sh /data/data/vad.dashing.camd/files/camd-probe-nonce1.sh"))
+        assertTrue(launcher.contains("&"))
+        assertTrue(launcher.trimEnd().endsWith("exit 0"))
     }
 }
 

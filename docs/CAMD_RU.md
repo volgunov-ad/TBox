@@ -60,7 +60,7 @@ adb install -r -d camd-debug.apk
 | AVM работает | `camd-probe-nostop-<вход>-<дата>.txt` |
 | AVM остановлен | `camd-probe-stopavm-<вход>-<дата>.txt` |
 
-Внутри: вариант, номер входа, `date`, `init.svc.AVMapp`, `vendor.camera.mbhal.type`, `vendor.cartype.version`, `ps` до и после, полный вывод `qcarcam_test -printfps`. Путь файл показывает на экране, когда кнопка отпустилась. Если после второй пробы `AVMapp` не вернулся, перезагрузка ГУ поднимает штатную камеру сама. В движении пробы не запускать.
+Лог создаётся в `/sdcard/Download` до остановки `AVMapp` и до запуска `qcarcam_test`. Туда же пишется `logcat` тега `qcarcam_test`. Сам `/sdcard/autorun.sh` только запускает пробу в фоне и сразу заканчивается, чтобы следующая проба не ждала зависший `qcarcam_test`. Если кнопка вернула таймаут, свежий `camd-probe-*.txt` в «Загрузках» всё равно нужно забрать.
 
 Как читать:
 
