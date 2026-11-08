@@ -536,10 +536,10 @@ sealed interface AutomationTrigger {
     ) : AutomationTrigger
 
     /**
-     * Fired by OEM A9 mbCAN hardkey events (steering wheel keys, door buttons).
-     * Verified [keyCode] values are listed in docs/MBCAN_VHAL_PARAMETERS_RU.md and
-     * [vad.dashing.tbox.mbcan.KeyPressDiagnosticFormat.mbCanKeyName]; the backend is
-     * available only when the head unit runs the Android 9 mbCAN CAN stack.
+     * Fired by steering-wheel and door buttons. Android 9 sends mbCAN key codes.
+     * Android 10 sends `InputKey` for the wheel and the same door numbers (210/211/212)
+     * from the door-panel VHAL properties. Verified values are in
+     * docs/MBCAN_VHAL_PARAMETERS_RU.md.
      *
      * [keyStatus] may be the raw OEM edge ([PRESSED]/[RELEASED]) or a synthesized
      * gesture ([SINGLE]/[DOUBLE]/[LONG]) derived from press/release timing.

@@ -74,6 +74,14 @@ class WidgetButtonBindingTest {
             resources.getString(R.string.hard_key_code_unknown, 999),
             hardKeyCodeLabel(resources, 999),
         )
+        assertTrue(
+            hardKeyCodeLabel(resources, 19)
+                .contains(resources.getString(R.string.hard_key_label_wheel_left_joy_up)),
+        )
+        assertTrue(
+            hardKeyCodeLabel(resources, 210)
+                .contains(resources.getString(R.string.hard_key_label_door_front_passenger)),
+        )
     }
 
     @Test

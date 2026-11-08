@@ -59,19 +59,66 @@ internal object KeyPressDiagnosticFormat {
             "keyStatus=$keyStatus state=${mbCanKeyStatus(keyStatus)} keyType=$keyType"
     }
 
+    /** A10 door-panel button status. Value 1 is the press that starts the stock 2200 ms hold timer. */
+    fun vhalDoorName(propertyId: Int): String = when (propertyId) {
+        289412276 -> "DOOR_FRONT_PASSENGER"
+        289412309 -> "DOOR_REAR_LEFT"
+        289412275 -> "DOOR_REAR_RIGHT"
+        else -> "UNKNOWN"
+    }
+
+    /**
+     * Same door numbers as A9 mbCAN so a saved door binding means the same door on both head units.
+     * Wheel codes stay separate: A10 InputKey values do not match A9 keyCodes.
+     */
+    fun vhalDoorKeyCode(propertyId: Int): Int? = when (propertyId) {
+        289412276 -> 210
+        289412275 -> 211
+        289412309 -> 212
+        else -> null
+    }
+
     fun vhal(event: VhalKeyDiagnosticEvent): String {
         val timestamp = event.timestampNanos?.toString() ?: "-"
         val status = event.status?.toString() ?: "-"
-        return "A10 VHAL propertyId=${event.propertyId} areaId=${event.areaId} " +
+        val door = vhalDoorName(event.propertyId).takeIf { it != "UNKNOWN" }
+        val name = if (door != null) " name=$door" else ""
+        return "A10 VHAL propertyId=${event.propertyId}$name areaId=${event.areaId} " +
             "value=${rawValue(event.value)} type=${event.valueType} timestamp=$timestamp status=$status"
+    }
+
+    /**
+     * Verified on Jetour Dashing A10 (`android.car.input.service` extra `InputKey`).
+     * Short press and hold use the same code. Left top button is absent on that trim.
+     */
+    fun adayoInputKeyName(inputKey: Int): String = when (inputKey) {
+        19 -> "WHEEL_LEFT_JOY_UP"
+        20 -> "WHEEL_LEFT_JOY_DOWN"
+        21 -> "WHEEL_LEFT_JOY_LEFT"
+        22 -> "WHEEL_LEFT_JOY_RIGHT"
+        195 -> "WHEEL_LEFT_JOY_PRESS"
+        189 -> "WHEEL_LEFT_BTN_BOTTOM"
+        4 -> "WHEEL_RIGHT_BTN_TOP"
+        231 -> "WHEEL_RIGHT_BTN_BOTTOM"
+        24 -> "WHEEL_RIGHT_JOY_UP"
+        25 -> "WHEEL_RIGHT_JOY_DOWN"
+        88 -> "WHEEL_RIGHT_JOY_LEFT"
+        87 -> "WHEEL_RIGHT_JOY_RIGHT"
+        91 -> "WHEEL_RIGHT_JOY_PRESS"
+        else -> "UNKNOWN"
     }
 
     /** `InputKey` is the int code from `android.car.input.service`. `hardKey` is the older string extra. */
     fun adayo(action: String, hardKey: String?, inputKey: Int?): String {
         val input = if (inputKey != null) {
-            val name = runCatching { KeyEvent.keyCodeToString(inputKey) }.getOrNull()
+            val wheel = adayoInputKeyName(inputKey).takeIf { it != "UNKNOWN" }
+            val androidName = runCatching { KeyEvent.keyCodeToString(inputKey) }.getOrNull()
                 ?.takeIf { it.isNotBlank() && it != inputKey.toString() }
-            if (name != null) " InputKey=$inputKey $name" else " InputKey=$inputKey"
+            buildString {
+                append(" InputKey=$inputKey")
+                if (wheel != null) append(" name=$wheel")
+                if (androidName != null) append(" $androidName")
+            }
         } else {
             ""
         }

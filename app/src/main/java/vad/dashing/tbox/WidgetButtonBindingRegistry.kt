@@ -1,6 +1,9 @@
 package vad.dashing.tbox
 
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 enum class WidgetButtonBindingTap {
     SINGLE,
@@ -22,6 +25,10 @@ object WidgetButtonBindingRegistry {
     private val nextId = AtomicLong(1L)
     private val lock = Any()
     private val entries = linkedMapOf<Long, Registration>()
+    private val _hardKeyVisible = MutableStateFlow(false)
+
+    /** True while a visible tile is bound to a steering or door button. */
+    val hardKeyVisible: StateFlow<Boolean> = _hardKeyVisible.asStateFlow()
 
     fun register(
         binding: WidgetButtonBinding,
@@ -37,6 +44,7 @@ object WidgetButtonBindingRegistry {
                 onSingle = onSingle,
                 onDouble = onDouble,
             )
+            publishHardKeyVisibleLocked()
         }
         return id
     }
@@ -45,7 +53,12 @@ object WidgetButtonBindingRegistry {
         if (id < 0L) return
         synchronized(lock) {
             entries.remove(id)
+            publishHardKeyVisibleLocked()
         }
+    }
+
+    private fun publishHardKeyVisibleLocked() {
+        _hardKeyVisible.value = entries.values.any { it.binding is WidgetButtonBinding.HardKey }
     }
 
     fun dispatch(binding: WidgetButtonBinding, tap: WidgetButtonBindingTap) {
@@ -73,6 +86,7 @@ object WidgetButtonBindingRegistry {
     internal fun clearForTests() {
         synchronized(lock) {
             entries.clear()
+            _hardKeyVisible.value = false
         }
     }
 

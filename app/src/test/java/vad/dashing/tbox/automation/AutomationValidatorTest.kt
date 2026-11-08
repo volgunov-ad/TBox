@@ -689,17 +689,13 @@ class AutomationValidatorTest {
     }
 
     @Test
-    fun hardKeyTrigger_rejectedOnAndroid10Vhal() = runBlocking {
+    fun hardKeyTrigger_acceptedOnAndroid10Vhal() = runBlocking {
         UniversalCanRepository.setMode(HeadUnitCanMode.Android10Vhal)
         try {
             val definition = validDefinition(
-                triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 115)),
+                triggers = listOf(AutomationTrigger.HardKey(id = "1", keyCode = 24)),
             )
-            assertTrue(
-                AutomationValidator.validate(definition).any {
-                    it.message.contains("Android 9")
-                },
-            )
+            assertTrue(AutomationValidator.validate(definition).isEmpty())
         } finally {
             UniversalCanRepository.setMode(HeadUnitCanMode.Android9MbCan)
         }

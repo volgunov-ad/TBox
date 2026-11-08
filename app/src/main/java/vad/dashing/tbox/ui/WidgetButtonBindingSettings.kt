@@ -6,12 +6,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.R
+import vad.dashing.tbox.mbcan.UniversalCanRepository
 import vad.dashing.tbox.WIDGET_BUTTON_BINDING_ESP_GPIO_MAX
 import vad.dashing.tbox.WIDGET_BUTTON_BINDING_ESP_GPIO_MIN
 import vad.dashing.tbox.WidgetButtonBinding
@@ -85,7 +88,8 @@ internal fun WidgetButtonBindingSettingsSection(
                     WidgetButtonBindingSource.NONE -> null
                     WidgetButtonBindingSource.HARD_KEY ->
                         WidgetButtonBinding.HardKey(
-                            keyCode = (draft as? WidgetButtonBinding.HardKey)?.keyCode ?: 115,
+                            keyCode = (draft as? WidgetButtonBinding.HardKey)?.keyCode
+                                ?: defaultHardKeyCode(UniversalCanRepository.mode.value),
                         )
                     WidgetButtonBindingSource.ESP_BLE ->
                         WidgetButtonBinding.EspBle(
@@ -103,12 +107,10 @@ internal fun WidgetButtonBindingSettingsSection(
         when (val current = draft) {
             is WidgetButtonBinding.HardKey -> {
                 val resources = LocalContext.current.resources
-                val keyOptions = remember(current.keyCode) {
-                    if (current.keyCode in HARD_KEY_PICKER_CODES) {
-                        HARD_KEY_PICKER_CODES
-                    } else {
-                        HARD_KEY_PICKER_CODES + current.keyCode
-                    }
+                val mode by UniversalCanRepository.mode.collectAsStateWithLifecycle()
+                val pickerCodes = hardKeyPickerCodes(mode)
+                val keyOptions = remember(current.keyCode, pickerCodes) {
+                    if (current.keyCode in pickerCodes) pickerCodes else pickerCodes + current.keyCode
                 }
                 AutomationDropdown(
                     label = stringResource(R.string.widget_button_binding_key_picker_label),

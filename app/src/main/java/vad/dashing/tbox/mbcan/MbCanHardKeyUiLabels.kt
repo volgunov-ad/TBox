@@ -30,6 +30,19 @@ internal object MbCanHardKeyUiLabels {
         210 -> R.string.hard_key_label_door_front_passenger
         211 -> R.string.hard_key_label_door_rear_right
         212 -> R.string.hard_key_label_door_rear_left
+        19 -> R.string.hard_key_label_wheel_left_joy_up
+        20 -> R.string.hard_key_label_wheel_left_joy_down
+        21 -> R.string.hard_key_label_wheel_left_joy_left
+        22 -> R.string.hard_key_label_wheel_left_joy_right
+        195 -> R.string.hard_key_label_wheel_left_joy_press
+        189 -> R.string.hard_key_label_wheel_left_btn_bottom
+        24 -> R.string.hard_key_label_wheel_right_joy_up
+        25 -> R.string.hard_key_label_wheel_right_joy_down
+        88 -> R.string.hard_key_label_wheel_right_joy_left
+        87 -> R.string.hard_key_label_wheel_right_joy_right
+        91 -> R.string.hard_key_label_wheel_right_joy_press
+        4 -> R.string.hard_key_label_wheel_right_btn_top
+        231 -> R.string.hard_key_label_wheel_right_btn_bottom
         103 -> R.string.hard_key_label_up
         105 -> R.string.hard_key_label_left
         106 -> R.string.hard_key_label_right

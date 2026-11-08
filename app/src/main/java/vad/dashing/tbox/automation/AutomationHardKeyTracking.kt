@@ -9,13 +9,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import vad.dashing.tbox.HeadUnitCanMode
+import vad.dashing.tbox.WidgetButtonBindingRegistry
 import vad.dashing.tbox.mbcan.MbCanRepository
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
 /**
- * Enables the OEM mbCAN hardkey subscription only while the Android 9 mbCAN backend is
- * active and at least one runnable automation uses an [AutomationTrigger.HardKey] trigger.
- * Same lifecycle pattern as the CCS stalk tracking in `CcsRememberedSetpoint`.
+ * Enables hardkey delivery while at least one runnable automation or a visible tile
+ * binding needs it. Android 9 uses the mbCAN listener. Android 10 uses steering
+ * `InputKey` broadcasts and door-panel VHAL properties.
  */
 object AutomationHardKeyTracking {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -36,10 +37,19 @@ object AutomationHardKeyTracking {
             started = true
         }
         scope.launch {
-            combine(UniversalCanRepository.mode, _interestRequired) { mode, required ->
-                mode == HeadUnitCanMode.Android9MbCan && required
-            }.collect { enable ->
-                MbCanRepository.setAutomationHardKeyTrackingEnabled(enable)
+            combine(
+                UniversalCanRepository.mode,
+                _interestRequired,
+                WidgetButtonBindingRegistry.hardKeyVisible,
+            ) { mode, automation, widget ->
+                mode to (automation || widget)
+            }.collect { (mode, required) ->
+                MbCanRepository.setAutomationHardKeyTrackingEnabled(
+                    mode == HeadUnitCanMode.Android9MbCan && required,
+                )
+                Android10HardKeySource.setEnabled(
+                    mode == HeadUnitCanMode.Android10Vhal && required,
+                )
             }
         }
     }

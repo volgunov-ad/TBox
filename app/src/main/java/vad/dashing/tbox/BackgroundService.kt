@@ -108,7 +108,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import vad.dashing.tbox.automation.AutomationActionResult
 import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.Android10HardKeySource
 import vad.dashing.tbox.automation.AutomationEngine
+import vad.dashing.tbox.automation.AutomationHardKeyTracking
 import vad.dashing.tbox.automation.AutomationFloatingPanelEnabledOp
 import vad.dashing.tbox.automation.AutomationFloatingPanelScope
 import vad.dashing.tbox.automation.AutomationFloatingPanelVisibilityOp
@@ -1063,6 +1065,8 @@ class BackgroundService : Service() {
         timingReset()
         timingMark("onCreate_start")
 
+        Android10HardKeySource.install(this)
+        AutomationHardKeyTracking.ensureStarted()
         settingsManager = SettingsManager(this)
         appDataManager = AppDataManager(this)
         scope = CoroutineScope(Dispatchers.Default + job + exceptionHandler)

@@ -53,9 +53,11 @@ private class CarPropertyBridge(
     private var propertyManager: Any? = null
     private var pushListener: Any? = null
     private var diagnosticPushListener: Any? = null
+    private var doorHardKeyPushListener: Any? = null
     private var deepDiagnosticPushListener: Any? = null
     private val registeredPushPropertyIds = mutableSetOf<Int>()
     private val registeredDiagnosticPropertyIds = mutableSetOf<Int>()
+    private val registeredDoorHardKeyPropertyIds = mutableSetOf<Int>()
     private val registeredDeepDiagnosticPropertyIds = mutableSetOf<Int>()
     @Volatile
     private var onPushPropertyChanged: ((propertyId: Int, areaId: Int, value: Any?) -> Unit)? = null
@@ -63,6 +65,7 @@ private class CarPropertyBridge(
     private var onPushPropertyError: ((propertyId: Int, areaId: Int) -> Unit)? = null
     @Volatile
     private var onDiagnosticPropertyChanged: ((event: VhalKeyDiagnosticEvent) -> Unit)? = null
+    private var onDoorHardKeyChanged: ((event: VhalKeyDiagnosticEvent) -> Unit)? = null
     @Volatile
     private var onDiagnosticPropertyError: ((propertyId: Int, areaId: Int) -> Unit)? = null
     @Volatile
@@ -172,6 +175,7 @@ private class CarPropertyBridge(
 
     fun disconnect() {
         runCatching { stopDiagnosticSubscriptions() }
+        runCatching { stopDoorHardKeyTracking() }
         runCatching { stopDeepDiagnosticSubscriptions() }
         runCatching { syncPushSubscriptions(emptySet()) }
         runCatching {
@@ -189,14 +193,17 @@ private class CarPropertyBridge(
         propertyManager = null
         pushListener = null
         diagnosticPushListener = null
+        doorHardKeyPushListener = null
         deepDiagnosticPushListener = null
         synchronized(this) { registeredPushPropertyIds.clear() }
         registeredDiagnosticPropertyIds.clear()
+        registeredDoorHardKeyPropertyIds.clear()
         registeredDeepDiagnosticPropertyIds.clear()
         onPushPropertyChanged = null
         onPushPropertyError = null
         onDiagnosticPropertyChanged = null
         onDiagnosticPropertyError = null
+        onDoorHardKeyChanged = null
     }
 
     fun getIntProperty(propertyId: Int, areaId: Int = 0): Int? {
@@ -460,6 +467,65 @@ private class CarPropertyBridge(
         diagnosticPushListener = null
         onDiagnosticPropertyChanged = null
         onDiagnosticPropertyError = null
+    }
+
+    fun startDoorHardKeyTracking(onEvent: (VhalKeyDiagnosticEvent) -> Unit): Boolean {
+        stopDoorHardKeyTracking()
+        onDoorHardKeyChanged = onEvent
+        val manager = propertyManager ?: return false
+        val listener = ensureDoorHardKeyPushListener()
+        var any = false
+        Android10VhalRepository.A10_DOOR_BUTTON_PROPERTY_IDS.forEach { propertyId ->
+            val accepted = runCatching {
+                val result = manager.javaClass
+                    .getMethod(
+                        "registerListener",
+                        listener.javaClass.interfaces.first(),
+                        Int::class.javaPrimitiveType,
+                        Float::class.javaPrimitiveType,
+                    )
+                    .invoke(manager, listener, propertyId, 0.0f)
+                (result as? Boolean) ?: true
+            }.getOrDefault(false)
+            if (accepted) {
+                registeredDoorHardKeyPropertyIds.add(propertyId)
+                any = true
+            }
+        }
+        if (!any) stopDoorHardKeyTracking()
+        return any
+    }
+
+    fun stopDoorHardKeyTracking() {
+        val manager = propertyManager
+        val listener = doorHardKeyPushListener
+        if (manager != null && listener != null) {
+            registeredDoorHardKeyPropertyIds.toList().forEach { propertyId ->
+                runCatching {
+                    manager.javaClass
+                        .getMethod(
+                            "unregisterListener",
+                            listener.javaClass.interfaces.first(),
+                            Int::class.javaPrimitiveType,
+                        )
+                        .invoke(manager, listener, propertyId)
+                }
+            }
+        }
+        registeredDoorHardKeyPropertyIds.clear()
+        doorHardKeyPushListener = null
+        onDoorHardKeyChanged = null
+    }
+
+    private fun ensureDoorHardKeyPushListener(): Any {
+        doorHardKeyPushListener?.let { return it }
+        val proxy = newDiagnosticEventProxy(
+            debugName = "DoorHardKeyCarPropertyEventListenerProxy",
+            emit = { event -> onDoorHardKeyChanged?.invoke(event) },
+            emitError = { _, _ -> },
+        )
+        doorHardKeyPushListener = proxy
+        return proxy
     }
 
     private fun unwrapReflectionThrowable(throwable: Throwable?): Throwable {
@@ -764,12 +830,17 @@ object Android10VhalRepository {
     private const val PUSH_STATE_COALESCE_MS = 200L
     private const val PUSH_DEBUG_LOG_COALESCE_MS = 1_000L
     private const val MAX_LOGGED_ERROR_KEYS = 512
+    internal val A10_DOOR_BUTTON_PROPERTY_IDS = listOf(
+        289412276, // R_0402_CEM_PsngrDoor_buttonsts, right front
+        289412309, // R_0402_CEM_LHRdoor_buttonsts, left rear
+        289412275, // R_0402_CEM_RHRdoor_buttonsts, right rear
+    )
     private val KEY_DIAGNOSTIC_PROPERTY_IDS = linkedSetOf(
         289475088,
         560991239,
         557845512,
         561003776,
-    )
+    ) + A10_DOOR_BUTTON_PROPERTY_IDS
     private val DEEP_DIAGNOSTIC_BATCH_SIZE = 10
     private val DEEP_DIAGNOSTIC_BATCH_DELAY_MS = 500L
     private val DEEP_BASELINE_PACE_MS = 5L
@@ -1462,6 +1533,24 @@ object Android10VhalRepository {
     fun stopKeyDiagnosticsAsync() {
         keyDiagnosticSession.incrementAndGet()
         scope.launch { bridge?.stopDiagnosticSubscriptions() }
+    }
+
+    /**
+     * Production door-panel buttons. Separate from the diagnostic listener so the test
+     * window can subscribe at the same time. Value 1 is the press.
+     */
+    suspend fun startDoorHardKeyTracking(
+        onEvent: (VhalKeyDiagnosticEvent) -> Unit,
+    ): Boolean {
+        val availability = ensureConnected()
+        if (availability !is MbCanAvailability.Available) return false
+        return withContext(stateApplyDispatcher) {
+            bridge?.startDoorHardKeyTracking(onEvent) == true
+        }
+    }
+
+    fun stopDoorHardKeyTrackingAsync() {
+        scope.launch { bridge?.stopDoorHardKeyTracking() }
     }
 
     /**
