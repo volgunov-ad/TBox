@@ -44,6 +44,31 @@ class CamdEngine(private val filesDir: File) {
         return text.takeLast(500)
     }
 
+    /** Runs one 20 second on-screen probe and returns the Download log path. */
+    fun runProbe(stopAvm: Boolean, input: CameraInput): String = synchronized(lock) {
+        runCatching {
+            val nonce = "p${System.currentTimeMillis()}"
+            val result = File(ProbeScripts.RESULT_FILE)
+            if (result.exists()) result.delete()
+            writeText(File(DaemonScripts.AUTORUN), ProbeScripts.script(stopAvm, input, nonce))
+            exec(arrayOf("chmod", "777", DaemonScripts.AUTORUN))
+            File(DaemonScripts.AUTORUN_FLAG).createNewFile()
+            exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, ""))
+            Thread.sleep(300)
+            exec(arrayOf("setprop", DaemonScripts.AUTORUN_PROP, DaemonScripts.AUTORUN_FLAG))
+            val deadline = System.currentTimeMillis() + PROBE_TIMEOUT_MS
+            while (System.currentTimeMillis() < deadline) {
+                val text = readIfAllowed(result)
+                if (text.contains(nonce)) {
+                    val path = text.lineSequence().firstOrNull { it.startsWith("/") } ?: text
+                    return path
+                }
+                Thread.sleep(500)
+            }
+            "state=error error=probe_timeout"
+        }.getOrElse { "state=error error=${it.message}" }
+    }
+
     private fun ensureDaemon() {
         val beat = File(DaemonScripts.PID_FILE)
         val fresh = beat.canRead() && System.currentTimeMillis() - beat.lastModified() < 5_000
@@ -133,5 +158,6 @@ class CamdEngine(private val filesDir: File) {
     private companion object {
         const val ARM_TIMEOUT_MS = 8_000L
         const val WAIT_TIMEOUT_MS = 12_000L
+        const val PROBE_TIMEOUT_MS = 45_000L
     }
 }

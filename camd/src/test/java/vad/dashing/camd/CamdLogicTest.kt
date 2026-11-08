@@ -62,6 +62,29 @@ class DaemonScriptTest {
     }
 }
 
+class ProbeScriptTest {
+    @Test
+    fun keepAvmScriptDoesNotStopTheService() {
+        val script = ProbeScripts.script(false, KnownInputs.byId(4)!!, "nonce1")
+        assertFalse(script.contains("\r"))
+        assertFalse(script.contains("ctl.stop"))
+        assertTrue(script.contains("variant=nostop input=4"))
+        assertTrue(script.contains("/sdcard/Download/camd-probe-nostop-4-"))
+        assertTrue(script.contains("-seconds=20"))
+        assertTrue(script.contains("input_id=\"4\""))
+    }
+
+    @Test
+    fun stopAvmScriptRestartsTheServiceOnExit() {
+        val script = ProbeScripts.script(true, KnownInputs.byId(0)!!, "nonce2")
+        assertTrue(script.contains("setprop ctl.stop AVMapp"))
+        assertTrue(script.contains("trap finish EXIT"))
+        assertTrue(script.contains("setprop ctl.start AVMapp"))
+        assertTrue(script.contains("variant=stopavm input=0"))
+        assertTrue(script.contains("nonce2"))
+    }
+}
+
 class CamdPortTest {
     @Test
     fun apiPortDoesNotCollideWithMonitorOrMqtt() {

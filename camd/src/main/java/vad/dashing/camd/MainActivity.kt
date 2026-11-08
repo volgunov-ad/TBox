@@ -65,7 +65,9 @@ class MainActivity : ComponentActivity() {
                     onW = controller::setW,
                     onH = controller::setH,
                     onOpen = controller::open,
-                    onClose = controller::close
+                    onClose = controller::close,
+                    onProbeKeepAvm = { controller.probe(false) },
+                    onProbeStopAvm = { controller.probe(true) }
                 )
             }
         }
@@ -163,6 +165,25 @@ class CamdController(private val engine: CamdEngine) {
             )
         }
     }
+
+    fun probe(stopAvm: Boolean) {
+        val input = KnownInputs.byId(_state.value.inputId) ?: return
+        io.execute {
+            val title = if (stopAvm) {
+                "AVM остановлен на 20 секунд. Смотрите центр экрана."
+            } else {
+                "AVM работает. 20 секунд смотрите центр экрана."
+            }
+            _state.value = _state.value.copy(busy = true, message = title)
+            val result = engine.runProbe(stopAvm, input)
+            _state.value = _state.value.copy(
+                busy = false,
+                message = "Лог: $result",
+                status = engine.status(),
+                log = engine.logTail()
+            )
+        }
+    }
 }
 
 @Composable
@@ -174,7 +195,9 @@ private fun CamdScreen(
     onW: (Float) -> Unit,
     onH: (Float) -> Unit,
     onOpen: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onProbeKeepAvm: () -> Unit,
+    onProbeStopAvm: () -> Unit
 ) {
     val input = remember(state.inputId) { KnownInputs.byId(state.inputId) }
     Column(
@@ -216,6 +239,14 @@ private fun CamdScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onOpen, enabled = !state.busy) { Text("Открыть") }
             Button(onClick = onClose, enabled = !state.busy) { Text("Закрыть") }
+        }
+        Text(
+            "Проба 20 секунд, окно по центру. Лог появится в Загрузках.",
+            fontSize = 13.sp
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onProbeKeepAvm, enabled = !state.busy) { Text("Проба, AVM работает") }
+            Button(onClick = onProbeStopAvm, enabled = !state.busy) { Text("Проба, AVM остановлен") }
         }
         Text(state.message, fontSize = 13.sp)
         if (state.status.isNotBlank()) {
