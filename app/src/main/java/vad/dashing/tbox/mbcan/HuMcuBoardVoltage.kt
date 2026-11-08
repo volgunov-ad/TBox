@@ -1,6 +1,6 @@
 package vad.dashing.tbox.mbcan
 
-import com.adayo.mcucommproxy.IMcuCommCallback
+import com.adayo.mcucommproxy.DevStatusMcuCallback
 import com.adayo.mcucommproxy.McuCommManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,9 +9,10 @@ import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Board voltage from the Android 10 MCU dev-status stream (`functionId` 3, frame `0x8305`).
- * VHAL does not publish this value. Widgets and automations hold a subscription while they
- * read it; the JNI callback is registered only on Android 10.
+ * Board voltage from the Android 10 MCU dev-status stream (`functionId` 3, frame `0x8305`),
+ * and current gear number from frame `0x8300` on the same stream.
+ * VHAL does not publish board voltage. Widgets and automations hold a subscription while they
+ * read these values; the JNI callback is registered only on Android 10.
  */
 internal object HuMcuBoardVoltage {
     /** `McuCommManager.functionID.PROTOCOL_CMD_DEV_STATUS`. */
@@ -22,15 +23,14 @@ internal object HuMcuBoardVoltage {
     private var registered = false
     private var failureLogged = false
 
-    private val callback = IMcuCommCallback { msgbuf, len ->
-        val declared = len.code
-        BoardVoltageCodec.decode(msgbuf, declared)?.let { volts ->
+    private val callback = DevStatusMcuCallback { msgbuf, length ->
+        BoardVoltageCodec.decode(msgbuf, length)?.let { volts ->
             if (_state.value == null) {
                 TboxRepository.addLog("INFO", "MCU", "Board voltage $volts V")
             }
             _state.value = volts
         }
-        DevStatusGearCodec.decode(msgbuf, declared)?.let { gear ->
+        DevStatusGearCodec.decode(msgbuf, length)?.let { gear ->
             _currentGear.value = gear
         }
     }
@@ -59,6 +59,13 @@ internal object HuMcuBoardVoltage {
 
     private fun start(): Boolean {
         if (UniversalCanRepository.mode.value != HeadUnitCanMode.Android10Vhal) return false
+        if (!McuCommManager.ensureLibraryLoaded()) {
+            if (!failureLogged) {
+                failureLogged = true
+                TboxRepository.addLog("WARN", "MCU", "Board voltage: mcucommproxy_jni not loaded")
+            }
+            return false
+        }
         return try {
             val connected = McuCommManager.connectMcuCommServer()
             val accepted = connected && McuCommManager.registMcuCommCallback(callback, DEV_STATUS)
@@ -91,7 +98,9 @@ internal object HuMcuBoardVoltage {
 
     private fun stop() {
         try {
-            McuCommManager.unregistMcuCommCallback(callback, DEV_STATUS)
+            if (McuCommManager.ensureLibraryLoaded()) {
+                McuCommManager.unregistMcuCommCallback(callback, DEV_STATUS)
+            }
         } catch (_: Throwable) {
         }
     }

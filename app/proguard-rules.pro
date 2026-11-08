@@ -22,6 +22,13 @@
 -keep class com.mengbo.** { *; }
 -keepnames class com.mengbo.**
 
+# A10 MCU proxy JNI (libmcucommproxy_jni) looks up McuCommManager natives and
+# IMcuCommCallback.mcuCommCallback by exact names/signatures. Without this keep,
+# R8 shrink/optimize breaks the DEV_STATUS callback and the process dies when a
+# voltage/gear tile holds HuMcuBoardVoltage (dashboard + floating panels).
+-keep class com.adayo.mcucommproxy.** { *; }
+-keepnames class com.adayo.mcucommproxy.**
+
 # Keep enum constants used via reflection/valueOf in vendor code.
 -keepclassmembers enum com.mengbo.** {
     public static **[] values();

@@ -67,6 +67,8 @@ import vad.dashing.tbox.TileBackgroundImageStorage
 import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.isBoardVoltageWidgetDataKey
 import vad.dashing.tbox.needsHeadUnitEngineTemperature
+import vad.dashing.tbox.needsHeadUnitGearNumbers
+import vad.dashing.tbox.needsMcuCurrentGear
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
@@ -178,8 +180,11 @@ fun MainDashboardTab(
     val panelNeedsBoardVoltage = remember(widgetConfigs) {
         widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
     }
-    val panelNeedsMcuGear = remember(widgetConfigs) {
-        widgetConfigs.any { it.dataKey == "gearBoxCurrentGear" }
+    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsHeadUnitGearNumbers(noTboxConnect) }
+    }
+    val panelNeedsMcuGear = remember(widgetConfigs, noTboxConnect) {
+        widgetConfigs.any { it.needsMcuCurrentGear(noTboxConnect) }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -390,6 +395,19 @@ fun MainDashboardTab(
         DisposableEffect(Unit) {
             onDispose {
                 UniversalCanRepository.enqueueClearSource("dashboard-tab-main-steering")
+            }
+        }
+    }
+    if (panelNeedsMbCanVhalGearNumbers) {
+        LaunchedEffect(widgetConfigs) {
+            UniversalCanRepository.setSourceSignals(
+                "dashboard-tab-main-gear-numbers",
+                setOf(MbCanSignal.GearNumbers)
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                UniversalCanRepository.enqueueClearSource("dashboard-tab-main-gear-numbers")
             }
         }
     }
