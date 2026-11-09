@@ -531,7 +531,7 @@ HFP phone — **6**.
 
 ## 10. Клиенты-спутники на ГУ: VAD Voice (`:voice`), TBox MQTT (`:mqtt`) и DCL
 
-Приложения на том же ГУ подключаются к `http://127.0.0.1:<port>/v1` и автоматически получают токен и актуальный порт API через локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1). Dashing Club Launcher (`ras.dashing.tbox.launcher`) — внешний лаунчер; инструкция по стороне DCL: [DCL_LOCAL_API_ACCESS_RU.md](DCL_LOCAL_API_ACCESS_RU.md).
+Приложения на том же ГУ подключаются к `http://127.0.0.1:<port>/v1` и автоматически получают токен и актуальный порт API через локальный провайдер `content://vad.dashing.tbox.localaccess` (см. §5.1). Dashing Club Launcher (`ras.dashing.tbox.launcher`) — внешний лаунчер; инструкция по стороне DCL: [DCL_LOCAL_API_ACCESS_RU.md](DCL_LOCAL_API_ACCESS_RU.md). API, которое Monitor будет вызывать у DCL (запуск apps / UI state, Binder-only, без второго consent): [DCL_LAUNCHER_API_FOR_VENDOR_RU.md](DCL_LAUNCHER_API_FOR_VENDOR_RU.md).
 
 ### 10.1. Голосовой клиент VAD Voice (`vad.dashing.voice`, модуль `:voice`)
 

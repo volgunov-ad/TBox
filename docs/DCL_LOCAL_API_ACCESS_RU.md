@@ -85,3 +85,5 @@ apksigner verify --print-certs <dcl.apk>
 ```
 
 Повторно править `ExternalApiLocalClients` не нужно: достаточно, чтобы пользователь снова нажал «Разрешить» на ГУ.
+
+Обратное направление (Monitor вызывает API лаунчера: запуск apps, хром, layout) — без второго «Разрешить» и без токена от DCL: [DCL_LAUNCHER_API_FOR_VENDOR_RU.md](DCL_LAUNCHER_API_FOR_VENDOR_RU.md).
