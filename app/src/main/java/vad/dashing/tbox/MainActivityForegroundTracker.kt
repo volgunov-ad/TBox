@@ -33,13 +33,14 @@ object MainActivityForegroundTracker {
         application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 if (activity is MainActivity) {
-                    AdbShutdownGate.markAppAlive()
+                    AdbShutdownGate.onMainActivityCreated()
                 }
             }
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {
-                if (activity is MainActivity && activity.isFinishing) {
-                    AdbShutdownGate.markAppShuttingDown()
+                if (activity is MainActivity &&
+                    AdbShutdownGate.onMainActivityDestroyed(activity.isFinishing)
+                ) {
                     AdbRepository.disconnect()
                 }
             }
@@ -74,7 +75,7 @@ object MainActivityForegroundTracker {
                     // Mark early so in-flight ADB callbacks after Close do not Toast
                     // "ADB transport closed" while the activity is finishing.
                     if (activity.isFinishing) {
-                        AdbShutdownGate.markAppShuttingDown()
+                        AdbShutdownGate.onMainActivityFinishing()
                     }
                 }
             }

@@ -110,6 +110,38 @@ class AdbIoErrorsTest {
         assertFalse(AdbShutdownGate.isAppShuttingDown())
         assertFalse(AdbIoErrors.shouldSuppressUserFacingFailure("ADB transport closed"))
     }
+
+    @Test
+    fun stockWindowRedirect_finishOfDisplay0Instance_doesNotLatchShutdown() {
+        AdbShutdownGate.onMainActivityCreated()
+        AdbShutdownGate.onMainActivityCreated()
+        AdbShutdownGate.onMainActivityFinishing()
+        assertFalse(AdbShutdownGate.isAppShuttingDown())
+        assertFalse(AdbShutdownGate.onMainActivityDestroyed(isFinishing = true))
+        assertFalse(AdbShutdownGate.isAppShuttingDown())
+    }
+
+    @Test
+    fun stockWindowRedirect_destroyBeforeWindowOnCreate_isClearedByWindow() {
+        AdbShutdownGate.onMainActivityCreated()
+        AdbShutdownGate.onMainActivityFinishing()
+        assertTrue(AdbShutdownGate.isAppShuttingDown())
+        assertTrue(AdbShutdownGate.onMainActivityDestroyed(isFinishing = true))
+        AdbShutdownGate.onMainActivityCreated()
+        assertFalse(AdbShutdownGate.isAppShuttingDown())
+    }
+
+    @Test
+    fun lastMainActivityDestroy_latchesShutdown_configChangeDoesNot() {
+        AdbShutdownGate.onMainActivityCreated()
+        AdbShutdownGate.onMainActivityCreated()
+        assertFalse(AdbShutdownGate.onMainActivityDestroyed(isFinishing = false))
+        assertFalse(AdbShutdownGate.isAppShuttingDown())
+        AdbShutdownGate.onMainActivityFinishing()
+        assertTrue(AdbShutdownGate.isAppShuttingDown())
+        assertTrue(AdbShutdownGate.onMainActivityDestroyed(isFinishing = true))
+        assertTrue(AdbShutdownGate.isAppShuttingDown())
+    }
 }
 
 class LocalhostAdbSessionCancellationTest {

@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicInteger
 internal object AdbShutdownGate {
     private val shuttingDown = AtomicBoolean(false)
     private val intentionalCloseDepth = AtomicInteger(0)
+    /** Living [vad.dashing.tbox.MainActivity] instances, including one that is finishing. */
+    private val liveMainActivities = AtomicInteger(0)
 
     /** Process / activity is finishing — suppress benign disconnect UI. */
     fun markAppShuttingDown() {
@@ -25,6 +27,36 @@ internal object AdbShutdownGate {
      */
     fun markAppAlive() {
         shuttingDown.set(false)
+    }
+
+    /** A MainActivity exists. Clears a shutdown latched by an older instance that already finished. */
+    fun onMainActivityCreated() {
+        liveMainActivities.incrementAndGet()
+        shuttingDown.set(false)
+    }
+
+    /**
+     * The activity is pausing because it called [android.app.Activity.finish].
+     * Suppress transport-closed toasts only when it is the last MainActivity.
+     * On A10 an external launch finishes the display-0 instance after the stock-window
+     * instance is already up; that finish must not abort logcat for the window that stays.
+     */
+    fun onMainActivityFinishing() {
+        if (liveMainActivities.get() <= 1) {
+            shuttingDown.set(true)
+        }
+    }
+
+    /**
+     * @return true when [isFinishing] and no MainActivity remains, so the shared ADB
+     * tab session should be dropped. A config-change destroy and a finished trampoline
+     * that leaves the windowed instance alive both return false.
+     */
+    fun onMainActivityDestroyed(isFinishing: Boolean): Boolean {
+        val left = liveMainActivities.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
+        if (!isFinishing || left > 0) return false
+        shuttingDown.set(true)
+        return true
     }
 
     fun isAppShuttingDown(): Boolean = shuttingDown.get()
@@ -61,5 +93,6 @@ internal object AdbShutdownGate {
     internal fun resetForTests() {
         shuttingDown.set(false)
         intentionalCloseDepth.set(0)
+        liveMainActivities.set(0)
     }
 }
