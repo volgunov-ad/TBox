@@ -22,7 +22,7 @@ Package name и label сняты через `aapt dump badging` со всех AP
 
 В этом `system.img` отдельных `vendor/app` / `product/app` нет — все 110 APK лежат в `system/app` + `system/priv-app`.
 
-Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_APPS_ANDROID10_VHAL_RU.md](STOCK_APPS_ANDROID10_VHAL_RU.md).
+Связанные доки: [CAN_BACKENDS_RU.md](CAN_BACKENDS_RU.md), [MBCAN_VHAL_PARAMETERS_RU.md](MBCAN_VHAL_PARAMETERS_RU.md), [STOCK_APPS_ANDROID10_VHAL_RU.md](STOCK_APPS_ANDROID10_VHAL_RU.md). Окно приложений и полный экран штатного лаунчера `com.wt.launcher3` 2.1.0.ov — [LAUNCHER_A9_APP_WINDOW_RU.md](LAUNCHER_A9_APP_WINDOW_RU.md).
 
 ### VirtualCar и mbCAN decode/encode
 
