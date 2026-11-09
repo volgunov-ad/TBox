@@ -332,11 +332,11 @@ public final class AAWindowPatch {
     }
 
     /**
-     * With native widthMargin configured for the 1327x865 window aspect ratio, the phone renders
-     * the active content into the center of the 16:9 frame and places letterbox bars on the left
-     * and right. Expanding the SurfaceView horizontally so its height is the full 865 px and its
-     * width is height * vw / vh (1536x865 at left=-104) pushes those side bars outside the clipped
-     * parent container, filling the entire 1327x865 window with zero distortion and zero bars.
+     * The codec frame stays 16:9. The phone draws the UI in the margin rect and leaves the
+     * remainder black: side bars in the 1327x865 window, top and bottom bars for 1920x864.
+     * Scale the frame uniformly so it covers the parent and clip the bars. The window stays
+     * 1536x865 at left=-104. Almost-fullscreen is 1920x1080 at top=-108, so the 864 px of UI
+     * fill the parent without stretch.
      */
     public static Rect viewport(SurfaceView surface, Rect video) {
         View parent = (View) surface.getParent();
@@ -347,20 +347,29 @@ public final class AAWindowPatch {
         if (width <= 0 || height <= 0 || vw <= 0 || vh <= 0) {
             return new Rect(0, 0, Math.max(1, surface.getWidth()), Math.max(1, surface.getHeight()));
         }
-        int fullWidth = (int) ((long) height * vw / vh);
-        fullWidth = (fullWidth / 2) * 2;
-        if (fullWidth < width) {
+        int fullWidth;
+        int fullHeight;
+        if ((long) width * vh >= (long) height * vw) {
             fullWidth = width;
+            fullHeight = (int) ((long) width * vh / vw);
+            fullHeight = (fullHeight / 2) * 2;
+            if (fullHeight < height) fullHeight = height;
+        } else {
+            fullHeight = height;
+            fullWidth = (int) ((long) height * vw / vh);
+            fullWidth = (fullWidth / 2) * 2;
+            if (fullWidth < width) fullWidth = width;
         }
         int left = (width - fullWidth) / 2;
-        Rect result = new Rect(left, 0, left + fullWidth, height);
+        int top = (height - fullHeight) / 2;
+        Rect result = new Rect(left, top, left + fullWidth, top + fullHeight);
         Log.d("AAWindowPatch", "parent=" + width + "x" + height + " video=" + video + " viewport=" + result);
         return result;
     }
 
     /**
-     * Both left and right margins must be negative so RelativeLayout's available width
-     * is parentWidth - leftMargin - rightMargin = full 16:9 width (1536), not 1327+104.
+     * Margins on both sides of the expanded axis must be negative, so RelativeLayout's
+     * available size is the full frame (1536x865 or 1920x1080), not the parent plus one inset.
      */
     public static void applyViewport(SurfaceView surface, Rect viewport) {
         ViewGroup parent = (ViewGroup) surface.getParent();

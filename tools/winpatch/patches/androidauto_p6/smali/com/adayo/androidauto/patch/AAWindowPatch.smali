@@ -140,80 +140,80 @@
 .method public static applyViewport(Landroid/view/SurfaceView;Landroid/graphics/Rect;)V
     .locals 4
 
-    .line 366
+    .line 375
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getParent()Landroid/view/ViewParent;
 
     move-result-object v0
 
     check-cast v0, Landroid/view/ViewGroup;
 
-    .line 367
+    .line 376
     const/4 v1, 0x1
 
     invoke-virtual {v0, v1}, Landroid/view/ViewGroup;->setClipChildren(Z)V
 
-    .line 368
+    .line 377
     invoke-virtual {v0, v1}, Landroid/view/ViewGroup;->setClipToPadding(Z)V
 
-    .line 369
+    .line 378
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getLayoutParams()Landroid/view/ViewGroup$LayoutParams;
 
     move-result-object v1
 
     check-cast v1, Landroid/view/ViewGroup$MarginLayoutParams;
 
-    .line 370
+    .line 379
     invoke-virtual {v0}, Landroid/view/ViewGroup;->getWidth()I
 
     move-result v2
 
-    .line 371
+    .line 380
     invoke-virtual {v0}, Landroid/view/ViewGroup;->getHeight()I
 
     move-result v0
 
-    .line 372
+    .line 381
     invoke-virtual {p1}, Landroid/graphics/Rect;->width()I
 
     move-result v3
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->width:I
 
-    .line 373
+    .line 382
     invoke-virtual {p1}, Landroid/graphics/Rect;->height()I
 
     move-result v3
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->height:I
 
-    .line 374
+    .line 383
     iget v3, p1, Landroid/graphics/Rect;->left:I
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->leftMargin:I
 
-    .line 375
+    .line 384
     iget v3, p1, Landroid/graphics/Rect;->top:I
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->topMargin:I
 
-    .line 376
+    .line 385
     iget v3, p1, Landroid/graphics/Rect;->right:I
 
     sub-int v3, v2, v3
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->rightMargin:I
 
-    .line 377
+    .line 386
     iget v3, p1, Landroid/graphics/Rect;->bottom:I
 
     sub-int v3, v0, v3
 
     iput v3, v1, Landroid/view/ViewGroup$MarginLayoutParams;->bottomMargin:I
 
-    .line 378
+    .line 387
     invoke-virtual {p0, v1}, Landroid/view/SurfaceView;->setLayoutParams(Landroid/view/ViewGroup$LayoutParams;)V
 
-    .line 379
+    .line 388
     new-instance p0, Ljava/lang/StringBuilder;
 
     invoke-direct {p0}, Ljava/lang/StringBuilder;-><init>()V
@@ -300,7 +300,7 @@
 
     invoke-static {p1, p0}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
-    .line 382
+    .line 391
     return-void
 .end method
 
@@ -1306,32 +1306,32 @@
 .method public static touch(Landroid/view/SurfaceView;Landroid/graphics/Rect;Landroid/view/MotionEvent;)Landroid/view/MotionEvent;
     .locals 10
 
-    .line 391
+    .line 400
     invoke-static {p2}, Landroid/view/MotionEvent;->obtain(Landroid/view/MotionEvent;)Landroid/view/MotionEvent;
 
     move-result-object v0
 
-    .line 392
+    .line 401
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getWidth()I
 
     move-result v1
 
-    .line 393
+    .line 402
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getHeight()I
 
     move-result v2
 
-    .line 394
+    .line 403
     invoke-virtual {p1}, Landroid/graphics/Rect;->width()I
 
     move-result v3
 
-    .line 395
+    .line 404
     invoke-virtual {p1}, Landroid/graphics/Rect;->height()I
 
     move-result p1
 
-    .line 396
+    .line 405
     if-lez v1, :cond_2
 
     if-lez v2, :cond_2
@@ -1342,7 +1342,7 @@
 
     goto/16 :goto_1
 
-    .line 397
+    .line 406
     :cond_0
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getParent()Landroid/view/ViewParent;
 
@@ -1350,30 +1350,30 @@
 
     check-cast p0, Landroid/view/View;
 
-    .line 398
+    .line 407
     invoke-virtual {p0}, Landroid/view/View;->getWidth()I
 
     move-result v4
 
-    .line 399
+    .line 408
     invoke-virtual {p0}, Landroid/view/View;->getHeight()I
 
     move-result p0
 
-    .line 400
+    .line 409
     nop
 
-    .line 401
+    .line 410
     nop
 
-    .line 402
+    .line 411
     const/4 v5, 0x0
 
     if-lez v4, :cond_1
 
     if-lez p0, :cond_1
 
-    .line 403
+    .line 412
     int-to-float v4, v4
 
     int-to-float v6, v3
@@ -1390,7 +1390,7 @@
 
     move-result v7
 
-    .line 404
+    .line 413
     div-float/2addr v4, v7
 
     sub-float/2addr v6, v4
@@ -1399,7 +1399,7 @@
 
     move-result v4
 
-    .line 405
+    .line 414
     div-float/2addr p0, v7
 
     sub-float/2addr v8, p0
@@ -1414,7 +1414,7 @@
 
     goto :goto_0
 
-    .line 407
+    .line 416
     :cond_1
     move p0, v5
 
@@ -1423,7 +1423,7 @@
 
     invoke-direct {v4}, Landroid/graphics/Matrix;-><init>()V
 
-    .line 408
+    .line 417
     int-to-float v3, v3
 
     int-to-float v6, v1
@@ -1438,7 +1438,7 @@
 
     invoke-virtual {v4, v3, p1}, Landroid/graphics/Matrix;->setScale(FF)V
 
-    .line 409
+    .line 418
     neg-float p1, v5
 
     const/high16 v3, 0x40000000    # 2.0f
@@ -1451,10 +1451,10 @@
 
     invoke-virtual {v4, p1, v6}, Landroid/graphics/Matrix;->postTranslate(FF)Z
 
-    .line 410
+    .line 419
     invoke-virtual {v0, v4}, Landroid/view/MotionEvent;->transform(Landroid/graphics/Matrix;)V
 
-    .line 411
+    .line 420
     new-instance p1, Ljava/lang/StringBuilder;
 
     invoke-direct {p1}, Ljava/lang/StringBuilder;-><init>()V
@@ -1545,7 +1545,7 @@
 
     move-result-object p0
 
-    .line 414
+    .line 423
     invoke-virtual {v0}, Landroid/view/MotionEvent;->getX()F
 
     move-result p1
@@ -1570,15 +1570,15 @@
 
     move-result-object p0
 
-    .line 411
+    .line 420
     const-string p1, "AAWindowPatch"
 
     invoke-static {p1, p0}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
-    .line 415
+    .line 424
     return-object v0
 
-    .line 396
+    .line 405
     :cond_2
     :goto_1
     return-object v0
@@ -1673,7 +1673,7 @@
 .end method
 
 .method public static viewport(Landroid/view/SurfaceView;Landroid/graphics/Rect;)Landroid/graphics/Rect;
-    .locals 9
+    .locals 10
 
     .line 342
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getParent()Landroid/view/ViewParent;
@@ -1703,57 +1703,109 @@
     move-result v3
 
     .line 347
-    const/4 v4, 0x0
+    if-lez v1, :cond_4
 
-    if-lez v1, :cond_2
+    if-lez v0, :cond_4
 
-    if-lez v0, :cond_2
-
-    if-lez v2, :cond_2
+    if-lez v2, :cond_4
 
     if-gtz v3, :cond_0
 
-    goto :goto_0
+    goto/16 :goto_2
 
-    .line 350
+    .line 352
     :cond_0
-    int-to-long v5, v0
+    int-to-long v4, v1
 
-    int-to-long v7, v2
+    int-to-long v6, v3
 
-    mul-long/2addr v5, v7
+    mul-long/2addr v4, v6
 
-    int-to-long v2, v3
+    int-to-long v8, v0
 
-    div-long/2addr v5, v2
+    int-to-long v2, v2
 
-    long-to-int p0, v5
+    mul-long/2addr v8, v2
 
-    .line 351
+    cmp-long p0, v4, v8
+
+    if-ltz p0, :cond_2
+
+    .line 353
+    nop
+
+    .line 354
+    div-long/2addr v4, v2
+
+    long-to-int p0, v4
+
+    .line 355
     div-int/lit8 p0, p0, 0x2
 
     mul-int/lit8 p0, p0, 0x2
 
-    .line 352
-    if-ge p0, v1, :cond_1
+    .line 356
+    if-ge p0, v0, :cond_1
 
-    .line 353
+    goto :goto_0
+
+    :cond_1
+    move v2, p0
+
     move p0, v1
 
-    .line 355
-    :cond_1
-    sub-int v2, v1, p0
+    goto :goto_1
 
-    div-int/lit8 v2, v2, 0x2
+    .line 358
+    :cond_2
+    nop
 
-    .line 356
-    new-instance v3, Landroid/graphics/Rect;
+    .line 359
+    div-long/2addr v8, v6
 
-    add-int/2addr p0, v2
+    long-to-int p0, v8
 
-    invoke-direct {v3, v2, v4, p0, v0}, Landroid/graphics/Rect;-><init>(IIII)V
+    .line 360
+    div-int/lit8 p0, p0, 0x2
 
-    .line 357
+    mul-int/lit8 p0, p0, 0x2
+
+    .line 361
+    if-ge p0, v1, :cond_3
+
+    .line 363
+    :goto_0
+    move v2, v0
+
+    move p0, v1
+
+    goto :goto_1
+
+    .line 361
+    :cond_3
+    move v2, v0
+
+    .line 363
+    :goto_1
+    sub-int v3, v1, p0
+
+    div-int/lit8 v3, v3, 0x2
+
+    .line 364
+    sub-int v4, v0, v2
+
+    div-int/lit8 v4, v4, 0x2
+
+    .line 365
+    new-instance v5, Landroid/graphics/Rect;
+
+    add-int/2addr p0, v3
+
+    add-int/2addr v2, v4
+
+    invoke-direct {v5, v3, v4, p0, v2}, Landroid/graphics/Rect;-><init>(IIII)V
+
+    .line 366
     new-instance p0, Ljava/lang/StringBuilder;
 
     invoke-direct {p0}, Ljava/lang/StringBuilder;-><init>()V
@@ -1794,7 +1846,7 @@
 
     move-result-object p0
 
-    invoke-virtual {p0, v3}, Ljava/lang/StringBuilder;->append(Ljava/lang/Object;)Ljava/lang/StringBuilder;
+    invoke-virtual {p0, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/Object;)Ljava/lang/StringBuilder;
 
     move-result-object p0
 
@@ -1806,12 +1858,12 @@
 
     invoke-static {p1, p0}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
-    .line 358
-    return-object v3
+    .line 367
+    return-object v5
 
     .line 348
-    :cond_2
-    :goto_0
+    :cond_4
+    :goto_2
     new-instance p1, Landroid/graphics/Rect;
 
     invoke-virtual {p0}, Landroid/view/SurfaceView;->getWidth()I
@@ -1832,7 +1884,9 @@
 
     move-result p0
 
-    invoke-direct {p1, v4, v4, v0, p0}, Landroid/graphics/Rect;-><init>(IIII)V
+    const/4 v1, 0x0
+
+    invoke-direct {p1, v1, v1, v0, p0}, Landroid/graphics/Rect;-><init>(IIII)V
 
     return-object p1
 .end method
