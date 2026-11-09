@@ -117,9 +117,15 @@
         tools:ignore="ScopedStorage"
         android:minSdkVersion="30" />
 
-    <!-- Info tab: detect TBox MQTT APK (package visibility on API 30+ / targetSdk 36). -->
+    <!-- Optional DCL permission; user-builds may not enforce it (Binder UID check instead). -->
+    <uses-permission android:name="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
+
+    <!-- Info tab: detect TBox MQTT APK (package visibility on API 30+ / targetSdk 36).
+         DCL launcher provider: ContentResolver.call visibility on API 30+ / targetSdk 36. -->
     <queries>
         <package android:name="vad.dashing.mqtt" />
+        <package android:name="ras.dashing.tbox.launcher" />
+        <provider android:authorities="ras.dashing.tbox.launcher.api" />
     </queries>
 
     <application
@@ -370,6 +376,17 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="vad.dashing.tbox.DEBUG_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- DCL Launcher UI state push (package-targeted by ras.dashing.tbox.launcher). -->
+        <receiver
+            android:name="vad.dashing.tbox.dcl.DclUiStateReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="ras.dashing.tbox.launcher.action.UI_STATE_CHANGED" />
+                <action android:name="ras.dashing.tbox.launcher.action.UI_CHROME_CHANGED" />
             </intent-filter>
         </receiver>
     </application>
