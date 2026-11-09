@@ -28,7 +28,8 @@ object LocalAccessClient {
 
     /**
      * Opens the consent dialog in Monitor once, then polls without reopening it until the user
-     * answers, closes the dialog, or [timeoutMs] runs out.
+     * answers Allow/Deny (dialog is non-cancelable; pending also appears in Settings → API) or
+     * [timeoutMs] runs out.
      */
     fun awaitAccess(
         context: Context,

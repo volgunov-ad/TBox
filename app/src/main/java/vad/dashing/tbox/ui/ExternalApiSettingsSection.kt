@@ -38,6 +38,7 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.externalapi.ExternalApiConstants
 import vad.dashing.tbox.externalapi.ExternalApiControllerHolder
+import vad.dashing.tbox.externalapi.ExternalApiLocalConsent
 import vad.dashing.tbox.externalapi.ExternalApiManualToken
 import vad.dashing.tbox.externalapi.ExternalApiPairRequest
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -59,8 +60,13 @@ fun ExternalApiSettingsSection(
     val idlePendingFlow = remember {
         kotlinx.coroutines.flow.MutableStateFlow(emptyList<ExternalApiPairRequest>())
     }
+    val idleLocalConsentFlow = remember {
+        kotlinx.coroutines.flow.MutableStateFlow<ExternalApiLocalConsent?>(null)
+    }
     val status by (controller?.status ?: idleStatusFlow).collectAsStateWithLifecycle()
     val pendingRequests by (controller?.pendingPairRequests ?: idlePendingFlow)
+        .collectAsStateWithLifecycle()
+    val localConsent by (controller?.localConsent ?: idleLocalConsentFlow)
         .collectAsStateWithLifecycle()
 
     var portDraft by remember { mutableStateOf(externalApiPort.toString()) }
@@ -230,6 +236,34 @@ fun ExternalApiSettingsSection(
                 )
             }
             OutlinedButton(onClick = rememberWrappedOnClick { controller?.denyPair(request.requestId) }) {
+                Text(
+                    stringResource(R.string.settings_api_pairing_deny),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+        }
+    }
+
+    localConsent?.let { consent ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_api_pairing_pending, consent.clientName),
+                style = MaterialTheme.typography.tboxBody,
+                color = onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = rememberWrappedOnClick { controller?.approveLocalConsent() }) {
+                Text(
+                    stringResource(R.string.settings_api_pairing_approve),
+                    style = MaterialTheme.typography.tboxButton,
+                )
+            }
+            OutlinedButton(onClick = rememberWrappedOnClick { controller?.denyLocalConsent() }) {
                 Text(
                     stringResource(R.string.settings_api_pairing_deny),
                     style = MaterialTheme.typography.tboxButton,
