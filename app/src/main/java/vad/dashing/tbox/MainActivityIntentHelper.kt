@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import vad.dashing.tbox.dcl.DclAppLaunchHelper
+import vad.dashing.tbox.dcl.DclLauncherApiRepository
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
+import vad.dashing.tbox.dcl.dclCanLaunchAppArea
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -141,22 +145,62 @@ object MainActivityIntentHelper {
         )
     }
 
-    fun shouldLaunchInStockAppWindow(context: Context): Boolean =
-        LaunchMainInStockAppWindowDecision.shouldAttempt(
+    fun resolveMainAppWindowBackend(context: Context): MainAppWindowBackend =
+        LaunchMainInStockAppWindowDecision.resolveBackend(
             settingEnabled = LaunchMainInStockAppWindowSetting.enabled,
+            dclApiAvailable = DclLauncherApiRepository.available.value,
+            dclLaunchAppAreaCapable = dclCanLaunchAppArea(
+                available = DclLauncherApiRepository.available.value,
+                capabilities = DclLauncherApiRepository.capabilities.value,
+            ),
             headUnitIsAndroid10 =
                 UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal,
             adayoLauncherAvailable = AdayoStockAppWindow.isAvailable(context),
         )
 
+    fun shouldLaunchInStockAppWindow(context: Context): Boolean =
+        resolveMainAppWindowBackend(context) != MainAppWindowBackend.NONE
+
+    fun shouldShowMainAppWindowSwitch(
+        headUnitIsAndroid10: Boolean,
+        dclApiAvailable: Boolean = DclLauncherApiRepository.available.value,
+        dclEnvironmentEnabled: Boolean = DclLauncherEnvironmentSetting.enabled,
+    ): Boolean =
+        LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
+            headUnitIsAndroid10 = headUnitIsAndroid10,
+            dclApiAvailable = dclApiAvailable,
+            dclEnvironmentEnabled = dclEnvironmentEnabled,
+        )
+
     private fun launchMain(context: Context, fallbackIntent: Intent): Boolean {
-        if (shouldLaunchInStockAppWindow(context)) {
-            val ok = AdayoStockAppWindow.launchInAppWindow(
-                context = context,
-                packageName = context.packageName,
-                activityClass = MainActivity::class.java.name,
-            )
-            if (ok) return true
+        when (resolveMainAppWindowBackend(context)) {
+            MainAppWindowBackend.DCL_APP_AREA -> {
+                DclAppLaunchHelper.launchAppArea(
+                    context = context,
+                    packageName = context.packageName,
+                    activityClass = MainActivity::class.java.name,
+                    onRawFallback = {
+                        val stockOk = AdayoStockAppWindow.launchInAppWindow(
+                            context = context,
+                            packageName = context.packageName,
+                            activityClass = MainActivity::class.java.name,
+                        )
+                        if (!stockOk) {
+                            runCatching { context.startActivity(fallbackIntent) }
+                        }
+                    },
+                )
+                return true
+            }
+            MainAppWindowBackend.ADAYO_STOCK -> {
+                val ok = AdayoStockAppWindow.launchInAppWindow(
+                    context = context,
+                    packageName = context.packageName,
+                    activityClass = MainActivity::class.java.name,
+                )
+                if (ok) return true
+            }
+            MainAppWindowBackend.NONE -> Unit
         }
         return try {
             context.startActivity(fallbackIntent)

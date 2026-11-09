@@ -396,13 +396,26 @@ private fun LaunchApplicationFields(
         apps = apps,
         onValueChange = { onChange(action.copy(packageName = it)) },
     )
+    val dclEnvEnabled by
+        settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+    val stockWindowAvailable = remember(context) {
+        vad.dashing.tbox.AdayoStockAppWindow.isAvailable(context)
+    }
+    val launchModeOptions = remember(dclEnvEnabled, action.launchMode, stockWindowAvailable) {
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.selectableLaunchModes(
+            envEnabled = dclEnvEnabled,
+            currentMode = action.launchMode,
+            showStockWindowMode = stockWindowAvailable,
+        )
+    }
     AutomationDropdown(
         label = "Режим запуска",
         value = action.launchMode,
-        options = AppLauncherLaunchMode.entries,
+        options = launchModeOptions,
         optionLabel = {
             when (it) {
-                AppLauncherLaunchMode.FULLSCREEN -> "Обычный полноэкранный"
+                AppLauncherLaunchMode.FULLSCREEN -> "Обычный"
+                AppLauncherLaunchMode.DCL_FULLSCREEN -> "На весь экран (DCL)"
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
                 AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"
                 AppLauncherLaunchMode.VIRTUAL_DISPLAY -> "В виртуальном дисплее (ADB)"
@@ -410,6 +423,16 @@ private fun LaunchApplicationFields(
         },
         onValueChange = { onChange(action.copy(launchMode = it)) },
     )
+    if (dclEnvEnabled &&
+        action.launchMode in
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BULK_REMAP_SOURCE_MODES
+    ) {
+        Text(
+            text = stringResource(R.string.widget_app_launcher_dcl_env_legacy_mode_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     if (action.launchMode == AppLauncherLaunchMode.FREEFORM) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AutomationDropdown(

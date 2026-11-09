@@ -746,8 +746,20 @@
     <string name="settings_vehicle_feature_setup_connect_tbox">Connect to TBox</string>
     <string name="settings_vehicle_feature_setup_connect_tbox_desc">UDP and tbox-proxy for TBox data. Off = head-unit bus only (mbCAN/VHAL).</string>
     <string name="settings_vehicle_feature_setup_done">Done</string>
-    <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app window</string>
-    <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the stock Adayo launcher ActivityView (like Media or Settings). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
+    <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app area</string>
+    <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the launcher app area (DCL app_area when the API is available, otherwise the stock Adayo window). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
+    <string name="settings_dcl_launcher_environment_title">Run in DCL launcher environment</string>
+    <string name="settings_dcl_launcher_environment_desc">«Normal» shortcuts, App List, and LaunchApplication automations open apps via DCL (app_area). «Fullscreen (DCL)» is a separate option. Freeform and virtual display are unavailable for new choices. If the API is down — raw launch with a toast.</string>
+    <string name="settings_dcl_launcher_api_status_available">DCL API: available (v%1$d)</string>
+    <string name="settings_dcl_launcher_api_status_unavailable">DCL API: unavailable (launcher missing or not responding)</string>
+    <string name="settings_dcl_bulk_convert_button">Convert shortcuts to DCL window (app_area)</string>
+    <string name="settings_dcl_bulk_convert_confirm_title">Convert shortcuts?</string>
+    <string name="settings_dcl_bulk_convert_confirm_loading">Counting shortcuts and actions…</string>
+    <string name="settings_dcl_bulk_convert_confirm_error">Could not count items. Continue anyway?</string>
+    <string name="settings_dcl_bulk_convert_confirm_body">Will change: %1$d shortcuts, %2$d automation actions. Freeform / virtual display / stock window → Normal (DCL app_area). Continue?</string>
+    <string name="settings_dcl_bulk_convert_confirm_ok">Convert</string>
+    <string name="settings_dcl_bulk_convert_done">Converted: %1$d shortcuts, %2$d automation actions</string>
+    <string name="dcl_launcher_api_unavailable_fallback">DCL Launcher API unavailable — raw launch</string>
     <string name="settings_ca_certs_title">Root certificates</string>
     <string name="settings_ca_certs_desc">Adds HARICA TLS Root CA 2021 (RSA and ECC) and Russian Trusted Root CA to the system store; without them RuStore and some sites fail with «Unacceptable certificate». Requires root (su) and localhost ADB. The system partition is not modified: certificates stay until the HU reboots, then press the button again or enable auto-install. Restart apps that are already running.</string>
     <string name="settings_ca_certs_auto_title">Install automatically</string>
@@ -2486,8 +2498,11 @@
     <string name="widget_app_launcher_launch_mode_desc_a10">Normal launch, stock Adayo A10 app window, a window beside TBox (freeform), or launch on a virtual display via ADB.</string>
     <string name="widget_app_launcher_double_tap_force_stop_hint">Double-tap the shortcut: am force-stop via localhost ADB (no relaunch; ADB tab not required). If ADB is unavailable — no toast; on shell command failure — toast, same as App List advanced mode.</string>
     <string name="widget_app_launcher_mode_fullscreen">Normal</string>
+    <string name="widget_app_launcher_mode_dcl_fullscreen">Fullscreen (DCL)</string>
     <string name="widget_app_launcher_mode_freeform">Beside TBox (freeform)</string>
     <string name="widget_app_launcher_mode_stock_window">App window (stock launcher)</string>
+    <string name="widget_app_launcher_launch_mode_desc_dcl">«Normal» opens in the DCL app area. «Fullscreen (DCL)» uses DCL fullscreen. Freeform / virtual display / stock window cannot be chosen for new tiles (existing tiles keep working).</string>
+    <string name="widget_app_launcher_dcl_env_legacy_mode_hint">Current mode is kept. With DCL environment on, new freeform / virtual display / stock window choices are unavailable — pick «Normal» or «Fullscreen (DCL)».</string>
     <string name="widget_app_launcher_mode_virtual_display">On virtual display (ADB)</string>
     <string name="widget_app_launcher_stock_window_hint">Opens the app in the stock Adayo launcher’s right ActivityView panel (like Media or Settings). TBox goes to the background. Not all apps or projections (CarPlay/AA) work well in that window.</string>
     <string name="widget_app_launcher_virtual_display">Virtual display</string>

@@ -50,6 +50,11 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            settingsManager.dclLauncherEnvironmentEnabledFlow.collectLatest { enabled ->
+                vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
+            }
+        }
+        applicationScope.launch {
             combine(
                 settingsManager.huCaCertsAutoInstallFlow,
                 settingsManager.headUnitCanModeFlow,

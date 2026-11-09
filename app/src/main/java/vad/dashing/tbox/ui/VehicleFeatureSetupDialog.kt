@@ -114,6 +114,18 @@ fun VehicleFeatureSetupDialog(
                     enabled = true,
                 )
 
+                val dclEnvEnabled by
+                    settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+                SettingSwitch(
+                    isChecked = dclEnvEnabled,
+                    onCheckedChange = { enabled ->
+                        settingsViewModel.saveDclLauncherEnvironmentEnabled(enabled)
+                    },
+                    text = stringResource(R.string.settings_dcl_launcher_environment_title),
+                    description = stringResource(R.string.settings_dcl_launcher_environment_desc),
+                    enabled = true,
+                )
+
                 SettingsTitle(stringResource(R.string.settings_cruise_type_title))
                 Text(
                     text = stringResource(R.string.settings_cruise_type_desc),

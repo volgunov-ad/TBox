@@ -1575,13 +1575,29 @@ private fun openNotificationListenerSettings(context: Context) {
 private fun openSelectedPlayer(context: Context, packageName: String) {
     if (packageName.isBlank()) return
     val launchPackage = resolvePlayerLaunchPackage(packageName)
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(launchPackage)
-        ?: if (launchPackage != packageName) {
-            context.packageManager.getLaunchIntentForPackage(packageName)
-        } else {
-            null
-        }
-        ?: return
+    val resolved = when {
+        context.packageManager.getLaunchIntentForPackage(launchPackage) != null -> launchPackage
+        launchPackage != packageName &&
+            context.packageManager.getLaunchIntentForPackage(packageName) != null -> packageName
+        else -> return
+    }
+    if (vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.shouldRouteDefaultLaunchViaDcl(
+            vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled,
+        )
+    ) {
+        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchAppArea(
+            context = context,
+            packageName = resolved,
+            onRawFallback = {
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(resolved)
+                    ?: return@launchAppArea
+                MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
+                runCatching { context.startActivity(launchIntent) }
+            },
+        )
+        return
+    }
+    val launchIntent = context.packageManager.getLaunchIntentForPackage(resolved) ?: return
     MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
     runCatching {
         context.startActivity(launchIntent)

@@ -11,6 +11,9 @@ import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.MirrorAdjustModeRepository
 import vad.dashing.tbox.SettingsViewModel
+import vad.dashing.tbox.dcl.DclAppLaunchHelper
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.mbcan.MbCanKnownVehiclePropertyId
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -74,8 +77,21 @@ private val hvacSyncToggleLock = Any()
 private var hvacSyncToggleBlockedUntilMs = 0L
 
 internal fun launchAppFromWidget(context: Context, packageName: String) {
+    val pkg = packageName.trim()
+    if (pkg.isBlank()) return
     FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-        launchAppFullscreen(context, packageName.trim())
+        if (DclLauncherEnvironmentRouting.shouldRouteDefaultLaunchViaDcl(
+                DclLauncherEnvironmentSetting.enabled,
+            )
+        ) {
+            DclAppLaunchHelper.launchAppArea(
+                context = context,
+                packageName = pkg,
+                onRawFallback = { launchAppFullscreen(context, pkg) },
+            )
+        } else {
+            launchAppFullscreen(context, pkg)
+        }
     }
 }
 
@@ -137,10 +153,25 @@ internal fun launchAppFromWidget(
             }
             return
         }
-        AppLauncherLaunchMode.FULLSCREEN -> {
-            // Exit freeform + main-screen overlay first so it does not cover the launched app.
+        AppLauncherLaunchMode.FULLSCREEN,
+        AppLauncherLaunchMode.DCL_FULLSCREEN,
+        -> {
+            val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                envEnabled = DclLauncherEnvironmentSetting.enabled,
+                launchMode = launchMode,
+            )
             FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                launchAppFullscreen(context, packageName)
+                if (dclMode != null) {
+                    DclAppLaunchHelper.launch(
+                        context = context,
+                        packageName = packageName,
+                        mode = dclMode,
+                        onRawFallback = { launchAppFullscreen(context, packageName) },
+                    )
+                } else {
+                    // Env off: DCL_FULLSCREEN falls back to raw fullscreen like «Обычный».
+                    launchAppFullscreen(context, packageName)
+                }
             }
         }
         AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {

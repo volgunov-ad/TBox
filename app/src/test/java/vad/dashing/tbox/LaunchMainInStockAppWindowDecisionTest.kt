@@ -1,5 +1,6 @@
 package vad.dashing.tbox
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -7,7 +8,77 @@ import org.junit.Test
 class LaunchMainInStockAppWindowDecisionTest {
 
     @Test
-    fun a10_enabled_withAdayo_attempts() {
+    fun settingOff_resolvesNone() {
+        assertEquals(
+            MainAppWindowBackend.NONE,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                settingEnabled = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun dclPreferredOverAdayo() {
+        assertEquals(
+            MainAppWindowBackend.DCL_APP_AREA,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                settingEnabled = true,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun adayoWhenDclUnavailableOnA10() {
+        assertEquals(
+            MainAppWindowBackend.ADAYO_STOCK,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                settingEnabled = true,
+                dclApiAvailable = false,
+                dclLaunchAppAreaCapable = false,
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun a9WithoutDcl_resolvesNone() {
+        assertEquals(
+            MainAppWindowBackend.NONE,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                settingEnabled = true,
+                dclApiAvailable = false,
+                dclLaunchAppAreaCapable = false,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun a9WithDcl_usesDcl() {
+        assertEquals(
+            MainAppWindowBackend.DCL_APP_AREA,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                settingEnabled = true,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldAttempt_matchesResolve() {
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldAttempt(
                 settingEnabled = true,
@@ -15,10 +86,6 @@ class LaunchMainInStockAppWindowDecisionTest {
                 adayoLauncherAvailable = true,
             ),
         )
-    }
-
-    @Test
-    fun settingOff_neverAttempts() {
         assertFalse(
             LaunchMainInStockAppWindowDecision.shouldAttempt(
                 settingEnabled = false,
@@ -26,10 +93,6 @@ class LaunchMainInStockAppWindowDecisionTest {
                 adayoLauncherAvailable = true,
             ),
         )
-    }
-
-    @Test
-    fun android9_neverAttempts() {
         assertFalse(
             LaunchMainInStockAppWindowDecision.shouldAttempt(
                 settingEnabled = true,
@@ -37,15 +100,45 @@ class LaunchMainInStockAppWindowDecisionTest {
                 adayoLauncherAvailable = true,
             ),
         )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldAttempt(
+                settingEnabled = true,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+            ),
+        )
     }
 
     @Test
-    fun a10_withoutAdayo_doesNotAttempt() {
+    fun showMainSwitch_onA9WhenDclPresent() {
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
+                headUnitIsAndroid10 = false,
+                dclApiAvailable = true,
+                dclEnvironmentEnabled = false,
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
+                headUnitIsAndroid10 = false,
+                dclApiAvailable = false,
+                dclEnvironmentEnabled = true,
+            ),
+        )
         assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldAttempt(
-                settingEnabled = true,
+            LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
+                headUnitIsAndroid10 = false,
+                dclApiAvailable = false,
+                dclEnvironmentEnabled = false,
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
                 headUnitIsAndroid10 = true,
-                adayoLauncherAvailable = false,
+                dclApiAvailable = false,
+                dclEnvironmentEnabled = false,
             ),
         )
     }
@@ -57,6 +150,9 @@ class LaunchMainInStockAppWindowDecisionTest {
         lastRedirectAtMs: Long = 0L,
         settingEnabled: Boolean = true,
         headUnitIsAndroid10: Boolean = true,
+        adayoLauncherAvailable: Boolean = true,
+        dclApiAvailable: Boolean = false,
+        dclLaunchAppAreaCapable: Boolean = false,
     ) = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
         freshInstance = freshInstance,
         displayId = displayId,
@@ -64,12 +160,26 @@ class LaunchMainInStockAppWindowDecisionTest {
         lastRedirectAtMs = lastRedirectAtMs,
         settingEnabled = settingEnabled,
         headUnitIsAndroid10 = headUnitIsAndroid10,
-        adayoLauncherAvailable = true,
+        adayoLauncherAvailable = adayoLauncherAvailable,
+        dclApiAvailable = dclApiAvailable,
+        dclLaunchAppAreaCapable = dclLaunchAppAreaCapable,
     )
 
     @Test
     fun externalLaunch_onDefaultDisplay_redirects() {
         assertTrue(redirect())
+    }
+
+    @Test
+    fun externalLaunch_withDclOnA9_redirects() {
+        assertTrue(
+            redirect(
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+            ),
+        )
     }
 
     @Test
@@ -94,8 +204,14 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun externalLaunch_settingOffOrAndroid9_doesNotRedirect() {
+    fun externalLaunch_settingOffOrAndroid9WithoutDcl_doesNotRedirect() {
         assertFalse(redirect(settingEnabled = false))
-        assertFalse(redirect(headUnitIsAndroid10 = false))
+        assertFalse(
+            redirect(
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = false,
+            ),
+        )
     }
 }

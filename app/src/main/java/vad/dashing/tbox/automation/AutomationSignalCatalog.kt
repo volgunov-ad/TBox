@@ -952,6 +952,37 @@ object AutomationSignalCatalog {
                 "(Settings.Global avm_state), даже если UsageStats держит предыдущее приложение.",
         ),
         state(
+            AutomationSignalId.DCL_ADAS_PANEL_VISIBLE,
+            "DCL: панель ADAS",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из DCL UI state (adasPanelVisible). Нет значения, пока лаунчер " +
+                "DCL не отдал снимок. Не путать с UsageStats sticky-hide.",
+        ),
+        state(
+            AutomationSignalId.DCL_TOP_BAR_VISIBLE,
+            "DCL: верхняя панель",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из DCL UI state (topBarVisible).",
+        ),
+        state(
+            AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE,
+            "DCL: нижняя панель",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из DCL UI state (bottomBarVisible).",
+        ),
+        state(
+            AutomationSignalId.DCL_SCREEN_MODE,
+            "DCL: режим экрана",
+            appOnly,
+            listOf("home", "single", "fullscreen", "split"),
+            typicalRange = "home / single / fullscreen / split из DCL screenMode. Типичный рецепт: " +
+                "скрыть плавающие панели при screenMode=fullscreen или когда бары скрыты " +
+                "(state_equals + toggle_hide_floating_panels).",
+        ),
+        state(
             AutomationSignalId.APP_THEME_MODE,
             "Тема приложения: режим",
             appOnly,

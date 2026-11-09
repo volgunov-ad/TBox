@@ -334,8 +334,13 @@ internal fun AppListDialog(
         AdayoStockAppWindow.isAvailable(context)
     }
     val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
-    val showStockWindowOpen = stockWindowAvailable ||
-        headUnitCanMode == HeadUnitCanMode.Android10Vhal
+    val dclEnvEnabled by
+        settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+    // Env ON: App List Open always uses DCL app_area; hide the stock-window twin button.
+    val showStockWindowOpen = !dclEnvEnabled && (
+        stockWindowAvailable ||
+            headUnitCanMode == HeadUnitCanMode.Android10Vhal
+        )
 
     val apps = if (advancedMode) installedApps else launchableApps
 

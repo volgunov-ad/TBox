@@ -1147,11 +1147,17 @@ class SettingsManager(private val context: Context) {
         private val CLIMATE_CONTROL_TYPE_KEY =
             stringPreferencesKey("${KEY_PREFIX}climate_control_type")
         /**
-         * A10 only: open [MainActivity] via Adayo stock app window (`LAUNCH_APP`).
+         * Open [MainActivity] via DCL app_area (when API available) or Adayo stock app window.
          * Default true when key absent.
          */
         private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
             booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
+        /**
+         * Route third-party «Обычный» / App List launches through DCL Launcher API.
+         * Default false when key absent. Independent of [LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY].
+         */
+        private val DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY =
+            booleanPreferencesKey("${KEY_PREFIX}dcl_launcher_environment_enabled")
         /** A10 only: re-apply the extra root CA overlay on app start. Default false. */
         private val HU_CA_CERTS_AUTO_INSTALL_KEY =
             booleanPreferencesKey("${KEY_PREFIX}hu_ca_certs_auto_install")
@@ -2280,11 +2286,19 @@ class SettingsManager(private val context: Context) {
         .distinctUntilChanged()
 
     /**
-     * When true (default) and HU mode is Android 10, programmatic [MainActivity] opens use
-     * Adayo stock app window instead of fullscreen.
+     * When true (default), programmatic [MainActivity] opens use DCL app_area (if available)
+     * or Adayo stock app window instead of fullscreen.
      */
     val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
+        .distinctUntilChanged()
+
+    /**
+     * When true, third-party app shortcut / App List «Обычный» launches go through DCL
+     * (`app_area` / opt-in `fullscreen`). Default false.
+     */
+    val dclLauncherEnvironmentEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY] ?: false }
         .distinctUntilChanged()
 
     val huCaCertsAutoInstallFlow: Flow<Boolean> = context.settingsDataStore.data
@@ -5135,6 +5149,13 @@ class SettingsManager(private val context: Context) {
             preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
         }
         LaunchMainInStockAppWindowSetting.update(enabled)
+    }
+
+    suspend fun saveDclLauncherEnvironmentEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[DCL_LAUNCHER_ENVIRONMENT_ENABLED_KEY] = enabled
+        }
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
     }
 
     suspend fun saveHuCaCertsAutoInstall(enabled: Boolean) {

@@ -154,6 +154,20 @@ internal object AutomationSignalReads {
                 )
                 AutomationSignalId.HU_HEADREST_SPEAKER -> platformHeadrestFlow()
                 AutomationSignalId.FOREGROUND_APP -> foregroundAppFlow()
+                AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> dclUiBooleanFlow { it.adasPanelVisible }
+                AutomationSignalId.DCL_TOP_BAR_VISIBLE -> dclUiBooleanFlow { it.topBarVisible }
+                AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> dclUiBooleanFlow { it.bottomBarVisible }
+                AutomationSignalId.DCL_SCREEN_MODE ->
+                    vad.dashing.tbox.dcl.DclLauncherApiRepository.uiState
+                        .map { state ->
+                            val mode = state?.screenMode?.trim().orEmpty()
+                            if (mode.isEmpty()) {
+                                AutomationSignalValue.Unavailable
+                            } else {
+                                AutomationSignalValue.State(mode)
+                            }
+                        }
+                        .distinctUntilChanged()
                 AutomationSignalId.TBOX_CONNECTED ->
                     TboxRepository.tboxConnected.map { connected ->
                         AutomationSignalValue.State(if (connected) "on" else "off")

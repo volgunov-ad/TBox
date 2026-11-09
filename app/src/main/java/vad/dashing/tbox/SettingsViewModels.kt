@@ -1593,6 +1593,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = true,
         )
 
+    val dclLauncherEnvironmentEnabled = settingsManager.dclLauncherEnvironmentEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false,
+        )
+
     val huCaCertsAutoInstall = settingsManager.huCaCertsAutoInstallFlow
         .stateIn(
             scope = viewModelScope,
@@ -3768,6 +3775,61 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
         viewModelScope.launch {
             settingsManager.saveLaunchMainInStockAppWindow(enabled)
         }
+    }
+
+    fun saveDclLauncherEnvironmentEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsManager.saveDclLauncherEnvironmentEnabled(enabled)
+        }
+    }
+
+    /**
+     * Remaps freeform / VD / stock app-shortcut tiles (main + floating + legacy dashboard)
+     * and automation [vad.dashing.tbox.automation.AutomationAction.LaunchApplication] actions
+     * to «Обычный». Callback runs on the main thread with remap counts.
+     */
+    fun bulkConvertLaunchModesToDclOrdinary(
+        onDone: (shortcuts: Int, automations: Int) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val appContext = requireNotNull(AppContextHolder.appContextOrNull)
+            val dashboard = settingsManager.dashboardWidgetsFlow.first()
+            val mainPanels = settingsManager.mainScreenDashboardsFlow.first()
+            val floating = settingsManager.floatingDashboardsFlow.first()
+            val store = vad.dashing.tbox.automation.AutomationStore(appContext)
+            val snapshot = store.snapshots.first()
+            val result = vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.applyBulkRemap(
+                dashboardWidgets = dashboard,
+                mainScreenPanels = mainPanels,
+                floatingPanels = floating,
+                document = snapshot.document,
+            )
+            if (result.shortcutCount > 0) {
+                settingsManager.saveDashboardWidgets(result.dashboardWidgets)
+                settingsManager.saveMainScreenDashboards(result.mainScreenPanels)
+                settingsManager.saveFloatingDashboards(result.floatingPanels)
+            }
+            if (result.automationActionCount > 0) {
+                store.save(result.document)
+            }
+            onDone(result.shortcutCount, result.automationActionCount)
+        }
+    }
+
+    suspend fun previewDclBulkConvertCounts():
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BulkRemapPreview {
+        val appContext = requireNotNull(AppContextHolder.appContextOrNull)
+        val dashboard = settingsManager.dashboardWidgetsFlow.first()
+        val mainPanels = settingsManager.mainScreenDashboardsFlow.first()
+        val floating = settingsManager.floatingDashboardsFlow.first()
+        val store = vad.dashing.tbox.automation.AutomationStore(appContext)
+        val snapshot = store.snapshots.first()
+        return vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.previewBulkRemap(
+            dashboardWidgets = dashboard,
+            mainScreenPanels = mainPanels,
+            floatingPanels = floating,
+            document = snapshot.document,
+        )
     }
 
     fun saveHuCaCertsAutoInstall(enabled: Boolean) {
