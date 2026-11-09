@@ -202,6 +202,14 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` — статус-enum **0…4*
 Для неё тот же триггер смотрит штатный `Settings.Global avm_state` (и `SHOW_AVM_EVENT`),
 а не UsageStats. Новый тип триггера не нужен — в правиле по-прежнему выбирается пакет AVM.
 
+**DCL лаунчер** (`dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible`,
+`dcl_screen_mode`) — только источник «Приложение». Видимость ADAS/баров — `on`/`off`;
+`dcl_screen_mode` — `home` / `single` / `fullscreen` / `split`. Значения из push/poll
+`DclLauncherApiRepository.uiState`; пока снимка нет — сигнала нет. Типичный рецепт:
+скрыть плавающие панели при `screenMode=fullscreen` или скрытых барах
+(`state_equals` + `toggle_hide_floating_panels`). Это не UsageStats sticky-hide.
+Подробнее: [DCL_LAUNCHER_ENVIRONMENT_MODE_RU.md](DCL_LAUNCHER_ENVIRONMENT_MODE_RU.md).
+
 **Тема приложения: режим** (`app_theme_mode`) — только источник «Приложение». Четыре
 состояния: `manual_day` / `manual_night` — ручная тема (ГУ или локальная тема приложения,
 когда оно отвязано от системы), `auto_day` / `auto_night` — штатный авто день/ночь ГУ

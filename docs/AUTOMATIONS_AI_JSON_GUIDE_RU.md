@@ -642,7 +642,10 @@
 ```
 
 - `packageName` нужно получить от пользователя; пример выше не означает, что пакет установлен;
-- `launchMode`: `fullscreen`, `freeform`, `stock_window`, `virtual_display`;
+- `launchMode`: `fullscreen` («Обычный»), `dcl_fullscreen` («На весь экран (DCL)»),
+  `freeform`, `stock_window`, `virtual_display`;
+- при включённой среде DCL (`dcl_launcher_environment_enabled`) `fullscreen` идёт в DCL
+  `app_area`, а `dcl_fullscreen` — в DCL `fullscreen`; новые freeform/VD/stock в UI недоступны;
 - `stock_window` предназначен для штатного оконного лаунчера Adayo;
 - `virtual_display` — запуск через localhost ADB (`am start --display`); нужны `virtualDisplayId`
   (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI; **display 0
@@ -951,6 +954,10 @@ TCP :5555 включают только если порт ещё не слуша
 | `modem_operator` | `app` | имя оператора (строка) или нет значения; без IMEI/ICCID/IMSI |
 | `modem_source` | `app` | `tbox`, `wifi_http` — активный источник модема |
 | `foreground_app` | `app` | точный package name; для камеры 360 обычно `com.mengbo.avm` |
+| `dcl_adas_panel_visible` | `app` | `on` / `off` — видимость ADAS-панели DCL; нет значения, пока нет UI state |
+| `dcl_top_bar_visible` | `app` | `on` / `off` — верхний бар DCL |
+| `dcl_bottom_bar_visible` | `app` | `on` / `off` — нижний бар DCL |
+| `dcl_screen_mode` | `app` | `home`, `single`, `fullscreen`, `split` — режим экрана DCL |
 | `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 | `hu_screen_auto_brightness` | `app` | `on`, `off` — автояркость экрана ГУ (Car Settings → Экраны) |
@@ -971,7 +978,7 @@ TCP :5555 включают только если порт ещё не слуша
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `epb_park_lamp`, `engine_oil_pressure`, `brake_fluid`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel`, `phone_hfp_connected` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel`, `phone_hfp_connected`, `dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и

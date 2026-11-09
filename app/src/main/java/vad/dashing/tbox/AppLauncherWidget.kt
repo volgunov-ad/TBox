@@ -8,12 +8,16 @@ const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
 /**
  * How an [APP_LAUNCHER_WIDGET_DATA_KEY] tile starts the target app.
  *
+ * [FULLSCREEN] is the picker label «Обычный»: raw `startActivity`, or DCL `app_area`
+ * when DCL environment mode is on.
+ * [DCL_FULLSCREEN] is opt-in «На весь экран (DCL)» → DCL `launchApp(mode=fullscreen)`.
  * [STOCK_WINDOW] uses Adayo A10 launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`).
  * [VIRTUAL_DISPLAY] starts the app on a chosen HU display via localhost ADB
  * (`am start --display`).
  */
 enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes: Int) {
     FULLSCREEN("fullscreen", R.string.widget_app_launcher_mode_fullscreen),
+    DCL_FULLSCREEN("dcl_fullscreen", R.string.widget_app_launcher_mode_dcl_fullscreen),
     FREEFORM("freeform", R.string.widget_app_launcher_mode_freeform),
     STOCK_WINDOW("stock_window", R.string.widget_app_launcher_mode_stock_window),
     VIRTUAL_DISPLAY("virtual_display", R.string.widget_app_launcher_mode_virtual_display);

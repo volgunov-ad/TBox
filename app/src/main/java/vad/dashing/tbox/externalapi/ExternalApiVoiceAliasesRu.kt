@@ -130,6 +130,22 @@ object ExternalApiVoiceAliasesRu {
             "селектор",
             "prnd",
         ),
+        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE to listOf(
+            "панель ADAS DCL",
+            "ADAS DCL",
+        ),
+        AutomationSignalId.DCL_TOP_BAR_VISIBLE to listOf(
+            "верхняя панель DCL",
+            "верхний бар DCL",
+        ),
+        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE to listOf(
+            "нижняя панель DCL",
+            "нижний бар DCL",
+        ),
+        AutomationSignalId.DCL_SCREEN_MODE to listOf(
+            "режим экрана DCL",
+            "экран DCL",
+        ),
         AutomationSignalId.TBOX_CONNECTED to listOf(
             "тбокс на связи",
             "тбокс подключен",

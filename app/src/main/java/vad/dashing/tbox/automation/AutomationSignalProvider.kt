@@ -190,6 +190,20 @@ internal fun foregroundAppFlow(): Flow<AutomationSignalValue> =
         }
         .distinctUntilChanged()
 
+internal fun dclUiBooleanFlow(
+    read: (vad.dashing.tbox.dcl.DclUiState) -> Boolean?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.uiState
+        .map { state ->
+            val visible = state?.let(read)
+            if (visible == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(if (visible) "on" else "off")
+            }
+        }
+        .distinctUntilChanged()
+
 internal fun appThemeModeFlow(): Flow<AutomationSignalValue> =
     HeadUnitDayNightRepository.modeState.map { mode ->
         val value = when (mode) {

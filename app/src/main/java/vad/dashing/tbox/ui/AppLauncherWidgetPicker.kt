@@ -228,20 +228,24 @@ internal fun AppLauncherWidgetSettingsSection(
             AdayoStockAppWindow.isAvailable(context)
         }
         val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+        val dclEnvEnabled by
+            settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
         val showStockWindowMode = stockWindowAvailable ||
             headUnitCanMode == HeadUnitCanMode.Android10Vhal
-        val launchModeOptions = remember(showStockWindowMode) {
-            buildList {
-                add(AppLauncherLaunchMode.FULLSCREEN)
-                if (showStockWindowMode) {
-                    add(AppLauncherLaunchMode.STOCK_WINDOW)
-                }
-                add(AppLauncherLaunchMode.FREEFORM)
-                add(AppLauncherLaunchMode.VIRTUAL_DISPLAY)
-            }
+        val launchModeOptions = remember(
+            showStockWindowMode,
+            dclEnvEnabled,
+            state.launcherLaunchMode,
+        ) {
+            vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.selectableLaunchModes(
+                envEnabled = dclEnvEnabled,
+                currentMode = state.launcherLaunchMode,
+                showStockWindowMode = showStockWindowMode,
+            )
         }
-        LaunchedEffect(showStockWindowMode, state.launcherLaunchMode) {
-            if (!showStockWindowMode &&
+        LaunchedEffect(showStockWindowMode, dclEnvEnabled, state.launcherLaunchMode) {
+            if (!dclEnvEnabled &&
+                !showStockWindowMode &&
                 state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW
             ) {
                 state.launcherLaunchMode = AppLauncherLaunchMode.FULLSCREEN
@@ -258,16 +262,27 @@ internal fun AppLauncherWidgetSettingsSection(
             onValueChange = { state.launcherLaunchMode = it.mode },
             text = stringResource(R.string.widget_app_launcher_launch_mode),
             description = stringResource(
-                if (showStockWindowMode) {
-                    R.string.widget_app_launcher_launch_mode_desc_a10
-                } else {
-                    R.string.widget_app_launcher_launch_mode_desc
+                when {
+                    dclEnvEnabled -> R.string.widget_app_launcher_launch_mode_desc_dcl
+                    showStockWindowMode -> R.string.widget_app_launcher_launch_mode_desc_a10
+                    else -> R.string.widget_app_launcher_launch_mode_desc
                 },
             ),
             enabled = state.togglesEnabled,
             options = localizedLaunchModes,
             selectorWidth = WidgetDialogDropdownSelectorWidth,
         )
+        if (dclEnvEnabled &&
+            state.launcherLaunchMode in
+            vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BULK_REMAP_SOURCE_MODES
+        ) {
+            Text(
+                text = stringResource(R.string.widget_app_launcher_dcl_env_legacy_mode_hint),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
         Text(
             text = stringResource(R.string.widget_app_launcher_double_tap_force_stop_hint),
             style = MaterialTheme.typography.tboxCaption,

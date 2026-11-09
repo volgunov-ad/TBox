@@ -4,6 +4,7 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.ui.theme.tboxHeadline
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxBody
+import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.TboxTextStyles
 import android.content.Context
 import vad.dashing.tbox.showSafely
@@ -27,6 +28,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import vad.dashing.tbox.MainActivityIntentHelper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -993,7 +996,117 @@ fun SettingsTabContent(
                 modifier = Modifier.weight(1f)
             )
         }
-        if (headUnitCanMode == HeadUnitCanMode.Android10Vhal) {
+        val dclEnvEnabled by
+            settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+        val dclApiAvailable by
+            vad.dashing.tbox.dcl.DclLauncherApiRepository.available.collectAsStateWithLifecycle()
+        val dclCapabilities by
+            vad.dashing.tbox.dcl.DclLauncherApiRepository.capabilities.collectAsStateWithLifecycle()
+        SettingSwitch(
+            dclEnvEnabled,
+            { enabled -> settingsViewModel.saveDclLauncherEnvironmentEnabled(enabled) },
+            stringResource(R.string.settings_dcl_launcher_environment_title),
+            stringResource(R.string.settings_dcl_launcher_environment_desc),
+            true,
+        )
+        Text(
+            text = if (dclApiAvailable) {
+                stringResource(
+                    R.string.settings_dcl_launcher_api_status_available,
+                    dclCapabilities?.apiVersion ?: 1,
+                )
+            } else {
+                stringResource(R.string.settings_dcl_launcher_api_status_unavailable)
+            },
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        var showBulkConvertConfirm by remember { mutableStateOf(false) }
+        var bulkConvertBusy by remember { mutableStateOf(false) }
+        OutlinedButton(
+            onClick = { showBulkConvertConfirm = true },
+            enabled = !bulkConvertBusy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.settings_dcl_bulk_convert_button),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        if (showBulkConvertConfirm) {
+            var previewText by remember {
+                mutableStateOf(
+                    context.getString(R.string.settings_dcl_bulk_convert_confirm_loading),
+                )
+            }
+            LaunchedEffect(Unit) {
+                val preview = runCatching {
+                    settingsViewModel.previewDclBulkConvertCounts()
+                }.getOrNull()
+                previewText = if (preview == null) {
+                    context.getString(R.string.settings_dcl_bulk_convert_confirm_error)
+                } else {
+                    context.getString(
+                        R.string.settings_dcl_bulk_convert_confirm_body,
+                        preview.shortcutCount,
+                        preview.automationActionCount,
+                    )
+                }
+            }
+            AlertDialog(
+                onDismissRequest = { if (!bulkConvertBusy) showBulkConvertConfirm = false },
+                title = {
+                    Text(stringResource(R.string.settings_dcl_bulk_convert_confirm_title))
+                },
+                text = {
+                    Text(
+                        text = previewText,
+                        style = MaterialTheme.typography.tboxBody,
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !bulkConvertBusy,
+                        onClick = {
+                            bulkConvertBusy = true
+                            settingsViewModel.bulkConvertLaunchModesToDclOrdinary { shortcuts, autos ->
+                                bulkConvertBusy = false
+                                showBulkConvertConfirm = false
+                                Toast.makeText(
+                                    context,
+                                    context.getString(
+                                        R.string.settings_dcl_bulk_convert_done,
+                                        shortcuts,
+                                        autos,
+                                    ),
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.settings_dcl_bulk_convert_confirm_ok))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !bulkConvertBusy,
+                        onClick = { showBulkConvertConfirm = false },
+                    ) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                },
+            )
+        }
+        val showMainAppWindowSwitch =
+            MainActivityIntentHelper.shouldShowMainAppWindowSwitch(
+                headUnitIsAndroid10 = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                dclApiAvailable = dclApiAvailable,
+                dclEnvironmentEnabled = dclEnvEnabled,
+            )
+        if (showMainAppWindowSwitch) {
             SettingSwitch(
                 launchMainInStockAppWindow,
                 { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },

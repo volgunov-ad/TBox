@@ -29,6 +29,10 @@ import vad.dashing.tbox.PlatformAudioRepository
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.SharedMediaControlService
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
+import vad.dashing.tbox.dcl.DclCallResult
+import vad.dashing.tbox.dcl.DclLauncherApiRepository
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
+import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -265,9 +269,19 @@ class AutomationActionExecutor(
                 )
             }
 
-            AppLauncherLaunchMode.FULLSCREEN -> {
+            AppLauncherLaunchMode.FULLSCREEN,
+            AppLauncherLaunchMode.DCL_FULLSCREEN,
+            -> {
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
                     return AutomationActionResult.failure("Приложение не установлено")
+                }
+                val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                    envEnabled = DclLauncherEnvironmentSetting.enabled,
+                    launchMode = action.launchMode,
+                )
+                if (dclMode != null) {
+                    awaitAfterWindowModeExit { true }
+                    return launchViaDclOrRaw(packageName, dclMode)
                 }
                 val launched = awaitAfterWindowModeExit {
                     launchFullscreen(packageName)
@@ -334,6 +348,49 @@ class AutomationActionExecutor(
             appContext.startActivity(intent)
             true
         }.getOrDefault(false)
+    }
+
+    private suspend fun launchViaDclOrRaw(
+        packageName: String,
+        dclMode: String,
+    ): AutomationActionResult {
+        val result = DclLauncherApiRepository.launchApp(
+            packageName = packageName,
+            mode = dclMode,
+            context = appContext,
+        )
+        return when (result) {
+            is DclCallResult.Ok -> {
+                if (result.value.success) {
+                    AutomationActionResult.ok("Приложение запущено через DCL ($dclMode)")
+                } else {
+                    AutomationActionResult.failure(
+                        result.value.error?.message
+                            ?: result.value.error?.errorCode
+                            ?: "DCL launch failed",
+                    )
+                }
+            }
+            is DclCallResult.Error ->
+                AutomationActionResult.failure(
+                    result.error.message
+                        ?: result.error.errorCode
+                        ?: "DCL launch error",
+                )
+            DclCallResult.Unavailable -> {
+                val launched = withContext(Dispatchers.Main) {
+                    launchFullscreen(packageName)
+                }
+                AutomationActionResult(
+                    launched,
+                    if (launched) {
+                        "DCL API недоступен — обычный запуск"
+                    } else {
+                        "Запуск приложения не удался"
+                    },
+                )
+            }
+        }
     }
 
     private suspend fun openMainScreen(

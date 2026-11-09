@@ -253,15 +253,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; on A10 with
-     * the stock-window setting on, hand them to the Adayo launcher ActivityView. Pending
-     * tile-edit / theme requests are already on their buses for the relaunched instance.
+     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; with the
+     * stock-window setting on, hand them to DCL app_area (if available) or Adayo ActivityView.
+     * Pending tile-edit / theme requests are already on their buses for the relaunched instance.
      */
     private fun redirectExternalLaunchToStockAppWindow(savedInstanceState: Bundle?): Boolean {
         @Suppress("DEPRECATION")
         val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
         if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) return false
-        if (!AdayoStockAppWindow.isAvailable(this)) return false
+        val dclAvailable = vad.dashing.tbox.dcl.DclLauncherApiRepository.available.value
+        val dclCaps = vad.dashing.tbox.dcl.DclLauncherApiRepository.capabilities.value
+        val dclAppArea = vad.dashing.tbox.dcl.dclCanLaunchAppArea(dclAvailable, dclCaps)
+        val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
+        if (!dclAppArea && !adayoAvailable) return false
         // Application-level caches may still hold defaults on a cold start, so read DataStore, but
         // never stall the first frame on it: on timeout fall back to the caches (worst case the
         // launch simply stays fullscreen).
@@ -280,6 +284,13 @@ class MainActivity : ComponentActivity() {
         }
         val (settingEnabled, canMode) = stored
             ?: (LaunchMainInStockAppWindowSetting.enabled to UniversalCanRepository.mode.value)
+        val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
+            settingEnabled = settingEnabled,
+            dclApiAvailable = dclAvailable,
+            dclLaunchAppAreaCapable = dclAppArea,
+            headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal,
+            adayoLauncherAvailable = adayoAvailable,
+        )
         val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
             freshInstance = true,
             displayId = displayId,
@@ -287,17 +298,36 @@ class MainActivity : ComponentActivity() {
             lastRedirectAtMs = lastExternalRedirectAtMs,
             settingEnabled = settingEnabled,
             headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal,
-            adayoLauncherAvailable = true,
+            adayoLauncherAvailable = adayoAvailable,
+            dclApiAvailable = dclAvailable,
+            dclLaunchAppAreaCapable = dclAppArea,
         )
-        if (!redirect) return false
-        val launched = AdayoStockAppWindow.launchInAppWindow(
-            context = this,
-            packageName = packageName,
-            activityClass = MainActivity::class.java.name,
-        )
+        if (!redirect || backend == MainAppWindowBackend.NONE) return false
+        val launched = when (backend) {
+            MainAppWindowBackend.DCL_APP_AREA ->
+                vad.dashing.tbox.dcl.DclAppLaunchHelper.launchAppAreaBlocking(
+                    context = this,
+                    packageName = packageName,
+                    activityClass = MainActivity::class.java.name,
+                ) || (
+                    adayoAvailable &&
+                        AdayoStockAppWindow.launchInAppWindow(
+                            context = this,
+                            packageName = packageName,
+                            activityClass = MainActivity::class.java.name,
+                        )
+                    )
+            MainAppWindowBackend.ADAYO_STOCK ->
+                AdayoStockAppWindow.launchInAppWindow(
+                    context = this,
+                    packageName = packageName,
+                    activityClass = MainActivity::class.java.name,
+                )
+            MainAppWindowBackend.NONE -> false
+        }
         if (!launched) return false
         lastExternalRedirectAtMs = now
-        Log.i(TAG, "External launch on default display redirected to stock app window")
+        Log.i(TAG, "External launch on default display redirected to app window ($backend)")
         finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(0, 0)
