@@ -1328,6 +1328,83 @@ class AutomationEvaluatorTest {
         dayOfMonth: Int = 31,
     ) = AutomationWallTime(year, month, dayOfMonth, hour, minute, weekday)
 
+    @Test
+    fun systemEvent_holdMillis_firesAfterPresenceHeld() {
+        AutomationUiSnapshot.setServiceRunning(true)
+        try {
+            val trigger = AutomationTrigger.SystemEvent(
+                id = "svc",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                holdMillis = 2_000L,
+            )
+            val evaluator = evaluator(trigger, allowStartupFire = false)
+
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 0L))
+            assertNull(evaluator.onTick(1_000L))
+            assertEquals(
+                "svc",
+                evaluator.onTick(2_000L)?.triggerId,
+            )
+        } finally {
+            AutomationUiSnapshot.resetForTests()
+        }
+    }
+
+    @Test
+    fun systemEvent_holdMillis_resetsWhenPresenceLost() {
+        AutomationUiSnapshot.setServiceRunning(true)
+        try {
+            val trigger = AutomationTrigger.SystemEvent(
+                id = "svc",
+                event = AutomationSystemEvent.BACKGROUND_SERVICE_STARTED,
+                holdMillis = 2_000L,
+            )
+            val evaluator = evaluator(trigger, allowStartupFire = false)
+
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 0L))
+            assertNull(evaluator.onTick(1_000L))
+            AutomationUiSnapshot.setServiceRunning(false)
+            assertNull(evaluator.onTick(1_500L))
+            AutomationUiSnapshot.setServiceRunning(true)
+            assertNull(evaluator.onSystemEvent(AutomationSystemEvent.BACKGROUND_SERVICE_STARTED, 2_000L))
+            assertNull(evaluator.onTick(3_500L))
+            assertEquals(
+                "svc",
+                evaluator.onTick(4_000L)?.triggerId,
+            )
+        } finally {
+            AutomationUiSnapshot.resetForTests()
+        }
+    }
+
+    @Test
+    fun adbTcpCondition_matchesListenFact() {
+        var now = 10_000L
+        vad.dashing.tbox.adb.AdbTcpListenFact.setNowElapsedMsForTests { now }
+        vad.dashing.tbox.adb.AdbTcpListenFact.setProbeForTests { _, _, _ -> true }
+        try {
+            val on = AutomationCondition.AdbTcp(listening = true)
+            val off = AutomationCondition.AdbTcp(listening = false)
+            val context = AutomationTriggerContext("a", "1", 0L)
+            assertTrue(
+                AutomationEvaluator.evaluateCondition(on, context, emptyMap()),
+            )
+            assertFalse(
+                AutomationEvaluator.evaluateCondition(off, context, emptyMap()),
+            )
+            now = 11_000L
+            vad.dashing.tbox.adb.AdbTcpListenFact.setProbeForTests { _, _, _ -> false }
+            assertFalse(
+                AutomationEvaluator.evaluateCondition(on, context, emptyMap()),
+            )
+            assertTrue(
+                AutomationEvaluator.evaluateCondition(off, context, emptyMap()),
+            )
+        } finally {
+            vad.dashing.tbox.adb.AdbTcpListenFact.resetForTests()
+        }
+    }
+
     private class MutableAutomationClock(
         var time: AutomationWallTime,
     ) : AutomationClock {

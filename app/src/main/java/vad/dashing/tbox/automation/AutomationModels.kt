@@ -527,6 +527,11 @@ sealed interface AutomationTrigger {
     data class SystemEvent(
         override val id: String = "1",
         val event: AutomationSystemEvent,
+        /**
+         * Continuous hold after the edge: corresponding UI/service presence must stay true
+         * for this long (`0` — fire immediately on the edge), same as [StateEquals.holdMillis].
+         */
+        val holdMillis: Long = AUTOMATION_DEFAULT_HOLD_MS,
     ) : AutomationTrigger
 
     /**
@@ -724,6 +729,15 @@ sealed interface AutomationCondition {
     data class AutomationEnabled(
         val automationId: String,
         val enabled: Boolean = true,
+    ) : AutomationCondition
+
+    /**
+     * Whether head-unit ADB TCP (:5555) is **actually listening**, not merely the
+     * in-app/settings toggle or `persist.adb.tcp.port` props.
+     * Evaluated only when a rule is already being checked — no dedicated poller.
+     */
+    data class AdbTcp(
+        val listening: Boolean = true,
     ) : AutomationCondition
 }
 

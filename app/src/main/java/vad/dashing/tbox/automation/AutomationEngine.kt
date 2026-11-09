@@ -328,9 +328,10 @@ class AutomationEngine(
     }
 
     private suspend fun handleSystemEvent(event: AutomationSystemEvent) {
+        val now = SystemClock.elapsedRealtime()
         definitions.values.forEach { definition ->
             val evaluator = evaluators[definition.id] ?: return@forEach
-            val fire = evaluator.onSystemEvent(event) ?: return@forEach
+            val fire = evaluator.onSystemEvent(event, now) ?: return@forEach
             dispatch(definition, evaluator, fire)
         }
     }
@@ -775,6 +776,7 @@ private fun MutableSet<AutomationSignalKey>.addConditionInterests(
         is AutomationCondition.UiState,
         is AutomationCondition.TriggerWidget,
         is AutomationCondition.AutomationEnabled,
+        is AutomationCondition.AdbTcp,
         -> Unit
 
         is AutomationCondition.Solar -> add(AUTOMATION_GEO_DISPLAY_KEY)

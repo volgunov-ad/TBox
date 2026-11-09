@@ -134,6 +134,18 @@ private fun SystemEventFields(
         optionLabel = ::systemEventLabel,
         onValueChange = { onChange(trigger.copy(event = it)) },
     )
+    AutomationSecondsField(
+        label = "В течение, с",
+        valueMillis = trigger.holdMillis,
+        onValueChange = { onChange(trigger.copy(holdMillis = it)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = stringResource(R.string.automation_system_event_hold_hint),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

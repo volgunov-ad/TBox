@@ -98,13 +98,43 @@ class AutomationEvaluator(
         return triggerStates.values.any { it.matchingSinceElapsedMillis != null }
     }
 
-    fun onSystemEvent(event: AutomationSystemEvent): AutomationTriggerFire? {
+    fun onSystemEvent(
+        event: AutomationSystemEvent,
+        nowElapsedMillis: Long = 0L,
+    ): AutomationTriggerFire? {
         val trigger = definition.triggers.firstOrNull {
             it is AutomationTrigger.SystemEvent && it.event == event
-        } ?: return null
+        } as? AutomationTrigger.SystemEvent ?: return null
         if (event == AutomationSystemEvent.BACKGROUND_SERVICE_STARTED) {
             startupFireClaimed = true
         }
+        val hold = trigger.holdMillis
+        val state = triggerStates.getValue(trigger.id)
+        if (hold <= 0L) {
+            // Immediate edge fire — same as pre-holdMillis behavior.
+            state.matchingSinceElapsedMillis = null
+            state.pendingInitialFire = false
+            state.currentValue = null
+            state.armed = false
+            return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
+        }
+        // Hold requires the corresponding UI/service presence to stay true continuously.
+        if (!systemEventPresenceMatches(trigger.event)) {
+            state.matchingSinceElapsedMillis = null
+            state.pendingInitialFire = false
+            state.currentValue = null
+            return null
+        }
+        if (state.matchingSinceElapsedMillis == null) {
+            state.matchingSinceElapsedMillis = nowElapsedMillis
+        }
+        state.currentValue = SYSTEM_EVENT_HOLD_VALUE
+        state.pendingInitialFire = false
+        if (nowElapsedMillis < state.matchingSinceElapsedMillis!! + hold) {
+            return null
+        }
+        state.matchingSinceElapsedMillis = null
+        state.armed = false
         return AutomationTriggerFire(trigger.id, oldValue = null, newValue = null)
     }
 
@@ -517,6 +547,9 @@ class AutomationEvaluator(
 
                 is AutomationCondition.AutomationEnabled ->
                     AutomationEnabledLookup.isEnabled(condition.automationId) == condition.enabled
+
+                is AutomationCondition.AdbTcp ->
+                    vad.dashing.tbox.adb.AdbTcpListenFact.isListening() == condition.listening
             }
         }
     }
@@ -713,7 +746,7 @@ private fun AutomationTrigger.signalKeyOrNull(): AutomationSignalKey? = when (th
 
 private fun AutomationTrigger.matches(value: AutomationSignalValue): Boolean {
     return when (this) {
-        is AutomationTrigger.SystemEvent,
+        is AutomationTrigger.SystemEvent -> systemEventPresenceMatches(event)
         is AutomationTrigger.WidgetPressed,
         is AutomationTrigger.HardKey,
         is AutomationTrigger.EspBleBtn,
@@ -779,7 +812,7 @@ private fun AutomationTrigger.isRearmedBy(value: AutomationSignalValue): Boolean
 }
 
 private fun AutomationTrigger.holdMillis(): Long = when (this) {
-    is AutomationTrigger.SystemEvent,
+    is AutomationTrigger.SystemEvent -> holdMillis
     is AutomationTrigger.WidgetPressed,
     is AutomationTrigger.HardKey,
     is AutomationTrigger.EspBleBtn,
@@ -791,6 +824,15 @@ private fun AutomationTrigger.holdMillis(): Long = when (this) {
     is AutomationTrigger.NumericThreshold -> holdMillis
     is AutomationTrigger.StateEquals -> holdMillis
     is AutomationTrigger.Geofence -> holdMillis
+}
+
+/** Sentinel so [AutomationEvaluator.onTick] can complete a system-event hold. */
+private val SYSTEM_EVENT_HOLD_VALUE = AutomationSignalValue.State("system_event")
+
+private fun systemEventPresenceMatches(event: AutomationSystemEvent): Boolean = when (event) {
+    AutomationSystemEvent.BACKGROUND_SERVICE_STARTED -> AutomationUiSnapshot.isServiceRunning()
+    AutomationSystemEvent.MAIN_SCREEN_OPENED -> AutomationUiSnapshot.isMainScreenOpen()
+    AutomationSystemEvent.MENU_OPENED -> AutomationUiSnapshot.isMenuOpen()
 }
 
 private fun AutomationTrigger.startupBehavior(): AutomationStartupBehavior = when (this) {

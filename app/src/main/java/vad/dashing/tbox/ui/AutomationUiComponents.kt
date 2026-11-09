@@ -37,11 +37,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.R
 import vad.dashing.tbox.location.GeoCoordinateParse
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -448,6 +450,7 @@ internal fun AutomationConditionEditor(
             is AutomationCondition.TriggerWidget -> TriggerWidgetConditionFields(condition, onChange)
             is AutomationCondition.AutomationEnabled ->
                 AutomationEnabledConditionFields(condition, peerAutomations, onChange)
+            is AutomationCondition.AdbTcp -> AdbTcpConditionFields(condition, onChange)
         }
     }
 }
@@ -841,6 +844,7 @@ private enum class ConditionUiKind {
     UI_STATE,
     TRIGGER_WIDGET,
     AUTOMATION_ENABLED,
+    ADB_TCP,
     TRIGGERED_BY,
     TIME,
     SOLAR,
@@ -856,6 +860,7 @@ private enum class ConditionUiKind {
         UI_STATE -> "Состояние приложения"
         TRIGGER_WIDGET -> "Виджет-триггер"
         AUTOMATION_ENABLED -> "Автоматизация включена"
+        ADB_TCP -> "ADB TCP"
         TRIGGERED_BY -> "Сработал триггер"
         TIME -> "Время"
         SOLAR -> "Восход / закат"
@@ -873,6 +878,7 @@ private fun conditionKind(condition: AutomationCondition): ConditionUiKind = whe
     is AutomationCondition.UiState -> ConditionUiKind.UI_STATE
     is AutomationCondition.TriggerWidget -> ConditionUiKind.TRIGGER_WIDGET
     is AutomationCondition.AutomationEnabled -> ConditionUiKind.AUTOMATION_ENABLED
+    is AutomationCondition.AdbTcp -> ConditionUiKind.ADB_TCP
     is AutomationCondition.TriggeredBy -> ConditionUiKind.TRIGGERED_BY
     is AutomationCondition.Time -> ConditionUiKind.TIME
     is AutomationCondition.Solar -> ConditionUiKind.SOLAR
@@ -911,6 +917,8 @@ private fun defaultCondition(
         automationId = peerAutomations.firstOrNull()?.id.orEmpty(),
         enabled = true,
     )
+
+    ConditionUiKind.ADB_TCP -> AutomationCondition.AdbTcp(listening = true)
 
     ConditionUiKind.TRIGGERED_BY ->
         AutomationCondition.TriggeredBy(triggerIds.firstOrNull()?.let(::setOf).orEmpty())
@@ -1030,6 +1038,28 @@ private fun UiStateConditionFields(
             }
         },
         onValueChange = { onChange(condition.copy(state = it)) },
+    )
+}
+
+@Composable
+private fun AdbTcpConditionFields(
+    condition: AutomationCondition.AdbTcp,
+    onChange: (AutomationCondition) -> Unit,
+) {
+    val onLabel = stringResource(R.string.automation_adb_tcp_condition_listening_on)
+    val offLabel = stringResource(R.string.automation_adb_tcp_condition_listening_off)
+    AutomationDropdown(
+        label = stringResource(R.string.automation_adb_tcp_condition_state_label),
+        value = condition.listening,
+        options = listOf(true, false),
+        optionLabel = { listening -> if (listening) onLabel else offLabel },
+        onValueChange = { onChange(condition.copy(listening = it)) },
+    )
+    Text(
+        text = stringResource(R.string.automation_adb_tcp_condition_hint),
+        style = MaterialTheme.typography.tboxCaption,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
