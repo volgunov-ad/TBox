@@ -47,7 +47,7 @@ Monitor со своей стороны больше не считает пуст
 - `shared/localaccess/java/vad/dashing/tbox/localaccess/LocalAccessContract.kt`
 - `shared/localaccess/java/vad/dashing/tbox/localaccess/LocalAccessClient.kt`
 
-3. Когда токена ещё нет, один раз вызвать `LocalAccessClient.awaitAccess(context)`. Это открывает в Monitor диалог и ждёт ответ до 120 секунд. Пока статус `pending`, диалог не открывать повторно.
+3. Когда токена ещё нет, один раз вызвать `LocalAccessClient.awaitAccess(context)`. Это открывает в Monitor диалог (только «Разрешить» / «Отклонить», без закрытия Back) и ждёт ответ до 120 секунд. Пока статус `pending`, диалог не открывать повторно; тот же запрос виден в Monitor → Настройки → API.
 
 4. Ответ `granted` сохранить в уже существующие поля:
 
@@ -63,7 +63,7 @@ Monitor со своей стороны больше не считает пуст
 | `status` | Что это |
 |---|---|
 | `granted` | есть `accessToken` и `port` |
-| `pending` | диалог Monitor ещё на экране |
+| `pending` | ждём явного Разрешить / Отклонить (диалог и/или Настройки → API) |
 | `consent_required` | подтверждения ещё не было или доступ отозвали |
 | `denied` | пользователь нажал «Отклонить»; следующий `awaitAccess` спросит снова |
 | `unavailable` | Monitor установлен, фоновая служба не запущена |

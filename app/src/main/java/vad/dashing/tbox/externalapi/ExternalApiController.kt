@@ -37,7 +37,6 @@ import vad.dashing.tbox.phoneble.PhoneBleCodec
 import vad.dashing.tbox.phoneble.PhoneCompanionHost
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import java.util.concurrent.ConcurrentHashMap
 
 data class ExternalApiStatus(
     val enabled: Boolean = false,
@@ -83,9 +82,8 @@ class ExternalApiController(
     private val _pendingPairRequests = MutableStateFlow<List<ExternalApiPairRequest>>(emptyList())
     val pendingPairRequests: StateFlow<List<ExternalApiPairRequest>> = _pendingPairRequests.asStateFlow()
 
-    private val _localConsent = MutableStateFlow<ExternalApiLocalConsent?>(null)
-    val localConsent: StateFlow<ExternalApiLocalConsent?> = _localConsent.asStateFlow()
-    private val deniedLocalPackages: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private val localConsentSession = ExternalApiLocalConsentSession()
+    val localConsent: StateFlow<ExternalApiLocalConsent?> = localConsentSession.pending
 
     private val clientsLock = Any()
     private val persistMutex = Mutex()
@@ -285,21 +283,17 @@ class ExternalApiController(
             return localAnswer(LocalAccessContract.STATUS_GRANTED, token)
         }
         val consent = ExternalApiLocalConsent(packageName, clientName, certSha256)
-        val status = when {
-            interactive -> {
-                deniedLocalPackages.remove(packageName)
-                _localConsent.value = consent
-                scope.launch(Dispatchers.Main) {
-                    appContext.startActivity(
-                        Intent(appContext, ExternalApiLocalConsentActivity::class.java)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-                LocalAccessContract.STATUS_PENDING
+        val status = if (interactive) {
+            localConsentSession.requestInteractive(consent)
+            scope.launch(Dispatchers.Main) {
+                appContext.startActivity(
+                    Intent(appContext, ExternalApiLocalConsentActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
             }
-            _localConsent.value == consent -> LocalAccessContract.STATUS_PENDING
-            packageName in deniedLocalPackages -> LocalAccessContract.STATUS_DENIED
-            else -> LocalAccessContract.STATUS_CONSENT_REQUIRED
+            LocalAccessContract.STATUS_PENDING
+        } else {
+            localConsentSession.pollStatus(consent)
         }
         return localAnswer(status)
     }
@@ -312,9 +306,7 @@ class ExternalApiController(
         }
 
     fun approveLocalConsent() {
-        val consent = _localConsent.value ?: return
-        _localConsent.value = null
-        deniedLocalPackages.remove(consent.packageName)
+        val consent = localConsentSession.takeForApprove() ?: return
         val clientId = ExternalApiLocalClients.clientId(consent.packageName)
         val now = System.currentTimeMillis()
         synchronized(clientsLock) {
@@ -337,15 +329,8 @@ class ExternalApiController(
     }
 
     fun denyLocalConsent() {
-        val consent = _localConsent.value ?: return
-        _localConsent.value = null
-        deniedLocalPackages.add(consent.packageName)
+        val consent = localConsentSession.takeForDeny() ?: return
         TboxRepository.addLog("INFO", "ExternalApi", "Local access denied: ${consent.packageName}")
-    }
-
-    /** The dialog was closed without an answer; the client may ask again. */
-    fun dismissLocalConsent() {
-        _localConsent.value = null
     }
 
     private fun localAnswer(status: String, token: String? = null) = ExternalApiLocalAnswer(
