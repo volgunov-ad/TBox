@@ -1927,7 +1927,7 @@ fun DashboardWidgetRenderer(
 
         "gearBoxCurrentGear" -> {
             DashboardWidgetItem(
-                widget = if (widgetConfig.useMbCanVhal || noTboxConnect) {
+                widget = if (widgetConfig.useMbCanVhal) {
                     widget.copy(dataKey = GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY)
                 } else {
                     widget

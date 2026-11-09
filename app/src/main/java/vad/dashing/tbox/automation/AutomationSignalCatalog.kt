@@ -242,8 +242,7 @@ object AutomationSignalCatalog {
             "",
             bothSources,
             typicalRange = "Номер передачи в D, обычно 1…8; вне D часто 0. " +
-                "A9 BCM getGSM_GearShiftPos. A10: MCU 0x8300 байт gear, иначе VHAL GSM_GearShiftPos. " +
-                "TBox gearBoxCurrentGear.",
+                "A9 BCM getGSM_GearShiftPos / A10 VHAL GSM_GearShiftPos; TBox gearBoxCurrentGear.",
         ),
         number(
             AutomationSignalId.TARGET_GEAR,

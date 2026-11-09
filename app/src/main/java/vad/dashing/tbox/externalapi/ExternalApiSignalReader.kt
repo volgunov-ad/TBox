@@ -72,7 +72,7 @@ class ExternalApiSignalReader {
     private suspend fun ensureHeadUnitSignals(ids: List<String>) {
         val wantsDevStatus = ids.any { rawId ->
             val signal = AutomationSignalId.fromStorageKey(rawId) ?: return@any false
-            (signal == AutomationSignalId.VOLTAGE || signal == AutomationSignalId.CURRENT_GEAR) &&
+            signal == AutomationSignalId.VOLTAGE &&
                 AutomationSignalCatalog.resolveSource(signal, AutomationSignalSource.HEAD_UNIT) ==
                 AutomationSignalSource.HEAD_UNIT
         }

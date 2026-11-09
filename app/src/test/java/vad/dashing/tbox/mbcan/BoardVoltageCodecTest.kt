@@ -25,24 +25,6 @@ class BoardVoltageCodecTest {
     }
 
     @Test
-    fun decodesParkedDevStatusGearNumber() {
-        val payload = byteArrayOf(
-            0x83.toByte(), 0x00, 0x00, 0x00, 0x02, 0x01, 0x00,
-        )
-        assertEquals(0, DevStatusGearCodec.decode(payload))
-    }
-
-    @Test
-    fun decodesDevStatusGearNumber() {
-        fun gear(value: Int) = byteArrayOf(
-            0x83.toByte(), 0x00, 0x00, 0x00, 0x00, 0x00, value.toByte(),
-        )
-        assertEquals(1, DevStatusGearCodec.decode(gear(1)))
-        assertEquals(8, DevStatusGearCodec.decode(gear(8)))
-        assertNull(DevStatusGearCodec.decode(gear(16)))
-    }
-
-    @Test
     fun honorsDeclaredLength() {
         val payload = byteArrayOf(0x83.toByte(), 0x05, 0x7A, 0x00, 0x11)
         assertNull(BoardVoltageCodec.decode(payload, length = 3))

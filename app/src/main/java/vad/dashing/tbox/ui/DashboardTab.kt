@@ -68,7 +68,6 @@ import vad.dashing.tbox.MAIN_DASHBOARD_DEFAULT_WIDGET_ELEVATION
 import vad.dashing.tbox.isBoardVoltageWidgetDataKey
 import vad.dashing.tbox.needsHeadUnitEngineTemperature
 import vad.dashing.tbox.needsHeadUnitGearNumbers
-import vad.dashing.tbox.needsMcuCurrentGear
 import vad.dashing.tbox.isMbCanVhalEngineRpmEnabled
 import vad.dashing.tbox.mbcan.HuMcuBoardVoltage
 import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
@@ -180,11 +179,8 @@ fun MainDashboardTab(
     val panelNeedsBoardVoltage = remember(widgetConfigs) {
         widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
     }
-    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs, noTboxConnect) {
-        widgetConfigs.any { it.needsHeadUnitGearNumbers(noTboxConnect) }
-    }
-    val panelNeedsMcuGear = remember(widgetConfigs, noTboxConnect) {
-        widgetConfigs.any { it.needsMcuCurrentGear(noTboxConnect) }
+    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs) {
+        widgetConfigs.any { it.needsHeadUnitGearNumbers() }
     }
     val mediaSourceId = remember { "main-dashboard" }
     val requestedMediaPlayers = remember(widgetConfigs) {
@@ -414,13 +410,9 @@ fun MainDashboardTab(
     LaunchedEffect(panelNeedsBoardVoltage) {
         HuMcuBoardVoltage.setHeld("dashboard-tab-main-board-voltage", panelNeedsBoardVoltage)
     }
-    LaunchedEffect(panelNeedsMcuGear) {
-        HuMcuBoardVoltage.setHeld("dashboard-tab-main-mcu-gear", panelNeedsMcuGear)
-    }
     DisposableEffect(Unit) {
         onDispose {
             HuMcuBoardVoltage.setHeld("dashboard-tab-main-board-voltage", false)
-            HuMcuBoardVoltage.setHeld("dashboard-tab-main-mcu-gear", false)
         }
     }
 

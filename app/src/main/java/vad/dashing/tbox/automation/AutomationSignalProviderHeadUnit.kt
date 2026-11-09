@@ -1,7 +1,6 @@
 package vad.dashing.tbox.automation
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import vad.dashing.tbox.mbcan.FcwSensitivity
 import vad.dashing.tbox.mbcan.AccCruiseDomain
@@ -60,10 +59,7 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
         it?.let { pressed -> AutomationSignalValue.State(if (pressed) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
     }
-    AutomationSignalId.CURRENT_GEAR -> combine(
-        HuMcuBoardVoltage.currentGear,
-        UniversalCanRepository.currentGearNumberState,
-    ) { fromMcu, fromVhal -> fromMcu ?: fromVhal }.numberFlow()
+    AutomationSignalId.CURRENT_GEAR -> UniversalCanRepository.currentGearNumberState.numberFlow()
     AutomationSignalId.TARGET_GEAR -> UniversalCanRepository.targetGearNumberState.numberFlow()
     AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel1)
     AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> UniversalCanRepository.wheelsPressureState.wheelNumberFlow(vad.dashing.tbox.Wheels::wheel2)

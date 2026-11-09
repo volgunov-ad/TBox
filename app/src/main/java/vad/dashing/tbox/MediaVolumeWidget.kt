@@ -172,20 +172,9 @@ fun FloatingDashboardWidgetConfig.isMbCanVhalGearBoxCurrentGearEnabled(): Boolea
     return isGearBoxCurrentGearWidgetDataKey(dataKey) && isMbCanVhalWidgetEnabled()
 }
 
-/**
- * Current-gear tile reads MCU `0x8300` (via [vad.dashing.tbox.mbcan.HuMcuBoardVoltage]) when the
- * tile asks for CAN or when TBox is switched off — same gate as
- * [vad.dashing.tbox.ui.DashboardWidgetRenderer] for `gearBoxCurrentGear_can`.
- */
-fun FloatingDashboardWidgetConfig.needsMcuCurrentGear(noTboxConnect: Boolean): Boolean {
-    return isGearBoxCurrentGearWidgetDataKey(dataKey) && (useMbCanVhal || noTboxConnect)
-}
-
 /** VHAL `GSM_GearShiftPos` / target gear interest for current or prepared gear tiles. */
-fun FloatingDashboardWidgetConfig.needsHeadUnitGearNumbers(noTboxConnect: Boolean): Boolean {
-    return isMbCanVhalGearBoxPreparedGearEnabled() ||
-        isMbCanVhalGearBoxCurrentGearEnabled() ||
-        needsMcuCurrentGear(noTboxConnect)
+fun FloatingDashboardWidgetConfig.needsHeadUnitGearNumbers(): Boolean {
+    return isMbCanVhalGearBoxPreparedGearEnabled() || isMbCanVhalGearBoxCurrentGearEnabled()
 }
 
 fun isGearBoxPreparedGearWidgetDataKey(dataKey: String): Boolean {

@@ -9,10 +9,9 @@ import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Board voltage from the Android 10 MCU dev-status stream (`functionId` 3, frame `0x8305`),
- * and current gear number from frame `0x8300` on the same stream.
- * VHAL does not publish board voltage. Widgets and automations hold a subscription while they
- * read these values; the JNI callback is registered only on Android 10.
+ * Board voltage from the Android 10 MCU dev-status stream (`functionId` 3, frame `0x8305`).
+ * VHAL does not publish this value. Widgets and automations hold a subscription while they
+ * read it; the JNI callback is registered only on Android 10.
  */
 internal object HuMcuBoardVoltage {
     /** `McuCommManager.functionID.PROTOCOL_CMD_DEV_STATUS`. */
@@ -30,16 +29,10 @@ internal object HuMcuBoardVoltage {
             }
             _state.value = volts
         }
-        DevStatusGearCodec.decode(msgbuf, length)?.let { gear ->
-            _currentGear.value = gear
-        }
     }
 
     private val _state = MutableStateFlow<Float?>(null)
     val state: StateFlow<Float?> = _state.asStateFlow()
-
-    private val _currentGear = MutableStateFlow<Int?>(null)
-    val currentGear: StateFlow<Int?> = _currentGear.asStateFlow()
 
     fun setHeld(holder: String, held: Boolean) {
         val id = holder.trim()
@@ -50,7 +43,6 @@ internal object HuMcuBoardVoltage {
                 if (registered) stop()
                 registered = false
                 _state.value = null
-                _currentGear.value = null
                 return
             }
             if (!registered) registered = start()

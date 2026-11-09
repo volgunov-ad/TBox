@@ -22,20 +22,3 @@ internal object BoardVoltageCodec {
         return volts
     }
 }
-
-/**
- * Current gear number from Android 10 dev-status `0x8300`, callback layout (17 bytes).
- * Offset 6 is the stock `McuCommMsg0x8300.gear` byte. Parked head unit reads 0.
- * The native unpack is one nibble, so 0…15 is accepted. This is not P/R/N/D.
- */
-internal object DevStatusGearCodec {
-    fun decode(payload: ByteArray, length: Int = payload.size): Int? {
-        val size = length.coerceIn(0, payload.size)
-        if (size < 7) return null
-        if ((payload[0].toInt() and 0xFF) != 0x83) return null
-        if ((payload[1].toInt() and 0xFF) != 0x00) return null
-        val gear = payload[6].toInt() and 0xFF
-        if (gear > 15) return null
-        return gear
-    }
-}

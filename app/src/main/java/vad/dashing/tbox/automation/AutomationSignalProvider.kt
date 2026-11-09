@@ -74,7 +74,7 @@ class AutomationSignalProvider(
         HuMcuBoardVoltage.setHeld(
             SOURCE_ID,
             keys.any { key ->
-                (key.signal == AutomationSignalId.VOLTAGE || key.signal == AutomationSignalId.CURRENT_GEAR) &&
+                key.signal == AutomationSignalId.VOLTAGE &&
                     AutomationSignalCatalog.resolveSource(key.signal, key.source) ==
                     AutomationSignalSource.HEAD_UNIT
             },

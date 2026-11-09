@@ -338,12 +338,8 @@ class TboxDataProvider(
                 valueToString(it, eff(0))
             }
             "gearBoxCurrentGear" -> canViewModel.gearBoxCurrentGear.mapState { valueToString(it, eff(1)) }
-            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY -> combine(
-                HuMcuBoardVoltage.currentGear,
-                UniversalCanRepository.currentGearNumberState,
-            ) { fromMcu, fromVhal ->
-                fromMcu ?: fromVhal
-            }.mapState { valueToString(it, eff(1)) }
+            GEAR_BOX_CURRENT_GEAR_CAN_FLOW_KEY ->
+                UniversalCanRepository.currentGearNumberState.mapState { valueToString(it, eff(1)) }
             "gearBoxPreparedGear" -> canViewModel.gearBoxPreparedGear.mapState { valueToString(it, eff(1)) }
             GEAR_BOX_PREPARED_GEAR_CAN_FLOW_KEY ->
                 UniversalCanRepository.targetGearNumberState.mapState { valueToString(it, eff(1)) }

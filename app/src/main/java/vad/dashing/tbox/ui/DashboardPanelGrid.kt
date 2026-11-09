@@ -49,7 +49,6 @@ import vad.dashing.tbox.isMbCanVhalEngineTemperatureEnabled
 import vad.dashing.tbox.isMbCanVhalCarSpeedEnabled
 import vad.dashing.tbox.isMbCanVhalGearBoxModeEnabled
 import vad.dashing.tbox.needsHeadUnitGearNumbers
-import vad.dashing.tbox.needsMcuCurrentGear
 import vad.dashing.tbox.isMbCanVhalOdometerEnabled
 import vad.dashing.tbox.isMbCanVhalFuelLevelPercentageEnabled
 import vad.dashing.tbox.isMbCanVhalOutsideTemperatureEnabled
@@ -135,8 +134,8 @@ internal fun DashboardPanelGridAndFrames(
     val panelNeedsMbCanVhalGearBoxMode = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalGearBoxModeEnabled() }
     }
-    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs, noTboxConnect) {
-        widgetConfigs.any { it.needsHeadUnitGearNumbers(noTboxConnect) }
+    val panelNeedsMbCanVhalGearNumbers = remember(widgetConfigs) {
+        widgetConfigs.any { it.needsHeadUnitGearNumbers() }
     }
     val panelNeedsMbCanVhalOdometer = remember(widgetConfigs) {
         widgetConfigs.any { it.isMbCanVhalOdometerEnabled() }
@@ -170,9 +169,6 @@ internal fun DashboardPanelGridAndFrames(
     }
     val panelNeedsBoardVoltage = remember(widgetConfigs) {
         widgetConfigs.any { isBoardVoltageWidgetDataKey(it.dataKey) }
-    }
-    val panelNeedsMcuGear = remember(widgetConfigs, noTboxConnect) {
-        widgetConfigs.any { it.needsMcuCurrentGear(noTboxConnect) }
     }
     if (panelNeedsMbCan) {
         LaunchedEffect(mbCanInterestSourceId, widgetConfigs, heavySubscriptionsEnabled) {
@@ -401,14 +397,9 @@ internal fun DashboardPanelGridAndFrames(
         val hold = heavySubscriptionsEnabled && panelNeedsBoardVoltage
         HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", hold)
     }
-    LaunchedEffect(mbCanInterestSourceId, panelNeedsMcuGear, heavySubscriptionsEnabled) {
-        val hold = heavySubscriptionsEnabled && panelNeedsMcuGear
-        HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-mcu-gear", hold)
-    }
     DisposableEffect(mbCanInterestSourceId) {
         onDispose {
             HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-board-voltage", false)
-            HuMcuBoardVoltage.setHeld("$mbCanInterestSourceId-mcu-gear", false)
         }
     }
     if (panelNeedsMbCanVhalSteering) {

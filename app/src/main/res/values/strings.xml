@@ -2631,7 +2631,7 @@
     <string name="widget_desc_gas_brake_widget">Положение педали газа в процентах. Если педаль тормоза нажата, цвет текста становится красным.</string>
     <string name="widget_desc_engine_temperature">Температура охлаждающей жидкости двигателя.</string>
     <string name="widget_desc_gearbox_oil_temperature">Температура масла коробки передач.</string>
-    <string name="widget_desc_gearbox_current_gear">Текущая включённая передача. Если TBox молчит, на Android 10 номер берётся с ГУ (кадр 0x8300). «Работа через CAN» оставляет только ГУ.</string>
+    <string name="widget_desc_gearbox_current_gear">Текущая включённая передача.</string>
     <string name="widget_desc_gearbox_prepared_gear">Передача, подготовленная коробкой к включению.</string>
     <string name="widget_desc_gearbox_change_gear">Состояние выполнения переключения передачи.</string>
     <string name="widget_desc_gearbox_mode">Текущий режим коробки передач.</string>
