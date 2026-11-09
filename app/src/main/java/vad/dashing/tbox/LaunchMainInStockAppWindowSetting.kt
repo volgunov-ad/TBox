@@ -68,6 +68,10 @@ internal object LaunchMainInStockAppWindowDecision {
      * another app). The launcher ActivityView hosts it on a virtual display (id ≠ 0), so the
      * display check also prevents a redirect loop; [lastRedirectAtMs] guards a launcher that
      * falls back to the default display.
+     *
+     * On A9, DCL `app_area` stays on physical display 0 (vendor API doc), so displayId alone
+     * cannot break the finish→relaunch loop. Use [alreadyRedirectedViaDclThisProcess],
+     * [intentSkipsRedirect], or [dclAlreadyHostingPackage] as anti-loop.
      */
     fun shouldRedirectExternalLaunch(
         freshInstance: Boolean,
@@ -79,8 +83,13 @@ internal object LaunchMainInStockAppWindowDecision {
         adayoLauncherAvailable: Boolean,
         dclApiAvailable: Boolean = false,
         dclLaunchAppAreaCapable: Boolean = false,
+        alreadyRedirectedViaDclThisProcess: Boolean = false,
+        intentSkipsRedirect: Boolean = false,
+        dclAlreadyHostingPackage: Boolean = false,
     ): Boolean {
         if (!freshInstance || displayId != DEFAULT_DISPLAY_ID) return false
+        if (intentSkipsRedirect) return false
+        if (alreadyRedirectedViaDclThisProcess || dclAlreadyHostingPackage) return false
         if (lastRedirectAtMs > 0L && nowMs - lastRedirectAtMs < EXTERNAL_REDIRECT_COOLDOWN_MS) {
             return false
         }
@@ -91,6 +100,25 @@ internal object LaunchMainInStockAppWindowDecision {
             dclApiAvailable = dclApiAvailable,
             dclLaunchAppAreaCapable = dclLaunchAppAreaCapable,
         )
+    }
+
+    /**
+     * Pure A9/single-display anti-loop for DCL app_area hosting on display 0.
+     * Sticky process flag, intent skip, or DCL uiState already showing [selfPackage].
+     */
+    fun shouldSkipDclRedirectAntiLoop(
+        alreadyRedirectedViaDclThisProcess: Boolean,
+        intentSkipsRedirect: Boolean,
+        dclForegroundPackage: String?,
+        dclScreenMode: String?,
+        selfPackageName: String,
+    ): Boolean {
+        if (intentSkipsRedirect || alreadyRedirectedViaDclThisProcess) return true
+        if (selfPackageName.isBlank()) return false
+        val fg = dclForegroundPackage?.trim().orEmpty()
+        if (fg != selfPackageName) return false
+        val mode = dclScreenMode?.trim().orEmpty()
+        return mode.isNotEmpty() && mode != "home"
     }
 
     /** Show the Main «app window» switch on A9 when DCL can host Main in app_area. */

@@ -7451,6 +7451,7 @@ class BackgroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        vad.dashing.tbox.dcl.DclLauncherApiRepository.stop()
         vad.dashing.tbox.adb.AdbShutdownGate.markAppShuttingDown()
         vad.dashing.tbox.adb.AdbRepository.disconnect()
 

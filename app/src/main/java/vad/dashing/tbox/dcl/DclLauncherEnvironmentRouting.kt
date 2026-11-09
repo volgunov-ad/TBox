@@ -256,16 +256,17 @@ object DclLauncherEnvironmentRouting {
 }
 
 /**
- * Whether DCL can be used for `launchApp(mode=app_area)`.
- * Missing capabilities after a successful availability probe still allow an attempt
- * (provider may omit flags on older builds).
+ * Whether DCL can be preferred for `launchApp(mode=app_area)`.
+ * Requires [available] **and** a successful capabilities snapshot with
+ * [DclCapabilities.launchAppArea] == true — null caps must not imply can-launch
+ * (caps Error / probe incomplete).
  */
 fun dclCanLaunchAppArea(
     available: Boolean,
     capabilities: DclCapabilities?,
 ): Boolean {
     if (!available) return false
-    return capabilities?.launchAppArea != false
+    return capabilities?.launchAppArea == true
 }
 
 fun dclCanLaunchFullscreen(
@@ -273,5 +274,43 @@ fun dclCanLaunchFullscreen(
     capabilities: DclCapabilities?,
 ): Boolean {
     if (!available) return false
-    return capabilities?.launchFullscreen != false
+    return capabilities?.launchFullscreen == true
 }
+
+/** Explicit capability flag for [mode] is missing or false → raw fallback (design §3.1). */
+fun dclModeCapabilityMissing(
+    mode: String,
+    capabilities: DclCapabilities?,
+): Boolean {
+    val caps = capabilities ?: return true
+    return when (mode) {
+        DclLauncherApiContract.MODE_APP_AREA -> !caps.launchAppArea
+        DclLauncherApiContract.MODE_FULLSCREEN -> !caps.launchFullscreen
+        else -> true
+    }
+}
+
+/**
+ * Error codes that should fall back to raw `startActivity` like [DclCallResult.Unavailable]
+ * (missing/unsupported API surface). Keep `busy` / `not_installed` as toast-only.
+ */
+val DCL_LAUNCH_RAW_FALLBACK_ERROR_CODES: Set<String> = setOf(
+    DclLauncherApiContract.ERROR_UNSUPPORTED,
+    DclLauncherApiContract.ERROR_INTERNAL,
+)
+
+fun dclLaunchShouldUseRawFallback(result: DclCallResult<DclLaunchResult>): Boolean =
+    when (result) {
+        DclCallResult.Unavailable -> true
+        is DclCallResult.Error ->
+            result.error.errorCode in DCL_LAUNCH_RAW_FALLBACK_ERROR_CODES ||
+                result.error.errorCode.isNullOrBlank()
+        is DclCallResult.Ok -> {
+            if (result.value.success) {
+                false
+            } else {
+                val code = result.value.error?.errorCode
+                code in DCL_LAUNCH_RAW_FALLBACK_ERROR_CODES || code.isNullOrBlank()
+            }
+        }
+    }

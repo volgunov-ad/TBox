@@ -12,7 +12,8 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
 
 /**
- * Launches an app via DCL with raw-startActivity fallback when the API is unavailable.
+ * Launches an app via DCL with raw-startActivity fallback when the API is unavailable
+ * or the selected mode lacks capability / returns unsupported-class errors (design §3.1).
  * Never auto-clears the DCL-environment preference.
  */
 object DclAppLaunchHelper {
@@ -29,6 +30,15 @@ object DclAppLaunchHelper {
         if (pkg.isBlank()) return
         val appContext = context.applicationContext
         scope.launch {
+            if (dclModeCapabilityMissing(mode, DclLauncherApiRepository.capabilities.value)) {
+                TboxRepository.addLog(
+                    "WARN",
+                    "DCL",
+                    "capability missing for mode=$mode — raw launch for $pkg",
+                )
+                runRawFallback(appContext, pkg, onRawFallback)
+                return@launch
+            }
             val result = runCatching {
                 DclLauncherApiRepository.launchApp(
                     packageName = pkg,
@@ -39,49 +49,45 @@ object DclAppLaunchHelper {
             }.getOrElse {
                 DclCallResult.Unavailable
             }
-            when (result) {
-                is DclCallResult.Ok -> {
-                    if (!result.value.success) {
-                        val message = result.value.error?.message
-                            ?: result.value.error?.errorCode
-                            ?: "DCL launch failed"
-                        showToast(appContext, message)
-                        TboxRepository.addLog(
-                            "WARN",
-                            "DCL",
-                            "launchApp $pkg mode=$mode: $message",
-                        )
+            when {
+                result is DclCallResult.Ok && result.value.success -> Unit
+                dclLaunchShouldUseRawFallback(result) -> {
+                    val detail = when (result) {
+                        is DclCallResult.Ok ->
+                            result.value.error?.message
+                                ?: result.value.error?.errorCode
+                                ?: "launch not successful"
+                        is DclCallResult.Error ->
+                            result.error.message
+                                ?: result.error.errorCode
+                                ?: "DCL launch error"
+                        DclCallResult.Unavailable -> "API unavailable"
                     }
+                    TboxRepository.addLog(
+                        "WARN",
+                        "DCL",
+                        "launchApp $pkg mode=$mode fallback: $detail",
+                    )
+                    runRawFallback(appContext, pkg, onRawFallback)
                 }
-                is DclCallResult.Error -> {
-                    val message = result.error.message
-                        ?: result.error.errorCode
-                        ?: "DCL launch error"
+                else -> {
+                    val message = when (result) {
+                        is DclCallResult.Ok ->
+                            result.value.error?.message
+                                ?: result.value.error?.errorCode
+                                ?: "DCL launch failed"
+                        is DclCallResult.Error ->
+                            result.error.message
+                                ?: result.error.errorCode
+                                ?: "DCL launch error"
+                        DclCallResult.Unavailable -> "DCL unavailable"
+                    }
                     showToast(appContext, message)
                     TboxRepository.addLog(
                         "WARN",
                         "DCL",
-                        "launchApp $pkg mode=$mode error: $message",
+                        "launchApp $pkg mode=$mode: $message",
                     )
-                }
-                DclCallResult.Unavailable -> {
-                    TboxRepository.addLog(
-                        "WARN",
-                        "DCL",
-                        "API unavailable — raw launch for $pkg (mode=$mode)",
-                    )
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(
-                            appContext,
-                            appContext.getString(R.string.dcl_launcher_api_unavailable_fallback),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                        if (onRawFallback != null) {
-                            onRawFallback()
-                        } else {
-                            launchRaw(appContext, pkg)
-                        }
-                    }
                 }
             }
         }
@@ -115,7 +121,10 @@ object DclAppLaunchHelper {
         )
     }
 
-    /** Blocking variant for MainActivity cold-start redirect (already off the critical UI path). */
+    /**
+     * Blocking Binder call — callers must hop off the main thread
+     * (see [DclLauncherApiClient] / Main cold redirect).
+     */
     fun launchAppAreaBlocking(
         context: Context,
         packageName: String,
@@ -143,6 +152,25 @@ object DclAppLaunchHelper {
             context.startActivity(launchIntent)
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private suspend fun runRawFallback(
+        appContext: Context,
+        packageName: String,
+        onRawFallback: (() -> Unit)?,
+    ) {
+        withContext(Dispatchers.Main) {
+            Toast.makeText(
+                appContext,
+                appContext.getString(R.string.dcl_launcher_api_unavailable_fallback),
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (onRawFallback != null) {
+                onRawFallback()
+            } else {
+                launchRaw(appContext, packageName)
+            }
         }
     }
 

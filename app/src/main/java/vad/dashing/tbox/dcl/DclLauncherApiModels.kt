@@ -105,94 +105,84 @@ data class DclLaunchResult(
 
 /** Pure Bundle/Intent parsing for the DCL Launcher API (unit-testable). */
 object DclLauncherApiCodec {
-    fun parseCapabilities(bundle: Bundle): DclCallResult<DclCapabilities> {
-        val status = bundle.getString(DclLauncherApiContract.KEY_STATUS)
-        if (status == DclLauncherApiContract.STATUS_ERROR) {
-            return DclCallResult.Error(parseError(bundle))
-        }
-        if (status != null && status != DclLauncherApiContract.STATUS_OK) {
-            return DclCallResult.Error(
-                DclApiError(
-                    errorCode = bundle.getString(DclLauncherApiContract.KEY_ERROR_CODE),
-                    message = bundle.getString(DclLauncherApiContract.KEY_MESSAGE) ?: status,
-                ),
-            )
-        }
-        val screenModesRaw = bundle.getString(DclLauncherApiContract.KEY_SCREEN_MODES).orEmpty()
-        val uiStateQuery = when {
-            bundle.containsKey(DclLauncherApiContract.KEY_UI_STATE_QUERY) ->
-                bundle.getBoolean(DclLauncherApiContract.KEY_UI_STATE_QUERY)
-            bundle.containsKey(DclLauncherApiContract.KEY_UI_CHROME_QUERY) ->
-                bundle.getBoolean(DclLauncherApiContract.KEY_UI_CHROME_QUERY)
-            else -> false
-        }
-        val uiStateEvents = when {
-            bundle.containsKey(DclLauncherApiContract.KEY_UI_STATE_EVENTS) ->
-                bundle.getBoolean(DclLauncherApiContract.KEY_UI_STATE_EVENTS)
-            bundle.containsKey(DclLauncherApiContract.KEY_UI_CHROME_EVENTS) ->
-                bundle.getBoolean(DclLauncherApiContract.KEY_UI_CHROME_EVENTS)
-            else -> false
-        }
-        return DclCallResult.Ok(
-            DclCapabilities(
-                apiVersion = bundle.getInt(DclLauncherApiContract.KEY_API_VERSION, 1),
-                launchFullscreen = bundle.getBoolean(DclLauncherApiContract.KEY_LAUNCH_FULLSCREEN, false),
-                launchAppArea = bundle.getBoolean(DclLauncherApiContract.KEY_LAUNCH_APP_AREA, false),
-                uiStateQuery = uiStateQuery,
-                uiStateEvents = uiStateEvents,
-                adasPanel = bundle.getBoolean(DclLauncherApiContract.KEY_ADAS_PANEL, false),
-                screenModes = screenModesRaw.split(',')
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() },
-                splitSupported = if (bundle.containsKey(DclLauncherApiContract.KEY_SPLIT_SUPPORTED)) {
-                    bundle.getBoolean(DclLauncherApiContract.KEY_SPLIT_SUPPORTED)
+    fun parseCapabilities(bundle: Bundle): DclCallResult<DclCapabilities> =
+        runCatching { parseCapabilitiesUnsafe(bundle) }
+            .getOrElse {
+                DclCallResult.Error(
+                    DclApiError(
+                        errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                        message = "capabilities parse failed: ${it.javaClass.simpleName}",
+                    ),
+                )
+            }
+
+    fun parseUiState(bundle: Bundle): DclCallResult<DclUiState> =
+        runCatching { parseUiStateUnsafe(bundle) }
+            .getOrElse {
+                DclCallResult.Error(
+                    DclApiError(
+                        errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                        message = "uiState parse failed: ${it.javaClass.simpleName}",
+                    ),
+                )
+            }
+
+    /**
+     * Broadcast extras may omit `status`; treat missing status as ok when a real snapshot
+     * marker is present (status / revision / screenMode). Empty / poison extras → null.
+     */
+    fun parseUiStateFromExtras(extras: Bundle?): DclUiState? {
+        if (extras == null || extras.isEmpty) return null
+        if (!hasUsableUiStateMarkers(extras)) return null
+        return runCatching {
+            val status = safeString(extras, DclLauncherApiContract.KEY_STATUS)
+            if (status == DclLauncherApiContract.STATUS_ERROR) return@runCatching null
+            if (status != null && status != DclLauncherApiContract.STATUS_OK) {
+                return@runCatching null
+            }
+            uiStateFromBundle(extras)
+        }.getOrNull()
+    }
+
+    /** Reject empty / status-less poison pushes that would publish a full default home snapshot. */
+    fun hasUsableUiStateMarkers(extras: Bundle): Boolean {
+        if (extras.isEmpty) return false
+        return extrasContains(extras, DclLauncherApiContract.KEY_STATUS) ||
+            extrasContains(extras, DclLauncherApiContract.KEY_REVISION) ||
+            extrasContains(extras, DclLauncherApiContract.KEY_SCREEN_MODE) ||
+            extrasContains(extras, DclLauncherApiContract.KEY_FOREGROUND_PACKAGE)
+    }
+
+    fun parseLaunchResult(bundle: Bundle): DclLaunchResult =
+        runCatching {
+            val status = safeString(bundle, DclLauncherApiContract.KEY_STATUS)
+                ?: DclLauncherApiContract.STATUS_ERROR
+            DclLaunchResult(
+                status = status,
+                packageName = safeString(bundle, DclLauncherApiContract.EXTRA_PACKAGE_NAME),
+                mode = safeString(bundle, DclLauncherApiContract.EXTRA_MODE),
+                error = if (status == DclLauncherApiContract.STATUS_ERROR) {
+                    parseError(bundle)
                 } else {
                     null
                 },
-            ),
-        )
-    }
-
-    fun parseUiState(bundle: Bundle): DclCallResult<DclUiState> {
-        val status = bundle.getString(DclLauncherApiContract.KEY_STATUS)
-        if (status == DclLauncherApiContract.STATUS_ERROR) {
-            return DclCallResult.Error(parseError(bundle))
-        }
-        if (status != null && status != DclLauncherApiContract.STATUS_OK) {
-            return DclCallResult.Error(
-                DclApiError(
-                    errorCode = bundle.getString(DclLauncherApiContract.KEY_ERROR_CODE),
-                    message = bundle.getString(DclLauncherApiContract.KEY_MESSAGE) ?: status,
+            )
+        }.getOrElse {
+            DclLaunchResult(
+                status = DclLauncherApiContract.STATUS_ERROR,
+                packageName = null,
+                mode = null,
+                error = DclApiError(
+                    errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                    message = "launch result parse failed: ${it.javaClass.simpleName}",
                 ),
             )
         }
-        return DclCallResult.Ok(uiStateFromBundle(bundle))
-    }
-
-    /** Broadcast extras may omit `status`; treat missing status as ok when geometry keys exist. */
-    fun parseUiStateFromExtras(extras: Bundle?): DclUiState? {
-        if (extras == null) return null
-        val status = extras.getString(DclLauncherApiContract.KEY_STATUS)
-        if (status == DclLauncherApiContract.STATUS_ERROR) return null
-        if (status != null && status != DclLauncherApiContract.STATUS_OK) return null
-        return uiStateFromBundle(extras)
-    }
-
-    fun parseLaunchResult(bundle: Bundle): DclLaunchResult {
-        val status = bundle.getString(DclLauncherApiContract.KEY_STATUS)
-            ?: DclLauncherApiContract.STATUS_ERROR
-        return DclLaunchResult(
-            status = status,
-            packageName = bundle.getString(DclLauncherApiContract.EXTRA_PACKAGE_NAME),
-            mode = bundle.getString(DclLauncherApiContract.EXTRA_MODE),
-            error = if (status == DclLauncherApiContract.STATUS_ERROR) parseError(bundle) else null,
-        )
-    }
 
     fun parseError(bundle: Bundle): DclApiError =
         DclApiError(
-            errorCode = bundle.getString(DclLauncherApiContract.KEY_ERROR_CODE),
-            message = bundle.getString(DclLauncherApiContract.KEY_MESSAGE),
+            errorCode = safeString(bundle, DclLauncherApiContract.KEY_ERROR_CODE),
+            message = safeString(bundle, DclLauncherApiContract.KEY_MESSAGE),
         )
 
     fun parseBounds(
@@ -205,44 +195,127 @@ object DclLauncherApiCodec {
         fallback: DclBounds = DclBounds.DEFAULT_APP_AREA,
     ): Rect = parseBounds(boundsStr, fallback).toRect()
 
+    private fun parseCapabilitiesUnsafe(bundle: Bundle): DclCallResult<DclCapabilities> {
+        val status = safeString(bundle, DclLauncherApiContract.KEY_STATUS)
+        if (status == DclLauncherApiContract.STATUS_ERROR) {
+            return DclCallResult.Error(parseError(bundle))
+        }
+        if (status != null && status != DclLauncherApiContract.STATUS_OK) {
+            return DclCallResult.Error(
+                DclApiError(
+                    errorCode = safeString(bundle, DclLauncherApiContract.KEY_ERROR_CODE),
+                    message = safeString(bundle, DclLauncherApiContract.KEY_MESSAGE) ?: status,
+                ),
+            )
+        }
+        val screenModesRaw =
+            safeString(bundle, DclLauncherApiContract.KEY_SCREEN_MODES).orEmpty()
+        val uiStateQuery = when {
+            extrasContains(bundle, DclLauncherApiContract.KEY_UI_STATE_QUERY) ->
+                safeBoolean(bundle, DclLauncherApiContract.KEY_UI_STATE_QUERY, false)
+            extrasContains(bundle, DclLauncherApiContract.KEY_UI_CHROME_QUERY) ->
+                safeBoolean(bundle, DclLauncherApiContract.KEY_UI_CHROME_QUERY, false)
+            else -> false
+        }
+        val uiStateEvents = when {
+            extrasContains(bundle, DclLauncherApiContract.KEY_UI_STATE_EVENTS) ->
+                safeBoolean(bundle, DclLauncherApiContract.KEY_UI_STATE_EVENTS, false)
+            extrasContains(bundle, DclLauncherApiContract.KEY_UI_CHROME_EVENTS) ->
+                safeBoolean(bundle, DclLauncherApiContract.KEY_UI_CHROME_EVENTS, false)
+            else -> false
+        }
+        return DclCallResult.Ok(
+            DclCapabilities(
+                apiVersion = safeInt(bundle, DclLauncherApiContract.KEY_API_VERSION, 1),
+                launchFullscreen = safeBoolean(
+                    bundle,
+                    DclLauncherApiContract.KEY_LAUNCH_FULLSCREEN,
+                    false,
+                ),
+                launchAppArea = safeBoolean(
+                    bundle,
+                    DclLauncherApiContract.KEY_LAUNCH_APP_AREA,
+                    false,
+                ),
+                uiStateQuery = uiStateQuery,
+                uiStateEvents = uiStateEvents,
+                adasPanel = safeBoolean(bundle, DclLauncherApiContract.KEY_ADAS_PANEL, false),
+                screenModes = screenModesRaw.split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() },
+                splitSupported = if (extrasContains(bundle, DclLauncherApiContract.KEY_SPLIT_SUPPORTED)) {
+                    safeBoolean(bundle, DclLauncherApiContract.KEY_SPLIT_SUPPORTED, false)
+                } else {
+                    null
+                },
+            ),
+        )
+    }
+
+    private fun parseUiStateUnsafe(bundle: Bundle): DclCallResult<DclUiState> {
+        val status = safeString(bundle, DclLauncherApiContract.KEY_STATUS)
+        if (status == DclLauncherApiContract.STATUS_ERROR) {
+            return DclCallResult.Error(parseError(bundle))
+        }
+        if (status != null && status != DclLauncherApiContract.STATUS_OK) {
+            return DclCallResult.Error(
+                DclApiError(
+                    errorCode = safeString(bundle, DclLauncherApiContract.KEY_ERROR_CODE),
+                    message = safeString(bundle, DclLauncherApiContract.KEY_MESSAGE) ?: status,
+                ),
+            )
+        }
+        return DclCallResult.Ok(uiStateFromBundle(bundle))
+    }
+
     private fun uiStateFromBundle(bundle: Bundle): DclUiState =
         DclUiState(
-            screenMode = bundle.getString(
+            screenMode = safeString(
+                bundle,
                 DclLauncherApiContract.KEY_SCREEN_MODE,
                 DclLauncherApiContract.SCREEN_MODE_HOME,
             ) ?: DclLauncherApiContract.SCREEN_MODE_HOME,
-            foregroundPackage = bundle.getString(DclLauncherApiContract.KEY_FOREGROUND_PACKAGE, "")
-                ?: "",
-            leftPackage = bundle.getString(DclLauncherApiContract.KEY_LEFT_PACKAGE, "") ?: "",
-            rightPackage = bundle.getString(DclLauncherApiContract.KEY_RIGHT_PACKAGE, "") ?: "",
-            topBarHeightPx = bundle.getInt(
+            foregroundPackage = safeString(
+                bundle,
+                DclLauncherApiContract.KEY_FOREGROUND_PACKAGE,
+                "",
+            ) ?: "",
+            leftPackage = safeString(bundle, DclLauncherApiContract.KEY_LEFT_PACKAGE, "") ?: "",
+            rightPackage = safeString(bundle, DclLauncherApiContract.KEY_RIGHT_PACKAGE, "") ?: "",
+            topBarHeightPx = safeInt(
+                bundle,
                 DclLauncherApiContract.KEY_TOP_BAR_HEIGHT_PX,
                 DclLauncherApiContract.DEFAULT_TOP_BAR_HEIGHT_PX,
             ),
-            bottomBarHeightPx = bundle.getInt(
+            bottomBarHeightPx = safeInt(
+                bundle,
                 DclLauncherApiContract.KEY_BOTTOM_BAR_HEIGHT_PX,
                 DclLauncherApiContract.DEFAULT_BOTTOM_BAR_HEIGHT_PX,
             ),
-            adasPanelBounds = bundle.getString(
+            adasPanelBounds = safeString(
+                bundle,
                 DclLauncherApiContract.KEY_ADAS_PANEL_BOUNDS,
                 DclLauncherApiContract.DEFAULT_ADAS_PANEL_BOUNDS,
             ) ?: DclLauncherApiContract.DEFAULT_ADAS_PANEL_BOUNDS,
-            appAreaBounds = bundle.getString(
+            appAreaBounds = safeString(
+                bundle,
                 DclLauncherApiContract.KEY_APP_AREA_BOUNDS,
                 DclLauncherApiContract.DEFAULT_APP_AREA_BOUNDS,
             ) ?: DclLauncherApiContract.DEFAULT_APP_AREA_BOUNDS,
-            displayWidthPx = bundle.getInt(
+            displayWidthPx = safeInt(
+                bundle,
                 DclLauncherApiContract.KEY_DISPLAY_WIDTH_PX,
                 DclLauncherApiContract.DEFAULT_DISPLAY_WIDTH_PX,
             ),
-            displayHeightPx = bundle.getInt(
+            displayHeightPx = safeInt(
+                bundle,
                 DclLauncherApiContract.KEY_DISPLAY_HEIGHT_PX,
                 DclLauncherApiContract.DEFAULT_DISPLAY_HEIGHT_PX,
             ),
-            overlayOpen = bundle.getBoolean(DclLauncherApiContract.KEY_OVERLAY_OPEN, false),
-            revision = bundle.getLong(DclLauncherApiContract.KEY_REVISION, 0L),
-            updatedAtEpochMs = if (bundle.containsKey(DclLauncherApiContract.KEY_UPDATED_AT_EPOCH_MS)) {
-                bundle.getLong(DclLauncherApiContract.KEY_UPDATED_AT_EPOCH_MS)
+            overlayOpen = safeBoolean(bundle, DclLauncherApiContract.KEY_OVERLAY_OPEN, false),
+            revision = safeLong(bundle, DclLauncherApiContract.KEY_REVISION, 0L),
+            updatedAtEpochMs = if (extrasContains(bundle, DclLauncherApiContract.KEY_UPDATED_AT_EPOCH_MS)) {
+                safeLong(bundle, DclLauncherApiContract.KEY_UPDATED_AT_EPOCH_MS, 0L)
             } else {
                 null
             },
@@ -253,5 +326,55 @@ object DclLauncherApiCodec {
         )
 
     private fun optionalBoolean(bundle: Bundle, key: String): Boolean? =
-        if (bundle.containsKey(key)) bundle.getBoolean(key) else null
+        if (extrasContains(bundle, key)) safeBoolean(bundle, key, false) else null
+
+    private fun extrasContains(bundle: Bundle, key: String): Boolean =
+        runCatching { bundle.containsKey(key) }.getOrDefault(false)
+
+    private fun safeString(bundle: Bundle, key: String, default: String? = null): String? =
+        runCatching {
+            when (val value = bundle.get(key)) {
+                null -> default
+                is String -> value
+                else -> value.toString()
+            }
+        }.getOrDefault(default)
+
+    private fun safeInt(bundle: Bundle, key: String, default: Int): Int =
+        runCatching {
+            when (val value = bundle.get(key)) {
+                null -> default
+                is Int -> value
+                is Number -> value.toInt()
+                is String -> value.toIntOrNull() ?: default
+                else -> default
+            }
+        }.getOrDefault(default)
+
+    private fun safeLong(bundle: Bundle, key: String, default: Long): Long =
+        runCatching {
+            when (val value = bundle.get(key)) {
+                null -> default
+                is Long -> value
+                is Int -> value.toLong()
+                is Number -> value.toLong()
+                is String -> value.toLongOrNull() ?: default
+                else -> default
+            }
+        }.getOrDefault(default)
+
+    private fun safeBoolean(bundle: Bundle, key: String, default: Boolean): Boolean =
+        runCatching {
+            when (val value = bundle.get(key)) {
+                null -> default
+                is Boolean -> value
+                is Number -> value.toInt() != 0
+                is String -> when (value.lowercase()) {
+                    "true", "1", "yes" -> true
+                    "false", "0", "no" -> false
+                    else -> default
+                }
+                else -> default
+            }
+        }.getOrDefault(default)
 }
