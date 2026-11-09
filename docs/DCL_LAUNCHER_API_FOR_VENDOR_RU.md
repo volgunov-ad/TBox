@@ -44,7 +44,7 @@ DCL — доверенный локальный клиент Monitor (как TBo
 
 Зачем п.2–3 TBox: автоматизации смогут **скрывать плавающие панели**, когда хром лаунчера скрыт или открыт fullscreen/split, и снова показывать на home / в оконном режиме. Сейчас TBox опирается на UsageStats и списки пакетов — этого недостаточно, когда layout и видимость баров контролирует именно DCL.
 
-**Сторона TBox (клиент этого API, автоматизации, сигналы) — phase 2.** В этой инструкции — только контракт для реализации в DCL.
+Клиент TBox Monitor (Binder-вызовы, parse Bundle, push-receiver) — [DCL_LAUNCHER_API_INTEGRATION_FOR_TBM_RU.md](DCL_LAUNCHER_API_INTEGRATION_FOR_TBM_RU.md) и пакет `vad.dashing.tbox.dcl`. Автоматизации / скрытие плавающих панелей по `screenMode` — отдельно. В этой инструкции — контракт для реализации в DCL.
 
 ---
 
@@ -453,6 +453,7 @@ Auth (Monitor→DCL, this API): Binder callingPackage==vad.dashing.tbox (+ optio
 В репозитории TBox Monitor (`preRelease`):
 
 - `docs/DCL_LOCAL_API_ACCESS_RU.md` — как DCL получает доступ к API Monitor (one-shot Allow).
+- `docs/DCL_LAUNCHER_API_INTEGRATION_FOR_TBM_RU.md` — интеграционный гайд DCL→TBM (gist вендора; клиент Monitor).
 - `docs/EXTERNAL_API_RU.md` §5.1 — локальный провайдер, consent, хранение токена.
 - `docs/EXTERNAL_API_USER_GUIDE_RU.md` §3.0 — пользовательский сценарий «Разрешить».
 - `docs/LAUNCHER_WINDOW_AA_CARPLAY_RU.md` — окно приложений / fullscreen у штатного Adayo (аналогия семантики, не копировать intents 1:1).
