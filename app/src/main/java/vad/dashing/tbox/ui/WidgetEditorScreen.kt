@@ -742,186 +742,186 @@ private fun PreviewTile(
     val borderWidth = if (editing || selected || dragTarget) 3.dp else 1.dp
     if (!exists) {
         Box(modifier = modifier.clip(shape).background(Color.Transparent))
-        return
-    }
-    val backgroundArgb = if (key.isEmpty()) {
-        null
     } else {
-        if (dark) config?.backgroundColorDark ?: defaultBackgroundDark
-        else config?.backgroundColorLight ?: defaultBackgroundLight
-    }
-    val background = backgroundArgb?.let { Color(it) } ?: Color.Transparent
-    val textColor = if (key.isEmpty()) {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    } else {
-        Color(if (dark) config!!.textColorDark else config!!.textColorLight)
-    }
-    val themeCode = if (dark) 2 else 1
-    val tileBgRelPath = (
-        if (dark) config?.tileBackgroundImageRelPathDark else config?.tileBackgroundImageRelPathLight
-        )?.takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
-    val useTileBackgroundUnderlay = key.isNotEmpty() && tileBgRelPath != null
-    val contentBackground = when {
-        key.isEmpty() -> Color.Transparent
-        useTileBackgroundUnderlay -> Color.Transparent
-        else -> background.copy(alpha = if (dragSource) background.alpha * 0.4f else background.alpha)
-    }
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .border(borderWidth, borderColor, shape),
-    ) {
-        if (key.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Transparent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "+",
-                    color = textColor,
-                    style = MaterialTheme.typography.tboxHeadline,
-                )
-            }
-            return
+        val backgroundArgb = if (key.isEmpty()) {
+            null
+        } else {
+            if (dark) config?.backgroundColorDark ?: defaultBackgroundDark
+            else config?.backgroundColorLight ?: defaultBackgroundLight
         }
-        val cfg = config!!
-        WidgetCellContentPadding(widgetConfig = cfg) {
-            if (useTileBackgroundUnderlay) {
-                DashboardTileBackgroundImageUnderlay(
-                    relPath = tileBgRelPath,
-                    backgroundColor = background.copy(
-                        alpha = if (dragSource) background.alpha * 0.4f else background.alpha,
-                    ),
-                    shapeDp = shapeDp,
-                    settingsViewModel = settingsViewModel,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            CompositionLocalProvider(
-                LocalWidgetTitleScale provides normalizeWidgetScale(cfg.titleScale),
-                LocalWidgetTextScale provides normalizeWidgetScale(cfg.textScale),
-                LocalWidgetIconScale provides normalizeWidgetScale(cfg.iconScale),
-                LocalWidgetTextAlign provides widgetTextAlignToCompose(normalizeWidgetTextAlign(cfg.textAlign)),
-                LocalWidgetFontWeight provides widgetFontWeightToCompose(normalizeWidgetFontWeight(cfg.fontWeight)),
-                LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(cfg.titlePosition),
-            ) {
-                val dialNumberPlaceholder =
-                    stringResource(R.string.widget_phone_dial_number_placeholder)
-                val sample = remember(
-                    cfg.dataKey,
-                    cfg.valueAccuracy,
-                    cfg.showUnit,
-                    cfg.dialPhoneNumber,
-                    cfg.dialShowNumber,
-                    dialNumberPlaceholder,
-                ) {
-                    widgetPreviewSample(
-                        dataKey = cfg.dataKey,
-                        config = cfg,
-                        unit = WidgetsRepository.getUnitForDataKey(context, cfg.dataKey),
-                        dialNumberPlaceholder = dialNumberPlaceholder,
-                    )
-                }
-                val title = cfg.customTitle.ifBlank {
-                    WidgetsRepository.getTitleForDataKey(context, cfg.dataKey)
-                }
-                val controls = rememberResolvedControlAppearance(
-                    config = cfg,
-                    currentTheme = themeCode,
-                    tileTextColor = textColor,
-                    dataKey = cfg.dataKey,
-                )
-                BoxWithConstraints(
+        val background = backgroundArgb?.let { Color(it) } ?: Color.Transparent
+        val textColor = if (key.isEmpty()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            Color(if (dark) config!!.textColorDark else config!!.textColorLight)
+        }
+        val themeCode = if (dark) 2 else 1
+        val tileBgRelPath = (
+            if (dark) config?.tileBackgroundImageRelPathDark else config?.tileBackgroundImageRelPathLight
+            )?.takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
+        val useTileBackgroundUnderlay = key.isNotEmpty() && tileBgRelPath != null
+        val contentBackground = when {
+            key.isEmpty() -> Color.Transparent
+            useTileBackgroundUnderlay -> Color.Transparent
+            else -> background.copy(alpha = if (dragSource) background.alpha * 0.4f else background.alpha)
+        }
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .border(borderWidth, borderColor, shape),
+        ) {
+            if (key.isEmpty()) {
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(shape)
-                        .background(contentBackground),
+                        .background(Color.Transparent),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    val availableHeight = maxHeight
-                    val textAlign = LocalWidgetTextAlign.current
-                    when (sample.kind) {
-                        WidgetPreviewKind.CENTERED_TITLE -> {
-                            // Match live DashboardPhoneDialWidgetItem centerOnlyTitle:
-                            // Box + align(Center), not fillMaxSize Text (that top-aligns glyphs).
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(4.dp),
-                            ) {
-                                Text(
-                                    text = title,
-                                    style = calculateResponsiveTextStyle(
-                                        containerHeight = availableHeight,
-                                        textType = TextType.TITLE,
-                                        forWidgetTitle = true,
-                                    ),
-                                    color = textColor,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 3,
-                                    softWrap = true,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 4.dp),
-                                )
-                            }
+                    Text(
+                        text = "+",
+                        color = textColor,
+                        style = MaterialTheme.typography.tboxHeadline,
+                    )
+                }
+            } else {
+                val cfg = config!!
+                WidgetCellContentPadding(widgetConfig = cfg) {
+                    if (useTileBackgroundUnderlay) {
+                        DashboardTileBackgroundImageUnderlay(
+                            relPath = tileBgRelPath,
+                            backgroundColor = background.copy(
+                                alpha = if (dragSource) background.alpha * 0.4f else background.alpha,
+                            ),
+                            shapeDp = shapeDp,
+                            settingsViewModel = settingsViewModel,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    CompositionLocalProvider(
+                        LocalWidgetTitleScale provides normalizeWidgetScale(cfg.titleScale),
+                        LocalWidgetTextScale provides normalizeWidgetScale(cfg.textScale),
+                        LocalWidgetIconScale provides normalizeWidgetScale(cfg.iconScale),
+                        LocalWidgetTextAlign provides widgetTextAlignToCompose(normalizeWidgetTextAlign(cfg.textAlign)),
+                        LocalWidgetFontWeight provides widgetFontWeightToCompose(normalizeWidgetFontWeight(cfg.fontWeight)),
+                        LocalWidgetTitlePosition provides normalizeWidgetTitlePosition(cfg.titlePosition),
+                    ) {
+                        val dialNumberPlaceholder =
+                            stringResource(R.string.widget_phone_dial_number_placeholder)
+                        val sample = remember(
+                            cfg.dataKey,
+                            cfg.valueAccuracy,
+                            cfg.showUnit,
+                            cfg.dialPhoneNumber,
+                            cfg.dialShowNumber,
+                            dialNumberPlaceholder,
+                        ) {
+                            widgetPreviewSample(
+                                dataKey = cfg.dataKey,
+                                config = cfg,
+                                unit = WidgetsRepository.getUnitForDataKey(context, cfg.dataKey),
+                                dialNumberPlaceholder = dialNumberPlaceholder,
+                            )
                         }
-                        else -> {
-                            DashboardWidgetContentWithOptionalTitle(
-                                showTitle = cfg.showTitle,
-                                titleText = title,
-                                availableHeight = availableHeight,
-                                resolvedTextColor = textColor,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(4.dp),
-                            ) { contentModifier ->
-                                when (sample.kind) {
-                                    WidgetPreviewKind.CONTROL -> {
-                                        PreviewControlHint(
-                                            controls = controls,
-                                            modifier = contentModifier.fillMaxSize(),
+                        val title = cfg.customTitle.ifBlank {
+                            WidgetsRepository.getTitleForDataKey(context, cfg.dataKey)
+                        }
+                        val controls = rememberResolvedControlAppearance(
+                            config = cfg,
+                            currentTheme = themeCode,
+                            tileTextColor = textColor,
+                            dataKey = cfg.dataKey,
+                        )
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(shape)
+                                .background(contentBackground),
+                        ) {
+                            val availableHeight = maxHeight
+                            val textAlign = LocalWidgetTextAlign.current
+                            when (sample.kind) {
+                                WidgetPreviewKind.CENTERED_TITLE -> {
+                                    // Match live DashboardPhoneDialWidgetItem centerOnlyTitle:
+                                    // Box + align(Center), not fillMaxSize Text (that top-aligns glyphs).
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(4.dp),
+                                    ) {
+                                        Text(
+                                            text = title,
+                                            style = calculateResponsiveTextStyle(
+                                                containerHeight = availableHeight,
+                                                textType = TextType.TITLE,
+                                                forWidgetTitle = true,
+                                            ),
+                                            color = textColor,
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 3,
+                                            softWrap = true,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier
+                                                .align(Alignment.Center)
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp),
                                         )
                                     }
-                                    WidgetPreviewKind.METRIC,
-                                    WidgetPreviewKind.SPECIAL,
-                                    -> {
-                                        if (sample.valueText.isEmpty()) {
-                                            Spacer(contentModifier)
-                                        } else {
-                                            val faded =
-                                                sample.valueText == dialNumberPlaceholder
-                                            Text(
-                                                text = sample.valueText,
-                                                style = calculateResponsiveTextStyle(
-                                                    containerHeight = availableHeight,
-                                                    textType = TextType.VALUE,
-                                                ),
-                                                color = textColor.copy(
-                                                    alpha = if (faded) 0.45f else 1f,
-                                                ),
-                                                textAlign = if (faded ||
-                                                    cfg.dataKey == PHONE_DIAL_WIDGET_DATA_KEY
-                                                ) {
-                                                    TextAlign.Center
+                                }
+                                else -> {
+                                    DashboardWidgetContentWithOptionalTitle(
+                                        showTitle = cfg.showTitle,
+                                        titleText = title,
+                                        availableHeight = availableHeight,
+                                        resolvedTextColor = textColor,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(4.dp),
+                                    ) { contentModifier ->
+                                        when (sample.kind) {
+                                            WidgetPreviewKind.CONTROL -> {
+                                                PreviewControlHint(
+                                                    controls = controls,
+                                                    modifier = contentModifier.fillMaxSize(),
+                                                )
+                                            }
+                                            WidgetPreviewKind.METRIC,
+                                            WidgetPreviewKind.SPECIAL,
+                                            -> {
+                                                if (sample.valueText.isEmpty()) {
+                                                    Spacer(contentModifier)
                                                 } else {
-                                                    textAlign
-                                                },
-                                                maxLines = 2,
-                                                softWrap = true,
-                                                overflow = TextOverflow.Ellipsis,
-                                                // Same as live DashboardWidget value row:
-                                                // weight(1f) from contentModifier + vertical center.
-                                                modifier = contentModifier
-                                                    .fillMaxWidth()
-                                                    .wrapContentHeight(Alignment.CenterVertically),
-                                            )
+                                                    val faded =
+                                                        sample.valueText == dialNumberPlaceholder
+                                                    Text(
+                                                        text = sample.valueText,
+                                                        style = calculateResponsiveTextStyle(
+                                                            containerHeight = availableHeight,
+                                                            textType = TextType.VALUE,
+                                                        ),
+                                                        color = textColor.copy(
+                                                            alpha = if (faded) 0.45f else 1f,
+                                                        ),
+                                                        textAlign = if (faded ||
+                                                            cfg.dataKey == PHONE_DIAL_WIDGET_DATA_KEY
+                                                        ) {
+                                                            TextAlign.Center
+                                                        } else {
+                                                            textAlign
+                                                        },
+                                                        maxLines = 2,
+                                                        softWrap = true,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        // Same as live DashboardWidget value row:
+                                                        // weight(1f) from contentModifier + vertical center.
+                                                        modifier = contentModifier
+                                                            .fillMaxWidth()
+                                                            .wrapContentHeight(Alignment.CenterVertically),
+                                                    )
+                                                }
+                                            }
+                                            WidgetPreviewKind.CENTERED_TITLE -> Unit
                                         }
                                     }
-                                    WidgetPreviewKind.CENTERED_TITLE -> Unit
                                 }
                             }
                         }
