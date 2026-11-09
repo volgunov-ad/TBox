@@ -379,16 +379,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- DCL Launcher UI state push (package-targeted by ras.dashing.tbox.launcher). -->
-        <receiver
-            android:name="vad.dashing.tbox.dcl.DclUiStateReceiver"
-            android:enabled="true"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="ras.dashing.tbox.launcher.action.UI_STATE_CHANGED" />
-                <action android:name="ras.dashing.tbox.launcher.action.UI_CHROME_CHANGED" />
-            </intent-filter>
-        </receiver>
+        <!-- DCL UI state push: dynamic receiver only (DclLauncherApiRepository.start). -->
     </application>
 
 </manifest>

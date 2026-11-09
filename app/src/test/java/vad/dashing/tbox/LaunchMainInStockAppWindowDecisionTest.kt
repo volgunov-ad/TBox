@@ -153,6 +153,9 @@ class LaunchMainInStockAppWindowDecisionTest {
         adayoLauncherAvailable: Boolean = true,
         dclApiAvailable: Boolean = false,
         dclLaunchAppAreaCapable: Boolean = false,
+        alreadyRedirectedViaDclThisProcess: Boolean = false,
+        intentSkipsRedirect: Boolean = false,
+        dclAlreadyHostingPackage: Boolean = false,
     ) = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
         freshInstance = freshInstance,
         displayId = displayId,
@@ -163,6 +166,9 @@ class LaunchMainInStockAppWindowDecisionTest {
         adayoLauncherAvailable = adayoLauncherAvailable,
         dclApiAvailable = dclApiAvailable,
         dclLaunchAppAreaCapable = dclLaunchAppAreaCapable,
+        alreadyRedirectedViaDclThisProcess = alreadyRedirectedViaDclThisProcess,
+        intentSkipsRedirect = intentSkipsRedirect,
+        dclAlreadyHostingPackage = dclAlreadyHostingPackage,
     )
 
     @Test
@@ -211,6 +217,98 @@ class LaunchMainInStockAppWindowDecisionTest {
                 headUnitIsAndroid10 = false,
                 adayoLauncherAvailable = false,
                 dclApiAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun externalLaunch_dclStickyAntiLoop_doesNotRedirect() {
+        assertFalse(
+            redirect(
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                alreadyRedirectedViaDclThisProcess = true,
+            ),
+        )
+        assertFalse(
+            redirect(
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                intentSkipsRedirect = true,
+            ),
+        )
+        assertFalse(
+            redirect(
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                dclAlreadyHostingPackage = true,
+            ),
+        )
+        // After cooldown, sticky still blocks A9 display-0 re-entry.
+        assertFalse(
+            redirect(
+                nowMs = 100_000L + LaunchMainInStockAppWindowDecision.EXTERNAL_REDIRECT_COOLDOWN_MS,
+                lastRedirectAtMs = 100_000L,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+                dclApiAvailable = true,
+                dclLaunchAppAreaCapable = true,
+                alreadyRedirectedViaDclThisProcess = true,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldSkipDclRedirectAntiLoop_matchesHostingAndSticky() {
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = true,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = true,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "vad.dashing.tbox",
+                dclScreenMode = "single",
+                selfPackageName = "vad.dashing.tbox",
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "vad.dashing.tbox",
+                dclScreenMode = "home",
+                selfPackageName = "vad.dashing.tbox",
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(
+                alreadyRedirectedViaDclThisProcess = false,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "other.app",
+                dclScreenMode = "single",
+                selfPackageName = "vad.dashing.tbox",
             ),
         )
     }

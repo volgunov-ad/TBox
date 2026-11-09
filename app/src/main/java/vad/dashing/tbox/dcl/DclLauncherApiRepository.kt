@@ -18,7 +18,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Holds the latest DCL UI snapshot from push broadcasts and optional poll refreshes.
- * Does not yet drive floating-panel hide automations — callers observe [uiState].
+ * Push delivery uses a **single** dynamic [BroadcastReceiver] registered in [start]
+ * (no manifest twin — avoids double-fire / untrusted early delivery).
  */
 object DclLauncherApiRepository {
     private const val TAG = "DclLauncherApi"
@@ -59,9 +60,16 @@ object DclLauncherApiRepository {
         appContext = null
     }
 
-    /** Manifest [DclUiStateReceiver] and the dynamic receiver both land here. */
-    fun onUiStateBroadcast(intent: Intent) {
+    /**
+     * Entry for the dynamic push receiver. Verifies sender package when the platform
+     * exposes it (API 34+), then rejects empty/poison extras via the codec.
+     */
+    fun onUiStateBroadcast(context: Context, receiver: BroadcastReceiver, intent: Intent) {
         if (!isUiStateAction(intent.action)) return
+        if (!isTrustedDclBroadcast(context, receiver, intent)) {
+            Log.w(TAG, "Ignoring UI state broadcast from untrusted sender")
+            return
+        }
         val state = DclLauncherApiCodec.parseUiStateFromExtras(intent.extras) ?: return
         publishUiState(state)
     }
@@ -86,6 +94,36 @@ object DclLauncherApiRepository {
         action == DclLauncherApiContract.ACTION_UI_STATE_CHANGED ||
             action == DclLauncherApiContract.ACTION_UI_CHROME_CHANGED
 
+    /**
+     * Trusts Binder-visible sender identity when the platform exposes it
+     * ([BroadcastReceiver.getSentFromPackage] / [BroadcastReceiver.getSentFromUid], API 34+);
+     * always rejects empty / poison extras. Package-targeted delivery alone is not enough
+     * for exported receivers.
+     */
+    fun isTrustedDclBroadcast(
+        context: Context,
+        receiver: BroadcastReceiver,
+        intent: Intent,
+    ): Boolean {
+        val extras = intent.extras
+        if (extras == null || extras.isEmpty) return false
+        if (!DclLauncherApiCodec.hasUsableUiStateMarkers(extras)) return false
+        if (Build.VERSION.SDK_INT >= 34) {
+            val sentFromPackage = runCatching { receiver.sentFromPackage }.getOrNull()
+            if (!sentFromPackage.isNullOrBlank() &&
+                sentFromPackage != DclLauncherApiContract.LAUNCHER_PACKAGE
+            ) {
+                return false
+            }
+            val uid = runCatching { receiver.sentFromUid }.getOrDefault(-1)
+            if (uid >= 0) {
+                val packages = context.packageManager.getPackagesForUid(uid) ?: return false
+                if (DclLauncherApiContract.LAUNCHER_PACKAGE !in packages) return false
+            }
+        }
+        return true
+    }
+
     private fun refreshBlocking(context: Context): Boolean {
         when (val caps = DclLauncherApiClient.getCapabilitiesBlocking(context)) {
             is DclCallResult.Ok -> {
@@ -94,7 +132,9 @@ object DclLauncherApiRepository {
             }
             is DclCallResult.Error -> {
                 Log.w(TAG, "getCapabilities error: ${caps.error.errorCode} ${caps.error.message}")
-                _available.value = true
+                // Do not mark available / keep stale null caps as "capable" (P1-4).
+                _available.value = false
+                return false
             }
             DclCallResult.Unavailable -> {
                 _available.value = false
@@ -120,13 +160,16 @@ object DclLauncherApiRepository {
             return
         }
         _uiState.value = state
-        _available.value = true
+        // Push proves the launcher process is alive; launch preference still needs caps (P1-4).
+        if (_capabilities.value != null) {
+            _available.value = true
+        }
     }
 
     private fun registerPushReceiver(context: Context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
-                onUiStateBroadcast(intent)
+                onUiStateBroadcast(ctx, this, intent)
             }
         }
         val filter = IntentFilter().apply {
@@ -141,5 +184,4 @@ object DclLauncherApiRepository {
         }
         pushReceiver = receiver
     }
-
 }

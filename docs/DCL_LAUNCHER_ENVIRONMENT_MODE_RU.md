@@ -20,7 +20,8 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 | App List Open | только DCL `app_area` (кнопка stock-window скрыта) |
 | Automation `LaunchApplication` | parity с ярлыком |
 | Freeform / VD / stock | UI disable для **нового** выбора; сохранённые конфиги работают |
-| API Unavailable | raw `startActivity` + toast/journal; toggle **не** сбрасывается |
+| API Unavailable / missing capability / `unsupported`/`internal` | raw `startActivity` + toast/journal; toggle **не** сбрасывается |
+| `busy` / `not_installed` / target errors | toast only (no raw fallback) |
 | Main ON | DCL `app_area` → иначе Adayo stock → иначе fullscreen |
 | Main OFF | fullscreen |
 

@@ -231,9 +231,10 @@ class DclLauncherEnvironmentRoutingTest {
     }
 
     @Test
-    fun dclCanLaunchAppArea_respectsCapabilityFlag() {
+    fun dclCanLaunchAppArea_requiresExplicitCapability() {
         assertFalse(dclCanLaunchAppArea(available = false, capabilities = null))
-        assertTrue(dclCanLaunchAppArea(available = true, capabilities = null))
+        // Null caps must not imply can-launch (P1-4).
+        assertFalse(dclCanLaunchAppArea(available = true, capabilities = null))
         assertTrue(
             dclCanLaunchAppArea(
                 available = true,
@@ -261,6 +262,93 @@ class DclLauncherEnvironmentRoutingTest {
                     adasPanel = false,
                     screenModes = emptyList(),
                     splitSupported = null,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun dclModeCapabilityMissing_andRawFallbackCodes() {
+        assertTrue(dclModeCapabilityMissing(DclLauncherApiContract.MODE_APP_AREA, null))
+        assertTrue(
+            dclModeCapabilityMissing(
+                DclLauncherApiContract.MODE_APP_AREA,
+                DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = true,
+                    launchAppArea = false,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+        assertFalse(
+            dclModeCapabilityMissing(
+                DclLauncherApiContract.MODE_FULLSCREEN,
+                DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = true,
+                    launchAppArea = false,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+
+        assertTrue(dclLaunchShouldUseRawFallback(DclCallResult.Unavailable))
+        assertTrue(
+            dclLaunchShouldUseRawFallback(
+                DclCallResult.Error(
+                    DclApiError(DclLauncherApiContract.ERROR_UNSUPPORTED, "no"),
+                ),
+            ),
+        )
+        assertTrue(
+            dclLaunchShouldUseRawFallback(
+                DclCallResult.Ok(
+                    DclLaunchResult(
+                        status = DclLauncherApiContract.STATUS_ERROR,
+                        packageName = "a.b",
+                        mode = DclLauncherApiContract.MODE_APP_AREA,
+                        error = DclApiError(DclLauncherApiContract.ERROR_INTERNAL, "x"),
+                    ),
+                ),
+            ),
+        )
+        assertFalse(
+            dclLaunchShouldUseRawFallback(
+                DclCallResult.Error(
+                    DclApiError(DclLauncherApiContract.ERROR_BUSY, "wait"),
+                ),
+            ),
+        )
+        assertFalse(
+            dclLaunchShouldUseRawFallback(
+                DclCallResult.Ok(
+                    DclLaunchResult(
+                        status = DclLauncherApiContract.STATUS_ERROR,
+                        packageName = "a.b",
+                        mode = DclLauncherApiContract.MODE_APP_AREA,
+                        error = DclApiError(DclLauncherApiContract.ERROR_NOT_INSTALLED, "gone"),
+                    ),
+                ),
+            ),
+        )
+        assertFalse(
+            dclLaunchShouldUseRawFallback(
+                DclCallResult.Ok(
+                    DclLaunchResult(
+                        status = DclLauncherApiContract.STATUS_OK,
+                        packageName = "a.b",
+                        mode = DclLauncherApiContract.MODE_APP_AREA,
+                        error = null,
+                    ),
                 ),
             ),
         )

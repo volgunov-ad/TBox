@@ -222,4 +222,4 @@ fun parseBounds(boundsStr: String): android.graphics.Rect {
 
 ## Реализация в TBox Monitor
 
-Клиент в коде Monitor: пакет `vad.dashing.tbox.dcl` (`DclLauncherApiContract`, `DclLauncherApiClient`, `DclLauncherApiRepository`, `DclUiStateReceiver`).
+Клиент в коде Monitor: пакет `vad.dashing.tbox.dcl` (`DclLauncherApiContract`, `DclLauncherApiClient`, `DclLauncherApiRepository`; UI push — только dynamic receiver из `DclLauncherApiRepository.start`).

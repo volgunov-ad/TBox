@@ -100,10 +100,51 @@ class DclLauncherApiCodecTest {
     @Test
     fun parseUiStateFromExtras_nullOrError_returnsNull() {
         assertNull(DclLauncherApiCodec.parseUiStateFromExtras(null))
+        assertNull(DclLauncherApiCodec.parseUiStateFromExtras(Bundle()))
         val error = Bundle().apply {
             putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_ERROR)
         }
         assertNull(DclLauncherApiCodec.parseUiStateFromExtras(error))
+    }
+
+    @Test
+    fun parseUiStateFromExtras_poisonEmptyKeys_returnsNull() {
+        // Unrelated keys only — must not publish a default home snapshot (P1-3).
+        val poison = Bundle().apply {
+            putString("unrelated", "x")
+        }
+        assertFalse(DclLauncherApiCodec.hasUsableUiStateMarkers(poison))
+        assertNull(DclLauncherApiCodec.parseUiStateFromExtras(poison))
+    }
+
+    @Test
+    fun parseUiStateFromExtras_wrongTypedRevision_doesNotCrash() {
+        val extras = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putString(DclLauncherApiContract.KEY_REVISION, "42")
+            putString(DclLauncherApiContract.KEY_TOP_BAR_HEIGHT_PX, "51")
+            putString(DclLauncherApiContract.KEY_SCREEN_MODE, DclLauncherApiContract.SCREEN_MODE_SINGLE)
+        }
+        val state = DclLauncherApiCodec.parseUiStateFromExtras(extras)
+        assertEquals(42L, state!!.revision)
+        assertEquals(51, state.topBarHeightPx)
+        assertEquals(DclLauncherApiContract.SCREEN_MODE_SINGLE, state.screenMode)
+    }
+
+    @Test
+    fun parseCapabilities_wrongTypedBooleans_doesNotCrash() {
+        val bundle = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putString(DclLauncherApiContract.KEY_LAUNCH_APP_AREA, "true")
+            putString(DclLauncherApiContract.KEY_LAUNCH_FULLSCREEN, "1")
+            putString(DclLauncherApiContract.KEY_API_VERSION, "2")
+        }
+        val result = DclLauncherApiCodec.parseCapabilities(bundle)
+        assertTrue(result is DclCallResult.Ok)
+        val caps = (result as DclCallResult.Ok).value
+        assertTrue(caps.launchAppArea)
+        assertTrue(caps.launchFullscreen)
+        assertEquals(2, caps.apiVersion)
     }
 
     @Test

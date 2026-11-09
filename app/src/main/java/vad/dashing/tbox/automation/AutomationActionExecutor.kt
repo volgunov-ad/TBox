@@ -33,6 +33,8 @@ import vad.dashing.tbox.dcl.DclCallResult
 import vad.dashing.tbox.dcl.DclLauncherApiRepository
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
+import vad.dashing.tbox.dcl.dclLaunchShouldUseRawFallback
+import vad.dashing.tbox.dcl.dclModeCapabilityMissing
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -354,43 +356,60 @@ class AutomationActionExecutor(
         packageName: String,
         dclMode: String,
     ): AutomationActionResult {
+        if (dclModeCapabilityMissing(dclMode, DclLauncherApiRepository.capabilities.value)) {
+            return rawFallbackAfterDcl("DCL capability missing ($dclMode) — обычный запуск", packageName)
+        }
         val result = DclLauncherApiRepository.launchApp(
             packageName = packageName,
             mode = dclMode,
             context = appContext,
         )
-        return when (result) {
-            is DclCallResult.Ok -> {
-                if (result.value.success) {
-                    AutomationActionResult.ok("Приложение запущено через DCL ($dclMode)")
-                } else {
-                    AutomationActionResult.failure(
-                        result.value.error?.message
-                            ?: result.value.error?.errorCode
-                            ?: "DCL launch failed",
-                    )
-                }
-            }
-            is DclCallResult.Error ->
-                AutomationActionResult.failure(
+        if (result is DclCallResult.Ok && result.value.success) {
+            return AutomationActionResult.ok("Приложение запущено через DCL ($dclMode)")
+        }
+        if (dclLaunchShouldUseRawFallback(result)) {
+            val detail = when (result) {
+                is DclCallResult.Ok ->
+                    result.value.error?.message
+                        ?: result.value.error?.errorCode
+                        ?: "launch not successful"
+                is DclCallResult.Error ->
                     result.error.message
                         ?: result.error.errorCode
-                        ?: "DCL launch error",
-                )
-            DclCallResult.Unavailable -> {
-                val launched = withContext(Dispatchers.Main) {
-                    launchFullscreen(packageName)
-                }
-                AutomationActionResult(
-                    launched,
-                    if (launched) {
-                        "DCL API недоступен — обычный запуск"
-                    } else {
-                        "Запуск приложения не удался"
-                    },
-                )
+                        ?: "DCL launch error"
+                DclCallResult.Unavailable -> "API unavailable"
             }
+            return rawFallbackAfterDcl(
+                "DCL недоступен ($detail) — обычный запуск",
+                packageName,
+            )
         }
+        return AutomationActionResult.failure(
+            when (result) {
+                is DclCallResult.Ok ->
+                    result.value.error?.message
+                        ?: result.value.error?.errorCode
+                        ?: "DCL launch failed"
+                is DclCallResult.Error ->
+                    result.error.message
+                        ?: result.error.errorCode
+                        ?: "DCL launch error"
+                DclCallResult.Unavailable -> "DCL unavailable"
+            },
+        )
+    }
+
+    private suspend fun rawFallbackAfterDcl(
+        message: String,
+        packageName: String,
+    ): AutomationActionResult {
+        val launched = withContext(Dispatchers.Main) {
+            launchFullscreen(packageName)
+        }
+        return AutomationActionResult(
+            launched,
+            if (launched) message else "Запуск приложения не удался",
+        )
     }
 
     private suspend fun openMainScreen(

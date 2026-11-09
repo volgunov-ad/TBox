@@ -64,6 +64,14 @@ object MainActivityIntentHelper {
     const val EXTRA_FLOATING_DASHBOARD_PANEL_ID = "extra_floating_dashboard_panel_id"
     const val EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX = "extra_floating_dashboard_widget_index"
 
+    /**
+     * When true, [MainActivity] skips cold external redirect into DCL/Adayo app window.
+     * Reserved for launches that already came from DCL (or tests); sticky process flag
+     * covers A9 display-0 loops when the vendor does not forward this extra.
+     */
+    const val EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT =
+        "vad.dashing.tbox.extra.SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT"
+
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun applyBringToFrontFlags(intent: Intent, context: Context) {
