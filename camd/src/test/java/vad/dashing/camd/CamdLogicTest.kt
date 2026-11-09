@@ -84,7 +84,8 @@ class ProbeScriptTest {
         assertTrue(script.contains("variant=stopavm input=0"))
         assertTrue(script.contains("nonce2"))
         assertTrue(script.indexOf("variant=stopavm") < script.indexOf("ctl.stop"))
-        assertTrue(script.indexOf("qcarcam_exit") < script.indexOf("ctl.start"))
+        assertTrue(script.contains("kill -9"))
+        assertTrue(script.indexOf("qcarcam_exit=killed") < script.indexOf("ctl.start"))
     }
 
     @Test
