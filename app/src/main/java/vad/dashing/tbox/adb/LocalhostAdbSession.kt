@@ -109,6 +109,7 @@ internal object LocalhostAdbSession {
             gateway.refreshHuAdb()
             val propsSayEnabled = gateway.isTcpEnabled()
             val portAlreadyOpen = gateway.isTcpPortOpen(host, port, TCP_PROBE_TIMEOUT_MS)
+            AdbTcpListenFact.remember(portAlreadyOpen)
             // Port open wins over lying/stale props — never restart adbd or restore-off.
             val tcpAlreadyAvailable = propsSayEnabled || portAlreadyOpen
             var enabledByUs = false

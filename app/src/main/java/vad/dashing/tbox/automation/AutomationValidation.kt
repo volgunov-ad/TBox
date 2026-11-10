@@ -153,7 +153,8 @@ object AutomationValidator {
         issues: MutableList<AutomationValidationIssue>,
     ) {
         when (trigger) {
-            is AutomationTrigger.SystemEvent -> Unit
+            is AutomationTrigger.SystemEvent ->
+                validateHold(trigger.holdMillis, "$path.holdMillis", issues)
             is AutomationTrigger.WidgetPressed -> {
                 val widgetTriggerId = trigger.triggerId.trim()
                 if (widgetTriggerId.isEmpty()) {
@@ -554,6 +555,7 @@ object AutomationValidator {
                 }
             }
 
+            is AutomationCondition.AdbTcp -> Unit
             is AutomationCondition.AutomationEnabled -> {
                 if (condition.automationId.trim().isEmpty()) {
                     issues += AutomationValidationIssue(

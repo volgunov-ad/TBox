@@ -152,6 +152,11 @@
     <string name="toast_automations_import_read_error">Could not read the automation file</string>
     <string name="automations_invalid_rule_hint">Invalid; other rules still run. Fix: %1$s</string>
     <string name="automation_adb_set_tcp_hint">Toggles ADB TCP on port 5555 on the head unit (same as the settings switch). Restarts adbd.</string>
+    <string name="automation_adb_tcp_condition_state_label">Port :5555</string>
+    <string name="automation_adb_tcp_condition_listening_on">Listening</string>
+    <string name="automation_adb_tcp_condition_listening_off">Not listening</string>
+    <string name="automation_adb_tcp_condition_hint">Checks that port 5555 is actually accepting connections (not the settings toggle or getprop alone). There is no dedicated poll — the condition is read when the rule is already being evaluated from another trigger.</string>
+    <string name="automation_system_event_hold_hint">“For”: after the event, the matching state must stay true for N seconds (service running / main screen open / menu open). 0 — fire immediately on the event.</string>
     <string name="automation_adb_shell_command_label">Shell command</string>
     <string name="automation_adb_shell_hint">Same privilege level as the ADB tab shell. If :5555 is not listening yet, briefly enables ADB TCP, runs the command, and restores TCP only if this session turned it on. Does not disable an already-open port.</string>
     <string name="automation_adb_force_stop_package_label">App</string>
