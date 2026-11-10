@@ -7,13 +7,23 @@ plugins {
 android {
     namespace = "vad.dashing.camd"
     compileSdk = 36
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "vad.dashing.camd"
         minSdk = 28
         targetSdk = 28
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++17"
+            }
+        }
     }
 
     signingConfigs {
@@ -42,6 +52,21 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+}
+
+tasks.matching { it.name == "mergeDebugAssets" || it.name == "mergeReleaseAssets" }.configureEach {
+    dependsOn("externalNativeBuildDebug")
 }
 
 dependencies {

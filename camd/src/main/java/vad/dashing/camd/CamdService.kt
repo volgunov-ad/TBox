@@ -17,13 +17,18 @@ class CamdService : Service() {
 object CamdRuntime {
     private val lock = Any()
     private var engine: CamdEngine? = null
+    private var windows: CameraWindows? = null
 
     fun start(context: android.content.Context) {
         synchronized(lock) {
             if (engine == null) {
-                val created = CamdEngine(context.applicationContext.filesDir)
+                val app = context.applicationContext
+                val created = CamdEngine(app.filesDir)
+                val createdWindows = CameraWindows(app)
                 engine = created
-                CamdApiServer(created).start()
+                windows = createdWindows
+                CamdApiServer(created, createdWindows).start()
+                Thread({ createdWindows.recover() }, "camd-recover").apply { isDaemon = true }.start()
             }
         }
     }
@@ -31,5 +36,10 @@ object CamdRuntime {
     fun engine(context: android.content.Context): CamdEngine {
         start(context)
         return checkNotNull(engine)
+    }
+
+    fun windows(context: android.content.Context): CameraWindows {
+        start(context)
+        return checkNotNull(windows)
     }
 }

@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -1025,6 +1026,7 @@ fun SettingsTabContent(
         )
         var showBulkConvertConfirm by remember { mutableStateOf(false) }
         var bulkConvertBusy by remember { mutableStateOf(false) }
+        val resources = LocalResources.current
         OutlinedButton(
             onClick = { showBulkConvertConfirm = true },
             enabled = !bulkConvertBusy,
@@ -1040,7 +1042,7 @@ fun SettingsTabContent(
         if (showBulkConvertConfirm) {
             var previewText by remember {
                 mutableStateOf(
-                    context.getString(R.string.settings_dcl_bulk_convert_confirm_loading),
+                    resources.getString(R.string.settings_dcl_bulk_convert_confirm_loading),
                 )
             }
             LaunchedEffect(Unit) {
@@ -1048,9 +1050,9 @@ fun SettingsTabContent(
                     settingsViewModel.previewDclBulkConvertCounts()
                 }.getOrNull()
                 previewText = if (preview == null) {
-                    context.getString(R.string.settings_dcl_bulk_convert_confirm_error)
+                    resources.getString(R.string.settings_dcl_bulk_convert_confirm_error)
                 } else {
-                    context.getString(
+                    resources.getString(
                         R.string.settings_dcl_bulk_convert_confirm_body,
                         preview.shortcutCount,
                         preview.automationActionCount,
@@ -1078,7 +1080,7 @@ fun SettingsTabContent(
                                 showBulkConvertConfirm = false
                                 Toast.makeText(
                                     context,
-                                    context.getString(
+                                    resources.getString(
                                         R.string.settings_dcl_bulk_convert_done,
                                         shortcuts,
                                         autos,

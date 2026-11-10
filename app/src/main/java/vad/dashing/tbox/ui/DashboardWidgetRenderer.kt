@@ -54,6 +54,7 @@ import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
@@ -1395,6 +1396,25 @@ fun DashboardWidgetRenderer(
                 titleOverride = titleOverride,
                 defaultTitle = stringResource(R.string.data_title_automation_trigger_widget),
                 automationTriggerId = widgetConfig.automationTriggerId
+            )
+        }
+
+        CAMD_WINDOW_WIDGET_DATA_KEY -> {
+            DashboardCamdWindowWidgetItem(
+                isEditMode = isEditMode,
+                onEditClick = onClick,
+                onLongClick = onLongClick,
+                elevation = elevation,
+                shape = shape,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                cameraId = widgetConfig.camdWindowCameraId,
+                x = widgetConfig.camdWindowX,
+                y = widgetConfig.camdWindowY,
+                w = widgetConfig.camdWindowW,
+                h = widgetConfig.camdWindowH,
             )
         }
 

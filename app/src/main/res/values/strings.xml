@@ -2494,6 +2494,7 @@
     <string name="data_title_http_request_widget">HTTP-запрос</string>
     <string name="data_title_phone_dial_widget">Набрать номер</string>
     <string name="data_title_automation_trigger_widget">Триггер автоматизации</string>
+    <string name="data_title_camd_window_widget">Камера ГУ</string>
     <string name="data_title_empty_tile_widget">Пустая</string>
     <string name="data_title_external_app_widget">Виджет стороннего приложения</string>
     <string name="data_title_hide_floating_panels_widget">Скрытие плавающих панелей</string>
@@ -2756,6 +2757,7 @@
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
     <string name="widget_desc_phone_dial">Исходящий звонок на сохранённый номер через Bluetooth HFP. Только главный экран и плавающие панели.</string>
     <string name="widget_desc_automation_trigger">Кнопка для запуска автоматизаций: активируется действием «Триггер автоматизации (виджет)», а одиночное или двойное нажатие запускает автоматизации с триггером «Нажатие виджета-триггера» (тип нажатия single/double) и совпадающим ID.</string>
+    <string name="widget_desc_camd_window">Окно чистого кадра с камеры головного устройства. Камера, размер и положение задаются в настройках плитки. Нужно установленное приложение «Камеры ГУ».</string>
     <string name="widget_desc_empty_tile">Пустая плитка для создания свободного места в сетке.</string>
     <string name="widget_desc_restart_tbox">Перезагрузка модуля TBox.</string>
     <string name="widget_desc_external_app">Системный Android-виджет выбранного стороннего приложения.</string>
@@ -2837,6 +2839,20 @@
     <string name="widget_actions_http_request">Одиночное нажатие — выполнить настроенное действие.</string>
     <string name="widget_actions_phone_dial">Одиночное нажатие — позвонить на сохранённый номер (нужны CALL_PHONE и активный HFP). Во время набора / разговора / удержания / входящего — сброс звонка.</string>
     <string name="widget_actions_automation_trigger">Одиночное или двойное нажатие — запустить автоматизации с совпадающим ID и типом нажатия. В режиме редактирования — открыть настройки виджета.</string>
+    <string name="widget_actions_camd_window">Одиночное нажатие — открыть окно. Двойное — закрыть. В режиме редактирования — открыть настройки виджета.</string>
+    <string name="widget_camd_window_camera">Камера</string>
+    <string name="widget_camd_window_x">Слева, %</string>
+    <string name="widget_camd_window_y">Сверху, %</string>
+    <string name="widget_camd_window_w">Ширина, %</string>
+    <string name="widget_camd_window_h">Высота, %</string>
+    <string name="camd_window_camera_front">Передняя</string>
+    <string name="camd_window_camera_rear">Задняя</string>
+    <string name="camd_window_camera_left">Левая</string>
+    <string name="camd_window_camera_right">Правая</string>
+    <string name="camd_window_camera_cabin">Салон</string>
+    <string name="camd_window_camera_oms">OMS</string>
+    <string name="camd_window_camera_dms">DMS</string>
+    <string name="camd_window_unreachable">Камеры ГУ не отвечают</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>
     <string name="widget_automation_trigger_id_hint">До 32 символов. Пустой ID — виджет всегда неактивен. Состояние сбрасывается перезапуском приложения.</string>

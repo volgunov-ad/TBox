@@ -47,6 +47,9 @@ tools/out/
 voice/src/main/assets/vits-piper-*/
 voice/src/main/assets/vosk-model-*/
 
+# camd root grabber, copied into assets by CMake
+camd/src/main/assets/camd_grab
+
 hu_perf_results/
 
 # R8 mapping.txt of published APKs (tools/build_ota_release.py), ~100 MB each

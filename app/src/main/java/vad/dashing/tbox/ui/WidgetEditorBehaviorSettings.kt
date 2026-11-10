@@ -22,6 +22,7 @@ import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MAX
 import vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_MIN
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_CURRENT_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_DAILY_TRIP
 import vad.dashing.tbox.AVG_FUEL_CONSUMPTION_SOURCE_MBCAN_VHAL
@@ -246,6 +247,10 @@ internal fun TileBehaviorSettings(
             AutomationTriggerWidgetSettingsSection(
                 state = state,
                 modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+            )
+            CamdWindowWidgetSettingsSection(
+                state = state,
+                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
             )
             WidgetButtonBindingSettingsSection(
                 state = state,
@@ -864,6 +869,7 @@ internal fun tileHasBehaviorSettings(dataKey: String): Boolean =
         dataKey == APP_LAUNCHER_WIDGET_DATA_KEY ||
         dataKey == HTTP_REQUEST_WIDGET_DATA_KEY ||
         dataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY ||
+        dataKey == CAMD_WINDOW_WIDGET_DATA_KEY ||
         supportsWidgetButtonBinding(dataKey) ||
         WidgetsRepository.supportsUseMbCanVhal(dataKey) ||
         isAverageFuelConsumptionWidgetDataKey(dataKey) ||

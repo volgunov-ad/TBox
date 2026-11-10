@@ -3,7 +3,9 @@ package vad.dashing.camd
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,7 +55,16 @@ class MainActivity : ComponentActivity() {
         } else {
             requestStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
-        val controller = CamdController(CamdRuntime.engine(this))
+        val controller = CamdController(CamdRuntime.engine(this), CamdRuntime.windows(this)) {
+            runOnUiThread {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                )
+            }
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 val state by controller.state.collectAsState()
@@ -86,7 +97,11 @@ data class CamdUiState(
     val log: String = ""
 )
 
-class CamdController(private val engine: CamdEngine) {
+class CamdController(
+    private val engine: CamdEngine,
+    private val windows: CameraWindows,
+    private val askOverlay: () -> Unit
+) {
     private val _state = MutableStateFlow(CamdUiState())
     val state: StateFlow<CamdUiState> = _state.asStateFlow()
     private val io = Executors.newSingleThreadExecutor()
@@ -96,7 +111,7 @@ class CamdController(private val engine: CamdEngine) {
             while (!Thread.currentThread().isInterrupted) {
                 if (!_state.value.busy) {
                     _state.value = _state.value.copy(
-                        status = engine.status(),
+                        status = windows.status(),
                         log = engine.logTail()
                     )
                 }
@@ -128,9 +143,9 @@ class CamdController(private val engine: CamdEngine) {
     fun open() {
         val current = _state.value
         io.execute {
-            _state.value = current.copy(busy = true, message = "Запускаю окно…")
+            _state.value = current.copy(busy = true, message = "Открываю окно…")
             val line = String.format(
-                java.util.Locale.US,
+                Locale.US,
                 "OPEN %d %.4f %.4f %.4f %.4f",
                 current.inputId,
                 current.x,
@@ -140,27 +155,33 @@ class CamdController(private val engine: CamdEngine) {
             )
             val command = CamdCommands.parse(line)
             val result = if (command is CamdCommand.Open) {
-                engine.open(command)
+                windows.open(command)
             } else {
                 "state=error error=bad_geometry"
             }
+            if (result.contains("overlay_permission")) askOverlay()
             _state.value = _state.value.copy(
                 busy = false,
-                message = result,
-                status = engine.status(),
+                message = if (result.contains("overlay_permission")) {
+                    "Не удалось выдать показ поверх других окон."
+                } else {
+                    result
+                },
+                status = windows.status(),
                 log = engine.logTail()
             )
         }
     }
 
     fun close() {
+        val inputId = _state.value.inputId
         io.execute {
             _state.value = _state.value.copy(busy = true, message = "Закрываю…")
-            val result = engine.close()
+            val result = windows.close(inputId)
             _state.value = _state.value.copy(
                 busy = false,
                 message = result,
-                status = engine.status(),
+                status = windows.status(),
                 log = engine.logTail()
             )
         }
@@ -179,7 +200,7 @@ class CamdController(private val engine: CamdEngine) {
             _state.value = _state.value.copy(
                 busy = false,
                 message = "Лог: $result",
-                status = engine.status(),
+                status = windows.status(),
                 log = engine.logTail()
             )
         }
@@ -209,8 +230,9 @@ private fun CamdScreen(
     ) {
         Text("Окно камеры", style = MaterialTheme.typography.titleLarge)
         Text(
-            "Чистый кадр через qcarcam_test от root. Сдвиг — это новое открытие. " +
-                "API 127.0.0.1:${DaemonScripts.API_PORT}: OPEN id x y w h / CLOSE / STATUS",
+            "Окно приложения, по одному на камеру. Крестик в углу закрывает его. " +
+                "Повторное открытие той же камеры только двигает окно. " +
+                "API 127.0.0.1:${DaemonScripts.API_PORT}: OPEN id x y w h / CLOSE id / CLOSE / STATUS",
             fontSize = 13.sp
         )
         Row(
@@ -227,7 +249,7 @@ private fun CamdScreen(
         }
         if (input?.heldByAvm == true) {
             Text(
-                "Этот вход держит штатный AVM. Второе окно его перебьёт.",
+                "Этот вход держит штатный AVM. Пока такое окно открыто, AVM будет остановлен.",
                 fontSize = 13.sp
             )
         }
@@ -238,7 +260,7 @@ private fun CamdScreen(
         FractionSlider("Высота", state.h, onH)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onOpen, enabled = !state.busy) { Text("Открыть") }
-            Button(onClick = onClose, enabled = !state.busy) { Text("Закрыть") }
+            Button(onClick = onClose, enabled = !state.busy) { Text("Закрыть выбранную") }
         }
         Text(
             "Проба 20 секунд, окно по центру. Лог появится в Загрузках.",

@@ -10,9 +10,13 @@ import kotlin.concurrent.thread
  * One line in, one line out, on localhost only.
  * OPEN <id> <x> <y> <w> <h>
  * CLOSE
+ * CLOSE <id>
  * STATUS
  */
-class CamdApiServer(private val engine: CamdEngine) {
+class CamdApiServer(
+    private val engine: CamdEngine,
+    private val windows: CameraWindows? = null
+) {
 
     private companion object {
         const val TAG = "CamdApi"
@@ -40,6 +44,7 @@ class CamdApiServer(private val engine: CamdEngine) {
                                 val request = client.getInputStream().bufferedReader().readLine() ?: return@thread
                                 val reply = reply(request)
                                 client.getOutputStream().write((reply + "\n").toByteArray())
+                                client.getOutputStream().flush()
                             }
                         } catch (error: Throwable) {
                             Log.e(TAG, "запрос API", error)
@@ -56,9 +61,13 @@ class CamdApiServer(private val engine: CamdEngine) {
     fun reply(request: String): String {
         val command = CamdCommands.parse(request) ?: return "ERR bad_command"
         return when (command) {
-            is CamdCommand.Open -> "OK " + engine.open(command)
-            CamdCommand.Close -> "OK " + engine.close()
-            CamdCommand.Status -> "OK " + engine.status().ifBlank { "state=unknown" }
+            is CamdCommand.Open -> windows?.let { "OK " + it.open(command) } ?: "ERR no_windows"
+            is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
+            CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
+            CamdCommand.Status -> {
+                val text = windows?.status() ?: engine.status()
+                "OK " + text.ifBlank { "state=unknown" }
+            }
         }
     }
 }

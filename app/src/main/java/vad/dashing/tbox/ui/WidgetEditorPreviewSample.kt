@@ -3,6 +3,7 @@ package vad.dashing.tbox.ui
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.APP_LIST_WIDGET_DATA_KEY
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_CYCLE_WIDGET_DATA_KEY
 import vad.dashing.tbox.DRIVE_MODE_WIDGET_DATA_KEY
@@ -115,6 +116,7 @@ private fun specialSample(dataKey: String): WidgetPreviewSample? = when (dataKey
     -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "App")
     HTTP_REQUEST_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "HTTP")
     AUTOMATION_TRIGGER_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "▶")
+    CAMD_WINDOW_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "CAM")
     WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY -> WidgetPreviewSample(WidgetPreviewKind.SPECIAL, "Ext")
     "netWidget",
     "netWidgetNew",

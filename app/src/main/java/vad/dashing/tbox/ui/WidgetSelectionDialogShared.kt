@@ -92,9 +92,17 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_W
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_X
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_Y
+import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
+import vad.dashing.tbox.normalizeCamdWindowCamera
+import vad.dashing.tbox.normalizeCamdWindowGeometry
 import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetButtonBinding
 import vad.dashing.tbox.supportsWidgetButtonBinding
@@ -713,6 +721,61 @@ internal class WidgetSelectionDialogState(
             ""
         }
     )
+    var camdWindowCameraId by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowCamera(initialConfig.camdWindowCameraId)
+        } else {
+            CAMD_WINDOW_DEFAULT_CAMERA
+        }
+    )
+    var camdWindowX by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowGeometry(
+                initialConfig.camdWindowX,
+                initialConfig.camdWindowY,
+                initialConfig.camdWindowW,
+                initialConfig.camdWindowH,
+            ).x
+        } else {
+            CAMD_WINDOW_DEFAULT_X
+        }
+    )
+    var camdWindowY by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowGeometry(
+                initialConfig.camdWindowX,
+                initialConfig.camdWindowY,
+                initialConfig.camdWindowW,
+                initialConfig.camdWindowH,
+            ).y
+        } else {
+            CAMD_WINDOW_DEFAULT_Y
+        }
+    )
+    var camdWindowW by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowGeometry(
+                initialConfig.camdWindowX,
+                initialConfig.camdWindowY,
+                initialConfig.camdWindowW,
+                initialConfig.camdWindowH,
+            ).w
+        } else {
+            CAMD_WINDOW_DEFAULT_W
+        }
+    )
+    var camdWindowH by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowGeometry(
+                initialConfig.camdWindowX,
+                initialConfig.camdWindowY,
+                initialConfig.camdWindowW,
+                initialConfig.camdWindowH,
+            ).h
+        } else {
+            CAMD_WINDOW_DEFAULT_H
+        }
+    )
     var buttonBinding by mutableStateOf(
         if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
             normalizeWidgetButtonBinding(initialConfig.buttonBinding)
@@ -1011,6 +1074,9 @@ internal class WidgetSelectionDialogState(
     val isAutomationTriggerWidgetSelected: Boolean
         get() = selectedDataKey == AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 
+    val isCamdWindowWidgetSelected: Boolean
+        get() = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY
+
     val isExternalAppWidgetSelected: Boolean
         get() = selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY
 
@@ -1210,6 +1276,31 @@ internal class WidgetSelectionDialogState(
                 normalizeAutomationTriggerId(automationTriggerId)
             } else {
                 ""
+            },
+            camdWindowCameraId = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowCamera(camdWindowCameraId)
+            } else {
+                CAMD_WINDOW_DEFAULT_CAMERA
+            },
+            camdWindowX = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowGeometry(camdWindowX, camdWindowY, camdWindowW, camdWindowH).x
+            } else {
+                CAMD_WINDOW_DEFAULT_X
+            },
+            camdWindowY = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowGeometry(camdWindowX, camdWindowY, camdWindowW, camdWindowH).y
+            } else {
+                CAMD_WINDOW_DEFAULT_Y
+            },
+            camdWindowW = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowGeometry(camdWindowX, camdWindowY, camdWindowW, camdWindowH).w
+            } else {
+                CAMD_WINDOW_DEFAULT_W
+            },
+            camdWindowH = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowGeometry(camdWindowX, camdWindowY, camdWindowW, camdWindowH).h
+            } else {
+                CAMD_WINDOW_DEFAULT_H
             },
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
@@ -1612,6 +1703,25 @@ internal class WidgetSelectionDialogState(
             normalizeAutomationTriggerId(cfg.automationTriggerId)
         } else {
             ""
+        }
+        if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            val geometry = normalizeCamdWindowGeometry(
+                cfg.camdWindowX,
+                cfg.camdWindowY,
+                cfg.camdWindowW,
+                cfg.camdWindowH,
+            )
+            camdWindowCameraId = normalizeCamdWindowCamera(cfg.camdWindowCameraId)
+            camdWindowX = geometry.x
+            camdWindowY = geometry.y
+            camdWindowW = geometry.w
+            camdWindowH = geometry.h
+        } else {
+            camdWindowCameraId = CAMD_WINDOW_DEFAULT_CAMERA
+            camdWindowX = CAMD_WINDOW_DEFAULT_X
+            camdWindowY = CAMD_WINDOW_DEFAULT_Y
+            camdWindowW = CAMD_WINDOW_DEFAULT_W
+            camdWindowH = CAMD_WINDOW_DEFAULT_H
         }
         buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
             normalizeWidgetButtonBinding(cfg.buttonBinding)

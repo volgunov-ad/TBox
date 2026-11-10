@@ -266,6 +266,19 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("automationTriggerId", automationTriggerId)
             }
         }
+        if (config.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            val geometry = normalizeCamdWindowGeometry(
+                config.camdWindowX,
+                config.camdWindowY,
+                config.camdWindowW,
+                config.camdWindowH,
+            )
+            obj.put("camdWindowCameraId", normalizeCamdWindowCamera(config.camdWindowCameraId))
+            obj.put("camdWindowX", geometry.x)
+            obj.put("camdWindowY", geometry.y)
+            obj.put("camdWindowW", geometry.w)
+            obj.put("camdWindowH", geometry.h)
+        }
         if (supportsWidgetButtonBinding(config.dataKey)) {
             normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
                 obj.put("buttonBinding", encodeWidgetButtonBinding(binding))
@@ -563,6 +576,21 @@ private fun parseWidgetConfigsFromJsonArray(
                 val tileDark = item.optString("tileBackgroundImageRelPathDark", "").trim()
                     .takeIf { TileBackgroundImageStorage.isAllowedStoredRelPath(it) }
                 val widgetScales = parseWidgetScaleTriplet(item)
+                val camdGeometry = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    normalizeCamdWindowGeometry(
+                        item.optInt("camdWindowX", CAMD_WINDOW_DEFAULT_X),
+                        item.optInt("camdWindowY", CAMD_WINDOW_DEFAULT_Y),
+                        item.optInt("camdWindowW", CAMD_WINDOW_DEFAULT_W),
+                        item.optInt("camdWindowH", CAMD_WINDOW_DEFAULT_H),
+                    )
+                } else {
+                    normalizeCamdWindowGeometry(
+                        CAMD_WINDOW_DEFAULT_X,
+                        CAMD_WINDOW_DEFAULT_Y,
+                        CAMD_WINDOW_DEFAULT_W,
+                        CAMD_WINDOW_DEFAULT_H,
+                    )
+                }
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
@@ -752,6 +780,15 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
+                        camdWindowCameraId = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                            normalizeCamdWindowCamera(item.optInt("camdWindowCameraId", CAMD_WINDOW_DEFAULT_CAMERA))
+                        } else {
+                            CAMD_WINDOW_DEFAULT_CAMERA
+                        },
+                        camdWindowX = camdGeometry.x,
+                        camdWindowY = camdGeometry.y,
+                        camdWindowW = camdGeometry.w,
+                        camdWindowH = camdGeometry.h,
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {

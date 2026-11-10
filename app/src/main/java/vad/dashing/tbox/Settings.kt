@@ -195,6 +195,13 @@ data class FloatingDashboardWidgetConfig(
     val dialConfirmBeforeCall: Boolean = false,
     /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
     val automationTriggerId: String = "",
+    /** Camera input for [CAMD_WINDOW_WIDGET_DATA_KEY]. */
+    val camdWindowCameraId: Int = CAMD_WINDOW_DEFAULT_CAMERA,
+    /** Window origin and size for [CAMD_WINDOW_WIDGET_DATA_KEY], percent of the screen. */
+    val camdWindowX: Int = CAMD_WINDOW_DEFAULT_X,
+    val camdWindowY: Int = CAMD_WINDOW_DEFAULT_Y,
+    val camdWindowW: Int = CAMD_WINDOW_DEFAULT_W,
+    val camdWindowH: Int = CAMD_WINDOW_DEFAULT_H,
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**

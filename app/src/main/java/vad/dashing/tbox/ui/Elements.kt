@@ -1341,7 +1341,7 @@ fun GeometryWhxyCommitBlock(
         parsedX != savedX ||
         parsedY != savedY
     val canCommit = enabled && valid && dirty
-    val commitDrafts: () -> Unit = {
+    val commitDrafts = commitDrafts@{
         val w = parseGeometryDraftInt(draftW) ?: return@commitDrafts
         val h = parseGeometryDraftInt(draftH) ?: return@commitDrafts
         val x = parseGeometryDraftInt(draftX) ?: return@commitDrafts

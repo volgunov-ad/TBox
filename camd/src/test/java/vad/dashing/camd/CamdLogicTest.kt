@@ -31,7 +31,8 @@ class CamdCommandTest {
     fun parsesOpenCloseAndStatus() {
         val open = CamdCommands.parse("OPEN 0 0.0200 0.7000 0.2800 0.2800")
         assertEquals(CamdCommand.Open(0, 0.02f, 0.70f, 0.28f, 0.28f), open)
-        assertEquals(CamdCommand.Close, CamdCommands.parse("close"))
+        assertEquals(CamdCommand.CloseAll, CamdCommands.parse("close"))
+        assertEquals(CamdCommand.Close(4), CamdCommands.parse("CLOSE 4"))
         assertEquals(CamdCommand.Status, CamdCommands.parse("STATUS"))
     }
 
@@ -94,6 +95,48 @@ class ProbeScriptTest {
         assertTrue(launcher.contains("sh /data/data/vad.dashing.camd/files/camd-probe-nonce1.sh"))
         assertTrue(launcher.contains("&"))
         assertTrue(launcher.trimEnd().endsWith("exit 0"))
+    }
+}
+
+class GrabberScriptTest {
+    @Test
+    fun launcherStopsAvmBeforeTheGrabberAndReturns() {
+        val text = GrabberScripts.launcher("n1", stopAvm = true)
+        val stop = text.indexOf("setprop ctl.stop AVMapp")
+        val process = text.indexOf("camd_grab")
+        assertTrue(stop >= 0)
+        assertTrue(process > stop)
+        assertTrue(text.contains("appops set vad.dashing.camd SYSTEM_ALERT_WINDOW allow"))
+        assertTrue(text.indexOf("SYSTEM_ALERT_WINDOW") < process)
+        assertFalse(text.contains("\r"))
+        assertTrue(text.trimEnd().endsWith("exit 0"))
+    }
+
+    @Test
+    fun launcherKeepsAvmWhenTheCameraIsNotSurround() {
+        val text = GrabberScripts.launcher("n2", stopAvm = false)
+        assertFalse(text.contains("ctl.stop"))
+        assertTrue(text.contains("exit 0"))
+    }
+
+    @Test
+    fun startAvmWritesTheNonceBeforeExit() {
+        val text = GrabberScripts.startAvm("nonce9")
+        val echo = text.indexOf("echo nonce9")
+        val exit = text.indexOf("exit 0")
+        assertTrue(echo >= 0)
+        assertTrue(exit > echo)
+        assertTrue(text.contains("ctl.start AVMapp"))
+    }
+
+    @Test
+    fun grantOverlayAllowsTheWindowBeforeExit() {
+        val text = GrabberScripts.grantOverlay("nonce3")
+        val grant = text.indexOf("appops set vad.dashing.camd SYSTEM_ALERT_WINDOW allow")
+        val exit = text.indexOf("exit 0")
+        assertTrue(grant >= 0)
+        assertTrue(exit > grant)
+        assertTrue(text.contains("echo nonce3"))
     }
 }
 

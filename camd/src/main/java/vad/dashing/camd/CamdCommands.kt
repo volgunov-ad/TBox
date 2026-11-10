@@ -9,7 +9,8 @@ sealed class CamdCommand {
         val h: Float
     ) : CamdCommand()
 
-    data object Close : CamdCommand()
+    data object CloseAll : CamdCommand()
+    data class Close(val inputId: Int) : CamdCommand()
     data object Status : CamdCommand()
 }
 
@@ -19,7 +20,11 @@ object CamdCommands {
         if (parts.isEmpty()) return null
         return when (parts[0].uppercase()) {
             "OPEN" -> parseOpen(parts)
-            "CLOSE" -> CamdCommand.Close
+            "CLOSE" -> when (parts.size) {
+                1 -> CamdCommand.CloseAll
+                2 -> parts[1].toIntOrNull()?.let { CamdCommand.Close(it) }
+                else -> null
+            }
             "STATUS" -> CamdCommand.Status
             else -> null
         }

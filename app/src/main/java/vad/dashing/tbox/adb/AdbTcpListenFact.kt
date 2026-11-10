@@ -26,7 +26,7 @@ object AdbTcpListenFact {
     private var probeOverride: Probe? = null
 
     @Volatile
-    private var nowElapsedMs: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+    private var nowElapsedMs: () -> Long = { monotonicNowMs() }
 
     /**
      * Whether localhost:[HuAdbControl.TCP_ENABLED_PORT] currently accepts TCP connections.
@@ -64,8 +64,11 @@ object AdbTcpListenFact {
     internal fun resetForTests() {
         probeOverride = null
         cache.set(null)
-        nowElapsedMs = { android.os.SystemClock.elapsedRealtime() }
+        nowElapsedMs = { monotonicNowMs() }
     }
+
+    /** Monotonic milliseconds. JVM unit tests cannot call SystemClock.elapsedRealtime. */
+    private fun monotonicNowMs(): Long = System.nanoTime() / 1_000_000L
 
     private fun activeProbe(): Probe = probeOverride ?: DefaultProbe
 
