@@ -249,6 +249,27 @@ class WinPatchCodecTest {
         WinPatchCodec.applyScript(mapOf(WinPatchCodec.ANDROID_AUTO to aaStage, WinPatchCodec.CAR_PLAY to cpStage))
 
     @Test
+    fun carPlayLayoutScriptWrites864ForBarsAndRestores1080ForWindow() {
+        val bars = WinPatchCodec.carPlayLayoutScript(WinPatchCodec.Layout.Bars)
+        assertTrue(bars.contains("\"heightPixels\":864"))
+        assertTrue(bars.contains("\"heightPhysical\":156"))
+        assertTrue(bars.contains("settings put global ${WinPatchCodec.LAYOUT_SETTING} bars"))
+        assertTrue(bars.contains("kill \$(pidof ${WinPatchCodec.CARPLAY_SERVER})"))
+        assertTrue(bars.contains(WinPatchCodec.LAYOUT_MARKER))
+        assertTrue(bars.contains(WinPatchCodec.CARPLAY_CONFIG_BACKUP))
+        assertTrue(bars.contains("fail nocpbackup"))
+        assertFalse(bars.contains("settings put global ${WinPatchCodec.LAYOUT_SETTING} window"))
+
+        val window = WinPatchCodec.carPlayLayoutScript(WinPatchCodec.Layout.Window)
+        assertTrue(window.contains("cp \"\$BAK\" \"\$N\""))
+        assertTrue(window.contains("\"heightPixels\":1080"))
+        assertTrue(window.contains("\"heightPhysical\":195"))
+        assertTrue(window.contains("settings put global ${WinPatchCodec.LAYOUT_SETTING} window"))
+        assertFalse(window.contains("\"heightPixels\":864"))
+        assertTrue(window.contains(WinPatchCodec.LAYOUT_MARKER))
+    }
+
+    @Test
     fun parseLayoutTreatsOnlyBarsAsFullscreenBetweenBars() {
         assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout(null))
         assertEquals(WinPatchCodec.Layout.Window, WinPatchCodec.parseLayout(""))

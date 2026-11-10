@@ -153,8 +153,7 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun inspect() {
-        val paths = WinPatchCodec.TARGETS.flatMap { listOf(it.systemPath, it.backupPath, it.legacyBackupPath) } +
-            WinPatchCodec.CARPLAY_CONFIG
+        val paths = WinPatchCodec.TARGETS.flatMap { listOf(it.systemPath, it.backupPath, it.legacyBackupPath) }
         val (md5Output, incremental, layoutRaw) = openShell().use { shell ->
             val md5s = shell.rootText(paths.joinToString(" ") { "md5sum $it" } + " 2>/dev/null; true")
             val inc = shell.rootText("getprop ro.build.version.incremental").trim()
@@ -177,13 +176,15 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
                 legacyOk = t.stockVariantByMd5(legMd5) != null,
             )
         }
-        val configMd5 = md5s[WinPatchCodec.CARPLAY_CONFIG]
         val layoutReady = infos.any { it.system == FileState.Patched }
         val facts = listOf(
             "Прошивка ГУ" to WinPatchCodec.firmwareNameForIncremental(incremental),
             "Режим запуска" to if (layout == WinPatchCodec.Layout.Bars) "почти весь экран" else "окно лаунчера",
-            "CarPlayManagerConfig.json" to
-                (configMd5?.let { "не изменяется установщиком (${it.take(8)}…)" } ?: "не найден"),
+            "Поток CarPlay" to if (layout == WinPatchCodec.Layout.Bars) {
+                "1920×864, область между барами"
+            } else {
+                "1920×1080, в окне с полосами"
+            },
             "Резервные копии стока" to "вшиты в приложение для V00.03.07, 03.16, 05.09 и 07.12",
         )
         val panels = infos.map(::panelOf)
@@ -201,6 +202,7 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
                     "(${WinPatchCodec.CAR_PLAY.patchLabel}) ставятся и откатываются отдельно: " +
                     "запись в /system со снятием защиты eMMC, очистка dalvik-cache и перезапуск процесса. " +
                     "Один патч открывает приложения либо в окне лаунчера, либо почти на весь экран между барами. " +
+                    "Кнопка режима для CarPlay записывает размер потока в CarPlayManagerConfig.json. " +
                     "Эталонные стоковые APK для всех версий прошивки вшиты в приложение." +
                     if (anyPatched) " Если режим не подхватился после установки — перезагрузите ГУ." else "",
                 WinPatchBannerKind.Info,
@@ -223,27 +225,37 @@ class WinPatchViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun writeLayout(layout: WinPatchCodec.Layout) {
-        val value = if (layout == WinPatchCodec.Layout.Bars) WinPatchCodec.LAYOUT_BARS else WinPatchCodec.LAYOUT_WINDOW
-        openShell().use { shell ->
+        val script = WinPatchCodec.carPlayLayoutScript(layout)
+        val output = openShell().use { shell ->
             if (shell.rootText("id -u").trim() != "0") throw IOException("su не дал root")
-            val saved = shell.rootText(
-                "settings put global ${WinPatchCodec.LAYOUT_SETTING} $value; settings get global ${WinPatchCodec.LAYOUT_SETTING}",
-            )
-            if (WinPatchCodec.parseLayout(saved) != layout) {
-                throw IOException("настройка не сохранилась (${saved.trim()})")
-            }
-            shell.rootText(
-                "am force-stop ${WinPatchCodec.ANDROID_AUTO.processName}; " +
-                    "am force-stop ${WinPatchCodec.CAR_PLAY.processName}",
-            )
+            shell.rootText("mkdir -p ${WinPatchCodec.WORK_DIR} && chmod 700 ${WinPatchCodec.WORK_DIR}")
+            shell.writeFile(WinPatchCodec.LAYOUT_SCRIPT, script.toByteArray(Charsets.UTF_8))
+            val result = shell.root("sh ${WinPatchCodec.LAYOUT_SCRIPT}")
+            "${result.stdout}\n${result.stderr}"
+        }
+        val failed = output.lineSequence().map { it.trim() }.firstOrNull { it.startsWith(WinPatchCodec.ERR_MARKER) }
+        if (failed != null) {
+            throw IOException(layoutError(failed.removePrefix(WinPatchCodec.ERR_MARKER).trim()))
+        }
+        if (WinPatchCodec.LAYOUT_MARKER !in output || WinPatchCodec.parseLayout(output) != layout) {
+            throw IOException("настройка не сохранилась")
         }
         inspect()
         val text = if (layout == WinPatchCodec.Layout.Bars) {
-            "Сохранён режим «почти весь экран». Откройте Android Auto или CarPlay заново — выбор останется после перезагрузки."
+            "Сохранён режим «почти весь экран». CarPlay отдаст 1920×864 и заполнит область между барами. " +
+                "Выньте и вставьте кабель iPhone. Android Auto откройте заново."
         } else {
-            "Сохранён режим «окно лаунчера». Откройте Android Auto или CarPlay заново — выбор останется после перезагрузки."
+            "Сохранён режим «окно лаунчера». CarPlay снова 1920×1080, в окне будут полосы сверху и снизу. " +
+                "Выньте и вставьте кабель iPhone. Android Auto откройте заново."
         }
         _state.update { it.copy(banner = WinPatchBanner(text, WinPatchBannerKind.Success)) }
+    }
+
+    private fun layoutError(code: String): String = when (code) {
+        "nocpbackup", "badcpbackup" ->
+            "Нет сохранённого штатного CarPlayManagerConfig.json 1920×1080. Режим не переключён."
+        "wpoff", "remount" -> "Не удалось снять защиту записи eMMC ($code)."
+        else -> "Смена режима CarPlay не записалась ($code)."
     }
 
     private fun panelOf(info: TargetInfo): WinPatchTargetPanel {

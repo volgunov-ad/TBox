@@ -308,6 +308,10 @@ public final class WindowSurface extends SurfaceView {
         Log.d("CPViewPatch", "startInWindow display=" + displayId + " surfaceId=" + sid);
     }
 
+    /**
+     * Window mode keeps the stock 1920×1080 stream and letterboxes it 16:9.
+     * Bars mode is a 1920×864 stream, so the surface fills the parent 1:1.
+     */
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         int width = MeasureSpec.getSize(widthSpec);
@@ -316,19 +320,23 @@ public final class WindowSurface extends SurfaceView {
             super.onMeasure(widthSpec, heightSpec);
             return;
         }
-        if ((long) width * 1080 > (long) height * 1920) {
-            width = height * 1920 / 1080;
-        } else {
-            height = width * 1080 / 1920;
+        if (!barsMode(getContext())) {
+            if ((long) width * 1080 > (long) height * 1920) {
+                width = height * 1920 / 1080;
+            } else {
+                height = width * 1080 / 1920;
+            }
         }
         setMeasuredDimension(width, height);
-        Log.d("CPViewPatch", "fit16x9=" + width + "x" + height);
+        Log.d("CPViewPatch", (barsMode(getContext()) ? "fill=" : "fit16x9=") + width + "x" + height);
     }
 
     public int[] mapTouch(MotionEvent event) {
         int action = event.getActionMasked();
-        float x = event.getX() - getLeft();
-        float y = event.getY() - getTop();
+        int[] inWindow = new int[2];
+        getLocationInWindow(inWindow);
+        float x = event.getX() - inWindow[0];
+        float y = event.getY() - inWindow[1];
         int width = getWidth();
         int height = getHeight();
         if (width <= 0 || height <= 0) return null;
@@ -336,8 +344,13 @@ public final class WindowSurface extends SurfaceView {
             tracking = x >= 0 && y >= 0 && x < width && y < height;
         }
         if (!tracking) return null;
-        int mappedX = Math.max(0, Math.min(1919, (int) (x * 1920 / width)));
-        int mappedY = Math.max(0, Math.min(1079, (int) (y * 1080 / height)));
+        int videoW = 1920;
+        int videoH = 1080;
+        if (barsMode(getContext())) {
+            videoH = 864;
+        }
+        int mappedX = Math.max(0, Math.min(videoW - 1, (int) (x * videoW / width)));
+        int mappedY = Math.max(0, Math.min(videoH - 1, (int) (y * videoH / height)));
         int pressed;
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             tracking = false;

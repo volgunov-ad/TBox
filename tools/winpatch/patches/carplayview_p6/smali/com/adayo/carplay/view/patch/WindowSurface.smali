@@ -1349,239 +1349,270 @@
 
 # virtual methods
 .method public mapTouch(Landroid/view/MotionEvent;)[I
-    .locals 10
+    .locals 11
 
-    .line 329
+    .line 335
     invoke-virtual {p1}, Landroid/view/MotionEvent;->getActionMasked()I
 
     move-result v0
 
-    .line 330
+    .line 336
+    const/4 v1, 0x2
+
+    new-array v2, v1, [I
+
+    .line 337
+    invoke-virtual {p0, v2}, Lcom/adayo/carplay/view/patch/WindowSurface;->getLocationInWindow([I)V
+
+    .line 338
     invoke-virtual {p1}, Landroid/view/MotionEvent;->getX()F
 
-    move-result v1
+    move-result v3
 
-    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getLeft()I
+    const/4 v4, 0x0
 
-    move-result v2
+    aget v5, v2, v4
+
+    int-to-float v5, v5
+
+    sub-float/2addr v3, v5
+
+    .line 339
+    invoke-virtual {p1}, Landroid/view/MotionEvent;->getY()F
+
+    move-result v5
+
+    const/4 v6, 0x1
+
+    aget v2, v2, v6
 
     int-to-float v2, v2
 
-    sub-float/2addr v1, v2
+    sub-float/2addr v5, v2
 
-    .line 331
-    invoke-virtual {p1}, Landroid/view/MotionEvent;->getY()F
+    .line 340
+    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getWidth()I
 
     move-result v2
 
-    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getTop()I
-
-    move-result v3
-
-    int-to-float v3, v3
-
-    sub-float/2addr v2, v3
-
-    .line 332
-    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getWidth()I
-
-    move-result v3
-
-    .line 333
+    .line 341
     invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getHeight()I
 
-    move-result v4
+    move-result v7
 
-    .line 334
-    const/4 v5, 0x0
-
-    if-lez v3, :cond_9
-
-    if-gtz v4, :cond_0
-
-    goto/16 :goto_4
-
-    .line 335
-    :cond_0
-    const/4 v6, 0x1
-
-    const/4 v7, 0x0
-
-    if-nez v0, :cond_2
-
-    .line 336
+    .line 342
     const/4 v8, 0x0
 
-    cmpl-float v9, v1, v8
+    if-lez v2, :cond_a
+
+    if-gtz v7, :cond_0
+
+    goto/16 :goto_5
+
+    .line 343
+    :cond_0
+    if-nez v0, :cond_2
+
+    .line 344
+    const/4 v9, 0x0
+
+    cmpl-float v10, v3, v9
+
+    if-ltz v10, :cond_1
+
+    cmpl-float v9, v5, v9
 
     if-ltz v9, :cond_1
 
-    cmpl-float v8, v2, v8
+    int-to-float v9, v2
 
-    if-ltz v8, :cond_1
+    cmpg-float v9, v3, v9
 
-    int-to-float v8, v3
+    if-gez v9, :cond_1
 
-    cmpg-float v8, v1, v8
+    int-to-float v9, v7
 
-    if-gez v8, :cond_1
+    cmpg-float v9, v5, v9
 
-    int-to-float v8, v4
+    if-gez v9, :cond_1
 
-    cmpg-float v8, v2, v8
-
-    if-gez v8, :cond_1
-
-    move v8, v6
+    move v9, v6
 
     goto :goto_0
 
     :cond_1
-    move v8, v7
+    move v9, v4
 
     :goto_0
-    iput-boolean v8, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
+    iput-boolean v9, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
 
-    .line 338
+    .line 346
     :cond_2
-    iget-boolean v8, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
+    iget-boolean v9, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
 
-    if-nez v8, :cond_3
+    if-nez v9, :cond_3
 
-    return-object v5
+    return-object v8
 
-    .line 339
+    .line 347
     :cond_3
-    const/high16 v8, 0x44f00000    # 1920.0f
+    nop
 
-    mul-float/2addr v1, v8
+    .line 348
+    nop
 
-    int-to-float v8, v3
+    .line 349
+    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getContext()Landroid/content/Context;
 
-    div-float/2addr v1, v8
+    move-result-object v9
 
-    float-to-int v1, v1
+    invoke-static {v9}, Lcom/adayo/carplay/view/patch/WindowSurface;->barsMode(Landroid/content/Context;)Z
 
-    const/16 v8, 0x77f
+    move-result v9
 
-    invoke-static {v8, v1}, Ljava/lang/Math;->min(II)I
+    if-eqz v9, :cond_4
 
-    move-result v1
-
-    invoke-static {v7, v1}, Ljava/lang/Math;->max(II)I
-
-    move-result v1
-
-    .line 340
-    const/high16 v8, 0x44870000    # 1080.0f
-
-    mul-float/2addr v2, v8
-
-    int-to-float v8, v4
-
-    div-float/2addr v2, v8
-
-    float-to-int v2, v2
-
-    const/16 v8, 0x437
-
-    invoke-static {v8, v2}, Ljava/lang/Math;->min(II)I
-
-    move-result v2
-
-    invoke-static {v7, v2}, Ljava/lang/Math;->max(II)I
-
-    move-result v2
-
-    .line 342
-    const/4 v8, 0x2
-
-    if-eq v0, v6, :cond_7
-
-    const/4 v9, 0x3
-
-    if-ne v0, v9, :cond_4
-
-    goto :goto_2
-
-    .line 345
-    :cond_4
-    if-eqz v0, :cond_6
-
-    if-ne v0, v8, :cond_5
+    .line 350
+    const/16 v9, 0x360
 
     goto :goto_1
 
-    .line 348
-    :cond_5
-    return-object v5
-
-    .line 346
-    :cond_6
-    :goto_1
-    goto :goto_3
-
-    .line 343
-    :cond_7
-    :goto_2
-    iput-boolean v7, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
-
-    .line 344
-    move v6, v7
-
-    .line 350
-    :goto_3
-    if-ne v0, v8, :cond_8
-
-    iget v7, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastX:I
-
-    if-ne v1, v7, :cond_8
-
-    iget v7, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastY:I
-
-    if-ne v2, v7, :cond_8
-
-    return-object v5
-
-    .line 351
-    :cond_8
-    iput v1, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastX:I
+    .line 349
+    :cond_4
+    const/16 v9, 0x438
 
     .line 352
-    iput v2, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastY:I
+    :goto_1
+    const/high16 v10, 0x44f00000    # 1920.0f
+
+    mul-float/2addr v3, v10
+
+    int-to-float v10, v2
+
+    div-float/2addr v3, v10
+
+    float-to-int v3, v3
+
+    const/16 v10, 0x77f
+
+    invoke-static {v10, v3}, Ljava/lang/Math;->min(II)I
+
+    move-result v3
+
+    invoke-static {v4, v3}, Ljava/lang/Math;->max(II)I
+
+    move-result v3
 
     .line 353
-    new-instance v5, Ljava/lang/StringBuilder;
+    add-int/lit8 v10, v9, -0x1
 
-    invoke-direct {v5}, Ljava/lang/StringBuilder;-><init>()V
+    int-to-float v9, v9
 
-    const-string v7, "action="
+    mul-float/2addr v5, v9
 
-    invoke-virtual {v5, v7}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    int-to-float v9, v7
 
-    move-result-object v5
+    div-float/2addr v5, v9
 
-    invoke-virtual {v5, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    float-to-int v5, v5
+
+    invoke-static {v10, v5}, Ljava/lang/Math;->min(II)I
+
+    move-result v5
+
+    invoke-static {v4, v5}, Ljava/lang/Math;->max(II)I
+
+    move-result v5
+
+    .line 355
+    if-eq v0, v6, :cond_8
+
+    const/4 v9, 0x3
+
+    if-ne v0, v9, :cond_5
+
+    goto :goto_3
+
+    .line 358
+    :cond_5
+    if-eqz v0, :cond_7
+
+    if-ne v0, v1, :cond_6
+
+    goto :goto_2
+
+    .line 361
+    :cond_6
+    return-object v8
+
+    .line 359
+    :cond_7
+    :goto_2
+    move v4, v6
+
+    goto :goto_4
+
+    .line 356
+    :cond_8
+    :goto_3
+    iput-boolean v4, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->tracking:Z
+
+    .line 357
+    nop
+
+    .line 363
+    :goto_4
+    if-ne v0, v1, :cond_9
+
+    iget v1, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastX:I
+
+    if-ne v3, v1, :cond_9
+
+    iget v1, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastY:I
+
+    if-ne v5, v1, :cond_9
+
+    return-object v8
+
+    .line 364
+    :cond_9
+    iput v3, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastX:I
+
+    .line 365
+    iput v5, p0, Lcom/adayo/carplay/view/patch/WindowSurface;->lastY:I
+
+    .line 366
+    new-instance v1, Ljava/lang/StringBuilder;
+
+    invoke-direct {v1}, Ljava/lang/StringBuilder;-><init>()V
+
+    const-string v6, "action="
+
+    invoke-virtual {v1, v6}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+
+    move-result-object v1
+
+    invoke-virtual {v1, v0}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object v0
 
-    const-string v5, " local="
+    const-string v1, " local="
 
-    invoke-virtual {v0, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object v0
 
     invoke-virtual {p1}, Landroid/view/MotionEvent;->getX()F
 
-    move-result v5
+    move-result v1
 
-    invoke-virtual {v0, v5}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
+    invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(F)Ljava/lang/StringBuilder;
 
     move-result-object v0
 
-    const-string v5, ","
+    const-string v1, ","
 
-    invoke-virtual {v0, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object v0
 
@@ -1599,7 +1630,7 @@
 
     move-result-object p1
 
-    .line 354
+    .line 367
     invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getLeft()I
 
     move-result v0
@@ -1608,7 +1639,7 @@
 
     move-result-object p1
 
-    invoke-virtual {p1, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
@@ -1620,19 +1651,19 @@
 
     move-result-object p1
 
-    invoke-virtual {p1, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
-    invoke-virtual {p1, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
-    invoke-virtual {p1, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
-    invoke-virtual {p1, v4}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v7}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
@@ -1642,15 +1673,15 @@
 
     move-result-object p1
 
-    invoke-virtual {p1, v1}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v3}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
-    invoke-virtual {p1, v5}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
-    invoke-virtual {p1, v2}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v5}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
@@ -1660,7 +1691,7 @@
 
     move-result-object p1
 
-    invoke-virtual {p1, v6}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
+    invoke-virtual {p1, v4}, Ljava/lang/StringBuilder;->append(I)Ljava/lang/StringBuilder;
 
     move-result-object p1
 
@@ -1668,46 +1699,57 @@
 
     move-result-object p1
 
-    .line 353
+    .line 366
     const-string v0, "CPViewPatch"
 
     invoke-static {v0, p1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
-    .line 356
-    filled-new-array {v6, v1, v2}, [I
+    .line 369
+    filled-new-array {v4, v3, v5}, [I
 
     move-result-object p1
 
     return-object p1
 
-    .line 334
-    :cond_9
-    :goto_4
-    return-object v5
+    .line 342
+    :cond_a
+    :goto_5
+    return-object v8
 .end method
 
 .method protected onMeasure(II)V
     .locals 6
 
-    .line 313
+    .line 317
     invoke-static {p1}, Landroid/view/View$MeasureSpec;->getSize(I)I
 
     move-result v0
 
-    .line 314
+    .line 318
     invoke-static {p2}, Landroid/view/View$MeasureSpec;->getSize(I)I
 
     move-result v1
 
-    .line 315
-    if-lez v0, :cond_2
+    .line 319
+    if-lez v0, :cond_4
 
     if-gtz v1, :cond_0
 
-    goto :goto_1
+    goto :goto_2
 
-    .line 319
+    .line 323
     :cond_0
+    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getContext()Landroid/content/Context;
+
+    move-result-object p1
+
+    invoke-static {p1}, Lcom/adayo/carplay/view/patch/WindowSurface;->barsMode(Landroid/content/Context;)Z
+
+    move-result p1
+
+    if-nez p1, :cond_2
+
+    .line 324
     int-to-long p1, v0
 
     const-wide/16 v2, 0x438
@@ -1724,30 +1766,47 @@
 
     if-lez p1, :cond_1
 
-    .line 320
+    .line 325
     mul-int/lit16 p1, v1, 0x780
 
     div-int/lit16 v0, p1, 0x438
 
     goto :goto_0
 
-    .line 322
+    .line 327
     :cond_1
     mul-int/lit16 p1, v0, 0x438
 
     div-int/lit16 v1, p1, 0x780
 
-    .line 324
+    .line 330
+    :cond_2
     :goto_0
     invoke-virtual {p0, v0, v1}, Lcom/adayo/carplay/view/patch/WindowSurface;->setMeasuredDimension(II)V
 
-    .line 325
+    .line 331
     new-instance p1, Ljava/lang/StringBuilder;
 
     invoke-direct {p1}, Ljava/lang/StringBuilder;-><init>()V
 
+    invoke-virtual {p0}, Lcom/adayo/carplay/view/patch/WindowSurface;->getContext()Landroid/content/Context;
+
+    move-result-object p2
+
+    invoke-static {p2}, Lcom/adayo/carplay/view/patch/WindowSurface;->barsMode(Landroid/content/Context;)Z
+
+    move-result p2
+
+    if-eqz p2, :cond_3
+
+    const-string p2, "fill="
+
+    goto :goto_1
+
+    :cond_3
     const-string p2, "fit16x9="
 
+    :goto_1
     invoke-virtual {p1, p2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
     move-result-object p1
@@ -1774,14 +1833,14 @@
 
     invoke-static {p2, p1}, Landroid/util/Log;->d(Ljava/lang/String;Ljava/lang/String;)I
 
-    .line 326
+    .line 332
     return-void
 
-    .line 316
-    :cond_2
-    :goto_1
+    .line 320
+    :cond_4
+    :goto_2
     invoke-super {p0, p1, p2}, Landroid/view/SurfaceView;->onMeasure(II)V
 
-    .line 317
+    .line 321
     return-void
 .end method

@@ -16,6 +16,11 @@ object WinPatchCodec {
     const val APPLY_SCRIPT = "$WORK_DIR/apply.sh"
     const val RESTORE_SCRIPT = "$WORK_DIR/restore.sh"
     const val CARPLAY_CONFIG = "/system/etc/adayo/carplay/CarPlayManagerConfig.json"
+    const val CARPLAY_CONFIG_BACKUP = "$WORK_DIR/CarPlayManagerConfig.stock.json"
+    const val CARPLAY_CONFIG_LEGACY_BACKUP = "/data/local/tmp/CarPlayManagerConfig.json.orig"
+    const val CARPLAY_SERVER = "com.adayo.carplay"
+    const val LAYOUT_SCRIPT = "$WORK_DIR/layout.sh"
+    const val LAYOUT_MARKER = "TBOX_WINPATCH_LAYOUT"
 
     /** `settings get/put global`. Read by the patched AA and CarPlay on each launch. */
     const val LAYOUT_SETTING = "tbox_winpatch_layout"
@@ -117,7 +122,7 @@ object WinPatchCodec {
         legacyBackupPath = "/data/local/tmp/AndroidAuto_orig_backup.apk",
         assetName = "AndroidAuto_p6.apk",
         stockMd5 = "821cf2db51435747bd974a81fd52d1bb",
-        patchedMd5 = "db8efcab587b992ef96f720f84399144",
+        patchedMd5 = "14325504ae3961e08138ab39c9151366",
         processName = "com.adayo.androidauto",
         stockVariants = ANDROID_AUTO_STOCK_VARIANTS,
         legacyPatchedMd5s = mapOf(
@@ -136,6 +141,11 @@ object WinPatchCodec {
             "22619227b2df11c30c76a49dee268c29" to "p6-mode",
             "8aceab907534f273e93a37d6b851dc02" to "p6-crash",
             "4627daaf718dc7565d5bb2e2392aba73" to "p6-stretch",
+            "db8efcab587b992ef96f720f84399144" to "p6-crop",
+            "39f5e576f5464e70667b5ab7bb865324" to "p6-rebuild",
+            "5db12f93b9cb64d28acc1d399d12b191" to "p6-rebuild2",
+            "60d81e8e5252773969aa47c9655c6cce" to "p6-prev",
+            "85ba1bfecf397cd9b65dc4b13a6bb50a" to "p6-rebuild3",
         ),
     )
 
@@ -148,7 +158,7 @@ object WinPatchCodec {
         legacyBackupPath = "/data/local/tmp/CarPlayView_orig_backup.apk",
         assetName = "CarPlayView_p6.apk",
         stockMd5 = "2718803663e016a969e6d2fa0d2b4c16",
-        patchedMd5 = "8acc7bddaf06221892d27ae76796a5c2",
+        patchedMd5 = "44b12e46506df98b3b6ebe101deac39c",
         processName = "com.adayo.carplay.view",
         stockVariants = CARPLAY_STOCK_VARIANTS,
         legacyPatchedMd5s = mapOf(
@@ -163,6 +173,11 @@ object WinPatchCodec {
             "af0888794b02440a499ee22f83f12842" to "p6-mode",
             "a03971924667e2d8972b3acd63d634e4" to "p6-crash",
             "a00fc1a55bbbbe52977833b217663f09" to "p6-prev",
+            "8acc7bddaf06221892d27ae76796a5c2" to "p6-fit",
+            "9b2ecdbddc3aa3a0a16578c148b91685" to "p6-fill",
+            "f96afe29961c113566b9c58a4ac071f7" to "p6-bars",
+            "a70979af92b8642cc668b2f802350df3" to "p6-1327",
+            "31e3f40b8e1cc04952a6df487b0c0770" to "p6-fill",
         ),
     )
 
@@ -391,6 +406,88 @@ object WinPatchCodec {
             restoreBody(ordered, stockStages, stockMd5ByTarget) +
             scriptTail(ordered) +
             "echo \"$RESTORED_MARKER\"\n"
+    }
+
+    /**
+     * Rewrites the CarPlay main display from the stock backup and stores the launch mode.
+     * Bars is the checked 1920×864 stream (heightPhysical 156). Window restores 1920×1080.
+     * The iPhone reads the size only when it connects, so the caller must ask for a replug.
+     */
+    fun carPlayLayoutScript(layout: Layout): String {
+        val mode = if (layout == Layout.Bars) LAYOUT_BARS else LAYOUT_WINDOW
+        val prepare = if (layout == Layout.Bars) {
+            """
+            |sed 's/"heightPixels":1080/"heightPixels":864/; s/"heightPhysical":195/"heightPhysical":156/' "${'$'}BAK" > "${'$'}N" || fail sed
+            |grep -q '"heightPixels":864' "${'$'}N" || fail verify
+            |grep -q '"heightPhysical":156' "${'$'}N" || fail verify
+            |grep -q '"widthPixels":1920' "${'$'}N" || fail verify
+            |grep -q '"heightPixels":1080' "${'$'}N" && fail verify
+            """.trimMargin()
+        } else {
+            """
+            |cp "${'$'}BAK" "${'$'}N" || fail cp
+            |grep -q '"heightPixels":1080' "${'$'}N" || fail verify
+            |grep -q '"heightPhysical":195' "${'$'}N" || fail verify
+            |grep -q '"widthPixels":1920' "${'$'}N" || fail verify
+            """.trimMargin()
+        }
+        val checkLive = if (layout == Layout.Bars) {
+            """
+            |grep -q '"heightPixels":864' "${'$'}S" || fail verify
+            |grep -q '"heightPhysical":156' "${'$'}S" || fail verify
+            """.trimMargin()
+        } else {
+            """
+            |grep -q '"heightPixels":1080' "${'$'}S" || fail verify
+            |grep -q '"heightPhysical":195' "${'$'}S" || fail verify
+            """.trimMargin()
+        }
+        return """
+            |S=$CARPLAY_CONFIG
+            |BAK=$CARPLAY_CONFIG_BACKUP
+            |LEG=$CARPLAY_CONFIG_LEGACY_BACKUP
+            |N=$WORK_DIR/CarPlayManagerConfig.next
+            |P=$WP_PROC
+            |D=$DISK
+            |fail() { echo $ERR_MARKER "${'$'}1"; exit 1; }
+            |mkdir -p $WORK_DIR
+            |if [ ! -s "${'$'}BAK" ]; then
+            |  if [ -s "${'$'}LEG" ] && grep -q '"heightPixels":1080' "${'$'}LEG" && grep -q '"heightPhysical":195' "${'$'}LEG"; then
+            |    cp "${'$'}LEG" "${'$'}BAK" || fail cpbackup
+            |  elif grep -q '"heightPixels":1080' "${'$'}S" && grep -q '"heightPhysical":195' "${'$'}S"; then
+            |    cp "${'$'}S" "${'$'}BAK" || fail cpbackup
+            |  else
+            |    fail nocpbackup
+            |  fi
+            |fi
+            |grep -q '"heightPixels":1080' "${'$'}BAK" || fail badcpbackup
+            |grep -q '"heightPhysical":195' "${'$'}BAK" || fail badcpbackup
+            |grep -q '"widthPixels":1920' "${'$'}BAK" || fail badcpbackup
+            |$prepare
+            |echo emmc_disable_all_wp > "${'$'}P" || fail wpoff
+            |mount -o remount,rw / || { echo emmc_enable_all_wp > "${'$'}P"; fail remount; }
+            |cat "${'$'}N" > "${'$'}S" || { echo emmc_enable_all_wp > "${'$'}P"; fail write; }
+            |chown root:root "${'$'}S"
+            |chmod 644 "${'$'}S"
+            |chcon u:object_r:system_file:s0 "${'$'}S" 2>/dev/null
+            |sync
+            |blockdev --flushbufs "${'$'}D" 2>/dev/null
+            |echo 3 > /proc/sys/vm/drop_caches
+            |$checkLive
+            |sync
+            |mount -o remount,ro / 2>/dev/null
+            |echo emmc_enable_all_wp > "${'$'}P"
+            |settings put global $LAYOUT_SETTING $mode
+            |/system/bin/am force-stop ${ANDROID_AUTO.processName} 2>/dev/null
+            |/system/bin/am force-stop ${CAR_PLAY.processName} 2>/dev/null
+            |/system/bin/am force-stop $CARPLAY_SERVER 2>/dev/null
+            |kill ${'$'}(pidof ${ANDROID_AUTO.processName}) 2>/dev/null
+            |kill ${'$'}(pidof ${CAR_PLAY.processName}) 2>/dev/null
+            |kill ${'$'}(pidof $CARPLAY_SERVER) 2>/dev/null
+            |echo $LAYOUT_MARKER
+            |settings get global $LAYOUT_SETTING
+            |
+        """.trimMargin()
     }
 
     sealed interface Outcome {
