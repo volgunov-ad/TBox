@@ -4,6 +4,7 @@
 
     <string name="loading">Loading…</string>
     <string name="action_save">Save</string>
+    <string name="action_apply">Apply</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_replace">Replace</string>
     <string name="action_clear">Clear</string>

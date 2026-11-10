@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -2124,70 +2125,72 @@ fun FloatingPanelsSettingsTabContent(
                 ?: floatingDashboardsList.firstOrNull()
         }
         if (selectedFloatingPanel != null) {
-            var panelBgThemeSegment by remember(selectedFloatingPanel.id) { mutableIntStateOf(0) }
-            PanelBackgroundAppearanceSettingsSection(
-                panelStorageId = selectedFloatingPanel.id,
-                enabled = hasFloatingPanels,
-                colorThemeSegment = panelBgThemeSegment,
-                onColorThemeSegmentChange = { panelBgThemeSegment = it },
-                backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                onBackgroundColorLightChange = { color ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = color,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                onBackgroundColorDarkChange = { color ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = color,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                onBackgroundImageRelPathLightChange = { path ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = path,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                onBackgroundImageRelPathDarkChange = { path ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = path,
-                        panelShape = selectedFloatingPanel.panelShape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                panelShape = selectedFloatingPanel.panelShape,
-                onPanelShapeChange = { shape ->
-                    settingsViewModel.saveFloatingDashboardBackgroundStyle(
-                        backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
-                        backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
-                        backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
-                        backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
-                        panelShape = shape,
-                        panelId = selectedFloatingPanel.id,
-                    )
-                },
-                settingsViewModel = settingsViewModel,
-                presetSlots = widgetColorPresetSlots,
-            )
+            key(selectedFloatingPanel.id) {
+                var panelBgThemeSegment by remember { mutableIntStateOf(0) }
+                PanelBackgroundAppearanceSettingsSection(
+                    panelStorageId = selectedFloatingPanel.id,
+                    enabled = hasFloatingPanels,
+                    colorThemeSegment = panelBgThemeSegment,
+                    onColorThemeSegmentChange = { panelBgThemeSegment = it },
+                    backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                    backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                    onBackgroundColorLightChange = { color ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = color,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    onBackgroundColorDarkChange = { color ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = color,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                    backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                    onBackgroundImageRelPathLightChange = { path ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = path,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    onBackgroundImageRelPathDarkChange = { path ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = path,
+                            panelShape = selectedFloatingPanel.panelShape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    panelShape = selectedFloatingPanel.panelShape,
+                    onPanelShapeChange = { shape ->
+                        settingsViewModel.saveFloatingDashboardBackgroundStyle(
+                            backgroundColorLight = selectedFloatingPanel.panelBackgroundColorLight,
+                            backgroundColorDark = selectedFloatingPanel.panelBackgroundColorDark,
+                            backgroundImageRelPathLight = selectedFloatingPanel.panelBackgroundImageRelPathLight,
+                            backgroundImageRelPathDark = selectedFloatingPanel.panelBackgroundImageRelPathDark,
+                            panelShape = shape,
+                            panelId = selectedFloatingPanel.id,
+                        )
+                    },
+                    settingsViewModel = settingsViewModel,
+                    presetSlots = widgetColorPresetSlots,
+                )
+            }
         }
         FloatingDashboardPositionSizeSettings(
             settingsViewModel,

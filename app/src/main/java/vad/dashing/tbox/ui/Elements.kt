@@ -1285,6 +1285,10 @@ private fun GeometryDraftIntField(
 /**
  * Compact W/H + X/Y integer geometry editor with a single save (diskette) for the whole block.
  * Draft text is local until commit — clearing a field does not snap back or persist.
+ *
+ * Pass [resetKey] (e.g. selected panel id) so drafts rebuild when the edited entity changes,
+ * even if W/H/X/Y integers happen to match the previous panel (LaunchedEffect on values alone
+ * would keep the old draft / dirty text in that case).
  */
 @Composable
 fun GeometryWhxyCommitBlock(
@@ -1306,13 +1310,19 @@ fun GeometryWhxyCommitBlock(
     maxY: Int = Int.MAX_VALUE,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    resetKey: Any? = null,
+    /**
+     * When non-null, show a labeled commit button (e.g. «Применить») instead of the diskette.
+     * Diskette remains the default for other geometry editors.
+     */
+    commitLabel: String? = null,
     onCommit: (width: Int, height: Int, x: Int, y: Int) -> Unit,
 ) {
-    var draftW by remember { mutableStateOf(savedWidth.toString()) }
-    var draftH by remember { mutableStateOf(savedHeight.toString()) }
-    var draftX by remember { mutableStateOf(savedX.toString()) }
-    var draftY by remember { mutableStateOf(savedY.toString()) }
-    LaunchedEffect(savedWidth, savedHeight, savedX, savedY) {
+    var draftW by remember(resetKey) { mutableStateOf(savedWidth.toString()) }
+    var draftH by remember(resetKey) { mutableStateOf(savedHeight.toString()) }
+    var draftX by remember(resetKey) { mutableStateOf(savedX.toString()) }
+    var draftY by remember(resetKey) { mutableStateOf(savedY.toString()) }
+    LaunchedEffect(resetKey, savedWidth, savedHeight, savedX, savedY) {
         draftW = savedWidth.toString()
         draftH = savedHeight.toString()
         draftX = savedX.toString()
@@ -1331,6 +1341,19 @@ fun GeometryWhxyCommitBlock(
         parsedX != savedX ||
         parsedY != savedY
     val canCommit = enabled && valid && dirty
+    val commitDrafts: () -> Unit = {
+        val w = parseGeometryDraftInt(draftW) ?: return@commitDrafts
+        val h = parseGeometryDraftInt(draftH) ?: return@commitDrafts
+        val x = parseGeometryDraftInt(draftX) ?: return@commitDrafts
+        val y = parseGeometryDraftInt(draftY) ?: return@commitDrafts
+        if (w in minWidth..maxWidth &&
+            h in minHeight..maxHeight &&
+            x in minX..maxX &&
+            y in minY..maxY
+        ) {
+            onCommit(w, h, x, y)
+        }
+    }
 
     Column(modifier = modifier) {
         Row(
@@ -1381,28 +1404,25 @@ fun GeometryWhxyCommitBlock(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SettingsCommitIconButton(
-                    onClick = {
-                        val w = parseGeometryDraftInt(draftW) ?: return@SettingsCommitIconButton
-                        val h = parseGeometryDraftInt(draftH) ?: return@SettingsCommitIconButton
-                        val x = parseGeometryDraftInt(draftX) ?: return@SettingsCommitIconButton
-                        val y = parseGeometryDraftInt(draftY) ?: return@SettingsCommitIconButton
-                        if (w in minWidth..maxWidth &&
-                            h in minHeight..maxHeight &&
-                            x in minX..maxX &&
-                            y in minY..maxY
-                        ) {
-                            onCommit(w, h, x, y)
-                        }
-                    },
-                    contentDescription = stringResource(R.string.action_save),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_refuel_save),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
+                if (commitLabel != null) {
+                    OutlinedButton(onClick = rememberWrappedOnClick(commitDrafts)) {
+                        Text(
+                            text = commitLabel,
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                } else {
+                    SettingsCommitIconButton(
+                        onClick = commitDrafts,
+                        contentDescription = stringResource(R.string.action_save),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_refuel_save),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
@@ -1445,7 +1465,7 @@ fun FloatingDashboardPanelEditor(
     if (panels.isEmpty()) return
     val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
     val effectiveId = selectedConfig.id
-    var draftName by remember { mutableStateOf(selectedConfig.name) }
+    var draftName by remember(effectiveId) { mutableStateOf(selectedConfig.name) }
     LaunchedEffect(effectiveId, selectedConfig.name) {
         draftName = selectedConfig.name
     }
@@ -1488,13 +1508,19 @@ fun FloatingDashboardPanelEditor(
                         )
                     },
                     textStyle = MaterialTheme.typography.tboxButton,
-                    trailingIcon = {
-                        PanelNameSaveTrailingIcon(
-                            visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
-                            onSave = { onRenamePanel(effectiveId, trimmedDraft) },
-                        )
-                    },
                 )
+                if (enabled && nameDirty && trimmedDraft.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            onRenamePanel(effectiveId, trimmedDraft)
+                        },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_apply),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                }
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
@@ -1524,7 +1550,7 @@ fun MainScreenPanelEditor(
     if (panels.isEmpty()) return
     val selectedConfig = panels.find { it.id == selectedPanelId } ?: panels.first()
     val effectiveId = selectedConfig.id
-    var draftName by remember { mutableStateOf(selectedConfig.name) }
+    var draftName by remember(effectiveId) { mutableStateOf(selectedConfig.name) }
     LaunchedEffect(effectiveId, selectedConfig.name) {
         draftName = selectedConfig.name
     }
@@ -1594,39 +1620,44 @@ fun MainScreenPanelRelativeLayoutSettings(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
+    val activePanelId by settingsViewModel.activeMainScreenPanelId.collectAsStateWithLifecycle()
     val relX by settingsViewModel.mainScreenPanelRelXPercent.collectAsStateWithLifecycle()
     val relY by settingsViewModel.mainScreenPanelRelYPercent.collectAsStateWithLifecycle()
     val relW by settingsViewModel.mainScreenPanelRelWidthPercent.collectAsStateWithLifecycle()
     val relH by settingsViewModel.mainScreenPanelRelHeightPercent.collectAsStateWithLifecycle()
 
-    GeometryWhxyCommitBlock(
-        widthLabel = stringResource(R.string.main_screen_panel_rel_width_pct),
-        heightLabel = stringResource(R.string.main_screen_panel_rel_height_pct),
-        xLabel = stringResource(R.string.main_screen_panel_rel_x_pct),
-        yLabel = stringResource(R.string.main_screen_panel_rel_y_pct),
-        savedWidth = relW,
-        savedHeight = relH,
-        savedX = relX,
-        savedY = relY,
-        minWidth = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
-        minHeight = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
-        minX = 0,
-        minY = 0,
-        maxWidth = 100,
-        maxHeight = 100,
-        maxX = 100,
-        maxY = 100,
-        enabled = enabled,
-        modifier = modifier,
-        onCommit = { w, h, x, y ->
-            settingsViewModel.saveSelectedMainScreenPanelRelLayoutPercent(
-                xPercent = x,
-                yPercent = y,
-                widthPercent = w,
-                heightPercent = h,
-            )
-        },
-    )
+    key(activePanelId) {
+        GeometryWhxyCommitBlock(
+            widthLabel = stringResource(R.string.main_screen_panel_rel_width_pct),
+            heightLabel = stringResource(R.string.main_screen_panel_rel_height_pct),
+            xLabel = stringResource(R.string.main_screen_panel_rel_x_pct),
+            yLabel = stringResource(R.string.main_screen_panel_rel_y_pct),
+            savedWidth = relW,
+            savedHeight = relH,
+            savedX = relX,
+            savedY = relY,
+            minWidth = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
+            minHeight = MIN_MAIN_SCREEN_PANEL_REL_PERCENT,
+            minX = 0,
+            minY = 0,
+            maxWidth = 100,
+            maxHeight = 100,
+            maxX = 100,
+            maxY = 100,
+            enabled = enabled,
+            modifier = modifier,
+            resetKey = activePanelId,
+            commitLabel = stringResource(R.string.action_apply),
+            onCommit = { w, h, x, y ->
+                settingsViewModel.saveSelectedMainScreenPanelRelLayoutPercent(
+                    xPercent = x,
+                    yPercent = y,
+                    widthPercent = w,
+                    heightPercent = h,
+                )
+            },
+        )
+    }
 }
 
 @Composable
@@ -1635,6 +1666,7 @@ fun FloatingDashboardPositionSizeSettings(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
+    val activePanelId by settingsViewModel.activeFloatingDashboardId.collectAsStateWithLifecycle()
     val floatingDashboardHeight by settingsViewModel.floatingDashboardHeight.collectAsStateWithLifecycle()
     val floatingDashboardWidth by settingsViewModel.floatingDashboardWidth.collectAsStateWithLifecycle()
     val floatingDashboardStartX by settingsViewModel.floatingDashboardStartX.collectAsStateWithLifecycle()
@@ -1643,30 +1675,34 @@ fun FloatingDashboardPositionSizeSettings(
         settingsViewModel.floatingPanelsAllowBeyondScreen.collectAsStateWithLifecycle()
     val originMin = if (allowBeyondScreen) FLOATING_PANEL_BEYOND_SCREEN_MIN_ORIGIN_PX else 0
 
-    GeometryWhxyCommitBlock(
-        widthLabel = stringResource(R.string.floating_panel_width_px),
-        heightLabel = stringResource(R.string.floating_panel_height_px),
-        xLabel = stringResource(R.string.floating_panel_pos_x_px),
-        yLabel = stringResource(R.string.floating_panel_pos_y_px),
-        savedWidth = floatingDashboardWidth,
-        savedHeight = floatingDashboardHeight,
-        savedX = floatingDashboardStartX,
-        savedY = floatingDashboardStartY,
-        minWidth = MIN_FLOATING_PANEL_SIZE_PX,
-        minHeight = MIN_FLOATING_PANEL_SIZE_PX,
-        minX = originMin,
-        minY = originMin,
-        enabled = enabled,
-        modifier = modifier,
-        onCommit = { w, h, x, y ->
-            settingsViewModel.saveSelectedFloatingDashboardGeometry(
-                width = w,
-                height = h,
-                startX = x,
-                startY = y,
-            )
-        },
-    )
+    key(activePanelId) {
+        GeometryWhxyCommitBlock(
+            widthLabel = stringResource(R.string.floating_panel_width_px),
+            heightLabel = stringResource(R.string.floating_panel_height_px),
+            xLabel = stringResource(R.string.floating_panel_pos_x_px),
+            yLabel = stringResource(R.string.floating_panel_pos_y_px),
+            savedWidth = floatingDashboardWidth,
+            savedHeight = floatingDashboardHeight,
+            savedX = floatingDashboardStartX,
+            savedY = floatingDashboardStartY,
+            minWidth = MIN_FLOATING_PANEL_SIZE_PX,
+            minHeight = MIN_FLOATING_PANEL_SIZE_PX,
+            minX = originMin,
+            minY = originMin,
+            enabled = enabled,
+            modifier = modifier,
+            resetKey = activePanelId,
+            commitLabel = stringResource(R.string.action_apply),
+            onCommit = { w, h, x, y ->
+                settingsViewModel.saveSelectedFloatingDashboardGeometry(
+                    width = w,
+                    height = h,
+                    startX = x,
+                    startY = y,
+                )
+            },
+        )
+    }
 }
 
 // Компонент для ввода целых чисел
