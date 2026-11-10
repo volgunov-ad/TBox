@@ -1311,6 +1311,11 @@ fun GeometryWhxyCommitBlock(
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     resetKey: Any? = null,
+    /**
+     * When non-null, show a labeled commit button (e.g. «Применить») instead of the diskette.
+     * Diskette remains the default for other geometry editors.
+     */
+    commitLabel: String? = null,
     onCommit: (width: Int, height: Int, x: Int, y: Int) -> Unit,
 ) {
     var draftW by remember(resetKey) { mutableStateOf(savedWidth.toString()) }
@@ -1336,6 +1341,19 @@ fun GeometryWhxyCommitBlock(
         parsedX != savedX ||
         parsedY != savedY
     val canCommit = enabled && valid && dirty
+    val commitDrafts: () -> Unit = {
+        val w = parseGeometryDraftInt(draftW) ?: return@commitDrafts
+        val h = parseGeometryDraftInt(draftH) ?: return@commitDrafts
+        val x = parseGeometryDraftInt(draftX) ?: return@commitDrafts
+        val y = parseGeometryDraftInt(draftY) ?: return@commitDrafts
+        if (w in minWidth..maxWidth &&
+            h in minHeight..maxHeight &&
+            x in minX..maxX &&
+            y in minY..maxY
+        ) {
+            onCommit(w, h, x, y)
+        }
+    }
 
     Column(modifier = modifier) {
         Row(
@@ -1386,28 +1404,25 @@ fun GeometryWhxyCommitBlock(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SettingsCommitIconButton(
-                    onClick = {
-                        val w = parseGeometryDraftInt(draftW) ?: return@SettingsCommitIconButton
-                        val h = parseGeometryDraftInt(draftH) ?: return@SettingsCommitIconButton
-                        val x = parseGeometryDraftInt(draftX) ?: return@SettingsCommitIconButton
-                        val y = parseGeometryDraftInt(draftY) ?: return@SettingsCommitIconButton
-                        if (w in minWidth..maxWidth &&
-                            h in minHeight..maxHeight &&
-                            x in minX..maxX &&
-                            y in minY..maxY
-                        ) {
-                            onCommit(w, h, x, y)
-                        }
-                    },
-                    contentDescription = stringResource(R.string.action_save),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_refuel_save),
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
+                if (commitLabel != null) {
+                    OutlinedButton(onClick = rememberWrappedOnClick(commitDrafts)) {
+                        Text(
+                            text = commitLabel,
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                } else {
+                    SettingsCommitIconButton(
+                        onClick = commitDrafts,
+                        contentDescription = stringResource(R.string.action_save),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_refuel_save),
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
             }
         }
@@ -1493,13 +1508,19 @@ fun FloatingDashboardPanelEditor(
                         )
                     },
                     textStyle = MaterialTheme.typography.tboxButton,
-                    trailingIcon = {
-                        PanelNameSaveTrailingIcon(
-                            visible = enabled && nameDirty && trimmedDraft.isNotEmpty(),
-                            onSave = { onRenamePanel(effectiveId, trimmedDraft) },
-                        )
-                    },
                 )
+                if (enabled && nameDirty && trimmedDraft.isNotEmpty()) {
+                    OutlinedButton(
+                        onClick = rememberWrappedOnClick {
+                            onRenamePanel(effectiveId, trimmedDraft)
+                        },
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_apply),
+                            style = MaterialTheme.typography.tboxButton,
+                        )
+                    }
+                }
             }
             Button(onClick = rememberWrappedOnClick(onAddPanel), enabled = enabled) {
                 Text(stringResource(R.string.action_add), style = MaterialTheme.typography.tboxButton)
@@ -1626,6 +1647,7 @@ fun MainScreenPanelRelativeLayoutSettings(
             enabled = enabled,
             modifier = modifier,
             resetKey = activePanelId,
+            commitLabel = stringResource(R.string.action_apply),
             onCommit = { w, h, x, y ->
                 settingsViewModel.saveSelectedMainScreenPanelRelLayoutPercent(
                     xPercent = x,
@@ -1670,6 +1692,7 @@ fun FloatingDashboardPositionSizeSettings(
             enabled = enabled,
             modifier = modifier,
             resetKey = activePanelId,
+            commitLabel = stringResource(R.string.action_apply),
             onCommit = { w, h, x, y ->
                 settingsViewModel.saveSelectedFloatingDashboardGeometry(
                     width = w,
