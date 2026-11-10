@@ -148,7 +148,7 @@ Separate diagnostic/test app **Тест камер ГУ (Mengbo)** (`vad.dashing
 
 ### Camera window app (`:camd`)
 
-Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). Skeleton so far: one qcarcam window via a root daemon, local API `127.0.0.1:8770` (`8766` is TBox MQTT), and two 20 s car probes that write `camd-probe-*.txt` into `/sdcard/Download`. Recording, the AVM-replacing service, several windows, and the TBox/DCL clients are not built.
+Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done: [docs/CAMD_RU.md](docs/CAMD_RU.md). A9 camera facts: [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md). Skeleton so far: one qcarcam window via a root daemon, local API `127.0.0.1:8770` (`8766` is TBox MQTT), and two 20 s car probes that write `camd-probe-*.txt` into `/sdcard/Download`. Car result on 10 Nov 2026: clean frames from inputs 4 and 5 arrive only after `AVMapp` is stopped, and `qcarcam_test` does not put them on screen. Next is our own window service and API for TBox and DCL. Recording is deferred.
 
 ```
 ./gradlew :camd:testDebugUnitTest
