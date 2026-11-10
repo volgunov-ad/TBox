@@ -73,9 +73,11 @@ internal fun PanelBackgroundAppearanceSettingsSection(
     val panelRevision by settingsViewModel.panelBackgroundImageRevision.collectAsStateWithLifecycle()
     val darkSegment = colorThemeSegment == 1
     val currentPath = if (darkSegment) backgroundImageRelPathDark else backgroundImageRelPathLight
-    var hasImage by remember { mutableStateOf(false) }
-    var removeImageLabel by remember { mutableIntStateOf(R.string.widget_panel_background_image_remove) }
-    LaunchedEffect(currentPath, panelRevision, iconLookup, darkSegment) {
+    var hasImage by remember(panelStorageId) { mutableStateOf(false) }
+    var removeImageLabel by remember(panelStorageId) {
+        mutableIntStateOf(R.string.widget_panel_background_image_remove)
+    }
+    LaunchedEffect(panelStorageId, currentPath, panelRevision, iconLookup, darkSegment) {
         hasImage = !currentPath.isNullOrBlank() &&
             PanelBackgroundImageStorage.isAllowedStoredRelPath(currentPath) &&
             PanelBackgroundImageStorage.hasResolvableFile(context.filesDir, currentPath, iconLookup)
@@ -93,7 +95,7 @@ internal fun PanelBackgroundAppearanceSettingsSection(
         android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply { type = "image/*" }
             .resolveActivity(context.packageManager) != null
     }
-    var pendingPickDark by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var pendingPickDark by rememberSaveable(panelStorageId) { mutableStateOf<Boolean?>(null) }
     val pickImage = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
