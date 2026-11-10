@@ -3437,6 +3437,7 @@
     <string name="widget_editor_clipboard_panel">Буфер панели</string>
     <string name="widget_editor_type_description">Описание типа</string>
     <string name="widget_editor_unsaved">Есть несохранённые изменения</string>
+    <string name="widget_editor_save_and_close">Сохранить и закрыть</string>
     <string name="widget_editor_cannot_save">Заполните обязательные поля, чтобы сохранить.</string>
     <string name="widget_editor_fix_tile_first">Сначала заполните обязательные поля этой плитки.</string>
     <string name="widget_editor_delete_panel">Удалить панель</string>
@@ -3447,7 +3448,7 @@
     <string name="widget_editor_keep_editing">Продолжить</string>
     <string name="widget_editor_tab_placement">Размер и место</string>
     <string name="widget_editor_card_placement">Положение на экране</string>
-    <string name="widget_editor_placement_hint">Перетащите панель, чтобы сдвинуть её; тяните за уголок справа снизу, чтобы изменить размер. Применится после «Сохранить».</string>
+    <string name="widget_editor_placement_hint">Перетащите панель, чтобы сдвинуть её; тяните за уголок справа снизу, чтобы изменить размер. Применится по «Применить» или «Сохранить и закрыть».</string>
     <string name="widget_editor_placement_screen_px">Экран: %1$d × %2$d px</string>
     <string name="widget_editor_card_placement_values">Точные значения</string>
     <string name="widget_editor_center_horizontal">По центру по горизонтали</string>

@@ -369,4 +369,37 @@ class WidgetEditorLogicTest {
         assertEquals(PanelPlacement(50, 20, 300, 200), state.editedWholePanelPlacement)
         assertTrue(state.isPanelDirty)
     }
+
+    @Test
+    fun markDraftsAppliedToLivePanel_clearsUnsavedWithoutClosingSession() {
+        val current = listOf(tile("speed"), tile("rpm"))
+        val state = editorState(current)
+        state.syncWholePanelDraftFromFloating(
+            FloatingDashboardConfig(
+                id = "f1",
+                name = "F",
+                enabled = true,
+                widgetsConfig = current,
+                rows = 1,
+                cols = 2,
+                width = 300,
+                height = 200,
+                startX = 10,
+                startY = 20,
+                background = false,
+                clickAction = false,
+            )
+        )
+        state.markWholePanelDraftSeeded()
+        state.textScale = 1.5f
+        state.wholePanelPlacement = PanelPlacement(x = 50, y = 20, width = 300, height = 200)
+        assertTrue(state.hasUnsavedChanges)
+
+        state.markDraftsAppliedToLivePanel(currentWidgetConfigs = current, tileCount = 2)
+
+        assertFalse(state.hasUnsavedChanges)
+        assertNull(state.editedWholePanelPlacement)
+        assertEquals(1.5f, state.textScale, 0.0001f)
+        assertEquals(PanelPlacement(50, 20, 300, 200), state.wholePanelPlacement)
+    }
 }

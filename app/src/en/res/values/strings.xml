@@ -3416,6 +3416,7 @@
     <string name="widget_editor_clipboard_panel">Panel clipboard</string>
     <string name="widget_editor_type_description">Type description</string>
     <string name="widget_editor_unsaved">Unsaved changes</string>
+    <string name="widget_editor_save_and_close">Save and close</string>
     <string name="widget_editor_cannot_save">Fill in the required fields to save.</string>
     <string name="widget_editor_fix_tile_first">Fill in the required fields of this tile first.</string>
     <string name="widget_editor_delete_panel">Delete panel</string>
@@ -3426,7 +3427,7 @@
     <string name="widget_editor_keep_editing">Keep editing</string>
     <string name="widget_editor_tab_placement">Size &amp; position</string>
     <string name="widget_editor_card_placement">Position on screen</string>
-    <string name="widget_editor_placement_hint">Drag the panel to move it; drag the bottom-right corner to resize. Applied on «Save».</string>
+    <string name="widget_editor_placement_hint">Drag the panel to move it; drag the bottom-right corner to resize. Applied with «Apply» or «Save and close».</string>
     <string name="widget_editor_placement_screen_px">Screen: %1$d × %2$d px</string>
     <string name="widget_editor_card_placement_values">Exact values</string>
     <string name="widget_editor_center_horizontal">Center horizontally</string>
