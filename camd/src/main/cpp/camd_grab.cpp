@@ -2,6 +2,7 @@
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +20,7 @@
 #define QCARCAM_MAX_NUM_PLANES 3
 #define QCARCAM_FMT_UYVY_8 0x07080102u
 #define QCARCAM_VERSION 0x00000404u
-#define FRAME_TIMEOUT_NS 500000000ull
+#define FRAME_TIMEOUT_NS 100000000ull
 #define MAX_CAMERAS 8
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
@@ -112,13 +113,8 @@ static fn_release_frame p_release_frame = nullptr;
 static Camera* open_cameras[10];
 static long long next_try[10];
 
-static void put_be32(FILE* out, unsigned int value) {
-    unsigned char bytes[4];
-    bytes[0] = (unsigned char)((value >> 24) & 0xFF);
-    bytes[1] = (unsigned char)((value >> 16) & 0xFF);
-    bytes[2] = (unsigned char)((value >> 8) & 0xFF);
-    bytes[3] = (unsigned char)(value & 0xFF);
-    fwrite(bytes, 1, 4, out);
+static void write_u32(FILE* out, uint32_t value) {
+    fwrite(&value, sizeof(value), 1, out);
 }
 
 static int camera_size(int id, int* width, int* height) {
@@ -278,31 +274,32 @@ static void write_frame(Camera* camera) {
     snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", dest_path);
     FILE* out = fopen(tmp_path, "wb");
     if (!out) return;
-    put_be32(out, (unsigned)camera->width);
-    put_be32(out, (unsigned)camera->height);
-    put_be32(out, (unsigned)camera->seq);
-    put_be32(out, 0);
+    write_u32(out, (uint32_t)camera->width);
+    write_u32(out, (uint32_t)camera->height);
+    write_u32(out, (uint32_t)camera->seq);
+    write_u32(out, 0);
     int count = camera->width * camera->height;
-    for (int i = 0; i < count; i++) put_be32(out, (unsigned)camera->argb[i]);
+    fwrite(camera->argb, sizeof(int), (size_t)count, out);
     fclose(out);
     unlink(dest_path);
     if (rename(tmp_path, dest_path) == 0) chmod(dest_path, 0666);
 }
 
-static void grab(Camera* camera) {
+static int grab(Camera* camera) {
     qcarcam_frame_info_t frame;
     memset(&frame, 0, sizeof(frame));
     int ret = p_get_frame(camera->handle, &frame, FRAME_TIMEOUT_NS, 0);
-    if (ret != 0) return;
+    if (ret != 0) return 0;
     if (frame.idx >= 5 || !camera->ptrs[frame.idx] || camera->ptrs[frame.idx] == MAP_FAILED) {
         p_release_frame(camera->handle, frame.idx);
-        return;
+        return 0;
     }
     copy_uyvy((const uint8_t*)camera->ptrs[frame.idx], camera->stride, camera->width, camera->height, camera->argb);
     int released = p_release_frame(camera->handle, frame.idx);
     if (released != 0) fprintf(stderr, "release_frame %u -> %d\n", frame.idx, released);
     camera->seq += 1;
     write_frame(camera);
+    return 1;
 }
 
 static int wanted(const int* ids, int count, int id) {
@@ -337,6 +334,7 @@ static void beat(void) {
 }
 
 int main(void) {
+    signal(SIGHUP, SIG_IGN);
     setvbuf(stderr, nullptr, _IONBF, 0);
     fprintf(stderr, "camd_grab start\n");
     if (init_client() != 0) return 1;
@@ -363,9 +361,10 @@ int main(void) {
             if (opened) open_cameras[id] = opened;
             else next_try[id] = now + 2;
         }
+        int got = 0;
         for (int id = 0; id < 10; id++) {
-            if (open_cameras[id] && open_cameras[id]->handle) grab(open_cameras[id]);
+            if (open_cameras[id] && open_cameras[id]->handle && grab(open_cameras[id])) got = 1;
         }
-        usleep(40000);
+        usleep(got ? 1000 : 20000);
     }
 }

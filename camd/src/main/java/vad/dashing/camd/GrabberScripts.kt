@@ -28,13 +28,21 @@ object GrabberScripts {
         lines.add("sleep 0.2")
         lines.add("cp $BINARY $RUN")
         lines.add("chmod 755 $RUN")
-        lines.add("$RUN > $LOG 2>&1 &")
+        lines.add("$RUN > $LOG 2>&1 < /dev/null &")
         lines.add("echo $nonce > $ARM")
         lines.add("chmod 666 $ARM")
         lines.add("chmod 666 $LOG")
         lines.add("exit 0")
         return lines.joinToString("\n") + "\n"
     }
+
+    fun stopAvm(nonce: String): String = listOf(
+        "#!/system/bin/sh",
+        "setprop ctl.stop AVMapp",
+        "echo $nonce > $ARM",
+        "chmod 666 $ARM",
+        "exit 0",
+    ).joinToString("\n") + "\n"
 
     fun grantOverlay(nonce: String): String = listOf(
         "#!/system/bin/sh",

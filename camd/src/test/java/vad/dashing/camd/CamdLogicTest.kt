@@ -138,6 +138,14 @@ class GrabberScriptTest {
         assertTrue(exit > grant)
         assertTrue(text.contains("echo nonce3"))
     }
+
+    @Test
+    fun stopAvmDoesNotRestartTheGrabber() {
+        val text = GrabberScripts.stopAvm("nonce4")
+        assertTrue(text.contains("setprop ctl.stop AVMapp"))
+        assertFalse(text.contains("camd_grab"))
+        assertTrue(text.trimEnd().endsWith("exit 0"))
+    }
 }
 
 class CamdPortTest {

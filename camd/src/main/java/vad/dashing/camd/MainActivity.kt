@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -77,6 +79,7 @@ class MainActivity : ComponentActivity() {
                     onH = controller::setH,
                     onOpen = controller::open,
                     onClose = controller::close,
+                    onKeepAvm = controller::setKeepAvmStopped,
                     onProbeKeepAvm = { controller.probe(false) },
                     onProbeStopAvm = { controller.probe(true) }
                 )
@@ -92,6 +95,7 @@ data class CamdUiState(
     val w: Float = 0.28f,
     val h: Float = 0.28f,
     val busy: Boolean = false,
+    val keepAvmStopped: Boolean = false,
     val message: String = "Окно откроется после «Открыть». Записи пока нет.",
     val status: String = "",
     val log: String = ""
@@ -107,6 +111,7 @@ class CamdController(
     private val io = Executors.newSingleThreadExecutor()
 
     init {
+        _state.value = _state.value.copy(keepAvmStopped = windows.keepAvmStopped())
         Thread {
             while (!Thread.currentThread().isInterrupted) {
                 if (!_state.value.busy) {
@@ -138,6 +143,19 @@ class CamdController(
 
     fun setH(value: Float) {
         _state.value = _state.value.copy(h = value)
+    }
+
+    fun setKeepAvmStopped(keep: Boolean) {
+        io.execute {
+            _state.value = _state.value.copy(busy = true, keepAvmStopped = keep)
+            val result = windows.setKeepAvmStopped(keep)
+            _state.value = _state.value.copy(
+                busy = false,
+                keepAvmStopped = windows.keepAvmStopped(),
+                message = result,
+                status = windows.status(),
+            )
+        }
     }
 
     fun open() {
@@ -217,6 +235,7 @@ private fun CamdScreen(
     onH: (Float) -> Unit,
     onOpen: () -> Unit,
     onClose: () -> Unit,
+    onKeepAvm: (Boolean) -> Unit,
     onProbeKeepAvm: () -> Unit,
     onProbeStopAvm: () -> Unit
 ) {
@@ -247,12 +266,31 @@ private fun CamdScreen(
                 )
             }
         }
-        if (input?.heldByAvm == true) {
+        if (input?.heldByAvm == true && !state.keepAvmStopped) {
             Text(
                 "Этот вход держит штатный AVM. Пока такое окно открыто, AVM будет остановлен.",
                 fontSize = 13.sp
             )
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "Держать AVM выключенным",
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = state.keepAvmStopped,
+                onCheckedChange = onKeepAvm,
+                enabled = !state.busy,
+            )
+        }
+        Text(
+            "Если включено, штатный AVM останавливается сразу и не возвращается после закрытия окна. Следующее окно открывается без ожидания его остановки.",
+            fontSize = 13.sp,
+        )
         Text("Кадр ${input?.width}×${input?.height}", fontSize = 13.sp)
         FractionSlider("X", state.x, onX)
         FractionSlider("Y", state.y, onY)

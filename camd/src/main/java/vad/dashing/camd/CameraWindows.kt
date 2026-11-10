@@ -1,6 +1,7 @@
 package vad.dashing.camd
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -29,7 +30,27 @@ class CameraWindows(private val context: Context) {
     private val openIds = LinkedHashSet<Int>()
     private val views = HashMap<Int, LiveWindow>()
     private val main = Handler(Looper.getMainLooper())
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences("camd", Context.MODE_PRIVATE)
     private var avmStoppedByUs = false
+
+    fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED, false)
+
+    /** Stop AVMapp at startup and do not start it when the last surround window closes. */
+    fun setKeepAvmStopped(keep: Boolean): String = synchronized(lock) {
+        prefs.edit().putBoolean(KEEP_AVM_STOPPED, keep).apply()
+        if (keep) {
+            markAvmStopped()
+            if (getprop("init.svc.AVMapp") == "running") {
+                val nonce = "k${System.currentTimeMillis()}"
+                arm(GrabberScripts.stopAvm(nonce), nonce)
+                waitProp("init.svc.AVMapp", "running", present = false)
+            }
+            return "state=avm_held"
+        }
+        if (!needsAvmStop()) maybeStartAvm()
+        "state=avm_restore"
+    }
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(context)
 
@@ -38,7 +59,7 @@ class CameraWindows(private val context: Context) {
         val moved = views.containsKey(command.inputId)
         openIds.add(command.inputId)
         writeDesired()
-        val root = runCatching { prepare(needsAvmStop()) }
+        val root = runCatching { prepare(shouldStopAvmNow()) }
         if (root.isFailure) {
             if (!moved) openIds.remove(command.inputId)
             writeDesired()
@@ -86,6 +107,11 @@ class CameraWindows(private val context: Context) {
         return "windows=$ids avm=$avm"
     }
 
+    private fun shouldStopAvmNow(): Boolean {
+        if (!needsAvmStop()) return false
+        return getprop("init.svc.AVMapp") == "running"
+    }
+
     private fun needsAvmStop(): Boolean {
         return openIds.any { KnownInputs.byId(it)?.heldByAvm == true }
     }
@@ -96,6 +122,12 @@ class CameraWindows(private val context: Context) {
         val fresh = beat.canRead() && System.currentTimeMillis() - beat.lastModified() < 4_000
         if (fresh && !stopAvm && !needGrant) return
         if (stopAvm) markAvmStopped()
+        if (fresh && stopAvm && !needGrant) {
+            val nonce = "s${System.currentTimeMillis()}"
+            arm(GrabberScripts.stopAvm(nonce), nonce)
+            waitProp("init.svc.AVMapp", "running", present = false)
+            return
+        }
         if (fresh && !stopAvm) {
             val nonce = "o${System.currentTimeMillis()}"
             arm(GrabberScripts.grantOverlay(nonce), nonce)
@@ -118,7 +150,7 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun maybeStartAvm() {
-        if (!avmStoppedByUs || needsAvmStop()) return
+        if (keepAvmStopped() || !avmStoppedByUs || needsAvmStop()) return
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
             val busy = listOf(4, 5, 8, 9).any { File(GrabberScripts.frame(it)).exists() }
@@ -134,6 +166,16 @@ class CameraWindows(private val context: Context) {
     /** If the process died after stopping AVMapp, the next start puts it back. */
     fun recover() {
         synchronized(lock) {
+            if (keepAvmStopped()) {
+                markAvmStopped()
+                if (getprop("init.svc.AVMapp") == "running") {
+                    runCatching {
+                        val nonce = "k${System.currentTimeMillis()}"
+                        arm(GrabberScripts.stopAvm(nonce), nonce)
+                    }
+                }
+                return
+            }
             val marker = File(context.filesDir, "avm.stopped")
             if (!marker.exists()) return
             avmStoppedByUs = true
@@ -361,7 +403,7 @@ class CameraWindows(private val context: Context) {
                             caption.visibility = View.GONE
                         }
                     }
-                    Thread.sleep(80)
+                    Thread.sleep(30)
                 }
             }, "camd-win-$id").apply { isDaemon = true }.start()
         }
@@ -376,24 +418,28 @@ class CameraWindows(private val context: Context) {
         if (modified == previousModified) return null
         val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
         if (bytes.size < 16) return null
-        val width = be(bytes, 0)
-        val height = be(bytes, 4)
+        val width = le(bytes, 0)
+        val height = le(bytes, 4)
         if (width <= 0 || height <= 0 || width > 1920 || height > 1200) return null
         val pixelsSize = width * height
         if (bytes.size < 16 + pixelsSize * 4) return null
         val pixels = IntArray(pixelsSize)
         var offset = 16
         for (i in pixels.indices) {
-            pixels[i] = be(bytes, offset)
+            pixels[i] = le(bytes, offset)
             offset += 4
         }
         return Decoded(width, height, pixels, modified)
     }
 
-    private fun be(bytes: ByteArray, offset: Int): Int {
-        return ((bytes[offset].toInt() and 0xFF) shl 24) or
-            ((bytes[offset + 1].toInt() and 0xFF) shl 16) or
-            ((bytes[offset + 2].toInt() and 0xFF) shl 8) or
-            (bytes[offset + 3].toInt() and 0xFF)
+    private fun le(bytes: ByteArray, offset: Int): Int {
+        return (bytes[offset].toInt() and 0xFF) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+    }
+
+    private companion object {
+        const val KEEP_AVM_STOPPED = "keep_avm_stopped"
     }
 }
