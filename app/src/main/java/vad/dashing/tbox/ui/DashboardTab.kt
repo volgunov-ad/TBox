@@ -920,6 +920,29 @@ private fun WidgetEditorHost(
             onDismiss()
         },
         onDismiss = onDismiss,
+        onApply = {
+            // External-widget first pick still needs the system picker (Save-and-close path).
+            // Apply must keep the editor open, so skip that case.
+            val needsExternalPicker =
+                state.selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY &&
+                    externalAppWidgetIdForApply(
+                        state,
+                        currentWidgetConfigs,
+                        state.editingIndex,
+                    ) == null
+            if (!needsExternalPicker) {
+                persist(true)
+                val tileCount = if (state.wholePanelDraftSeeded) {
+                    (state.wholePanelRows * state.wholePanelCols).coerceAtLeast(1)
+                } else {
+                    currentWidgets.size.coerceAtLeast(1)
+                }
+                state.markDraftsAppliedToLivePanel(
+                    currentWidgetConfigs = currentWidgetConfigs,
+                    tileCount = tileCount,
+                )
+            }
+        },
         onSave = {
             val launchedPicker = tryLaunchExternalWidgetPicker(
                 context = context,

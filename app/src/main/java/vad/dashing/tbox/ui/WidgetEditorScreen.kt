@@ -100,6 +100,7 @@ internal fun WidgetEditorScreen(
     onWholePanelOpened: () -> Unit,
     onPickExternalWidget: () -> Unit,
     onDismiss: () -> Unit,
+    onApply: () -> Unit,
     onSave: () -> Unit,
     onDeletePanel: (() -> Unit)?,
 ) {
@@ -122,6 +123,7 @@ internal fun WidgetEditorScreen(
                 onWholePanelOpened = onWholePanelOpened,
                 onPickExternalWidget = onPickExternalWidget,
                 onClose = requestClose,
+                onApply = onApply,
                 onSave = onSave,
                 onDeletePanel = onDeletePanel,
             )
@@ -180,6 +182,7 @@ private fun WidgetEditorContent(
     onWholePanelOpened: () -> Unit,
     onPickExternalWidget: () -> Unit,
     onClose: () -> Unit,
+    onApply: () -> Unit,
     onSave: () -> Unit,
     onDeletePanel: (() -> Unit)?,
 ) {
@@ -345,6 +348,7 @@ private fun WidgetEditorContent(
         EditorFooter(
             state = state,
             onClose = onClose,
+            onApply = onApply,
             onSave = onSave,
             onDeletePanel = onDeletePanel,
         )
@@ -425,6 +429,7 @@ private const val DELETE_CONFIRM_TIMEOUT_MS = 4_000L
 private fun EditorFooter(
     state: WidgetSelectionDialogState,
     onClose: () -> Unit,
+    onApply: () -> Unit,
     onSave: () -> Unit,
     onDeletePanel: (() -> Unit)?,
 ) {
@@ -435,6 +440,7 @@ private fun EditorFooter(
             confirmDelete = false
         }
     }
+    val canApply = state.hasUnsavedChanges && state.canSaveSelection
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -477,8 +483,17 @@ private fun EditorFooter(
         OutlinedButton(onClick = rememberWrappedOnClick(onClose)) {
             Text(text = stringResource(R.string.action_cancel), style = MaterialTheme.typography.tboxButton)
         }
+        OutlinedButton(
+            enabled = canApply,
+            onClick = rememberWrappedOnClick(onApply),
+        ) {
+            Text(text = stringResource(R.string.action_apply), style = MaterialTheme.typography.tboxButton)
+        }
         Button(enabled = state.canSaveSelection, onClick = rememberWrappedOnClick(onSave)) {
-            Text(text = stringResource(R.string.action_save), style = MaterialTheme.typography.tboxButton)
+            Text(
+                text = stringResource(R.string.widget_editor_save_and_close),
+                style = MaterialTheme.typography.tboxButton,
+            )
         }
     }
 }

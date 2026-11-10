@@ -1955,6 +1955,23 @@ internal class WidgetSelectionDialogState(
         panelBaseline = panelFieldsFingerprint()
     }
 
+    /**
+     * After footer «Применить» writes drafts to the live panel, treat the current drafts as the
+     * new baseline so the unsaved hint clears without closing the editor.
+     */
+    fun markDraftsAppliedToLivePanel(
+        currentWidgetConfigs: List<FloatingDashboardWidgetConfig>,
+        tileCount: Int,
+    ) {
+        wholePanelWidgetsDraft = workingTileConfigs(currentWidgetConfigs, tileCount)
+        tileBaseline = buildDraftWidgetConfig()
+        otherTilesDirty = false
+        if (wholePanelDraftSeeded) {
+            wholePanelPlacement?.let { wholePanelPlacementLoaded = it }
+            panelBaseline = panelFieldsFingerprint()
+        }
+    }
+
     /** Config written for the edited tile on Save (empty slot when no type is chosen). */
     fun editingTileConfigForSave(): FloatingDashboardWidgetConfig =
         if (selectedDataKey.isNotEmpty()) {
