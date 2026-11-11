@@ -142,6 +142,11 @@ object ExternalApiVoiceAliasesRu {
             "нижняя панель DCL",
             "нижний бар DCL",
         ),
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED to listOf(
+            "шторка уведомлений DCL",
+            "шторка DCL",
+            "control center DCL",
+        ),
         AutomationSignalId.DCL_SCREEN_MODE to listOf(
             "режим экрана DCL",
             "экран DCL",

@@ -166,6 +166,11 @@ object DclLauncherApiRepository {
         }
     }
 
+    /** Test-only: publish a UI snapshot without Binder / broadcast. */
+    internal fun publishUiStateForTests(state: DclUiState?) {
+        _uiState.value = state
+    }
+
     private fun registerPushReceiver(context: Context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {

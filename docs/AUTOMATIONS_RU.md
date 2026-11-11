@@ -208,10 +208,11 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` — статус-enum **0…4*
 а не UsageStats. Новый тип триггера не нужен — в правиле по-прежнему выбирается пакет AVM.
 
 **DCL лаунчер** (`dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible`,
-`dcl_screen_mode`) — только источник «Приложение». Видимость ADAS/баров — `on`/`off`;
-`dcl_screen_mode` — `home` / `single` / `fullscreen` / `split`. Значения из push/poll
+`dcl_notification_shade_expanded`, `dcl_screen_mode`) — только источник «Приложение».
+Видимость ADAS/баров и шторки уведомлений — `on`/`off`; `dcl_screen_mode` —
+`home` / `single` / `fullscreen` / `split`. Значения из push/poll
 `DclLauncherApiRepository.uiState`; пока снимка нет — сигнала нет. Типичный рецепт:
-скрыть плавающие панели при `screenMode=fullscreen` или скрытых барах
+скрыть плавающие панели при `screenMode=fullscreen`, скрытых барах или открытой шторке
 (`state_equals` + `toggle_hide_floating_panels`). Это не UsageStats sticky-hide.
 Подробнее: [DCL_LAUNCHER_ENVIRONMENT_MODE_RU.md](DCL_LAUNCHER_ENVIRONMENT_MODE_RU.md).
 

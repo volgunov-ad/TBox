@@ -157,6 +157,8 @@ internal object AutomationSignalReads {
                 AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> dclUiBooleanFlow { it.adasPanelVisible }
                 AutomationSignalId.DCL_TOP_BAR_VISIBLE -> dclUiBooleanFlow { it.topBarVisible }
                 AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> dclUiBooleanFlow { it.bottomBarVisible }
+                AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED ->
+                    dclUiBooleanFlow { it.notificationShadeExpanded }
                 AutomationSignalId.DCL_SCREEN_MODE ->
                     vad.dashing.tbox.dcl.DclLauncherApiRepository.uiState
                         .map { state ->
