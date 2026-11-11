@@ -47,6 +47,15 @@ Monitor со своей стороны больше не считает пуст
 - `shared/localaccess/java/vad/dashing/tbox/localaccess/LocalAccessContract.kt`
 - `shared/localaccess/java/vad/dashing/tbox/localaccess/LocalAccessClient.kt`
 
+   **Критично для HOME:** не держать стабильный `ContentProviderClient` / открытый `Cursor` на
+   `vad.dashing.tbox.localaccess`. На API 28 обычный `ContentResolver.call` берёт **stable**
+   provider на время вызова: если в этот момент обновляют Monitor, AMS убивает клиента с причиной
+   `depends on provider … ExternalApiLocalAccessProvider` — умирает весь лаунчер. Эталонный
+   `LocalAccessClient` вызывает `acquireUnstableContentProviderClient`, делает один `call`, сразу
+   `close()`. При смерти Monitor — `DeadObjectException` / `not_supported` / `unavailable`, токен
+   HTTP не стирать, повторить позже. Инцидент на A9 (DCL 0.7.72 + обновление TBox 1.1.4): HOME
+   убивали именно так.
+
 3. Когда токена ещё нет, один раз вызвать `LocalAccessClient.awaitAccess(context)`. Это открывает в Monitor диалог (только «Разрешить» / «Отклонить», без закрытия Back) и ждёт ответ до 120 секунд. Пока статус `pending`, диалог не открывать повторно; тот же запрос виден в Monitor → Настройки → API.
 
 4. Ответ `granted` сохранить в уже существующие поля:
