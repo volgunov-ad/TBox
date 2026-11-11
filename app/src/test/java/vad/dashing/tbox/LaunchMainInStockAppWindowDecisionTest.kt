@@ -265,46 +265,6 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun shouldProbeDclOnColdRedirect_whenCapsUnknown() {
-        assertTrue(
-            LaunchMainInStockAppWindowDecision.shouldProbeDclOnColdRedirect(
-                settingEnabled = true,
-                cachedDclAppAreaCapable = false,
-                dclCapabilitiesProbed = false,
-            ),
-        )
-        assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldProbeDclOnColdRedirect(
-                settingEnabled = true,
-                cachedDclAppAreaCapable = false,
-                dclCapabilitiesProbed = true,
-            ),
-        )
-        assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldProbeDclOnColdRedirect(
-                settingEnabled = true,
-                cachedDclAppAreaCapable = true,
-                dclCapabilitiesProbed = false,
-            ),
-        )
-        assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldProbeDclOnColdRedirect(
-                settingEnabled = false,
-                cachedDclAppAreaCapable = false,
-                dclCapabilitiesProbed = false,
-            ),
-        )
-    }
-
-    @Test
-    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect_isFalse() {
-        // singleTask + DCL REUSED_TASK: finish would destroy the only Main.
-        assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(),
-        )
-    }
-
-    @Test
     fun shouldSkipDclRedirectAntiLoop_matchesHostingAndSticky() {
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(

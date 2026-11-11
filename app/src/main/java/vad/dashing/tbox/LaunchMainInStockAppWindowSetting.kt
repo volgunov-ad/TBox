@@ -128,30 +128,6 @@ internal object LaunchMainInStockAppWindowDecision {
         dclEnvironmentEnabled: Boolean,
     ): Boolean = headUnitIsAndroid10 || dclApiAvailable || dclEnvironmentEnabled
 
-    /**
-     * Cold Main redirect must not treat «DCL caps not probed yet» as «DCL unavailable».
-     * Repository defaults are false/null until [vad.dashing.tbox.dcl.DclLauncherApiRepository]
-     * finishes its first getCapabilities (often only after BackgroundService on older builds).
-     */
-    fun shouldProbeDclOnColdRedirect(
-        settingEnabled: Boolean,
-        cachedDclAppAreaCapable: Boolean,
-        dclCapabilitiesProbed: Boolean,
-    ): Boolean =
-        settingEnabled && !cachedDclAppAreaCapable && !dclCapabilitiesProbed
-
-    /**
-     * After a successful DCL `app_area` launch from an external Main redirect: keep this
-     * activity alive (`false` = do not [android.app.Activity.finish]).
-     *
-     * Main is `singleTask`. DCL on A9 typically **reuses** the already-started task
-     * (`moveTaskToFront` + `resizeTask` into freeform/app_area bounds) instead of
-     * starting a second instance. Finishing the redirector would destroy that only
-     * Main → empty freeform task and HOME-only UI. Adayo `LAUNCH_APP` still needs
-     * finish (new host on a virtual display).
-     */
-    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(): Boolean = false
-
     const val EXTERNAL_REDIRECT_COOLDOWN_MS = 3_000L
     private const val DEFAULT_DISPLAY_ID = 0
 }

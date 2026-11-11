@@ -36,23 +36,15 @@ object DclLauncherApiRepository {
     private val _available = MutableStateFlow(false)
     val available: StateFlow<Boolean> = _available.asStateFlow()
 
-    /**
-     * True after the first [getCapabilities] attempt finishes (Ok / Error / Unavailable).
-     * Distinguishes «not probed yet» from «probed and unavailable» when [capabilities] is still null
-     * (P1-4 keeps null caps from implying can-launch).
-     */
-    private val _capabilitiesProbed = MutableStateFlow(false)
-    val capabilitiesProbed: StateFlow<Boolean> = _capabilitiesProbed.asStateFlow()
-
     @Volatile
     private var appContext: Context? = null
 
     private var pushReceiver: BroadcastReceiver? = null
 
     fun start(context: Context) {
+        if (!started.compareAndSet(false, true)) return
         val app = context.applicationContext
         appContext = app
-        if (!started.compareAndSet(false, true)) return
         registerPushReceiver(app)
         scope.launch { refreshBlocking(app) }
     }
@@ -137,18 +129,15 @@ object DclLauncherApiRepository {
             is DclCallResult.Ok -> {
                 _capabilities.value = caps.value
                 _available.value = true
-                _capabilitiesProbed.value = true
             }
             is DclCallResult.Error -> {
                 Log.w(TAG, "getCapabilities error: ${caps.error.errorCode} ${caps.error.message}")
                 // Do not mark available / keep stale null caps as "capable" (P1-4).
                 _available.value = false
-                _capabilitiesProbed.value = true
                 return false
             }
             DclCallResult.Unavailable -> {
                 _available.value = false
-                _capabilitiesProbed.value = true
                 return false
             }
         }
