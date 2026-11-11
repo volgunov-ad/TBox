@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import vad.dashing.tbox.MainActivityIntentHelper
+import vad.dashing.tbox.MainDclLaunchMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -819,6 +820,8 @@ fun SettingsTabContent(
     val climateControlType by settingsViewModel.climateControlType.collectAsStateWithLifecycle()
     val launchMainInStockAppWindow by
         settingsViewModel.launchMainInStockAppWindow.collectAsStateWithLifecycle()
+    val launchMainDclMode by
+        settingsViewModel.launchMainDclMode.collectAsStateWithLifecycle()
     val huCaCertsAutoInstall by settingsViewModel.huCaCertsAutoInstall.collectAsStateWithLifecycle()
     val huAppNetworkAutoOpen by settingsViewModel.huAppNetworkAutoOpen.collectAsStateWithLifecycle()
     val huDspMode by settingsViewModel.huDspMode.collectAsStateWithLifecycle()
@@ -1103,20 +1106,64 @@ fun SettingsTabContent(
                 },
             )
         }
-        val showMainAppWindowSwitch =
-            MainActivityIntentHelper.shouldShowMainAppWindowSwitch(
-                headUnitIsAndroid10 = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
-                dclApiAvailable = dclApiAvailable,
-                dclEnvironmentEnabled = dclEnvEnabled,
+        if (MainActivityIntentHelper.shouldShowMainDclLaunchModePicker(dclEnvEnabled)) {
+            SettingsTitle(stringResource(R.string.settings_launch_main_dcl_mode_title))
+            Text(
+                text = stringResource(R.string.settings_launch_main_dcl_mode_desc),
+                style = MaterialTheme.typography.tboxBody,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
             )
-        if (showMainAppWindowSwitch) {
-            SettingSwitch(
-                launchMainInStockAppWindow,
-                { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
-                stringResource(R.string.settings_launch_main_in_stock_app_window_title),
-                stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
-                true,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_fullscreen),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.FULLSCREEN,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.FULLSCREEN)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_full_width),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.FULL_WIDTH,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.FULL_WIDTH)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                ModeButton(
+                    text = stringResource(R.string.settings_launch_main_dcl_mode_app_area),
+                    isSelected = launchMainDclMode == MainDclLaunchMode.APP_AREA,
+                    onClick = {
+                        settingsViewModel.saveLaunchMainDclMode(MainDclLaunchMode.APP_AREA)
+                    },
+                    enabled = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        } else {
+            val showMainAppWindowSwitch =
+                MainActivityIntentHelper.shouldShowMainAppWindowSwitch(
+                    headUnitIsAndroid10 = headUnitCanMode == HeadUnitCanMode.Android10Vhal,
+                    dclApiAvailable = dclApiAvailable,
+                    dclEnvironmentEnabled = dclEnvEnabled,
+                )
+            if (showMainAppWindowSwitch) {
+                SettingSwitch(
+                    launchMainInStockAppWindow,
+                    { enabled -> settingsViewModel.saveLaunchMainInStockAppWindow(enabled) },
+                    stringResource(R.string.settings_launch_main_in_stock_app_window_title),
+                    stringResource(R.string.settings_launch_main_in_stock_app_window_desc),
+                    true,
+                )
+            }
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsTitle(stringResource(R.string.settings_cruise_type_title))

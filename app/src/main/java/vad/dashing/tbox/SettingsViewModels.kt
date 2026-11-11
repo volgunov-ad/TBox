@@ -1593,6 +1593,13 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
             initialValue = true,
         )
 
+    val launchMainDclMode = settingsManager.launchMainDclModeFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = MainDclLaunchMode.DEFAULT,
+        )
+
     val dclLauncherEnvironmentEnabled = settingsManager.dclLauncherEnvironmentEnabledFlow
         .stateIn(
             scope = viewModelScope,
@@ -3774,6 +3781,12 @@ class SettingsViewModel(private val settingsManager: SettingsManager) : ViewMode
     fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
         viewModelScope.launch {
             settingsManager.saveLaunchMainInStockAppWindow(enabled)
+        }
+    }
+
+    fun saveLaunchMainDclMode(mode: MainDclLaunchMode) {
+        viewModelScope.launch {
+            settingsManager.saveLaunchMainDclMode(mode)
         }
     }
 

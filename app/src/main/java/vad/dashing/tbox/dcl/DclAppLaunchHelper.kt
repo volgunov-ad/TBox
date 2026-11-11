@@ -142,11 +142,28 @@ object DclAppLaunchHelper {
         context: Context,
         packageName: String,
         activityClass: String? = null,
+    ): Boolean =
+        launchModeBlocking(
+            context = context,
+            packageName = packageName,
+            mode = DclLauncherApiContract.MODE_APP_AREA,
+            activityClass = activityClass,
+        )
+
+    /**
+     * Blocking Binder `launchApp` for any supported mode (`app_area` / `full_width` /
+     * `fullscreen`). Callers must hop off the main thread (P0-1).
+     */
+    fun launchModeBlocking(
+        context: Context,
+        packageName: String,
+        mode: String,
+        activityClass: String? = null,
     ): Boolean {
         val result = DclLauncherApiClient.launchAppBlocking(
             context = context.applicationContext,
             packageName = packageName,
-            mode = DclLauncherApiContract.MODE_APP_AREA,
+            mode = mode,
             activityClass = activityClass,
         )
         return when (result) {

@@ -4,11 +4,78 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.dcl.DclCapabilities
+import vad.dashing.tbox.dcl.DclLauncherApiContract
 
 class LaunchMainInStockAppWindowDecisionTest {
 
+    private fun caps(
+        appArea: Boolean = true,
+        fullscreen: Boolean = true,
+        fullWidth: Boolean? = true,
+    ) = DclCapabilities(
+        apiVersion = 1,
+        launchFullscreen = fullscreen,
+        launchAppArea = appArea,
+        launchFullWidth = fullWidth,
+        uiStateQuery = true,
+        uiStateEvents = false,
+        adasPanel = true,
+        screenModes = listOf("home", "single", "full_width", "fullscreen"),
+        splitSupported = null,
+    )
+
     @Test
-    fun settingOff_resolvesNone() {
+    fun migrateFromLegacyBoolean_trueToAppArea_falseToFullscreen() {
+        assertEquals(
+            MainDclLaunchMode.APP_AREA,
+            MainDclLaunchMode.migrateFromLegacyBoolean(true),
+        )
+        assertEquals(
+            MainDclLaunchMode.FULLSCREEN,
+            MainDclLaunchMode.migrateFromLegacyBoolean(false),
+        )
+    }
+
+    @Test
+    fun resolveStored_prefersModeKey_thenMigratesBoolean() {
+        assertEquals(
+            MainDclLaunchMode.FULL_WIDTH,
+            MainDclLaunchMode.resolveStored(
+                storedMode = "full_width",
+                legacyBoolean = false,
+                modeKeyPresent = true,
+            ),
+        )
+        assertEquals(
+            MainDclLaunchMode.APP_AREA,
+            MainDclLaunchMode.resolveStored(
+                storedMode = null,
+                legacyBoolean = true,
+                modeKeyPresent = false,
+            ),
+        )
+        assertEquals(
+            MainDclLaunchMode.FULLSCREEN,
+            MainDclLaunchMode.resolveStored(
+                storedMode = null,
+                legacyBoolean = false,
+                modeKeyPresent = false,
+            ),
+        )
+        // Absent boolean defaults to true → app_area.
+        assertEquals(
+            MainDclLaunchMode.APP_AREA,
+            MainDclLaunchMode.resolveStored(
+                storedMode = null,
+                legacyBoolean = null,
+                modeKeyPresent = false,
+            ),
+        )
+    }
+
+    @Test
+    fun settingOff_legacy_resolvesNone() {
         assertEquals(
             MainAppWindowBackend.NONE,
             LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -22,7 +89,7 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun dclPreferredOverAdayo() {
+    fun dclPreferredOverAdayo_legacy() {
         assertEquals(
             MainAppWindowBackend.DCL_APP_AREA,
             LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -36,7 +103,7 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun adayoWhenDclUnavailableOnA10() {
+    fun adayoWhenDclUnavailableOnA10_legacy() {
         assertEquals(
             MainAppWindowBackend.ADAYO_STOCK,
             LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -50,7 +117,7 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun a9WithoutDcl_resolvesNone() {
+    fun a9WithoutDcl_resolvesNone_legacy() {
         assertEquals(
             MainAppWindowBackend.NONE,
             LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -64,7 +131,7 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun a9WithDcl_usesDcl() {
+    fun a9WithDcl_usesDcl_legacy() {
         assertEquals(
             MainAppWindowBackend.DCL_APP_AREA,
             LaunchMainInStockAppWindowDecision.resolveBackend(
@@ -74,6 +141,127 @@ class LaunchMainInStockAppWindowDecisionTest {
                 headUnitIsAndroid10 = false,
                 adayoLauncherAvailable = false,
             ),
+        )
+    }
+
+    @Test
+    fun dclEnvOn_routesByMainMode() {
+        val c = caps()
+        assertEquals(
+            MainAppWindowBackend.DCL_FULLSCREEN,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = true,
+                mainDclMode = MainDclLaunchMode.FULLSCREEN,
+                legacyStockWindowEnabled = true,
+                dclApiAvailable = true,
+                dclCapabilities = c,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+        assertEquals(
+            MainAppWindowBackend.DCL_FULL_WIDTH,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = true,
+                mainDclMode = MainDclLaunchMode.FULL_WIDTH,
+                legacyStockWindowEnabled = false,
+                dclApiAvailable = true,
+                dclCapabilities = c,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+        assertEquals(
+            MainAppWindowBackend.DCL_APP_AREA,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = true,
+                mainDclMode = MainDclLaunchMode.APP_AREA,
+                legacyStockWindowEnabled = false,
+                dclApiAvailable = true,
+                dclCapabilities = c,
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun dclEnvOn_fullWidthFallsBackToAppAreaThenAdayo() {
+        assertEquals(
+            MainAppWindowBackend.DCL_APP_AREA,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = true,
+                mainDclMode = MainDclLaunchMode.FULL_WIDTH,
+                legacyStockWindowEnabled = true,
+                dclApiAvailable = true,
+                dclCapabilities = caps(fullWidth = false, appArea = true),
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+        assertEquals(
+            MainAppWindowBackend.ADAYO_STOCK,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = true,
+                mainDclMode = MainDclLaunchMode.FULL_WIDTH,
+                legacyStockWindowEnabled = true,
+                dclApiAvailable = false,
+                dclCapabilities = null,
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun dclEnvOff_ignoresMainMode_usesLegacyBoolean() {
+        assertEquals(
+            MainAppWindowBackend.NONE,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = false,
+                mainDclMode = MainDclLaunchMode.APP_AREA,
+                legacyStockWindowEnabled = false,
+                dclApiAvailable = true,
+                dclCapabilities = caps(),
+                headUnitIsAndroid10 = true,
+                adayoLauncherAvailable = true,
+            ),
+        )
+        assertEquals(
+            MainAppWindowBackend.DCL_APP_AREA,
+            LaunchMainInStockAppWindowDecision.resolveBackend(
+                dclEnvironmentEnabled = false,
+                mainDclMode = MainDclLaunchMode.FULLSCREEN,
+                legacyStockWindowEnabled = true,
+                dclApiAvailable = true,
+                dclCapabilities = caps(),
+                headUnitIsAndroid10 = false,
+                adayoLauncherAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun dclModeForBackend_mapsStorageKeys() {
+        assertEquals(
+            DclLauncherApiContract.MODE_APP_AREA,
+            LaunchMainInStockAppWindowDecision.dclModeForBackend(MainAppWindowBackend.DCL_APP_AREA),
+        )
+        assertEquals(
+            DclLauncherApiContract.MODE_FULL_WIDTH,
+            LaunchMainInStockAppWindowDecision.dclModeForBackend(MainAppWindowBackend.DCL_FULL_WIDTH),
+        )
+        assertEquals(
+            DclLauncherApiContract.MODE_FULLSCREEN,
+            LaunchMainInStockAppWindowDecision.dclModeForBackend(MainAppWindowBackend.DCL_FULLSCREEN),
+        )
+        assertEquals(
+            null,
+            LaunchMainInStockAppWindowDecision.dclModeForBackend(MainAppWindowBackend.ADAYO_STOCK),
+        )
+        assertEquals(
+            null,
+            LaunchMainInStockAppWindowDecision.dclModeForBackend(MainAppWindowBackend.NONE),
         )
     }
 
@@ -112,19 +300,29 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun showMainSwitch_onA9WhenDclPresent() {
-        assertTrue(
+    fun showMainSwitch_hiddenWhenDclEnvOn_pickerInstead() {
+        assertFalse(
             LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
-                headUnitIsAndroid10 = false,
+                headUnitIsAndroid10 = true,
                 dclApiAvailable = true,
+                dclEnvironmentEnabled = true,
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldShowMainDclLaunchModePicker(
+                dclEnvironmentEnabled = true,
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldShowMainDclLaunchModePicker(
                 dclEnvironmentEnabled = false,
             ),
         )
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldShowMainAppWindowSwitch(
                 headUnitIsAndroid10 = false,
-                dclApiAvailable = false,
-                dclEnvironmentEnabled = true,
+                dclApiAvailable = true,
+                dclEnvironmentEnabled = false,
             ),
         )
         assertFalse(
@@ -297,8 +495,11 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect_isFalse() {
+    fun shouldFinishSelfAfterSuccessfulDclRedirect_isFalse() {
         // singleTask + DCL REUSED_TASK: finish would destroy the only Main.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldFinishSelfAfterSuccessfulDclRedirect(),
+        )
         assertFalse(
             LaunchMainInStockAppWindowDecision.shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(),
         )
@@ -349,6 +550,70 @@ class LaunchMainInStockAppWindowDecisionTest {
                 dclForegroundPackage = "other.app",
                 dclScreenMode = "single",
                 selfPackageName = "vad.dashing.tbox",
+            ),
+        )
+    }
+
+    @Test
+    fun shouldReapplyDclLaunchModeOnAliveMain_afterStickyFullscreen() {
+        // Post-update first open left Main raw fullscreen; second open must re-host.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_APP_AREA,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = "home",
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+            ),
+        )
+        // Already in matching app_area/single — no re-apply.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_APP_AREA,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "vad.dashing.tbox",
+                dclScreenMode = "single",
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+            ),
+        )
+        // Wrong mode (fullscreen while wanting full_width) → re-apply.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_FULL_WIDTH,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = "vad.dashing.tbox",
+                dclScreenMode = "fullscreen",
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+            ),
+        )
+        // NONE / Adayo backends have no DCL mode to re-apply.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.NONE,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = null,
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 100_000L,
+                lastReapplyAtMs = 0L,
+            ),
+        )
+        // Cooldown blocks thrash.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+                backend = MainAppWindowBackend.DCL_APP_AREA,
+                intentSkipsRedirect = false,
+                dclForegroundPackage = null,
+                dclScreenMode = "home",
+                selfPackageName = "vad.dashing.tbox",
+                nowMs = 101_000L,
+                lastReapplyAtMs = 100_000L,
             ),
         )
     }

@@ -766,6 +766,11 @@
     <string name="settings_vehicle_feature_setup_done">Готово</string>
     <string name="settings_launch_main_in_stock_app_window_title">Запускать TBox Monitor в области приложений</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Открывать главный экран в области приложений лаунчера (DCL app_area при доступном API, иначе штатное окно Adayo). Автозапуск, плавающие панели, возврат из плеера и другие программные запуски. Выкл. — на весь экран.</string>
+    <string name="settings_launch_main_dcl_mode_title">Запуск главного экрана (DCL)</string>
+    <string name="settings_launch_main_dcl_mode_desc">Только для TBox Monitor. Холодный старт, плавающие панели, автозапуск, ярлык DCL и другие программные открытия Main. Первое открытие после обновления APK может остаться на весь экран; со второго — выбранный режим.</string>
+    <string name="settings_launch_main_dcl_mode_fullscreen">полный экран</string>
+    <string name="settings_launch_main_dcl_mode_full_width">полный экран с барами (по ширине)</string>
+    <string name="settings_launch_main_dcl_mode_app_area">окно приложений</string>
     <string name="settings_dcl_launcher_environment_title">Работа в среде лаунчера DCL</string>
     <string name="settings_dcl_launcher_environment_desc">Ярлыки «Обычный», список программ и автоматизации LaunchApplication открывают приложения через DCL (app_area). Отдельно — «На всю ширину (DCL)» и «На весь экран (DCL)». Freeform и вирт. дисплей для нового выбора недоступны. При недоступном API — обычный запуск с уведомлением.</string>
     <string name="settings_dcl_launcher_api_status_available">DCL API: доступен (v%1$d)</string>

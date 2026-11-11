@@ -1166,10 +1166,17 @@ class SettingsManager(private val context: Context) {
             stringPreferencesKey("${KEY_PREFIX}climate_control_type")
         /**
          * Open [MainActivity] via DCL app_area (when API available) or Adayo stock app window.
-         * Default true when key absent.
+         * Default true when key absent. Used when DCL environment is OFF (A10 Adayo / legacy).
          */
         private val LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY =
             booleanPreferencesKey("${KEY_PREFIX}launch_main_in_stock_app_window")
+        /**
+         * Main-only DCL launch mode when environment is ON:
+         * `fullscreen` / `full_width` / `app_area`. Absent → migrate from
+         * [LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] (true→app_area, false→fullscreen).
+         */
+        private val LAUNCH_MAIN_DCL_MODE_KEY =
+            stringPreferencesKey("${KEY_PREFIX}launch_main_dcl_mode")
         /**
          * Route third-party «Обычный» / App List launches through DCL Launcher API.
          * Default false when key absent. Independent of [LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY].
@@ -2305,10 +2312,24 @@ class SettingsManager(private val context: Context) {
 
     /**
      * When true (default), programmatic [MainActivity] opens use DCL app_area (if available)
-     * or Adayo stock app window instead of fullscreen.
+     * or Adayo stock app window instead of fullscreen. Used when DCL environment is OFF.
      */
     val launchMainInStockAppWindowFlow: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] ?: true }
+        .distinctUntilChanged()
+
+    /**
+     * Main-only DCL launch mode (`fullscreen` / `full_width` / `app_area`) when environment is ON.
+     * Migrates from [launchMainInStockAppWindowFlow] when the mode key is absent.
+     */
+    val launchMainDclModeFlow: Flow<MainDclLaunchMode> = context.settingsDataStore.data
+        .map { preferences ->
+            MainDclLaunchMode.resolveStored(
+                storedMode = preferences[LAUNCH_MAIN_DCL_MODE_KEY],
+                legacyBoolean = preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY],
+                modeKeyPresent = preferences.contains(LAUNCH_MAIN_DCL_MODE_KEY),
+            )
+        }
         .distinctUntilChanged()
 
     /**
@@ -5165,8 +5186,32 @@ class SettingsManager(private val context: Context) {
     suspend fun saveLaunchMainInStockAppWindow(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] = enabled
+            // Keep mode in sync for env-ON picker when user only touches the legacy switch.
+            if (!preferences.contains(LAUNCH_MAIN_DCL_MODE_KEY) ||
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] == MainDclLaunchMode.FULLSCREEN.storageKey ||
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] == MainDclLaunchMode.APP_AREA.storageKey
+            ) {
+                preferences[LAUNCH_MAIN_DCL_MODE_KEY] =
+                    MainDclLaunchMode.migrateFromLegacyBoolean(enabled).storageKey
+            }
         }
         LaunchMainInStockAppWindowSetting.update(enabled)
+        if (MainDclLaunchModeSetting.mode == MainDclLaunchMode.FULLSCREEN ||
+            MainDclLaunchModeSetting.mode == MainDclLaunchMode.APP_AREA
+        ) {
+            MainDclLaunchModeSetting.update(MainDclLaunchMode.migrateFromLegacyBoolean(enabled))
+        }
+    }
+
+    suspend fun saveLaunchMainDclMode(mode: MainDclLaunchMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAUNCH_MAIN_DCL_MODE_KEY] = mode.storageKey
+            // Mirror windowed vs fullscreen into the legacy boolean (A10 Adayo when env OFF).
+            preferences[LAUNCH_MAIN_IN_STOCK_APP_WINDOW_KEY] =
+                mode != MainDclLaunchMode.FULLSCREEN
+        }
+        MainDclLaunchModeSetting.update(mode)
+        LaunchMainInStockAppWindowSetting.update(mode != MainDclLaunchMode.FULLSCREEN)
     }
 
     suspend fun saveDclLauncherEnvironmentEnabled(enabled: Boolean) {

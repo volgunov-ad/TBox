@@ -50,6 +50,11 @@ class TboxApplication : Application() {
             }
         }
         applicationScope.launch {
+            settingsManager.launchMainDclModeFlow.collectLatest { mode ->
+                MainDclLaunchModeSetting.update(mode)
+            }
+        }
+        applicationScope.launch {
             settingsManager.dclLauncherEnvironmentEnabledFlow.collectLatest { enabled ->
                 vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
             }
