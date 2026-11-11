@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.LinkedHashSet
 import java.net.HttpURLConnection
 import java.net.URL
@@ -547,8 +548,6 @@ object SharedMediaControlService {
     internal fun scheduleColdStartPlayRetryIfNeeded(
         appContext: Context,
         targetPackage: String,
-        keepPlayerForeground: Boolean = false,
-        launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
     ) {
         launchPlayerVerifyScope.launch {
             try {
@@ -565,13 +564,11 @@ object SharedMediaControlService {
                 }
                 if (!needsRetry) return@launch
                 sendMediaPlayKeyEvent(appContext, targetPackage)
-                launchPlayerApp(
-                    appContext,
-                    targetPackage,
-                    scheduleColdStartPlayRetry = false,
-                    keepPlayerForeground = keepPlayerForeground,
-                    launchWidgetConfig = launchWidgetConfig,
-                )
+                // Wake only: do not re-apply freeform / stock / VD / DCL (avoids a second UI launch
+                // and tearing down an active freeform session ~4s after the first cold play).
+                withContext(Dispatchers.Main) {
+                    launchPackageFullscreen(appContext, targetPackage)
+                }
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", "MediaControl", "Cold start retry failed: ${e.message}")
             }
@@ -1210,15 +1207,20 @@ private fun launchPlayerApp(
     val shouldReturnToMain =
         !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityInForeground.value
 
-    // Same mode routing as open-player / App Shortcut (default FULLSCREEN when no widget config).
-    val modeConfig = launchWidgetConfig
-        ?: FloatingDashboardWidgetConfig(dataKey = MUSIC_WIDGET_DATA_KEY)
-    launchPackageWithLaunchMode(
-        context = context,
-        packageName = packageName,
-        config = modeConfig,
-        settingsViewModel = null,
-    )
+    if (launchWidgetConfig != null) {
+        // Widget cold play/pause: honor the music tile launch-mode picker.
+        launchPackageWithLaunchMode(
+            context = context,
+            packageName = packageName,
+            config = launchWidgetConfig,
+            settingsViewModel = null,
+        )
+    } else {
+        // Automation / phone / other callers without a widget config: plain wake only.
+        // Do not runAfterExitingWindowMode or DCL-route — that fought LaunchApplication(freeform)
+        // then MEDIA_PLAY and changed pre-PR startActivity behavior.
+        launchPackageFullscreen(context, packageName)
+    }
 
     // Return only if MainActivity was visible at the moment the player launch started.
     if (shouldReturnToMain) {
@@ -1231,8 +1233,6 @@ private fun launchPlayerApp(
         SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(
             appContext = context.applicationContext,
             targetPackage = packageName,
-            keepPlayerForeground = keepPlayerForeground,
-            launchWidgetConfig = launchWidgetConfig,
         )
     }
     if (scheduleLateSessionPlayRetry) {
