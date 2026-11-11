@@ -3,7 +3,7 @@ package vad.dashing.tbox.externalapi
 object ExternalApiConstants {
     const val API_VERSION = 1
     /** 7 — camera windows (`camd_window`) and keep-stock-AVM (`camd_keep_avm`). */
-    const val CATALOG_VERSION = 7
+    const val CATALOG_VERSION = 8
 
     const val DEFAULT_PORT = 8765
     const val MIN_PORT = 1024

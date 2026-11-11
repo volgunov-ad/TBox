@@ -973,6 +973,14 @@ object AutomationSignalCatalog {
             typicalRange = "on/off из DCL UI state (bottomBarVisible).",
         ),
         state(
+            AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED,
+            "DCL: шторка уведомлений",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из DCL UI state (notificationShadeExpanded). Нет значения, " +
+                "пока лаунчер не отдал снимок или поле отсутствует (старый DCL).",
+        ),
+        state(
             AutomationSignalId.DCL_SCREEN_MODE,
             "DCL: режим экрана",
             appOnly,
