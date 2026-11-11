@@ -31,6 +31,14 @@ const val DEFAULT_HTTP_REQUEST_WIDGET_YAML = "url: \"http://\""
 const val DEFAULT_HTTP_REQUEST_TIMEOUT_SECONDS = 10
 const val HTTP_REQUEST_POST_ACTION_BLOCK_MS = 500L
 
+/** Default pause after optional pre-request app launch on an HTTP tile: 1 s (1000 ms). */
+const val DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC = 1
+const val MIN_HTTP_LAUNCH_APP_DELAY_SEC = 0
+const val MAX_HTTP_LAUNCH_APP_DELAY_SEC = 30
+
+fun normalizeHttpLaunchAppDelaySec(raw: Int): Int =
+    raw.coerceIn(MIN_HTTP_LAUNCH_APP_DELAY_SEC, MAX_HTTP_LAUNCH_APP_DELAY_SEC)
+
 data class HttpRequestWidgetConfig(
     val url: String,
     val method: String = "get",

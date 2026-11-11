@@ -203,10 +203,14 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("mediaControlsHeightPercent", controlsHeight)
             }
         }
-        if (config.launcherAppPackage.isNotBlank()) {
+        val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
+            config.dataKey,
+            config.httpLaunchAppBeforeRequest,
+        )
+        if (storesLauncherLaunch && config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
-        if (usesAppLauncherLaunchModeFields(config.dataKey)) {
+        if (storesLauncherLaunch) {
             val launchMode = AppLauncherLaunchMode.fromStored(
                 config.launcherLaunchMode.storageKey,
                 config.launcherFreeformEnabled,
@@ -247,6 +251,13 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
+            if (config.httpLaunchAppBeforeRequest) {
+                obj.put("httpLaunchAppBeforeRequest", true)
+                val delaySec = normalizeHttpLaunchAppDelaySec(config.httpLaunchAppDelaySec)
+                if (delaySec != DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC) {
+                    obj.put("httpLaunchAppDelaySec", delaySec)
+                }
+            }
         }
         if (config.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
             val number = config.dialPhoneNumber.trim()
@@ -591,6 +602,12 @@ private fun parseWidgetConfigsFromJsonArray(
                         CAMD_WINDOW_DEFAULT_H,
                     )
                 }
+                val httpLaunchAppBeforeRequest = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                    item.optBoolean("httpLaunchAppBeforeRequest", false)
+                val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
+                    dataKey,
+                    httpLaunchAppBeforeRequest,
+                )
                 configs.add(
                     FloatingDashboardWidgetConfig(
                         dataKey = dataKey,
@@ -672,12 +689,12 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             null
                         },
-                        launcherAppPackage = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherAppPackage = if (storesLauncherLaunch) {
                             launcherAppPackage
                         } else {
                             ""
                         },
-                        launcherLaunchMode = if (usesAppLauncherLaunchModeFields(dataKey)) {
+                        launcherLaunchMode = if (storesLauncherLaunch) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -685,7 +702,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             AppLauncherLaunchMode.DEFAULT
                         },
-                        launcherFreeformEnabled = if (usesAppLauncherLaunchModeFields(dataKey)) {
+                        launcherFreeformEnabled = if (storesLauncherLaunch) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -693,14 +710,14 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             false
                         },
-                        launcherFreeformSide = if (usesAppLauncherLaunchModeFields(dataKey)) {
+                        launcherFreeformSide = if (storesLauncherLaunch) {
                             FreeformLaunchSide.fromStorageKey(
                                 item.optString("launcherFreeformSide", ""),
                             )
                         } else {
                             FreeformLaunchSide.DEFAULT
                         },
-                        launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(dataKey)) {
+                        launcherFreeformPercent = if (storesLauncherLaunch) {
                             FreeformLaunchBounds.normalizePercent(
                                 item.optInt(
                                     "launcherFreeformPercent",
@@ -711,39 +728,31 @@ private fun parseWidgetConfigsFromJsonArray(
                             FreeformLaunchBounds.DEFAULT_PERCENT
                         },
                         launcherFreeformOverlayPage =
-                            if (usesAppLauncherLaunchModeFields(dataKey) &&
-                                item.has("launcherFreeformOverlayPage")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherFreeformOverlayPage")) {
                                 item.optInt("launcherFreeformOverlayPage")
                                     .takeIf { it > 0 }
                             } else {
                                 null
                             },
                         launcherFreeformOverlayCrop =
-                            usesAppLauncherLaunchModeFields(dataKey) &&
+                            storesLauncherLaunch &&
                                 item.optBoolean("launcherFreeformOverlayCrop", false),
                         launcherVirtualDisplayId =
-                            if (usesAppLauncherLaunchModeFields(dataKey) &&
-                                item.has("launcherVirtualDisplayId")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayId")) {
                                 item.optInt("launcherVirtualDisplayId")
                                     .takeIf { it >= 0 }
                             } else {
                                 null
                             },
                         launcherVirtualDisplayWidthPx =
-                            if (usesAppLauncherLaunchModeFields(dataKey) &&
-                                item.has("launcherVirtualDisplayWidthPx")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayWidthPx")) {
                                 item.optInt("launcherVirtualDisplayWidthPx")
                                     .takeIf { it > 0 }
                             } else {
                                 null
                             },
                         launcherVirtualDisplayHeightPx =
-                            if (usesAppLauncherLaunchModeFields(dataKey) &&
-                                item.has("launcherVirtualDisplayHeightPx")
-                            ) {
+                            if (storesLauncherLaunch && item.has("launcherVirtualDisplayHeightPx")) {
                                 item.optInt("launcherVirtualDisplayHeightPx")
                                     .takeIf { it > 0 }
                             } else {
@@ -759,6 +768,17 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("httpOpenBrowser", false)
                         } else {
                             false
+                        },
+                        httpLaunchAppBeforeRequest = httpLaunchAppBeforeRequest,
+                        httpLaunchAppDelaySec = if (httpLaunchAppBeforeRequest) {
+                            normalizeHttpLaunchAppDelaySec(
+                                item.optInt(
+                                    "httpLaunchAppDelaySec",
+                                    DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC,
+                                ),
+                            )
+                        } else {
+                            DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
                         },
                         dialPhoneNumber = if (dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
                             item.optString("dialPhoneNumber", "").trim()

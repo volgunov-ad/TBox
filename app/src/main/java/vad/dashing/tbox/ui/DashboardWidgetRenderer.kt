@@ -1347,8 +1347,8 @@ fun DashboardWidgetRenderer(
             DashboardHttpRequestWidgetItem(
                 widget = widget,
                 iconKey = HttpRequestIconPaths.iconKey(panelStorageId, widget.id),
-                requestYaml = widgetConfig.httpRequestYaml,
-                openBrowser = widgetConfig.httpOpenBrowser,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
                 customIconRevision = httpRequestIconRevision,
                 iconLookup = iconLookup,
                 suppressCustomIcon = themeActivating,

@@ -9,6 +9,7 @@ import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
+import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.MainScreenPanelConfig
 import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationCondition
@@ -124,6 +125,20 @@ class DclLauncherEnvironmentRoutingTest {
         assertNull(
             DclLauncherEnvironmentRouting.remapWidgetToOrdinary(
                 freeform.copy(launcherLaunchMode = AppLauncherLaunchMode.DCL_FULLSCREEN),
+            ),
+        )
+
+        val httpLaunch = FloatingDashboardWidgetConfig(
+            dataKey = HTTP_REQUEST_WIDGET_DATA_KEY,
+            httpLaunchAppBeforeRequest = true,
+            launcherAppPackage = "com.example.app",
+            launcherLaunchMode = AppLauncherLaunchMode.STOCK_WINDOW,
+        )
+        val remappedHttp = DclLauncherEnvironmentRouting.remapWidgetToOrdinary(httpLaunch)!!
+        assertEquals(AppLauncherLaunchMode.FULLSCREEN, remappedHttp.launcherLaunchMode)
+        assertNull(
+            DclLauncherEnvironmentRouting.remapWidgetToOrdinary(
+                httpLaunch.copy(httpLaunchAppBeforeRequest = false),
             ),
         )
     }

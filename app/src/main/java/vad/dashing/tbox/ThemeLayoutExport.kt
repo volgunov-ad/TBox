@@ -117,7 +117,11 @@ object ThemeLayoutExport {
     fun collectLauncherPackages(widgets: List<FloatingDashboardWidgetConfig>): Set<String> =
         widgets.mapNotNull { widget ->
             widget.launcherAppPackage.trim().takeIf { pkg ->
-                pkg.isNotEmpty() && widget.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY
+                pkg.isNotEmpty() &&
+                    widgetStoresAppLauncherLaunchSettings(
+                        widget.dataKey,
+                        widget.httpLaunchAppBeforeRequest,
+                    )
             }
         }.toSet()
 

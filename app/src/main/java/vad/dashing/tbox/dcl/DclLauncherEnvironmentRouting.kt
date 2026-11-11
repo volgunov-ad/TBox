@@ -8,7 +8,7 @@ import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationDocument
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
-import vad.dashing.tbox.usesAppLauncherLaunchModeFields
+import vad.dashing.tbox.widgetStoresAppLauncherLaunchSettings
 
 /**
  * Pure routing / remap helpers for DCL launcher environment mode (v1).
@@ -79,7 +79,14 @@ object DclLauncherEnvironmentRouting {
     fun remapWidgetToOrdinary(
         config: FloatingDashboardWidgetConfig,
     ): FloatingDashboardWidgetConfig? {
-        if (!usesAppLauncherLaunchModeFields(config.dataKey)) return null
+        if (
+            !widgetStoresAppLauncherLaunchSettings(
+                config.dataKey,
+                config.httpLaunchAppBeforeRequest,
+            )
+        ) {
+            return null
+        }
         val mode = AppLauncherLaunchMode.fromStored(
             config.launcherLaunchMode.storageKey,
             config.launcherFreeformEnabled,
