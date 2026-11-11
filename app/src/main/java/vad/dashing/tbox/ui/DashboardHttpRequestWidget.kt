@@ -17,7 +17,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.HTTP_REQUEST_POST_ACTION_BLOCK_MS
@@ -41,7 +39,6 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.decodeFileToOwnedImageBitmap
-import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.httpRequestWidgetErrorMessage
 import vad.dashing.tbox.normalizeHttpLaunchAppDelaySec
 import vad.dashing.tbox.openHttpRequestWidgetUrlInBrowser
@@ -71,7 +68,7 @@ internal fun DashboardHttpRequestWidgetItem(
     backgroundColor: Color,
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val appContext = context.applicationContext
     val requestYaml = widgetConfig.httpRequestYaml
     val openBrowser = widgetConfig.httpOpenBrowser
     val launchAppBeforeRequest = widgetConfig.httpLaunchAppBeforeRequest &&
@@ -150,16 +147,15 @@ internal fun DashboardHttpRequestWidgetItem(
             }
             blockedUntilMs = now + launchDelayMs + config.timeoutMillis +
                 HTTP_REQUEST_POST_ACTION_BLOCK_MS
-            scope.launch {
-                if (launchAppBeforeRequest) {
-                    runCatching {
-                        launchAppFromWidget(context, widgetConfig, settingsViewModel)
-                    }
-                    if (launchDelayMs > 0L) {
-                        delay(launchDelayMs)
-                    }
-                }
-                val result = executeHttpRequestWidget(config)
+            // Process-lifetime scope: survive floating-panel hide / Compose dispose during delay.
+            DashboardHttpRequestTileActionRunner.enqueue(
+                launchContext = context,
+                widgetConfig = widgetConfig,
+                settingsViewModel = settingsViewModel,
+                requestConfig = config,
+                launchAppBeforeRequest = launchAppBeforeRequest,
+                launchDelayMs = launchDelayMs,
+            ) { result ->
                 blockedUntilMs = System.currentTimeMillis() + HTTP_REQUEST_POST_ACTION_BLOCK_MS
                 when (result) {
                     is HttpRequestWidgetResult.Success -> {
@@ -168,7 +164,7 @@ internal fun DashboardHttpRequestWidgetItem(
                     }
                     is HttpRequestWidgetResult.Failure -> {
                         android.widget.Toast.makeText(
-                            context,
+                            appContext,
                             requestFailedTemplate.format(httpRequestWidgetErrorMessage(result)),
                             android.widget.Toast.LENGTH_LONG
                         ).show()

@@ -120,7 +120,7 @@ object ThemeLayoutExport {
                 pkg.isNotEmpty() &&
                     widgetStoresAppLauncherLaunchSettings(
                         widget.dataKey,
-                        widget.httpLaunchAppBeforeRequest,
+                        widget.httpLaunchAppBeforeRequest && !widget.httpOpenBrowser,
                     )
             }
         }.toSet()
