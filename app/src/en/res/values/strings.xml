@@ -763,6 +763,11 @@
     <string name="settings_vehicle_feature_setup_done">Done</string>
     <string name="settings_launch_main_in_stock_app_window_title">Launch TBox Monitor in app area</string>
     <string name="settings_launch_main_in_stock_app_window_desc">Open the main screen in the launcher app area (DCL app_area when the API is available, otherwise the stock Adayo window). Applies to boot auto-open, floating panels, return from player, and other in-app launches. Off = fullscreen.</string>
+    <string name="settings_launch_main_dcl_mode_title">Main screen launch (DCL)</string>
+    <string name="settings_launch_main_dcl_mode_desc">TBox Monitor only. Cold start, floating panels, boot auto-open, DCL shortcut, and other programmatic Main opens. The first open after an APK update may stay fullscreen; from the second open onward the chosen mode applies.</string>
+    <string name="settings_launch_main_dcl_mode_fullscreen">fullscreen</string>
+    <string name="settings_launch_main_dcl_mode_full_width">fullscreen with bars (full width)</string>
+    <string name="settings_launch_main_dcl_mode_app_area">app window</string>
     <string name="settings_dcl_launcher_environment_title">Run in DCL launcher environment</string>
     <string name="settings_dcl_launcher_environment_desc">«Normal» shortcuts, App List, and LaunchApplication automations open apps via DCL (app_area). «Full width (DCL)» and «Fullscreen (DCL)» are separate options. Freeform and virtual display are unavailable for new choices. If the API is down — raw launch with a toast.</string>
     <string name="settings_dcl_launcher_api_status_available">DCL API: available (v%1$d)</string>

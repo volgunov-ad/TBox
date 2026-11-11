@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import vad.dashing.tbox.dcl.DclAppLaunchHelper
 import vad.dashing.tbox.dcl.DclLauncherApiRepository
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
-import vad.dashing.tbox.dcl.dclCanLaunchAppArea
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -55,9 +54,10 @@ object ThemeOpenRequestBus {
  * [context] is not an [Activity], because starting an activity from a non-Activity context
  * requires it (e.g. [android.app.Service], [Application], app widget [Context]).
  *
- * On Android 10 Adayo, when [LaunchMainInStockAppWindowSetting] is enabled, programmatic opens
- * go through [AdayoStockAppWindow] (stock launcher ActivityView) instead of fullscreen
- * [MainActivity].
+ * When DCL environment is ON, programmatic opens use the Main-only DCL mode picker
+ * ([MainDclLaunchMode]). When OFF, the legacy Adayo/DCL app_area boolean applies.
+ * Prefer DCL `launchApp` with the selected mode while keeping the activity alive (no
+ * finish-after-reuse husks).
  */
 object MainActivityIntentHelper {
 
@@ -125,7 +125,7 @@ object MainActivityIntentHelper {
             putExtra(EXTRA_FLOATING_DASHBOARD_WIDGET_INDEX, widgetIndex)
         }
 
-    /** Programmatic bring-to-front; honors A10 stock app-window setting. */
+    /** Programmatic bring-to-front; honors Main DCL mode / A10 stock app-window setting. */
     fun bringToFront(context: Context): Boolean =
         launchMain(context, createBringToFrontIntent(context))
 
@@ -155,12 +155,11 @@ object MainActivityIntentHelper {
 
     fun resolveMainAppWindowBackend(context: Context): MainAppWindowBackend =
         LaunchMainInStockAppWindowDecision.resolveBackend(
-            settingEnabled = LaunchMainInStockAppWindowSetting.enabled,
+            dclEnvironmentEnabled = DclLauncherEnvironmentSetting.enabled,
+            mainDclMode = MainDclLaunchModeSetting.mode,
+            legacyStockWindowEnabled = LaunchMainInStockAppWindowSetting.enabled,
             dclApiAvailable = DclLauncherApiRepository.available.value,
-            dclLaunchAppAreaCapable = dclCanLaunchAppArea(
-                available = DclLauncherApiRepository.available.value,
-                capabilities = DclLauncherApiRepository.capabilities.value,
-            ),
+            dclCapabilities = DclLauncherApiRepository.capabilities.value,
             headUnitIsAndroid10 =
                 UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal,
             adayoLauncherAvailable = AdayoStockAppWindow.isAvailable(context),
@@ -180,19 +179,33 @@ object MainActivityIntentHelper {
             dclEnvironmentEnabled = dclEnvironmentEnabled,
         )
 
+    fun shouldShowMainDclLaunchModePicker(
+        dclEnvironmentEnabled: Boolean = DclLauncherEnvironmentSetting.enabled,
+    ): Boolean =
+        LaunchMainInStockAppWindowDecision.shouldShowMainDclLaunchModePicker(
+            dclEnvironmentEnabled = dclEnvironmentEnabled,
+        )
+
     private fun launchMain(context: Context, fallbackIntent: Intent): Boolean {
-        when (resolveMainAppWindowBackend(context)) {
-            MainAppWindowBackend.DCL_APP_AREA -> {
-                DclAppLaunchHelper.launchAppArea(
+        when (val backend = resolveMainAppWindowBackend(context)) {
+            MainAppWindowBackend.DCL_APP_AREA,
+            MainAppWindowBackend.DCL_FULL_WIDTH,
+            MainAppWindowBackend.DCL_FULLSCREEN,
+            -> {
+                val mode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend)
+                    ?: return startFallback(context, fallbackIntent)
+                DclAppLaunchHelper.launch(
                     context = context,
                     packageName = context.packageName,
+                    mode = mode,
                     activityClass = MainActivity::class.java.name,
                     onRawFallback = {
-                        val stockOk = AdayoStockAppWindow.launchInAppWindow(
-                            context = context,
-                            packageName = context.packageName,
-                            activityClass = MainActivity::class.java.name,
-                        )
+                        val stockOk = backend != MainAppWindowBackend.DCL_FULLSCREEN &&
+                            AdayoStockAppWindow.launchInAppWindow(
+                                context = context,
+                                packageName = context.packageName,
+                                activityClass = MainActivity::class.java.name,
+                            )
                         if (!stockOk) {
                             runCatching { context.startActivity(fallbackIntent) }
                         }
@@ -210,13 +223,16 @@ object MainActivityIntentHelper {
             }
             MainAppWindowBackend.NONE -> Unit
         }
-        return try {
+        return startFallback(context, fallbackIntent)
+    }
+
+    private fun startFallback(context: Context, fallbackIntent: Intent): Boolean =
+        try {
             context.startActivity(fallbackIntent)
             true
         } catch (_: Exception) {
             false
         }
-    }
 
     /**
      * Third-party app [Intent] from [android.content.pm.PackageManager.getLaunchIntentForPackage]:

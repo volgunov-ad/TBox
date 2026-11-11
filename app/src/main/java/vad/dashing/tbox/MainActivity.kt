@@ -54,9 +54,14 @@ class MainActivity : ComponentActivity() {
         @Volatile
         private var lastExternalRedirectAtMs = 0L
 
+        /** Cooldown for onNewIntent DCL re-host after post-update sticky fullscreen. */
+        @Volatile
+        private var lastDclModeReapplyAtMs = 0L
+
         /**
-         * Sticky anti-loop for A9 / single-display DCL `app_area` (hosts on display 0).
+         * Sticky anti-loop for A9 / single-display DCL hosts on display 0.
          * Set after a successful DCL cold redirect in this process; cleared never (process lifetime).
+         * Does **not** block [onNewIntent] re-apply of the chosen DCL mode.
          */
         @Volatile
         var dclAppAreaExternalRedirectConsumedThisProcess: Boolean = false
@@ -259,6 +264,9 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         consumeFloatingDashboardTileEditIntent(intent)
         consumeThemeOpenIntent(intent)
+        // singleTask: after post-update first open skipped redirect, launcher / am start
+        // land here — re-host via DCL launchApp without finish() (no empty husks).
+        maybeReapplyDclLaunchModeOnAliveMain(intent)
     }
 
     /**
@@ -281,13 +289,12 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; with the
-     * stock-window setting on, hand them to DCL app_area (if available) or Adayo ActivityView.
-     * DCL Binder [ContentResolver.call] runs on [Dispatchers.IO] (P0-1); Adayo stays sync.
-     * Pending tile-edit / theme requests are already on their buses for the relaunched instance.
+     * External starts (ADB, shortcut, other apps) bypass [MainActivityIntentHelper]; hand them
+     * to the resolved Main backend (DCL mode picker when env ON, else legacy boolean /
+     * Adayo). DCL Binder [ContentResolver.call] runs on [Dispatchers.IO] (P0-1); Adayo stays sync.
      *
      * First open after install/update may skip redirect (fullscreen OK) via
-     * [PostUpdateMainLaunchGate]. Successful DCL app_area must not [finish] this singleTask.
+     * [PostUpdateMainLaunchGate]. Successful DCL launch must not [finish] this singleTask.
      */
     private fun beginExternalStockWindowRedirect(savedInstanceState: Bundle?): ExternalRedirectOutcome {
         @Suppress("DEPRECATION")
@@ -302,7 +309,6 @@ class MainActivity : ComponentActivity() {
         val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
         val dclAvailable = dclRepo.available.value
         val dclCaps = dclRepo.capabilities.value
-        val dclAppArea = vad.dashing.tbox.dcl.dclCanLaunchAppArea(dclAvailable, dclCaps)
         val dclUi = dclRepo.uiState.value
         val intentSkips = intent?.getBooleanExtra(
             MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
@@ -316,7 +322,6 @@ class MainActivity : ComponentActivity() {
             selfPackageName = packageName,
         )
         val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
-        if (!dclAppArea && !adayoAvailable) return ExternalRedirectOutcome.NotNeeded
         // Application-level caches may still hold defaults on a cold start, so read DataStore, but
         // never stall the first frame on it: on timeout fall back to the caches (worst case the
         // launch simply stays fullscreen).
@@ -324,8 +329,12 @@ class MainActivity : ComponentActivity() {
         val stored = runCatching {
             runBlocking {
                 withTimeoutOrNull(EXTERNAL_REDIRECT_SETTINGS_TIMEOUT_MS) {
-                    settingsManager.launchMainInStockAppWindowFlow.first() to
-                        settingsManager.headUnitCanModeFlow.first()
+                    Triple(
+                        settingsManager.dclLauncherEnvironmentEnabledFlow.first(),
+                        settingsManager.launchMainDclModeFlow.first(),
+                        settingsManager.launchMainInStockAppWindowFlow.first() to
+                            settingsManager.headUnitCanModeFlow.first(),
+                    )
                 }
             }
         }.getOrNull()
@@ -333,26 +342,30 @@ class MainActivity : ComponentActivity() {
         if (stored == null) {
             Log.w(TAG, "Stock-window redirect: settings read timed out after ${now - readStartMs} ms, using cache")
         }
-        val (settingEnabled, canMode) = stored
+        val dclEnv = stored?.first
+            ?: vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled
+        val mainMode = stored?.second ?: MainDclLaunchModeSetting.mode
+        val (settingEnabled, canMode) = stored?.third
             ?: (LaunchMainInStockAppWindowSetting.enabled to UniversalCanRepository.mode.value)
         val headUnitIsAndroid10 = canMode == HeadUnitCanMode.Android10Vhal
         val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
-            settingEnabled = settingEnabled,
+            dclEnvironmentEnabled = dclEnv,
+            mainDclMode = mainMode,
+            legacyStockWindowEnabled = settingEnabled,
             dclApiAvailable = dclAvailable,
-            dclLaunchAppAreaCapable = dclAppArea,
+            dclCapabilities = dclCaps,
             headUnitIsAndroid10 = headUnitIsAndroid10,
             adayoLauncherAvailable = adayoAvailable,
         )
+        if (backend == MainAppWindowBackend.NONE && !adayoAvailable) {
+            return ExternalRedirectOutcome.NotNeeded
+        }
         val redirect = LaunchMainInStockAppWindowDecision.shouldRedirectExternalLaunch(
             freshInstance = true,
             displayId = displayId,
             nowMs = now,
             lastRedirectAtMs = lastExternalRedirectAtMs,
-            settingEnabled = settingEnabled,
-            headUnitIsAndroid10 = headUnitIsAndroid10,
-            adayoLauncherAvailable = adayoAvailable,
-            dclApiAvailable = dclAvailable,
-            dclLaunchAppAreaCapable = dclAppArea,
+            backend = backend,
             alreadyRedirectedViaDclThisProcess = dclAppAreaExternalRedirectConsumedThisProcess,
             intentSkipsRedirect = intentSkips,
             dclAlreadyHostingPackage = dclAlreadyHosting,
@@ -371,17 +384,25 @@ class MainActivity : ComponentActivity() {
                 finishAfterExternalRedirect(now, backend)
                 ExternalRedirectOutcome.FinishedSync
             }
-            MainAppWindowBackend.DCL_APP_AREA -> {
+            MainAppWindowBackend.DCL_APP_AREA,
+            MainAppWindowBackend.DCL_FULL_WIDTH,
+            MainAppWindowBackend.DCL_FULLSCREEN,
+            -> {
+                val dclMode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend)
+                    ?: return ExternalRedirectOutcome.NotNeeded
                 // Never block onCreate / main thread on ContentResolver.call (P0-1).
                 lifecycleScope.launch {
                     val dclOk = withContext(Dispatchers.IO) {
-                        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchAppAreaBlocking(
+                        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
                             context = this@MainActivity,
                             packageName = packageName,
+                            mode = dclMode,
                             activityClass = MainActivity::class.java.name,
                         )
                     }
+                    val allowAdayoFallback = backend != MainAppWindowBackend.DCL_FULLSCREEN
                     val adayoOk = !dclOk &&
+                        allowAdayoFallback &&
                         adayoAvailable &&
                         AdayoStockAppWindow.launchInAppWindow(
                             context = this@MainActivity,
@@ -393,17 +414,18 @@ class MainActivity : ComponentActivity() {
                             val nowMs = SystemClock.elapsedRealtime()
                             dclAppAreaExternalRedirectConsumedThisProcess = true
                             lastExternalRedirectAtMs = nowMs
-                            // DCL app_area reuses this singleTask (resize/move). finish() would
-                            // kill the only Main — see shouldFinishSelfAfterSuccessfulDclAppAreaRedirect.
+                            lastDclModeReapplyAtMs = nowMs
+                            // DCL reuses this singleTask (resize/move). finish() would kill the
+                            // only Main — see shouldFinishSelfAfterSuccessfulDclRedirect.
                             if (
                                 LaunchMainInStockAppWindowDecision
-                                    .shouldFinishSelfAfterSuccessfulDclAppAreaRedirect()
+                                    .shouldFinishSelfAfterSuccessfulDclRedirect()
                             ) {
-                                finishAfterExternalRedirect(nowMs, MainAppWindowBackend.DCL_APP_AREA)
+                                finishAfterExternalRedirect(nowMs, backend)
                             } else {
                                 Log.i(
                                     TAG,
-                                    "External launch hosted in DCL app_area (same task); continuing normal onCreate",
+                                    "External launch hosted in DCL mode=$dclMode (same task); continuing normal onCreate",
                                 )
                                 completeNormalOnCreate()
                             }
@@ -423,6 +445,61 @@ class MainActivity : ComponentActivity() {
                 ExternalRedirectOutcome.PendingAsync
             }
             MainAppWindowBackend.NONE -> ExternalRedirectOutcome.NotNeeded
+        }
+    }
+
+    /**
+     * Second+ opens of the live `singleTask` Main: ask DCL to apply the chosen mode without
+     * finishing. Skips when already hosted in a matching screen mode or within cooldown.
+     * Does not consult [PostUpdateMainLaunchGate] (that gate is only for cold onCreate).
+     */
+    private fun maybeReapplyDclLaunchModeOnAliveMain(intent: Intent?) {
+        val intentSkips = intent?.getBooleanExtra(
+            MainActivityIntentHelper.EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT,
+            false,
+        ) == true
+        val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
+        val adayoAvailable = AdayoStockAppWindow.isAvailable(this)
+        val backend = LaunchMainInStockAppWindowDecision.resolveBackend(
+            dclEnvironmentEnabled = vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled,
+            mainDclMode = MainDclLaunchModeSetting.mode,
+            legacyStockWindowEnabled = LaunchMainInStockAppWindowSetting.enabled,
+            dclApiAvailable = dclRepo.available.value,
+            dclCapabilities = dclRepo.capabilities.value,
+            headUnitIsAndroid10 =
+                UniversalCanRepository.mode.value == HeadUnitCanMode.Android10Vhal,
+            adayoLauncherAvailable = adayoAvailable,
+        )
+        val dclMode = LaunchMainInStockAppWindowDecision.dclModeForBackend(backend) ?: return
+        val dclUi = dclRepo.uiState.value
+        val now = SystemClock.elapsedRealtime()
+        val should = LaunchMainInStockAppWindowDecision.shouldReapplyDclLaunchModeOnAliveMain(
+            backend = backend,
+            intentSkipsRedirect = intentSkips,
+            dclForegroundPackage = dclUi?.foregroundPackage,
+            dclScreenMode = dclUi?.screenMode,
+            selfPackageName = packageName,
+            nowMs = now,
+            lastReapplyAtMs = lastDclModeReapplyAtMs,
+        )
+        if (!should) return
+        lastDclModeReapplyAtMs = now
+        Log.i(TAG, "Re-applying DCL launch mode=$dclMode on alive Main (no finish)")
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                vad.dashing.tbox.dcl.DclAppLaunchHelper.launchModeBlocking(
+                    context = this@MainActivity,
+                    packageName = packageName,
+                    mode = dclMode,
+                    activityClass = MainActivity::class.java.name,
+                )
+            }
+            if (ok) {
+                dclAppAreaExternalRedirectConsumedThisProcess = true
+                lastExternalRedirectAtMs = SystemClock.elapsedRealtime()
+            } else {
+                Log.w(TAG, "DCL re-apply mode=$dclMode failed; leaving current Main host")
+            }
         }
     }
 

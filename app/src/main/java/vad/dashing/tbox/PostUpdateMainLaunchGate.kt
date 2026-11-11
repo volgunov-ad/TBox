@@ -7,9 +7,11 @@ import android.os.Build
 import android.util.Log
 
 /**
- * One-shot gate: first [MainActivity] external stock-window redirect after install/update
- * may stay fullscreen. Armed by [Intent.ACTION_MY_PACKAGE_REPLACED] and/or a versionCode
- * stamp mismatch. Does **not** affect [MainActivityIntentHelper] / boot / widgets.
+ * One-shot gate: first [MainActivity] external stock-window / DCL-mode redirect after
+ * install/update may stay fullscreen. Armed by [Intent.ACTION_MY_PACKAGE_REPLACED] and/or
+ * a versionCode stamp mismatch. Does **not** affect [MainActivityIntentHelper] / boot /
+ * widgets, and does **not** block [MainActivity.onNewIntent] re-apply of the chosen DCL mode
+ * on the second+ open of the live `singleTask`.
  */
 internal object PostUpdateMainLaunchGate {
     private const val TAG = "PostUpdateMainLaunch"
