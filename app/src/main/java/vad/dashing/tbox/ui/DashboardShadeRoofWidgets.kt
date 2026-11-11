@@ -2,13 +2,15 @@ package vad.dashing.tbox.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import vad.dashing.tbox.R
 import vad.dashing.tbox.STEPPER_ADJUST_ICON_PLUS_MINUS
 import vad.dashing.tbox.ShadeRoofStepperDomain
@@ -113,8 +115,15 @@ private fun ShadeRoofPositionStepperWidget(
     val bodyComfort by UniversalCanRepository.bodyComfortRaw.collectAsStateWithLifecycle()
     val available = availability is MbCanAvailability.Available
     val raw = rawSelector(bodyComfort)
-    val displayPercent = ShadeRoofStepperDomain.normalizePercent(raw, allowTilt)
-    val unknown = ShadeRoofStepperDomain.isUnknownDisplay(raw)
+    var pendingPercent by remember(propertyId) { mutableStateOf<Int?>(null) }
+    val debounceHost = rememberDebouncedCanCommandHost(SHADE_ROOF_POSITION_DEBOUNCE_MS) {
+        val target = pendingPercent ?: return@rememberDebouncedCanCommandHost
+        val write = ShadeRoofStepperDomain.writeValue(target)
+        UniversalCanRepository.execute(MbCanCommand.SetProperty(propertyId, write))
+        pendingPercent = null
+    }
+    val displayPercent = ShadeRoofStepperDomain.displayPercent(pendingPercent, raw, allowTilt)
+    val unknown = ShadeRoofStepperDomain.isUnknownDisplay(pendingPercent, raw)
     val centerLabel = if (unknown) {
         stringResource(R.string.widget_shade_roof_position_unknown)
     } else {
@@ -126,11 +135,9 @@ private fun ShadeRoofPositionStepperWidget(
 
     fun applyDelta(increase: Boolean) {
         if (!available) return
-        val next = ShadeRoofStepperDomain.stepPercent(raw, allowTilt, increase)
-        val write = ShadeRoofStepperDomain.writeValue(next)
-        scope.launch {
-            UniversalCanRepository.execute(MbCanCommand.SetProperty(propertyId, write))
-        }
+        val next = ShadeRoofStepperDomain.stepFromPercent(displayPercent, increase)
+        pendingPercent = next
+        debounceHost.schedule(scope)
     }
 
     DashboardStepperControlWidget(
