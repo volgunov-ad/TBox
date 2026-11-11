@@ -297,14 +297,6 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
-    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect_isFalse() {
-        // singleTask + DCL REUSED_TASK: finish would destroy the only Main.
-        assertFalse(
-            LaunchMainInStockAppWindowDecision.shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(),
-        )
-    }
-
-    @Test
     fun shouldSkipDclRedirectAntiLoop_matchesHostingAndSticky() {
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(

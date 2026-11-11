@@ -140,18 +140,6 @@ internal object LaunchMainInStockAppWindowDecision {
     ): Boolean =
         settingEnabled && !cachedDclAppAreaCapable && !dclCapabilitiesProbed
 
-    /**
-     * After a successful DCL `app_area` launch from an external Main redirect: keep this
-     * activity alive (`false` = do not [android.app.Activity.finish]).
-     *
-     * Main is `singleTask`. DCL on A9 typically **reuses** the already-started task
-     * (`moveTaskToFront` + `resizeTask` into freeform/app_area bounds) instead of
-     * starting a second instance. Finishing the redirector would destroy that only
-     * Main → empty freeform task and HOME-only UI. Adayo `LAUNCH_APP` still needs
-     * finish (new host on a virtual display).
-     */
-    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(): Boolean = false
-
     const val EXTERNAL_REDIRECT_COOLDOWN_MS = 3_000L
     private const val DEFAULT_DISPLAY_ID = 0
 }
