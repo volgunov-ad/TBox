@@ -326,6 +326,12 @@ class ExternalApiController(
         persistClients()
         publishStatus()
         TboxRepository.addLog("INFO", "ExternalApi", "Local access approved: ${consent.packageName}")
+        // Same path as Settings → «Работа в среде лаунчера DCL»: DataStore + routing cache.
+        if (ExternalApiLocalClients.shouldEnableDclEnvironmentOnApprove(consent.packageName)) {
+            scope.launch {
+                settingsManager.saveDclLauncherEnvironmentEnabled(true)
+            }
+        }
     }
 
     fun denyLocalConsent() {
