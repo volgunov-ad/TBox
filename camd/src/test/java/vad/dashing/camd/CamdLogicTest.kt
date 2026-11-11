@@ -34,6 +34,9 @@ class CamdCommandTest {
         assertEquals(CamdCommand.CloseAll, CamdCommands.parse("close"))
         assertEquals(CamdCommand.Close(4), CamdCommands.parse("CLOSE 4"))
         assertEquals(CamdCommand.Status, CamdCommands.parse("STATUS"))
+        assertEquals(CamdCommand.SetKeepAvm(true), CamdCommands.parse("AVM ON"))
+        assertEquals(CamdCommand.SetKeepAvm(false), CamdCommands.parse("avm off"))
+        assertNull(CamdCommands.parse("AVM"))
     }
 
     @Test

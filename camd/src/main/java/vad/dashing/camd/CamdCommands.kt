@@ -12,6 +12,7 @@ sealed class CamdCommand {
     data object CloseAll : CamdCommand()
     data class Close(val inputId: Int) : CamdCommand()
     data object Status : CamdCommand()
+    data class SetKeepAvm(val keep: Boolean) : CamdCommand()
 }
 
 object CamdCommands {
@@ -26,6 +27,16 @@ object CamdCommands {
                 else -> null
             }
             "STATUS" -> CamdCommand.Status
+            "AVM" -> parseAvm(parts)
+            else -> null
+        }
+    }
+
+    private fun parseAvm(parts: List<String>): CamdCommand.SetKeepAvm? {
+        if (parts.size != 2) return null
+        return when (parts[1].uppercase()) {
+            "ON", "1" -> CamdCommand.SetKeepAvm(true)
+            "OFF", "0" -> CamdCommand.SetKeepAvm(false)
             else -> null
         }
     }

@@ -15,22 +15,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Typography
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -68,7 +73,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = Color(0xFF2180F3),
+                    secondary = Color(0xFFF3A721),
+                ),
+                typography = CamdTypography,
+            ) {
                 val state by controller.state.collectAsState()
                 CamdScreen(
                     state = state,
@@ -225,6 +236,13 @@ class CamdController(
     }
 }
 
+private val CamdTypography = Typography(
+    headlineSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 28.sp, lineHeight = 36.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 26.sp, lineHeight = 34.sp),
+    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 31.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 31.sp),
+)
+
 @Composable
 private fun CamdScreen(
     state: CamdUiState,
@@ -247,12 +265,12 @@ private fun CamdScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Окно камеры", style = MaterialTheme.typography.titleLarge)
+        Text("Камеры ГУ", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
         Text(
-            "Окно приложения, по одному на камеру. Крестик в углу закрывает его. " +
-                "Повторное открытие той же камеры только двигает окно. " +
-                "API 127.0.0.1:${DaemonScripts.API_PORT}: OPEN id x y w h / CLOSE id / CLOSE / STATUS",
-            fontSize = 13.sp
+            "Одно окно на камеру. Одиночное нажатие плитки в TBox Monitor открывает его, двойное закрывает. " +
+                "Повторное открытие только двигает окно.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -262,58 +280,71 @@ private fun CamdScreen(
                 FilterChip(
                     selected = camera.id == state.inputId,
                     onClick = { onInput(camera.id) },
-                    label = { Text(camera.title, fontSize = 12.sp) }
+                    label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) }
                 )
             }
         }
         if (input?.heldByAvm == true && !state.keepAvmStopped) {
             Text(
                 "Этот вход держит штатный AVM. Пока такое окно открыто, AVM будет остановлен.",
-                fontSize = 13.sp
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                "Держать AVM выключенным",
-                fontSize = 13.sp,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = state.keepAvmStopped,
-                onCheckedChange = onKeepAvm,
-                enabled = !state.busy,
-            )
-        }
-        Text(
-            "Если включено, штатный AVM останавливается сразу и не возвращается после закрытия окна. Следующее окно открывается без ожидания его остановки.",
-            fontSize = 13.sp,
+        SettingSwitch(
+            checked = state.keepAvmStopped,
+            enabled = !state.busy,
+            title = "Держать штатный AVM отключенным",
+            description = "Штатный AVM выключается сразу и остаётся выключенным после перезагрузки. " +
+                "Выключение опции закрывает сырые окна и сразу включает его.",
+            onCheckedChange = onKeepAvm,
         )
-        Text("Кадр ${input?.width}×${input?.height}", fontSize = 13.sp)
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            "Кадр ${input?.width}×${input?.height}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         FractionSlider("X", state.x, onX)
         FractionSlider("Y", state.y, onY)
         FractionSlider("Ширина", state.w, onW)
         FractionSlider("Высота", state.h, onH)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onOpen, enabled = !state.busy) { Text("Открыть") }
-            Button(onClick = onClose, enabled = !state.busy) { Text("Закрыть выбранную") }
+            Button(onClick = onOpen, enabled = !state.busy) {
+                Text("Открыть", style = MaterialTheme.typography.labelLarge)
+            }
+            Button(onClick = onClose, enabled = !state.busy) {
+                Text("Закрыть выбранную", style = MaterialTheme.typography.labelLarge)
+            }
         }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(
             "Проба 20 секунд, окно по центру. Лог появится в Загрузках.",
-            fontSize = 13.sp
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onProbeKeepAvm, enabled = !state.busy) { Text("Проба, AVM работает") }
-            Button(onClick = onProbeStopAvm, enabled = !state.busy) { Text("Проба, AVM остановлен") }
+            Button(onClick = onProbeKeepAvm, enabled = !state.busy) {
+                Text("Проба, AVM работает", style = MaterialTheme.typography.labelLarge)
+            }
+            Button(onClick = onProbeStopAvm, enabled = !state.busy) {
+                Text("Проба, AVM остановлен", style = MaterialTheme.typography.labelLarge)
+            }
         }
-        Text(state.message, fontSize = 13.sp)
+        Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         if (state.status.isNotBlank()) {
-            Text(state.status, fontSize = 12.sp)
+            Text(
+                state.status,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (state.log.isNotBlank()) {
-            Text(state.log, fontSize = 11.sp)
+            Text(
+                state.log,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -321,7 +352,51 @@ private fun CamdScreen(
 @Composable
 private fun FractionSlider(label: String, value: Float, onChange: (Float) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text("$label  ${String.format(Locale.US, "%.2f", value)}", fontSize = 13.sp)
+        Text(
+            "$label  ${String.format(Locale.US, "%.2f", value)}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Slider(value = value.coerceIn(0f, 1f), onValueChange = onChange, valueRange = 0f..1f)
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    checked: Boolean,
+    enabled: Boolean,
+    title: String,
+    description: String,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val titleColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    val descColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp),
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleLarge, color = titleColor)
+            Text(text = description, style = MaterialTheme.typography.bodyLarge, color = descColor)
+        }
     }
 }

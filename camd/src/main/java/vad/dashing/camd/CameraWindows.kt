@@ -48,7 +48,12 @@ class CameraWindows(private val context: Context) {
             }
             return "state=avm_held"
         }
-        if (!needsAvmStop()) maybeStartAvm()
+        val ids = openIds.toList()
+        openIds.clear()
+        writeDesired()
+        ids.forEach { hide(it) }
+        avmStoppedByUs = true
+        maybeStartAvm()
         "state=avm_restore"
     }
 
@@ -104,7 +109,8 @@ class CameraWindows(private val context: Context) {
     fun status(): String {
         val ids = synchronized(lock) { if (openIds.isEmpty()) "none" else openIds.joinToString(",") }
         val avm = getprop("init.svc.AVMapp").ifBlank { "unknown" }
-        return "windows=$ids avm=$avm"
+        val keep = if (keepAvmStopped()) "1" else "0"
+        return "windows=$ids avm=$avm keep_avm=$keep"
     }
 
     private fun shouldStopAvmNow(): Boolean {

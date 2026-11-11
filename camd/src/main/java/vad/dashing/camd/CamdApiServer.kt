@@ -11,6 +11,7 @@ import kotlin.concurrent.thread
  * OPEN <id> <x> <y> <w> <h>
  * CLOSE
  * CLOSE <id>
+ * AVM ON|OFF
  * STATUS
  */
 class CamdApiServer(
@@ -64,6 +65,7 @@ class CamdApiServer(
             is CamdCommand.Open -> windows?.let { "OK " + it.open(command) } ?: "ERR no_windows"
             is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
             CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
+            is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
             CamdCommand.Status -> {
                 val text = windows?.status() ?: engine.status()
                 "OK " + text.ifBlank { "state=unknown" }
