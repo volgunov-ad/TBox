@@ -90,4 +90,48 @@ class ShadeRoofStepperDomainTest {
             ShadeRoofStepperDomain.isUnknownDisplay(MbCanKnownVehiclePropertyId.SUNROOF_TILT),
         )
     }
+
+    @Test
+    fun displayPercent_prefersPendingOverBus() {
+        assertEquals(
+            70,
+            ShadeRoofStepperDomain.displayPercent(
+                pendingPercent = 70,
+                busRaw = 20,
+                allowTilt = false,
+            ),
+        )
+        assertEquals(
+            20,
+            ShadeRoofStepperDomain.displayPercent(
+                pendingPercent = null,
+                busRaw = 20,
+                allowTilt = false,
+            ),
+        )
+    }
+
+    @Test
+    fun isUnknownDisplay_falseWhilePendingPreview() {
+        assertFalse(
+            ShadeRoofStepperDomain.isUnknownDisplay(
+                pendingPercent = 40,
+                busRaw = null,
+            ),
+        )
+        assertTrue(
+            ShadeRoofStepperDomain.isUnknownDisplay(
+                pendingPercent = null,
+                busRaw = null,
+            ),
+        )
+    }
+
+    @Test
+    fun stepFromPercent_chainsFromPendingPreview() {
+        assertEquals(50, ShadeRoofStepperDomain.stepFromPercent(40, increase = true))
+        assertEquals(30, ShadeRoofStepperDomain.stepFromPercent(40, increase = false))
+        val afterPlus = ShadeRoofStepperDomain.stepFromPercent(50, increase = true)
+        assertEquals(70, ShadeRoofStepperDomain.stepFromPercent(afterPlus, increase = true))
+    }
 }
