@@ -430,7 +430,8 @@ object SharedMediaControlService {
         context: Context,
         selectedPackages: Set<String>,
         preferredPackage: String = "",
-        keepPlayerForeground: Boolean = false // anymani: опция независима от автозапуска
+        keepPlayerForeground: Boolean = false, // anymani: опция независима от автозапуска
+        launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -462,7 +463,8 @@ object SharedMediaControlService {
             targetPackage,
             scheduleColdStartPlayRetry = true,
             keepPlayerForeground = keepPlayerForeground, // anymani: передаём флаг при ручном запуске
-            scheduleLateSessionPlayRetry = true
+            scheduleLateSessionPlayRetry = true,
+            launchWidgetConfig = launchWidgetConfig,
         )
     }
 
@@ -470,7 +472,8 @@ object SharedMediaControlService {
         context: Context,
         selectedPackages: Set<String>,
         preferredPackage: String = "",
-        keepPlayerForeground: Boolean = false // anymani: опция для отключения возврата лаунчера
+        keepPlayerForeground: Boolean = false, // anymani: опция для отключения возврата лаунчера
+        launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
     ) {
         var controllerHandled = false
         synchronized(this) {
@@ -496,9 +499,11 @@ object SharedMediaControlService {
         sendMediaPlayKeyEvent(context.applicationContext, targetPackage)
         launchPlayerApp(
             context.applicationContext,
-            targetPackage, scheduleColdStartPlayRetry = true,
+            targetPackage,
+            scheduleColdStartPlayRetry = true,
             keepPlayerForeground = keepPlayerForeground, // anymani: передаём флаг в launchPlayerApp
-            scheduleLateSessionPlayRetry = true
+            scheduleLateSessionPlayRetry = true,
+            launchWidgetConfig = launchWidgetConfig,
         )
     }
 
@@ -539,7 +544,12 @@ object SharedMediaControlService {
         }
     }
 
-    internal fun scheduleColdStartPlayRetryIfNeeded(appContext: Context, targetPackage: String) {
+    internal fun scheduleColdStartPlayRetryIfNeeded(
+        appContext: Context,
+        targetPackage: String,
+        keepPlayerForeground: Boolean = false,
+        launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
+    ) {
         launchPlayerVerifyScope.launch {
             try {
                 delay(LAUNCH_PLAYER_VERIFY_DELAY_MS)
@@ -555,7 +565,13 @@ object SharedMediaControlService {
                 }
                 if (!needsRetry) return@launch
                 sendMediaPlayKeyEvent(appContext, targetPackage)
-                launchPlayerApp(appContext, targetPackage, scheduleColdStartPlayRetry = false)
+                launchPlayerApp(
+                    appContext,
+                    targetPackage,
+                    scheduleColdStartPlayRetry = false,
+                    keepPlayerForeground = keepPlayerForeground,
+                    launchWidgetConfig = launchWidgetConfig,
+                )
             } catch (e: Exception) {
                 TboxRepository.addLog("ERROR", "MediaControl", "Cold start retry failed: ${e.message}")
             }
@@ -1187,16 +1203,22 @@ private fun launchPlayerApp(
     packageName: String,
     scheduleColdStartPlayRetry: Boolean = true,
     keepPlayerForeground: Boolean = false, // anymani: флаг для контроля возврата лаунчера
-    scheduleLateSessionPlayRetry: Boolean = false
+    scheduleLateSessionPlayRetry: Boolean = false,
+    launchWidgetConfig: FloatingDashboardWidgetConfig? = null,
 ) {
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
-    MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-    val shouldReturnToMain = !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityInForeground.value
+    if (context.packageManager.getLaunchIntentForPackage(packageName) == null) return
+    val shouldReturnToMain =
+        !keepPlayerForeground && MainActivityForegroundTracker.isMainActivityInForeground.value
 
-    val launched = runCatching {
-        context.startActivity(launchIntent)
-    }.isSuccess
-    if (!launched) return
+    // Same mode routing as open-player / App Shortcut (default FULLSCREEN when no widget config).
+    val modeConfig = launchWidgetConfig
+        ?: FloatingDashboardWidgetConfig(dataKey = MUSIC_WIDGET_DATA_KEY)
+    launchPackageWithLaunchMode(
+        context = context,
+        packageName = packageName,
+        config = modeConfig,
+        settingsViewModel = null,
+    )
 
     // Return only if MainActivity was visible at the moment the player launch started.
     if (shouldReturnToMain) {
@@ -1206,7 +1228,12 @@ private fun launchPlayerApp(
         )
     }
     if (scheduleColdStartPlayRetry) {
-        SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(context.applicationContext, packageName)
+        SharedMediaControlService.scheduleColdStartPlayRetryIfNeeded(
+            appContext = context.applicationContext,
+            targetPackage = packageName,
+            keepPlayerForeground = keepPlayerForeground,
+            launchWidgetConfig = launchWidgetConfig,
+        )
     }
     if (scheduleLateSessionPlayRetry) {
         SharedMediaControlService.scheduleLateSessionPlayRetryIfNeeded(context.applicationContext, packageName)

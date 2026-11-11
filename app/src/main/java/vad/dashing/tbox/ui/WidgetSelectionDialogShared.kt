@@ -70,6 +70,7 @@ import vad.dashing.tbox.isFuelLitersDisplayModeWidgetDataKey
 import vad.dashing.tbox.normalizeFuelLitersDisplayMode
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
 import vad.dashing.tbox.isMusicWidgetDataKey
+import vad.dashing.tbox.usesAppLauncherLaunchModeFields
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
@@ -624,7 +625,7 @@ internal class WidgetSelectionDialogState(
         }
     )
     var launcherLaunchMode by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             AppLauncherLaunchMode.fromStored(
                 initialConfig.launcherLaunchMode.storageKey,
                 initialConfig.launcherFreeformEnabled,
@@ -634,46 +635,46 @@ internal class WidgetSelectionDialogState(
         }
     )
     var launcherFreeformSide by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             initialConfig.launcherFreeformSide
         } else {
             FreeformLaunchSide.DEFAULT
         }
     )
     var launcherFreeformPercent by mutableIntStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             FreeformLaunchBounds.normalizePercent(initialConfig.launcherFreeformPercent)
         } else {
             FreeformLaunchBounds.DEFAULT_PERCENT
         }
     )
     var launcherFreeformOverlayPage by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             initialConfig.launcherFreeformOverlayPage
         } else {
             null
         }
     )
     var launcherFreeformOverlayCrop by mutableStateOf(
-        initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+        usesAppLauncherLaunchModeFields(initialConfig.dataKey) &&
             initialConfig.launcherFreeformOverlayCrop,
     )
     var launcherVirtualDisplayId by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             initialConfig.launcherVirtualDisplayId
         } else {
             null
         },
     )
     var launcherVirtualDisplayWidthPx by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             initialConfig.launcherVirtualDisplayWidthPx
         } else {
             null
         },
     )
     var launcherVirtualDisplayHeightPx by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
             initialConfig.launcherVirtualDisplayHeightPx
         } else {
             null
@@ -1194,25 +1195,25 @@ internal class WidgetSelectionDialogState(
             } else {
                 ""
             },
-            launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            launcherLaunchMode = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
                 launcherLaunchMode
             } else {
                 AppLauncherLaunchMode.DEFAULT
             },
-            launcherFreeformEnabled = selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+            launcherFreeformEnabled = usesAppLauncherLaunchModeFields(selectedDataKey) &&
                 launcherLaunchMode == AppLauncherLaunchMode.FREEFORM,
-            launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            launcherFreeformSide = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
                 launcherFreeformSide
             } else {
                 FreeformLaunchSide.DEFAULT
             },
-            launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
                 FreeformLaunchBounds.normalizePercent(launcherFreeformPercent)
             } else {
                 FreeformLaunchBounds.DEFAULT_PERCENT
             },
             launcherFreeformOverlayPage =
-                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM
                 ) {
                     launcherFreeformOverlayPage
@@ -1220,11 +1221,11 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherFreeformOverlayCrop =
-                selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                usesAppLauncherLaunchModeFields(selectedDataKey) &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM &&
                     launcherFreeformOverlayCrop,
             launcherVirtualDisplayId =
-                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayId?.takeIf { it > 0 }
@@ -1232,7 +1233,7 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherVirtualDisplayWidthPx =
-                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayWidthPx?.takeIf { it > 0 }
@@ -1240,7 +1241,7 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherVirtualDisplayHeightPx =
-                if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayHeightPx?.takeIf { it > 0 }
@@ -1634,7 +1635,7 @@ internal class WidgetSelectionDialogState(
         } else {
             ""
         }
-        launcherLaunchMode = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherLaunchMode = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             AppLauncherLaunchMode.fromStored(
                 cfg.launcherLaunchMode.storageKey,
                 cfg.launcherFreeformEnabled,
@@ -1642,34 +1643,34 @@ internal class WidgetSelectionDialogState(
         } else {
             AppLauncherLaunchMode.DEFAULT
         }
-        launcherFreeformSide = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherFreeformSide = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             cfg.launcherFreeformSide
         } else {
             FreeformLaunchSide.DEFAULT
         }
-        launcherFreeformPercent = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             FreeformLaunchBounds.normalizePercent(cfg.launcherFreeformPercent)
         } else {
             FreeformLaunchBounds.DEFAULT_PERCENT
         }
-        launcherFreeformOverlayPage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherFreeformOverlayPage = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             cfg.launcherFreeformOverlayPage
         } else {
             null
         }
         launcherFreeformOverlayCrop =
-            selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY && cfg.launcherFreeformOverlayCrop
-        launcherVirtualDisplayId = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            usesAppLauncherLaunchModeFields(selectedDataKey) && cfg.launcherFreeformOverlayCrop
+        launcherVirtualDisplayId = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             cfg.launcherVirtualDisplayId
         } else {
             null
         }
-        launcherVirtualDisplayWidthPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherVirtualDisplayWidthPx = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             cfg.launcherVirtualDisplayWidthPx
         } else {
             null
         }
-        launcherVirtualDisplayHeightPx = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        launcherVirtualDisplayHeightPx = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
             cfg.launcherVirtualDisplayHeightPx
         } else {
             null
@@ -2134,7 +2135,14 @@ internal class WidgetSelectionDialogState(
     val canSaveSelection: Boolean
         get() = when {
             selectedDataKey.isEmpty() -> true
-            isMusicWidgetSelected -> selectedMediaPlayers.isNotEmpty()
+            isMusicWidgetSelected -> {
+                val displayId = launcherVirtualDisplayId
+                selectedMediaPlayers.isNotEmpty() &&
+                    (
+                        launcherLaunchMode != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
+                            (displayId != null && displayId > 0)
+                        )
+            }
             isDriveModeCycleWidgetSelected ->
                 normalizeDriveModeCycleSelection(selectedDriveModes).isNotEmpty()
             isAppLauncherWidgetSelected -> {

@@ -206,7 +206,7 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
         }
-        if (config.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (usesAppLauncherLaunchModeFields(config.dataKey)) {
             val launchMode = AppLauncherLaunchMode.fromStored(
                 config.launcherLaunchMode.storageKey,
                 config.launcherFreeformEnabled,
@@ -677,7 +677,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             ""
                         },
-                        launcherLaunchMode = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherLaunchMode = if (usesAppLauncherLaunchModeFields(dataKey)) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -685,7 +685,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             AppLauncherLaunchMode.DEFAULT
                         },
-                        launcherFreeformEnabled = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformEnabled = if (usesAppLauncherLaunchModeFields(dataKey)) {
                             AppLauncherLaunchMode.fromStored(
                                 item.optString("launcherLaunchMode", ""),
                                 item.optBoolean("launcherFreeformEnabled", false),
@@ -693,14 +693,14 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             false
                         },
-                        launcherFreeformSide = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformSide = if (usesAppLauncherLaunchModeFields(dataKey)) {
                             FreeformLaunchSide.fromStorageKey(
                                 item.optString("launcherFreeformSide", ""),
                             )
                         } else {
                             FreeformLaunchSide.DEFAULT
                         },
-                        launcherFreeformPercent = if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+                        launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(dataKey)) {
                             FreeformLaunchBounds.normalizePercent(
                                 item.optInt(
                                     "launcherFreeformPercent",
@@ -711,7 +711,7 @@ private fun parseWidgetConfigsFromJsonArray(
                             FreeformLaunchBounds.DEFAULT_PERCENT
                         },
                         launcherFreeformOverlayPage =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            if (usesAppLauncherLaunchModeFields(dataKey) &&
                                 item.has("launcherFreeformOverlayPage")
                             ) {
                                 item.optInt("launcherFreeformOverlayPage")
@@ -720,10 +720,10 @@ private fun parseWidgetConfigsFromJsonArray(
                                 null
                             },
                         launcherFreeformOverlayCrop =
-                            dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            usesAppLauncherLaunchModeFields(dataKey) &&
                                 item.optBoolean("launcherFreeformOverlayCrop", false),
                         launcherVirtualDisplayId =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            if (usesAppLauncherLaunchModeFields(dataKey) &&
                                 item.has("launcherVirtualDisplayId")
                             ) {
                                 item.optInt("launcherVirtualDisplayId")
@@ -732,7 +732,7 @@ private fun parseWidgetConfigsFromJsonArray(
                                 null
                             },
                         launcherVirtualDisplayWidthPx =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            if (usesAppLauncherLaunchModeFields(dataKey) &&
                                 item.has("launcherVirtualDisplayWidthPx")
                             ) {
                                 item.optInt("launcherVirtualDisplayWidthPx")
@@ -741,7 +741,7 @@ private fun parseWidgetConfigsFromJsonArray(
                                 null
                             },
                         launcherVirtualDisplayHeightPx =
-                            if (dataKey == APP_LAUNCHER_WIDGET_DATA_KEY &&
+                            if (usesAppLauncherLaunchModeFields(dataKey) &&
                                 item.has("launcherVirtualDisplayHeightPx")
                             ) {
                                 item.optInt("launcherVirtualDisplayHeightPx")

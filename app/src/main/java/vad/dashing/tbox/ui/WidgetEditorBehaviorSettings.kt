@@ -227,6 +227,17 @@ internal fun TileBehaviorSettings(
                         maxValue = MusicWidgetControlsDisplay.MAX_CONTROLS_HEIGHT_PERCENT,
                     )
                 }
+                Text(
+                    text = stringResource(R.string.widget_music_player_launch_mode_note),
+                    style = MaterialTheme.typography.tboxCaption,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                )
+                AppLauncherLaunchModeSettings(
+                    state = state,
+                    settingsViewModel = settingsViewModel,
+                    showDoubleTapForceStopHint = false,
+                )
             }
             AppLauncherWidgetSettingsSection(
                 state = state,
