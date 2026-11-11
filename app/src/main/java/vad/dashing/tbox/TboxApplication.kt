@@ -54,8 +54,6 @@ class TboxApplication : Application() {
                 vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.update(enabled)
             }
         }
-        // Warm DCL caps before MainActivity cold redirect / IntentHelper (idempotent with service).
-        vad.dashing.tbox.dcl.DclLauncherApiRepository.start(this)
         applicationScope.launch {
             combine(
                 settingsManager.huCaCertsAutoInstallFlow,
