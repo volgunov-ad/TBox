@@ -265,6 +265,46 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
+    fun shouldSkipExternalRedirectForFirstOpenAfterUpdate_versionOrArmed() {
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipExternalRedirectForFirstOpenAfterUpdate(
+                lastSeenVersionCode = 0L,
+                currentVersionCode = 10022L,
+                packageReplacedArmed = false,
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipExternalRedirectForFirstOpenAfterUpdate(
+                lastSeenVersionCode = 10021L,
+                currentVersionCode = 10022L,
+                packageReplacedArmed = false,
+            ),
+        )
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldSkipExternalRedirectForFirstOpenAfterUpdate(
+                lastSeenVersionCode = 10022L,
+                currentVersionCode = 10022L,
+                packageReplacedArmed = true,
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldSkipExternalRedirectForFirstOpenAfterUpdate(
+                lastSeenVersionCode = 10022L,
+                currentVersionCode = 10022L,
+                packageReplacedArmed = false,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect_isFalse() {
+        // singleTask + DCL REUSED_TASK: finish would destroy the only Main.
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(),
+        )
+    }
+
+    @Test
     fun shouldSkipDclRedirectAntiLoop_matchesHostingAndSticky() {
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(

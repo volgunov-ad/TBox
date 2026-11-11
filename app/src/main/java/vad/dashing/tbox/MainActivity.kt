@@ -285,11 +285,18 @@ class MainActivity : ComponentActivity() {
      * stock-window setting on, hand them to DCL app_area (if available) or Adayo ActivityView.
      * DCL Binder [ContentResolver.call] runs on [Dispatchers.IO] (P0-1); Adayo stays sync.
      * Pending tile-edit / theme requests are already on their buses for the relaunched instance.
+     *
+     * First open after install/update may skip redirect (fullscreen OK) via
+     * [PostUpdateMainLaunchGate]. Successful DCL app_area must not [finish] this singleTask.
      */
     private fun beginExternalStockWindowRedirect(savedInstanceState: Bundle?): ExternalRedirectOutcome {
         @Suppress("DEPRECATION")
         val displayId = windowManager.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
         if (savedInstanceState != null || displayId != Display.DEFAULT_DISPLAY) {
+            return ExternalRedirectOutcome.NotNeeded
+        }
+        if (PostUpdateMainLaunchGate.consumeSkipExternalRedirect(this)) {
+            Log.i(TAG, "Stock-window redirect skipped (first open after install/update)")
             return ExternalRedirectOutcome.NotNeeded
         }
         val dclRepo = vad.dashing.tbox.dcl.DclLauncherApiRepository
@@ -374,24 +381,43 @@ class MainActivity : ComponentActivity() {
                             activityClass = MainActivity::class.java.name,
                         )
                     }
-                    val launched = dclOk || (
+                    val adayoOk = !dclOk &&
                         adayoAvailable &&
-                            AdayoStockAppWindow.launchInAppWindow(
-                                context = this@MainActivity,
-                                packageName = packageName,
-                                activityClass = MainActivity::class.java.name,
-                            )
+                        AdayoStockAppWindow.launchInAppWindow(
+                            context = this@MainActivity,
+                            packageName = packageName,
+                            activityClass = MainActivity::class.java.name,
                         )
-                    if (launched) {
-                        if (dclOk) {
+                    when {
+                        dclOk -> {
+                            val nowMs = SystemClock.elapsedRealtime()
                             dclAppAreaExternalRedirectConsumedThisProcess = true
+                            lastExternalRedirectAtMs = nowMs
+                            // DCL app_area reuses this singleTask (resize/move). finish() would
+                            // kill the only Main — see shouldFinishSelfAfterSuccessfulDclAppAreaRedirect.
+                            if (
+                                LaunchMainInStockAppWindowDecision
+                                    .shouldFinishSelfAfterSuccessfulDclAppAreaRedirect()
+                            ) {
+                                finishAfterExternalRedirect(nowMs, MainAppWindowBackend.DCL_APP_AREA)
+                            } else {
+                                Log.i(
+                                    TAG,
+                                    "External launch hosted in DCL app_area (same task); continuing normal onCreate",
+                                )
+                                completeNormalOnCreate()
+                            }
                         }
-                        finishAfterExternalRedirect(
-                            SystemClock.elapsedRealtime(),
-                            backend,
-                        )
-                    } else {
-                        completeNormalOnCreate()
+                        adayoOk -> {
+                            finishAfterExternalRedirect(
+                                SystemClock.elapsedRealtime(),
+                                MainAppWindowBackend.ADAYO_STOCK,
+                            )
+                        }
+                        else -> {
+                            Log.w(TAG, "Stock-window redirect failed; falling back to normal onCreate")
+                            completeNormalOnCreate()
+                        }
                     }
                 }
                 ExternalRedirectOutcome.PendingAsync
