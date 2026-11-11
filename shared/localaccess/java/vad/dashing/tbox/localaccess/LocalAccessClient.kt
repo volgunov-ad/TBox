@@ -3,6 +3,8 @@ package vad.dashing.tbox.localaccess
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.os.DeadObjectException
+import android.os.RemoteException
 
 data class LocalAccessResult(
     val status: String,
@@ -14,7 +16,14 @@ data class LocalAccessResult(
         get() = status == LocalAccessContract.STATUS_GRANTED && !accessToken.isNullOrBlank()
 }
 
-/** Binder calls into Monitor; all of them block, so keep them off the main thread. */
+/**
+ * Binder calls into Monitor; all of them block, so keep them off the main thread.
+ *
+ * Uses [android.content.ContentResolver.acquireUnstableContentProviderClient] so a dying
+ * Monitor process (APK update / force-stop) yields [DeadObjectException] instead of AMS killing
+ * this client with "depends on provider". On API 28, plain [android.content.ContentResolver.call]
+ * still acquires a **stable** provider for the duration of the call — fatal for HOME launchers.
+ */
 object LocalAccessClient {
     fun getAccess(context: Context, interactive: Boolean): LocalAccessResult {
         val extras = Bundle().apply {
@@ -49,24 +58,38 @@ object LocalAccessClient {
     }
 
     private fun call(context: Context, method: String, extras: Bundle?): LocalAccessResult {
-        val bundle = try {
-            context.contentResolver.call(Uri.parse(LocalAccessContract.URI), method, null, extras)
-        } catch (_: IllegalArgumentException) {
-            null
+        val uri = Uri.parse(LocalAccessContract.URI)
+        val client = try {
+            context.contentResolver.acquireUnstableContentProviderClient(uri)
         } catch (_: SecurityException) {
             null
         } ?: return LocalAccessResult(LocalAccessContract.STATUS_NOT_SUPPORTED)
-        val port = bundle.getInt(LocalAccessContract.KEY_PORT, 0)
-        return LocalAccessResult(
-            status = bundle.getString(LocalAccessContract.KEY_STATUS)
-                ?: LocalAccessContract.STATUS_NOT_SUPPORTED,
-            accessToken = bundle.getString(LocalAccessContract.KEY_ACCESS_TOKEN),
-            port = port.takeIf { it > 0 },
-            serverEnabled = if (bundle.containsKey(LocalAccessContract.KEY_SERVER_ENABLED)) {
-                bundle.getBoolean(LocalAccessContract.KEY_SERVER_ENABLED)
-            } else {
+        return try {
+            val bundle = try {
+                client.call(method, null, extras)
+            } catch (_: DeadObjectException) {
                 null
-            },
-        )
+            } catch (_: RemoteException) {
+                null
+            } catch (_: IllegalArgumentException) {
+                null
+            } catch (_: SecurityException) {
+                null
+            } ?: return LocalAccessResult(LocalAccessContract.STATUS_NOT_SUPPORTED)
+            val port = bundle.getInt(LocalAccessContract.KEY_PORT, 0)
+            LocalAccessResult(
+                status = bundle.getString(LocalAccessContract.KEY_STATUS)
+                    ?: LocalAccessContract.STATUS_NOT_SUPPORTED,
+                accessToken = bundle.getString(LocalAccessContract.KEY_ACCESS_TOKEN),
+                port = port.takeIf { it > 0 },
+                serverEnabled = if (bundle.containsKey(LocalAccessContract.KEY_SERVER_ENABLED)) {
+                    bundle.getBoolean(LocalAccessContract.KEY_SERVER_ENABLED)
+                } else {
+                    null
+                },
+            )
+        } finally {
+            client.close()
+        }
     }
 }
