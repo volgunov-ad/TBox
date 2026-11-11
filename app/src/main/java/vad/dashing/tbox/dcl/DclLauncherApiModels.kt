@@ -72,6 +72,8 @@ data class DclUiState(
     val topBarVisible: Boolean?,
     val bottomBarVisible: Boolean?,
     val immersive: Boolean?,
+    /** DCL notification / control-center shade expanded; absent on older launchers. */
+    val notificationShadeExpanded: Boolean?,
 ) {
     fun adasBounds(): DclBounds =
         DclBounds.parse(adasPanelBounds, DclBounds.DEFAULT_ADAS)
@@ -323,6 +325,10 @@ object DclLauncherApiCodec {
             topBarVisible = optionalBoolean(bundle, DclLauncherApiContract.KEY_TOP_BAR_VISIBLE),
             bottomBarVisible = optionalBoolean(bundle, DclLauncherApiContract.KEY_BOTTOM_BAR_VISIBLE),
             immersive = optionalBoolean(bundle, DclLauncherApiContract.KEY_IMMERSIVE),
+            notificationShadeExpanded = optionalBoolean(
+                bundle,
+                DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED,
+            ),
         )
 
     private fun optionalBoolean(bundle: Bundle, key: String): Boolean? =
