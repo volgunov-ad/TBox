@@ -71,6 +71,7 @@ fun launchPackageWithLaunchMode(
             }
         }
         AppLauncherLaunchMode.FULLSCREEN,
+        AppLauncherLaunchMode.DCL_FULL_WIDTH,
         AppLauncherLaunchMode.DCL_FULLSCREEN,
         -> {
             val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(

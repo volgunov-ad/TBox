@@ -16,6 +16,7 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 | Путь | Поведение |
 |------|-----------|
 | Ярлык «Обычный» (`fullscreen`) | DCL `launchApp(..., mode=app_area)` |
+| Ярлык «На всю ширину (DCL)» (`dcl_full_width`) | DCL `mode=full_width` (бары да, ADAS нет, не immersive) |
 | Ярлык «На весь экран (DCL)» (`dcl_fullscreen`) | DCL `mode=fullscreen` |
 | App List Open | только DCL `app_area` (кнопка stock-window скрыта) |
 | Automation `LaunchApplication` | parity с ярлыком |
@@ -27,7 +28,9 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 
 **Первый open после install/update:** cold redirect из `MainActivity` в DCL/Adayo **можно пропустить** (fullscreen допустим) — `PostUpdateMainLaunchGate` / `MY_PACKAGE_REPLACED` + stamp `versionCode`. Все остальные пути (`MainActivityIntentHelper`: панели, boot, виджеты, broadcast) по-прежнему идут в окно. Успешный DCL `app_area` **не** делает `finish()` единственного `singleTask` Main (DCL обычно `REUSED_TASK`). Adayo `LAUNCH_APP` по-прежнему finish (хост на virtual display).
 
-Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboard + main panels + floating) и в `LaunchApplication` → «Обычный». Не трогает Main, App List, уже-Обычный / DCL fullscreen.
+Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboard + main panels + floating) и в `LaunchApplication` → «Обычный». Не трогает Main, App List, уже-Обычный / DCL full_width / DCL fullscreen.
+
+**Capability `launchFullWidth`:** если ключ есть в `getCapabilities` — гейт как у `launchAppArea` / `launchFullscreen` (явный `false` → raw fallback без Binder). Если ключа нет (gist v1.3 пока без caps) — всё равно вызываем `launchApp(mode=full_width)`; `unsupported` / `internal` / Unavailable → raw fallback, как у остальных режимов.
 
 Код: `DclLauncherEnvironmentRouting`, `DclAppLaunchHelper`, `DashboardAppNavigation`, `MainActivityIntentHelper`, `AutomationActionExecutor`.
 
@@ -39,7 +42,7 @@ Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboar
 | `dcl_top_bar_visible` | STATE on/off | `topBarVisible` |
 | `dcl_bottom_bar_visible` | STATE on/off | `bottomBarVisible` |
 | `dcl_notification_shade_expanded` | STATE on/off | `notificationShadeExpanded` |
-| `dcl_screen_mode` | STATE home/single/fullscreen/split | `screenMode` |
+| `dcl_screen_mode` | STATE home/single/full_width/fullscreen/split | `screenMode` |
 
 Через существующие `state_equals` / `state`. Пока снимка DCL нет — `Unavailable`.
 

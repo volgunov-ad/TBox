@@ -46,10 +46,11 @@ object DclLauncherApi {
 - `apiVersion` (Int): `1`
 - `launchFullscreen` (Boolean): `true`
 - `launchAppArea` (Boolean): `true`
+- `launchFullWidth` (Boolean, опционально): `true` — если ключ отсутствует, Monitor всё равно пытается `mode=full_width` и обрабатывает `unsupported` как у прочих режимов
 - `uiStateQuery` (Boolean): `true`
 - `uiStateEvents` (Boolean): `true`
 - `adasPanel` (Boolean): `true`
-- `screenModes` (String): `"home,single,fullscreen,split"`
+- `screenModes` (String): `"home,single,full_width,fullscreen,split"`
 
 ---
 
@@ -59,7 +60,7 @@ object DclLauncherApi {
 
 ```kotlin
 data class DclUiState(
-    val screenMode: String,          // "home" | "single" | "fullscreen" | "split"
+    val screenMode: String,          // "home" | "single" | "full_width" | "fullscreen" | "split"
     val foregroundPackage: String,   // Пакет текущего видимого приложения
     val topBarHeightPx: Int,         // Высота верхнего бара (px)
     val bottomBarHeightPx: Int,      // Высота нижнего бара (px)
@@ -149,12 +150,13 @@ class DclUiStateReceiver : BroadcastReceiver() {
 
 ## 5. Запуск приложений и самого TBox Monitor (`launchApp`)
 
-Вызывайте метод `launchApp`, чтобы запустить TBox Monitor или стороннее приложение в требуемом режиме (`app_area` или `fullscreen`).
+Вызывайте метод `launchApp`, чтобы запустить TBox Monitor или стороннее приложение в требуемом режиме (`app_area`, `full_width` или `fullscreen`).
 
 ### Параметры `extras`
 - `packageName` (String, обязательно): Имя пакета приложения (например, `"vad.dashing.tbox"` или `"ru.yandex.yandexnavi"`).
 - `mode` (String, обязательно):
   - `"app_area"` — открытие приложения в рабочей области лаунчера (между верхним и нижним барами, справа от ADAS-зоны).
+  - `"full_width"` — на всю ширину экрана между верхним и нижним барами, без ADAS (не immersive).
   - `"fullscreen"` — открытие на полный экран.
 - `activityClass` (String, опционально): Полное имя класса конкретной Activity.
 - `requestId` (String, опционально): Уникальный ID запроса для предотвращения дублирующих нажатий.

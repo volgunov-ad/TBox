@@ -144,7 +144,7 @@ Monitor со своей стороны добавит в `<queries>` authority D
 | `packageName` | String | да | Имя пакета приложения |
 | `activityClass` | String | нет | Полное имя activity; если пусто — launch activity пакета (как `getLaunchIntentForPackage`) |
 | `action` | String | нет | Intent action (опционально) |
-| `mode` | String | да | `"fullscreen"` или `"app_area"` |
+| `mode` | String | да | `"fullscreen"`, `"full_width"` или `"app_area"` |
 | `requestId` | String | нет | Идемпотентность (см. ниже) |
 | `displayId` | int | нет | Только если DCL на A10 реально различает VD; иначе игнорировать |
 
@@ -153,9 +153,10 @@ Monitor со своей стороны добавит в `<queries>` authority D
 | Значение | Смысл для DCL |
 |----------|----------------|
 | `fullscreen` | Открыть приложение на весь экран лаунчера / immersive так, как DCL уже открывает apps в fullscreen (пользовательский «на весь экран»). |
+| `full_width` | На всю ширину экрана между верхним и нижним барами, **без ADAS**, не immersive (`screenMode=full_width`, типичные `appAreaBounds≈0,51,1920,998`). |
 | `app_area` | Открыть в **области приложений** — том же не-fullscreen регионе, где DCL показывает обычные apps рядом с барами / ADAS (аналог роли штатного Adayo `LAUNCH_APP` → ActivityView ~окно приложений). Не путать с freeform TBox и с виртуальными дисплеями TBox. |
 
-На A9 при одном физическом дисплее `app_area` = «внутри layout лаунчера, бары остаются по политике DCL»; `fullscreen` = «как сейчас DCL разворачивает app на весь экран». Конкретные пиксели — ответственность DCL; TBox передаёт только режим.
+На A9 при одном физическом дисплее `app_area` = «внутри layout лаунчера, бары остаются по политике DCL»; `full_width` = «бары да, ADAS скрыта, на всю ширину»; `fullscreen` = «как сейчас DCL разворачивает app на весь экран». Конкретные пиксели — ответственность DCL; TBox передаёт только режим.
 
 **Ответ Bundle:**
 
@@ -182,7 +183,7 @@ Monitor со своей стороны добавит в `<queries>` authority D
 **Идемпотентность:**
 
 - Повторный `launchApp` с тем же `packageName` + `mode` + (опционально) `requestId` в течение короткого окна (~2 с) не должен порождать второй instance «ради дубля»: достаточно поднять уже открытую задачу / переключить режим.
-- Смена только `mode` для того же пакета — валидный новый запрос (перевести app_area ↔ fullscreen), если DCL это умеет; иначе вернуть `unsupported` с понятным `message`.
+- Смена только `mode` для того же пакета — валидный новый запрос (перевести app_area ↔ full_width ↔ fullscreen), если DCL это умеет; иначе вернуть `unsupported` с понятным `message`.
 
 **Синхронность:** метод может вернуть `accepted`, если запуск асинхронный, но приложение **должно** реально открыться без дальнейшего пинка от TBox. Предпочтительно `ok` после того, как intent/start уже отдан системе.
 
@@ -222,14 +223,15 @@ Monitor со своей стороны добавит в `<queries>` authority D
 |----------|--------|
 | `home` | Показан home / главный экран DCL (нет app поверх области приложений, либо «чистый» лаунчер). |
 | `single` | Одно приложение в **области приложений** (не fullscreen); бары по политике DCL обычно видны. `foregroundPackage` = это приложение. |
+| `full_width` | Одно приложение на всю ширину между барами, без ADAS, не immersive. `foregroundPackage` = это приложение. |
 | `fullscreen` | Приложение на весь экран / immersive по правилам DCL. `foregroundPackage` = это приложение. |
 | `split` | Два приложения рядом. Обязательны `leftPackage` и `rightPackage`. `foregroundPackage` = сторона с фокусом **или** левая, если фокус DCL не различает (тогда в capabilities указать отсутствие focus — см. §6). |
 
 Правила заполнения:
 
-- Ровно одно из четырёх значений `screenMode` в каждый момент.
+- Ровно одно из значений `screenMode` в каждый момент.
 - На `home`: `foregroundPackage` пустой; `leftPackage` / `rightPackage` пустые.
-- На `single` / `fullscreen`: заполнен `foregroundPackage`; split-поля пустые.
+- На `single` / `full_width` / `fullscreen`: заполнен `foregroundPackage`; split-поля пустые.
 - На `split`: оба `leftPackage` и `rightPackage` непустые; если фокус неизвестен — всё равно отдать оба пакета.
 - Смена app в том же режиме (например другой пакет в `single`) — новое состояние + новый `revision`.
 
@@ -268,9 +270,10 @@ Extras: **полный снимок** как у `getUiState` (хром + `screen
 | `apiVersion` | int | `1` |
 | `launchFullscreen` | boolean | `true` |
 | `launchAppArea` | boolean | `true` |
+| `launchFullWidth` | boolean | `true` (опционально; без ключа Monitor всё равно пробует `full_width`) |
 | `uiStateQuery` | boolean | `true` |
 | `uiStateEvents` | boolean | `true` / `false` |
-| `screenModes` | String | `"home,single,fullscreen,split"` (какие реально есть) |
+| `screenModes` | String | `"home,single,full_width,fullscreen,split"` (какие реально есть) |
 | `adasPanel` | boolean | есть ли ADAS panel |
 | `splitSupported` | boolean | умеет ли лаунчер split |
 
@@ -372,7 +375,7 @@ TBox может отложить hide/show плавающих панелей н�
 
 ## 7. Версионирование
 
-- **Обязательный v1** (этот документ): auth Monitor→DCL = Binder only (§3.2); существующий DCL→Monitor consent в Monitor без изменений (§3.1); `launchApp` fullscreen + app_area; boolean ADAS/top/bottom; `screenMode` ∈ {`home`,`single`,`fullscreen`,`split`} + пакеты.
+- **Обязательный v1** (этот документ): auth Monitor→DCL = Binder only (§3.2); существующий DCL→Monitor consent в Monitor без изменений (§3.1); `launchApp` fullscreen + full_width + app_area; boolean ADAS/top/bottom; `screenMode` ∈ {`home`,`single`,`full_width`,`fullscreen`,`split`} + пакеты.
 - Поля §6 — **рекомендуемые phase-2 / additive**; shipping v1 без них допустим.
 - Новые ключи в Bundle — только additive; не ломать смысл существующих.
 - Смена authority или семантики `screenMode` / launch `mode` — только major + согласование с TBox.
@@ -385,11 +388,11 @@ TBox может отложить hide/show плавающих панелей н�
 
 - [ ] Provider `content://ras.dashing.tbox.launcher.api` экспортирован, отвечает на `call`.
 - [ ] Чужой пакет → `forbidden`; только `vad.dashing.tbox` → `ok`.
-- [ ] `launchApp` + `mode=fullscreen` / `mode=app_area` работают; повтор ~1 с идемпотентен.
+- [ ] `launchApp` + `mode=fullscreen` / `mode=full_width` / `mode=app_area` работают; повтор ~1 с идемпотентен.
 - [ ] Невалидный пакет → `not_installed` / `no_launch_activity`, без краша.
 - [ ] `getUiState` (или `getUiChrome`) отдаёт `adasPanelVisible` / `topBarVisible` / `bottomBarVisible`.
-- [ ] Тот же снимок отдаёт `screenMode` ∈ {`home`,`single`,`fullscreen`,`split`} и корректные `foregroundPackage` / `leftPackage` / `rightPackage`.
-- [ ] Ручной прогон: home → single → fullscreen → split → home; `revision` растёт.
+- [ ] Тот же снимок отдаёт `screenMode` ∈ {`home`,`single`,`full_width`,`fullscreen`,`split`} и корректные `foregroundPackage` / `leftPackage` / `rightPackage`.
+- [ ] Ручной прогон: home → single → full_width → fullscreen → split → home; `revision` растёт.
 - [ ] Нет listen на внешний IP; **нет** токена/consent UI от DCL к Monitor (§3.2); чужой пакет → `forbidden`.
 - [ ] (Желательно) broadcast `UI_STATE_CHANGED` с полным снимком.
 
@@ -433,10 +436,10 @@ Authority: content://ras.dashing.tbox.launcher.api
 Caller:    only vad.dashing.tbox (Binder)
 
 REQUIRED v1
-  call "launchApp"   mode=fullscreen|app_area + packageName…
+  call "launchApp"   mode=fullscreen|full_width|app_area + packageName…
   call "getUiState"  (alias getUiChrome)
        → adasPanelVisible, topBarVisible, bottomBarVisible
-       → screenMode=home|single|fullscreen|split
+       → screenMode=home|single|full_width|fullscreen|split
        → foregroundPackage; leftPackage/rightPackage if split
        → revision, updatedAtEpochMs
   optional push: …UI_STATE_CHANGED → same snapshot

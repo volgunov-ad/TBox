@@ -249,7 +249,7 @@ enum class AutomationSignalId(
     DCL_BOTTOM_BAR_VISIBLE("dcl_bottom_bar_visible", AutomationSignalValueType.STATE),
     /** DCL notification / control-center shade expanded (`on`/`off`). */
     DCL_NOTIFICATION_SHADE_EXPANDED("dcl_notification_shade_expanded", AutomationSignalValueType.STATE),
-    /** DCL screen mode: `home` / `single` / `fullscreen` / `split`. */
+    /** DCL screen mode: `home` / `single` / `full_width` / `fullscreen` / `split`. */
     DCL_SCREEN_MODE("dcl_screen_mode", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
     APP_THEME("app_theme", AutomationSignalValueType.STATE),

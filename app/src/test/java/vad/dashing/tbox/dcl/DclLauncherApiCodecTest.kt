@@ -226,21 +226,75 @@ class DclLauncherApiCodecTest {
             putBoolean(DclLauncherApiContract.KEY_UI_CHROME_QUERY, true)
             putBoolean(DclLauncherApiContract.KEY_UI_CHROME_EVENTS, false)
             putBoolean(DclLauncherApiContract.KEY_ADAS_PANEL, true)
-            putString(DclLauncherApiContract.KEY_SCREEN_MODES, "home,single,fullscreen,split")
+            putString(
+                DclLauncherApiContract.KEY_SCREEN_MODES,
+                "home,single,full_width,fullscreen,split",
+            )
             putBoolean(DclLauncherApiContract.KEY_SPLIT_SUPPORTED, true)
         }
         val caps = (DclLauncherApiCodec.parseCapabilities(bundle) as DclCallResult.Ok).value
         assertEquals(1, caps.apiVersion)
         assertTrue(caps.launchFullscreen)
         assertTrue(caps.launchAppArea)
+        assertNull(caps.launchFullWidth)
         assertTrue(caps.uiStateQuery)
         assertFalse(caps.uiStateEvents)
         assertTrue(caps.adasPanel)
         assertEquals(
-            listOf("home", "single", "fullscreen", "split"),
+            listOf("home", "single", "full_width", "fullscreen", "split"),
             caps.screenModes,
         )
         assertEquals(true, caps.splitSupported)
+    }
+
+    @Test
+    fun parseCapabilities_launchFullWidth_optionalTriState() {
+        val withFlag = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putBoolean(DclLauncherApiContract.KEY_LAUNCH_FULL_WIDTH, true)
+        }
+        val capsWith = (DclLauncherApiCodec.parseCapabilities(withFlag) as DclCallResult.Ok).value
+        assertEquals(true, capsWith.launchFullWidth)
+
+        val explicitFalse = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putBoolean(DclLauncherApiContract.KEY_LAUNCH_FULL_WIDTH, false)
+        }
+        val capsFalse =
+            (DclLauncherApiCodec.parseCapabilities(explicitFalse) as DclCallResult.Ok).value
+        assertEquals(false, capsFalse.launchFullWidth)
+    }
+
+    @Test
+    fun parseUiState_fullWidthScreenMode() {
+        val bundle = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putString(
+                DclLauncherApiContract.KEY_SCREEN_MODE,
+                DclLauncherApiContract.SCREEN_MODE_FULL_WIDTH,
+            )
+            putString(DclLauncherApiContract.KEY_FOREGROUND_PACKAGE, "ru.yandex.music")
+            putString(
+                DclLauncherApiContract.KEY_APP_AREA_BOUNDS,
+                DclLauncherApiContract.DEFAULT_FULL_WIDTH_APP_AREA_BOUNDS,
+            )
+            putBoolean(DclLauncherApiContract.KEY_ADAS_PANEL_VISIBLE, false)
+            putBoolean(DclLauncherApiContract.KEY_TOP_BAR_VISIBLE, true)
+            putBoolean(DclLauncherApiContract.KEY_BOTTOM_BAR_VISIBLE, true)
+            putBoolean(DclLauncherApiContract.KEY_IMMERSIVE, false)
+            putLong(DclLauncherApiContract.KEY_REVISION, 9L)
+        }
+        val state = (DclLauncherApiCodec.parseUiState(bundle) as DclCallResult.Ok).value
+        assertEquals(DclLauncherApiContract.SCREEN_MODE_FULL_WIDTH, state.screenMode)
+        assertEquals("ru.yandex.music", state.foregroundPackage)
+        assertEquals(
+            DclLauncherApiContract.DEFAULT_FULL_WIDTH_APP_AREA_BOUNDS,
+            state.appAreaBounds,
+        )
+        assertEquals(false, state.adasPanelVisible)
+        assertEquals(true, state.topBarVisible)
+        assertEquals(true, state.bottomBarVisible)
+        assertEquals(false, state.immersive)
     }
 
     @Test

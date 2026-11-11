@@ -48,6 +48,20 @@ class WidgetConfigCodecMusicLaunchModeTest {
     }
 
     @Test
+    fun musicWidget_roundTrip_dclFullWidth() {
+        val original = FloatingDashboardWidgetConfig(
+            dataKey = MUSIC_COVER_WIDGET_DATA_KEY,
+            mediaPlayers = listOf("ru.yandex.music"),
+            launcherLaunchMode = AppLauncherLaunchMode.DCL_FULL_WIDTH,
+        )
+        val parsed = parseWidgetConfigsFromString(serializeWidgetConfigs(listOf(original))).single()
+        assertEquals(AppLauncherLaunchMode.DCL_FULL_WIDTH, parsed.launcherLaunchMode)
+
+        val obj = JSONArray(serializeWidgetConfigs(listOf(original))).getJSONObject(0)
+        assertEquals("dcl_full_width", obj.getString("launcherLaunchMode"))
+    }
+
+    @Test
     fun musicWidget_roundTrip_freeformFields() {
         val original = FloatingDashboardWidgetConfig(
             dataKey = MUSIC_SQUARE_WIDGET_DATA_KEY,
@@ -107,6 +121,13 @@ class WidgetConfigCodecMusicLaunchModeTest {
             DclLauncherEnvironmentRouting.dclLaunchModeFor(
                 envEnabled = true,
                 launchMode = AppLauncherLaunchMode.FULLSCREEN,
+            ),
+        )
+        assertEquals(
+            DclLauncherApiContract.MODE_FULL_WIDTH,
+            DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                envEnabled = true,
+                launchMode = AppLauncherLaunchMode.DCL_FULL_WIDTH,
             ),
         )
         assertEquals(

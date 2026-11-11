@@ -658,10 +658,11 @@
 ```
 
 - `packageName` нужно получить от пользователя; пример выше не означает, что пакет установлен;
-- `launchMode`: `fullscreen` («Обычный»), `dcl_fullscreen` («На весь экран (DCL)»),
-  `freeform`, `stock_window`, `virtual_display`;
+- `launchMode`: `fullscreen` («Обычный»), `dcl_full_width` («На всю ширину (DCL)»),
+  `dcl_fullscreen` («На весь экран (DCL)»), `freeform`, `stock_window`, `virtual_display`;
 - при включённой среде DCL (`dcl_launcher_environment_enabled`) `fullscreen` идёт в DCL
-  `app_area`, а `dcl_fullscreen` — в DCL `fullscreen`; новые freeform/VD/stock в UI недоступны;
+  `app_area`, `dcl_full_width` — в DCL `full_width`, а `dcl_fullscreen` — в DCL `fullscreen`;
+  новые freeform/VD/stock в UI недоступны;
 - `stock_window` предназначен для штатного оконного лаунчера Adayo;
 - `virtual_display` — запуск через localhost ADB (`am start --display`); нужны `virtualDisplayId`
   (id дисплея из общего кэша приложения, обновляемого кнопкой «Обновить список» в UI; **display 0
@@ -976,7 +977,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `dcl_top_bar_visible` | `app` | `on` / `off` — верхний бар DCL |
 | `dcl_bottom_bar_visible` | `app` | `on` / `off` — нижний бар DCL |
 | `dcl_notification_shade_expanded` | `app` | `on` / `off` — шторка уведомлений / control center DCL |
-| `dcl_screen_mode` | `app` | `home`, `single`, `fullscreen`, `split` — режим экрана DCL |
+| `dcl_screen_mode` | `app` | `home`, `single`, `full_width`, `fullscreen`, `split` — режим экрана DCL |
 | `app_theme_mode` | `app` | `manual_day`, `manual_night`, `auto_day`, `auto_night` (режим и текущее разрешение: ручной день/ночь или авто день/ночь ГУ) |
 | `app_theme` | `app` | `day`, `night` (эффективная тема сейчас: ручная или разрешённая авто-режимом) |
 | `hu_screen_auto_brightness` | `app` | `on`, `off` — автояркость экрана ГУ (Car Settings → Экраны) |

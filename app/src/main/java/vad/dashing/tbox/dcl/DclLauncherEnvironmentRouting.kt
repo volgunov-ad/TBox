@@ -24,8 +24,8 @@ object DclLauncherEnvironmentRouting {
     )
 
     /**
-     * When env is ON, «Обычный» and «На весь экран (DCL)» route through DCL.
-     * Freeform / VD / stock keep their existing backends (no silent remap).
+     * When env is ON, «Обычный», «На всю ширину (DCL)» and «На весь экран (DCL)»
+     * route through DCL. Freeform / VD / stock keep their existing backends (no silent remap).
      */
     fun dclLaunchModeFor(
         envEnabled: Boolean,
@@ -34,6 +34,7 @@ object DclLauncherEnvironmentRouting {
         if (!envEnabled) return null
         return when (launchMode) {
             AppLauncherLaunchMode.FULLSCREEN -> DclLauncherApiContract.MODE_APP_AREA
+            AppLauncherLaunchMode.DCL_FULL_WIDTH -> DclLauncherApiContract.MODE_FULL_WIDTH
             AppLauncherLaunchMode.DCL_FULLSCREEN -> DclLauncherApiContract.MODE_FULLSCREEN
             AppLauncherLaunchMode.FREEFORM,
             AppLauncherLaunchMode.STOCK_WINDOW,
@@ -58,7 +59,10 @@ object DclLauncherEnvironmentRouting {
                 }
                 add(AppLauncherLaunchMode.FREEFORM)
                 add(AppLauncherLaunchMode.VIRTUAL_DISPLAY)
-                // Keep a previously saved DCL fullscreen choice visible so the user can change it.
+                // Keep previously saved DCL-only choices visible so the user can change them.
+                if (currentMode == AppLauncherLaunchMode.DCL_FULL_WIDTH) {
+                    add(AppLauncherLaunchMode.DCL_FULL_WIDTH)
+                }
                 if (currentMode == AppLauncherLaunchMode.DCL_FULLSCREEN) {
                     add(AppLauncherLaunchMode.DCL_FULLSCREEN)
                 }
@@ -66,6 +70,7 @@ object DclLauncherEnvironmentRouting {
         }
         return buildList {
             add(AppLauncherLaunchMode.FULLSCREEN)
+            add(AppLauncherLaunchMode.DCL_FULL_WIDTH)
             add(AppLauncherLaunchMode.DCL_FULLSCREEN)
             if (currentMode in BULK_REMAP_SOURCE_MODES) {
                 add(currentMode)
@@ -284,7 +289,26 @@ fun dclCanLaunchFullscreen(
     return capabilities?.launchFullscreen == true
 }
 
-/** Explicit capability flag for [mode] is missing or false → raw fallback (design §3.1). */
+/**
+ * Prefer explicit [DclCapabilities.launchFullWidth] when present.
+ * When the key is absent (`null`), treat as tentatively available so callers attempt
+ * Binder `launchApp(mode=full_width)` and fall back on unsupported like peers.
+ */
+fun dclCanLaunchFullWidth(
+    available: Boolean,
+    capabilities: DclCapabilities?,
+): Boolean {
+    if (!available) return false
+    val caps = capabilities ?: return false
+    return caps.launchFullWidth != false
+}
+
+/**
+ * Explicit capability flag for [mode] is missing or false → raw fallback (design §3.1).
+ *
+ * For [DclLauncherApiContract.MODE_FULL_WIDTH]: gate only when `launchFullWidth` is
+ * present and false; absent key → not missing (attempt launch; unsupported → raw fallback).
+ */
 fun dclModeCapabilityMissing(
     mode: String,
     capabilities: DclCapabilities?,
@@ -293,6 +317,7 @@ fun dclModeCapabilityMissing(
     return when (mode) {
         DclLauncherApiContract.MODE_APP_AREA -> !caps.launchAppArea
         DclLauncherApiContract.MODE_FULLSCREEN -> !caps.launchFullscreen
+        DclLauncherApiContract.MODE_FULL_WIDTH -> caps.launchFullWidth == false
         else -> true
     }
 }
