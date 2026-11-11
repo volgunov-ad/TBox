@@ -16,7 +16,14 @@ import kotlinx.coroutines.withContext
 import vad.dashing.tbox.AdayoStockAppWindow
 import vad.dashing.tbox.AppDataManager
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.CarDataRepository
+import vad.dashing.tbox.camdAutomationCommandLine
+import vad.dashing.tbox.camdKeepAvmCommandLine
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightMapping
 import vad.dashing.tbox.HeadUnitDayNightRepository
@@ -822,6 +829,47 @@ class AutomationActionExecutor(
         AutomationBuiltinActionType.PLACE_CALL -> placeCall(action.stringValue)
         AutomationBuiltinActionType.ANSWER_CALL -> answerCall()
         AutomationBuiltinActionType.HANGUP_CALL -> hangupCall()
+
+        AutomationBuiltinActionType.CAMD_WINDOW -> executeCamdWindow(action)
+        AutomationBuiltinActionType.CAMD_KEEP_AVM -> executeCamd(
+            camdKeepAvmCommandLine(action.boolValue),
+            if (action.boolValue) {
+                "Штатный AVM удерживается выключенным"
+            } else {
+                "Штатный AVM включён"
+            },
+        )
+    }
+
+    private suspend fun executeCamdWindow(action: AutomationAction.Builtin): AutomationActionResult {
+        val line = camdAutomationCommandLine(action.intValue, action.stringValue)
+            ?: return AutomationActionResult.failure("Некорректные параметры окна камеры")
+        val mode = parseCamdAutomationWindowArgs(action.stringValue)?.mode
+        val ok = when (mode) {
+            CAMD_ACTION_CLOSE_ALL -> "Окна камер закрыты"
+            CAMD_ACTION_CLOSE -> "Окно камеры закрыто"
+            CAMD_ACTION_OPEN -> "Окно камеры открыто"
+            else -> "Команда камеры выполнена"
+        }
+        return executeCamd(line, ok)
+    }
+
+    private suspend fun executeCamd(line: String, okMessage: String): AutomationActionResult {
+        val result = withContext(Dispatchers.IO) {
+            CamdWindowClient.command(line, context = appContext)
+        }
+        return result.fold(
+            onSuccess = { AutomationActionResult.ok(okMessage) },
+            onFailure = { error ->
+                val detail = error.message.orEmpty()
+                val text = if (detail.startsWith("ERR") || detail.contains("state=")) {
+                    detail
+                } else {
+                    "Камеры ГУ не отвечают"
+                }
+                AutomationActionResult.failure(text)
+            },
+        )
     }
 
     private fun placeCall(rawNumber: String): AutomationActionResult {

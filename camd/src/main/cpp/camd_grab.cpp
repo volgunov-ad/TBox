@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -25,7 +26,9 @@
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
 #define BEAT "/data/local/tmp/camd-grab.beat"
-#define FRAME_DIR "/data/local/tmp"
+#define FRAME_RAM "/mnt/camd-ram"
+#define UYVY_MAGIC 0x31765955u
+#define UYVY_HEADER 64
 
 typedef void* qcarcam_hndl_t;
 typedef int qcarcam_ret_t;
@@ -98,7 +101,8 @@ struct Camera {
     void* ptrs[5];
     qcarcam_buffer_t buffers[5];
     qcarcam_buffers_t list;
-    int* argb;
+    void* shared;
+    int sharedBytes;
 };
 
 static fn_initialize p_initialize = nullptr;
@@ -113,32 +117,13 @@ static fn_release_frame p_release_frame = nullptr;
 static Camera* open_cameras[10];
 static long long next_try[10];
 
-static void write_u32(FILE* out, uint32_t value) {
-    fwrite(&value, sizeof(value), 1, out);
-}
+static int map_shared(Camera* camera);
 
 static int camera_size(int id, int* width, int* height) {
     if (id == 0) { *width = 1488; *height = 616; return 1; }
     if (id == 1) { *width = 1280; *height = 720; return 1; }
     if (id == 3 || id == 4 || id == 5 || id == 8 || id == 9) { *width = 1280; *height = 800; return 1; }
     return 0;
-}
-
-static int yuv_to_rgb(int y, int u, int v) {
-    int c = y - 16;
-    int d = u - 128;
-    int e = v - 128;
-    if (c < 0) c = 0;
-    int r = (298 * c + 409 * e + 128) >> 8;
-    int g = (298 * c - 100 * d - 208 * e + 128) >> 8;
-    int b = (298 * c + 516 * d + 128) >> 8;
-    if (r < 0) r = 0;
-    if (g < 0) g = 0;
-    if (b < 0) b = 0;
-    if (r > 255) r = 255;
-    if (g > 255) g = 255;
-    if (b > 255) b = 255;
-    return (0xFF << 24) | (r << 16) | (g << 8) | b;
 }
 
 static int alloc_dma(int ion, int bytes) {
@@ -165,7 +150,16 @@ static void release_camera(Camera* camera) {
         if (camera->ptrs[i] && camera->ptrs[i] != MAP_FAILED) munmap(camera->ptrs[i], camera->size);
         if (camera->fds[i] > 0) close(camera->fds[i]);
     }
-    free(camera->argb);
+    if (camera->shared && camera->shared != MAP_FAILED) {
+        munmap(camera->shared, (size_t)camera->sharedBytes);
+    }
+    char path[128];
+    snprintf(path, sizeof(path), FRAME_RAM "/camd-uyvy-%d", camera->id);
+    unlink(path);
+    snprintf(path, sizeof(path), "/data/local/tmp/camd-uyvy-%d", camera->id);
+    unlink(path);
+    snprintf(path, sizeof(path), "/data/local/tmp/camd-frame-%d.bin", camera->id);
+    unlink(path);
     free(camera);
 }
 
@@ -212,7 +206,6 @@ static Camera* open_camera(int id) {
     camera->height = height;
     camera->stride = width * 2;
     camera->size = camera->stride * height;
-    camera->argb = (int*)malloc((size_t)width * (size_t)height * sizeof(int));
     for (int i = 0; i < 5; i++) {
         int fd = alloc_dma(ion, camera->size);
         camera->fds[i] = fd;
@@ -252,37 +245,39 @@ static Camera* open_camera(int id) {
         return nullptr;
     }
     camera->started = 1;
+    if (map_shared(camera) != 0) {
+        fprintf(stderr, "uyvy map %d failed errno=%d\n", id, errno);
+        release_camera(camera);
+        return nullptr;
+    }
     return camera;
 }
 
-static void copy_uyvy(const uint8_t* src, int stride, int width, int height, int* dst) {
-    for (int y = 0; y < height; y++) {
-        const uint8_t* row = src + y * stride;
-        int* out = dst + y * width;
-        for (int x = 0; x + 1 < width; x += 2) {
-            out[x] = yuv_to_rgb(row[1], row[0], row[2]);
-            out[x + 1] = yuv_to_rgb(row[3], row[0], row[2]);
-            row += 4;
-        }
+static int map_shared(Camera* camera) {
+    char path[128];
+    snprintf(path, sizeof(path), FRAME_RAM "/camd-uyvy-%d", camera->id);
+    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0666);
+    if (fd < 0) return -1;
+    int mapSize = UYVY_HEADER + camera->size * 2;
+    if (ftruncate(fd, mapSize) != 0) {
+        close(fd);
+        return -1;
     }
-}
-
-static void write_frame(Camera* camera) {
-    char dest_path[128];
-    char tmp_path[136];
-    snprintf(dest_path, sizeof(dest_path), FRAME_DIR "/camd-frame-%d.bin", camera->id);
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", dest_path);
-    FILE* out = fopen(tmp_path, "wb");
-    if (!out) return;
-    write_u32(out, (uint32_t)camera->width);
-    write_u32(out, (uint32_t)camera->height);
-    write_u32(out, (uint32_t)camera->seq);
-    write_u32(out, 0);
-    int count = camera->width * camera->height;
-    fwrite(camera->argb, sizeof(int), (size_t)count, out);
-    fclose(out);
-    unlink(dest_path);
-    if (rename(tmp_path, dest_path) == 0) chmod(dest_path, 0666);
+    void* mem = mmap(nullptr, (size_t)mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (mem == MAP_FAILED) return -1;
+    chmod(path, 0666);
+    memset(mem, 0, UYVY_HEADER);
+    uint32_t* hdr = (uint32_t*)mem;
+    hdr[1] = (uint32_t)camera->width;
+    hdr[2] = (uint32_t)camera->height;
+    hdr[3] = (uint32_t)camera->stride;
+    hdr[6] = (uint32_t)camera->size;
+    __sync_synchronize();
+    hdr[0] = UYVY_MAGIC;
+    camera->shared = mem;
+    camera->sharedBytes = mapSize;
+    return 0;
 }
 
 static int grab(Camera* camera) {
@@ -290,15 +285,21 @@ static int grab(Camera* camera) {
     memset(&frame, 0, sizeof(frame));
     int ret = p_get_frame(camera->handle, &frame, FRAME_TIMEOUT_NS, 0);
     if (ret != 0) return 0;
-    if (frame.idx >= 5 || !camera->ptrs[frame.idx] || camera->ptrs[frame.idx] == MAP_FAILED) {
+    if (frame.idx >= 5 || !camera->ptrs[frame.idx] || camera->ptrs[frame.idx] == MAP_FAILED || !camera->shared) {
         p_release_frame(camera->handle, frame.idx);
         return 0;
     }
-    copy_uyvy((const uint8_t*)camera->ptrs[frame.idx], camera->stride, camera->width, camera->height, camera->argb);
+    uint32_t* hdr = (uint32_t*)camera->shared;
+    uint32_t slot = hdr[5] ^ 1u;
+    uint8_t* dst = (uint8_t*)camera->shared + UYVY_HEADER + (size_t)slot * (size_t)camera->size;
+    memcpy(dst, camera->ptrs[frame.idx], (size_t)camera->size);
     int released = p_release_frame(camera->handle, frame.idx);
     if (released != 0) fprintf(stderr, "release_frame %u -> %d\n", frame.idx, released);
+    __sync_synchronize();
+    hdr[5] = slot;
+    __sync_synchronize();
+    hdr[4] = hdr[4] + 1u;
     camera->seq += 1;
-    write_frame(camera);
     return 1;
 }
 
@@ -333,10 +334,44 @@ static void beat(void) {
     chmod(BEAT, 0666);
 }
 
+static int ram_mounted(void) {
+    FILE* file = fopen("/proc/mounts", "r");
+    if (!file) return 0;
+    char line[512];
+    int found = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, " " FRAME_RAM " ")) found = 1;
+    }
+    fclose(file);
+    return found;
+}
+
+static void ensure_ram(void) {
+    mkdir(FRAME_RAM, 0777);
+    if (ram_mounted()) {
+        chmod(FRAME_RAM, 0777);
+        return;
+    }
+    if (mount("tmpfs", FRAME_RAM, "tmpfs", 0, "size=32m,mode=777") != 0) {
+        fprintf(stderr, "tmpfs %s errno=%d\n", FRAME_RAM, errno);
+        return;
+    }
+    chmod(FRAME_RAM, 0777);
+    fprintf(stderr, "tmpfs %s\n", FRAME_RAM);
+}
+
 int main(void) {
     signal(SIGHUP, SIG_IGN);
     setvbuf(stderr, nullptr, _IONBF, 0);
     fprintf(stderr, "camd_grab start\n");
+    ensure_ram();
+    for (int id = 0; id < 10; id++) {
+        char path[128];
+        snprintf(path, sizeof(path), "/data/local/tmp/camd-uyvy-%d", id);
+        unlink(path);
+        snprintf(path, sizeof(path), "/data/local/tmp/camd-frame-%d.bin", id);
+        unlink(path);
+    }
     if (init_client() != 0) return 1;
     while (1) {
         beat();
@@ -346,7 +381,7 @@ int main(void) {
             if (!open_cameras[id]) continue;
             if (wanted(ids, count, id)) continue;
             char path[128];
-            snprintf(path, sizeof(path), FRAME_DIR "/camd-frame-%d.bin", id);
+            snprintf(path, sizeof(path), FRAME_RAM "/camd-uyvy-%d", id);
             unlink(path);
             release_camera(open_cameras[id]);
             open_cameras[id] = nullptr;

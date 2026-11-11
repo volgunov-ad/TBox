@@ -2,8 +2,8 @@ package vad.dashing.tbox.externalapi
 
 object ExternalApiConstants {
     const val API_VERSION = 1
-    /** 6 — phone dial widget + place_call / answer_call / hangup_call + call-state signals. */
-    const val CATALOG_VERSION = 6
+    /** 7 — camera windows (`camd_window`) and keep-stock-AVM (`camd_keep_avm`). */
+    const val CATALOG_VERSION = 7
 
     const val DEFAULT_PORT = 8765
     const val MIN_PORT = 1024

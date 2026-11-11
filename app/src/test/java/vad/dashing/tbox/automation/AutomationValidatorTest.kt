@@ -607,6 +607,53 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun camdWindowAndKeepAvm_areAcceptedWhenTheFieldsAreValid() {
+        val definition = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 5,
+                    stringValue = "open 2 55 40 40",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 4,
+                    stringValue = "close_all",
+                ),
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_KEEP_AVM,
+                    boolValue = true,
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(definition).isEmpty())
+    }
+
+    @Test
+    fun camdWindow_rejectsAnUnknownCameraAndAWindowOffScreen() {
+        val unknownCamera = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 2,
+                    stringValue = "open 2 55 40 40",
+                ),
+            ),
+        )
+        val offScreen = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 4,
+                    stringValue = "open 90 0 80 40",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(unknownCamera).any { it.path.contains("intValue") })
+        assertTrue(AutomationValidator.validate(offScreen).any { it.path.contains("stringValue") })
+    }
+
+    @Test
     fun adbShellAndTcp_areAccepted() {
         val definition = validDefinition(
             actions = listOf(

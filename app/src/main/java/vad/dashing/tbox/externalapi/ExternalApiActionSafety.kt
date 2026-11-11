@@ -46,6 +46,8 @@ object ExternalApiActionSafetyRules {
         AutomationBuiltinActionType.PLACE_CALL,
         AutomationBuiltinActionType.ANSWER_CALL,
         AutomationBuiltinActionType.HANGUP_CALL,
+        AutomationBuiltinActionType.CAMD_WINDOW,
+        AutomationBuiltinActionType.CAMD_KEEP_AVM,
         -> ExternalApiActionSafety.CONFIRM
 
         else -> ExternalApiActionSafety.SAFE

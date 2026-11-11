@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
 import vad.dashing.tbox.R
 import vad.dashing.tbox.normalizeCamdWindowGeometry
 import vad.dashing.tbox.ui.theme.tboxButton
@@ -37,7 +38,7 @@ internal fun CamdWindowWidgetSettingsSection(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.padding(bottom = 8.dp),
         ) {
-            listOf(4, 5, 8, 9, 0, 1, 3).forEach { cameraId ->
+            CAMD_WINDOW_CAMERA_IDS.forEach { cameraId ->
                 FilterChip(
                     selected = state.camdWindowCameraId == cameraId,
                     onClick = { state.camdWindowCameraId = cameraId },

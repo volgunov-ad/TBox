@@ -1493,6 +1493,7 @@ fun SettingsTabContent(
             onAutoCompileChange = settingsViewModel::saveAppDexoptAuto,
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        CamdKeepAvmSystemSwitch()
         SettingsTitle(stringResource(R.string.settings_expert_section_title))
         Button(
             onClick = rememberWrappedOnClick { showKeyPressDiagnosticsDialog = true },
@@ -4074,6 +4075,7 @@ fun InfoTabContent(
             item { HuSystemNetworksSection() }
             item { HuUsbDevicesSection() }
             item { MqttStatusInfoSection() }
+            item { CamdStatusInfoSection() }
             if (!noTboxConnect) {
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

@@ -2,6 +2,12 @@ package vad.dashing.tbox.automation
 
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.camdWindowGeometryIssue
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.SettingsManager
 import vad.dashing.tbox.browserUrlFromHttpRequestYaml
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -886,6 +892,33 @@ object AutomationValidator {
                     issues += AutomationValidationIssue(
                         "$path.stringValue",
                         "Выберите приложение",
+                    )
+                }
+            }
+
+            AutomationBuiltinActionType.CAMD_WINDOW -> {
+                val args = parseCamdAutomationWindowArgs(action.stringValue)
+                if (args == null) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Окно камеры: open, close или close_all",
+                    )
+                } else if (args.mode != CAMD_ACTION_CLOSE_ALL &&
+                    action.intValue !in CAMD_WINDOW_CAMERA_IDS
+                ) {
+                    issues += AutomationValidationIssue(
+                        "$path.intValue",
+                        "Камера: 4, 5, 8, 9, 0, 1 или 3",
+                    )
+                } else if (args.mode == CAMD_ACTION_OPEN) {
+                    val geometry = camdWindowGeometryIssue(args.x, args.y, args.w, args.h)
+                    if (geometry != null) {
+                        issues += AutomationValidationIssue("$path.stringValue", geometry)
+                    }
+                } else if (args.mode != CAMD_ACTION_CLOSE && args.mode != CAMD_ACTION_CLOSE_ALL) {
+                    issues += AutomationValidationIssue(
+                        "$path.stringValue",
+                        "Окно камеры: open, close или close_all",
                     )
                 }
             }

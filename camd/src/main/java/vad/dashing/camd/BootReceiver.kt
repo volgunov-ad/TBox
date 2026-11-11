@@ -6,7 +6,16 @@ import android.content.Intent
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
-        context.startService(Intent(context, CamdService::class.java))
+        when (intent?.action) {
+            Intent.ACTION_BOOT_COMPLETED,
+            QUICKBOOT_POWERON,
+            START_ACTION,
+            -> context.startForegroundService(Intent(context, CamdService::class.java))
+        }
+    }
+
+    private companion object {
+        const val QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
+        const val START_ACTION = "vad.dashing.camd.START"
     }
 }

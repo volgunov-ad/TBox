@@ -1,19 +1,31 @@
 package vad.dashing.tbox
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
+import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.Locale
 import java.util.concurrent.Executors
 
 /** Tile that asks the Камеры ГУ app to open or close one camera window. */
 const val CAMD_WINDOW_WIDGET_DATA_KEY = "camdWindowWidget"
 
+const val CAMD_PACKAGE_NAME = "vad.dashing.camd"
+const val CAMD_START_ACTION = "vad.dashing.camd.START"
 const val CAMD_WINDOW_PORT = 8770
-const val CAMD_WINDOW_DEFAULT_CAMERA = 4
+const val CAMD_ACTION_OPEN = "open"
+const val CAMD_ACTION_CLOSE = "close"
+const val CAMD_ACTION_CLOSE_ALL = "close_all"
+
+val CAMD_WINDOW_CAMERA_IDS: List<Int> = listOf(8, 9, 4, 5, 0, 1, 3)
+const val CAMD_WINDOW_DEFAULT_CAMERA = 8
 const val CAMD_WINDOW_DEFAULT_X = 2
 const val CAMD_WINDOW_DEFAULT_Y = 55
 const val CAMD_WINDOW_DEFAULT_W = 40
@@ -64,6 +76,16 @@ fun camdWindowCloseLine(cameraId: Int): String {
     return "CLOSE ${normalizeCamdWindowCamera(cameraId)}"
 }
 
+/** Status polls must not start the service. Every other line is a command. */
+fun camdCommandWakesService(line: String): Boolean =
+    !line.trim().equals("STATUS", ignoreCase = true)
+
+fun isCamdPortClosed(error: Throwable?): Boolean = when (error) {
+    is ConnectException -> true
+    is SocketTimeoutException -> error.message.orEmpty().contains("connect", ignoreCase = true)
+    else -> false
+}
+
 object CamdWindowClient {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
@@ -76,28 +98,151 @@ object CamdWindowClient {
         send(context, camdWindowCloseLine(cameraId))
     }
 
+    fun fetchStatus(): CamdServiceStatus? =
+        command("STATUS", readTimeoutMs = 2_000).getOrNull()?.let(::parseCamdStatusReply)
+
+    fun command(
+        line: String,
+        readTimeoutMs: Int = 20_000,
+        context: Context? = null,
+    ): Result<String> {
+        val first = exchange(line, readTimeoutMs, connectTimeoutMs = 1_500)
+        if (first.isSuccess || context == null || !camdCommandWakesService(line)) return first
+        if (!isCamdPortClosed(first.exceptionOrNull())) return first
+        context.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
+        val deadline = System.nanoTime() + 4_000_000_000L
+        var last = first
+        while (System.nanoTime() < deadline) {
+            Thread.sleep(250)
+            last = exchange(line, readTimeoutMs, connectTimeoutMs = 500)
+            if (last.isSuccess || !isCamdPortClosed(last.exceptionOrNull())) return last
+        }
+        return last
+    }
+
+    private fun exchange(line: String, readTimeoutMs: Int, connectTimeoutMs: Int): Result<String> =
+        runCatching {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress("127.0.0.1", CAMD_WINDOW_PORT), connectTimeoutMs)
+                socket.soTimeout = readTimeoutMs
+                val out = socket.getOutputStream()
+                out.write((line + "\n").toByteArray(Charsets.UTF_8))
+                out.flush()
+                val reply = socket.getInputStream().bufferedReader().readLine().orEmpty()
+                if (reply.startsWith("ERR") || reply.contains("state=error")) {
+                    error(reply.ifBlank { "empty" })
+                }
+                reply
+            }
+        }
+
     private fun send(context: Context, line: String) {
         val app = context.applicationContext
         io.execute {
-            if (runCatching { exchange(line) }.isFailure) {
+            if (command(line, context = app).isFailure) {
                 main.post {
                     Toast.makeText(app, app.getString(R.string.camd_window_unreachable), Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
+}
 
-    private fun exchange(line: String) {
-        Socket().use { socket ->
-            socket.connect(InetSocketAddress("127.0.0.1", CAMD_WINDOW_PORT), 1500)
-            socket.soTimeout = 20_000
-            val out = socket.getOutputStream()
-            out.write((line + "\n").toByteArray(Charsets.UTF_8))
-            out.flush()
-            val reply = socket.getInputStream().bufferedReader().readLine().orEmpty()
-            if (reply.startsWith("ERR") || reply.contains("state=error")) {
-                error(reply)
-            }
+data class CamdServiceStatus(
+    val windows: List<Int>,
+    val avm: String,
+    val keepAvm: Boolean,
+)
+
+data class CamdAutomationWindowArgs(
+    val mode: String,
+    val x: Int,
+    val y: Int,
+    val w: Int,
+    val h: Int,
+)
+
+fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(CAMD_PACKAGE_NAME, PackageManager.PackageInfoFlags.of(0))
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(CAMD_PACKAGE_NAME, 0)
         }
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
+
+/** `OK windows=none|4,5 avm=running|stopped keep_avm=0|1` */
+fun parseCamdStatusReply(reply: String): CamdServiceStatus? {
+    val text = reply.trim()
+    if (!text.startsWith("OK")) return null
+    val body = text.removePrefix("OK").trim()
+    val windows = Regex("""windows=(\S+)""").find(body)?.groupValues?.get(1) ?: return null
+    val avm = Regex("""avm=(\S+)""").find(body)?.groupValues?.get(1) ?: return null
+    val keep = Regex("""keep_avm=([01])""").find(body)?.groupValues?.get(1) ?: return null
+    val ids = if (windows == "none") {
+        emptyList()
+    } else {
+        windows.split(',').mapNotNull { it.toIntOrNull() }
+    }
+    return CamdServiceStatus(windows = ids, avm = avm, keepAvm = keep == "1")
+}
+
+fun camdKeepAvmCommandLine(keepStopped: Boolean): String =
+    if (keepStopped) "AVM ON" else "AVM OFF"
+
+fun formatCamdAutomationWindowArgs(mode: String, x: Int, y: Int, w: Int, h: Int): String =
+    if (mode == CAMD_ACTION_OPEN) "$CAMD_ACTION_OPEN $x $y $w $h" else mode
+
+fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
+    val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    if (parts.isEmpty()) return null
+    val mode = parts[0].lowercase(Locale.US)
+    if (mode != CAMD_ACTION_OPEN && mode != CAMD_ACTION_CLOSE && mode != CAMD_ACTION_CLOSE_ALL) {
+        return null
+    }
+    if (mode != CAMD_ACTION_OPEN) {
+        if (parts.size != 1) return null
+        return CamdAutomationWindowArgs(
+            mode = mode,
+            x = CAMD_WINDOW_DEFAULT_X,
+            y = CAMD_WINDOW_DEFAULT_Y,
+            w = CAMD_WINDOW_DEFAULT_W,
+            h = CAMD_WINDOW_DEFAULT_H,
+        )
+    }
+    if (parts.size != 5) return null
+    return CamdAutomationWindowArgs(
+        mode = mode,
+        x = parts[1].toIntOrNull() ?: return null,
+        y = parts[2].toIntOrNull() ?: return null,
+        w = parts[3].toIntOrNull() ?: return null,
+        h = parts[4].toIntOrNull() ?: return null,
+    )
+}
+
+fun camdWindowGeometryIssue(x: Int, y: Int, w: Int, h: Int): String? {
+    if (w !in 5..100 || h !in 5..100) return "Ширина и высота окна: 5–100 %"
+    if (x !in 0..(100 - w) || y !in 0..(100 - h)) return "Окно выходит за экран"
+    return null
+}
+
+/** Command line for an automation, or null when the saved fields are not a valid window request. */
+fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
+    val args = parseCamdAutomationWindowArgs(raw) ?: return null
+    return when (args.mode) {
+        CAMD_ACTION_CLOSE_ALL -> "CLOSE"
+        CAMD_ACTION_CLOSE -> {
+            if (cameraId !in CAMD_WINDOW_CAMERA_IDS) null else "CLOSE $cameraId"
+        }
+        CAMD_ACTION_OPEN -> {
+            if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
+            if (camdWindowGeometryIssue(args.x, args.y, args.w, args.h) != null) return null
+            camdWindowOpenLine(cameraId, args.x, args.y, args.w, args.h)
+        }
+        else -> null
     }
 }

@@ -49,7 +49,7 @@ class WidgetConfigCodecCamdWindowTest {
         )
         assertFalse(serialized.contains("\"camdWindowCameraId\":99"))
         val parsed = parseWidgetConfigsFromString(serialized).single()
-        assertEquals(4, parsed.camdWindowCameraId)
+        assertEquals(8, parsed.camdWindowCameraId)
         assertEquals(20, parsed.camdWindowX)
         assertEquals(80, parsed.camdWindowW)
     }

@@ -270,7 +270,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 6,
+  "catalogVersion": 7,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -328,7 +328,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **6** — HFP phone dial: builtin `place_call` / `answer_call` / `hangup_call` + сигналы `phone_*`;
+- `catalogVersion` (сейчас **7** — окна камер `camd_window` и удержание штатного AVM `camd_keep_avm`;
+  **6** — HFP phone dial: builtin `place_call` / `answer_call` / `hangup_call` + сигналы `phone_*`;
   **5** — read-only обогащение гео/модема отдельными signal id;
   **4** — у `can_command` добавлены `operations`, `signalId` и `write`, а у builtin `set_media_volume` — `write`).
 
@@ -509,7 +510,7 @@ UI правил и HTTP API получали их одновременно. Су
 Дополнительно для голоса (не отдельные signal id): таблица **`voiceAliasesRu`** в выдаче
 `/v1/catalog` (код: `ExternalApiVoiceAliasesRu` — label + curated RU-фразы для сигналов и
 действий). `catalogVersion = 3` (+ aliases); схема write — 4; гео/модем enrichment — **5**;
-HFP phone — **6**.
+HFP phone — **6**; окна камер и удержание штатного AVM — **7**.
 
 ### Не в блокирующем списке v1
 
@@ -524,7 +525,7 @@ HFP phone — **6**.
 | Класс | Примеры | Поведение API |
 |-------|---------|----------------|
 | `safe` | чтение; медиа play/pause; `set_media_volume`; `show_toast`; `open_main_screen`; `delay` | invoke при базовом токене |
-| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, `place_call` / `answer_call` / `hangup_call`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
+| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, `place_call` / `answer_call` / `hangup_call`, `camd_window` / `camd_keep_avm`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
 | `dangerous` | `adb_set_tcp`, `adb_shell`, `adb_force_stop` | только если в Monitor включён тумблер опасных команд |
 
 Точная разметка `safety` по каждому builtin/can_command — в `ExternalApiActionSafety.kt` + поле `safety` в `/v1/catalog`.

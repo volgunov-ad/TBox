@@ -353,6 +353,8 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.PLACE_CALL to "Позвонить",
         AutomationBuiltinActionType.ANSWER_CALL to "Ответить на звонок",
         AutomationBuiltinActionType.HANGUP_CALL to "Сбросить звонок",
+        AutomationBuiltinActionType.CAMD_WINDOW to "Окно камеры",
+        AutomationBuiltinActionType.CAMD_KEEP_AVM to "Держать штатный AVM отключенным",
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(

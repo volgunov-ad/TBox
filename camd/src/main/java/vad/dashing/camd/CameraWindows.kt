@@ -2,7 +2,6 @@ package vad.dashing.camd
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -11,18 +10,18 @@ import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.TextureView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.TextView
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * One overlay per camera. Frames are read from files the root grabber writes.
- * Opening the same camera again only moves the window.
+ * One overlay per camera. The root grabber publishes raw UYVY in a shared file.
+ * This window paints it with a GPU shader. Opening the same camera again only moves the window.
  */
 class CameraWindows(private val context: Context) {
 
@@ -224,7 +223,7 @@ class CameraWindows(private val context: Context) {
                     place(live.params, command)
                     windowManager().addView(live.root, live.params)
                     views[command.inputId] = live
-                    live.pump()
+                    live.start()
                 }
                 result.ok = true
             } catch (error: Throwable) {
@@ -241,7 +240,7 @@ class CameraWindows(private val context: Context) {
         val latch = CountDownLatch(1)
         main.post {
             val live = views.remove(inputId)
-            live?.running = false
+            live?.stop()
             if (live != null) {
                 runCatching { windowManager().removeView(live.root) }
             }
@@ -335,16 +334,16 @@ class CameraWindows(private val context: Context) {
 
     private inner class LiveWindow(val id: Int, val input: CameraInput) {
         val root: FrameLayout = FrameLayout(context)
-        val image: ImageView = ImageView(context)
+        val picture: TextureView = TextureView(context)
         val caption: TextView = TextView(context)
         val params: WindowManager.LayoutParams
-        @Volatile var running: Boolean = true
+        private val renderer: UyvyRenderer
 
         init {
-            image.scaleType = ImageView.ScaleType.FIT_XY
-            image.setBackgroundColor(Color.BLACK)
+            picture.isOpaque = true
+            root.setBackgroundColor(Color.BLACK)
             root.addView(
-                image,
+                picture,
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
@@ -364,7 +363,8 @@ class CameraWindows(private val context: Context) {
             close.setTextColor(Color.WHITE)
             close.gravity = Gravity.CENTER
             close.textSize = 36f
-            close.setBackgroundColor(0xCC000000.toInt())
+            close.setShadowLayer(10f, 0f, 0f, Color.BLACK)
+            close.setBackgroundColor(Color.TRANSPARENT)
             close.setOnClickListener {
                 Thread({ this@CameraWindows.close(id) }, "camd-close-$id").start()
             }
@@ -386,63 +386,18 @@ class CameraWindows(private val context: Context) {
                 PixelFormat.TRANSLUCENT
             )
             params.gravity = Gravity.START or Gravity.TOP
+            renderer = UyvyRenderer(picture, File(GrabberScripts.frame(id)), main) {
+                caption.visibility = View.GONE
+            }
         }
 
-        fun pump() {
-            Thread({
-                var modified = 0L
-                var bitmap: Bitmap? = null
-                while (running) {
-                    val frame = readFrame(id, modified)
-                    if (frame != null) {
-                        modified = frame.modified
-                        main.post {
-                            if (!running) return@post
-                            val current = bitmap
-                            val target = if (current != null && current.width == frame.width && current.height == frame.height) {
-                                current
-                            } else {
-                                Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888).also { bitmap = it }
-                            }
-                            target.setPixels(frame.pixels, 0, frame.width, 0, 0, frame.width, frame.height)
-                            image.setImageBitmap(target)
-                            caption.visibility = View.GONE
-                        }
-                    }
-                    Thread.sleep(30)
-                }
-            }, "camd-win-$id").apply { isDaemon = true }.start()
+        fun start() {
+            renderer.start()
         }
-    }
 
-    private class Decoded(val width: Int, val height: Int, val pixels: IntArray, val modified: Long)
-
-    private fun readFrame(id: Int, previousModified: Long): Decoded? {
-        val file = File(GrabberScripts.frame(id))
-        if (!file.canRead()) return null
-        val modified = file.lastModified()
-        if (modified == previousModified) return null
-        val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null
-        if (bytes.size < 16) return null
-        val width = le(bytes, 0)
-        val height = le(bytes, 4)
-        if (width <= 0 || height <= 0 || width > 1920 || height > 1200) return null
-        val pixelsSize = width * height
-        if (bytes.size < 16 + pixelsSize * 4) return null
-        val pixels = IntArray(pixelsSize)
-        var offset = 16
-        for (i in pixels.indices) {
-            pixels[i] = le(bytes, offset)
-            offset += 4
+        fun stop() {
+            renderer.stop()
         }
-        return Decoded(width, height, pixels, modified)
-    }
-
-    private fun le(bytes: ByteArray, offset: Int): Int {
-        return (bytes[offset].toInt() and 0xFF) or
-            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
-            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
     }
 
     private companion object {

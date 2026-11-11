@@ -27,6 +27,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vad.dashing.tbox.AppPermissions
 import vad.dashing.tbox.AUTOMATION_TRIGGER_ID_MAX_CHARS
+import vad.dashing.tbox.CAMD_ACTION_CLOSE
+import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
+import vad.dashing.tbox.CAMD_ACTION_OPEN
+import vad.dashing.tbox.CamdAutomationWindowArgs
+import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_W
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_X
+import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_Y
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_TOGGLE_INT
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
@@ -53,6 +63,8 @@ import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
 import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
+import vad.dashing.tbox.formatCamdAutomationWindowArgs
+import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
 import vad.dashing.tbox.automation.floatingPanelEnabledOpLabel
 import vad.dashing.tbox.automation.floatingPanelEnabledOpToInt
@@ -689,6 +701,7 @@ private fun BuiltinActionFields(
                         AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET ->
                             vad.dashing.tbox.ACC_CRUISE_TARGET_KMH_DEFAULT
                         AutomationBuiltinActionType.CRUISE_NUDGE -> 1
+                        AutomationBuiltinActionType.CAMD_WINDOW -> CAMD_WINDOW_DEFAULT_CAMERA
                         else -> 0
                     },
                     boolValue = type == AutomationBuiltinActionType.WIFI_SET_ENABLED ||
@@ -714,6 +727,14 @@ private fun BuiltinActionFields(
                             type == AutomationBuiltinActionType.CRUISE_ACTIVATE_AT_CURRENT_SPEED ||
                             type == AutomationBuiltinActionType.CRUISE_NUDGE ->
                             ""
+                        type == AutomationBuiltinActionType.CAMD_WINDOW ->
+                            formatCamdAutomationWindowArgs(
+                                CAMD_ACTION_OPEN,
+                                CAMD_WINDOW_DEFAULT_X,
+                                CAMD_WINDOW_DEFAULT_Y,
+                                CAMD_WINDOW_DEFAULT_W,
+                                CAMD_WINDOW_DEFAULT_H,
+                            )
                         else -> ""
                     },
                 ),
@@ -1146,6 +1167,28 @@ private fun BuiltinActionFields(
             PhoneCallPermissionGrantButton()
         }
 
+        AutomationBuiltinActionType.CAMD_WINDOW -> CamdWindowActionFields(action, onChange)
+
+        AutomationBuiltinActionType.CAMD_KEEP_AVM -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Держать штатный AVM отключенным",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = "Включено — штатный AVM остановлен и не запускается после перезагрузки. " +
+                    "Выключено — сырые окна закрываются и AVM сразу запускается. " +
+                    "Если служба не слушает порт, команда попробует её запустить.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         AutomationBuiltinActionType.ANSWER_CALL,
         AutomationBuiltinActionType.HANGUP_CALL,
         -> Column(
@@ -1163,6 +1206,148 @@ private fun BuiltinActionFields(
 
         else -> Unit
     }
+}
+
+@Composable
+private fun CamdWindowActionFields(
+    action: AutomationAction.Builtin,
+    onChange: (AutomationAction) -> Unit,
+) {
+    val args = parseCamdAutomationWindowArgs(action.stringValue) ?: CamdAutomationWindowArgs(
+        mode = CAMD_ACTION_OPEN,
+        x = CAMD_WINDOW_DEFAULT_X,
+        y = CAMD_WINDOW_DEFAULT_Y,
+        w = CAMD_WINDOW_DEFAULT_W,
+        h = CAMD_WINDOW_DEFAULT_H,
+    )
+    val camera = if (action.intValue in CAMD_WINDOW_CAMERA_IDS) {
+        action.intValue
+    } else {
+        CAMD_WINDOW_DEFAULT_CAMERA
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AutomationDropdown(
+            label = "Окно",
+            value = args.mode,
+            options = listOf(CAMD_ACTION_OPEN, CAMD_ACTION_CLOSE, CAMD_ACTION_CLOSE_ALL),
+            optionLabel = { mode ->
+                when (mode) {
+                    CAMD_ACTION_CLOSE -> "Закрыть эту камеру"
+                    CAMD_ACTION_CLOSE_ALL -> "Закрыть все"
+                    else -> "Открыть"
+                }
+            },
+            onValueChange = { mode ->
+                onChange(
+                    action.copy(
+                        intValue = camera,
+                        stringValue = formatCamdAutomationWindowArgs(
+                            mode,
+                            args.x,
+                            args.y,
+                            args.w,
+                            args.h,
+                        ),
+                    ),
+                )
+            },
+        )
+        if (args.mode != CAMD_ACTION_CLOSE_ALL) {
+            val cameraLabels = CAMD_WINDOW_CAMERA_IDS.associateWith { id ->
+                stringResource(camdWindowCameraTitle(id))
+            }
+            AutomationDropdown(
+                label = "Камера",
+                value = camera,
+                options = CAMD_WINDOW_CAMERA_IDS,
+                optionLabel = { id -> cameraLabels[id] ?: id.toString() },
+                onValueChange = { onChange(action.copy(intValue = it)) },
+            )
+        }
+        if (args.mode == CAMD_ACTION_OPEN) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = formatCamdAutomationWindowArgs(
+                                args.mode,
+                                next,
+                                args.y,
+                                args.w,
+                                args.h,
+                            ),
+                        ),
+                    )
+                }
+                CamdPercentField("Сверху, %", args.y, Modifier.weight(1f)) { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = formatCamdAutomationWindowArgs(
+                                args.mode,
+                                args.x,
+                                next,
+                                args.w,
+                                args.h,
+                            ),
+                        ),
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CamdPercentField("Ширина, %", args.w, Modifier.weight(1f)) { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = formatCamdAutomationWindowArgs(
+                                args.mode,
+                                args.x,
+                                args.y,
+                                next,
+                                args.h,
+                            ),
+                        ),
+                    )
+                }
+                CamdPercentField("Высота, %", args.h, Modifier.weight(1f)) { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = formatCamdAutomationWindowArgs(
+                                args.mode,
+                                args.x,
+                                args.y,
+                                args.w,
+                                next,
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+        Text(
+            text = "Нужно приложение «Камеры ГУ». Если служба не слушает порт, команда попробует её запустить. " +
+                "Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM.",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun CamdPercentField(
+    label: String,
+    value: Int,
+    modifier: Modifier,
+    onValue: (Int) -> Unit,
+) {
+    AutomationIntField(
+        label = label,
+        value = value,
+        onValueChange = { raw ->
+            if (raw == Int.MIN_VALUE) return@AutomationIntField
+            onValue(raw)
+        },
+        modifier = modifier,
+    )
 }
 
 /** Settings / first-failure path for API-only users who never tap the dial tile (S9). */
@@ -1351,6 +1536,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.PLACE_CALL -> "Позвонить (HFP)"
     AutomationBuiltinActionType.ANSWER_CALL -> "Ответить на звонок (HFP)"
     AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
+    AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
+    AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

@@ -874,7 +874,21 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * Hang up / reject the current HFP call (best-effort; may fail without privileges).
      * No parameters. Gated by [vad.dashing.tbox.phone.PhoneCallStateRepository] capabilities.
      */
-    HANGUP_CALL("hangup_call");
+    HANGUP_CALL("hangup_call"),
+    /**
+     * Open or close a «Камеры ГУ» window.
+     * [AutomationAction.Builtin.intValue] is the camera id (4/5/8/9/0/1/3).
+     * [AutomationAction.Builtin.stringValue] is `open <x> <y> <w> <h>` (screen percent),
+     * `close`, or `close_all`. If the service is not listening, the command asks it to start
+     * and retries. A status poll does not start it.
+     */
+    CAMD_WINDOW("camd_window"),
+    /**
+     * «Держать штатный AVM отключенным».
+     * [AutomationAction.Builtin.boolValue] `true` sends `AVM ON` (keep stopped).
+     * `false` sends `AVM OFF`: raw windows close and stock AVMapp starts.
+     */
+    CAMD_KEEP_AVM("camd_keep_avm");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

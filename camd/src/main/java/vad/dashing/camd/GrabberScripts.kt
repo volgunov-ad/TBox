@@ -13,10 +13,10 @@ object GrabberScripts {
     const val BEAT = "/data/local/tmp/camd-grab.beat"
     const val LOG = "/data/local/tmp/camd-grab.log"
     const val ARM = "/data/local/tmp/camd-grab.arm"
-    const val FRAME_DIR = "/data/local/tmp"
+    const val FRAME_RAM = "/mnt/camd-ram"
 
     @JvmStatic
-    fun frame(id: Int): String = "$FRAME_DIR/camd-frame-$id.bin"
+    fun frame(id: Int): String = "$FRAME_RAM/camd-uyvy-$id"
 
     fun launcher(nonce: String, stopAvm: Boolean): String {
         val lines = ArrayList<String>()
