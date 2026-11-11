@@ -10,6 +10,8 @@ const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
  *
  * [FULLSCREEN] is the picker label «Обычный»: raw `startActivity`, or DCL `app_area`
  * when DCL environment mode is on.
+ * [DCL_FULL_WIDTH] is opt-in «На всю ширину (DCL)» → DCL `launchApp(mode=full_width)`
+ * (bars visible, ADAS hidden, not immersive).
  * [DCL_FULLSCREEN] is opt-in «На весь экран (DCL)» → DCL `launchApp(mode=fullscreen)`.
  * [STOCK_WINDOW] uses Adayo A10 launcher ActivityView (`com.adayo.launcher.LAUNCH_APP`).
  * [VIRTUAL_DISPLAY] starts the app on a chosen HU display via localhost ADB
@@ -17,6 +19,7 @@ const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
  */
 enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes: Int) {
     FULLSCREEN("fullscreen", R.string.widget_app_launcher_mode_fullscreen),
+    DCL_FULL_WIDTH("dcl_full_width", R.string.widget_app_launcher_mode_dcl_full_width),
     DCL_FULLSCREEN("dcl_fullscreen", R.string.widget_app_launcher_mode_dcl_fullscreen),
     FREEFORM("freeform", R.string.widget_app_launcher_mode_freeform),
     STOCK_WINDOW("stock_window", R.string.widget_app_launcher_mode_stock_window),

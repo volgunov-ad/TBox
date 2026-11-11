@@ -32,6 +32,8 @@ object DclLauncherApiContract {
     const val KEY_API_VERSION = "apiVersion"
     const val KEY_LAUNCH_FULLSCREEN = "launchFullscreen"
     const val KEY_LAUNCH_APP_AREA = "launchAppArea"
+    /** Optional v1.3+ capability; absent key is treated as unknown (attempt launch). */
+    const val KEY_LAUNCH_FULL_WIDTH = "launchFullWidth"
     const val KEY_UI_STATE_QUERY = "uiStateQuery"
     const val KEY_UI_STATE_EVENTS = "uiStateEvents"
     const val KEY_UI_CHROME_QUERY = "uiChromeQuery"
@@ -68,12 +70,17 @@ object DclLauncherApiContract {
     const val EXTRA_DISPLAY_ID = "displayId"
 
     const val MODE_APP_AREA = "app_area"
+    const val MODE_FULL_WIDTH = "full_width"
     const val MODE_FULLSCREEN = "fullscreen"
 
     const val SCREEN_MODE_HOME = "home"
     const val SCREEN_MODE_SINGLE = "single"
+    const val SCREEN_MODE_FULL_WIDTH = "full_width"
     const val SCREEN_MODE_FULLSCREEN = "fullscreen"
     const val SCREEN_MODE_SPLIT = "split"
+
+    /** Typical app-area bounds for [MODE_FULL_WIDTH] / [SCREEN_MODE_FULL_WIDTH] (vendor gist v1.3). */
+    const val DEFAULT_FULL_WIDTH_APP_AREA_BOUNDS = "0,51,1920,998"
 
     const val STATUS_OK = "ok"
     const val STATUS_ACCEPTED = "accepted"

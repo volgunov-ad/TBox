@@ -108,6 +108,19 @@ object DclAppLaunchHelper {
         )
     }
 
+    fun launchFullWidth(
+        context: Context,
+        packageName: String,
+        onRawFallback: (() -> Unit)? = null,
+    ) {
+        launch(
+            context = context,
+            packageName = packageName,
+            mode = DclLauncherApiContract.MODE_FULL_WIDTH,
+            onRawFallback = onRawFallback,
+        )
+    }
+
     fun launchFullscreen(
         context: Context,
         packageName: String,

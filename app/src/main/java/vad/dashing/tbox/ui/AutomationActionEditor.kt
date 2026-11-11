@@ -427,6 +427,7 @@ private fun LaunchApplicationFields(
         optionLabel = {
             when (it) {
                 AppLauncherLaunchMode.FULLSCREEN -> "Обычный"
+                AppLauncherLaunchMode.DCL_FULL_WIDTH -> "На всю ширину (DCL)"
                 AppLauncherLaunchMode.DCL_FULLSCREEN -> "На весь экран (DCL)"
                 AppLauncherLaunchMode.FREEFORM -> "Freeform"
                 AppLauncherLaunchMode.STOCK_WINDOW -> "Окно штатного лаунчера"

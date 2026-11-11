@@ -247,7 +247,7 @@ enum class AutomationSignalId(
     DCL_TOP_BAR_VISIBLE("dcl_top_bar_visible", AutomationSignalValueType.STATE),
     /** DCL bottom chrome bar visible. */
     DCL_BOTTOM_BAR_VISIBLE("dcl_bottom_bar_visible", AutomationSignalValueType.STATE),
-    /** DCL screen mode: `home` / `single` / `fullscreen` / `split`. */
+    /** DCL screen mode: `home` / `single` / `full_width` / `fullscreen` / `split`. */
     DCL_SCREEN_MODE("dcl_screen_mode", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
     APP_THEME("app_theme", AutomationSignalValueType.STATE),

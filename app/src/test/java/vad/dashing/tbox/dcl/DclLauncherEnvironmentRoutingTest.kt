@@ -31,18 +31,31 @@ class DclLauncherEnvironmentRoutingTest {
         assertNull(
             DclLauncherEnvironmentRouting.dclLaunchModeFor(
                 envEnabled = false,
+                launchMode = AppLauncherLaunchMode.DCL_FULL_WIDTH,
+            ),
+        )
+        assertNull(
+            DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                envEnabled = false,
                 launchMode = AppLauncherLaunchMode.DCL_FULLSCREEN,
             ),
         )
     }
 
     @Test
-    fun dclLaunchMode_envOn_mapsOrdinaryAndDclFullscreen() {
+    fun dclLaunchMode_envOn_mapsOrdinaryFullWidthAndDclFullscreen() {
         assertEquals(
             DclLauncherApiContract.MODE_APP_AREA,
             DclLauncherEnvironmentRouting.dclLaunchModeFor(
                 envEnabled = true,
                 launchMode = AppLauncherLaunchMode.FULLSCREEN,
+            ),
+        )
+        assertEquals(
+            DclLauncherApiContract.MODE_FULL_WIDTH,
+            DclLauncherEnvironmentRouting.dclLaunchModeFor(
+                envEnabled = true,
+                launchMode = AppLauncherLaunchMode.DCL_FULL_WIDTH,
             ),
         )
         assertEquals(
@@ -80,7 +93,11 @@ class DclLauncherEnvironmentRoutingTest {
             showStockWindowMode = true,
         )
         assertEquals(
-            listOf(AppLauncherLaunchMode.FULLSCREEN, AppLauncherLaunchMode.DCL_FULLSCREEN),
+            listOf(
+                AppLauncherLaunchMode.FULLSCREEN,
+                AppLauncherLaunchMode.DCL_FULL_WIDTH,
+                AppLauncherLaunchMode.DCL_FULLSCREEN,
+            ),
             fresh,
         )
 
@@ -92,6 +109,7 @@ class DclLauncherEnvironmentRoutingTest {
         assertEquals(
             listOf(
                 AppLauncherLaunchMode.FULLSCREEN,
+                AppLauncherLaunchMode.DCL_FULL_WIDTH,
                 AppLauncherLaunchMode.DCL_FULLSCREEN,
                 AppLauncherLaunchMode.FREEFORM,
             ),
@@ -120,6 +138,11 @@ class DclLauncherEnvironmentRoutingTest {
         assertNull(
             DclLauncherEnvironmentRouting.remapWidgetToOrdinary(
                 freeform.copy(launcherLaunchMode = AppLauncherLaunchMode.FULLSCREEN),
+            ),
+        )
+        assertNull(
+            DclLauncherEnvironmentRouting.remapWidgetToOrdinary(
+                freeform.copy(launcherLaunchMode = AppLauncherLaunchMode.DCL_FULL_WIDTH),
             ),
         )
         assertNull(
@@ -262,6 +285,7 @@ class DclLauncherEnvironmentRoutingTest {
                     apiVersion = 1,
                     launchFullscreen = true,
                     launchAppArea = true,
+                    launchFullWidth = null,
                     uiStateQuery = true,
                     uiStateEvents = true,
                     adasPanel = true,
@@ -277,6 +301,7 @@ class DclLauncherEnvironmentRoutingTest {
                     apiVersion = 1,
                     launchFullscreen = true,
                     launchAppArea = false,
+                    launchFullWidth = null,
                     uiStateQuery = true,
                     uiStateEvents = true,
                     adasPanel = false,
@@ -297,6 +322,7 @@ class DclLauncherEnvironmentRoutingTest {
                     apiVersion = 1,
                     launchFullscreen = true,
                     launchAppArea = false,
+                    launchFullWidth = null,
                     uiStateQuery = false,
                     uiStateEvents = false,
                     adasPanel = false,
@@ -312,6 +338,73 @@ class DclLauncherEnvironmentRoutingTest {
                     apiVersion = 1,
                     launchFullscreen = true,
                     launchAppArea = false,
+                    launchFullWidth = null,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+        // Absent launchFullWidth key → attempt Binder (not treated as missing).
+        assertFalse(
+            dclModeCapabilityMissing(
+                DclLauncherApiContract.MODE_FULL_WIDTH,
+                DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = true,
+                    launchAppArea = true,
+                    launchFullWidth = null,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+        assertTrue(
+            dclModeCapabilityMissing(
+                DclLauncherApiContract.MODE_FULL_WIDTH,
+                DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = true,
+                    launchAppArea = true,
+                    launchFullWidth = false,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+        assertFalse(
+            dclModeCapabilityMissing(
+                DclLauncherApiContract.MODE_FULL_WIDTH,
+                DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = true,
+                    launchAppArea = true,
+                    launchFullWidth = true,
+                    uiStateQuery = false,
+                    uiStateEvents = false,
+                    adasPanel = false,
+                    screenModes = emptyList(),
+                    splitSupported = null,
+                ),
+            ),
+        )
+        assertFalse(dclCanLaunchFullWidth(available = true, capabilities = null))
+        assertTrue(
+            dclCanLaunchFullWidth(
+                available = true,
+                capabilities = DclCapabilities(
+                    apiVersion = 1,
+                    launchFullscreen = false,
+                    launchAppArea = false,
+                    launchFullWidth = null,
                     uiStateQuery = false,
                     uiStateEvents = false,
                     adasPanel = false,

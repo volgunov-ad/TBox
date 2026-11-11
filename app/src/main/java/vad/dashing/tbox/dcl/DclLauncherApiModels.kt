@@ -43,6 +43,13 @@ data class DclCapabilities(
     val apiVersion: Int,
     val launchFullscreen: Boolean,
     val launchAppArea: Boolean,
+    /**
+     * Optional `launchFullWidth` from getCapabilities.
+     * `null` = key absent (attempt Binder launch; unsupported → raw fallback).
+     * `false` = explicitly unsupported → treat as capability missing.
+     * `true` = gate allows launch.
+     */
+    val launchFullWidth: Boolean?,
     val uiStateQuery: Boolean,
     val uiStateEvents: Boolean,
     val adasPanel: Boolean,
@@ -237,6 +244,13 @@ object DclLauncherApiCodec {
                     DclLauncherApiContract.KEY_LAUNCH_APP_AREA,
                     false,
                 ),
+                launchFullWidth = if (
+                    extrasContains(bundle, DclLauncherApiContract.KEY_LAUNCH_FULL_WIDTH)
+                ) {
+                    safeBoolean(bundle, DclLauncherApiContract.KEY_LAUNCH_FULL_WIDTH, false)
+                } else {
+                    null
+                },
                 uiStateQuery = uiStateQuery,
                 uiStateEvents = uiStateEvents,
                 adasPanel = safeBoolean(bundle, DclLauncherApiContract.KEY_ADAS_PANEL, false),

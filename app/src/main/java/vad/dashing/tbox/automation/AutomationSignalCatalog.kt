@@ -976,10 +976,10 @@ object AutomationSignalCatalog {
             AutomationSignalId.DCL_SCREEN_MODE,
             "DCL: режим экрана",
             appOnly,
-            listOf("home", "single", "fullscreen", "split"),
-            typicalRange = "home / single / fullscreen / split из DCL screenMode. Типичный рецепт: " +
-                "скрыть плавающие панели при screenMode=fullscreen или когда бары скрыты " +
-                "(state_equals + toggle_hide_floating_panels).",
+            listOf("home", "single", "full_width", "fullscreen", "split"),
+            typicalRange = "home / single / full_width / fullscreen / split из DCL screenMode. " +
+                "Типичный рецепт: скрыть плавающие панели при screenMode=fullscreen или когда " +
+                "бары скрыты (state_equals + toggle_hide_floating_panels).",
         ),
         state(
             AutomationSignalId.APP_THEME_MODE,

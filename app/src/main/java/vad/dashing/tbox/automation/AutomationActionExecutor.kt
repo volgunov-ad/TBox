@@ -279,6 +279,7 @@ class AutomationActionExecutor(
             }
 
             AppLauncherLaunchMode.FULLSCREEN,
+            AppLauncherLaunchMode.DCL_FULL_WIDTH,
             AppLauncherLaunchMode.DCL_FULLSCREEN,
             -> {
                 if (appContext.packageManager.getLaunchIntentForPackage(packageName) == null) {

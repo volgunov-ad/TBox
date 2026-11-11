@@ -83,12 +83,13 @@ object DclLauncherApiClient {
             )
         }
         if (mode != DclLauncherApiContract.MODE_APP_AREA &&
+            mode != DclLauncherApiContract.MODE_FULL_WIDTH &&
             mode != DclLauncherApiContract.MODE_FULLSCREEN
         ) {
             return DclCallResult.Error(
                 DclApiError(
                     errorCode = DclLauncherApiContract.ERROR_INVALID_ARGS,
-                    message = "mode must be app_area or fullscreen",
+                    message = "mode must be app_area, full_width, or fullscreen",
                 ),
             )
         }
