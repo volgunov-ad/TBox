@@ -509,6 +509,7 @@
     <!-- Опция для проблемных проигрывателей: anymani -->
     <string name="widget_music_keep_player_foreground">Оставить плеер на переднем плане после его запуска</string>
     <string name="widget_music_keep_player_foreground_desc">При запуске плеера не возвращает лаунчер на передний план. Решает проблему с VKX и другими чувствительными плеерами</string>
+    <string name="widget_music_player_launch_mode_note">Режим запуска плеера (открытие по обложке / двойному тапу и холодный play/pause без MediaSession) — тот же выбор, что у ярлыка приложения.</string>
     <string name="widget_music_follow_playback">Следовать за воспроизведением</string>
     <string name="widget_music_follow_playback_desc">Виджет переключается на тот плеер из списка, который сейчас играет. После ручного свайпа пауза 15 с</string>
     <string name="widget_music_show_like_button">Кнопка «Нравится»</string>

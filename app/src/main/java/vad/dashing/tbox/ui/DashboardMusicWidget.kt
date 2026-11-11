@@ -59,7 +59,6 @@ import vad.dashing.tbox.CanDataViewModel
 import vad.dashing.tbox.DashboardWidget
 import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.ui.theme.TboxTextStyles
-import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
 import vad.dashing.tbox.LauncherAppIconPaths
 import vad.dashing.tbox.R
@@ -388,7 +387,8 @@ fun DashboardMusicWidgetItem(
             context = context,
             selectedPackages = selectedPlayers,
             preferredPackage = autoPlayPackage,
-            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
+            keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground, // anymani: передаём флаг
+            launchWidgetConfig = widgetConfig,
         )
         /* Избыточный участок кода
         delay(AUTO_PLAY_VERIFY_DELAY_MS)
@@ -398,7 +398,8 @@ fun DashboardMusicWidgetItem(
                 context = context,
                 selectedPackages = selectedPlayers,
                 preferredPackage = autoPlayPackage,
-                keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground // anymani: передаём флаг
+                keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground, // anymani: передаём флаг
+                launchWidgetConfig = widgetConfig,
             )
         }*/
     }
@@ -503,6 +504,8 @@ fun DashboardMusicWidgetItem(
                     canSendLike = canSendLike,
                     selectedPlayers = selectedPlayers,
                     keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                    widgetConfig = widgetConfig,
+                    settingsViewModel = settingsViewModel,
                     playbackProgress = playbackProgress,
                     context = context,
                 )
@@ -534,6 +537,8 @@ fun DashboardMusicWidgetItem(
                     canSendLike = canSendLike,
                     selectedPlayers = selectedPlayers,
                     keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                    widgetConfig = widgetConfig,
+                    settingsViewModel = settingsViewModel,
                     playbackProgress = playbackProgress,
                     context = context,
                 )
@@ -564,7 +569,7 @@ fun DashboardMusicWidgetItem(
                             onLongClick = onLongClick,
                             onOpenPlayer = {
                                 if (enableInnerInteractions) {
-                                    openSelectedPlayer(context, selectedPackage)
+                                    openSelectedPlayer(context, selectedPackage, widgetConfig, settingsViewModel)
                                 }
                             },
                             modifier = coverModifier
@@ -599,6 +604,8 @@ fun DashboardMusicWidgetItem(
                             canSendLike = canSendLike,
                             selectedPlayers = selectedPlayers,
                             keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                            widgetConfig = widgetConfig,
+                            settingsViewModel = settingsViewModel,
                             playbackProgress = playbackProgress,
                             context = context
                         )
@@ -642,6 +649,8 @@ fun DashboardMusicWidgetItem(
                     canSendLike = canSendLike,
                     selectedPlayers = selectedPlayers,
                     keepPlayerForeground = widgetConfig.mediaKeepPlayerForeground,
+                    widgetConfig = widgetConfig,
+                    settingsViewModel = settingsViewModel,
                     playbackProgress = playbackProgress,
                     context = context
                 )
@@ -674,6 +683,8 @@ private fun MusicWidgetSquareLayout(
     canSendLike: Boolean,
     selectedPlayers: Set<String>,
     keepPlayerForeground: Boolean,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     playbackProgress: Float,
     context: Context,
 ) {
@@ -722,7 +733,7 @@ private fun MusicWidgetSquareLayout(
                         onLongClick = onLongClick,
                         onOpenPlayer = {
                             if (enableInnerInteractions) {
-                                openSelectedPlayer(context, selectedPackage)
+                                openSelectedPlayer(context, selectedPackage, widgetConfig, settingsViewModel)
                             }
                         },
                         modifier = Modifier
@@ -746,6 +757,7 @@ private fun MusicWidgetSquareLayout(
                             selectedPackages = selectedPlayers,
                             preferredPackage = selectedPackage,
                             keepPlayerForeground = keepPlayerForeground,
+                            launchWidgetConfig = widgetConfig,
                         )
                     },
                 )
@@ -873,6 +885,8 @@ private fun MusicWidgetCoverOverlay(
     canSendLike: Boolean,
     selectedPlayers: Set<String>,
     keepPlayerForeground: Boolean,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     playbackProgress: Float,
     context: Context,
 ) {
@@ -885,7 +899,7 @@ private fun MusicWidgetCoverOverlay(
                     .fillMaxSize()
                     .combinedClickableWithSound(
                         enabled = enableInnerInteractions,
-                        onClick = { openSelectedPlayer(context, selectedPackage) },
+                        onClick = { openSelectedPlayer(context, selectedPackage, widgetConfig, settingsViewModel) },
                         onLongClick = onLongClick,
                     ),
                 contentScale = ContentScale.Fit,
@@ -972,6 +986,7 @@ private fun MusicWidgetCoverOverlay(
                         selectedPackages = selectedPlayers,
                         preferredPackage = selectedPackage,
                         keepPlayerForeground = keepPlayerForeground,
+                        launchWidgetConfig = widgetConfig,
                     )
                 },
                 onNext = {
@@ -1079,6 +1094,8 @@ private fun MusicWidgetMainColumn(
     canSendLike: Boolean,
     selectedPlayers: Set<String>,
     keepPlayerForeground: Boolean,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
     playbackProgress: Float,
     context: Context,
 ) {
@@ -1115,7 +1132,7 @@ private fun MusicWidgetMainColumn(
                         onLongClick = onLongClick,
                         onDoubleClick = {
                             if (enableInnerInteractions) {
-                                openSelectedPlayer(context, selectedPackage)
+                                openSelectedPlayer(context, selectedPackage, widgetConfig, settingsViewModel)
                             }
                         }
                     ),
@@ -1172,7 +1189,7 @@ private fun MusicWidgetMainColumn(
                         onLongClick = onLongClick,
                         onDoubleClick = {
                             if (enableInnerInteractions) {
-                                openSelectedPlayer(context, selectedPackage)
+                                openSelectedPlayer(context, selectedPackage, widgetConfig, settingsViewModel)
                             }
                         }
                     )
@@ -1223,7 +1240,8 @@ private fun MusicWidgetMainColumn(
                     context = context,
                     selectedPackages = selectedPlayers,
                     preferredPackage = selectedPackage,
-                    keepPlayerForeground = keepPlayerForeground
+                    keepPlayerForeground = keepPlayerForeground,
+                    launchWidgetConfig = widgetConfig,
                 )
             },
             onNext = {
@@ -1572,7 +1590,12 @@ private fun openNotificationListenerSettings(context: Context) {
     }
 }
 
-private fun openSelectedPlayer(context: Context, packageName: String) {
+private fun openSelectedPlayer(
+    context: Context,
+    packageName: String,
+    widgetConfig: FloatingDashboardWidgetConfig,
+    settingsViewModel: SettingsViewModel,
+) {
     if (packageName.isBlank()) return
     val launchPackage = resolvePlayerLaunchPackage(packageName)
     val resolved = when {
@@ -1581,27 +1604,12 @@ private fun openSelectedPlayer(context: Context, packageName: String) {
             context.packageManager.getLaunchIntentForPackage(packageName) != null -> packageName
         else -> return
     }
-    if (vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.shouldRouteDefaultLaunchViaDcl(
-            vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting.enabled,
-        )
-    ) {
-        vad.dashing.tbox.dcl.DclAppLaunchHelper.launchAppArea(
-            context = context,
-            packageName = resolved,
-            onRawFallback = {
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(resolved)
-                    ?: return@launchAppArea
-                MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-                runCatching { context.startActivity(launchIntent) }
-            },
-        )
-        return
-    }
-    val launchIntent = context.packageManager.getLaunchIntentForPackage(resolved) ?: return
-    MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-    runCatching {
-        context.startActivity(launchIntent)
-    }
+    vad.dashing.tbox.launchPackageWithLaunchMode(
+        context = context,
+        packageName = resolved,
+        config = widgetConfig,
+        settingsViewModel = settingsViewModel,
+    )
 }
 
 /**

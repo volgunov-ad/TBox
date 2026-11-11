@@ -6,7 +6,7 @@ import androidx.annotation.StringRes
 const val APP_LAUNCHER_WIDGET_DATA_KEY = "appLauncherWidget"
 
 /**
- * How an [APP_LAUNCHER_WIDGET_DATA_KEY] tile starts the target app.
+ * How an app-shortcut or music-control tile starts the target app.
  *
  * [FULLSCREEN] is the picker label «Обычный»: raw `startActivity`, or DCL `app_area`
  * when DCL environment mode is on.

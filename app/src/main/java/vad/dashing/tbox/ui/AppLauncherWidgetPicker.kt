@@ -149,6 +149,176 @@ internal fun WatchLaunchablePackageChanges(appContext: Context) {
 }
 
 /**
+ * Shared launch-mode picker (ordinary / DCL fullscreen / freeform / stock / virtual display).
+ * Used by App Shortcut and music-control widget settings.
+ *
+ * @param showDoubleTapForceStopHint App Shortcut double-tap force-stop caption; omit for music.
+ */
+@Composable
+internal fun AppLauncherLaunchModeSettings(
+    state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
+    showDoubleTapForceStopHint: Boolean = true,
+) {
+    val context = LocalContext.current
+    val mainScreenPageCount by
+        settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
+    val stockWindowAvailable = remember(context) {
+        AdayoStockAppWindow.isAvailable(context)
+    }
+    val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
+    val dclEnvEnabled by
+        settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
+    val showStockWindowMode = stockWindowAvailable ||
+        headUnitCanMode == HeadUnitCanMode.Android10Vhal
+    val launchModeOptions = remember(
+        showStockWindowMode,
+        dclEnvEnabled,
+        state.launcherLaunchMode,
+    ) {
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.selectableLaunchModes(
+            envEnabled = dclEnvEnabled,
+            currentMode = state.launcherLaunchMode,
+            showStockWindowMode = showStockWindowMode,
+        )
+    }
+    LaunchedEffect(showStockWindowMode, dclEnvEnabled, state.launcherLaunchMode) {
+        if (!dclEnvEnabled &&
+            !showStockWindowMode &&
+            state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW
+        ) {
+            state.launcherLaunchMode = AppLauncherLaunchMode.FULLSCREEN
+        }
+    }
+    val localizedLaunchModes = launchModeOptions.map { mode ->
+        AppLauncherLaunchModeDropdownOption(mode, stringResource(mode.labelRes))
+    }
+    val selectedLaunchMode = localizedLaunchModes.firstOrNull {
+        it.mode == state.launcherLaunchMode
+    } ?: localizedLaunchModes.first()
+    SettingDropdownGeneric(
+        selectedValue = selectedLaunchMode,
+        onValueChange = { state.launcherLaunchMode = it.mode },
+        text = stringResource(R.string.widget_app_launcher_launch_mode),
+        description = stringResource(
+            when {
+                dclEnvEnabled -> R.string.widget_app_launcher_launch_mode_desc_dcl
+                showStockWindowMode -> R.string.widget_app_launcher_launch_mode_desc_a10
+                else -> R.string.widget_app_launcher_launch_mode_desc
+            },
+        ),
+        enabled = state.togglesEnabled,
+        options = localizedLaunchModes,
+        selectorWidth = WidgetDialogDropdownSelectorWidth,
+    )
+    if (dclEnvEnabled &&
+        state.launcherLaunchMode in
+        vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BULK_REMAP_SOURCE_MODES
+    ) {
+        Text(
+            text = stringResource(R.string.widget_app_launcher_dcl_env_legacy_mode_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    }
+    if (showDoubleTapForceStopHint) {
+        Text(
+            text = stringResource(R.string.widget_app_launcher_double_tap_force_stop_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        )
+    }
+    if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
+        LaunchedEffect(mainScreenPageCount) {
+            state.launcherFreeformOverlayPage =
+                state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
+        }
+        val localizedSideOptions = FreeformLaunchSide.entries.map { side ->
+            FreeformSideDropdownOption(side, stringResource(side.labelRes))
+        }
+        SettingDropdownGeneric(
+            selectedValue = localizedSideOptions.first {
+                it.side == state.launcherFreeformSide
+            },
+            onValueChange = { state.launcherFreeformSide = it.side },
+            text = stringResource(R.string.widget_app_launcher_freeform_side),
+            description = "",
+            enabled = state.togglesEnabled,
+            options = localizedSideOptions,
+            selectorWidth = WidgetDialogDropdownSelectorWidth,
+        )
+        val percentOptions = remember { FreeformLaunchBounds.percentOptions() }
+        SettingDropdownGeneric(
+            selectedValue = FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
+                .let { current ->
+                    percentOptions.minByOrNull { kotlin.math.abs(it - current) }
+                        ?: FreeformLaunchBounds.DEFAULT_PERCENT
+                },
+            onValueChange = { state.launcherFreeformPercent = it },
+            text = stringResource(R.string.widget_app_launcher_freeform_percent),
+            description = stringResource(R.string.widget_app_launcher_freeform_percent_desc),
+            enabled = state.togglesEnabled,
+            options = percentOptions,
+            selectorWidth = WidgetDialogDropdownSelectorWidth,
+        )
+        val unchangedPageLabel =
+            stringResource(R.string.widget_app_launcher_freeform_overlay_page_unchanged)
+        val pageLabelFormat =
+            stringResource(R.string.widget_app_launcher_freeform_overlay_page_value)
+        val overlayPageOptions = listOf(
+            FreeformOverlayPageDropdownOption(null, unchangedPageLabel),
+        ) + (1..mainScreenPageCount).map { page ->
+            FreeformOverlayPageDropdownOption(page, pageLabelFormat.format(page))
+        }
+        val selectedOverlayPage = overlayPageOptions.first {
+            it.page == state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
+        }
+        SettingDropdownGeneric(
+            selectedValue = selectedOverlayPage,
+            onValueChange = { state.launcherFreeformOverlayPage = it.page },
+            text = stringResource(R.string.widget_app_launcher_freeform_overlay_page),
+            description = stringResource(
+                R.string.widget_app_launcher_freeform_overlay_page_desc,
+            ),
+            enabled = state.togglesEnabled,
+            options = overlayPageOptions,
+            selectorWidth = WidgetDialogDropdownSelectorWidth,
+        )
+        SettingSwitch(
+            isChecked = state.launcherFreeformOverlayCrop,
+            onCheckedChange = { state.launcherFreeformOverlayCrop = it },
+            text = stringResource(R.string.widget_app_launcher_freeform_overlay_crop),
+            description = stringResource(
+                R.string.widget_app_launcher_freeform_overlay_crop_desc,
+            ),
+            enabled = state.togglesEnabled,
+        )
+        Text(
+            text = stringResource(R.string.widget_app_launcher_freeform_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    } else if (state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW) {
+        Text(
+            text = stringResource(R.string.widget_app_launcher_stock_window_hint),
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+    } else if (state.launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
+        VirtualDisplayLaunchSettings(
+            state = state,
+            settingsViewModel = settingsViewModel,
+        )
+    }
+}
+
+/**
  * App picker embedded in [WidgetSelectionDialogForm] (same window as overlay / AlertDialog body)
  * so FloatingDashboard overlays are not stacked with a second dialog.
  */
@@ -162,8 +332,6 @@ internal fun AppLauncherWidgetSettingsSection(
     val context = LocalContext.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
-    val mainScreenPageCount by
-        settingsViewModel.mainScreenPageCount.collectAsStateWithLifecycle()
     val apps = rememberLaunchableAppEntries(settingsViewModel, iconRevision)
     val selectedLabel = apps.find { it.packageName == state.launcherAppPackage }?.label
     var filterText by rememberSaveable { mutableStateOf("") }
@@ -224,157 +392,11 @@ internal fun AppLauncherWidgetSettingsSection(
         }
     }
     Column(modifier = modifier.fillMaxWidth()) {
-        val stockWindowAvailable = remember(context) {
-            AdayoStockAppWindow.isAvailable(context)
-        }
-        val headUnitCanMode by settingsViewModel.headUnitCanMode.collectAsStateWithLifecycle()
-        val dclEnvEnabled by
-            settingsViewModel.dclLauncherEnvironmentEnabled.collectAsStateWithLifecycle()
-        val showStockWindowMode = stockWindowAvailable ||
-            headUnitCanMode == HeadUnitCanMode.Android10Vhal
-        val launchModeOptions = remember(
-            showStockWindowMode,
-            dclEnvEnabled,
-            state.launcherLaunchMode,
-        ) {
-            vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.selectableLaunchModes(
-                envEnabled = dclEnvEnabled,
-                currentMode = state.launcherLaunchMode,
-                showStockWindowMode = showStockWindowMode,
-            )
-        }
-        LaunchedEffect(showStockWindowMode, dclEnvEnabled, state.launcherLaunchMode) {
-            if (!dclEnvEnabled &&
-                !showStockWindowMode &&
-                state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW
-            ) {
-                state.launcherLaunchMode = AppLauncherLaunchMode.FULLSCREEN
-            }
-        }
-        val localizedLaunchModes = launchModeOptions.map { mode ->
-            AppLauncherLaunchModeDropdownOption(mode, stringResource(mode.labelRes))
-        }
-        val selectedLaunchMode = localizedLaunchModes.firstOrNull {
-            it.mode == state.launcherLaunchMode
-        } ?: localizedLaunchModes.first()
-        SettingDropdownGeneric(
-            selectedValue = selectedLaunchMode,
-            onValueChange = { state.launcherLaunchMode = it.mode },
-            text = stringResource(R.string.widget_app_launcher_launch_mode),
-            description = stringResource(
-                when {
-                    dclEnvEnabled -> R.string.widget_app_launcher_launch_mode_desc_dcl
-                    showStockWindowMode -> R.string.widget_app_launcher_launch_mode_desc_a10
-                    else -> R.string.widget_app_launcher_launch_mode_desc
-                },
-            ),
-            enabled = state.togglesEnabled,
-            options = localizedLaunchModes,
-            selectorWidth = WidgetDialogDropdownSelectorWidth,
+        AppLauncherLaunchModeSettings(
+            state = state,
+            settingsViewModel = settingsViewModel,
+            showDoubleTapForceStopHint = true,
         )
-        if (dclEnvEnabled &&
-            state.launcherLaunchMode in
-            vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting.BULK_REMAP_SOURCE_MODES
-        ) {
-            Text(
-                text = stringResource(R.string.widget_app_launcher_dcl_env_legacy_mode_hint),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-        Text(
-            text = stringResource(R.string.widget_app_launcher_double_tap_force_stop_hint),
-            style = MaterialTheme.typography.tboxCaption,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-        )
-        if (state.launcherLaunchMode == AppLauncherLaunchMode.FREEFORM) {
-            LaunchedEffect(mainScreenPageCount) {
-                state.launcherFreeformOverlayPage =
-                    state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
-            }
-            val localizedSideOptions = FreeformLaunchSide.entries.map { side ->
-                FreeformSideDropdownOption(side, stringResource(side.labelRes))
-            }
-            SettingDropdownGeneric(
-                selectedValue = localizedSideOptions.first {
-                    it.side == state.launcherFreeformSide
-                },
-                onValueChange = { state.launcherFreeformSide = it.side },
-                text = stringResource(R.string.widget_app_launcher_freeform_side),
-                description = "",
-                enabled = state.togglesEnabled,
-                options = localizedSideOptions,
-                selectorWidth = WidgetDialogDropdownSelectorWidth,
-            )
-            val percentOptions = remember { FreeformLaunchBounds.percentOptions() }
-            SettingDropdownGeneric(
-                selectedValue = FreeformLaunchBounds.normalizePercent(state.launcherFreeformPercent)
-                    .let { current ->
-                        percentOptions.minByOrNull { kotlin.math.abs(it - current) }
-                            ?: FreeformLaunchBounds.DEFAULT_PERCENT
-                    },
-                onValueChange = { state.launcherFreeformPercent = it },
-                text = stringResource(R.string.widget_app_launcher_freeform_percent),
-                description = stringResource(R.string.widget_app_launcher_freeform_percent_desc),
-                enabled = state.togglesEnabled,
-                options = percentOptions,
-                selectorWidth = WidgetDialogDropdownSelectorWidth,
-            )
-            val unchangedPageLabel =
-                stringResource(R.string.widget_app_launcher_freeform_overlay_page_unchanged)
-            val pageLabelFormat =
-                stringResource(R.string.widget_app_launcher_freeform_overlay_page_value)
-            val overlayPageOptions = listOf(
-                FreeformOverlayPageDropdownOption(null, unchangedPageLabel),
-            ) + (1..mainScreenPageCount).map { page ->
-                FreeformOverlayPageDropdownOption(page, pageLabelFormat.format(page))
-            }
-            val selectedOverlayPage = overlayPageOptions.first {
-                it.page == state.launcherFreeformOverlayPage?.coerceIn(1, mainScreenPageCount)
-            }
-            SettingDropdownGeneric(
-                selectedValue = selectedOverlayPage,
-                onValueChange = { state.launcherFreeformOverlayPage = it.page },
-                text = stringResource(R.string.widget_app_launcher_freeform_overlay_page),
-                description = stringResource(
-                    R.string.widget_app_launcher_freeform_overlay_page_desc,
-                ),
-                enabled = state.togglesEnabled,
-                options = overlayPageOptions,
-                selectorWidth = WidgetDialogDropdownSelectorWidth,
-            )
-            SettingSwitch(
-                isChecked = state.launcherFreeformOverlayCrop,
-                onCheckedChange = { state.launcherFreeformOverlayCrop = it },
-                text = stringResource(R.string.widget_app_launcher_freeform_overlay_crop),
-                description = stringResource(
-                    R.string.widget_app_launcher_freeform_overlay_crop_desc,
-                ),
-                enabled = state.togglesEnabled,
-            )
-            Text(
-                text = stringResource(R.string.widget_app_launcher_freeform_hint),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        } else if (state.launcherLaunchMode == AppLauncherLaunchMode.STOCK_WINDOW) {
-            Text(
-                text = stringResource(R.string.widget_app_launcher_stock_window_hint),
-                style = MaterialTheme.typography.tboxCaption,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-        } else if (state.launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY) {
-            VirtualDisplayLaunchSettings(
-                state = state,
-                settingsViewModel = settingsViewModel,
-            )
-        }
         Text(
             text = if (selectedLabel != null) {
                 stringResource(R.string.widget_app_launcher_selected, selectedLabel)

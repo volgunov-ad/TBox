@@ -116,117 +116,12 @@ internal fun launchAppFromWidget(
     config: FloatingDashboardWidgetConfig,
     settingsViewModel: SettingsViewModel,
 ) {
-    val packageName = config.launcherAppPackage.trim()
-    if (packageName.isBlank()) return
-
-    val launchMode = AppLauncherLaunchMode.fromStored(
-        config.launcherLaunchMode.storageKey,
-        config.launcherFreeformEnabled,
+    vad.dashing.tbox.launchPackageWithLaunchMode(
+        context = context,
+        packageName = config.launcherAppPackage,
+        config = config,
+        settingsViewModel = settingsViewModel,
     )
-
-    when (launchMode) {
-        AppLauncherLaunchMode.STOCK_WINDOW -> {
-            launchAppInStockWindow(context, packageName)
-            return
-        }
-        AppLauncherLaunchMode.FREEFORM -> {
-            val launch = { pinnedOverlayPage: Int? ->
-                val launched = FreeformLaunchHelper.launchCompanion(
-                    context = context,
-                    packageName = packageName,
-                    side = config.launcherFreeformSide,
-                    percent = config.launcherFreeformPercent,
-                    overlayCrop = config.launcherFreeformOverlayCrop,
-                    pinnedOverlayPage = pinnedOverlayPage,
-                )
-                if (!launched) {
-                    FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                        launchAppFullscreen(context, packageName)
-                    }
-                }
-            }
-            val overlayPage = config.launcherFreeformOverlayPage
-            if (overlayPage == null) {
-                launch(null)
-            } else {
-                settingsViewModel.applyLauncherFreeformOverlayPage(overlayPage, launch)
-            }
-            return
-        }
-        AppLauncherLaunchMode.FULLSCREEN,
-        AppLauncherLaunchMode.DCL_FULLSCREEN,
-        -> {
-            val dclMode = DclLauncherEnvironmentRouting.dclLaunchModeFor(
-                envEnabled = DclLauncherEnvironmentSetting.enabled,
-                launchMode = launchMode,
-            )
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                if (dclMode != null) {
-                    DclAppLaunchHelper.launch(
-                        context = context,
-                        packageName = packageName,
-                        mode = dclMode,
-                        onRawFallback = { launchAppFullscreen(context, packageName) },
-                    )
-                } else {
-                    // Env off: DCL_FULLSCREEN falls back to raw fullscreen like «Обычный».
-                    launchAppFullscreen(context, packageName)
-                }
-            }
-        }
-        AppLauncherLaunchMode.VIRTUAL_DISPLAY -> {
-            val displayId = config.launcherVirtualDisplayId
-            if (displayId == null || displayId <= 0) return
-            FreeformLaunchHelper.runAfterExitingWindowMode(context) {
-                settingsViewModel.launchAppOnVirtualDisplay(
-                    context = context,
-                    packageName = packageName,
-                    displayId = displayId,
-                    displayWidthPx = config.launcherVirtualDisplayWidthPx,
-                    displayHeightPx = config.launcherVirtualDisplayHeightPx,
-                ) { outcome ->
-                    when (outcome) {
-                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Failed -> {
-                            val detail = vad.dashing.tbox.adb.LocalhostAdbReasons.forVirtualDisplay(
-                                context,
-                                outcome.reason,
-                                outcome.detail,
-                            )
-                            if (!vad.dashing.tbox.adb.AdbIoErrors.shouldSuppressUserFacingFailure(
-                                    detail,
-                                    context,
-                                )
-                            ) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    context.getString(
-                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_launch_fail,
-                                        detail,
-                                    ),
-                                    android.widget.Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                        }
-                        is vad.dashing.tbox.adb.VirtualDisplayAdb.LaunchOutcome.Success -> {
-                            if (outcome.remapped) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    context.getString(
-                                        vad.dashing.tbox.R.string.widget_app_launcher_virtual_display_remapped,
-                                        displayId,
-                                        outcome.displayId,
-                                        outcome.widthPx,
-                                        outcome.heightPx,
-                                    ),
-                                    android.widget.Toast.LENGTH_SHORT,
-                                ).show()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**
@@ -264,14 +159,7 @@ internal fun forceStopAppFromWidget(
 }
 
 private fun launchAppFullscreen(context: Context, packageName: String) {
-    try {
-        val pm = context.packageManager
-        val launchIntent = pm.getLaunchIntentForPackage(packageName) ?: return
-        MainActivityIntentHelper.applyExternalAppLaunchFlags(launchIntent, context)
-        context.startActivity(launchIntent)
-    } catch (e: Exception) {
-        e.printStackTrace()
-    }
+    vad.dashing.tbox.launchPackageFullscreen(context, packageName)
 }
 
 internal fun openMainActivityFromWidget(context: Context) {

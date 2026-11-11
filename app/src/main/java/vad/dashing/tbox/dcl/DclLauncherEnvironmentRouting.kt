@@ -1,6 +1,5 @@
 package vad.dashing.tbox.dcl
 
-import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
 import vad.dashing.tbox.FloatingDashboardConfig
 import vad.dashing.tbox.FloatingDashboardWidgetConfig
@@ -9,6 +8,7 @@ import vad.dashing.tbox.automation.AutomationAction
 import vad.dashing.tbox.automation.AutomationDocument
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
+import vad.dashing.tbox.usesAppLauncherLaunchModeFields
 
 /**
  * Pure routing / remap helpers for DCL launcher environment mode (v1).
@@ -42,7 +42,7 @@ object DclLauncherEnvironmentRouting {
         }
     }
 
-    /** App List / music / paths without a mode picker: always DCL app_area when env ON. */
+    /** App List / mode-less paths: always DCL app_area when env ON. Music widgets use a mode picker. */
     fun shouldRouteDefaultLaunchViaDcl(envEnabled: Boolean): Boolean = envEnabled
 
     fun selectableLaunchModes(
@@ -79,7 +79,7 @@ object DclLauncherEnvironmentRouting {
     fun remapWidgetToOrdinary(
         config: FloatingDashboardWidgetConfig,
     ): FloatingDashboardWidgetConfig? {
-        if (config.dataKey != APP_LAUNCHER_WIDGET_DATA_KEY) return null
+        if (!usesAppLauncherLaunchModeFields(config.dataKey)) return null
         val mode = AppLauncherLaunchMode.fromStored(
             config.launcherLaunchMode.storageKey,
             config.launcherFreeformEnabled,
