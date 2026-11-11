@@ -25,6 +25,8 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 | Main ON | DCL `app_area` → иначе Adayo stock → иначе fullscreen |
 | Main OFF | fullscreen |
 
+**Первый open после install/update:** cold redirect из `MainActivity` в DCL/Adayo **можно пропустить** (fullscreen допустим) — `PostUpdateMainLaunchGate` / `MY_PACKAGE_REPLACED` + stamp `versionCode`. Все остальные пути (`MainActivityIntentHelper`: панели, boot, виджеты, broadcast) по-прежнему идут в окно. Успешный DCL `app_area` **не** делает `finish()` единственного `singleTask` Main (DCL обычно `REUSED_TASK`). Adayo `LAUNCH_APP` по-прежнему finish (хост на virtual display).
+
 Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboard + main panels + floating) и в `LaunchApplication` → «Обычный». Не трогает Main, App List, уже-Обычный / DCL fullscreen.
 
 Код: `DclLauncherEnvironmentRouting`, `DclAppLaunchHelper`, `DashboardAppNavigation`, `MainActivityIntentHelper`, `AutomationActionExecutor`.

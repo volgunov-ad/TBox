@@ -128,6 +128,29 @@ internal object LaunchMainInStockAppWindowDecision {
         dclEnvironmentEnabled: Boolean,
     ): Boolean = headUnitIsAndroid10 || dclApiAvailable || dclEnvironmentEnabled
 
+    /**
+     * First Main cold open after install/update may skip external DCL/Adayo redirect
+     * (fullscreen is acceptable). Armed by [PostUpdateMainLaunchGate] via version stamp
+     * and/or [android.content.Intent.ACTION_MY_PACKAGE_REPLACED].
+     */
+    fun shouldSkipExternalRedirectForFirstOpenAfterUpdate(
+        lastSeenVersionCode: Long,
+        currentVersionCode: Long,
+        packageReplacedArmed: Boolean,
+    ): Boolean = packageReplacedArmed || lastSeenVersionCode != currentVersionCode
+
+    /**
+     * After a successful DCL `app_area` launch from an external Main redirect: keep this
+     * activity alive (`false` = do not [android.app.Activity.finish]).
+     *
+     * Main is `singleTask`. DCL on A9 typically **reuses** the already-started task
+     * (`moveTaskToFront` + `resizeTask` into freeform/app_area bounds) instead of
+     * starting a second instance. Finishing the redirector would destroy that only
+     * Main → empty freeform task and HOME-only UI. Adayo `LAUNCH_APP` still needs
+     * finish (new host on a virtual display).
+     */
+    fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(): Boolean = false
+
     const val EXTERNAL_REDIRECT_COOLDOWN_MS = 3_000L
     private const val DEFAULT_DISPLAY_ID = 0
 }

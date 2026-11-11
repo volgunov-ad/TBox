@@ -379,6 +379,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- First Main open after APK update may skip DCL/Adayo cold redirect (fullscreen OK). -->
+        <receiver
+            android:name="vad.dashing.tbox.PackageReplacedReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- DCL UI state push: dynamic receiver only (DclLauncherApiRepository.start). -->
     </application>
 
