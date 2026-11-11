@@ -205,7 +205,7 @@ fun serializeWidgetConfigsToJsonArray(
         }
         val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
             config.dataKey,
-            config.httpLaunchAppBeforeRequest,
+            config.httpLaunchAppBeforeRequest && !config.httpOpenBrowser,
         )
         if (storesLauncherLaunch && config.launcherAppPackage.isNotBlank()) {
             obj.put("launcherAppPackage", config.launcherAppPackage.trim())
@@ -251,7 +251,8 @@ fun serializeWidgetConfigsToJsonArray(
         if (config.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
             obj.put("httpRequestYaml", config.httpRequestYaml.ifBlank { DEFAULT_HTTP_REQUEST_WIDGET_YAML })
             obj.put("httpOpenBrowser", config.httpOpenBrowser)
-            if (config.httpLaunchAppBeforeRequest) {
+            // Do not persist launch-before together with browser mode.
+            if (config.httpLaunchAppBeforeRequest && !config.httpOpenBrowser) {
                 obj.put("httpLaunchAppBeforeRequest", true)
                 val delaySec = normalizeHttpLaunchAppDelaySec(config.httpLaunchAppDelaySec)
                 if (delaySec != DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC) {
@@ -602,7 +603,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         CAMD_WINDOW_DEFAULT_H,
                     )
                 }
+                val httpOpenBrowser = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                    item.optBoolean("httpOpenBrowser", false)
+                // Browser mode and launch-before are mutually exclusive (UI + tap path).
                 val httpLaunchAppBeforeRequest = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                    !httpOpenBrowser &&
                     item.optBoolean("httpLaunchAppBeforeRequest", false)
                 val storesLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
                     dataKey,
@@ -764,11 +769,7 @@ private fun parseWidgetConfigsFromJsonArray(
                         } else {
                             DEFAULT_HTTP_REQUEST_WIDGET_YAML
                         },
-                        httpOpenBrowser = if (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY) {
-                            item.optBoolean("httpOpenBrowser", false)
-                        } else {
-                            false
-                        },
+                        httpOpenBrowser = httpOpenBrowser,
                         httpLaunchAppBeforeRequest = httpLaunchAppBeforeRequest,
                         httpLaunchAppDelaySec = if (httpLaunchAppBeforeRequest) {
                             normalizeHttpLaunchAppDelaySec(

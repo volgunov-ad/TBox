@@ -141,6 +141,11 @@ class DclLauncherEnvironmentRoutingTest {
                 httpLaunch.copy(httpLaunchAppBeforeRequest = false),
             ),
         )
+        assertNull(
+            DclLauncherEnvironmentRouting.remapWidgetToOrdinary(
+                httpLaunch.copy(httpOpenBrowser = true),
+            ),
+        )
     }
 
     @Test

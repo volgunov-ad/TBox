@@ -82,7 +82,7 @@ object DclLauncherEnvironmentRouting {
         if (
             !widgetStoresAppLauncherLaunchSettings(
                 config.dataKey,
-                config.httpLaunchAppBeforeRequest,
+                config.httpLaunchAppBeforeRequest && !config.httpOpenBrowser,
             )
         ) {
             return null

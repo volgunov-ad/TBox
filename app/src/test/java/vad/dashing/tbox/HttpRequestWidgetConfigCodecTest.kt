@@ -126,4 +126,50 @@ class HttpRequestWidgetConfigCodecTest {
         assertEquals(MAX_HTTP_LAUNCH_APP_DELAY_SEC, normalizeHttpLaunchAppDelaySec(999))
         assertEquals(DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC, normalizeHttpLaunchAppDelaySec(1))
     }
+
+    @Test
+    fun parseHttpRequestWidget_clearsLaunchWhenOpenBrowserAlsoSet() {
+        val parsed = parseWidgetConfigsFromString(
+            """
+            [{
+              "dataKey":"${HTTP_REQUEST_WIDGET_DATA_KEY}",
+              "httpRequestYaml":"url: 'https://example.com'",
+              "httpOpenBrowser":true,
+              "httpLaunchAppBeforeRequest":true,
+              "httpLaunchAppDelaySec":5,
+              "launcherAppPackage":"com.example.app",
+              "launcherLaunchMode":"freeform"
+            }]
+            """.trimIndent()
+        ).single()
+
+        assertTrue(parsed.httpOpenBrowser)
+        assertFalse(parsed.httpLaunchAppBeforeRequest)
+        assertEquals(DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC, parsed.httpLaunchAppDelaySec)
+        assertEquals("", parsed.launcherAppPackage)
+        assertEquals(AppLauncherLaunchMode.DEFAULT, parsed.launcherLaunchMode)
+    }
+
+    @Test
+    fun serializeHttpRequestWidget_omitsLaunchWhenOpenBrowserOn() {
+        val serialized = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = HTTP_REQUEST_WIDGET_DATA_KEY,
+                    httpRequestYaml = "url: 'https://example.com'",
+                    httpOpenBrowser = true,
+                    httpLaunchAppBeforeRequest = true,
+                    httpLaunchAppDelaySec = 4,
+                    launcherAppPackage = "com.example.app",
+                    launcherLaunchMode = AppLauncherLaunchMode.STOCK_WINDOW,
+                )
+            )
+        )
+
+        assertFalse(serialized.contains("httpLaunchAppBeforeRequest"))
+        assertFalse(serialized.contains("httpLaunchAppDelaySec"))
+        assertFalse(serialized.contains("launcherAppPackage"))
+        assertFalse(serialized.contains("launcherLaunchMode"))
+        assertTrue(serialized.contains("\"httpOpenBrowser\":true") || serialized.contains("\"httpOpenBrowser\": true"))
+    }
 }
