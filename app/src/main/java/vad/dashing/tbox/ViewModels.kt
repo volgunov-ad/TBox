@@ -509,6 +509,18 @@ object WidgetsRepository {
         HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY to DataTitle(
             R.string.data_title_hud_brightness_widget_vertical
         ),
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunshade_position_widget_horizontal
+        ),
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunshade_position_widget_vertical
+        ),
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunroof_position_widget_horizontal
+        ),
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY to DataTitle(
+            R.string.data_title_sunroof_position_widget_vertical
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to DataTitle(
             R.string.data_title_main_screen_page_selector_widget_horizontal
         ),
@@ -883,6 +895,22 @@ object WidgetsRepository {
             R.string.widget_desc_hud_brightness_vertical,
             R.string.widget_actions_hud_brightness,
         ),
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunshade_position_horizontal,
+            R.string.widget_actions_sunshade_position,
+        ),
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunshade_position_vertical,
+            R.string.widget_actions_sunshade_position,
+        ),
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunroof_position_horizontal,
+            R.string.widget_actions_sunroof_position,
+        ),
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_sunroof_position_vertical,
+            R.string.widget_actions_sunroof_position,
+        ),
         MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY to WidgetDescription(
             R.string.widget_desc_main_screen_page_selector_horizontal,
             R.string.widget_actions_main_screen_page_selector,
@@ -1116,6 +1144,10 @@ object WidgetsRepository {
             ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             "frontLeftSeatHeatVentWidget",
@@ -1252,6 +1284,10 @@ object WidgetsRepository {
             ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY,
             HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+            SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY,
             MAIN_SCREEN_PAGE_SELECTOR_WIDGET_VERTICAL_DATA_KEY,
             DRIVE_MODE_WIDGET_DATA_KEY,

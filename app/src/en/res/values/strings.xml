@@ -555,6 +555,14 @@
     <string name="widget_hud_brightness_action_increase">Increase HUD brightness</string>
     <string name="widget_hud_brightness_action_decrease">Decrease HUD brightness</string>
     <string name="widget_hud_brightness_action_auto">Toggle HUD auto brightness</string>
+    <string name="widget_sunshade_position_title">Sunshade</string>
+    <string name="widget_sunshade_position_action_increase">Open sunshade</string>
+    <string name="widget_sunshade_position_action_decrease">Close sunshade</string>
+    <string name="widget_sunroof_position_title">Sunroof</string>
+    <string name="widget_sunroof_position_action_increase">Open sunroof</string>
+    <string name="widget_sunroof_position_action_decrease">Close sunroof</string>
+    <string name="widget_shade_roof_position_percent">%1$d%%</string>
+    <string name="widget_shade_roof_position_unknown">—</string>
     <string name="widget_stepper_adjust_icon_style_title">Value adjust buttons</string>
     <string name="widget_stepper_adjust_icon_style_desc">Icons for increase and decrease controls</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Plus and minus</string>
@@ -2473,6 +2481,10 @@
     <string name="data_title_hu_screen_brightness_widget_vertical">HU screen brightness (vertical)</string>
     <string name="data_title_icm_brightness_widget_horizontal">Instrument cluster brightness (horizontal)</string>
     <string name="data_title_icm_brightness_widget_vertical">Instrument cluster brightness (vertical)</string>
+    <string name="data_title_sunshade_position_widget_horizontal">Sunshade (horizontal)</string>
+    <string name="data_title_sunshade_position_widget_vertical">Sunshade (vertical)</string>
+    <string name="data_title_sunroof_position_widget_horizontal">Sunroof (horizontal)</string>
+    <string name="data_title_sunroof_position_widget_vertical">Sunroof (vertical)</string>
     <string name="data_title_hud_brightness_widget_horizontal">HUD brightness (horizontal)</string>
     <string name="data_title_hud_brightness_widget_vertical">HUD brightness (vertical)</string>
     <string name="data_title_time_widget">Time</string>
@@ -2746,6 +2758,10 @@
     <string name="widget_desc_icm_brightness_vertical">Vertical instrument cluster brightness control.</string>
     <string name="widget_desc_hud_brightness_horizontal">Horizontal HUD brightness control.</string>
     <string name="widget_desc_hud_brightness_vertical">Vertical HUD brightness control.</string>
+    <string name="widget_desc_sunshade_position_horizontal">Horizontal sunshade position control (0…100%, step 10%).</string>
+    <string name="widget_desc_sunshade_position_vertical">Vertical sunshade position control (0…100%, step 10%).</string>
+    <string name="widget_desc_sunroof_position_horizontal">Horizontal sunroof position control (0…100%, step 10%, no tilt).</string>
+    <string name="widget_desc_sunroof_position_vertical">Vertical sunroof position control (0…100%, step 10%, no tilt).</string>
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
     <string name="widget_desc_app_list">List of installed apps with open, hide, and uninstall actions.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
@@ -2827,6 +2843,8 @@
 
     <string name="widget_actions_hu_screen_brightness">Buttons or swipe — change brightness; center tap — auto brightness. Turning auto off writes the current level.</string>
     <string name="widget_actions_icm_brightness">Buttons or swipe — change brightness; center tap — instrument cluster auto brightness. Turning auto off writes the current level.</string>
+    <string name="widget_actions_sunshade_position">Buttons or swipe — change sunshade position in 10% steps.</string>
+    <string name="widget_actions_sunroof_position">Buttons or swipe — change sunroof position in 10% steps (no tilt).</string>
     <string name="widget_actions_hud_brightness">Buttons or swipe — change brightness; center tap — HUD auto brightness. Turning auto off writes the current level.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application; double tap — close (ADB force-stop, no relaunch).</string>
     <string name="widget_actions_app_list">Single tap — open the app list.</string>
