@@ -399,14 +399,30 @@ class MainActivity : ComponentActivity() {
                         )
                     )
                 if (launched) {
+                    val nowMs = SystemClock.elapsedRealtime()
                     if (dclOk) {
                         dclAppAreaExternalRedirectConsumedThisProcess = true
+                        lastExternalRedirectAtMs = nowMs
+                        // DCL app_area reuses this singleTask (resize/move). finish() would
+                        // kill the only Main — see shouldFinishSelfAfterSuccessfulDclAppAreaRedirect.
+                        if (
+                            LaunchMainInStockAppWindowDecision
+                                .shouldFinishSelfAfterSuccessfulDclAppAreaRedirect()
+                        ) {
+                            finishAfterExternalRedirect(nowMs, MainAppWindowBackend.DCL_APP_AREA)
+                        } else {
+                            Log.i(
+                                TAG,
+                                "External launch hosted in DCL app_area (same task); continuing normal onCreate",
+                            )
+                            completeNormalOnCreate()
+                        }
+                    } else {
+                        finishAfterExternalRedirect(nowMs, MainAppWindowBackend.ADAYO_STOCK)
                     }
-                    finishAfterExternalRedirect(
-                        SystemClock.elapsedRealtime(),
-                        if (dclOk) MainAppWindowBackend.DCL_APP_AREA else MainAppWindowBackend.ADAYO_STOCK,
-                    )
                 } else {
+                    // DCL/Adayo failed — safe fullscreen fallback so Main still appears.
+                    Log.w(TAG, "Stock-window redirect failed; falling back to normal onCreate")
                     completeNormalOnCreate()
                 }
             }
