@@ -2577,6 +2577,20 @@
 
     <string name="net_no">no network</string>
     <string name="data_title_http_request_widget">HTTP request</string>
+    <string name="widget_http_request_settings_title">HTTP request</string>
+    <string name="widget_http_request_yaml_label">Request YAML</string>
+    <string name="widget_http_request_yaml_hint">Supported: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding.</string>
+    <string name="widget_http_request_reset_yaml">Reset</string>
+    <string name="widget_http_request_insert_new_line">Insert line break</string>
+    <string name="widget_http_request_open_browser">Open in browser</string>
+    <string name="widget_http_request_open_browser_desc">When enabled, the tile opens the url in a browser, does not send an HTTP request, and does not show the color flash.</string>
+    <string name="widget_http_request_launch_app_before">Launch app before request</string>
+    <string name="widget_http_request_launch_app_before_desc">Before the HTTP request, open a selected app (same launch modes as the app shortcut). If launch fails, the request is still sent. Unavailable together with “Open in browser”.</string>
+    <string name="widget_http_request_launch_app_delay">Pause before request (sec)</string>
+    <string name="widget_http_request_launch_app_delay_desc">Seconds to wait after launching the app before sending the HTTP request (0–30). Used only when app launch is enabled.</string>
+    <string name="widget_http_request_secret_warning">Warning: tokens, passwords, and headers from the YAML are stored in settings and will be included in a theme file when you export the panel.</string>
+    <string name="widget_http_request_invalid_yaml">YAML error: %1$s</string>
+    <string name="widget_http_request_failed">HTTP request failed: %1$s</string>
     <string name="data_title_phone_dial_widget">Dial number</string>
     <string name="widget_phone_dial_settings_title">Dial number</string>
     <string name="widget_phone_dial_number_label">Phone number</string>

@@ -2578,6 +2578,10 @@
     <string name="widget_http_request_insert_new_line">Вставить перенос строки</string>
     <string name="widget_http_request_open_browser">Открыть браузер</string>
     <string name="widget_http_request_open_browser_desc">Если включено, плитка открывает url в браузере, не выполняет HTTP-запрос и не показывает цветовую анимацию.</string>
+    <string name="widget_http_request_launch_app_before">Запустить приложение перед запросом</string>
+    <string name="widget_http_request_launch_app_before_desc">Перед HTTP-запросом открыть выбранное приложение (те же режимы запуска, что у ярлыка). При ошибке запуска запрос всё равно отправляется. Недоступно вместе с «Открыть браузер».</string>
+    <string name="widget_http_request_launch_app_delay">Пауза перед запросом (сек)</string>
+    <string name="widget_http_request_launch_app_delay_desc">Сколько секунд ждать после запуска приложения перед отправкой HTTP-запроса (0–30). Учитывается только если включён запуск приложения.</string>
     <string name="widget_http_request_secret_warning">Внимание: токены, пароли и headers из YAML сохраняются в настройках и попадут в файл темы при экспорте панели.</string>
     <string name="widget_http_request_invalid_yaml">Ошибка YAML: %1$s</string>
     <string name="widget_http_request_failed">HTTP-запрос не выполнен: %1$s</string>

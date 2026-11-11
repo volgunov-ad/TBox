@@ -48,6 +48,17 @@ enum class AppLauncherLaunchMode(val storageKey: String, @StringRes val labelRes
 /** Dashboard widget: shows a custom icon and sends a configured HTTP request on tap. */
 const val HTTP_REQUEST_WIDGET_DATA_KEY = "httpRequestWidget"
 
+/**
+ * True when the tile persists app-shortcut launch fields ([FloatingDashboardWidgetConfig.launcherAppPackage]
+ * and launch-mode / freeform / virtual-display settings).
+ */
+fun widgetStoresAppLauncherLaunchSettings(
+    dataKey: String,
+    httpLaunchAppBeforeRequest: Boolean = false,
+): Boolean =
+    usesAppLauncherLaunchModeFields(dataKey) ||
+        (dataKey == HTTP_REQUEST_WIDGET_DATA_KEY && httpLaunchAppBeforeRequest)
+
 const val ACTIVE_TRIP_WIDGET_DATA_KEY = "activeTripWidget"
 const val ACTIVE_TRIP_WIDGET_SIMPLE_DATA_KEY = "activeTripWidgetSimple"
 const val ACTIVE_TRIP_WIDGET_MINI_DATA_KEY = "activeTripWidgetMini"

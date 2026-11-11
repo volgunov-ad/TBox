@@ -329,6 +329,27 @@ internal fun AppLauncherWidgetSettingsSection(
     modifier: Modifier = Modifier
 ) {
     if (!state.isAppLauncherWidgetSelected) return
+    AppLauncherLaunchSettingsContent(
+        state = state,
+        settingsViewModel = settingsViewModel,
+        showDoubleTapForceStopHint = true,
+        requirePackageSelected = true,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Shared app-shortcut launch-mode + package picker (also used by HTTP tile
+ * «launch before request»).
+ */
+@Composable
+internal fun AppLauncherLaunchSettingsContent(
+    state: WidgetSelectionDialogState,
+    settingsViewModel: SettingsViewModel,
+    showDoubleTapForceStopHint: Boolean,
+    requirePackageSelected: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val iconLookup = rememberLauncherAppIconLookup(settingsViewModel)
     val iconRevision by settingsViewModel.launcherAppIconRevision.collectAsStateWithLifecycle()
@@ -523,7 +544,7 @@ internal fun AppLauncherWidgetSettingsSection(
                 }
             }
         }
-        if (state.launcherAppPackage.isBlank()) {
+        if (requirePackageSelected && state.launcherAppPackage.isBlank()) {
             Text(
                 text = stringResource(R.string.widget_app_launcher_required),
                 color = MaterialTheme.colorScheme.error,

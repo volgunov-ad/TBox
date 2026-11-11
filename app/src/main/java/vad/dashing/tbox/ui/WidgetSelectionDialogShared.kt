@@ -32,8 +32,11 @@ import androidx.compose.ui.unit.dp
 import android.content.Context
 import vad.dashing.tbox.APP_LAUNCHER_WIDGET_DATA_KEY
 import vad.dashing.tbox.AppLauncherLaunchMode
+import vad.dashing.tbox.DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
 import vad.dashing.tbox.DEFAULT_HTTP_REQUEST_WIDGET_YAML
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_DARK
+import vad.dashing.tbox.normalizeHttpLaunchAppDelaySec
+import vad.dashing.tbox.widgetStoresAppLauncherLaunchSettings
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.DEFAULT_WIDGET_TEXT_COLOR_LIGHT
@@ -70,7 +73,6 @@ import vad.dashing.tbox.isFuelLitersDisplayModeWidgetDataKey
 import vad.dashing.tbox.normalizeFuelLitersDisplayMode
 import vad.dashing.tbox.FUEL_LITERS_DISPLAY_REMAINING
 import vad.dashing.tbox.isMusicWidgetDataKey
-import vad.dashing.tbox.usesAppLauncherLaunchModeFields
 import vad.dashing.tbox.isOsmSpeedLimitWidgetDataKey
 import vad.dashing.tbox.isRoadMatchMapWidgetDataKey
 import vad.dashing.tbox.DEFAULT_MAPS_CAM_LOOKAHEAD_M
@@ -618,14 +620,24 @@ internal class WidgetSelectionDialogState(
         backgroundColorDark = panelDefaultBackgroundDark
     }
     var launcherAppPackage by mutableStateOf(
-        if (initialConfig.dataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherAppPackage
         } else {
             ""
         }
     )
     var launcherLaunchMode by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             AppLauncherLaunchMode.fromStored(
                 initialConfig.launcherLaunchMode.storageKey,
                 initialConfig.launcherFreeformEnabled,
@@ -635,46 +647,78 @@ internal class WidgetSelectionDialogState(
         }
     )
     var launcherFreeformSide by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherFreeformSide
         } else {
             FreeformLaunchSide.DEFAULT
         }
     )
     var launcherFreeformPercent by mutableIntStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             FreeformLaunchBounds.normalizePercent(initialConfig.launcherFreeformPercent)
         } else {
             FreeformLaunchBounds.DEFAULT_PERCENT
         }
     )
     var launcherFreeformOverlayPage by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherFreeformOverlayPage
         } else {
             null
         }
     )
     var launcherFreeformOverlayCrop by mutableStateOf(
-        usesAppLauncherLaunchModeFields(initialConfig.dataKey) &&
-            initialConfig.launcherFreeformOverlayCrop,
+        widgetStoresAppLauncherLaunchSettings(
+            initialConfig.dataKey,
+            initialConfig.httpLaunchAppBeforeRequest,
+        ) && initialConfig.launcherFreeformOverlayCrop,
     )
     var launcherVirtualDisplayId by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherVirtualDisplayId
         } else {
             null
         },
     )
     var launcherVirtualDisplayWidthPx by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherVirtualDisplayWidthPx
         } else {
             null
         },
     )
     var launcherVirtualDisplayHeightPx by mutableStateOf(
-        if (usesAppLauncherLaunchModeFields(initialConfig.dataKey)) {
+        if (
+            widgetStoresAppLauncherLaunchSettings(
+                initialConfig.dataKey,
+                initialConfig.httpLaunchAppBeforeRequest,
+            )
+        ) {
             initialConfig.launcherVirtualDisplayHeightPx
         } else {
             null
@@ -693,6 +737,20 @@ internal class WidgetSelectionDialogState(
         } else {
             false
         }
+    )
+    var httpLaunchAppBeforeRequest by mutableStateOf(
+        initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+            initialConfig.httpLaunchAppBeforeRequest,
+    )
+    var httpLaunchAppDelaySec by mutableIntStateOf(
+        if (
+            initialConfig.dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+            initialConfig.httpLaunchAppBeforeRequest
+        ) {
+            normalizeHttpLaunchAppDelaySec(initialConfig.httpLaunchAppDelaySec)
+        } else {
+            DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
+        },
     )
     var dialPhoneNumber by mutableStateOf(
         if (initialConfig.dataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
@@ -1069,6 +1127,14 @@ internal class WidgetSelectionDialogState(
     val isHttpRequestWidgetSelected: Boolean
         get() = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY
 
+    private val storesLauncherLaunchSettings: Boolean
+        get() = widgetStoresAppLauncherLaunchSettings(
+            selectedDataKey,
+            selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                httpLaunchAppBeforeRequest &&
+                !httpOpenBrowser,
+        )
+
     val isPhoneDialWidgetSelected: Boolean
         get() = selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY
 
@@ -1190,30 +1256,30 @@ internal class WidgetSelectionDialogState(
             } else {
                 null
             },
-            launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+            launcherAppPackage = if (storesLauncherLaunchSettings) {
                 launcherAppPackage.trim()
             } else {
                 ""
             },
-            launcherLaunchMode = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+            launcherLaunchMode = if (storesLauncherLaunchSettings) {
                 launcherLaunchMode
             } else {
                 AppLauncherLaunchMode.DEFAULT
             },
-            launcherFreeformEnabled = usesAppLauncherLaunchModeFields(selectedDataKey) &&
+            launcherFreeformEnabled = storesLauncherLaunchSettings &&
                 launcherLaunchMode == AppLauncherLaunchMode.FREEFORM,
-            launcherFreeformSide = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+            launcherFreeformSide = if (storesLauncherLaunchSettings) {
                 launcherFreeformSide
             } else {
                 FreeformLaunchSide.DEFAULT
             },
-            launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+            launcherFreeformPercent = if (storesLauncherLaunchSettings) {
                 FreeformLaunchBounds.normalizePercent(launcherFreeformPercent)
             } else {
                 FreeformLaunchBounds.DEFAULT_PERCENT
             },
             launcherFreeformOverlayPage =
-                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
+                if (storesLauncherLaunchSettings &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM
                 ) {
                     launcherFreeformOverlayPage
@@ -1221,11 +1287,11 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherFreeformOverlayCrop =
-                usesAppLauncherLaunchModeFields(selectedDataKey) &&
+                storesLauncherLaunchSettings &&
                     launcherLaunchMode == AppLauncherLaunchMode.FREEFORM &&
                     launcherFreeformOverlayCrop,
             launcherVirtualDisplayId =
-                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
+                if (storesLauncherLaunchSettings &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayId?.takeIf { it > 0 }
@@ -1233,7 +1299,7 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherVirtualDisplayWidthPx =
-                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
+                if (storesLauncherLaunchSettings &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayWidthPx?.takeIf { it > 0 }
@@ -1241,7 +1307,7 @@ internal class WidgetSelectionDialogState(
                     null
                 },
             launcherVirtualDisplayHeightPx =
-                if (usesAppLauncherLaunchModeFields(selectedDataKey) &&
+                if (storesLauncherLaunchSettings &&
                     launcherLaunchMode == AppLauncherLaunchMode.VIRTUAL_DISPLAY
                 ) {
                     launcherVirtualDisplayHeightPx?.takeIf { it > 0 }
@@ -1257,6 +1323,18 @@ internal class WidgetSelectionDialogState(
                 httpOpenBrowser
             } else {
                 false
+            },
+            httpLaunchAppBeforeRequest = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                httpLaunchAppBeforeRequest &&
+                !httpOpenBrowser,
+            httpLaunchAppDelaySec = if (
+                selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+                httpLaunchAppBeforeRequest &&
+                !httpOpenBrowser
+            ) {
+                normalizeHttpLaunchAppDelaySec(httpLaunchAppDelaySec)
+            } else {
+                DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
             },
             dialPhoneNumber = if (selectedDataKey == PHONE_DIAL_WIDGET_DATA_KEY) {
                 dialPhoneNumber.trim()
@@ -1630,12 +1708,26 @@ internal class WidgetSelectionDialogState(
         } else {
             DRIVE_MODE_CYCLE_WIDGET_DEFAULT_RAW_VALUES
         }
-        launcherAppPackage = if (selectedDataKey == APP_LAUNCHER_WIDGET_DATA_KEY) {
+        httpLaunchAppBeforeRequest = selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+            cfg.httpLaunchAppBeforeRequest
+        httpLaunchAppDelaySec = if (
+            selectedDataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
+            cfg.httpLaunchAppBeforeRequest
+        ) {
+            normalizeHttpLaunchAppDelaySec(cfg.httpLaunchAppDelaySec)
+        } else {
+            DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC
+        }
+        val applyLauncherLaunch = widgetStoresAppLauncherLaunchSettings(
+            selectedDataKey,
+            httpLaunchAppBeforeRequest,
+        )
+        launcherAppPackage = if (applyLauncherLaunch) {
             cfg.launcherAppPackage
         } else {
             ""
         }
-        launcherLaunchMode = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherLaunchMode = if (applyLauncherLaunch) {
             AppLauncherLaunchMode.fromStored(
                 cfg.launcherLaunchMode.storageKey,
                 cfg.launcherFreeformEnabled,
@@ -1643,34 +1735,33 @@ internal class WidgetSelectionDialogState(
         } else {
             AppLauncherLaunchMode.DEFAULT
         }
-        launcherFreeformSide = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherFreeformSide = if (applyLauncherLaunch) {
             cfg.launcherFreeformSide
         } else {
             FreeformLaunchSide.DEFAULT
         }
-        launcherFreeformPercent = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherFreeformPercent = if (applyLauncherLaunch) {
             FreeformLaunchBounds.normalizePercent(cfg.launcherFreeformPercent)
         } else {
             FreeformLaunchBounds.DEFAULT_PERCENT
         }
-        launcherFreeformOverlayPage = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherFreeformOverlayPage = if (applyLauncherLaunch) {
             cfg.launcherFreeformOverlayPage
         } else {
             null
         }
-        launcherFreeformOverlayCrop =
-            usesAppLauncherLaunchModeFields(selectedDataKey) && cfg.launcherFreeformOverlayCrop
-        launcherVirtualDisplayId = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherFreeformOverlayCrop = applyLauncherLaunch && cfg.launcherFreeformOverlayCrop
+        launcherVirtualDisplayId = if (applyLauncherLaunch) {
             cfg.launcherVirtualDisplayId
         } else {
             null
         }
-        launcherVirtualDisplayWidthPx = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherVirtualDisplayWidthPx = if (applyLauncherLaunch) {
             cfg.launcherVirtualDisplayWidthPx
         } else {
             null
         }
-        launcherVirtualDisplayHeightPx = if (usesAppLauncherLaunchModeFields(selectedDataKey)) {
+        launcherVirtualDisplayHeightPx = if (applyLauncherLaunch) {
             cfg.launcherVirtualDisplayHeightPx
         } else {
             null
@@ -2153,7 +2244,21 @@ internal class WidgetSelectionDialogState(
                             (displayId != null && displayId > 0)
                         )
             }
-            isHttpRequestWidgetSelected -> parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
+            isHttpRequestWidgetSelected -> {
+                val yamlOk = parseHttpRequestWidgetYaml(httpRequestYaml).isSuccess
+                if (!yamlOk) {
+                    false
+                } else if (!httpLaunchAppBeforeRequest || httpOpenBrowser) {
+                    true
+                } else {
+                    val displayId = launcherVirtualDisplayId
+                    launcherAppPackage.isNotBlank() &&
+                        (
+                            launcherLaunchMode != AppLauncherLaunchMode.VIRTUAL_DISPLAY ||
+                                (displayId != null && displayId > 0)
+                            )
+                }
+            }
             isPhoneDialWidgetSelected -> normalizeDialPhoneNumber(dialPhoneNumber).isNotEmpty()
             WidgetsRepository.supportsDateTimeFormat(selectedDataKey) ->
                 isValidDateTimeWidgetFormat(selectedDataKey, dateTimeFormat)

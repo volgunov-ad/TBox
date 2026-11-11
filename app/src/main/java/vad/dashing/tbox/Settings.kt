@@ -188,6 +188,16 @@ data class FloatingDashboardWidgetConfig(
     val httpRequestYaml: String = DEFAULT_HTTP_REQUEST_WIDGET_YAML,
     /** When true, `httpRequestWidget` opens its URL in the browser instead of sending a request. */
     val httpOpenBrowser: Boolean = false,
+    /**
+     * When true, a single tap on `httpRequestWidget` launches [launcherAppPackage] (same modes as
+     * the app-shortcut tile) before sending the HTTP request. Default off.
+     */
+    val httpLaunchAppBeforeRequest: Boolean = false,
+    /**
+     * Seconds to wait after the optional pre-request launch before sending HTTP.
+     * Only used when [httpLaunchAppBeforeRequest] is true.
+     */
+    val httpLaunchAppDelaySec: Int = DEFAULT_HTTP_LAUNCH_APP_DELAY_SEC,
     /** Phone number for [PHONE_DIAL_WIDGET_DATA_KEY] (`tel:` / ACTION_CALL). */
     val dialPhoneNumber: String = "",
     /** When true, show [dialPhoneNumber] on the tile face. Default on. */
