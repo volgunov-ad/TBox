@@ -25,6 +25,8 @@ Settings: блок типа ГУ / лаунчер. First-run `VehicleFeatureSetu
 | Main ON | DCL `app_area` → иначе Adayo stock → иначе fullscreen |
 | Main OFF | fullscreen |
 
+**Cold start / после обновления APK:** `MainActivity.onCreate` не должен считать DCL «недоступным» только потому, что `DclLauncherApiRepository` ещё не пробовал `getCapabilities` (раньше `start()` шёл из `BackgroundService` уже после решения о fullscreen). При `launch_main_in_stock_app_window=ON` и ещё не пробитых caps — async probe на IO, затем `app_area` / Adayo / fullscreen. Репозиторий также греется из `TboxApplication.onCreate`. DCL-env на пути Main не влияет.
+
 Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboard + main panels + floating) и в `LaunchApplication` → «Обычный». Не трогает Main, App List, уже-Обычный / DCL fullscreen.
 
 Код: `DclLauncherEnvironmentRouting`, `DclAppLaunchHelper`, `DashboardAppNavigation`, `MainActivityIntentHelper`, `AutomationActionExecutor`.
