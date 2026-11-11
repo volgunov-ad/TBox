@@ -652,7 +652,7 @@ object AutomationSignalCatalog {
             AutomationParameterLabels.signalLabel(AutomationSignalId.HUD_BRIGHTNESS),
             "",
             headUnitOnly,
-            typicalRange = "Уровень 1…10 — яркость проекции HUD (не экран ГУ и не приборка).",
+            typicalRange = "Уровень 1…10 — яркость проекции HUD (не экран ГУ и не приборная панель).",
         ),
         state(
             AutomationSignalId.HUD_DISPLAY_MODE,
@@ -1008,7 +1008,7 @@ object AutomationSignalCatalog {
             "",
             appOnly,
             typicalRange = "Только приложение. Уровень 1…10 — подсветка экрана ГУ " +
-                "(Car Settings → Экраны). Три яркости: экран ГУ / HUD / приборка (ICM) — " +
+                "(Car Settings → Экраны). Три яркости: экран ГУ / HUD / приборная панель (ICM) — " +
                 "разные сигналы. A9: Settings.System screen_brightness; A10: Adayo getSysBacklight.",
         ),
         state(

@@ -87,6 +87,10 @@ import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.HU_SCREEN_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.DAY_NIGHT_THEME_WIDGET_DATA_KEY
 import vad.dashing.tbox.MAIN_SCREEN_PAGE_SELECTOR_WIDGET_HORIZONTAL_DATA_KEY
@@ -1645,6 +1649,70 @@ fun DashboardWidgetRenderer(
 
         HUD_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY -> {
             DashboardHudBrightnessWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardSunshadePositionWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardSunshadePositionWidgetItem(
+                isVertical = true,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY -> {
+            DashboardSunroofPositionWidgetItem(
+                isVertical = false,
+                showTitle = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enableInnerInteractions = enableInnerInteractions,
+                elevation = elevation,
+                shape = shape,
+                textColor = widgetTextColor,
+                backgroundColor = widgetBackgroundColor,
+                stepperAdjustIconStyle = widgetConfig.stepperAdjustIconStyle,
+            )
+        }
+
+        SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY -> {
+            DashboardSunroofPositionWidgetItem(
                 isVertical = true,
                 showTitle = widgetConfig.showTitle,
                 titleOverride = titleOverride,

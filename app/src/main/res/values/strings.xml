@@ -558,6 +558,14 @@
     <string name="widget_hud_brightness_action_increase">Увеличить яркость HUD</string>
     <string name="widget_hud_brightness_action_decrease">Уменьшить яркость HUD</string>
     <string name="widget_hud_brightness_action_auto">Включить или выключить автояркость HUD</string>
+    <string name="widget_sunshade_position_title">Шторка</string>
+    <string name="widget_sunshade_position_action_increase">Открыть шторку</string>
+    <string name="widget_sunshade_position_action_decrease">Закрыть шторку</string>
+    <string name="widget_sunroof_position_title">Люк</string>
+    <string name="widget_sunroof_position_action_increase">Открыть люк</string>
+    <string name="widget_sunroof_position_action_decrease">Закрыть люк</string>
+    <string name="widget_shade_roof_position_percent">%1$d%%</string>
+    <string name="widget_shade_roof_position_unknown">—</string>
     <string name="widget_stepper_adjust_icon_style_title">Кнопки изменения значения</string>
     <string name="widget_stepper_adjust_icon_style_desc">Вид иконок для увеличения и уменьшения</string>
     <string name="widget_stepper_adjust_icon_plus_minus">Плюс и минус</string>
@@ -2482,8 +2490,12 @@
 
     <string name="data_title_hu_screen_brightness_widget_horizontal">Яркость экрана ГУ (горизонтально)</string>
     <string name="data_title_hu_screen_brightness_widget_vertical">Яркость экрана ГУ (вертикально)</string>
-    <string name="data_title_icm_brightness_widget_horizontal">Яркость приборки (горизонтально)</string>
-    <string name="data_title_icm_brightness_widget_vertical">Яркость приборки (вертикально)</string>
+    <string name="data_title_icm_brightness_widget_horizontal">Яркость приборной панели (горизонтально)</string>
+    <string name="data_title_icm_brightness_widget_vertical">Яркость приборной панели (вертикально)</string>
+    <string name="data_title_sunshade_position_widget_horizontal">Шторка (горизонтально)</string>
+    <string name="data_title_sunshade_position_widget_vertical">Шторка (вертикально)</string>
+    <string name="data_title_sunroof_position_widget_horizontal">Люк (горизонтально)</string>
+    <string name="data_title_sunroof_position_widget_vertical">Люк (вертикально)</string>
     <string name="data_title_hud_brightness_widget_horizontal">Яркость HUD (горизонтально)</string>
     <string name="data_title_hud_brightness_widget_vertical">Яркость HUD (вертикально)</string>
     <string name="data_title_time_widget">Время</string>
@@ -2757,6 +2769,10 @@
     <string name="widget_desc_icm_brightness_vertical">Вертикальный регулятор яркости приборной панели.</string>
     <string name="widget_desc_hud_brightness_horizontal">Горизонтальный регулятор яркости HUD.</string>
     <string name="widget_desc_hud_brightness_vertical">Вертикальный регулятор яркости HUD.</string>
+    <string name="widget_desc_sunshade_position_horizontal">Горизонтальный регулятор положения шторки (0…100 %, шаг 10 %).</string>
+    <string name="widget_desc_sunshade_position_vertical">Вертикальный регулятор положения шторки (0…100 %, шаг 10 %).</string>
+    <string name="widget_desc_sunroof_position_horizontal">Горизонтальный регулятор положения люка (0…100 %, шаг 10 %, без откидывания).</string>
+    <string name="widget_desc_sunroof_position_vertical">Вертикальный регулятор положения люка (0…100 %, шаг 10 %, без откидывания).</string>
     <string name="widget_desc_app_launcher">Ярлык выбранного приложения.</string>
     <string name="widget_desc_app_list">Список установленных программ с запуском, скрытием и удалением.</string>
     <string name="widget_desc_http_request">Выполняет настроенный HTTP-запрос или открывает адрес в браузере.</string>
@@ -2837,7 +2853,9 @@
     <string name="widget_actions_media_volume">Кнопки или свайп — изменить громкость; нажатие по центру — выключить или вернуть звук.</string>
 
     <string name="widget_actions_hu_screen_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость. При выключении авто записывается текущий уровень.</string>
-    <string name="widget_actions_icm_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость приборки. При выключении авто записывается текущий уровень.</string>
+    <string name="widget_actions_icm_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость приборной панели. При выключении авто записывается текущий уровень.</string>
+    <string name="widget_actions_sunshade_position">Кнопки или свайп — изменить положение шторки с шагом 10 %.</string>
+    <string name="widget_actions_sunroof_position">Кнопки или свайп — изменить положение люка с шагом 10 % (без откидывания).</string>
     <string name="widget_actions_hud_brightness">Кнопки или свайп — изменить яркость; нажатие по центру — автояркость HUD. При выключении авто записывается текущий уровень.</string>
     <string name="widget_actions_app_launcher">Одиночное нажатие — открыть приложение; двойное — закрыть (ADB force-stop, без повторного запуска).</string>
     <string name="widget_actions_app_list">Одиночное нажатие — открыть список программ.</string>

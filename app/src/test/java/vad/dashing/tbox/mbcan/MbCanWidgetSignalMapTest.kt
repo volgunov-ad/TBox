@@ -19,6 +19,10 @@ import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_HORIZONTAL_DATA_KEY
 import vad.dashing.tbox.ICM_BRIGHTNESS_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.LDW_WIDGET_DATA_KEY
 import vad.dashing.tbox.LKA_WIDGET_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY
+import vad.dashing.tbox.SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY
 import vad.dashing.tbox.TJA_ICA_WIDGET_DATA_KEY
 import vad.dashing.tbox.TRUNK_DOOR_WIDGET_DATA_KEY
 import vad.dashing.tbox.WIPER_MAINTENANCE_WIDGET_DATA_KEY
@@ -149,5 +153,25 @@ class MbCanWidgetSignalMapTest {
         )
         assertTrue(signals.contains(MbCanSignal.HudBrightness))
         assertTrue(signals.contains(MbCanSignal.HudAutoBrightness))
+    }
+
+    @Test
+    fun sunshadeAndSunroofPositionWidgets_subscribeBodyComfort() {
+        assertTrue(MbCanWidgetSignalMap.panelNeedsCan(listOf(SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY)))
+        assertEquals(
+            MbCanSignal.BodyComfort,
+            MbCanWidgetSignalMap.signalFor(SUNSHADE_POSITION_WIDGET_VERTICAL_DATA_KEY),
+        )
+        assertEquals(
+            MbCanSignal.BodyComfort,
+            MbCanWidgetSignalMap.signalFor(SUNROOF_POSITION_WIDGET_HORIZONTAL_DATA_KEY),
+        )
+        val signals = MbCanWidgetSignalMap.signalsForNormalizedKeys(
+            listOf(
+                SUNSHADE_POSITION_WIDGET_HORIZONTAL_DATA_KEY,
+                SUNROOF_POSITION_WIDGET_VERTICAL_DATA_KEY,
+            ),
+        )
+        assertTrue(signals.contains(MbCanSignal.BodyComfort))
     }
 }

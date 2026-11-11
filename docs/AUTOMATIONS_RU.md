@@ -235,7 +235,7 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` — статус-enum **0…4*
 |--------|---------|
 | `hu_screen_brightness` | Экран головного устройства |
 | `hud_brightness` | Проекция HUD |
-| `icm_brightness` | Комбинация приборов (приборка) |
+| `icm_brightness` | Комбинация приборов (приборная панель) |
 
 A9: `Settings.System screen_brightness` / `Settings.Global auto_bright`; A10: Adayo
 `get/setSysBacklight` и `get/setDayNightMode` (1 auto / 4 manual для яркости). Пока нет
