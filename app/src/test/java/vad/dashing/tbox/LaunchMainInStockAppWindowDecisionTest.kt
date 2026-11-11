@@ -305,6 +305,66 @@ class LaunchMainInStockAppWindowDecisionTest {
     }
 
     @Test
+    fun shouldEnsureStartActivityWhenOpeningMainViaDcl_isTrue() {
+        // DCL alone may REUSED_TASK an empty husk after HOME; ensure startActivity.
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldEnsureStartActivityWhenOpeningMainViaDcl(),
+        )
+    }
+
+    @Test
+    fun shouldClearDclRedirectStickyOnDestroy_onlyWhenFinishing() {
+        assertTrue(
+            LaunchMainInStockAppWindowDecision.shouldClearDclRedirectStickyOnDestroy(
+                isFinishing = true,
+                isChangingConfigurations = false,
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldClearDclRedirectStickyOnDestroy(
+                isFinishing = true,
+                isChangingConfigurations = true,
+            ),
+        )
+        assertFalse(
+            LaunchMainInStockAppWindowDecision.shouldClearDclRedirectStickyOnDestroy(
+                isFinishing = false,
+                isChangingConfigurations = false,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldRemoveEmptyOwnTask_whenNoActivities() {
+        assertTrue(
+            MainActivityOwnTasks.shouldRemoveEmptyOwnTask(
+                numActivities = 0,
+                taskId = 10,
+            ),
+        )
+        assertFalse(
+            MainActivityOwnTasks.shouldRemoveEmptyOwnTask(
+                numActivities = 1,
+                taskId = 10,
+            ),
+        )
+        assertFalse(
+            MainActivityOwnTasks.shouldRemoveEmptyOwnTask(
+                numActivities = 0,
+                taskId = 10,
+                keepTaskId = 10,
+            ),
+        )
+        assertTrue(
+            MainActivityOwnTasks.shouldRemoveEmptyOwnTask(
+                numActivities = 0,
+                taskId = 10,
+                keepTaskId = 11,
+            ),
+        )
+    }
+
+    @Test
     fun shouldSkipDclRedirectAntiLoop_matchesHostingAndSticky() {
         assertTrue(
             LaunchMainInStockAppWindowDecision.shouldSkipDclRedirectAntiLoop(

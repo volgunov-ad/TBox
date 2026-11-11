@@ -574,6 +574,17 @@ object FreeformLaunchHelper {
         if (Build.VERSION.SDK_INT >= 28) "setLaunchWindowingMode" else "setLaunchStackId"
 
     /**
+     * Bundle for starting an activity already in freeform at [bounds] (A9 API 28 reflection).
+     * Used when DCL `launchApp` would `closeFullWidthAppsIfOpen` the just-started Main.
+     */
+    fun freeformLaunchOptionsBundle(bounds: Rect): Bundle? =
+        activityOptionsBundle(
+            windowingMode = freeformWindowingModeId(),
+            bounds = bounds,
+            launchDisplayId = null,
+        )
+
+    /**
      * @param launchDisplayId when non-null, sets [ActivityOptions.setLaunchDisplayId] (inset VD).
      *   Null keeps the pre-multi-VD path so freeform bounds are not dropped on default display.
      */

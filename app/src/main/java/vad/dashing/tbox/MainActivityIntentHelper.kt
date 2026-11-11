@@ -10,10 +10,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import vad.dashing.tbox.dcl.DclAppLaunchHelper
+import vad.dashing.tbox.dcl.DclBounds
 import vad.dashing.tbox.dcl.DclLauncherApiRepository
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.dcl.dclCanLaunchAppArea
+import vad.dashing.tbox.freeform.FreeformLaunchHelper
 import vad.dashing.tbox.freeform.WindowModeUiGuard
 import vad.dashing.tbox.mbcan.UniversalCanRepository
 
@@ -183,21 +186,57 @@ object MainActivityIntentHelper {
     private fun launchMain(context: Context, fallbackIntent: Intent): Boolean {
         when (resolveMainAppWindowBackend(context)) {
             MainAppWindowBackend.DCL_APP_AREA -> {
-                DclAppLaunchHelper.launchAppArea(
-                    context = context,
-                    packageName = context.packageName,
-                    activityClass = MainActivity::class.java.name,
-                    onRawFallback = {
-                        val stockOk = AdayoStockAppWindow.launchInAppWindow(
-                            context = context,
-                            packageName = context.packageName,
-                            activityClass = MainActivity::class.java.name,
+                val appContext = context.applicationContext
+                if (
+                    !LaunchMainInStockAppWindowDecision
+                        .shouldEnsureStartActivityWhenOpeningMainViaDcl()
+                ) {
+                    DclAppLaunchHelper.launchAppArea(
+                        context = context,
+                        packageName = context.packageName,
+                        activityClass = MainActivity::class.java.name,
+                        onRawFallback = {
+                            val stockOk = AdayoStockAppWindow.launchInAppWindow(
+                                context = context,
+                                packageName = context.packageName,
+                                activityClass = MainActivity::class.java.name,
+                            )
+                            if (!stockOk) {
+                                runCatching { context.startActivity(fallbackIntent) }
+                            }
+                        },
+                    )
+                    return true
+                }
+                // Avoid DCL launchApp here: empty freeform husks (HOME + removeTask denied) make
+                // DCL REUSED_TASK sz=0, and launchApp also runs closeFullWidthAppsIfOpen on the
+                // just-started Main then restores HOME. Start Main ourselves into app_area
+                // freeform bounds; skip cold redirect so we do not re-enter that DCL path.
+                val appAreaBounds =
+                    DclLauncherApiRepository.uiState.value?.appArea()
+                        ?: DclBounds.DEFAULT_APP_AREA
+                val ensureIntent = Intent(appContext, MainActivity::class.java).apply {
+                    action = Intent.ACTION_MAIN
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(EXTRA_SKIP_EXTERNAL_STOCK_WINDOW_REDIRECT, true)
+                    fallbackIntent.extras?.let { putExtras(it) }
+                }
+                ioScope.launch {
+                    MainActivityOwnTasks.removeEmptyTasks(appContext)
+                    withContext(Dispatchers.Main) {
+                        val opts = FreeformLaunchHelper.freeformLaunchOptionsBundle(
+                            appAreaBounds.toRect(),
                         )
-                        if (!stockOk) {
-                            runCatching { context.startActivity(fallbackIntent) }
+                        runCatching {
+                            if (opts != null) {
+                                appContext.startActivity(ensureIntent, opts)
+                            } else {
+                                appContext.startActivity(ensureIntent)
+                            }
                         }
-                    },
-                )
+                    }
+                }
                 return true
             }
             MainAppWindowBackend.ADAYO_STOCK -> {

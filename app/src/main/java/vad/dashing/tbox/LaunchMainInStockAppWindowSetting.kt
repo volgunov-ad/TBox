@@ -152,6 +152,23 @@ internal object LaunchMainInStockAppWindowDecision {
      */
     fun shouldFinishSelfAfterSuccessfulDclAppAreaRedirect(): Boolean = false
 
+    /**
+     * Programmatic Main open via DCL must also [android.content.Context.startActivity] a
+     * bring-to-front Intent: DCL alone may `REUSED_TASK` an empty freeform husk and
+     * report success without creating Main (panel / shortcut appear dead after first open).
+     */
+    fun shouldEnsureStartActivityWhenOpeningMainViaDcl(): Boolean = true
+
+    /**
+     * Clear the process sticky anti-loop when a finishing Main is destroyed (not config
+     * change). After DCL HOME tears down the hosted activity, a later cold open must be
+     * allowed to redirect into app_area again.
+     */
+    fun shouldClearDclRedirectStickyOnDestroy(
+        isFinishing: Boolean,
+        isChangingConfigurations: Boolean,
+    ): Boolean = isFinishing && !isChangingConfigurations
+
     const val EXTERNAL_REDIRECT_COOLDOWN_MS = 3_000L
     private const val DEFAULT_DISPLAY_ID = 0
 }

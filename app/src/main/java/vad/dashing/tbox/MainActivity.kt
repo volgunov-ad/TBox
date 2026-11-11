@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Display
 import android.view.ViewTreeObserver
@@ -371,6 +373,14 @@ class MainActivity : ComponentActivity() {
             val probeBeforeLaunch = needsDclProbe
             lifecycleScope.launch {
                 val dclOk = withContext(Dispatchers.IO) {
+                    // Drop empty freeform husks before DCL reuse (HOME leaves sz=0 tasks when
+                    // removeTask is denied). Never prune this in-flight task — it can briefly
+                    // report 0 activities during early onCreate.
+                    @Suppress("DEPRECATION")
+                    MainActivityOwnTasks.removeEmptyTasks(
+                        context = this@MainActivity,
+                        keepTaskId = taskId,
+                    )
                     dclRepo.start(this@MainActivity)
                     if (probeBeforeLaunch && !dclRepo.capabilitiesProbed.value) {
                         dclRepo.refresh(this@MainActivity)
@@ -490,6 +500,23 @@ class MainActivity : ComponentActivity() {
         try {
             unregisterReceiver(finishForWindowModeReceiver)
         } catch (_: Exception) {
+        }
+        if (
+            LaunchMainInStockAppWindowDecision.shouldClearDclRedirectStickyOnDestroy(
+                isFinishing = isFinishing,
+                isChangingConfigurations = isChangingConfigurations,
+            )
+        ) {
+            // Clear sticky so the next cold Main can DCL-redirect again.
+            dclAppAreaExternalRedirectConsumedThisProcess = false
+            // After HOME, DCL often leaves an empty freeform husk (removeTask denied).
+            // Prune empty own tasks shortly after destroy so the next DCL/panel open
+            // does not REUSED_TASK sz=0. Delayed so freeform config recreate is settled.
+            val app = applicationContext
+            Handler(Looper.getMainLooper()).postDelayed(
+                { MainActivityOwnTasks.removeEmptyTasks(app) },
+                400L,
+            )
         }
         super.onDestroy()
     }
