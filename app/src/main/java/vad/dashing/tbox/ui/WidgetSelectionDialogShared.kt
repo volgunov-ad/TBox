@@ -1605,7 +1605,11 @@ internal class WidgetSelectionDialogState(
         textAlign = normalizeWidgetTextAlign(cfg.textAlign)
         fontWeight = normalizeWidgetFontWeight(cfg.fontWeight)
         titlePosition = normalizeWidgetTitlePosition(cfg.titlePosition)
-        customTitle = cfg.customTitle
+        // Paste without type (preserveDataKey): keep the target tile's custom title,
+        // same as applyTileAppearance — only full paste replaces the title.
+        if (!preserveDataKey) {
+            customTitle = cfg.customTitle
+        }
         singleLineDualMetrics = cfg.singleLineDualMetrics &&
             WidgetsRepository.supportsSingleLineDualMetrics(selectedDataKey)
         titleScale = normalizeWidgetScale(cfg.titleScale)
