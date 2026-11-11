@@ -45,6 +45,7 @@ Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboar
 | `dcl_adas_panel_visible` | STATE on/off | `uiState.adasPanelVisible` |
 | `dcl_top_bar_visible` | STATE on/off | `topBarVisible` |
 | `dcl_bottom_bar_visible` | STATE on/off | `bottomBarVisible` |
+| `dcl_notification_shade_expanded` | STATE on/off | `notificationShadeExpanded` |
 | `dcl_screen_mode` | STATE home/single/full_width/fullscreen/split | `screenMode` |
 
 Через существующие `state_equals` / `state`. Пока снимка DCL нет — `Unavailable`.

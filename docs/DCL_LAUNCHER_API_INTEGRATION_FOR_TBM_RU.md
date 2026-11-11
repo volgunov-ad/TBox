@@ -69,6 +69,7 @@ data class DclUiState(
     val displayWidthPx: Int,         // Ширина экрана в пикселях (напр. 1920)
     val displayHeightPx: Int,        // Высота экрана в пикселях (напр. 1080)
     val overlayOpen: Boolean,        // Открыты ли оверлеи DCL поверх приложений
+    val notificationShadeExpanded: Boolean?, // Шторка уведомлений / control center (API v1.3)
     val revision: Long,              // Монотонно растущий номер версии состояния
 )
 
@@ -88,6 +89,11 @@ fun getUiState(context: Context): DclUiState? {
         displayWidthPx = bundle.getInt("displayWidthPx", 1920),
         displayHeightPx = bundle.getInt("displayHeightPx", 1080),
         overlayOpen = bundle.getBoolean("overlayOpen", false),
+        notificationShadeExpanded = if (bundle.containsKey("notificationShadeExpanded")) {
+            bundle.getBoolean("notificationShadeExpanded")
+        } else {
+            null
+        },
         revision = bundle.getLong("revision", 1L)
     )
 }

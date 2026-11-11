@@ -59,6 +59,7 @@ object DclLauncherApiContract {
     const val KEY_TOP_BAR_VISIBLE = "topBarVisible"
     const val KEY_BOTTOM_BAR_VISIBLE = "bottomBarVisible"
     const val KEY_IMMERSIVE = "immersive"
+    const val KEY_NOTIFICATION_SHADE_EXPANDED = "notificationShadeExpanded"
     const val KEY_ERROR_CODE = "errorCode"
     const val KEY_MESSAGE = "message"
 

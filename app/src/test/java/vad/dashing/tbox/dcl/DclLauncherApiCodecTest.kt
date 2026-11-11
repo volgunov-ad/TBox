@@ -31,6 +31,7 @@ class DclLauncherApiCodecTest {
             putBoolean(DclLauncherApiContract.KEY_TOP_BAR_VISIBLE, true)
             putBoolean(DclLauncherApiContract.KEY_BOTTOM_BAR_VISIBLE, true)
             putBoolean(DclLauncherApiContract.KEY_ADAS_PANEL_VISIBLE, true)
+            putBoolean(DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED, true)
         }
 
         val result = DclLauncherApiCodec.parseUiState(bundle)
@@ -49,9 +50,48 @@ class DclLauncherApiCodecTest {
         assertEquals(true, state.topBarVisible)
         assertEquals(true, state.bottomBarVisible)
         assertEquals(true, state.adasPanelVisible)
+        assertEquals(true, state.notificationShadeExpanded)
         assertNull(state.immersive)
         assertEquals(DclBounds(344, 51, 1920, 998), state.appArea())
         assertEquals(DclBounds(0, 51, 344, 998), state.adasBounds())
+    }
+
+    @Test
+    fun parseUiState_notificationShadeExpanded_optionalBoolean() {
+        val absent = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putLong(DclLauncherApiContract.KEY_REVISION, 1L)
+        }
+        val absentState = (DclLauncherApiCodec.parseUiState(absent) as DclCallResult.Ok).value
+        assertNull(absentState.notificationShadeExpanded)
+
+        val collapsed = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putLong(DclLauncherApiContract.KEY_REVISION, 2L)
+            putBoolean(DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED, false)
+        }
+        val collapsedState = (DclLauncherApiCodec.parseUiState(collapsed) as DclCallResult.Ok).value
+        assertEquals(false, collapsedState.notificationShadeExpanded)
+
+        val stringTrue = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putLong(DclLauncherApiContract.KEY_REVISION, 3L)
+            putString(DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED, "true")
+        }
+        val stringState = (DclLauncherApiCodec.parseUiState(stringTrue) as DclCallResult.Ok).value
+        assertEquals(true, stringState.notificationShadeExpanded)
+    }
+
+    @Test
+    fun parseUiStateFromExtras_notificationShadeExpanded() {
+        val extras = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_SCREEN_MODE, DclLauncherApiContract.SCREEN_MODE_HOME)
+            putLong(DclLauncherApiContract.KEY_REVISION, 9L)
+            putBoolean(DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED, true)
+        }
+        val state = DclLauncherApiCodec.parseUiStateFromExtras(extras)
+        assertEquals(true, state!!.notificationShadeExpanded)
+        assertEquals(9L, state.revision)
     }
 
     @Test

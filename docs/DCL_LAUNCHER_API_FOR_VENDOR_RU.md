@@ -318,6 +318,10 @@ Extras: **полный снимок** как у `getUiState` (хром + `screen
 | `modalOpen` | boolean | диалог / sheet / picker DCL |
 | `transientChromeVisible` | boolean | удобный OR всех «временных» слоёв |
 
+`notificationShadeExpanded` в gist API v1.3 входит в основной снимок UI; Monitor парсит
+поле в `DclUiState` (push + `getUiState`) и публикует сигнал автоматизаций
+`dcl_notification_shade_expanded` (`on`/`off`). Остальные ключи §6.3 пока wishlist.
+
 Чтобы плавающие панели TBox не рисовались поверх system/DCL UI.
 
 ### 6.4. Active source / media host — **P2**

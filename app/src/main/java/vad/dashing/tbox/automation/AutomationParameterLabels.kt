@@ -274,6 +274,7 @@ object AutomationParameterLabels {
         AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> "DCL: панель ADAS"
         AutomationSignalId.DCL_TOP_BAR_VISIBLE -> "DCL: верхняя панель"
         AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> "DCL: нижняя панель"
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED -> "DCL: шторка уведомлений"
         AutomationSignalId.DCL_SCREEN_MODE -> "DCL: режим экрана"
         AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
         AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
