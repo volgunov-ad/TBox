@@ -2875,6 +2875,7 @@
     <string name="widget_camd_window_y">From the top, %</string>
     <string name="widget_camd_window_w">Width, %</string>
     <string name="widget_camd_window_h">Height, %</string>
+    <string name="widget_camd_window_rotation">Rotation</string>
     <string name="camd_window_camera_front">Front</string>
     <string name="camd_window_camera_rear">Rear</string>
     <string name="camd_window_camera_left">Left</string>

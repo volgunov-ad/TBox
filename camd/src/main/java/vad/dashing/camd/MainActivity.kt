@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                     onY = controller::setY,
                     onW = controller::setW,
                     onH = controller::setH,
+                    onRotation = controller::setRotation,
                     onOpen = controller::open,
                     onClose = controller::close,
                     onKeepAvm = controller::setKeepAvmStopped,
@@ -105,6 +106,7 @@ data class CamdUiState(
     val y: Float = 0.70f,
     val w: Float = 0.28f,
     val h: Float = 0.28f,
+    val rotation: Int = 0,
     val busy: Boolean = false,
     val keepAvmStopped: Boolean = false,
     val message: String = "Окно откроется после «Открыть». Записи пока нет.",
@@ -156,6 +158,14 @@ class CamdController(
         _state.value = _state.value.copy(h = value)
     }
 
+    fun setRotation(degrees: Int) {
+        val rotation = when (degrees) {
+            90, 180, 270 -> degrees
+            else -> 0
+        }
+        _state.value = _state.value.copy(rotation = rotation)
+    }
+
     fun setKeepAvmStopped(keep: Boolean) {
         io.execute {
             _state.value = _state.value.copy(busy = true, keepAvmStopped = keep)
@@ -175,12 +185,13 @@ class CamdController(
             _state.value = current.copy(busy = true, message = "Открываю окно…")
             val line = String.format(
                 Locale.US,
-                "OPEN %d %.4f %.4f %.4f %.4f",
+                "OPEN %d %.4f %.4f %.4f %.4f %d",
                 current.inputId,
                 current.x,
                 current.y,
                 current.w,
-                current.h
+                current.h,
+                current.rotation,
             )
             val command = CamdCommands.parse(line)
             val result = if (command is CamdCommand.Open) {
@@ -251,6 +262,7 @@ private fun CamdScreen(
     onY: (Float) -> Unit,
     onW: (Float) -> Unit,
     onH: (Float) -> Unit,
+    onRotation: (Int) -> Unit,
     onOpen: () -> Unit,
     onClose: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
@@ -309,6 +321,16 @@ private fun CamdScreen(
         FractionSlider("Y", state.y, onY)
         FractionSlider("Ширина", state.w, onW)
         FractionSlider("Высота", state.h, onH)
+        Text("Поворот", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0, 90, 180, 270).forEach { degrees ->
+                FilterChip(
+                    selected = state.rotation == degrees,
+                    onClick = { onRotation(degrees) },
+                    label = { Text("$degrees°", style = MaterialTheme.typography.labelLarge) },
+                )
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onOpen, enabled = !state.busy) {
                 Text("Открыть", style = MaterialTheme.typography.labelLarge)

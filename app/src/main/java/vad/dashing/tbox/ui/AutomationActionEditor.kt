@@ -1248,6 +1248,7 @@ private fun CamdWindowActionFields(
                             args.y,
                             args.w,
                             args.h,
+                            args.rotation,
                         ),
                     ),
                 )
@@ -1266,6 +1267,26 @@ private fun CamdWindowActionFields(
             )
         }
         if (args.mode == CAMD_ACTION_OPEN) {
+            AutomationDropdown(
+                label = "Поворот",
+                value = args.rotation,
+                options = listOf(0, 90, 180, 270),
+                optionLabel = { "$it°" },
+                onValueChange = { degrees ->
+                    onChange(
+                        action.copy(
+                            stringValue = formatCamdAutomationWindowArgs(
+                                args.mode,
+                                args.x,
+                                args.y,
+                                args.w,
+                                args.h,
+                                degrees,
+                            ),
+                        ),
+                    )
+                },
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
                     onChange(
@@ -1276,6 +1297,7 @@ private fun CamdWindowActionFields(
                                 args.y,
                                 args.w,
                                 args.h,
+                                args.rotation,
                             ),
                         ),
                     )
@@ -1289,6 +1311,7 @@ private fun CamdWindowActionFields(
                                 next,
                                 args.w,
                                 args.h,
+                                args.rotation,
                             ),
                         ),
                     )
@@ -1304,6 +1327,7 @@ private fun CamdWindowActionFields(
                                 args.y,
                                 next,
                                 args.h,
+                                args.rotation,
                             ),
                         ),
                     )
@@ -1317,6 +1341,7 @@ private fun CamdWindowActionFields(
                                 args.y,
                                 args.w,
                                 next,
+                                args.rotation,
                             ),
                         ),
                     )

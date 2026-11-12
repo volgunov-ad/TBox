@@ -290,6 +290,8 @@ fun serializeWidgetConfigsToJsonArray(
             obj.put("camdWindowY", geometry.y)
             obj.put("camdWindowW", geometry.w)
             obj.put("camdWindowH", geometry.h)
+            val rotation = normalizeCamdRotation(config.camdWindowRotation)
+            if (rotation != 0) obj.put("camdWindowRotation", rotation)
         }
         if (supportsWidgetButtonBinding(config.dataKey)) {
             normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
@@ -810,6 +812,11 @@ private fun parseWidgetConfigsFromJsonArray(
                         camdWindowY = camdGeometry.y,
                         camdWindowW = camdGeometry.w,
                         camdWindowH = camdGeometry.h,
+                        camdWindowRotation = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                            normalizeCamdRotation(item.optInt("camdWindowRotation", 0))
+                        } else {
+                            0
+                        },
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {

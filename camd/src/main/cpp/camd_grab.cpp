@@ -256,12 +256,24 @@ static Camera* open_camera(int id) {
 static int map_shared(Camera* camera) {
     char path[128];
     snprintf(path, sizeof(path), FRAME_RAM "/camd-uyvy-%d", camera->id);
-    int fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0666);
-    if (fd < 0) return -1;
     int mapSize = UYVY_HEADER + camera->size * 2;
-    if (ftruncate(fd, mapSize) != 0) {
-        close(fd);
-        return -1;
+    int fd = open(path, O_RDWR | O_CLOEXEC);
+    if (fd >= 0) {
+        struct stat st;
+        if (fstat(fd, &st) != 0 || st.st_size != mapSize) {
+            close(fd);
+            unlink(path);
+            fd = -1;
+        }
+    }
+    if (fd < 0) {
+        fd = open(path, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
+        if (fd < 0) return -1;
+        if (ftruncate(fd, mapSize) != 0) {
+            close(fd);
+            unlink(path);
+            return -1;
+        }
     }
     void* mem = mmap(nullptr, (size_t)mapSize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);

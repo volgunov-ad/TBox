@@ -97,6 +97,7 @@ import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
+import vad.dashing.tbox.normalizeCamdRotation
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_W
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_X
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_Y
@@ -835,6 +836,13 @@ internal class WidgetSelectionDialogState(
             CAMD_WINDOW_DEFAULT_H
         }
     )
+    var camdWindowRotation by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdRotation(initialConfig.camdWindowRotation)
+        } else {
+            0
+        }
+    )
     var buttonBinding by mutableStateOf(
         if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
             normalizeWidgetButtonBinding(initialConfig.buttonBinding)
@@ -1381,6 +1389,11 @@ internal class WidgetSelectionDialogState(
             } else {
                 CAMD_WINDOW_DEFAULT_H
             },
+            camdWindowRotation = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdRotation(camdWindowRotation)
+            } else {
+                0
+            },
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
             } else {
@@ -1812,12 +1825,14 @@ internal class WidgetSelectionDialogState(
             camdWindowY = geometry.y
             camdWindowW = geometry.w
             camdWindowH = geometry.h
+            camdWindowRotation = normalizeCamdRotation(cfg.camdWindowRotation)
         } else {
             camdWindowCameraId = CAMD_WINDOW_DEFAULT_CAMERA
             camdWindowX = CAMD_WINDOW_DEFAULT_X
             camdWindowY = CAMD_WINDOW_DEFAULT_Y
             camdWindowW = CAMD_WINDOW_DEFAULT_W
             camdWindowH = CAMD_WINDOW_DEFAULT_H
+            camdWindowRotation = 0
         }
         buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
             normalizeWidgetButtonBinding(cfg.buttonBinding)

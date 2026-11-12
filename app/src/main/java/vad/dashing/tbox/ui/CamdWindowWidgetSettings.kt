@@ -84,6 +84,27 @@ internal fun CamdWindowWidgetSettingsSection(
             minValue = 5,
             maxValue = 100,
         )
+        Text(
+            text = stringResource(R.string.widget_camd_window_rotation),
+            style = MaterialTheme.typography.tboxButton,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 6.dp, top = 8.dp),
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(0, 90, 180, 270).forEach { degrees ->
+                FilterChip(
+                    selected = state.camdWindowRotation == degrees,
+                    onClick = { state.camdWindowRotation = degrees },
+                    enabled = state.togglesEnabled,
+                    label = {
+                        Text("$degrees°", style = MaterialTheme.typography.tboxCaption)
+                    },
+                )
+            }
+        }
     }
 }
 

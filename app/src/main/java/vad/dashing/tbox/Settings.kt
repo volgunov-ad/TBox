@@ -213,6 +213,8 @@ data class FloatingDashboardWidgetConfig(
     val camdWindowY: Int = CAMD_WINDOW_DEFAULT_Y,
     val camdWindowW: Int = CAMD_WINDOW_DEFAULT_W,
     val camdWindowH: Int = CAMD_WINDOW_DEFAULT_H,
+    /** Clockwise image rotation for [CAMD_WINDOW_WIDGET_DATA_KEY]: 0, 90, 180, or 270. */
+    val camdWindowRotation: Int = 0,
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**

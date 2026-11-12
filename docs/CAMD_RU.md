@@ -87,8 +87,8 @@ adb install -r -d camd-debug.apk
 | Кадр | root `camd_grab` копирует UYVY в tmpfs `/mnt/camd-ram/camd-uyvy-<id>` (32 МБ). Окно — `TextureView` и шейдер. Лог `/data/local/tmp/camd-grab.log` |
 | AVM | входы 4, 5, 8, 9 останавливают `AVMapp`, пока открыто хотя бы одно такое окно. Последнее закрытие запускает его снова |
 | Пробы | по-прежнему `qcarcam_test`, не показ. Скрипт убивает его через 22 секунды и возвращает `AVMapp` |
-| API | `127.0.0.1:8770`: `OPEN <id> <x> <y> <w> <h>`, `CLOSE <id>`, `CLOSE`, `AVM ON`, `AVM OFF`, `STATUS` |
-| Загрузка | `BOOT_COMPLETED` и `QUICKBOOT_POWERON` стартуют службу и API. Если порт молчит, TBox Monitor шлёт явный `vad.dashing.camd.START` и повторяет команду. Опрос `STATUS` службу не будит. Root-процесс поднимается при первом «Открыть» |
+| API | `127.0.0.1:8770`: `OPEN <id> <x> <y> <w> <h> [0\|90\|180\|270]`, `CLOSE <id>`, `CLOSE`, `AVM ON`, `AVM OFF`, `STATUS`. Поворот — по часовой, картинки внутри окна |
+| Загрузка | `BOOT_COMPLETED`, `LOCKED_BOOT_COMPLETED` (если пользователь уже разблокирован), `USER_UNLOCKED`, `QUICKBOOT_POWERON` и обновление пакета стартуют службу. TBox Monitor при своей загрузке тоже поднимает её, если пакет установлен. Если порт молчит, команда повторяет запуск. Опрос `STATUS` службу не будит |
 | TBox Monitor | Если пакет установлен: вкладка «Информация» читает `STATUS`; «Настройки → Система» шлёт `AVM ON`/`AVM OFF`; автоматизации `camd_window` и `camd_keep_avm` шлют `OPEN`/`CLOSE` и тот же переключатель |
 | Код | `CameraWindows.kt`, `camd/src/main/cpp/camd_grab.cpp`, пробы в `ProbeScripts.kt` |
 

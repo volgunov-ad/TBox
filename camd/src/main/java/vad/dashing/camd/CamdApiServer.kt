@@ -8,7 +8,7 @@ import kotlin.concurrent.thread
 
 /**
  * One line in, one line out, on localhost only.
- * OPEN <id> <x> <y> <w> <h>
+ * OPEN <id> <x> <y> <w> <h> [0|90|180|270]
  * CLOSE
  * CLOSE <id>
  * AVM ON|OFF

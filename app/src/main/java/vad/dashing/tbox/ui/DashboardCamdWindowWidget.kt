@@ -35,6 +35,7 @@ internal fun DashboardCamdWindowWidgetItem(
     y: Int,
     w: Int,
     h: Int,
+    rotation: Int,
 ) {
     val context = LocalContext.current
     val camera = normalizeCamdWindowCamera(cameraId)
@@ -46,7 +47,7 @@ internal fun DashboardCamdWindowWidgetItem(
             if (isEditMode) {
                 onEditClick()
             } else {
-                CamdWindowClient.open(context, camera, x, y, w, h)
+                CamdWindowClient.open(context, camera, x, y, w, h, rotation)
             }
         },
         onDoubleClick = if (isEditMode) {

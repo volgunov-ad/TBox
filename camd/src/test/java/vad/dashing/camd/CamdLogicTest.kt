@@ -31,6 +31,11 @@ class CamdCommandTest {
     fun parsesOpenCloseAndStatus() {
         val open = CamdCommands.parse("OPEN 0 0.0200 0.7000 0.2800 0.2800")
         assertEquals(CamdCommand.Open(0, 0.02f, 0.70f, 0.28f, 0.28f), open)
+        assertEquals(
+            CamdCommand.Open(4, 0.02f, 0.55f, 0.40f, 0.40f, 90),
+            CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 90"),
+        )
+        assertNull(CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 45"))
         assertEquals(CamdCommand.CloseAll, CamdCommands.parse("close"))
         assertEquals(CamdCommand.Close(4), CamdCommands.parse("CLOSE 4"))
         assertEquals(CamdCommand.Status, CamdCommands.parse("STATUS"))

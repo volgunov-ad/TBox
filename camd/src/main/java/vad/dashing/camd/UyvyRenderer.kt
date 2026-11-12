@@ -28,14 +28,34 @@ internal class UyvyRenderer(
     private val view: TextureView,
     private val frame: File,
     private val main: Handler,
+    initialRotation: Int = 0,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
     @Volatile
+    private var started = false
+    @Volatile
     private var running = false
+    @Volatile
+    private var rotation = when (initialRotation) {
+        90, 180, 270 -> initialRotation
+        else -> 0
+    }
+    @Volatile
+    private var surfaceWidth = 1
+    @Volatile
+    private var surfaceHeight = 1
     private var thread: Thread? = null
 
+    fun setRotation(degrees: Int) {
+        rotation = when (degrees) {
+            90, 180, 270 -> degrees
+            else -> 0
+        }
+    }
+
     fun start() {
+        started = true
         view.surfaceTextureListener = this
         if (view.isAvailable) {
             val surface = view.surfaceTexture ?: return
@@ -44,30 +64,45 @@ internal class UyvyRenderer(
     }
 
     fun stop() {
+        started = false
         running = false
-        thread?.join(1_000)
-        thread = null
+        joinThread()
     }
 
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-        if (thread != null) return
+        if (!started || thread != null) return
+        surfaceWidth = width.coerceAtLeast(1)
+        surfaceHeight = height.coerceAtLeast(1)
+        surface.setDefaultBufferSize(surfaceWidth, surfaceHeight)
         running = true
-        thread = Thread({ render(surface, width, height) }, "camd-gl").apply {
+        thread = Thread({ render(surface) }, "camd-gl").apply {
             isDaemon = true
             start()
         }
     }
 
-    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) = Unit
+    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+        surfaceWidth = width.coerceAtLeast(1)
+        surfaceHeight = height.coerceAtLeast(1)
+        surface.setDefaultBufferSize(surfaceWidth, surfaceHeight)
+    }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+        started = false
         running = false
-        return true
+        joinThread()
+        return thread?.isAlive != true
     }
 
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
 
-    private fun render(surfaceTexture: SurfaceTexture, viewWidth: Int, viewHeight: Int) {
+    private fun joinThread() {
+        val worker = thread ?: return
+        runCatching { worker.join(3_000) }
+        if (!worker.isAlive) thread = null
+    }
+
+    private fun render(surfaceTexture: SurfaceTexture) {
         val window = Surface(surfaceTexture)
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         if (display == EGL14.EGL_NO_DISPLAY) {
@@ -94,6 +129,7 @@ internal class UyvyRenderer(
         )
         val surface = EGL14.eglCreateWindowSurface(display, config, window, intArrayOf(EGL14.EGL_NONE), 0)
         if (context == null || context == EGL14.EGL_NO_CONTEXT || surface == null || surface == EGL14.EGL_NO_SURFACE) {
+            if (surface != null && surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(display, surface)
             if (context != null && context != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
             window.release()
@@ -115,6 +151,7 @@ internal class UyvyRenderer(
         val aPos = GLES20.glGetAttribLocation(program, "aPos")
         val uTex = GLES20.glGetUniformLocation(program, "uTex")
         val uWidth = GLES20.glGetUniformLocation(program, "uWidth")
+        val uRot = GLES20.glGetUniformLocation(program, "uRot")
         var mapped: ByteBuffer? = null
         var mappedIno = 0L
         var mappedLength = 0L
@@ -136,7 +173,7 @@ internal class UyvyRenderer(
                     Thread.sleep(4)
                     continue
                 }
-                val published = readSlot(buffer)
+                val published = readUyvySlot(buffer)
                 if (published == null || published.seq == lastSeq) {
                     Thread.sleep(4)
                     continue
@@ -147,9 +184,10 @@ internal class UyvyRenderer(
                 }
                 copy.clear()
                 val viewBuffer = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-                viewBuffer.position(HEADER + published.slot * bytes)
-                viewBuffer.limit(HEADER + published.slot * bytes + bytes)
+                viewBuffer.position(UYVY_HEADER + published.slot * bytes)
+                viewBuffer.limit(UYVY_HEADER + published.slot * bytes + bytes)
                 copy.put(viewBuffer)
+                if (buffer.getInt(16) != published.seq) continue
                 copy.position(0)
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
                 if (uploadedWidth != published.width || uploadedHeight != published.height) {
@@ -179,15 +217,16 @@ internal class UyvyRenderer(
                         copy,
                     )
                 }
-                GLES20.glViewport(0, 0, viewWidth.coerceAtLeast(1), viewHeight.coerceAtLeast(1))
+                GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
                 GLES20.glUseProgram(program)
                 GLES20.glUniform1i(uTex, 0)
                 GLES20.glUniform1f(uWidth, published.width.toFloat())
+                GLES20.glUniform1f(uRot, rotation.toFloat())
                 quad.position(0)
                 GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
                 GLES20.glEnableVertexAttribArray(aPos)
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                EGL14.eglSwapBuffers(display, surface)
+                if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
                 if (!sawFrame) {
                     sawFrame = true
@@ -196,6 +235,8 @@ internal class UyvyRenderer(
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
+        } catch (_: Exception) {
+            // A bad frame must not leave the EGL surface attached.
         } finally {
             runCatching { source?.close() }
             GLES20.glDeleteTextures(1, texture, 0)
@@ -232,7 +273,7 @@ internal class UyvyRenderer(
             return SharedMap(current, mapped, mappedIno, mappedLength)
         }
         runCatching { current?.close() }
-        if (stat == null || length < HEADER) {
+        if (stat == null || length < UYVY_HEADER) {
             runCatching { probe.close() }
             return SharedMap(null, null, 0L, 0L)
         }
@@ -244,25 +285,6 @@ internal class UyvyRenderer(
             return SharedMap(null, null, 0L, 0L)
         }
         return SharedMap(probe, buffer, stat.st_ino, length)
-    }
-
-    private fun readSlot(buffer: ByteBuffer): Slot? {
-        if (buffer.capacity() < HEADER) return null
-        if (buffer.getInt(0) != MAGIC) return null
-        val width = buffer.getInt(4)
-        val height = buffer.getInt(8)
-        val stride = buffer.getInt(12)
-        val seq1 = buffer.getInt(16)
-        val slot = buffer.getInt(20)
-        val slotBytes = buffer.getInt(24)
-        val seq2 = buffer.getInt(16)
-        if (seq1 == 0 || seq1 != seq2) return null
-        if (slot != 0 && slot != 1) return null
-        if (width < 2 || height < 2 || width > 1920 || height > 1200 || width % 2 != 0) return null
-        if (stride != width * 2 || slotBytes != stride * height) return null
-        val end = HEADER + (slot + 1) * slotBytes
-        if (end > buffer.capacity()) return null
-        return Slot(width, height, slot, slotBytes, seq1)
     }
 
     private fun chooseConfig(display: EGLDisplay): EGLConfig? {
@@ -319,17 +341,7 @@ internal class UyvyRenderer(
         val length: Long,
     )
 
-    private class Slot(
-        val width: Int,
-        val height: Int,
-        val slot: Int,
-        val slotBytes: Int,
-        val seq: Int,
-    )
-
     private companion object {
-        const val MAGIC = 0x31765955
-        const val HEADER = 64
         const val VERTEX = """
             attribute vec2 aPos;
             varying vec2 vTex;
@@ -342,11 +354,18 @@ internal class UyvyRenderer(
             precision highp float;
             uniform sampler2D uTex;
             uniform float uWidth;
+            uniform float uRot;
             varying vec2 vTex;
             void main() {
-                float x = vTex.x * uWidth;
+                vec2 p = vTex - 0.5;
+                vec2 r = p;
+                if (uRot > 45.0 && uRot < 135.0) r = vec2(-p.y, p.x);
+                else if (uRot > 135.0 && uRot < 225.0) r = -p;
+                else if (uRot > 225.0) r = vec2(p.y, -p.x);
+                vec2 uv = r + 0.5;
+                float x = uv.x * uWidth;
                 float texel = (floor(x * 0.5) + 0.5) / (uWidth * 0.5);
-                vec4 uyvy = texture2D(uTex, vec2(texel, vTex.y));
+                vec4 uyvy = texture2D(uTex, vec2(texel, uv.y));
                 float y = mod(floor(x), 2.0) < 0.5 ? uyvy.g : uyvy.a;
                 float u = uyvy.r - 0.5;
                 float v = uyvy.b - 0.5;

@@ -58,17 +58,23 @@ fun normalizeCamdWindowCamera(id: Int): Int {
     }
 }
 
-fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int): String {
+fun normalizeCamdRotation(value: Int): Int = when (value) {
+    90, 180, 270 -> value
+    else -> 0
+}
+
+fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: Int = 0): String {
     val camera = normalizeCamdWindowCamera(cameraId)
     val geometry = normalizeCamdWindowGeometry(x, y, w, h)
     return String.format(
         Locale.US,
-        "OPEN %d %.4f %.4f %.4f %.4f",
+        "OPEN %d %.4f %.4f %.4f %.4f %d",
         camera,
         geometry.x / 100.0,
         geometry.y / 100.0,
         geometry.w / 100.0,
         geometry.h / 100.0,
+        normalizeCamdRotation(rotation),
     )
 }
 
@@ -86,12 +92,22 @@ fun isCamdPortClosed(error: Throwable?): Boolean = when (error) {
     else -> false
 }
 
+fun startCamdService(context: Context) {
+    val app = context.applicationContext
+    val intent = Intent().setClassName(CAMD_PACKAGE_NAME, "$CAMD_PACKAGE_NAME.CamdService")
+    try {
+        app.startForegroundService(intent)
+    } catch (_: Exception) {
+        app.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
+    }
+}
+
 object CamdWindowClient {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
-    fun open(context: Context, cameraId: Int, x: Int, y: Int, w: Int, h: Int) {
-        send(context, camdWindowOpenLine(cameraId, x, y, w, h))
+    fun open(context: Context, cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: Int = 0) {
+        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation))
     }
 
     fun close(context: Context, cameraId: Int) {
@@ -109,7 +125,7 @@ object CamdWindowClient {
         val first = exchange(line, readTimeoutMs, connectTimeoutMs = 1_500)
         if (first.isSuccess || context == null || !camdCommandWakesService(line)) return first
         if (!isCamdPortClosed(first.exceptionOrNull())) return first
-        context.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
+        startCamdService(context)
         val deadline = System.nanoTime() + 4_000_000_000L
         var last = first
         while (System.nanoTime() < deadline) {
@@ -160,6 +176,7 @@ data class CamdAutomationWindowArgs(
     val y: Int,
     val w: Int,
     val h: Int,
+    val rotation: Int = 0,
 )
 
 fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
@@ -194,8 +211,19 @@ fun parseCamdStatusReply(reply: String): CamdServiceStatus? {
 fun camdKeepAvmCommandLine(keepStopped: Boolean): String =
     if (keepStopped) "AVM ON" else "AVM OFF"
 
-fun formatCamdAutomationWindowArgs(mode: String, x: Int, y: Int, w: Int, h: Int): String =
-    if (mode == CAMD_ACTION_OPEN) "$CAMD_ACTION_OPEN $x $y $w $h" else mode
+fun formatCamdAutomationWindowArgs(
+    mode: String,
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+    rotation: Int = 0,
+): String =
+    if (mode == CAMD_ACTION_OPEN) {
+        "$CAMD_ACTION_OPEN $x $y $w $h ${normalizeCamdRotation(rotation)}"
+    } else {
+        mode
+    }
 
 fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
     val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
@@ -214,13 +242,21 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
             h = CAMD_WINDOW_DEFAULT_H,
         )
     }
-    if (parts.size != 5) return null
+    if (parts.size != 5 && parts.size != 6) return null
+    val rotation = if (parts.size == 6) {
+        val value = parts[5].toIntOrNull() ?: return null
+        if (value != 0 && value != 90 && value != 180 && value != 270) return null
+        value
+    } else {
+        0
+    }
     return CamdAutomationWindowArgs(
         mode = mode,
         x = parts[1].toIntOrNull() ?: return null,
         y = parts[2].toIntOrNull() ?: return null,
         w = parts[3].toIntOrNull() ?: return null,
         h = parts[4].toIntOrNull() ?: return null,
+        rotation = rotation,
     )
 }
 
@@ -241,7 +277,7 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
         CAMD_ACTION_OPEN -> {
             if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
             if (camdWindowGeometryIssue(args.x, args.y, args.w, args.h) != null) return null
-            camdWindowOpenLine(cameraId, args.x, args.y, args.w, args.h)
+            camdWindowOpenLine(cameraId, args.x, args.y, args.w, args.h, args.rotation)
         }
         else -> null
     }

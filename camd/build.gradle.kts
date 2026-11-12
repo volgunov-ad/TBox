@@ -12,7 +12,7 @@ android {
     defaultConfig {
         applicationId = "vad.dashing.camd"
         minSdk = 28
-        targetSdk = 28
+        targetSdk = 36
         versionCode = 1
         versionName = "0.2.0"
 

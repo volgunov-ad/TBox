@@ -57,6 +57,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="vad.dashing.camd.permission.START" />
     <uses-permission
         android:name="android.car.permission.CAR_INFO"
         tools:ignore="ProtectedPermissions" />

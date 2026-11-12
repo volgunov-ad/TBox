@@ -2886,6 +2886,7 @@
     <string name="widget_camd_window_y">Сверху, %</string>
     <string name="widget_camd_window_w">Ширина, %</string>
     <string name="widget_camd_window_h">Высота, %</string>
+    <string name="widget_camd_window_rotation">Поворот</string>
     <string name="camd_window_camera_front">Передняя</string>
     <string name="camd_window_camera_rear">Задняя</string>
     <string name="camd_window_camera_left">Левая</string>

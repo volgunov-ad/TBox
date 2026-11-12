@@ -6,7 +6,8 @@ sealed class CamdCommand {
         val x: Float,
         val y: Float,
         val w: Float,
-        val h: Float
+        val h: Float,
+        val rotation: Int = 0,
     ) : CamdCommand()
 
     data object CloseAll : CamdCommand()
@@ -42,17 +43,25 @@ object CamdCommands {
     }
 
     private fun parseOpen(parts: List<String>): CamdCommand.Open? {
-        if (parts.size != 6) return null
+        if (parts.size != 6 && parts.size != 7) return null
         val id = parts[1].toIntOrNull() ?: return null
         val x = parts[2].toFloatOrNull() ?: return null
         val y = parts[3].toFloatOrNull() ?: return null
         val w = parts[4].toFloatOrNull() ?: return null
         val h = parts[5].toFloatOrNull() ?: return null
+        val rotation = if (parts.size == 7) {
+            when (parts[6].toIntOrNull()) {
+                0, 90, 180, 270 -> parts[6].toInt()
+                else -> return null
+            }
+        } else {
+            0
+        }
         if (KnownInputs.byId(id) == null) return null
         if (!fraction(x) || !fraction(y) || !fraction(w) || !fraction(h)) return null
         if (w < 0.05f || h < 0.05f) return null
         if (x + w > 1.02f || y + h > 1.02f) return null
-        return CamdCommand.Open(id, x, y, w, h)
+        return CamdCommand.Open(id, x, y, w, h, rotation)
     }
 
     private fun fraction(value: Float): Boolean = value in 0f..1f

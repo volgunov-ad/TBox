@@ -217,9 +217,10 @@ class CameraWindows(private val context: Context) {
                 val existing = views[command.inputId]
                 if (existing != null) {
                     place(existing.params, command)
+                    existing.setRotation(command.rotation)
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
-                    val live = LiveWindow(command.inputId, input)
+                    val live = LiveWindow(command.inputId, input, command.rotation)
                     place(live.params, command)
                     windowManager().addView(live.root, live.params)
                     views[command.inputId] = live
@@ -332,7 +333,7 @@ class CameraWindows(private val context: Context) {
         var error: String = "overlay"
     }
 
-    private inner class LiveWindow(val id: Int, val input: CameraInput) {
+    private inner class LiveWindow(val id: Int, val input: CameraInput, rotation: Int) {
         val root: FrameLayout = FrameLayout(context)
         val picture: TextureView = TextureView(context)
         val caption: TextView = TextView(context)
@@ -386,9 +387,18 @@ class CameraWindows(private val context: Context) {
                 PixelFormat.TRANSLUCENT
             )
             params.gravity = Gravity.START or Gravity.TOP
-            renderer = UyvyRenderer(picture, File(GrabberScripts.frame(id)), main) {
+            renderer = UyvyRenderer(
+                picture,
+                File(GrabberScripts.frame(id)),
+                main,
+                rotation,
+            ) {
                 caption.visibility = View.GONE
             }
+        }
+
+        fun setRotation(degrees: Int) {
+            renderer.setRotation(degrees)
         }
 
         fun start() {
