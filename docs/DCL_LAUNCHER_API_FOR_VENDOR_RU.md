@@ -15,6 +15,8 @@
 | **TBox Monitor** | `vad.dashing.tbox` | Телеметрия, плавающие панели, автоматизации, External HTTP API |
 | **Dashing Club Launcher (DCL)** | `ras.dashing.tbox.launcher` | HOME-лаунчер на ГУ; рисует свой UI (бары, панель ADAS, область приложений) |
 
+Сворачивание чужих окон на A9 делает не этот API, а root-помощник лаунчера: [DCL_WINDOW_HELPER_RU.md](DCL_WINDOW_HELPER_RU.md).
+
 ### 1.1. Уже налаженная связь DCL → Monitor (для справки)
 
 DCL — доверенный локальный клиент Monitor (как TBox MQTT и VAD Voice):
