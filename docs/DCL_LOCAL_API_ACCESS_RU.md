@@ -96,3 +96,5 @@ apksigner verify --print-certs <dcl.apk>
 Повторно править `ExternalApiLocalClients` не нужно: достаточно, чтобы пользователь снова нажал «Разрешить» на ГУ.
 
 Обратное направление (Monitor вызывает API лаунчера: запуск apps, хром, layout) — без второго «Разрешить» и без токена от DCL: [DCL_LAUNCHER_API_FOR_VENDOR_RU.md](DCL_LAUNCHER_API_FOR_VENDOR_RU.md). Клиент в Monitor и гайд вендора для TBM: [DCL_LAUNCHER_API_INTEGRATION_FOR_TBM_RU.md](DCL_LAUNCHER_API_INTEGRATION_FOR_TBM_RU.md).
+
+Окна камер ГУ DCL командует напрямую службе `vad.dashing.camd` (TCP `127.0.0.1:8770`), не через Monitor: [DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md).
