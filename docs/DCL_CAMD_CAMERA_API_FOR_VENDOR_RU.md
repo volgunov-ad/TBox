@@ -1,0 +1,331 @@
+# Окна камер ГУ (`camd`) — инструкция для DCL
+
+**Аудитория:** разработчик Dashing Club Launcher (`ras.dashing.tbox.launcher`).  
+**Цель:** показать / убрать / переместить окно камеры на экране ГУ, командуя уже существующей службой **«Камеры ГУ»**.  
+**Язык:** русский; имена пакетов, команд и полей — как в коде.
+
+Контракт и код в этом репозитории (`preRelease`): модуль `:camd`, пакет `vad.dashing.camd`; клиент со стороны Monitor — `CamdWindowClient` / `CamdWindowWidget.kt`. Обзор инженерии: [CAMD_RU.md](CAMD_RU.md), входы AIS: [CAMERAS_A9_RU.md](CAMERAS_A9_RU.md).
+
+---
+
+## 0. Нужно ли что-то менять в `camd`?
+
+| Вердикт | Что это значит для DCL |
+|---------|------------------------|
+| **Менять `camd` не нужно** | Контракт уже есть и им пользуется TBox Monitor. DCL может командовать так же. |
+| **Опциональные улучшения** (не блокер) | Токен/allowlist на порту, push «окно закрыли крестиком», ContentProvider вместо сокета, отдельный Intent с extras вместо текстовых строк. |
+| **Обязательная доработка `camd`** | Только если нужен сценарий, которого **нет** в текущем API (см. §8). Для «показать картинку камеры в заданном прямоугольнике» — **нет**. |
+
+Итого: для DCL достаточно **клиента** к уже работающему API. Кнопки/жесты в лаунчере — работа DCL, не `camd`.
+
+---
+
+## 1. Кто есть кто
+
+| Компонент | Пакет / модуль | Роль |
+|-----------|----------------|------|
+| **Камеры ГУ (`camd`)** | `vad.dashing.camd` (`:camd`) | Слушает команды, рисует оверлеи, root-grabber читает чистый кадр сенсора |
+| **TBox Monitor** | `vad.dashing.tbox` | Клиент того же API (плитка, автоматизации, External API). **Не** держит картинку камеры сам |
+| **DCL** | `ras.dashing.tbox.launcher` | Ещё один локальный клиент того же API |
+| ~~`:camview`~~ | — | Диагностика Mengbo / `*_sharecamera`. **Не** канал для DCL |
+
+Картинка — **чистый кадр** (UYVY через `camd_grab` → tmpfs → `TYPE_APPLICATION_OVERLAY`), не штатный обработанный AVM-превью и не `:camview`.
+
+Платформа: **только Android 9 / mbCAN (Mengbo)**. На A10 / VHAL этого стека (`ais_server` / `AVMapp` / `mb_daemon`) в текущем `camd` нет.
+
+---
+
+## 2. Основной канал (рекомендуемый для DCL)
+
+Это **не HTTP**. Одна TCP-сессия на localhost: **одна текстовая строка запрос → одна строка ответ → сокет закрывается**.
+
+| Параметр | Значение |
+|----------|----------|
+| Хост | `127.0.0.1` |
+| Порт | `8770` (`DaemonScripts.API_PORT` / `CAMD_WINDOW_PORT`) |
+| Кодировка | UTF-8, перевод строки `\n` |
+| Аутентификация | **нет** (любой локальный процесс может послать команду) |
+| Параллелизм | сервер принимает соединения; обработка на отдельном потоке `camd-api-client` |
+
+Порты рядом (не путать):
+
+| Порт | Кто |
+|------|-----|
+| `8765` | HTTP External API TBox Monitor |
+| `8766` | локальный статус TBox MQTT |
+| **`8770`** | **команды окон камер (`camd`)** |
+
+### 2.1. Поднять службу, если порт молчит
+
+Служба обычно стартует сама (`BOOT_COMPLETED`, `LOCKED_BOOT_COMPLETED` при уже разблокированном пользователе, `USER_UNLOCKED`, `QUICKBOOT_POWERON`, `MY_PACKAGE_REPLACED`). TBox Monitor при своей загрузке тоже поднимает её, если пакет установлен.
+
+Если `connect` к `8770` даёт отказ / timeout connect:
+
+1. Предпочтительно (как Monitor): `startForegroundService` на  
+   `vad.dashing.camd` / `vad.dashing.camd.CamdService`.  
+   Нужно permission **`vad.dashing.camd.permission.START`** (`protectionLevel=signature`).  
+   У DCL **другая подпись** → прямой `startForegroundService` **скорее всего не сработает**.
+2. Рабочий обходной путь (тоже использует Monitor как fallback):  
+   `sendBroadcast(new Intent("vad.dashing.camd.START").setPackage("vad.dashing.camd"))`.  
+   `BootReceiver` экспортирован **без** этого permission и сам стартует `CamdService`.
+3. Повторять команду на `8770` с паузой ~250 мс до ~4 с (логика `CamdWindowClient.command`).
+
+**`STATUS` службу не будит** — опрос статуса не должен вызывать старт.
+
+Overlay: `camd` сам выставляет `appops … SYSTEM_ALERT_WINDOW allow` через root-скрипт при подготовке окна. Если права нет — ответ с `error=overlay_permission`.
+
+---
+
+## 3. Команды
+
+Разбор: `CamdCommands.parse`. Регистр первой лексемы не важен (`OPEN` / `open`).
+
+### 3.1. `OPEN` — показать или переместить окно
+
+```
+OPEN <id> <x> <y> <w> <h> [rotation]
+```
+
+| Поле | Тип | Ограничения |
+|------|-----|-------------|
+| `id` | int | Только известные входы: `0`, `1`, `3`, `4`, `5`, `8`, `9` |
+| `x`, `y`, `w`, `h` | float | Доли экрана `0…1`. Минимум стороны `0.05`. `x+w ≤ 1.02`, `y+h ≤ 1.02` |
+| `rotation` | int, опционально | `0` / `90` / `180` / `270` по часовой; по умолчанию `0` |
+
+Повторный `OPEN` того же `id` **не** пересоздаёт grabber: окно только двигается/масштабируется (`state=moved`).
+
+Одно окно на камеру. Несколько разных `id` — несколько окон одновременно.
+
+**Входы (как на машине по картинке, не по именам XML):**
+
+| id | Название в UI | Держит штатный `AVMapp` |
+|----|---------------|-------------------------|
+| `8` | перед | да |
+| `9` | зад | да |
+| `4` | лево | да |
+| `5` | право | да |
+| `0` | салон / AR | нет |
+| `1` | OMS | нет |
+| `3` | DMS | нет |
+
+Для `4`/`5`/`8`/`9` при открытии первого такого окна `camd` останавливает `AVMapp` (`setprop ctl.stop AVMapp`), пока открыто хотя бы одно; после закрытия последнего — снова `ctl.start`, если не включён режим «держать AVM выключенным».
+
+### 3.2. `CLOSE` — закрыть
+
+```
+CLOSE <id>     # одно окно
+CLOSE          # все окна
+```
+
+### 3.3. `AVM` — удерживать штатный круговой обзор выключенным
+
+```
+AVM ON    # или AVM 1 — держать AVMapp остановленным (в т.ч. после reboot prefs)
+AVM OFF   # или AVM 0 — закрыть все сырые окна и сразу запустить AVMapp
+```
+
+В `STATUS` флаг: `keep_avm=0|1`.
+
+### 3.4. `STATUS`
+
+```
+STATUS
+```
+
+Пример ответа:
+
+```
+OK windows=8,4 avm=stopped keep_avm=0
+OK windows=none avm=running keep_avm=1
+```
+
+---
+
+## 4. Ответы и ошибки
+
+Формат: `OK …` или `ERR …` (одна строка).
+
+| Ответ / фрагмент | Смысл |
+|------------------|--------|
+| `OK state=open input=<id>` | Окно открыто |
+| `OK state=moved input=<id>` | То же окно перенесено |
+| `OK state=closed …` | Закрыто |
+| `OK state=avm_held` / `OK state=avm_restore` | Переключатель AVM |
+| `OK windows=… avm=… keep_avm=…` | Статус |
+| `ERR bad_command` | Строка не разобралась / неверные числа / неизвестный id / геометрия вне правил |
+| `ERR no_windows` | Служба без слоя окон (не должна встречаться в нормальном FGS) |
+| `OK state=error error=overlay_permission` | Нет права оверлея у `vad.dashing.camd` |
+| `OK state=error error=unknown_input` | Неизвестный id (на практике парсер обычно уже отсечёт → `ERR bad_command`) |
+| `OK state=error error=mb_daemon не ответил` / `камера не запустилась…` | Root-grabber / `mb_daemon` не поднял кадр |
+| `OK state=error error=overlay_timeout` | UI-поток не успел добавить View за 3 с |
+
+Клиент Monitor считает ошибкой любую строку, начинающуюся с `ERR` **или** содержащую `state=error`.
+
+Сетевые: `Connection refused` / connect timeout → служба не слушает (разбудить, §2.1). Read timeout при живом grabber — отдельно: команда уже принята, но операция долгая (Monitor для команд ждёт до ~20 с).
+
+---
+
+## 5. Последовательность для DCL
+
+Типичный сценарий «показать переднюю камеру внизу слева»:
+
+1. Убедиться, что установлен пакет `vad.dashing.camd` (иначе API нет).
+2. (Опционально) `STATUS` — если connect отказал, **не** считать это фатальным для показа.
+3. Отправить  
+   `OPEN 8 0.0200 0.5500 0.4000 0.4000 0`  
+   (2 % / 55 % / 40 % / 40 % — дефолт плитки Monitor).
+4. Если connect отказал → broadcast `vad.dashing.camd.START` → повторить `OPEN` до ~4 с.
+5. Разобрать ответ: успех только без `ERR` и без `state=error`.
+6. Скрыть: `CLOSE 8` или `CLOSE`.
+
+Поток: **не UI-thread** (блокирующий socket + возможное ожидание старта). Оверлей добавляется внутри `camd` на main looper; клиенту ждать только строку ответа.
+
+Жизненный цикл:
+
+- Окно живёт в процессе `camd`, не в DCL. Уход HOME / смена Activity лаунчера окно само не закрывает.
+- Крестик 88 dp в углу окна закрывает только это окно внутри `camd`. DCL об этом **не уведомляется** (push нет).
+- Убить процесс `camd` / `force-stop` — окна исчезнут; службу нужно снова поднять.
+
+---
+
+## 6. Примеры
+
+### 6.1. Kotlin / Java (сокет), как Monitor
+
+```kotlin
+fun camdCommand(line: String, connectMs: Int = 1500, readMs: Int = 20_000): String {
+    Socket().use { socket ->
+        socket.connect(InetSocketAddress("127.0.0.1", 8770), connectMs)
+        socket.soTimeout = readMs
+        socket.getOutputStream().apply {
+            write("$line\n".toByteArray(Charsets.UTF_8))
+            flush()
+        }
+        return socket.getInputStream().bufferedReader().readLine().orEmpty()
+    }
+}
+
+// открыть переднюю
+camdCommand("OPEN 8 0.0200 0.5500 0.4000 0.4000 0")
+// закрыть
+camdCommand("CLOSE 8")
+```
+
+Разбудить службу (без signature permission):
+
+```kotlin
+context.sendBroadcast(
+    Intent("vad.dashing.camd.START").setPackage("vad.dashing.camd")
+)
+```
+
+### 6.2. adb / shell smoke
+
+```bash
+# если есть toybox/nc на ГУ:
+printf 'STATUS\n' | nc 127.0.0.1 8770
+printf 'OPEN 8 0.1 0.1 0.3 0.3 0\n' | nc 127.0.0.1 8770
+printf 'CLOSE 8\n' | nc 127.0.0.1 8770
+```
+
+### 6.3. Альтернатива: через TBox Monitor External API
+
+Если DCL уже ходит в Monitor (`content://vad.dashing.tbox.localaccess` → Bearer → `http://127.0.0.1:<port>/v1/...`), можно не трогать `8770` напрямую:
+
+`POST /v1/actions/invoke` (класс `confirm`, базовый токен достаточно):
+
+```json
+{
+  "actions": [
+    {
+      "type": "builtin",
+      "actionType": "camd_window",
+      "intValue": 8,
+      "stringValue": "open 2 55 40 40 0",
+      "boolValue": false
+    }
+  ]
+}
+```
+
+| Поле | Значение |
+|------|----------|
+| `actionType` | `camd_window` или `camd_keep_avm` |
+| `intValue` (`camd_window`) | id камеры |
+| `stringValue` (`camd_window`) | `open <x%> <y%> <w%> <h%> [rotation]` **в процентах 0…100**, либо `close` / `close_all` |
+| `boolValue` (`camd_keep_avm`) | `true` = `AVM ON`, `false` = `AVM OFF` |
+
+Monitor сам переводит проценты в доли и шлёт строку на `8770`, при необходимости будит службу.  
+Это **обёртка**, не отдельный протокол камер. Прямой сокет проще и не требует consent/токена.
+
+---
+
+## 7. Окно на экране (факты реализации)
+
+| Свойство | Значение |
+|----------|----------|
+| Тип окна | `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY` |
+| Флаги | `FLAG_NOT_FOCUSABLE`, `FLAG_NOT_TOUCH_MODAL`, `FLAG_LAYOUT_IN_SCREEN` |
+| Координаты | от `(0,0)` реального дисплея; `x/y/w/h` — доли × `getRealMetrics` |
+| UI | чёрный фон, `TextureView` + шейдер UYVY, подпись «жду кадр», крестик закрытия |
+| Кадр | root `camd_grab` → `/mnt/camd-ram/camd-uyvy-<id>`; процесс приложения к `ais_server` не коннектится |
+
+---
+
+## 8. Что DCL может сегодня vs чего нет
+
+### Можно сегодня (без правок `camd`)
+
+- Открыть / переместить / закрыть любое из 7 известных окон.
+- Несколько камер сразу.
+- Поворот картинки 0/90/180/270.
+- Узнать статус (`windows`, `avm`, `keep_avm`).
+- Удерживать штатный AVM выключенным (`AVM ON`/`OFF`).
+- Разбудить службу broadcast’ом `vad.dashing.camd.START`.
+- То же через Monitor `camd_window` / `camd_keep_avm`, если уже есть локальный API-доступ.
+
+### Нет в контракте (потребует доработки `camd` или другого стека)
+
+| Запрос | Статус |
+|--------|--------|
+| Intent/ContentProvider «камера» внутри **TBox Monitor** (без `camd`) | **нет** — Monitor только клиент |
+| HTTP на `8770` | **нет** — текстовый TCP line protocol |
+| Токен / ограничение только пакетом DCL | **нет** (сейчас открыто для localhost) |
+| Событие «пользователь нажал ✕» в DCL | **нет** |
+| Живой список входов с ГУ | **нет** — список зашит |
+| A10 / VHAL камеры тем же API | **нет** |
+| Гарантия кадра на всех машинах | окно на стенде/машине ещё доводится; API команд уже в коде |
+| Задняя картинка на R, пока `AVMapp` остановлен и окно `5`/`9` ещё не открыто | **не входит** в текущую сборку |
+| Видеорегистратор | отложен |
+
+### Опциональные niceties (не обязательны для первой интеграции DCL)
+
+- Signature shared / выдача `vad.dashing.camd.permission.START` DCL — чтобы будить FGS так же, как Monitor (сейчас хватает broadcast).
+- Auth на порту, если появятся недоверенные APK на ГУ.
+- Callback/broadcast при `CLOSE` с крестика.
+
+---
+
+## 9. Чеклист интеграции DCL
+
+1. На ГУ установлен `vad.dashing.camd` (сборка с API окон, не только старые пробы).
+2. Клиент пишет одну строку на `127.0.0.1:8770` с фонового потока.
+3. При `Connection refused` — `vad.dashing.camd.START` + retry; `STATUS` не использует для пробуждения.
+4. Геометрию лучше нормализовать на стороне клиента (как Monitor: проценты → доли, окно внутри экрана, сторона ≥ 5 %).
+5. Не смешивать с `:camview` и не ждать ContentProvider камер у Monitor.
+6. Учитывать побочный эффект: открытие surround-входов гасит штатный `AVMapp`, пока окна открыты (или пока `keep_avm=1`).
+
+---
+
+## 10. Ссылки на код
+
+| Что | Где |
+|-----|-----|
+| Парсер команд | `camd/.../CamdCommands.kt` |
+| TCP-сервер | `camd/.../CamdApiServer.kt` |
+| Оверлеи / AVM / ошибки | `camd/.../CameraWindows.kt` |
+| Входы | `camd/.../KnownInputs.kt` |
+| Manifest / START / permission | `camd/src/main/AndroidManifest.xml` |
+| Клиент Monitor | `app/.../CamdWindowWidget.kt` (`CamdWindowClient`) |
+| Автоматизации / External API | `camd_window`, `camd_keep_avm` → `AutomationActionExecutor` |
+| Инженерия | [CAMD_RU.md](CAMD_RU.md) |

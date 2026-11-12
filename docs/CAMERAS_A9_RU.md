@@ -147,4 +147,4 @@ qcarcam_test -config=/data/local/tmp/окно.xml -nonInteractive
 
 ## 7. Приложение `:camd`
 
-Описание, план и что уже сделано: [CAMD_RU.md](CAMD_RU.md).
+Описание, план и что уже сделано: [CAMD_RU.md](CAMD_RU.md). Инструкция вендору DCL по API окон: [DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md).

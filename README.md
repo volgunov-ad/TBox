@@ -109,6 +109,7 @@ Workflow [Build Companion Firmware](.github/workflows/build-companion-firmware.y
 | [docs/LAUNCHER_A9_APP_WINDOW_RU.md](docs/LAUNCHER_A9_APP_WINDOW_RU.md) | Штатный лаунчер A9: полный экран и окно приложений (`start_activity`), сетка карточек |
 | [docs/CAMERAS_A9_RU.md](docs/CAMERAS_A9_RU.md) | Камеры A9: чистый кадр `ais_server`, XML-окна `qcarcam_test`, запрет сокета (только root) |
 | [docs/CAMD_RU.md](docs/CAMD_RU.md) | Приложение «Камеры ГУ» (`:camd`): описание, план, что сделано и чего нет |
+| [docs/DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md](docs/DCL_CAMD_CAMERA_API_FOR_VENDOR_RU.md) | API окон `camd` для вендора DCL: TCP `127.0.0.1:8770`, команды OPEN/CLOSE/AVM/STATUS |
 | [AGENTS.md](AGENTS.md) (`:camview`) | «Тест камер ГУ (Mengbo)» (`:camview`): тестовое приложение превью камер AVM/OMS/DMS через Mengbo SDK и `*_sharecamera` на A9 |
 | [docs/Trips.md](docs/Trips.md) | Логика поездок: split, parking, перезапуск службы, топливо |
 | [docs/Themes.md](docs/Themes.md) | Темы: `.tboxtheme`, кэш материализации, режимы вождения |
