@@ -15,7 +15,6 @@ class BootReceiver : BroadcastReceiver() {
             Intent.ACTION_USER_UNLOCKED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
             QUICKBOOT_POWERON,
-            START_ACTION,
             -> start(context, action)
         }
     }
@@ -44,6 +43,5 @@ class BootReceiver : BroadcastReceiver() {
     private companion object {
         const val TAG = "CamdBoot"
         const val QUICKBOOT_POWERON = "android.intent.action.QUICKBOOT_POWERON"
-        const val START_ACTION = "vad.dashing.camd.START"
     }
 }

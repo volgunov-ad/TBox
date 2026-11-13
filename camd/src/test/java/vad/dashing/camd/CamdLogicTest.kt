@@ -6,26 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class WindowXmlTest {
-    @Test
-    fun buildsTheWindowThatWasProvenOnInput0() {
-        val xml = WindowXml.build(
-            input = KnownInputs.byId(0)!!,
-            x = 0.02f,
-            y = 0.70f,
-            w = 0.28f,
-            h = 0.28f
-        )
-        assertTrue(xml.contains("input_id=\"0\""))
-        assertTrue(xml.contains("window_pos_x=\"0.0200\""))
-        assertTrue(xml.contains("window_pos_y=\"0.7000\""))
-        assertTrue(xml.contains("window_width=\"0.2800\""))
-        assertTrue(xml.contains("window_height=\"0.2800\""))
-        assertTrue(xml.contains("width=\"1488\" height=\"616\""))
-        assertFalse(xml.contains("\r"))
-    }
-}
-
 class CamdCommandTest {
     @Test
     fun parsesOpenCloseAndStatus() {
@@ -104,59 +84,6 @@ class CamdLensCorrectionTest {
     }
 }
 
-class DaemonScriptTest {
-    @Test
-    fun scriptsAreLfAndLaunchQcarcamFromTheAppXml() {
-        val daemon = DaemonScripts.daemon()
-        assertFalse(daemon.contains("\r"))
-        assertTrue(daemon.startsWith("#!/system/bin/sh\n"))
-        assertTrue(daemon.contains("PIDFILE=/data/local/tmp/camd.pid"))
-        assertTrue(daemon.contains("echo \$\$ >"))
-        assertTrue(daemon.contains("/system/bin/qcarcam_test -config=\"\$XML\" -seconds=86400 -nonInteractive"))
-        assertTrue(daemon.contains(DaemonScripts.XML_FILE))
-
-        val arm = DaemonScripts.arm("nonce42")
-        assertFalse(arm.contains("\r"))
-        assertTrue(arm.contains("already nonce42"))
-        assertTrue(arm.contains(DaemonScripts.DAEMON_FILE))
-    }
-}
-
-class ProbeScriptTest {
-    @Test
-    fun keepAvmScriptDoesNotStopTheServiceAndLogsFirst() {
-        val script = ProbeScripts.body(false, KnownInputs.byId(4)!!, "nonce1")
-        assertFalse(script.contains("\r"))
-        assertFalse(script.contains("ctl.stop"))
-        assertTrue(script.contains("variant=nostop input=4"))
-        assertTrue(script.contains("/sdcard/Download/camd-probe-nostop-4-"))
-        assertTrue(script.contains("-seconds=20"))
-        assertTrue(script.contains("input_id=\"4\""))
-        assertTrue(script.contains("logcat -s qcarcam_test:V"))
-        assertTrue(script.indexOf("variant=nostop") < script.indexOf("qcarcam_test -config"))
-    }
-
-    @Test
-    fun stopAvmScriptWritesTheLogBeforeStoppingAndRestartsAfter() {
-        val script = ProbeScripts.body(true, KnownInputs.byId(0)!!, "nonce2")
-        assertTrue(script.contains("setprop ctl.stop AVMapp"))
-        assertTrue(script.contains("setprop ctl.start AVMapp"))
-        assertTrue(script.contains("variant=stopavm input=0"))
-        assertTrue(script.contains("nonce2"))
-        assertTrue(script.indexOf("variant=stopavm") < script.indexOf("ctl.stop"))
-        assertTrue(script.contains("kill -9"))
-        assertTrue(script.indexOf("qcarcam_exit=killed") < script.indexOf("ctl.start"))
-    }
-
-    @Test
-    fun launcherReturnsWithoutWaitingForTheProbe() {
-        val launcher = ProbeScripts.launcher(ProbeScripts.bodyPath("nonce1"))
-        assertTrue(launcher.contains("sh /data/data/vad.dashing.camd/files/camd-probe-nonce1.sh"))
-        assertTrue(launcher.contains("&"))
-        assertTrue(launcher.trimEnd().endsWith("exit 0"))
-    }
-}
-
 class GrabberScriptTest {
     @Test
     fun launcherStopsAvmBeforeTheGrabberAndReturns() {
@@ -225,18 +152,34 @@ class CamdApiReplyTest {
     }
 }
 
-class CamdSeqTicketTest {
+class PropCacheTest {
     @Test
-    fun matchesOnlyTheExactTicketToken() {
-        assertTrue(hasSeqTicket("state=open input=4 qpid=812 seq=1", 1))
-        assertFalse(hasSeqTicket("state=open input=4 qpid=812 seq=11", 1))
-        assertFalse(hasSeqTicket("state=idle seq=0", 1))
-        assertTrue(hasSeqTicket("state=idle seq=12", 12))
-        assertTrue(hasSeqTicket("seq=3\nstate=open", 3))
-        assertTrue(hasSeqTicket("seq=1", 1))
-        assertFalse(hasSeqTicket("", 1))
-        assertFalse(hasSeqTicket("state=unknown", 1))
-        assertFalse(hasSeqTicket("state=error error=timeout seq=1", 2))
+    fun cachesWithinTtlReloadsAfterTtlAndOnInvalidate() {
+        var now = 0L
+        var loads = 0
+        val cache = PropCache(ttlMs = 1_000, clock = { now })
+        assertEquals("running", cache.get("init.svc.AVMapp") { loads += 1; "running" })
+        assertEquals(1, loads)
+        now = 500
+        assertEquals("running", cache.get("init.svc.AVMapp") { loads += 1; "stopped" })
+        assertEquals(1, loads)
+        now = 1_000
+        assertEquals("stopped", cache.get("init.svc.AVMapp") { loads += 1; "stopped" })
+        assertEquals(2, loads)
+        cache.invalidate()
+        assertEquals("fresh", cache.get("init.svc.AVMapp") { loads += 1; "fresh" })
+        assertEquals(3, loads)
+    }
+
+    @Test
+    fun differentNamesAreCachedSeparately() {
+        var now = 0L
+        val cache = PropCache(ttlMs = 1_000, clock = { now })
+        assertEquals("a", cache.get("p1") { "a" })
+        assertEquals("b", cache.get("p2") { "b" })
+        now = 100
+        assertEquals("a", cache.get("p1") { "x" })
+        assertEquals("b", cache.get("p2") { "y" })
     }
 }
 

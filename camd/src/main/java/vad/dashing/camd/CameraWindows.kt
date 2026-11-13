@@ -18,6 +18,7 @@ import android.widget.TextView
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,6 +34,10 @@ class CameraWindows(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("camd", Context.MODE_PRIVATE)
     private var avmStoppedByUs = false
+    private val closeExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "camd-close").apply { isDaemon = true }
+    }
+    private val propCache = PropCache()
 
     fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED, false)
 
@@ -325,19 +330,21 @@ class CameraWindows(private val context: Context) {
     private fun waitProp(name: String, value: String, present: Boolean) {
         val deadline = System.currentTimeMillis() + 4_000
         while (System.currentTimeMillis() < deadline) {
-            val now = getprop(name) == value
-            if (now == present) return
+            if ((readProp(name) == value) == present) {
+                propCache.invalidate()
+                return
+            }
             Thread.sleep(200)
         }
+        propCache.invalidate()
     }
 
     private fun getprop(name: String): String {
-        return runCatching {
-            val process = ProcessBuilder("getprop", name).redirectErrorStream(true).start()
-            val text = process.inputStream.bufferedReader().readText().trim()
-            process.waitFor(3, TimeUnit.SECONDS)
-            text
-        }.getOrDefault("")
+        return propCache.get(name) { key -> readProp(key) }
+    }
+
+    private fun readProp(name: String): String {
+        return runCatching { CamdShell.exec(arrayOf("getprop", name), timeoutMs = 3_000) }.getOrDefault("")
     }
 
     private fun exec(cmd: Array<String>) {
@@ -390,7 +397,7 @@ class CameraWindows(private val context: Context) {
             close.setShadowLayer(10f, 0f, 0f, Color.BLACK)
             close.setBackgroundColor(Color.TRANSPARENT)
             close.setOnClickListener {
-                Thread({ this@CameraWindows.close(id) }, "camd-close-$id").start()
+                closeExecutor.execute { this@CameraWindows.close(id) }
             }
             val px = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP,

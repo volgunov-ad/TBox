@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -44,6 +45,8 @@ import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
 
+    private lateinit var controller: CamdController
+
     private val requestStorage = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -52,14 +55,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startService(Intent(this, CamdService::class.java))
+        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
             == PackageManager.PERMISSION_GRANTED
         ) {
             startService(Intent(this, CamdService::class.java))
         } else {
             requestStorage.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
-        val controller = CamdController(CamdRuntime.engine(this), CamdRuntime.windows(this)) {
+        controller = CamdController(CamdRuntime.engine(this), CamdRuntime.windows(this)) {
             runOnUiThread {
                 startActivity(
                     Intent(
@@ -98,6 +103,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        if (::controller.isInitialized) controller.shutdown()
+        super.onDestroy()
+    }
 }
 
 data class CamdUiState(
@@ -123,6 +133,21 @@ class CamdController(
     private val _state = MutableStateFlow(CamdUiState())
     val state: StateFlow<CamdUiState> = _state.asStateFlow()
     private val io = Executors.newSingleThreadExecutor()
+    private val poll = Thread {
+        while (!Thread.currentThread().isInterrupted) {
+            if (!_state.value.busy) {
+                _state.value = _state.value.copy(
+                    status = windows.status(),
+                    log = engine.logTail()
+                )
+            }
+            try {
+                Thread.sleep(1000)
+            } catch (_: InterruptedException) {
+                return@Thread
+            }
+        }
+    }.apply { isDaemon = true; name = "camd-poll"; start() }
 
     init {
         val inputId = _state.value.inputId
@@ -130,17 +155,11 @@ class CamdController(
             keepAvmStopped = windows.keepAvmStopped(),
             lens = windows.lensCorrection(inputId),
         )
-        Thread {
-            while (!Thread.currentThread().isInterrupted) {
-                if (!_state.value.busy) {
-                    _state.value = _state.value.copy(
-                        status = windows.status(),
-                        log = engine.logTail()
-                    )
-                }
-                Thread.sleep(1000)
-            }
-        }.apply { isDaemon = true; name = "camd-poll"; start() }
+    }
+
+    fun shutdown() {
+        io.shutdownNow()
+        poll.interrupt()
     }
 
     fun setInput(id: Int) {
@@ -259,25 +278,6 @@ class CamdController(
             _state.value = _state.value.copy(
                 busy = false,
                 message = result,
-                status = windows.status(),
-                log = engine.logTail()
-            )
-        }
-    }
-
-    fun probe(stopAvm: Boolean) {
-        val input = KnownInputs.byId(_state.value.inputId) ?: return
-        io.execute {
-            val title = if (stopAvm) {
-                "AVM остановлен на 20 секунд. Смотрите центр экрана."
-            } else {
-                "AVM работает. 20 секунд смотрите центр экрана."
-            }
-            _state.value = _state.value.copy(busy = true, message = title)
-            val result = engine.runProbe(stopAvm, input)
-            _state.value = _state.value.copy(
-                busy = false,
-                message = "Лог: $result",
                 status = windows.status(),
                 log = engine.logTail()
             )
