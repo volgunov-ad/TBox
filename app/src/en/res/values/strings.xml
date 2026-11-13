@@ -2609,7 +2609,7 @@
     <string name="data_title_http_request_widget">HTTP request</string>
     <string name="widget_http_request_settings_title">HTTP request</string>
     <string name="widget_http_request_yaml_label">Request YAML</string>
-    <string name="widget_http_request_yaml_hint">Supported: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding.</string>
+    <string name="widget_http_request_yaml_hint">Supported: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding. Non-HTTP schemes (e.g. yandexmaps://maps.yandex.ru/?pt=37.62,55.75) are opened as intents instead of an HTTP request.</string>
     <string name="widget_http_request_reset_yaml">Reset</string>
     <string name="widget_http_request_insert_new_line">Insert line break</string>
     <string name="widget_http_request_open_browser">Open in browser</string>
@@ -2776,10 +2776,10 @@
     <string name="widget_desc_icm_brightness_vertical">Vertical instrument cluster brightness control.</string>
     <string name="widget_desc_hud_brightness_horizontal">Horizontal HUD brightness control.</string>
     <string name="widget_desc_hud_brightness_vertical">Vertical HUD brightness control.</string>
-    <string name="widget_desc_sunshade_position_horizontal">Horizontal sunshade position control (0…100%, step 10%).</string>
-    <string name="widget_desc_sunshade_position_vertical">Vertical sunshade position control (0…100%, step 10%).</string>
-    <string name="widget_desc_sunroof_position_horizontal">Horizontal sunroof position control (0…100%, step 10%, no tilt).</string>
-    <string name="widget_desc_sunroof_position_vertical">Vertical sunroof position control (0…100%, step 10%, no tilt).</string>
+    <string name="widget_desc_sunshade_position_horizontal" formatted="false">Horizontal sunshade position control (0…100%, step 10%).</string>
+    <string name="widget_desc_sunshade_position_vertical" formatted="false">Vertical sunshade position control (0…100%, step 10%).</string>
+    <string name="widget_desc_sunroof_position_horizontal" formatted="false">Horizontal sunroof position control (0…100%, step 10%, no tilt).</string>
+    <string name="widget_desc_sunroof_position_vertical" formatted="false">Vertical sunroof position control (0…100%, step 10%, no tilt).</string>
     <string name="widget_desc_app_launcher">Shortcut to the selected application.</string>
     <string name="widget_desc_app_list">List of installed apps with open, hide, and uninstall actions.</string>
     <string name="widget_desc_http_request">Runs a configured HTTP request or opens an address in the browser.</string>
@@ -2861,8 +2861,8 @@
 
     <string name="widget_actions_hu_screen_brightness">Buttons or swipe — change brightness; center tap — auto brightness. Turning auto off writes the current level.</string>
     <string name="widget_actions_icm_brightness">Buttons or swipe — change brightness; center tap — instrument cluster auto brightness. Turning auto off writes the current level.</string>
-    <string name="widget_actions_sunshade_position">Buttons or swipe — change sunshade position in 10% steps.</string>
-    <string name="widget_actions_sunroof_position">Buttons or swipe — change sunroof position in 10% steps (no tilt).</string>
+    <string name="widget_actions_sunshade_position" formatted="false">Buttons or swipe — change sunshade position in 10% steps.</string>
+    <string name="widget_actions_sunroof_position" formatted="false">Buttons or swipe — change sunroof position in 10% steps (no tilt).</string>
     <string name="widget_actions_hud_brightness">Buttons or swipe — change brightness; center tap — HUD auto brightness. Turning auto off writes the current level.</string>
     <string name="widget_actions_app_launcher">Single tap — open the application; double tap — close (ADB force-stop, no relaunch).</string>
     <string name="widget_actions_app_list">Single tap — open the app list.</string>

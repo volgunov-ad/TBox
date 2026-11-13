@@ -41,7 +41,7 @@ internal object DashboardHttpRequestTileActionRunner {
                     delay(launchDelayMs)
                 }
             }
-            val result = executeHttpRequestWidget(requestConfig)
+            val result = executeHttpRequestWidget(launchContext, requestConfig)
             onFinished(result)
         }
     }

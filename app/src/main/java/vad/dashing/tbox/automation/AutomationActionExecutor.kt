@@ -42,6 +42,7 @@ import vad.dashing.tbox.dcl.DclLauncherEnvironmentRouting
 import vad.dashing.tbox.dcl.DclLauncherEnvironmentSetting
 import vad.dashing.tbox.dcl.dclLaunchShouldUseRawFallback
 import vad.dashing.tbox.dcl.dclModeCapabilityMissing
+import vad.dashing.tbox.HttpRequestWidgetResult
 import vad.dashing.tbox.executeHttpRequestWidget
 import vad.dashing.tbox.freeform.FreeformCompanionSession
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
@@ -462,11 +463,15 @@ class AutomationActionExecutor(
         val config = parseHttpRequestWidgetYaml(action.yaml).getOrElse {
             return AutomationActionResult.failure(it.message ?: "Некорректный HTTP YAML")
         }
-        val result = executeHttpRequestWidget(config)
+        val result = executeHttpRequestWidget(appContext, config)
         return AutomationActionResult(
             success = httpRequestWidgetIsSuccess(result),
             message = if (httpRequestWidgetIsSuccess(result)) {
-                "HTTP выполнен"
+                if (result is HttpRequestWidgetResult.Success && result.code == 0) {
+                    "Запрос передан приложению"
+                } else {
+                    "HTTP выполнен"
+                }
             } else {
                 httpRequestWidgetErrorMessage(result)
             },

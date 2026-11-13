@@ -2603,7 +2603,7 @@
     <string name="widget_phone_dial_no_hfp">Телефон не подключён по Bluetooth</string>
     <string name="widget_http_request_settings_title">HTTP-запрос</string>
     <string name="widget_http_request_yaml_label">YAML запроса</string>
-    <string name="widget_http_request_yaml_hint">Поддерживаются: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding.</string>
+    <string name="widget_http_request_yaml_hint">Поддерживаются: url, method, headers, payload, authentication, username, password, timeout, content_type, verify_ssl, insecure_cipher, skip_url_encoding. Нестандартные схемы (например, yandexmaps://maps.yandex.ru/?pt=37.62,55.75) открываются как intent вместо HTTP-запроса.</string>
     <string name="widget_http_request_reset_yaml">Сброс</string>
     <string name="widget_http_request_insert_new_line">Вставить перенос строки</string>
     <string name="widget_http_request_open_browser">Открыть браузер</string>

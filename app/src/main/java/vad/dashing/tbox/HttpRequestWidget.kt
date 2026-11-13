@@ -110,7 +110,28 @@ fun parseHttpRequestWidgetYaml(rawYaml: String): Result<HttpRequestWidgetConfig>
 fun browserUrlFromHttpRequestYaml(rawYaml: String): Result<String> =
     parseHttpRequestWidgetYaml(rawYaml).map { it.url }
 
-suspend fun executeHttpRequestWidget(config: HttpRequestWidgetConfig): HttpRequestWidgetResult =
+suspend fun executeHttpRequestWidget(
+    context: Context,
+    config: HttpRequestWidgetConfig,
+): HttpRequestWidgetResult =
+    if (httpRequestWidgetUrlNeedsIntentDispatch(config.url)) {
+        executeHttpRequestWidgetViaIntent(context, config.url)
+    } else {
+        executeHttpRequestWidgetViaHttp(config)
+    }
+
+internal fun httpRequestWidgetUrlNeedsIntentDispatch(url: String): Boolean {
+    val trimmed = url.trim()
+    val colon = trimmed.indexOf(':')
+    if (colon <= 0) return false
+    if (!trimmed[0].isLetter()) return false
+    val scheme = trimmed.substring(0, colon).lowercase(Locale.ROOT)
+    return scheme != "http" && scheme != "https"
+}
+
+private suspend fun executeHttpRequestWidgetViaHttp(
+    config: HttpRequestWidgetConfig,
+): HttpRequestWidgetResult =
     withContext(Dispatchers.IO) {
         runCatching {
             val client = httpRequestClient(config)
@@ -122,6 +143,23 @@ suspend fun executeHttpRequestWidget(config: HttpRequestWidgetConfig): HttpReque
                     HttpRequestWidgetResult.Failure("HTTP ${response.code}", response.code)
                 }
             }
+        }.getOrElse { e ->
+            HttpRequestWidgetResult.Failure(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+private suspend fun executeHttpRequestWidgetViaIntent(
+    context: Context,
+    url: String,
+): HttpRequestWidgetResult =
+    withContext(Dispatchers.Main) {
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                },
+            )
+            HttpRequestWidgetResult.Success(code = 0)
         }.getOrElse { e ->
             HttpRequestWidgetResult.Failure(e.message ?: e.javaClass.simpleName)
         }
