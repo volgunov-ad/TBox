@@ -121,7 +121,7 @@ internal class UyvyRenderer(
         token += 1
         running = false
         joinThread()
-        return true
+        return thread?.isAlive != true
     }
 
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
@@ -192,6 +192,7 @@ internal class UyvyRenderer(
         var mappedIno = 0L
         var mappedLength = 0L
         var source: RandomAccessFile? = null
+        var pixels: ByteBuffer? = null
         var lastSeq = 0
         var uploadedWidth = 0
         var uploadedHeight = 0
@@ -218,10 +219,16 @@ internal class UyvyRenderer(
                     continue
                 }
                 val bytes = published.slotBytes
-                val slice = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-                slice.position(UYVY_HEADER + published.slot * bytes)
-                slice.limit(UYVY_HEADER + published.slot * bytes + bytes)
+                val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
+                    pixels = it
+                }
+                copy.clear()
+                val viewBuffer = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                viewBuffer.position(UYVY_HEADER + published.slot * bytes)
+                viewBuffer.limit(UYVY_HEADER + published.slot * bytes + bytes)
+                copy.put(viewBuffer)
                 if (buffer.getInt(16) != published.seq) continue
+                copy.position(0)
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
                 if (uploadedWidth != published.width || uploadedHeight != published.height) {
                     GLES20.glTexImage2D(
@@ -233,7 +240,7 @@ internal class UyvyRenderer(
                         0,
                         GLES20.GL_RGBA,
                         GLES20.GL_UNSIGNED_BYTE,
-                        slice,
+                        copy,
                     )
                     uploadedWidth = published.width
                     uploadedHeight = published.height
@@ -247,7 +254,7 @@ internal class UyvyRenderer(
                         published.height,
                         GLES20.GL_RGBA,
                         GLES20.GL_UNSIGNED_BYTE,
-                        slice,
+                        copy,
                     )
                 }
                 GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
