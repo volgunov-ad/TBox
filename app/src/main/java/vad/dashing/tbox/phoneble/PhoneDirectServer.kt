@@ -53,6 +53,7 @@ class PhoneDirectServer(
     @Volatile private var serverSocket: BluetoothServerSocket? = null
     @Volatile private var learnUntil = 0L
     private var snapGen = 0
+    @Volatile
     private var cachedSnap: PhoneBleCodec.Snapshot? = null
     private var cachedAt = 0L
 
