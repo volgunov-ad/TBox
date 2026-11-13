@@ -63,14 +63,26 @@ fun normalizeCamdRotation(value: Int): Int = when (value) {
     else -> 0
 }
 
-fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: Int = 0): String {
+fun camdWindowOpenLine(
+    cameraId: Int,
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+    rotation: Int = 0,
+    flipH: Boolean = false,
+    flipV: Boolean = false,
+): String {
     val camera = normalizeCamdWindowCamera(cameraId)
     val geometry = normalizeCamdWindowGeometry(x, y, w, h)
     val rot = normalizeCamdRotation(rotation)
-    // Older camd builds only accepted 6 tokens (no rotation). Omit trailing 0 so
-    // Monitor still talks to a service that was installed before the rotation field.
-    return if (rot == 0) {
-        String.format(
+    val fx = if (flipH) 1 else 0
+    val fy = if (flipV) 1 else 0
+    // Older camd: 6 tokens only; then 7 with rotation. Omit trailing identity so
+    // Monitor still talks to a service installed before rotation / flip fields.
+    // Flips require the rotation slot (even 0), same as camd's parser.
+    return when {
+        fx == 0 && fy == 0 && rot == 0 -> String.format(
             Locale.US,
             "OPEN %d %.4f %.4f %.4f %.4f",
             camera,
@@ -79,8 +91,7 @@ fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: 
             geometry.w / 100.0,
             geometry.h / 100.0,
         )
-    } else {
-        String.format(
+        fx == 0 && fy == 0 -> String.format(
             Locale.US,
             "OPEN %d %.4f %.4f %.4f %.4f %d",
             camera,
@@ -89,6 +100,29 @@ fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: 
             geometry.w / 100.0,
             geometry.h / 100.0,
             rot,
+        )
+        fy == 0 -> String.format(
+            Locale.US,
+            "OPEN %d %.4f %.4f %.4f %.4f %d %d",
+            camera,
+            geometry.x / 100.0,
+            geometry.y / 100.0,
+            geometry.w / 100.0,
+            geometry.h / 100.0,
+            rot,
+            fx,
+        )
+        else -> String.format(
+            Locale.US,
+            "OPEN %d %.4f %.4f %.4f %.4f %d %d %d",
+            camera,
+            geometry.x / 100.0,
+            geometry.y / 100.0,
+            geometry.w / 100.0,
+            geometry.h / 100.0,
+            rot,
+            fx,
+            fy,
         )
     }
 }
@@ -133,8 +167,18 @@ object CamdWindowClient {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
-    fun open(context: Context, cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: Int = 0) {
-        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation))
+    fun open(
+        context: Context,
+        cameraId: Int,
+        x: Int,
+        y: Int,
+        w: Int,
+        h: Int,
+        rotation: Int = 0,
+        flipH: Boolean = false,
+        flipV: Boolean = false,
+    ) {
+        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation, flipH, flipV))
     }
 
     fun close(context: Context, cameraId: Int) {
@@ -232,6 +276,8 @@ data class CamdAutomationWindowArgs(
     val w: Int,
     val h: Int,
     val rotation: Int = 0,
+    val flipH: Boolean = false,
+    val flipV: Boolean = false,
 )
 
 fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
@@ -273,9 +319,19 @@ fun formatCamdAutomationWindowArgs(
     w: Int,
     h: Int,
     rotation: Int = 0,
+    flipH: Boolean = false,
+    flipV: Boolean = false,
 ): String =
     if (mode == CAMD_ACTION_OPEN) {
-        "$CAMD_ACTION_OPEN $x $y $w $h ${normalizeCamdRotation(rotation)}"
+        val rot = normalizeCamdRotation(rotation)
+        val fx = if (flipH) 1 else 0
+        val fy = if (flipV) 1 else 0
+        when {
+            fx == 0 && fy == 0 && rot == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h"
+            fx == 0 && fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot"
+            fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx"
+            else -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx $fy"
+        }
     } else {
         mode
     }
@@ -297,13 +353,31 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
             h = CAMD_WINDOW_DEFAULT_H,
         )
     }
-    if (parts.size != 5 && parts.size != 6) return null
-    val rotation = if (parts.size == 6) {
+    if (parts.size !in 5..8) return null
+    val rotation = if (parts.size >= 6) {
         val value = parts[5].toIntOrNull() ?: return null
         if (value != 0 && value != 90 && value != 180 && value != 270) return null
         value
     } else {
         0
+    }
+    val flipH = if (parts.size >= 7) {
+        when (parts[6].toIntOrNull()) {
+            0 -> false
+            1 -> true
+            else -> return null
+        }
+    } else {
+        false
+    }
+    val flipV = if (parts.size >= 8) {
+        when (parts[7].toIntOrNull()) {
+            0 -> false
+            1 -> true
+            else -> return null
+        }
+    } else {
+        false
     }
     return CamdAutomationWindowArgs(
         mode = mode,
@@ -312,6 +386,8 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
         w = parts[3].toIntOrNull() ?: return null,
         h = parts[4].toIntOrNull() ?: return null,
         rotation = rotation,
+        flipH = flipH,
+        flipV = flipV,
     )
 }
 
@@ -332,7 +408,16 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
         CAMD_ACTION_OPEN -> {
             if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
             if (camdWindowGeometryIssue(args.x, args.y, args.w, args.h) != null) return null
-            camdWindowOpenLine(cameraId, args.x, args.y, args.w, args.h, args.rotation)
+            camdWindowOpenLine(
+                cameraId,
+                args.x,
+                args.y,
+                args.w,
+                args.h,
+                args.rotation,
+                args.flipH,
+                args.flipV,
+            )
         }
         else -> null
     }

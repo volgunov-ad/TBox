@@ -45,11 +45,62 @@ class CamdCommandTest {
     }
 
     @Test
+    fun parsesOpenWithOptionalFlips_6to9Tokens() {
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = false, flipV = false),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = false, flipV = false),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = true, flipV = false),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 1"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 90, flipH = true, flipV = true),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 90 1 1"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = false, flipV = true),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 0 1"),
+        )
+        // Flip without rotation slot is not a valid 7-token line (7th must be rot).
+        assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 1"))
+        assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 2"))
+        assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 1 1 0"))
+    }
+
+    @Test
+    fun openDefaultsHaveNoFlip() {
+        val open = CamdCommands.parse("OPEN 0 0.1 0.1 0.2 0.2") as CamdCommand.Open
+        assertFalse(open.flipH)
+        assertFalse(open.flipV)
+        assertEquals(0, open.rotation)
+    }
+
+    @Test
     fun rejectsUnknownInputAndAWindowThatLeavesTheScreen() {
         assertNull(CamdCommands.parse("OPEN 2 0.1 0.1 0.2 0.2"))
         assertNull(CamdCommands.parse("OPEN 0 0.9 0.1 0.3 0.2"))
         assertNull(CamdCommands.parse("OPEN 0 0 0 0.01 0.2"))
         assertNull(CamdCommands.parse("MOVE 0"))
+    }
+}
+
+class CamdLensCorrectionTest {
+    @Test
+    fun clampAndIdentity() {
+        assertTrue(CamdLensCorrection.IDENTITY.isIdentity())
+        assertFalse(CamdLensCorrection.PRESET_MILD_BARREL.isIdentity())
+        val clamped = CamdLensCorrection.clamp(
+            CamdLensCorrection(k1 = 5f, k2 = -5f, cx = 1f, cy = -1f),
+        )
+        assertEquals(1f, clamped.k1, 0f)
+        assertEquals(-1f, clamped.k2, 0f)
+        assertEquals(0.25f, clamped.cx, 0f)
+        assertEquals(-0.25f, clamped.cy, 0f)
     }
 }
 

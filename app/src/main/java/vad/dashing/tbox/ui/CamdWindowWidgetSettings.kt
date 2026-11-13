@@ -105,6 +105,20 @@ internal fun CamdWindowWidgetSettingsSection(
                 )
             }
         }
+        SettingSwitch(
+            isChecked = state.camdWindowFlipH,
+            onCheckedChange = { state.camdWindowFlipH = it },
+            text = stringResource(R.string.widget_camd_window_flip_h),
+            description = stringResource(R.string.widget_camd_window_flip_desc),
+            enabled = state.togglesEnabled,
+        )
+        SettingSwitch(
+            isChecked = state.camdWindowFlipV,
+            onCheckedChange = { state.camdWindowFlipV = it },
+            text = stringResource(R.string.widget_camd_window_flip_v),
+            description = "",
+            enabled = state.togglesEnabled,
+        )
     }
 }
 

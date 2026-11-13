@@ -53,4 +53,28 @@ class WidgetConfigCodecCamdWindowTest {
         assertEquals(20, parsed.camdWindowX)
         assertEquals(80, parsed.camdWindowW)
     }
+
+    @Test
+    fun serializeAndParseKeepsFlipFlags() {
+        val serialized = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = CAMD_WINDOW_WIDGET_DATA_KEY,
+                    camdWindowCameraId = 4,
+                    camdWindowFlipH = true,
+                    camdWindowFlipV = true,
+                    camdWindowRotation = 180,
+                )
+            )
+        )
+        val parsed = parseWidgetConfigsFromString(serialized).single()
+        assertEquals(true, parsed.camdWindowFlipH)
+        assertEquals(true, parsed.camdWindowFlipV)
+        assertEquals(180, parsed.camdWindowRotation)
+        assertFalse(
+            serializeWidgetConfigs(
+                listOf(FloatingDashboardWidgetConfig(dataKey = CAMD_WINDOW_WIDGET_DATA_KEY)),
+            ).contains("camdWindowFlipH"),
+        )
+    }
 }

@@ -29,6 +29,9 @@ internal class UyvyRenderer(
     private val frame: File,
     private val main: Handler,
     initialRotation: Int = 0,
+    initialFlipH: Boolean = false,
+    initialFlipV: Boolean = false,
+    initialLens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
@@ -42,6 +45,12 @@ internal class UyvyRenderer(
         else -> 0
     }
     @Volatile
+    private var flipH = initialFlipH
+    @Volatile
+    private var flipV = initialFlipV
+    @Volatile
+    private var lens = CamdLensCorrection.clamp(initialLens)
+    @Volatile
     private var surfaceWidth = 1
     @Volatile
     private var surfaceHeight = 1
@@ -52,6 +61,15 @@ internal class UyvyRenderer(
             90, 180, 270 -> degrees
             else -> 0
         }
+    }
+
+    fun setFlip(horizontal: Boolean, vertical: Boolean) {
+        flipH = horizontal
+        flipV = vertical
+    }
+
+    fun setLensCorrection(value: CamdLensCorrection) {
+        lens = CamdLensCorrection.clamp(value)
     }
 
     fun start() {
@@ -152,6 +170,12 @@ internal class UyvyRenderer(
         val uTex = GLES20.glGetUniformLocation(program, "uTex")
         val uWidth = GLES20.glGetUniformLocation(program, "uWidth")
         val uRot = GLES20.glGetUniformLocation(program, "uRot")
+        val uFlipH = GLES20.glGetUniformLocation(program, "uFlipH")
+        val uFlipV = GLES20.glGetUniformLocation(program, "uFlipV")
+        val uK1 = GLES20.glGetUniformLocation(program, "uK1")
+        val uK2 = GLES20.glGetUniformLocation(program, "uK2")
+        val uCx = GLES20.glGetUniformLocation(program, "uCx")
+        val uCy = GLES20.glGetUniformLocation(program, "uCy")
         var mapped: ByteBuffer? = null
         var mappedIno = 0L
         var mappedLength = 0L
@@ -222,6 +246,13 @@ internal class UyvyRenderer(
                 GLES20.glUniform1i(uTex, 0)
                 GLES20.glUniform1f(uWidth, published.width.toFloat())
                 GLES20.glUniform1f(uRot, rotation.toFloat())
+                GLES20.glUniform1f(uFlipH, if (flipH) 1f else 0f)
+                GLES20.glUniform1f(uFlipV, if (flipV) 1f else 0f)
+                val correction = lens
+                GLES20.glUniform1f(uK1, correction.k1)
+                GLES20.glUniform1f(uK2, correction.k2)
+                GLES20.glUniform1f(uCx, correction.cx)
+                GLES20.glUniform1f(uCy, correction.cy)
                 quad.position(0)
                 GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
                 GLES20.glEnableVertexAttribArray(aPos)
@@ -350,11 +381,19 @@ internal class UyvyRenderer(
                 gl_Position = vec4(aPos, 0.0, 1.0);
             }
         """
+        // Order: rotate → optional H/V flip of the displayed image → radial visual tweak → UYVY sample.
+        // Lens k1/k2/cx/cy are a preview aid only, not a real camera calibration.
         const val FRAGMENT = """
             precision highp float;
             uniform sampler2D uTex;
             uniform float uWidth;
             uniform float uRot;
+            uniform float uFlipH;
+            uniform float uFlipV;
+            uniform float uK1;
+            uniform float uK2;
+            uniform float uCx;
+            uniform float uCy;
             varying vec2 vTex;
             void main() {
                 vec2 p = vTex - 0.5;
@@ -363,6 +402,17 @@ internal class UyvyRenderer(
                 else if (uRot > 135.0 && uRot < 225.0) r = -p;
                 else if (uRot > 225.0) r = vec2(p.y, -p.x);
                 vec2 uv = r + 0.5;
+                if (uFlipH > 0.5) uv.x = 1.0 - uv.x;
+                if (uFlipV > 0.5) uv.y = 1.0 - uv.y;
+                vec2 c = vec2(0.5 + uCx, 0.5 + uCy);
+                vec2 d = uv - c;
+                float r2 = dot(d, d);
+                float scale = 1.0 + uK1 * r2 + uK2 * r2 * r2;
+                uv = c + d * scale;
+                if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
                 float x = uv.x * uWidth;
                 float texel = (floor(x * 0.5) + 0.5) / (uWidth * 0.5);
                 vec4 uyvy = texture2D(uTex, vec2(texel, uv.y));
