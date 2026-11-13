@@ -24,8 +24,20 @@ class PackageAdbActionsTest {
 
     @Test
     fun buildCommands() {
-        assertEquals("pm hide com.example", PackageAdbActions.buildHideCommand("com.example"))
-        assertEquals("pm unhide com.example", PackageAdbActions.buildUnhideCommand("com.example"))
+        val hideEscalated =
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm hide com.example'; else pm hide com.example; fi"
+        val unhideEscalated =
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm unhide com.example'; else pm unhide com.example; fi"
+        assertEquals(hideEscalated, PackageAdbActions.buildHideCommand("com.example"))
+        assertEquals(unhideEscalated, PackageAdbActions.buildUnhideCommand("com.example"))
+        assertEquals(
+            hideEscalated,
+            PackageAdbActions.commandFor(PackageAdbActions.Action.Hide, "com.example"),
+        )
+        assertEquals(
+            unhideEscalated,
+            PackageAdbActions.commandFor(PackageAdbActions.Action.Unhide, "  com.example  "),
+        )
         assertEquals(
             "pm disable-user --user 0 com.example",
             PackageAdbActions.buildDisableCommand("com.example"),
@@ -35,6 +47,15 @@ class PackageAdbActionsTest {
             "am force-stop com.example",
             PackageAdbActions.buildForceStopCommand("com.example"),
         )
+    }
+
+    @Test
+    fun escalateWithSuIfPresent_wrapsInnerAsSu0ElseShell() {
+        assertEquals(
+            "if command -v su >/dev/null 2>&1; then su 0 sh -c 'pm hide a.b'; else pm hide a.b; fi",
+            PackageAdbActions.escalateWithSuIfPresent("pm hide a.b"),
+        )
+        assertFalse("su -c" in PackageAdbActions.escalateWithSuIfPresent("pm unhide a.b"))
     }
 
     @Test

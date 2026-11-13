@@ -14,6 +14,10 @@ import vad.dashing.tbox.dexopt.AppDexoptCodec
  * ADB package ops for App List advanced mode: hide/unhide, disable/enable, force-stop,
  * plus batch status from `pm list` / `ps`.
  *
+ * Hide/unhide escalate with `su 0` when `su` exists (A10 shell lacks `MANAGE_USERS`);
+ * without `su` (A9) they run as bare `pm hide`/`unhide`. Same style as [HuRebootAdb]
+ * (`su -c` is broken on A10 — use `su 0 sh -c`).
+ *
  * While advanced mode is active, TCP :5555 is kept available ([AfterSession.LeaveTcpEnabled])
  * so each tap does not enable/restore. Leaving advanced mode or closing the dialog restores
  * TCP only if this session turned it on (port-open truth via [LocalhostAdbSession]).
@@ -73,10 +77,10 @@ internal object PackageAdbActions {
     }
 
     fun buildHideCommand(packageName: String): String =
-        "pm hide ${packageName.trim()}"
+        escalateWithSuIfPresent("pm hide ${packageName.trim()}")
 
     fun buildUnhideCommand(packageName: String): String =
-        "pm unhide ${packageName.trim()}"
+        escalateWithSuIfPresent("pm unhide ${packageName.trim()}")
 
     fun buildDisableCommand(packageName: String): String =
         "pm disable-user --user 0 ${packageName.trim()}"
@@ -86,6 +90,13 @@ internal object PackageAdbActions {
 
     fun buildForceStopCommand(packageName: String): String =
         "am force-stop ${packageName.trim()}"
+
+    /**
+     * Prefer root when available (A10); fall back to shell (A9 has no `su` and shell hide works).
+     * Package names are AOSP-safe (`[a-zA-Z0-9_.]`) so single-quoting [inner] is enough.
+     */
+    internal fun escalateWithSuIfPresent(inner: String): String =
+        "if command -v su >/dev/null 2>&1; then su 0 sh -c '$inner'; else $inner; fi"
 
     fun commandFor(action: Action, packageName: String): String = when (action) {
         Action.Hide -> buildHideCommand(packageName)
