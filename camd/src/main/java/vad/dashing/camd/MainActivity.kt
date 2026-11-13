@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,25 +24,21 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.Typography
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import vad.dashing.camd.ui.theme.CamdTheme
 import java.util.Locale
 import java.util.concurrent.Executors
 
@@ -73,34 +70,31 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    primary = Color(0xFF2180F3),
-                    secondary = Color(0xFFF3A721),
-                ),
-                typography = CamdTypography,
-            ) {
-                val state by controller.state.collectAsState()
-                CamdScreen(
-                    state = state,
-                    onInput = controller::setInput,
-                    onX = controller::setX,
-                    onY = controller::setY,
-                    onW = controller::setW,
-                    onH = controller::setH,
-                    onRotation = controller::setRotation,
-                    onLensK1 = { controller.setLensField(k1 = it) },
-                    onLensK2 = { controller.setLensField(k2 = it) },
-                    onLensCx = { controller.setLensField(cx = it) },
-                    onLensCy = { controller.setLensField(cy = it) },
-                    onLensPreset = controller::setLensPreset,
-                    onLensReset = controller::resetLens,
-                    onOpen = controller::open,
-                    onClose = controller::close,
-                    onKeepAvm = controller::setKeepAvmStopped,
-                    onProbeKeepAvm = { controller.probe(false) },
-                    onProbeStopAvm = { controller.probe(true) }
-                )
+            CamdTheme(dark = isSystemInDarkTheme()) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    val state by controller.state.collectAsState()
+                    CamdScreen(
+                        state = state,
+                        onInput = controller::setInput,
+                        onX = controller::setX,
+                        onY = controller::setY,
+                        onW = controller::setW,
+                        onH = controller::setH,
+                        onRotation = controller::setRotation,
+                        onLensK1 = { controller.setLensField(k1 = it) },
+                        onLensK2 = { controller.setLensField(k2 = it) },
+                        onLensCx = { controller.setLensField(cx = it) },
+                        onLensCy = { controller.setLensField(cy = it) },
+                        onLensPreset = controller::setLensPreset,
+                        onLensReset = controller::resetLens,
+                        onOpen = controller::open,
+                        onClose = controller::close,
+                        onKeepAvm = controller::setKeepAvmStopped,
+                    )
+                }
             }
         }
     }
@@ -291,13 +285,6 @@ class CamdController(
     }
 }
 
-private val CamdTypography = Typography(
-    headlineSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 28.sp, lineHeight = 36.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 26.sp, lineHeight = 34.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 31.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 31.sp),
-)
-
 @Composable
 private fun CamdScreen(
     state: CamdUiState,
@@ -316,8 +303,6 @@ private fun CamdScreen(
     onOpen: () -> Unit,
     onClose: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
-    onProbeKeepAvm: () -> Unit,
-    onProbeStopAvm: () -> Unit
 ) {
     val input = remember(state.inputId) { KnownInputs.byId(state.inputId) }
     Column(
@@ -431,19 +416,6 @@ private fun CamdScreen(
         RangedSlider("Центр X", state.lens.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCx)
         RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(
-            "Проба 20 секунд, окно по центру. Лог появится в Загрузках.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onProbeKeepAvm, enabled = !state.busy) {
-                Text("Проба, AVM работает", style = MaterialTheme.typography.labelLarge)
-            }
-            Button(onClick = onProbeStopAvm, enabled = !state.busy) {
-                Text("Проба, AVM остановлен", style = MaterialTheme.typography.labelLarge)
-            }
-        }
         Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         if (state.status.isNotBlank()) {
             Text(
