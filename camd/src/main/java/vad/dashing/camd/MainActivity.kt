@@ -89,6 +89,12 @@ class MainActivity : ComponentActivity() {
                     onW = controller::setW,
                     onH = controller::setH,
                     onRotation = controller::setRotation,
+                    onLensK1 = { controller.setLensField(k1 = it) },
+                    onLensK2 = { controller.setLensField(k2 = it) },
+                    onLensCx = { controller.setLensField(cx = it) },
+                    onLensCy = { controller.setLensField(cy = it) },
+                    onLensPreset = controller::setLensPreset,
+                    onLensReset = controller::resetLens,
                     onOpen = controller::open,
                     onClose = controller::close,
                     onKeepAvm = controller::setKeepAvmStopped,
@@ -107,6 +113,7 @@ data class CamdUiState(
     val w: Float = 0.28f,
     val h: Float = 0.28f,
     val rotation: Int = 0,
+    val lens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
     val busy: Boolean = false,
     val keepAvmStopped: Boolean = false,
     val message: String = "Окно откроется после «Открыть». Записи пока нет.",
@@ -124,7 +131,11 @@ class CamdController(
     private val io = Executors.newSingleThreadExecutor()
 
     init {
-        _state.value = _state.value.copy(keepAvmStopped = windows.keepAvmStopped())
+        val inputId = _state.value.inputId
+        _state.value = _state.value.copy(
+            keepAvmStopped = windows.keepAvmStopped(),
+            lens = windows.lensCorrection(inputId),
+        )
         Thread {
             while (!Thread.currentThread().isInterrupted) {
                 if (!_state.value.busy) {
@@ -139,7 +150,10 @@ class CamdController(
     }
 
     fun setInput(id: Int) {
-        _state.value = _state.value.copy(inputId = id)
+        _state.value = _state.value.copy(
+            inputId = id,
+            lens = windows.lensCorrection(id),
+        )
     }
 
     fun setX(value: Float) {
@@ -164,6 +178,36 @@ class CamdController(
             else -> 0
         }
         _state.value = _state.value.copy(rotation = rotation)
+    }
+
+    fun setLensField(
+        k1: Float = _state.value.lens.k1,
+        k2: Float = _state.value.lens.k2,
+        cx: Float = _state.value.lens.cx,
+        cy: Float = _state.value.lens.cy,
+    ) {
+        applyLens(
+            CamdLensCorrection(
+                k1 = k1,
+                k2 = k2,
+                cx = cx,
+                cy = cy,
+            ),
+        )
+    }
+
+    fun setLensPreset(value: CamdLensCorrection) {
+        applyLens(value)
+    }
+
+    fun resetLens() {
+        applyLens(CamdLensCorrection.IDENTITY)
+    }
+
+    private fun applyLens(value: CamdLensCorrection) {
+        val inputId = _state.value.inputId
+        val saved = windows.setLensCorrection(inputId, value)
+        _state.value = _state.value.copy(lens = saved)
     }
 
     fun setKeepAvmStopped(keep: Boolean) {
@@ -263,6 +307,12 @@ private fun CamdScreen(
     onW: (Float) -> Unit,
     onH: (Float) -> Unit,
     onRotation: (Int) -> Unit,
+    onLensK1: (Float) -> Unit,
+    onLensK2: (Float) -> Unit,
+    onLensCx: (Float) -> Unit,
+    onLensCy: (Float) -> Unit,
+    onLensPreset: (CamdLensCorrection) -> Unit,
+    onLensReset: () -> Unit,
     onOpen: () -> Unit,
     onClose: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
@@ -341,6 +391,47 @@ private fun CamdScreen(
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(
+            "Визуальная коррекция (на камеру)",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "Не калибровка объектива и не Brown–Conrady. Только превью: k1/k2 и опциональный сдвиг центра. " +
+                "Сохраняется в «Камеры ГУ»; DCL и Monitor получают уже выпрямленную картинку без коэффициентов в OPEN.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.lens.isIdentity(),
+                onClick = onLensReset,
+                label = { Text("Сброс", style = MaterialTheme.typography.labelLarge) },
+            )
+            FilterChip(
+                selected = state.lens == CamdLensCorrection.PRESET_MILD_BARREL,
+                onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_BARREL) },
+                label = { Text("Лёгкая бочка", style = MaterialTheme.typography.labelLarge) },
+            )
+            FilterChip(
+                selected = state.lens == CamdLensCorrection.PRESET_STRONG_BARREL,
+                onClick = { onLensPreset(CamdLensCorrection.PRESET_STRONG_BARREL) },
+                label = { Text("Сильная бочка", style = MaterialTheme.typography.labelLarge) },
+            )
+            FilterChip(
+                selected = state.lens == CamdLensCorrection.PRESET_MILD_PINCUSHION,
+                onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_PINCUSHION) },
+                label = { Text("Лёгкая подушка", style = MaterialTheme.typography.labelLarge) },
+            )
+        }
+        RangedSlider("k1", state.lens.k1, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK1)
+        RangedSlider("k2", state.lens.k2, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK2)
+        RangedSlider("Центр X", state.lens.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCx)
+        RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
             "Проба 20 секунд, окно по центру. Лог появится в Загрузках.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -373,13 +464,28 @@ private fun CamdScreen(
 
 @Composable
 private fun FractionSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+    RangedSlider(label, value, 0f, 1f, onChange)
+}
+
+@Composable
+private fun RangedSlider(
+    label: String,
+    value: Float,
+    min: Float,
+    max: Float,
+    onChange: (Float) -> Unit,
+) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            "$label  ${String.format(Locale.US, "%.2f", value)}",
+            "$label  ${String.format(Locale.US, "%.3f", value)}",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Slider(value = value.coerceIn(0f, 1f), onValueChange = onChange, valueRange = 0f..1f)
+        Slider(
+            value = value.coerceIn(min, max),
+            onValueChange = onChange,
+            valueRange = min..max,
+        )
     }
 }
 

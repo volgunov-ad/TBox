@@ -1226,6 +1226,16 @@ private fun CamdWindowActionFields(
     } else {
         CAMD_WINDOW_DEFAULT_CAMERA
     }
+    fun openLine(
+        mode: String = args.mode,
+        x: Int = args.x,
+        y: Int = args.y,
+        w: Int = args.w,
+        h: Int = args.h,
+        rotation: Int = args.rotation,
+        flipH: Boolean = args.flipH,
+        flipV: Boolean = args.flipV,
+    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Окно",
@@ -1242,14 +1252,7 @@ private fun CamdWindowActionFields(
                 onChange(
                     action.copy(
                         intValue = camera,
-                        stringValue = formatCamdAutomationWindowArgs(
-                            mode,
-                            args.x,
-                            args.y,
-                            args.w,
-                            args.h,
-                            args.rotation,
-                        ),
+                        stringValue = openLine(mode = mode),
                     ),
                 )
             },
@@ -1273,78 +1276,37 @@ private fun CamdWindowActionFields(
                 options = listOf(0, 90, 180, 270),
                 optionLabel = { "$it°" },
                 onValueChange = { degrees ->
-                    onChange(
-                        action.copy(
-                            stringValue = formatCamdAutomationWindowArgs(
-                                args.mode,
-                                args.x,
-                                args.y,
-                                args.w,
-                                args.h,
-                                degrees,
-                            ),
-                        ),
-                    )
+                    onChange(action.copy(stringValue = openLine(rotation = degrees)))
                 },
+            )
+            AutomationDropdown(
+                label = "Зеркало H",
+                value = args.flipH,
+                options = listOf(false, true),
+                optionLabel = { if (it) "Да" else "Нет" },
+                onValueChange = { onChange(action.copy(stringValue = openLine(flipH = it))) },
+            )
+            AutomationDropdown(
+                label = "Зеркало V",
+                value = args.flipV,
+                options = listOf(false, true),
+                optionLabel = { if (it) "Да" else "Нет" },
+                onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
-                    onChange(
-                        action.copy(
-                            stringValue = formatCamdAutomationWindowArgs(
-                                args.mode,
-                                next,
-                                args.y,
-                                args.w,
-                                args.h,
-                                args.rotation,
-                            ),
-                        ),
-                    )
+                    onChange(action.copy(stringValue = openLine(x = next)))
                 }
                 CamdPercentField("Сверху, %", args.y, Modifier.weight(1f)) { next ->
-                    onChange(
-                        action.copy(
-                            stringValue = formatCamdAutomationWindowArgs(
-                                args.mode,
-                                args.x,
-                                next,
-                                args.w,
-                                args.h,
-                                args.rotation,
-                            ),
-                        ),
-                    )
+                    onChange(action.copy(stringValue = openLine(y = next)))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CamdPercentField("Ширина, %", args.w, Modifier.weight(1f)) { next ->
-                    onChange(
-                        action.copy(
-                            stringValue = formatCamdAutomationWindowArgs(
-                                args.mode,
-                                args.x,
-                                args.y,
-                                next,
-                                args.h,
-                                args.rotation,
-                            ),
-                        ),
-                    )
+                    onChange(action.copy(stringValue = openLine(w = next)))
                 }
                 CamdPercentField("Высота, %", args.h, Modifier.weight(1f)) { next ->
-                    onChange(
-                        action.copy(
-                            stringValue = formatCamdAutomationWindowArgs(
-                                args.mode,
-                                args.x,
-                                args.y,
-                                args.w,
-                                next,
-                                args.rotation,
-                            ),
-                        ),
-                    )
+                    onChange(action.copy(stringValue = openLine(h = next)))
                 }
             }
         }

@@ -58,6 +58,20 @@ class CameraWindows(private val context: Context) {
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(context)
 
+    fun lensCorrection(inputId: Int): CamdLensCorrection =
+        CamdLensCorrectionStore.load(prefs, inputId)
+
+    /** Persist per-camera visual correction and push it to an open overlay if any. */
+    fun setLensCorrection(inputId: Int, value: CamdLensCorrection): CamdLensCorrection = synchronized(lock) {
+        val clamped = CamdLensCorrection.clamp(value)
+        CamdLensCorrectionStore.save(prefs, inputId, clamped)
+        val live = views[inputId]
+        if (live != null) {
+            main.post { live.setLensCorrection(clamped) }
+        }
+        clamped
+    }
+
     fun open(command: CamdCommand.Open): String = synchronized(lock) {
         val input = KnownInputs.byId(command.inputId) ?: return "state=error error=unknown_input"
         val moved = views.containsKey(command.inputId)
@@ -218,9 +232,18 @@ class CameraWindows(private val context: Context) {
                 if (existing != null) {
                     place(existing.params, command)
                     existing.setRotation(command.rotation)
+                    existing.setFlip(command.flipH, command.flipV)
+                    existing.setLensCorrection(CamdLensCorrectionStore.load(prefs, command.inputId))
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
-                    val live = LiveWindow(command.inputId, input, command.rotation)
+                    val live = LiveWindow(
+                        command.inputId,
+                        input,
+                        command.rotation,
+                        command.flipH,
+                        command.flipV,
+                        CamdLensCorrectionStore.load(prefs, command.inputId),
+                    )
                     place(live.params, command)
                     windowManager().addView(live.root, live.params)
                     views[command.inputId] = live
@@ -333,7 +356,14 @@ class CameraWindows(private val context: Context) {
         var error: String = "overlay"
     }
 
-    private inner class LiveWindow(val id: Int, val input: CameraInput, rotation: Int) {
+    private inner class LiveWindow(
+        val id: Int,
+        val input: CameraInput,
+        rotation: Int,
+        flipH: Boolean,
+        flipV: Boolean,
+        lens: CamdLensCorrection,
+    ) {
         val root: FrameLayout = FrameLayout(context)
         val picture: TextureView = TextureView(context)
         val caption: TextView = TextView(context)
@@ -392,6 +422,9 @@ class CameraWindows(private val context: Context) {
                 File(GrabberScripts.frame(id)),
                 main,
                 rotation,
+                flipH,
+                flipV,
+                lens,
             ) {
                 caption.visibility = View.GONE
             }
@@ -399,6 +432,14 @@ class CameraWindows(private val context: Context) {
 
         fun setRotation(degrees: Int) {
             renderer.setRotation(degrees)
+        }
+
+        fun setFlip(horizontal: Boolean, vertical: Boolean) {
+            renderer.setFlip(horizontal, vertical)
+        }
+
+        fun setLensCorrection(value: CamdLensCorrection) {
+            renderer.setLensCorrection(value)
         }
 
         fun start() {

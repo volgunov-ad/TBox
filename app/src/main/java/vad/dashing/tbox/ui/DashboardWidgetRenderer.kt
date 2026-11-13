@@ -1420,6 +1420,8 @@ fun DashboardWidgetRenderer(
                 w = widgetConfig.camdWindowW,
                 h = widgetConfig.camdWindowH,
                 rotation = widgetConfig.camdWindowRotation,
+                flipH = widgetConfig.camdWindowFlipH,
+                flipV = widgetConfig.camdWindowFlipV,
             )
         }
 

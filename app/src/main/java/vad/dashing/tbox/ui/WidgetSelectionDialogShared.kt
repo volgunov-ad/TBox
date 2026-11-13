@@ -843,6 +843,12 @@ internal class WidgetSelectionDialogState(
             0
         }
     )
+    var camdWindowFlipH by mutableStateOf(
+        initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY && initialConfig.camdWindowFlipH,
+    )
+    var camdWindowFlipV by mutableStateOf(
+        initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY && initialConfig.camdWindowFlipV,
+    )
     var buttonBinding by mutableStateOf(
         if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
             normalizeWidgetButtonBinding(initialConfig.buttonBinding)
@@ -1394,6 +1400,8 @@ internal class WidgetSelectionDialogState(
             } else {
                 0
             },
+            camdWindowFlipH = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowFlipH,
+            camdWindowFlipV = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowFlipV,
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
             } else {
@@ -1826,6 +1834,8 @@ internal class WidgetSelectionDialogState(
             camdWindowW = geometry.w
             camdWindowH = geometry.h
             camdWindowRotation = normalizeCamdRotation(cfg.camdWindowRotation)
+            camdWindowFlipH = cfg.camdWindowFlipH
+            camdWindowFlipV = cfg.camdWindowFlipV
         } else {
             camdWindowCameraId = CAMD_WINDOW_DEFAULT_CAMERA
             camdWindowX = CAMD_WINDOW_DEFAULT_X
@@ -1833,6 +1843,8 @@ internal class WidgetSelectionDialogState(
             camdWindowW = CAMD_WINDOW_DEFAULT_W
             camdWindowH = CAMD_WINDOW_DEFAULT_H
             camdWindowRotation = 0
+            camdWindowFlipH = false
+            camdWindowFlipV = false
         }
         buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
             normalizeWidgetButtonBinding(cfg.buttonBinding)

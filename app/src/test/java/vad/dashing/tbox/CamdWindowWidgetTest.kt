@@ -29,6 +29,26 @@ class CamdWindowWidgetTest {
     }
 
     @Test
+    fun openLineOmitsFlipsWhenBothZeroAndKeepsRotationSlotWhenFlipSet() {
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 0, flipH = false, flipV = false),
+        )
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000 0 1",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 0, flipH = true, flipV = false),
+        )
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000 90 1 1",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 90, flipH = true, flipV = true),
+        )
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000 0 0 1",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 0, flipH = false, flipV = true),
+        )
+    }
+
+    @Test
     fun openLineKeepsTheWindowOnScreen() {
         assertEquals(
             "OPEN 5 0.2000 0.0000 0.8000 0.4000",
@@ -63,6 +83,10 @@ class CamdWindowWidgetTest {
         assertEquals(
             "OPEN 5 0.0200 0.5500 0.4000 0.4000",
             camdAutomationCommandLine(5, "open 2 55 40 40"),
+        )
+        assertEquals(
+            "OPEN 5 0.0200 0.5500 0.4000 0.4000 0 1 1",
+            camdAutomationCommandLine(5, "open 2 55 40 40 0 1 1"),
         )
         assertEquals("CLOSE 8", camdAutomationCommandLine(8, "close"))
         assertEquals("CLOSE", camdAutomationCommandLine(4, "close_all"))
