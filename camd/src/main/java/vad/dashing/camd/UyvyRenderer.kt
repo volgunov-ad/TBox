@@ -56,6 +56,8 @@ internal class UyvyRenderer(
     private var surfaceHeight = 1
     @Volatile
     private var token = 0L
+    @Volatile
+    private var windowAttached = true
     private var thread: Thread? = null
 
     fun setRotation(degrees: Int) {
@@ -72,6 +74,10 @@ internal class UyvyRenderer(
 
     fun setLensCorrection(value: CamdLensCorrection) {
         lens = CamdLensCorrection.clamp(value)
+    }
+
+    fun setWindowAttached(value: Boolean) {
+        windowAttached = value
     }
 
     fun start() {
@@ -186,13 +192,16 @@ internal class UyvyRenderer(
         var mappedIno = 0L
         var mappedLength = 0L
         var source: RandomAccessFile? = null
-        var pixels: ByteBuffer? = null
         var lastSeq = 0
         var uploadedWidth = 0
         var uploadedHeight = 0
         var sawFrame = false
         try {
             while (running && myToken == token && program != 0) {
+                if (!windowAttached) {
+                    Thread.sleep(16)
+                    continue
+                }
                 val shared = mapFrame(source, mapped, mappedIno, mappedLength)
                 source = shared.source
                 mapped = shared.buffer
@@ -200,25 +209,19 @@ internal class UyvyRenderer(
                 mappedLength = shared.length
                 val buffer = mapped
                 if (buffer == null) {
-                    Thread.sleep(4)
+                    Thread.sleep(8)
                     continue
                 }
                 val published = readUyvySlot(buffer)
                 if (published == null || published.seq == lastSeq) {
-                    Thread.sleep(4)
+                    Thread.sleep(8)
                     continue
                 }
                 val bytes = published.slotBytes
-                val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
-                    pixels = it
-                }
-                copy.clear()
-                val viewBuffer = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
-                viewBuffer.position(UYVY_HEADER + published.slot * bytes)
-                viewBuffer.limit(UYVY_HEADER + published.slot * bytes + bytes)
-                copy.put(viewBuffer)
+                val slice = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                slice.position(UYVY_HEADER + published.slot * bytes)
+                slice.limit(UYVY_HEADER + published.slot * bytes + bytes)
                 if (buffer.getInt(16) != published.seq) continue
-                copy.position(0)
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
                 if (uploadedWidth != published.width || uploadedHeight != published.height) {
                     GLES20.glTexImage2D(
@@ -230,7 +233,7 @@ internal class UyvyRenderer(
                         0,
                         GLES20.GL_RGBA,
                         GLES20.GL_UNSIGNED_BYTE,
-                        copy,
+                        slice,
                     )
                     uploadedWidth = published.width
                     uploadedHeight = published.height
@@ -244,7 +247,7 @@ internal class UyvyRenderer(
                         published.height,
                         GLES20.GL_RGBA,
                         GLES20.GL_UNSIGNED_BYTE,
-                        copy,
+                        slice,
                     )
                 }
                 GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
@@ -292,24 +295,21 @@ internal class UyvyRenderer(
         mappedIno: Long,
         mappedLength: Long,
     ): SharedMap {
+        if (current != null && mapped != null) {
+            val stat = runCatching { Os.stat(frame.absolutePath) }.getOrNull()
+            if (stat != null && stat.st_ino == mappedIno && stat.st_size == mappedLength) {
+                return SharedMap(current, mapped, mappedIno, mappedLength)
+            }
+            runCatching { current.close() }
+            return SharedMap(null, null, 0L, 0L)
+        }
         if (!frame.isFile) {
-            runCatching { current?.close() }
             return SharedMap(null, null, 0L, 0L)
         }
         val probe = runCatching { RandomAccessFile(frame, "r") }.getOrNull()
-        if (probe == null) {
-            runCatching { current?.close() }
-            return SharedMap(null, null, 0L, 0L)
-        }
+            ?: return SharedMap(null, null, 0L, 0L)
         val stat = runCatching { Os.fstat(probe.fd) }.getOrNull()
         val length = runCatching { probe.length() }.getOrDefault(0L)
-        if (stat != null && mapped != null && current != null &&
-            stat.st_ino == mappedIno && length == mappedLength
-        ) {
-            runCatching { probe.close() }
-            return SharedMap(current, mapped, mappedIno, mappedLength)
-        }
-        runCatching { current?.close() }
         if (stat == null || length < UYVY_HEADER) {
             runCatching { probe.close() }
             return SharedMap(null, null, 0L, 0L)

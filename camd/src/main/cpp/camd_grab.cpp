@@ -21,7 +21,7 @@
 #define QCARCAM_MAX_NUM_PLANES 3
 #define QCARCAM_FMT_UYVY_8 0x07080102u
 #define QCARCAM_VERSION 0x00000404u
-#define FRAME_TIMEOUT_NS 100000000ull
+#define FRAME_TIMEOUT_NS 15000000ull
 #define MAX_CAMERAS 8
 
 #define DESIRED "/data/data/vad.dashing.camd/files/grab.desired"
@@ -320,6 +320,12 @@ static int wanted(const int* ids, int count, int id) {
     return 0;
 }
 
+static long long now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 static int read_desired(int* ids) {
     FILE* file = fopen(DESIRED, "r");
     if (!file) return 0;
@@ -364,7 +370,7 @@ static void ensure_ram(void) {
         chmod(FRAME_RAM, 0777);
         return;
     }
-    if (mount("tmpfs", FRAME_RAM, "tmpfs", 0, "size=32m,mode=777") != 0) {
+    if (mount("tmpfs", FRAME_RAM, "tmpfs", 0, "size=48m,mode=777") != 0) {
         fprintf(stderr, "tmpfs %s errno=%d\n", FRAME_RAM, errno);
         return;
     }
@@ -385,10 +391,20 @@ int main(void) {
         unlink(path);
     }
     if (init_client() != 0) return 1;
+    int ids[MAX_CAMERAS];
+    int count = 0;
+    long long last_beat_ms = -1000000;
+    long long last_desired_ms = -1000000;
     while (1) {
-        beat();
-        int ids[MAX_CAMERAS];
-        int count = read_desired(ids);
+        long long now = now_ms();
+        if (now - last_beat_ms >= 1000) {
+            beat();
+            last_beat_ms = now;
+        }
+        if (now - last_desired_ms >= 250) {
+            count = read_desired(ids);
+            last_desired_ms = now;
+        }
         for (int id = 0; id < 10; id++) {
             if (!open_cameras[id]) continue;
             if (wanted(ids, count, id)) continue;
@@ -398,7 +414,6 @@ int main(void) {
             release_camera(open_cameras[id]);
             open_cameras[id] = nullptr;
         }
-        long long now = (long long)time(nullptr);
         for (int n = 0; n < count; n++) {
             int id = ids[n];
             if (!known_id(id) || open_cameras[id]) continue;
@@ -406,12 +421,12 @@ int main(void) {
             Camera* opened = open_camera(id);
             fprintf(stderr, "open %d -> %s\n", id, opened ? "ok" : "fail");
             if (opened) open_cameras[id] = opened;
-            else next_try[id] = now + 2;
+            else next_try[id] = now + 2000;
         }
         int got = 0;
         for (int id = 0; id < 10; id++) {
             if (open_cameras[id] && open_cameras[id]->handle && grab(open_cameras[id])) got = 1;
         }
-        usleep(got ? 1000 : 20000);
+        usleep(got ? 4000 : 20000);
     }
 }

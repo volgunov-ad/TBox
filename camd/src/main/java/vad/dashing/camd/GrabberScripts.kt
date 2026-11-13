@@ -10,6 +10,8 @@ object GrabberScripts {
     const val DESIRED = "${DaemonScripts.PACKAGE_FILES}/grab.desired"
     const val BINARY = "${DaemonScripts.PACKAGE_FILES}/camd_grab.new"
     const val RUN = "/data/local/tmp/camd_grab"
+    const val VERSION_FILE = "/data/local/tmp/camd_grab.ver"
+    const val GRAB_VERSION = "3"
     const val BEAT = "/data/local/tmp/camd-grab.beat"
     const val LOG = "/data/local/tmp/camd-grab.log"
     const val ARM = "/data/local/tmp/camd-grab.arm"
@@ -28,6 +30,8 @@ object GrabberScripts {
         lines.add("sleep 0.2")
         lines.add("cp $BINARY $RUN")
         lines.add("chmod 755 $RUN")
+        lines.add("echo $GRAB_VERSION > $VERSION_FILE")
+        lines.add("chmod 666 $VERSION_FILE")
         lines.add("$RUN > $LOG 2>&1 < /dev/null &")
         lines.add("echo $nonce > $ARM")
         lines.add("chmod 666 $ARM")

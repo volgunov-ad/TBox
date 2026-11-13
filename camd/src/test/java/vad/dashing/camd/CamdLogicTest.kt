@@ -132,6 +132,18 @@ class GrabberScriptTest {
         assertFalse(text.contains("camd_grab"))
         assertTrue(text.trimEnd().endsWith("exit 0"))
     }
+
+    @Test
+    fun launcherStampsTheGrabberVersion() {
+        val text = GrabberScripts.launcher("n5", stopAvm = false)
+        val copy = text.indexOf("cp ")
+        val stamp = text.indexOf("echo ${GrabberScripts.GRAB_VERSION} > ${GrabberScripts.VERSION_FILE}")
+        val launch = text.indexOf("camd_grab > ")
+        assertTrue(copy >= 0)
+        assertTrue(stamp > copy)
+        assertTrue(launch > stamp)
+        assertTrue(text.contains("chmod 666 ${GrabberScripts.VERSION_FILE}"))
+    }
 }
 
 class CamdPortTest {

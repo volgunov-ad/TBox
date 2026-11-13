@@ -144,7 +144,12 @@ class CameraWindows(private val context: Context) {
     private fun prepare(stopAvm: Boolean) {
         val needGrant = !Settings.canDrawOverlays(context)
         val beat = File(GrabberScripts.BEAT)
-        val fresh = beat.canRead() && System.currentTimeMillis() - beat.lastModified() < 4_000
+        val versionOk = runCatching {
+            File(GrabberScripts.VERSION_FILE).readText().trim() == GrabberScripts.GRAB_VERSION
+        }.getOrDefault(false)
+        val fresh = beat.canRead() &&
+            System.currentTimeMillis() - beat.lastModified() < 4_000 &&
+            versionOk
         if (fresh && !stopAvm && !needGrant) return
         if (stopAvm) markAvmStopped()
         if (fresh && stopAvm && !needGrant) {
@@ -428,6 +433,15 @@ class CameraWindows(private val context: Context) {
             ) {
                 caption.visibility = View.GONE
             }
+            root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    renderer.setWindowAttached(true)
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    renderer.setWindowAttached(false)
+                }
+            })
         }
 
         fun setRotation(degrees: Int) {
