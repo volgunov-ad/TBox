@@ -52,6 +52,9 @@ class ExternalApiHttpServer(
     var lastError: String? = null
         private set
 
+    @Volatile
+    var onUnexpectedStop: (() -> Unit)? = null
+
     val isRunning: Boolean
         get() = running.get() && serverSocket?.isClosed == false
 
@@ -115,6 +118,10 @@ class ExternalApiHttpServer(
                     lastError = error.message ?: error.javaClass.simpleName
                 }
             }
+        }
+        if (serverSocket === socket && running.get()) {
+            running.set(false)
+            onUnexpectedStop?.let { callback -> runCatching { callback() } }
         }
     }
 

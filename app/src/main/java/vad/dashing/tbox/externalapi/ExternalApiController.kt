@@ -105,6 +105,7 @@ class ExternalApiController(
     private var pairingTimeoutJob: Job? = null
     private var tokenExpiryJob: Job? = null
     private var observeJob: Job? = null
+    private var pairingPollJob: Job? = null
 
     private val httpServer = ExternalApiHttpServer { method, path, query, headers, body ->
         router.handle(method, path, query, headers, body)
@@ -134,6 +135,15 @@ class ExternalApiController(
         headUnitPlatform = { headUnitPlatform() },
         climateControlType = { VehicleFeatureSettings.climateControlType.storageKey },
     )
+
+    init {
+        httpServer.onUnexpectedStop = {
+            scope.launch {
+                delay(UNEXPECTED_STOP_RESTART_DELAY_MS)
+                syncServer()
+            }
+        }
+    }
 
     private fun headUnitPlatform(): String = when (UniversalCanRepository.mode.value) {
         HeadUnitCanMode.Android9MbCan -> "android9"
@@ -174,12 +184,6 @@ class ExternalApiController(
                 automations = snapshot.document.automations
             }
         }
-        scope.launch {
-            while (true) {
-                _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
-                delay(250)
-            }
-        }
     }
 
     fun stop() {
@@ -189,6 +193,8 @@ class ExternalApiController(
         pairingTimeoutJob = null
         tokenExpiryJob?.cancel()
         tokenExpiryJob = null
+        pairingPollJob?.cancel()
+        pairingPollJob = null
         pairingSession.stopPairing()
         httpServer.stop()
         persistClients()
@@ -197,6 +203,7 @@ class ExternalApiController(
 
     fun startPairing() {
         pairingSession.startPairing()
+        ensurePairingRequestPoll()
         pairingTimeoutJob?.cancel()
         pairingTimeoutJob = scope.launch {
             delay(ExternalApiConstants.PAIRING_TIMEOUT_MS)
@@ -215,6 +222,17 @@ class ExternalApiController(
         pairingSession.stopPairing()
         publishStatus()
         _pendingPairRequests.value = emptyList()
+    }
+
+    private fun ensurePairingRequestPoll() {
+        if (pairingPollJob?.isActive == true) return
+        pairingPollJob = scope.launch {
+            while (pairingSession.isPairingActive()) {
+                _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+                delay(PAIRING_POLL_INTERVAL_MS)
+            }
+            _pendingPairRequests.value = pairingSession.pendingRequestsSnapshot()
+        }
     }
 
     fun approvePair(requestId: String) {
@@ -581,6 +599,11 @@ class ExternalApiController(
         val clientsJson: String,
         val webPanelEnabled: Boolean,
     )
+
+    private companion object {
+        const val UNEXPECTED_STOP_RESTART_DELAY_MS = 1_000L
+        const val PAIRING_POLL_INTERVAL_MS = 250L
+    }
 }
 
 object ExternalApiControllerHolder {
