@@ -2,7 +2,6 @@ package vad.dashing.camd
 
 import java.io.File
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 /**
  * Writes the window XML and a one-line command for the root daemon, and starts that
@@ -104,7 +103,7 @@ class CamdEngine(private val filesDir: File) {
         val deadline = System.currentTimeMillis() + WAIT_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
             val last = status()
-            if (last.contains("seq=$ticket")) return last
+            if (hasSeqTicket(last, ticket)) return last
             Thread.sleep(300)
         }
         return "state=error error=timeout seq=$ticket"
@@ -146,15 +145,7 @@ class CamdEngine(private val filesDir: File) {
     }
 
     private fun exec(cmd: Array<String>) {
-        val process = ProcessBuilder(*cmd).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(8, TimeUnit.SECONDS)) {
-            process.destroy()
-            throw IllegalStateException("timeout ${cmd[0]}")
-        }
-        if (process.exitValue() != 0) {
-            throw IllegalStateException("${cmd[0]} завершился ${process.exitValue()} $output".trim())
-        }
+        CamdShell.exec(cmd)
     }
 
     private companion object {
@@ -162,4 +153,9 @@ class CamdEngine(private val filesDir: File) {
         const val WAIT_TIMEOUT_MS = 12_000L
         const val PROBE_TIMEOUT_MS = 45_000L
     }
+}
+
+internal fun hasSeqTicket(status: String, ticket: Int): Boolean {
+    val token = "seq=$ticket"
+    return status.split(Regex("\\s+")).any { it == token }
 }

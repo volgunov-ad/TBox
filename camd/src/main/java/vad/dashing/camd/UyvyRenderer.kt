@@ -54,6 +54,8 @@ internal class UyvyRenderer(
     private var surfaceWidth = 1
     @Volatile
     private var surfaceHeight = 1
+    @Volatile
+    private var token = 0L
     private var thread: Thread? = null
 
     fun setRotation(degrees: Int) {
@@ -83,17 +85,21 @@ internal class UyvyRenderer(
 
     fun stop() {
         started = false
+        token += 1
         running = false
         joinThread()
     }
 
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-        if (!started || thread != null) return
+        if (!started) return
+        val previous = thread
+        if (previous != null && previous.isAlive) return
         surfaceWidth = width.coerceAtLeast(1)
         surfaceHeight = height.coerceAtLeast(1)
         surface.setDefaultBufferSize(surfaceWidth, surfaceHeight)
+        val myToken = token
         running = true
-        thread = Thread({ render(surface) }, "camd-gl").apply {
+        thread = Thread({ render(surface, myToken) }, "camd-gl").apply {
             isDaemon = true
             start()
         }
@@ -106,21 +112,21 @@ internal class UyvyRenderer(
     }
 
     override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-        started = false
+        token += 1
         running = false
         joinThread()
-        return thread?.isAlive != true
+        return true
     }
 
     override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
 
     private fun joinThread() {
         val worker = thread ?: return
-        runCatching { worker.join(3_000) }
+        runCatching { worker.join(1_000) }
         if (!worker.isAlive) thread = null
     }
 
-    private fun render(surfaceTexture: SurfaceTexture) {
+    private fun render(surfaceTexture: SurfaceTexture, myToken: Long) {
         val window = Surface(surfaceTexture)
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         if (display == EGL14.EGL_NO_DISPLAY) {
@@ -186,7 +192,7 @@ internal class UyvyRenderer(
         var uploadedHeight = 0
         var sawFrame = false
         try {
-            while (running && program != 0) {
+            while (running && myToken == token && program != 0) {
                 val shared = mapFrame(source, mapped, mappedIno, mappedLength)
                 source = shared.source
                 mapped = shared.buffer
@@ -266,7 +272,7 @@ internal class UyvyRenderer(
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             // A bad frame must not leave the EGL surface attached.
         } finally {
             runCatching { source?.close() }

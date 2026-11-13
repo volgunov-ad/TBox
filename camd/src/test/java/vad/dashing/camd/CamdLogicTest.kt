@@ -224,3 +224,62 @@ class CamdApiReplyTest {
         assertTrue(server.reply("STATUS").startsWith("OK "))
     }
 }
+
+class CamdSeqTicketTest {
+    @Test
+    fun matchesOnlyTheExactTicketToken() {
+        assertTrue(hasSeqTicket("state=open input=4 qpid=812 seq=1", 1))
+        assertFalse(hasSeqTicket("state=open input=4 qpid=812 seq=11", 1))
+        assertFalse(hasSeqTicket("state=idle seq=0", 1))
+        assertTrue(hasSeqTicket("state=idle seq=12", 12))
+        assertTrue(hasSeqTicket("seq=3\nstate=open", 3))
+        assertTrue(hasSeqTicket("seq=1", 1))
+        assertFalse(hasSeqTicket("", 1))
+        assertFalse(hasSeqTicket("state=unknown", 1))
+        assertFalse(hasSeqTicket("state=error error=timeout seq=1", 2))
+    }
+}
+
+class CamdApiServerClientTest {
+    @Test
+    fun answersOneLineAndClosesTheSocket() {
+        val engine = CamdEngine(java.io.File("build/camd-test-files").apply { mkdirs() })
+        val server = CamdApiServer(engine)
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { listener ->
+            val client = java.net.Socket()
+            client.soTimeout = 2_000
+            client.connect(
+                java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), listener.localPort),
+                2_000,
+            )
+            client.getOutputStream().write("STATUS\n".toByteArray())
+            client.getOutputStream().flush()
+            listener.accept().use { accepted ->
+                server.serveClient(accepted)
+            }
+            val reader = client.getInputStream().bufferedReader()
+            assertTrue(reader.readLine().startsWith("OK "))
+            assertEquals(-1, reader.read())
+            client.close()
+        }
+    }
+
+    @Test
+    fun idleClientTimesOutAndClosesWithoutReply() {
+        val engine = CamdEngine(java.io.File("build/camd-test-files").apply { mkdirs() })
+        val server = CamdApiServer(engine, clientTimeoutMs = 150)
+        java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress()).use { listener ->
+            val client = java.net.Socket()
+            client.soTimeout = 5_000
+            client.connect(
+                java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), listener.localPort),
+                2_000,
+            )
+            listener.accept().use { accepted ->
+                server.serveClient(accepted)
+            }
+            assertEquals(-1, client.getInputStream().read())
+            client.close()
+        }
+    }
+}

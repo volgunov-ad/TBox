@@ -16,6 +16,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -27,7 +28,7 @@ class CameraWindows(private val context: Context) {
 
     private val lock = Any()
     private val openIds = LinkedHashSet<Int>()
-    private val views = HashMap<Int, LiveWindow>()
+    private val views = ConcurrentHashMap<Int, LiveWindow>()
     private val main = Handler(Looper.getMainLooper())
     private val prefs: SharedPreferences =
         context.getSharedPreferences("camd", Context.MODE_PRIVATE)
@@ -340,15 +341,7 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun exec(cmd: Array<String>) {
-        val process = ProcessBuilder(*cmd).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        if (!process.waitFor(8, TimeUnit.SECONDS)) {
-            process.destroy()
-            throw IllegalStateException("timeout ${cmd[0]}")
-        }
-        if (process.exitValue() != 0) {
-            throw IllegalStateException("${cmd[0]} завершился ${process.exitValue()} $output".trim())
-        }
+        CamdShell.exec(cmd)
     }
 
     private class ShowResult {

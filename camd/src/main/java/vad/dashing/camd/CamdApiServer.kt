@@ -4,6 +4,8 @@ import android.util.Log
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
+import java.net.Socket
+import java.net.SocketTimeoutException
 import kotlin.concurrent.thread
 
 /**
@@ -16,12 +18,9 @@ import kotlin.concurrent.thread
  */
 class CamdApiServer(
     private val engine: CamdEngine,
-    private val windows: CameraWindows? = null
+    private val windows: CameraWindows? = null,
+    private val clientTimeoutMs: Int = CLIENT_TIMEOUT_MS,
 ) {
-
-    private companion object {
-        const val TAG = "CamdApi"
-    }
 
     @Volatile
     private var running = false
@@ -40,22 +39,28 @@ class CamdApiServer(
                 while (running) {
                     val socket = server.accept()
                     thread(name = "camd-api-client", isDaemon = true) {
-                        try {
-                            socket.use { client ->
-                                val request = client.getInputStream().bufferedReader().readLine() ?: return@thread
-                                val reply = reply(request)
-                                client.getOutputStream().write((reply + "\n").toByteArray())
-                                client.getOutputStream().flush()
-                            }
-                        } catch (error: Throwable) {
-                            Log.e(TAG, "запрос API", error)
-                        }
+                        serveClient(socket)
                     }
                 }
             } catch (error: Throwable) {
                 running = false
                 Log.e(TAG, "API не слушает ${DaemonScripts.API_PORT}", error)
             }
+        }
+    }
+
+    internal fun serveClient(socket: Socket) {
+        runCatching { socket.soTimeout = clientTimeoutMs }
+        try {
+            socket.use { client ->
+                val request = client.getInputStream().bufferedReader().readLine() ?: return
+                val reply = reply(request)
+                client.getOutputStream().write((reply + "\n").toByteArray())
+                client.getOutputStream().flush()
+            }
+        } catch (_: SocketTimeoutException) {
+        } catch (error: Throwable) {
+            Log.e(TAG, "запрос API", error)
         }
     }
 
@@ -66,10 +71,15 @@ class CamdApiServer(
             is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
             CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
             is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
-            CamdCommand.Status -> {
-                val text = windows?.status() ?: engine.status()
-                "OK " + text.ifBlank { "state=unknown" }
-            }
+                CamdCommand.Status -> {
+                    val text = windows?.status() ?: engine.status()
+                    "OK " + text.ifBlank { "state=unknown" }
+                }
         }
+    }
+
+    private companion object {
+        const val TAG = "CamdApi"
+        const val CLIENT_TIMEOUT_MS = 5_000
     }
 }
