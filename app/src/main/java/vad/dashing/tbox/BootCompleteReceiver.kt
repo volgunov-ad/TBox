@@ -43,8 +43,6 @@ class BootCompleteReceiver : BroadcastReceiver() {
             Log.e(TAG, "Failed to start BackgroundService ($bootAction)", e)
             TboxRepository.addLog("ERROR", "Boot receiver", "Start failed: ${e.message}")
         }
-        if (isCamdPackageInstalled(context.packageManager)) {
-            startCamdService(context)
-        }
+        wakeCamdServiceIfInstalled(context)
     }
 }

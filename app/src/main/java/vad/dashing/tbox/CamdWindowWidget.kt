@@ -122,6 +122,13 @@ fun startCamdService(context: Context) {
     app.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
 }
 
+/** Boot / NLS early-start: wake «Камеры ГУ» only when the package is installed. */
+fun wakeCamdServiceIfInstalled(context: Context) {
+    if (isCamdPackageInstalled(context.packageManager)) {
+        startCamdService(context)
+    }
+}
+
 object CamdWindowClient {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
