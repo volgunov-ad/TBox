@@ -65,9 +65,9 @@ android {
     }
 }
 
-tasks.matching { it.name == "mergeDebugAssets" || it.name == "mergeReleaseAssets" }.configureEach {
-    dependsOn("externalNativeBuildDebug")
-}
+// camd_grab is copied into assets by CMake; each variant must wait on its own native build.
+tasks.named("mergeDebugAssets").configure { dependsOn("externalNativeBuildDebug") }
+tasks.named("mergeReleaseAssets").configure { dependsOn("externalNativeBuildRelease") }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

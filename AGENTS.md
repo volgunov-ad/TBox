@@ -154,6 +154,7 @@ Separate app **Камеры ГУ** (`vad.dashing.camd`). Plan and done/not-done:
 ```
 ./gradlew :camd:testDebugUnitTest
 ./gradlew :camd:assembleDebug
+./gradlew :camd:assembleRelease
 ```
 
 ### Git branches
