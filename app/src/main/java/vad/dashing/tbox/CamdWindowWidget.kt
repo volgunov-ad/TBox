@@ -66,16 +66,31 @@ fun normalizeCamdRotation(value: Int): Int = when (value) {
 fun camdWindowOpenLine(cameraId: Int, x: Int, y: Int, w: Int, h: Int, rotation: Int = 0): String {
     val camera = normalizeCamdWindowCamera(cameraId)
     val geometry = normalizeCamdWindowGeometry(x, y, w, h)
-    return String.format(
-        Locale.US,
-        "OPEN %d %.4f %.4f %.4f %.4f %d",
-        camera,
-        geometry.x / 100.0,
-        geometry.y / 100.0,
-        geometry.w / 100.0,
-        geometry.h / 100.0,
-        normalizeCamdRotation(rotation),
-    )
+    val rot = normalizeCamdRotation(rotation)
+    // Older camd builds only accepted 6 tokens (no rotation). Omit trailing 0 so
+    // Monitor still talks to a service that was installed before the rotation field.
+    return if (rot == 0) {
+        String.format(
+            Locale.US,
+            "OPEN %d %.4f %.4f %.4f %.4f",
+            camera,
+            geometry.x / 100.0,
+            geometry.y / 100.0,
+            geometry.w / 100.0,
+            geometry.h / 100.0,
+        )
+    } else {
+        String.format(
+            Locale.US,
+            "OPEN %d %.4f %.4f %.4f %.4f %d",
+            camera,
+            geometry.x / 100.0,
+            geometry.y / 100.0,
+            geometry.w / 100.0,
+            geometry.h / 100.0,
+            rot,
+        )
+    }
 }
 
 fun camdWindowCloseLine(cameraId: Int): String {
@@ -94,12 +109,17 @@ fun isCamdPortClosed(error: Throwable?): Boolean = when (error) {
 
 fun startCamdService(context: Context) {
     val app = context.applicationContext
-    val intent = Intent().setClassName(CAMD_PACKAGE_NAME, "$CAMD_PACKAGE_NAME.CamdService")
+    // Explicit FGS can wake a force-stopped camd when signature permission is granted.
     try {
-        app.startForegroundService(intent)
+        app.startForegroundService(
+            Intent().setClassName(CAMD_PACKAGE_NAME, "$CAMD_PACKAGE_NAME.CamdService"),
+        )
     } catch (_: Exception) {
-        app.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
+        // Missing package, or signature START permission not granted to Monitor yet.
     }
+    // Always also broadcast: BootReceiver is exported without the START permission and
+    // starts CamdService from inside the camd package (which holds the permission).
+    app.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
 }
 
 object CamdWindowClient {
@@ -146,7 +166,7 @@ object CamdWindowClient {
                 out.flush()
                 val reply = socket.getInputStream().bufferedReader().readLine().orEmpty()
                 if (reply.startsWith("ERR") || reply.contains("state=error")) {
-                    error(reply.ifBlank { "empty" })
+                    throw CamdCommandException(reply.ifBlank { "empty" })
                 }
                 reply
             }
@@ -155,13 +175,41 @@ object CamdWindowClient {
     private fun send(context: Context, line: String) {
         val app = context.applicationContext
         io.execute {
-            if (command(line, context = app).isFailure) {
-                main.post {
-                    Toast.makeText(app, app.getString(R.string.camd_window_unreachable), Toast.LENGTH_SHORT).show()
-                }
+            val result = command(line, context = app)
+            val error = result.exceptionOrNull() ?: return@execute
+            main.post {
+                Toast.makeText(app, camdFailureToast(app, error), Toast.LENGTH_SHORT).show()
             }
         }
     }
+}
+
+/** camd answered on TCP, but the command failed (bad line or state=error). */
+class CamdCommandException(val reply: String) : IllegalStateException(reply)
+
+/** User-facing toast: unreachable vs a real error string from the camera service. */
+fun camdFailureToast(context: Context, error: Throwable): String {
+    val reply = (error as? CamdCommandException)?.reply
+        ?: error.message?.takeIf { it.startsWith("ERR") || it.contains("state=error") }
+    if (reply.isNullOrBlank()) {
+        return context.getString(R.string.camd_window_unreachable)
+    }
+    val detail = camdFailureDetail(reply)
+    return if (detail.isNullOrBlank()) {
+        context.getString(R.string.camd_window_unreachable)
+    } else {
+        context.getString(R.string.camd_window_command_failed, detail)
+    }
+}
+
+fun camdFailureDetail(reply: String): String? {
+    val text = reply.trim()
+    if (text.isEmpty()) return null
+    Regex("""error=(\S+)""").find(text)?.groupValues?.get(1)?.let { return it }
+    if (text.startsWith("ERR")) {
+        return text.removePrefix("ERR").trim().ifBlank { text }
+    }
+    return text
 }
 
 data class CamdServiceStatus(

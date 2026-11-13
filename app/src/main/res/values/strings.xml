@@ -2895,6 +2895,7 @@
     <string name="camd_window_camera_oms">OMS</string>
     <string name="camd_window_camera_dms">DMS</string>
     <string name="camd_window_unreachable">Камеры ГУ не отвечают</string>
+    <string name="camd_window_command_failed">Камеры ГУ: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>
     <string name="widget_automation_trigger_id_hint">До 32 символов. Пустой ID — виджет всегда неактивен. Состояние сбрасывается перезапуском приложения.</string>
