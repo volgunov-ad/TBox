@@ -32,6 +32,7 @@ internal class UyvyRenderer(
     initialFlipH: Boolean = false,
     initialFlipV: Boolean = false,
     initialLens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
+    initialCrop: CamdCrop = CamdCrop.IDENTITY,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
@@ -50,6 +51,8 @@ internal class UyvyRenderer(
     private var flipV = initialFlipV
     @Volatile
     private var lens = CamdLensCorrection.clamp(initialLens)
+    @Volatile
+    private var crop = CamdCrop.clamp(initialCrop)
     @Volatile
     private var surfaceWidth = 1
     @Volatile
@@ -74,6 +77,10 @@ internal class UyvyRenderer(
 
     fun setLensCorrection(value: CamdLensCorrection) {
         lens = CamdLensCorrection.clamp(value)
+    }
+
+    fun setCrop(value: CamdCrop) {
+        crop = CamdCrop.clamp(value)
     }
 
     fun setWindowAttached(value: Boolean) {
@@ -188,6 +195,8 @@ internal class UyvyRenderer(
         val uK2 = GLES20.glGetUniformLocation(program, "uK2")
         val uCx = GLES20.glGetUniformLocation(program, "uCx")
         val uCy = GLES20.glGetUniformLocation(program, "uCy")
+        val uCropOn = GLES20.glGetUniformLocation(program, "uCropOn")
+        val uCrop = GLES20.glGetUniformLocation(program, "uCrop")
         var mapped: ByteBuffer? = null
         var mappedIno = 0L
         var mappedLength = 0L
@@ -269,6 +278,9 @@ internal class UyvyRenderer(
                 GLES20.glUniform1f(uK2, correction.k2)
                 GLES20.glUniform1f(uCx, correction.cx)
                 GLES20.glUniform1f(uCy, correction.cy)
+                val activeCrop = crop
+                GLES20.glUniform1f(uCropOn, if (activeCrop.isIdentity()) 0f else 1f)
+                GLES20.glUniform4f(uCrop, activeCrop.x, activeCrop.y, activeCrop.w, activeCrop.h)
                 quad.position(0)
                 GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
                 GLES20.glEnableVertexAttribArray(aPos)
@@ -394,7 +406,8 @@ internal class UyvyRenderer(
                 gl_Position = vec4(aPos, 0.0, 1.0);
             }
         """
-        // Order: rotate → optional H/V flip of the displayed image → radial visual tweak → UYVY sample.
+        // Order: rotate → optional H/V flip of the displayed image → radial visual tweak
+        // → crop rect in the corrected-frame axes (stretched to fill the window) → UYVY sample.
         // Lens k1/k2/cx/cy are a preview aid only, not a real camera calibration.
         const val FRAGMENT = """
             precision highp float;
@@ -407,6 +420,8 @@ internal class UyvyRenderer(
             uniform float uK2;
             uniform float uCx;
             uniform float uCy;
+            uniform float uCropOn;
+            uniform vec4 uCrop;
             varying vec2 vTex;
             void main() {
                 vec2 p = vTex - 0.5;
@@ -426,6 +441,7 @@ internal class UyvyRenderer(
                     gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
                     return;
                 }
+                if (uCropOn > 0.5) uv = uCrop.xy + uCrop.zw * uv;
                 float x = uv.x * uWidth;
                 float texel = (floor(x * 0.5) + 0.5) / (uWidth * 0.5);
                 vec4 uyvy = texture2D(uTex, vec2(texel, uv.y));

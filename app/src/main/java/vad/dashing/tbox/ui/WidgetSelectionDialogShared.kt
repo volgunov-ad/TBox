@@ -106,6 +106,7 @@ import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.normalizeCamdWindowCamera
+import vad.dashing.tbox.normalizeCamdWindowCrop
 import vad.dashing.tbox.normalizeCamdWindowGeometry
 import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetButtonBinding
@@ -849,6 +850,57 @@ internal class WidgetSelectionDialogState(
     var camdWindowFlipV by mutableStateOf(
         initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY && initialConfig.camdWindowFlipV,
     )
+    var camdWindowCropEnabled by mutableStateOf(
+        initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY && initialConfig.camdWindowCropEnabled,
+    )
+    var camdWindowCropX by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowCrop(
+                initialConfig.camdWindowCropX,
+                initialConfig.camdWindowCropY,
+                initialConfig.camdWindowCropW,
+                initialConfig.camdWindowCropH,
+            ).x
+        } else {
+            0
+        }
+    )
+    var camdWindowCropY by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowCrop(
+                initialConfig.camdWindowCropX,
+                initialConfig.camdWindowCropY,
+                initialConfig.camdWindowCropW,
+                initialConfig.camdWindowCropH,
+            ).y
+        } else {
+            0
+        }
+    )
+    var camdWindowCropW by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowCrop(
+                initialConfig.camdWindowCropX,
+                initialConfig.camdWindowCropY,
+                initialConfig.camdWindowCropW,
+                initialConfig.camdWindowCropH,
+            ).w
+        } else {
+            100
+        }
+    )
+    var camdWindowCropH by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowCrop(
+                initialConfig.camdWindowCropX,
+                initialConfig.camdWindowCropY,
+                initialConfig.camdWindowCropW,
+                initialConfig.camdWindowCropH,
+            ).h
+        } else {
+            100
+        }
+    )
     var buttonBinding by mutableStateOf(
         if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
             normalizeWidgetButtonBinding(initialConfig.buttonBinding)
@@ -1402,6 +1454,27 @@ internal class WidgetSelectionDialogState(
             },
             camdWindowFlipH = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowFlipH,
             camdWindowFlipV = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowFlipV,
+            camdWindowCropEnabled = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowCropEnabled,
+            camdWindowCropX = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowCrop(camdWindowCropX, camdWindowCropY, camdWindowCropW, camdWindowCropH).x
+            } else {
+                0
+            },
+            camdWindowCropY = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowCrop(camdWindowCropX, camdWindowCropY, camdWindowCropW, camdWindowCropH).y
+            } else {
+                0
+            },
+            camdWindowCropW = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowCrop(camdWindowCropX, camdWindowCropY, camdWindowCropW, camdWindowCropH).w
+            } else {
+                100
+            },
+            camdWindowCropH = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowCrop(camdWindowCropX, camdWindowCropY, camdWindowCropW, camdWindowCropH).h
+            } else {
+                100
+            },
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
             } else {
@@ -1836,6 +1909,17 @@ internal class WidgetSelectionDialogState(
             camdWindowRotation = normalizeCamdRotation(cfg.camdWindowRotation)
             camdWindowFlipH = cfg.camdWindowFlipH
             camdWindowFlipV = cfg.camdWindowFlipV
+            camdWindowCropEnabled = cfg.camdWindowCropEnabled
+            val crop = normalizeCamdWindowCrop(
+                cfg.camdWindowCropX,
+                cfg.camdWindowCropY,
+                cfg.camdWindowCropW,
+                cfg.camdWindowCropH,
+            )
+            camdWindowCropX = crop.x
+            camdWindowCropY = crop.y
+            camdWindowCropW = crop.w
+            camdWindowCropH = crop.h
         } else {
             camdWindowCameraId = CAMD_WINDOW_DEFAULT_CAMERA
             camdWindowX = CAMD_WINDOW_DEFAULT_X
@@ -1845,6 +1929,11 @@ internal class WidgetSelectionDialogState(
             camdWindowRotation = 0
             camdWindowFlipH = false
             camdWindowFlipV = false
+            camdWindowCropEnabled = false
+            camdWindowCropX = 0
+            camdWindowCropY = 0
+            camdWindowCropW = 100
+            camdWindowCropH = 100
         }
         buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
             normalizeWidgetButtonBinding(cfg.buttonBinding)

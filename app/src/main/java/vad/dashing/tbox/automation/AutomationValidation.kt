@@ -6,6 +6,7 @@ import vad.dashing.tbox.CAMD_ACTION_CLOSE
 import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
 import vad.dashing.tbox.CAMD_ACTION_OPEN
 import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.camdWindowCropIssue
 import vad.dashing.tbox.camdWindowGeometryIssue
 import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.SettingsManager
@@ -914,6 +915,13 @@ object AutomationValidator {
                     val geometry = camdWindowGeometryIssue(args.x, args.y, args.w, args.h)
                     if (geometry != null) {
                         issues += AutomationValidationIssue("$path.stringValue", geometry)
+                    }
+                    val crop = args.crop
+                    if (crop != null) {
+                        val cropIssue = camdWindowCropIssue(crop.x, crop.y, crop.w, crop.h)
+                        if (cropIssue != null) {
+                            issues += AutomationValidationIssue("$path.stringValue", cropIssue)
+                        }
                     }
                 } else if (args.mode != CAMD_ACTION_CLOSE && args.mode != CAMD_ACTION_CLOSE_ALL) {
                     issues += AutomationValidationIssue(

@@ -53,11 +53,48 @@ class CamdCommandTest {
     }
 
     @Test
-    fun openDefaultsHaveNoFlip() {
+    fun openDefaultsHaveNoFlipAndNoCrop() {
         val open = CamdCommands.parse("OPEN 0 0.1 0.1 0.2 0.2") as CamdCommand.Open
         assertFalse(open.flipH)
         assertFalse(open.flipV)
         assertEquals(0, open.rotation)
+        assertNull(open.crop)
+    }
+
+    @Test
+    fun parsesOpenWithOptionalCropSuffix() {
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, crop = CamdCrop(0.25f, 0.10f, 0.50f, 0.40f)),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 crop=0.2500,0.1000,0.5000,0.4000"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 90, flipH = true, flipV = true, crop = CamdCrop(0f, 0f, 1f, 0.5f)),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 90 1 1 crop=0,0,1,0.5"),
+        )
+        // The prefix is case-insensitive and the token may sit anywhere in the line.
+        assertEquals(
+            CamdCommand.Open(4, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = false, flipV = false, crop = CamdCrop(0.1f, 0.1f, 0.8f, 0.8f)),
+            CamdCommands.parse("OPEN CROP=0.1,0.1,0.8,0.8 4 0.0200 0.5500 0.4000 0.4000"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, crop = CamdCrop(0.02f, 0.01f, 1f, 1f)),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 crop=0.02,0.01,1.0,1.0"),
+        )
+    }
+
+    @Test
+    fun rejectsBadCropTokens() {
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,0.8,0.1"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,x"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,-0.2"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,1.2"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.04,0.8"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,0.04"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.5,0.1,0.9,0.8"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 crop=0.1,0.1,0.8,0.8 crop=0,0,1,1"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 0 0 0 crop=0.1,0.1,0.8,0.8 9"))
+        assertNull(CamdCommands.parse("OPEN 8 crop=x"))
     }
 
     @Test
@@ -81,6 +118,37 @@ class CamdLensCorrectionTest {
         assertEquals(-1f, clamped.k2, 0f)
         assertEquals(0.25f, clamped.cx, 0f)
         assertEquals(-0.25f, clamped.cy, 0f)
+    }
+}
+
+class CamdCropTest {
+    @Test
+    fun identityAndValidity() {
+        assertTrue(CamdCrop.IDENTITY.isIdentity())
+        assertTrue(CamdCrop.isValid(CamdCrop.IDENTITY))
+        assertFalse(CamdCrop(0.1f, 0.1f, 0.8f, 0.8f).isIdentity())
+        assertTrue(CamdCrop.isValid(CamdCrop(0.02f, 0.01f, 1f, 1f)))
+        assertFalse(CamdCrop.isValid(CamdCrop(0.1f, 0.1f, 0.04f, 0.8f)))
+        assertFalse(CamdCrop.isValid(CamdCrop(0.5f, 0.1f, 0.9f, 0.8f)))
+        assertFalse(CamdCrop.isValid(CamdCrop(-0.1f, 0f, 0.5f, 0.5f)))
+    }
+
+    @Test
+    fun clampKeepsTheRectInsideTheFrameAndRespectsMinSize() {
+        assertEquals(CamdCrop.IDENTITY, CamdCrop.clamp(CamdCrop.IDENTITY))
+        assertEquals(
+            CamdCrop(0.2f, 0.3f, 0.8f, 0.7f),
+            CamdCrop.clamp(CamdCrop(0.2f, 0.3f, 0.8f, 0.7f)),
+        )
+        // Right/bottom overflow shifts the origin back so size wins.
+        assertEquals(
+            CamdCrop(0.2f, 0.3f, 0.8f, 0.7f),
+            CamdCrop.clamp(CamdCrop(0.5f, 0.6f, 0.8f, 0.7f)),
+        )
+        assertEquals(
+            CamdCrop(0.95f, 0f, CamdCrop.MIN_SIZE, 1f),
+            CamdCrop.clamp(CamdCrop(1f, -1f, 0.04f, 9f)),
+        )
     }
 }
 

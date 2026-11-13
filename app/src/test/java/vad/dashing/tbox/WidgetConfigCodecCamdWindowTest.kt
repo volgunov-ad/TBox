@@ -77,4 +77,66 @@ class WidgetConfigCodecCamdWindowTest {
             ).contains("camdWindowFlipH"),
         )
     }
+
+    @Test
+    fun serializeAndParseKeepsCrop() {
+        val serialized = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = CAMD_WINDOW_WIDGET_DATA_KEY,
+                    camdWindowCropEnabled = true,
+                    camdWindowCropX = 5,
+                    camdWindowCropY = 10,
+                    camdWindowCropW = 90,
+                    camdWindowCropH = 80,
+                )
+            )
+        )
+        val parsed = parseWidgetConfigsFromString(serialized).single()
+        assertEquals(true, parsed.camdWindowCropEnabled)
+        assertEquals(5, parsed.camdWindowCropX)
+        assertEquals(10, parsed.camdWindowCropY)
+        assertEquals(90, parsed.camdWindowCropW)
+        assertEquals(80, parsed.camdWindowCropH)
+    }
+
+    @Test
+    fun serializeOmitsCropWhenDisabledAndClampsValues() {
+        val disabled = serializeWidgetConfigs(
+            listOf(FloatingDashboardWidgetConfig(dataKey = CAMD_WINDOW_WIDGET_DATA_KEY)),
+        )
+        assertFalse(disabled.contains("camdWindowCropEnabled"))
+        val clamped = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = CAMD_WINDOW_WIDGET_DATA_KEY,
+                    camdWindowCropEnabled = true,
+                    camdWindowCropX = -5,
+                    camdWindowCropY = 90,
+                    camdWindowCropW = 120,
+                    camdWindowCropH = 40,
+                )
+            )
+        )
+        val parsed = parseWidgetConfigsFromString(clamped).single()
+        assertEquals(true, parsed.camdWindowCropEnabled)
+        assertEquals(0, parsed.camdWindowCropX)
+        assertEquals(60, parsed.camdWindowCropY)
+        assertEquals(100, parsed.camdWindowCropW)
+        assertEquals(40, parsed.camdWindowCropH)
+    }
+
+    @Test
+    fun nonCamdWidgetsKeepDefaultCropFields() {
+        val parsed = parseWidgetConfigsFromString(
+            serializeWidgetConfigs(
+                listOf(FloatingDashboardWidgetConfig(dataKey = ACC_CRUISE_WIDGET_DATA_KEY)),
+            )
+        ).single()
+        assertEquals(false, parsed.camdWindowCropEnabled)
+        assertEquals(0, parsed.camdWindowCropX)
+        assertEquals(0, parsed.camdWindowCropY)
+        assertEquals(100, parsed.camdWindowCropW)
+        assertEquals(100, parsed.camdWindowCropH)
+    }
 }

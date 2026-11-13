@@ -78,6 +78,19 @@ class CameraWindows(private val context: Context) {
         clamped
     }
 
+    fun crop(inputId: Int): CamdCrop = CamdCropStore.load(prefs, inputId)
+
+    /** Persist per-camera crop default and push it to an open overlay if any. */
+    fun setCrop(inputId: Int, value: CamdCrop): CamdCrop = synchronized(lock) {
+        val clamped = CamdCrop.clamp(value)
+        CamdCropStore.save(prefs, inputId, clamped)
+        val live = views[inputId]
+        if (live != null) {
+            main.post { live.setCrop(clamped) }
+        }
+        clamped
+    }
+
     fun open(command: CamdCommand.Open): String = synchronized(lock) {
         val input = KnownInputs.byId(command.inputId) ?: return "state=error error=unknown_input"
         val moved = views.containsKey(command.inputId)
@@ -245,6 +258,7 @@ class CameraWindows(private val context: Context) {
                     existing.setRotation(command.rotation)
                     existing.setFlip(command.flipH, command.flipV)
                     existing.setLensCorrection(CamdLensCorrectionStore.load(prefs, command.inputId))
+                    existing.setCrop(effectiveCrop(command))
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
                     val live = LiveWindow(
@@ -254,6 +268,7 @@ class CameraWindows(private val context: Context) {
                         command.flipH,
                         command.flipV,
                         CamdLensCorrectionStore.load(prefs, command.inputId),
+                        effectiveCrop(command),
                     )
                     place(live.params, command)
                     windowManager().addView(live.root, live.params)
@@ -292,6 +307,10 @@ class CameraWindows(private val context: Context) {
         params.width = (command.w * metrics.widthPixels).toInt().coerceAtLeast(1)
         params.height = (command.h * metrics.heightPixels).toInt().coerceAtLeast(1)
     }
+
+    /** Command crop wins; otherwise the per-camera default from prefs. Identity disables cropping. */
+    private fun effectiveCrop(command: CamdCommand.Open): CamdCrop =
+        command.crop ?: CamdCropStore.load(prefs, command.inputId)
 
     private fun windowManager(): WindowManager {
         return context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -368,6 +387,7 @@ class CameraWindows(private val context: Context) {
         flipH: Boolean,
         flipV: Boolean,
         lens: CamdLensCorrection,
+        crop: CamdCrop,
     ) {
         val root: FrameLayout = FrameLayout(context)
         val picture: TextureView = TextureView(context)
@@ -430,6 +450,7 @@ class CameraWindows(private val context: Context) {
                 flipH,
                 flipV,
                 lens,
+                crop,
             ) {
                 caption.visibility = View.GONE
             }
@@ -454,6 +475,10 @@ class CameraWindows(private val context: Context) {
 
         fun setLensCorrection(value: CamdLensCorrection) {
             renderer.setLensCorrection(value)
+        }
+
+        fun setCrop(value: CamdCrop) {
+            renderer.setCrop(value)
         }
 
         fun start() {

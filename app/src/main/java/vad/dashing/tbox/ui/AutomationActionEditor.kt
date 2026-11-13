@@ -31,6 +31,7 @@ import vad.dashing.tbox.CAMD_ACTION_CLOSE
 import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
 import vad.dashing.tbox.CAMD_ACTION_OPEN
 import vad.dashing.tbox.CamdAutomationWindowArgs
+import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
@@ -1235,7 +1236,8 @@ private fun CamdWindowActionFields(
         rotation: Int = args.rotation,
         flipH: Boolean = args.flipH,
         flipV: Boolean = args.flipV,
-    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV)
+        crop: CamdWindowCrop? = args.crop,
+    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV, crop)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Окно",
@@ -1293,6 +1295,40 @@ private fun CamdWindowActionFields(
                 optionLabel = { if (it) "Да" else "Нет" },
                 onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
             )
+            AutomationDropdown(
+                label = "Вырезка",
+                value = args.crop != null,
+                options = listOf(false, true),
+                optionLabel = { if (it) "Да" else "Нет" },
+                onValueChange = { enabled ->
+                    onChange(
+                        action.copy(
+                            stringValue = openLine(
+                                crop = if (enabled) CamdWindowCrop(10, 10, 80, 80) else null,
+                            ),
+                        ),
+                    )
+                },
+            )
+            if (args.crop != null) {
+                val crop = args.crop
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CamdPercentField("Вырезка: слева, %", crop.x, Modifier.weight(1f)) { next ->
+                        onChange(action.copy(stringValue = openLine(crop = crop.copy(x = next))))
+                    }
+                    CamdPercentField("Вырезка: сверху, %", crop.y, Modifier.weight(1f)) { next ->
+                        onChange(action.copy(stringValue = openLine(crop = crop.copy(y = next))))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CamdPercentField("Вырезка: ширина, %", crop.w, Modifier.weight(1f)) { next ->
+                        onChange(action.copy(stringValue = openLine(crop = crop.copy(w = next))))
+                    }
+                    CamdPercentField("Вырезка: высота, %", crop.h, Modifier.weight(1f)) { next ->
+                        onChange(action.copy(stringValue = openLine(crop = crop.copy(h = next))))
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(x = next)))

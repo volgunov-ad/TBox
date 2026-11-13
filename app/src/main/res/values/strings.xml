@@ -2890,6 +2890,12 @@
     <string name="widget_camd_window_flip_h">Зеркало по горизонтали</string>
     <string name="widget_camd_window_flip_v">Зеркало по вертикали</string>
     <string name="widget_camd_window_flip_desc">Передаётся в OPEN как flipH/flipV. Коррекция «рыбьего глаза» настраивается в приложении «Камеры ГУ», не здесь.</string>
+    <string name="widget_camd_window_crop">Кадрировать</string>
+    <string name="widget_camd_window_crop_desc">Вырезка части кадра (после коррекции объектива), растягивается на всё окно. Передаётся в OPEN как crop=; нужен «Камеры ГУ» 0.4.0+.</string>
+    <string name="widget_camd_window_crop_x">Вырезка: слева, %</string>
+    <string name="widget_camd_window_crop_y">Вырезка: сверху, %</string>
+    <string name="widget_camd_window_crop_w">Вырезка: ширина, %</string>
+    <string name="widget_camd_window_crop_h">Вырезка: высота, %</string>
     <string name="camd_window_camera_front">Передняя</string>
     <string name="camd_window_camera_rear">Задняя</string>
     <string name="camd_window_camera_left">Левая</string>

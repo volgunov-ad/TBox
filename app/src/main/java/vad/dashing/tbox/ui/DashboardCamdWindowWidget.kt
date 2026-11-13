@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vad.dashing.tbox.CamdWindowClient
+import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.R
 import vad.dashing.tbox.normalizeCamdWindowCamera
 
@@ -38,6 +39,7 @@ internal fun DashboardCamdWindowWidgetItem(
     rotation: Int,
     flipH: Boolean = false,
     flipV: Boolean = false,
+    crop: CamdWindowCrop? = null,
 ) {
     val context = LocalContext.current
     val camera = normalizeCamdWindowCamera(cameraId)
@@ -49,7 +51,7 @@ internal fun DashboardCamdWindowWidgetItem(
             if (isEditMode) {
                 onEditClick()
             } else {
-                CamdWindowClient.open(context, camera, x, y, w, h, rotation, flipH, flipV)
+                CamdWindowClient.open(context, camera, x, y, w, h, rotation, flipH, flipV, crop)
             }
         },
         onDoubleClick = if (isEditMode) {

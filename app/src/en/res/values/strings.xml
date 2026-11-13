@@ -2879,6 +2879,12 @@
     <string name="widget_camd_window_flip_h">Flip horizontal</string>
     <string name="widget_camd_window_flip_v">Flip vertical</string>
     <string name="widget_camd_window_flip_desc">Sent on OPEN as flipH/flipV. Lens visual correction is configured in the Cameras HU app, not here.</string>
+    <string name="widget_camd_window_crop">Crop</string>
+    <string name="widget_camd_window_crop_desc">Cuts a part of the frame (after lens correction), stretched to fill the window. Sent on OPEN as crop=; requires Cameras HU 0.4.0+.</string>
+    <string name="widget_camd_window_crop_x">Crop: from the left, %</string>
+    <string name="widget_camd_window_crop_y">Crop: from the top, %</string>
+    <string name="widget_camd_window_crop_w">Crop: width, %</string>
+    <string name="widget_camd_window_crop_h">Crop: height, %</string>
     <string name="camd_window_camera_front">Front</string>
     <string name="camd_window_camera_rear">Rear</string>
     <string name="camd_window_camera_left">Left</string>

@@ -55,6 +55,7 @@ import vad.dashing.tbox.EMPTY_TILE_WIDGET_DATA_KEY
 import vad.dashing.tbox.EspRelayWidgetMode
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
+import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
@@ -1422,6 +1423,16 @@ fun DashboardWidgetRenderer(
                 rotation = widgetConfig.camdWindowRotation,
                 flipH = widgetConfig.camdWindowFlipH,
                 flipV = widgetConfig.camdWindowFlipV,
+                crop = if (widgetConfig.camdWindowCropEnabled) {
+                    CamdWindowCrop(
+                        widgetConfig.camdWindowCropX,
+                        widgetConfig.camdWindowCropY,
+                        widgetConfig.camdWindowCropW,
+                        widgetConfig.camdWindowCropH,
+                    )
+                } else {
+                    null
+                },
             )
         }
 

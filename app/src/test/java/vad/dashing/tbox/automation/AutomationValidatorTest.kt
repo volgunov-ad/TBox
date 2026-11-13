@@ -654,6 +654,30 @@ class AutomationValidatorTest {
     }
 
     @Test
+    fun camdWindow_acceptsAValidCropAndRejectsABadOne() {
+        val validCrop = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 8,
+                    stringValue = "open 2 55 40 40 crop=10,10,80,80",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(validCrop).isEmpty())
+        val badCrop = validDefinition(
+            actions = listOf(
+                AutomationAction.Builtin(
+                    type = AutomationBuiltinActionType.CAMD_WINDOW,
+                    intValue = 8,
+                    stringValue = "open 2 55 40 40 crop=50,0,60,50",
+                ),
+            ),
+        )
+        assertTrue(AutomationValidator.validate(badCrop).any { it.path.contains("stringValue") })
+    }
+
+    @Test
     fun adbShellAndTcp_areAccepted() {
         val definition = validDefinition(
             actions = listOf(

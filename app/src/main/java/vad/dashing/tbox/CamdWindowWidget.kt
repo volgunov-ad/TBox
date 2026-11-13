@@ -38,11 +38,30 @@ data class CamdWindowGeometry(
     val h: Int,
 )
 
+/** Sub-rectangle of the frame in percent; the camera app stretches it to fill the window. */
+data class CamdWindowCrop(
+    val x: Int,
+    val y: Int,
+    val w: Int,
+    val h: Int,
+)
+
 /** Keeps the window inside the screen and large enough for the camera app. */
 fun normalizeCamdWindowGeometry(x: Int, y: Int, w: Int, h: Int): CamdWindowGeometry {
     val width = w.coerceIn(5, 100)
     val height = h.coerceIn(5, 100)
     return CamdWindowGeometry(
+        x = x.coerceIn(0, 100 - width),
+        y = y.coerceIn(0, 100 - height),
+        w = width,
+        h = height,
+    )
+}
+
+fun normalizeCamdWindowCrop(x: Int, y: Int, w: Int, h: Int): CamdWindowCrop {
+    val width = w.coerceIn(5, 100)
+    val height = h.coerceIn(5, 100)
+    return CamdWindowCrop(
         x = x.coerceIn(0, 100 - width),
         y = y.coerceIn(0, 100 - height),
         w = width,
@@ -72,6 +91,7 @@ fun camdWindowOpenLine(
     rotation: Int = 0,
     flipH: Boolean = false,
     flipV: Boolean = false,
+    crop: CamdWindowCrop? = null,
 ): String {
     val camera = normalizeCamdWindowCamera(cameraId)
     val geometry = normalizeCamdWindowGeometry(x, y, w, h)
@@ -81,7 +101,7 @@ fun camdWindowOpenLine(
     // Older camd: 6 tokens only; then 7 with rotation. Omit trailing identity so
     // Monitor still talks to a service installed before rotation / flip fields.
     // Flips require the rotation slot (even 0), same as camd's parser.
-    return when {
+    val line = when {
         fx == 0 && fy == 0 && rot == 0 -> String.format(
             Locale.US,
             "OPEN %d %.4f %.4f %.4f %.4f",
@@ -125,6 +145,16 @@ fun camdWindowOpenLine(
             fy,
         )
     }
+    if (crop == null) return line
+    // camd before 0.4.0 answers ERR bad_command; the toast shows the detail.
+    return line + String.format(
+        Locale.US,
+        " crop=%.4f,%.4f,%.4f,%.4f",
+        crop.x / 100.0,
+        crop.y / 100.0,
+        crop.w / 100.0,
+        crop.h / 100.0,
+    )
 }
 
 fun camdWindowCloseLine(cameraId: Int): String {
@@ -177,8 +207,9 @@ object CamdWindowClient {
         rotation: Int = 0,
         flipH: Boolean = false,
         flipV: Boolean = false,
+        crop: CamdWindowCrop? = null,
     ) {
-        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation, flipH, flipV))
+        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation, flipH, flipV, crop))
     }
 
     fun close(context: Context, cameraId: Int) {
@@ -278,6 +309,7 @@ data class CamdAutomationWindowArgs(
     val rotation: Int = 0,
     val flipH: Boolean = false,
     val flipV: Boolean = false,
+    val crop: CamdWindowCrop? = null,
 )
 
 fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
@@ -321,20 +353,38 @@ fun formatCamdAutomationWindowArgs(
     rotation: Int = 0,
     flipH: Boolean = false,
     flipV: Boolean = false,
-): String =
-    if (mode == CAMD_ACTION_OPEN) {
-        val rot = normalizeCamdRotation(rotation)
-        val fx = if (flipH) 1 else 0
-        val fy = if (flipV) 1 else 0
-        when {
-            fx == 0 && fy == 0 && rot == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h"
-            fx == 0 && fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot"
-            fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx"
-            else -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx $fy"
-        }
-    } else {
-        mode
+    crop: CamdWindowCrop? = null,
+): String {
+    if (mode != CAMD_ACTION_OPEN) return mode
+    val rot = normalizeCamdRotation(rotation)
+    val fx = if (flipH) 1 else 0
+    val fy = if (flipV) 1 else 0
+    val positional = when {
+        fx == 0 && fy == 0 && rot == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h"
+        fx == 0 && fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot"
+        fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx"
+        else -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx $fy"
     }
+    if (crop == null) return positional
+    return "$positional crop=${crop.x},${crop.y},${crop.w},${crop.h}"
+}
+
+fun isCamdCropToken(token: String): Boolean =
+    token.startsWith("crop=", ignoreCase = true)
+
+/** `crop=x,y,w,h` in percent, same bounds as the window. */
+fun parseCamdWindowCropToken(raw: String): CamdWindowCrop? {
+    val body = raw.substringAfter('=', "").trim()
+    val fields = body.split(",")
+    if (fields.size != 4) return null
+    val x = fields[0].trim().toIntOrNull() ?: return null
+    val y = fields[1].trim().toIntOrNull() ?: return null
+    val w = fields[2].trim().toIntOrNull() ?: return null
+    val h = fields[3].trim().toIntOrNull() ?: return null
+    val crop = CamdWindowCrop(x, y, w, h)
+    if (camdWindowCropIssue(x, y, w, h) != null) return null
+    return crop
+}
 
 fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
     val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
@@ -343,8 +393,12 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
     if (mode != CAMD_ACTION_OPEN && mode != CAMD_ACTION_CLOSE && mode != CAMD_ACTION_CLOSE_ALL) {
         return null
     }
+    val cropTokens = parts.filter { isCamdCropToken(it) }
+    if (cropTokens.size > 1) return null
+    val crop = cropTokens.firstOrNull()?.let { parseCamdWindowCropToken(it) ?: return null }
+    val positional = parts.filterNot { isCamdCropToken(it) }
     if (mode != CAMD_ACTION_OPEN) {
-        if (parts.size != 1) return null
+        if (positional.size != 1) return null
         return CamdAutomationWindowArgs(
             mode = mode,
             x = CAMD_WINDOW_DEFAULT_X,
@@ -353,16 +407,16 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
             h = CAMD_WINDOW_DEFAULT_H,
         )
     }
-    if (parts.size !in 5..8) return null
-    val rotation = if (parts.size >= 6) {
-        val value = parts[5].toIntOrNull() ?: return null
+    if (positional.size !in 5..8) return null
+    val rotation = if (positional.size >= 6) {
+        val value = positional[5].toIntOrNull() ?: return null
         if (value != 0 && value != 90 && value != 180 && value != 270) return null
         value
     } else {
         0
     }
-    val flipH = if (parts.size >= 7) {
-        when (parts[6].toIntOrNull()) {
+    val flipH = if (positional.size >= 7) {
+        when (positional[6].toIntOrNull()) {
             0 -> false
             1 -> true
             else -> return null
@@ -370,8 +424,8 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
     } else {
         false
     }
-    val flipV = if (parts.size >= 8) {
-        when (parts[7].toIntOrNull()) {
+    val flipV = if (positional.size >= 8) {
+        when (positional[7].toIntOrNull()) {
             0 -> false
             1 -> true
             else -> return null
@@ -381,19 +435,26 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
     }
     return CamdAutomationWindowArgs(
         mode = mode,
-        x = parts[1].toIntOrNull() ?: return null,
-        y = parts[2].toIntOrNull() ?: return null,
-        w = parts[3].toIntOrNull() ?: return null,
-        h = parts[4].toIntOrNull() ?: return null,
+        x = positional[1].toIntOrNull() ?: return null,
+        y = positional[2].toIntOrNull() ?: return null,
+        w = positional[3].toIntOrNull() ?: return null,
+        h = positional[4].toIntOrNull() ?: return null,
         rotation = rotation,
         flipH = flipH,
         flipV = flipV,
+        crop = crop,
     )
 }
 
 fun camdWindowGeometryIssue(x: Int, y: Int, w: Int, h: Int): String? {
     if (w !in 5..100 || h !in 5..100) return "Ширина и высота окна: 5–100 %"
     if (x !in 0..(100 - w) || y !in 0..(100 - h)) return "Окно выходит за экран"
+    return null
+}
+
+fun camdWindowCropIssue(x: Int, y: Int, w: Int, h: Int): String? {
+    if (w !in 5..100 || h !in 5..100) return "Ширина и высота вырезки: 5–100 %"
+    if (x !in 0..(100 - w) || y !in 0..(100 - h)) return "Вырезка выходит за кадр"
     return null
 }
 
@@ -408,6 +469,9 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
         CAMD_ACTION_OPEN -> {
             if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
             if (camdWindowGeometryIssue(args.x, args.y, args.w, args.h) != null) return null
+            if (args.crop != null && camdWindowCropIssue(args.crop.x, args.crop.y, args.crop.w, args.crop.h) != null) {
+                return null
+            }
             camdWindowOpenLine(
                 cameraId,
                 args.x,
@@ -417,6 +481,7 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
                 args.rotation,
                 args.flipH,
                 args.flipV,
+                args.crop,
             )
         }
         else -> null

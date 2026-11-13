@@ -219,6 +219,13 @@ data class FloatingDashboardWidgetConfig(
     val camdWindowFlipH: Boolean = false,
     /** Vertical mirror for [CAMD_WINDOW_WIDGET_DATA_KEY] (OPEN flipV). */
     val camdWindowFlipV: Boolean = false,
+    /** When true, OPEN carries crop=cx,cy,cw,ch (percent of the frame) for [CAMD_WINDOW_WIDGET_DATA_KEY]. */
+    val camdWindowCropEnabled: Boolean = false,
+    /** Frame crop rect for [CAMD_WINDOW_WIDGET_DATA_KEY], percent of the frame; stretched to fill the window. */
+    val camdWindowCropX: Int = 0,
+    val camdWindowCropY: Int = 0,
+    val camdWindowCropW: Int = 100,
+    val camdWindowCropH: Int = 100,
     /** System app-widget id when the tile shows a third-party app widget (`externalAppWidget`). */
     val appWidgetId: Int? = null,
     /**

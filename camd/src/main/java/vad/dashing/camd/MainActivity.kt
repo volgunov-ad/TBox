@@ -88,13 +88,21 @@ class MainActivity : ComponentActivity() {
                         onY = controller::setY,
                         onW = controller::setW,
                         onH = controller::setH,
-                        onRotation = controller::setRotation,
-                        onLensK1 = { controller.setLensField(k1 = it) },
-                        onLensK2 = { controller.setLensField(k2 = it) },
-                        onLensCx = { controller.setLensField(cx = it) },
-                        onLensCy = { controller.setLensField(cy = it) },
-                        onLensPreset = controller::setLensPreset,
-                        onLensReset = controller::resetLens,
+                         onRotation = controller::setRotation,
+                         onFlipH = { controller.setFlip(horizontal = it, vertical = controller.state.value.flipV) },
+                         onFlipV = { controller.setFlip(horizontal = controller.state.value.flipH, vertical = it) },
+                         onLensK1 = { controller.setLensField(k1 = it) },
+                         onLensK2 = { controller.setLensField(k2 = it) },
+                         onLensCx = { controller.setLensField(cx = it) },
+                         onLensCy = { controller.setLensField(cy = it) },
+                         onLensPreset = controller::setLensPreset,
+                         onLensReset = controller::resetLens,
+                         onCropToggle = controller::toggleCrop,
+                         onCropX = { controller.setCropField(x = it) },
+                         onCropY = { controller.setCropField(y = it) },
+                         onCropW = { controller.setCropField(w = it) },
+                         onCropH = { controller.setCropField(h = it) },
+                         onCropReset = controller::resetCrop,
                         onOpen = controller::open,
                         onClose = controller::close,
                         onKeepAvm = controller::setKeepAvmStopped,
@@ -117,7 +125,10 @@ data class CamdUiState(
     val w: Float = 0.28f,
     val h: Float = 0.28f,
     val rotation: Int = 0,
+    val flipH: Boolean = false,
+    val flipV: Boolean = false,
     val lens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
+    val crop: CamdCrop = CamdCrop.IDENTITY,
     val busy: Boolean = false,
     val keepAvmStopped: Boolean = false,
     val message: String = "Окно откроется после «Открыть». Записи пока нет.",
@@ -154,6 +165,7 @@ class CamdController(
         _state.value = _state.value.copy(
             keepAvmStopped = windows.keepAvmStopped(),
             lens = windows.lensCorrection(inputId),
+            crop = windows.crop(inputId),
         )
     }
 
@@ -166,6 +178,7 @@ class CamdController(
         _state.value = _state.value.copy(
             inputId = id,
             lens = windows.lensCorrection(id),
+            crop = windows.crop(id),
         )
     }
 
@@ -191,6 +204,10 @@ class CamdController(
             else -> 0
         }
         _state.value = _state.value.copy(rotation = rotation)
+    }
+
+    fun setFlip(horizontal: Boolean, vertical: Boolean) {
+        _state.value = _state.value.copy(flipH = horizontal, flipV = vertical)
     }
 
     fun setLensField(
@@ -223,6 +240,36 @@ class CamdController(
         _state.value = _state.value.copy(lens = saved)
     }
 
+    fun setCropField(
+        x: Float = _state.value.crop.x,
+        y: Float = _state.value.crop.y,
+        w: Float = _state.value.crop.w,
+        h: Float = _state.value.crop.h,
+    ) {
+        applyCrop(CamdCrop(x = x, y = y, w = w, h = h))
+    }
+
+    fun resetCrop() {
+        applyCrop(CamdCrop.IDENTITY)
+    }
+
+    fun toggleCrop(enabled: Boolean) {
+        val current = _state.value.crop
+        applyCrop(
+            if (enabled) {
+                if (current.isIdentity()) CamdCrop(0.1f, 0.1f, 0.8f, 0.8f) else current
+            } else {
+                CamdCrop.IDENTITY
+            }
+        )
+    }
+
+    private fun applyCrop(value: CamdCrop) {
+        val inputId = _state.value.inputId
+        val saved = windows.setCrop(inputId, value)
+        _state.value = _state.value.copy(crop = saved)
+    }
+
     fun setKeepAvmStopped(keep: Boolean) {
         io.execute {
             _state.value = _state.value.copy(busy = true, keepAvmStopped = keep)
@@ -240,17 +287,34 @@ class CamdController(
         val current = _state.value
         io.execute {
             _state.value = current.copy(busy = true, message = "Открываю окно…")
-            val line = String.format(
-                Locale.US,
-                "OPEN %d %.4f %.4f %.4f %.4f %d",
-                current.inputId,
-                current.x,
-                current.y,
-                current.w,
-                current.h,
-                current.rotation,
+            val line = StringBuilder(
+                String.format(
+                    Locale.US,
+                    "OPEN %d %.4f %.4f %.4f %.4f %d %d %d",
+                    current.inputId,
+                    current.x,
+                    current.y,
+                    current.w,
+                    current.h,
+                    current.rotation,
+                    if (current.flipH) 1 else 0,
+                    if (current.flipV) 1 else 0,
+                )
             )
-            val command = CamdCommands.parse(line)
+            val cropValue = current.crop
+            if (!cropValue.isIdentity()) {
+                line.append(
+                    String.format(
+                        Locale.US,
+                        " crop=%.4f,%.4f,%.4f,%.4f",
+                        cropValue.x,
+                        cropValue.y,
+                        cropValue.w,
+                        cropValue.h,
+                    )
+                )
+            }
+            val command = CamdCommands.parse(line.toString())
             val result = if (command is CamdCommand.Open) {
                 windows.open(command)
             } else {
@@ -294,12 +358,20 @@ private fun CamdScreen(
     onW: (Float) -> Unit,
     onH: (Float) -> Unit,
     onRotation: (Int) -> Unit,
+    onFlipH: (Boolean) -> Unit,
+    onFlipV: (Boolean) -> Unit,
     onLensK1: (Float) -> Unit,
     onLensK2: (Float) -> Unit,
     onLensCx: (Float) -> Unit,
     onLensCy: (Float) -> Unit,
     onLensPreset: (CamdLensCorrection) -> Unit,
     onLensReset: () -> Unit,
+    onCropToggle: (Boolean) -> Unit,
+    onCropX: (Float) -> Unit,
+    onCropY: (Float) -> Unit,
+    onCropW: (Float) -> Unit,
+    onCropH: (Float) -> Unit,
+    onCropReset: () -> Unit,
     onOpen: () -> Unit,
     onClose: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
@@ -366,6 +438,23 @@ private fun CamdScreen(
                 )
             }
         }
+        Text(
+            "Зеркалирование",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.flipH,
+                onClick = { onFlipH(!state.flipH) },
+                label = { Text("По горизонтали", style = MaterialTheme.typography.labelLarge) },
+            )
+            FilterChip(
+                selected = state.flipV,
+                onClick = { onFlipV(!state.flipV) },
+                label = { Text("По вертикали", style = MaterialTheme.typography.labelLarge) },
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = onOpen, enabled = !state.busy) {
                 Text("Открыть", style = MaterialTheme.typography.labelLarge)
@@ -415,6 +504,36 @@ private fun CamdScreen(
         RangedSlider("k2", state.lens.k2, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK2)
         RangedSlider("Центр X", state.lens.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCx)
         RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            "Кадрирование (на камеру)",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "Выбранная часть кадра (после коррекции объектива) растягивается на всё окно. " +
+                "Сохраняется в «Камеры ГУ» и применяется, когда OPEN пришёл без crop=.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SettingSwitch(
+            checked = !state.crop.isIdentity(),
+            enabled = !state.busy,
+            title = "Кадрировать",
+            description = "Включение подставляет центральные 80% кадра; выключение возвращает полный кадр.",
+            onCheckedChange = onCropToggle,
+        )
+        FractionSlider("Слева", state.crop.x, onCropX)
+        FractionSlider("Сверху", state.crop.y, onCropY)
+        RangedSlider("Ширина", state.crop.w, CamdCrop.MIN_SIZE, 1f, onCropW)
+        RangedSlider("Высота", state.crop.h, CamdCrop.MIN_SIZE, 1f, onCropH)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = state.crop.isIdentity(),
+                onClick = onCropReset,
+                label = { Text("Сброс", style = MaterialTheme.typography.labelLarge) },
+            )
+        }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         if (state.status.isNotBlank()) {

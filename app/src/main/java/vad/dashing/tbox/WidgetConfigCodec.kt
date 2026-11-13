@@ -294,6 +294,19 @@ fun serializeWidgetConfigsToJsonArray(
             if (rotation != 0) obj.put("camdWindowRotation", rotation)
             if (config.camdWindowFlipH) obj.put("camdWindowFlipH", true)
             if (config.camdWindowFlipV) obj.put("camdWindowFlipV", true)
+            if (config.camdWindowCropEnabled) {
+                val crop = normalizeCamdWindowCrop(
+                    config.camdWindowCropX,
+                    config.camdWindowCropY,
+                    config.camdWindowCropW,
+                    config.camdWindowCropH,
+                )
+                obj.put("camdWindowCropEnabled", true)
+                obj.put("camdWindowCropX", crop.x)
+                obj.put("camdWindowCropY", crop.y)
+                obj.put("camdWindowCropW", crop.w)
+                obj.put("camdWindowCropH", crop.h)
+            }
         }
         if (supportsWidgetButtonBinding(config.dataKey)) {
             normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
@@ -607,6 +620,18 @@ private fun parseWidgetConfigsFromJsonArray(
                         CAMD_WINDOW_DEFAULT_H,
                     )
                 }
+                val camdCropEnabled = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                    item.optBoolean("camdWindowCropEnabled", false)
+                val camdCrop = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    normalizeCamdWindowCrop(
+                        item.optInt("camdWindowCropX", 0),
+                        item.optInt("camdWindowCropY", 0),
+                        item.optInt("camdWindowCropW", 100),
+                        item.optInt("camdWindowCropH", 100),
+                    )
+                } else {
+                    normalizeCamdWindowCrop(0, 0, 100, 100)
+                }
                 val httpOpenBrowser = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
                     item.optBoolean("httpOpenBrowser", false)
                 // Browser mode and launch-before are mutually exclusive (UI + tap path).
@@ -823,6 +848,11 @@ private fun parseWidgetConfigsFromJsonArray(
                             item.optBoolean("camdWindowFlipH", false),
                         camdWindowFlipV = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
                             item.optBoolean("camdWindowFlipV", false),
+                        camdWindowCropEnabled = camdCropEnabled,
+                        camdWindowCropX = camdCrop.x,
+                        camdWindowCropY = camdCrop.y,
+                        camdWindowCropW = camdCrop.w,
+                        camdWindowCropH = camdCrop.h,
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {
