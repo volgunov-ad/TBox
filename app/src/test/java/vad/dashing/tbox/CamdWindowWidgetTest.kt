@@ -11,15 +11,27 @@ class CamdWindowWidgetTest {
     @Test
     fun openLineUsesScreenFractions() {
         assertEquals(
-            "OPEN 4 0.0200 0.5500 0.4000 0.4000 0",
+            "OPEN 4 0.0200 0.5500 0.4000 0.4000",
             camdWindowOpenLine(4, 2, 55, 40, 40),
+        )
+    }
+
+    @Test
+    fun openLineOmitsZeroRotationForOlderCamd() {
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 0),
+        )
+        assertEquals(
+            "OPEN 8 0.0200 0.5500 0.4000 0.4000 90",
+            camdWindowOpenLine(8, 2, 55, 40, 40, 90),
         )
     }
 
     @Test
     fun openLineKeepsTheWindowOnScreen() {
         assertEquals(
-            "OPEN 5 0.2000 0.0000 0.8000 0.4000 0",
+            "OPEN 5 0.2000 0.0000 0.8000 0.4000",
             camdWindowOpenLine(5, 90, -10, 80, 40),
         )
     }
@@ -48,6 +60,10 @@ class CamdWindowWidgetTest {
             "OPEN 5 0.0200 0.5500 0.4000 0.4000 90",
             camdAutomationCommandLine(5, "open 2 55 40 40 90"),
         )
+        assertEquals(
+            "OPEN 5 0.0200 0.5500 0.4000 0.4000",
+            camdAutomationCommandLine(5, "open 2 55 40 40"),
+        )
         assertEquals("CLOSE 8", camdAutomationCommandLine(8, "close"))
         assertEquals("CLOSE", camdAutomationCommandLine(4, "close_all"))
         assertEquals(null, camdAutomationCommandLine(2, "open 2 55 40 40"))
@@ -68,5 +84,12 @@ class CamdWindowWidgetTest {
         assertTrue(isCamdPortClosed(SocketTimeoutException("failed to connect to /127.0.0.1")))
         assertFalse(isCamdPortClosed(SocketTimeoutException("Read timed out")))
         assertFalse(isCamdPortClosed(IllegalStateException("ERR bad_command")))
+    }
+
+    @Test
+    fun failureDetailPrefersErrorToken() {
+        assertEquals("overlay_permission", camdFailureDetail("OK state=error error=overlay_permission"))
+        assertEquals("bad_command", camdFailureDetail("ERR bad_command"))
+        assertEquals(null, camdFailureDetail(""))
     }
 }

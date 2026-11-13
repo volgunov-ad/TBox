@@ -121,10 +121,11 @@
     <!-- Optional DCL permission; user-builds may not enforce it (Binder UID check instead). -->
     <uses-permission android:name="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
 
-    <!-- Info tab: detect TBox MQTT APK (package visibility on API 30+ / targetSdk 36).
+    <!-- Info tab: detect companion APKs (package visibility on API 30+ / targetSdk 36).
          DCL launcher provider: ContentResolver.call visibility on API 30+ / targetSdk 36. -->
     <queries>
         <package android:name="vad.dashing.mqtt" />
+        <package android:name="vad.dashing.camd" />
         <package android:name="ras.dashing.tbox.launcher" />
         <provider android:authorities="ras.dashing.tbox.launcher.api" />
     </queries>

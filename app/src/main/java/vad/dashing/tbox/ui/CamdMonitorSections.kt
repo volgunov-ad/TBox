@@ -27,6 +27,7 @@ import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
 import vad.dashing.tbox.CamdServiceStatus
 import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.R
+import vad.dashing.tbox.camdFailureToast
 import vad.dashing.tbox.camdKeepAvmCommandLine
 import vad.dashing.tbox.isCamdPackageInstalled
 import vad.dashing.tbox.ui.theme.tboxBody
@@ -132,12 +133,8 @@ fun CamdKeepAvmSystemSwitch() {
                 }
                 status = withContext(Dispatchers.IO) { CamdWindowClient.fetchStatus() }
                 busy = false
-                if (result.isFailure) {
-                    Toast.makeText(
-                        app,
-                        app.getString(R.string.camd_window_unreachable),
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                result.exceptionOrNull()?.let { error ->
+                    Toast.makeText(app, camdFailureToast(app, error), Toast.LENGTH_SHORT).show()
                 }
             }
         },

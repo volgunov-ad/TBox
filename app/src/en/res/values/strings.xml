@@ -2884,6 +2884,7 @@
     <string name="camd_window_camera_oms">OMS</string>
     <string name="camd_window_camera_dms">DMS</string>
     <string name="camd_window_unreachable">HU Cameras is not responding</string>
+    <string name="camd_window_command_failed">HU Cameras: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>
     <string name="widget_automation_trigger_id_label">Trigger id</string>
     <string name="widget_automation_trigger_id_hint">Up to 32 characters. An empty id keeps the widget always inactive. The state resets when the app restarts.</string>
