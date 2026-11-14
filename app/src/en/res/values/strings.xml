@@ -2898,6 +2898,15 @@
     <string name="widget_camd_window_crop_y">Crop: from the top, %</string>
     <string name="widget_camd_window_crop_w">Crop: width, %</string>
     <string name="widget_camd_window_crop_h">Crop: height, %</string>
+    <string name="widget_camd_window_frame_mode">Frame</string>
+    <string name="widget_camd_window_frame_as_is">As is</string>
+    <string name="widget_camd_window_frame_custom">Custom settings</string>
+    <string name="widget_camd_window_frame_preset">Preset</string>
+    <string name="widget_camd_window_preset_name">Preset name</string>
+    <string name="widget_camd_window_preset_desc">Preset settings live in the Cameras HU app; the window cannot change them. Name: lowercase latin, digits, underscore.</string>
+    <string name="widget_camd_window_preset_fetch">Fetch list from Cameras HU</string>
+    <string name="widget_camd_window_circle">Round window</string>
+    <string name="widget_camd_window_circle_desc">Picture as an inscribed circle, corners and sides transparent. Requires Cameras HU 0.5.0+.</string>
     <string name="camd_window_camera_front">Front</string>
     <string name="camd_window_camera_rear">Rear</string>
     <string name="camd_window_camera_left">Left</string>

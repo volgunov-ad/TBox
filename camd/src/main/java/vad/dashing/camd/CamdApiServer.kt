@@ -10,11 +10,13 @@ import kotlin.concurrent.thread
 
 /**
  * One line in, one line out, on localhost only.
- * OPEN <id> <x> <y> <w> <h> [0|90|180|270 [flipH [flipV]]]
+ * OPEN <id> <x> <y> <w> <h> [0|90|180|270 [flipH [flipV]]] [crop=cx,cy,cw,ch] [shape=circle]
+ * OPEN preset=<name> <x> <y> <w> <h> [shape=circle]
  * CLOSE
  * CLOSE <id>
  * AVM ON|OFF
  * STATUS
+ * PRESETS
  */
 class CamdApiServer(
     private val engine: CamdEngine,
@@ -75,6 +77,7 @@ class CamdApiServer(
                     val text = windows?.status() ?: engine.status()
                     "OK " + text.ifBlank { "state=unknown" }
                 }
+            CamdCommand.ListPresets -> windows?.let { "OK " + it.presetsListing() } ?: "ERR no_windows"
         }
     }
 

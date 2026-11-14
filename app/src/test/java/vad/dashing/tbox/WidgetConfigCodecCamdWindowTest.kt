@@ -2,6 +2,7 @@ package vad.dashing.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -138,5 +139,66 @@ class WidgetConfigCodecCamdWindowTest {
         assertEquals(0, parsed.camdWindowCropY)
         assertEquals(100, parsed.camdWindowCropW)
         assertEquals(100, parsed.camdWindowCropH)
+    }
+
+    @Test
+    fun serializeAndParseKeepsFrameModePresetAndCircle() {
+        val serialized = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = CAMD_WINDOW_WIDGET_DATA_KEY,
+                    camdWindowFrameMode = CAMD_FRAME_MODE_PRESET,
+                    camdWindowPresetName = "my_corner",
+                    camdWindowCircle = true,
+                )
+            )
+        )
+        val parsed = parseWidgetConfigsFromString(serialized).single()
+        assertEquals(CAMD_FRAME_MODE_PRESET, parsed.camdWindowFrameMode)
+        assertEquals("my_corner", parsed.camdWindowPresetName)
+        assertEquals(true, parsed.camdWindowCircle)
+    }
+
+    @Test
+    fun serializeOmitsFrameModeDefaultsAndInvalidPresetNames() {
+        val asIs = serializeWidgetConfigs(
+            listOf(FloatingDashboardWidgetConfig(dataKey = CAMD_WINDOW_WIDGET_DATA_KEY)),
+        )
+        assertFalse(asIs.contains("camdWindowFrameMode"))
+        assertFalse(asIs.contains("camdWindowPresetName"))
+        assertFalse(asIs.contains("camdWindowCircle"))
+        val invalidPreset = serializeWidgetConfigs(
+            listOf(
+                FloatingDashboardWidgetConfig(
+                    dataKey = CAMD_WINDOW_WIDGET_DATA_KEY,
+                    camdWindowFrameMode = CAMD_FRAME_MODE_PRESET,
+                    camdWindowPresetName = "Bad Name",
+                )
+            )
+        )
+        assertFalse(invalidPreset.contains("camdWindowPresetName"))
+        val parsed = parseWidgetConfigsFromString(invalidPreset).single()
+        assertEquals("", parsed.camdWindowPresetName)
+    }
+
+    @Test
+    fun parseMigratesLegacyTilesToCustomFrameMode() {
+        val withRotation = parseWidgetConfigsFromString(
+            """ [{"dataKey":"$CAMD_WINDOW_WIDGET_DATA_KEY","camdWindowRotation":90}] """
+        ).single()
+        assertEquals(CAMD_FRAME_MODE_CUSTOM, withRotation.camdWindowFrameMode)
+        val withCrop = parseWidgetConfigsFromString(
+            """ [{"dataKey":"$CAMD_WINDOW_WIDGET_DATA_KEY","camdWindowCropEnabled":true}] """
+        ).single()
+        assertEquals(CAMD_FRAME_MODE_CUSTOM, withCrop.camdWindowFrameMode)
+        val plain = parseWidgetConfigsFromString(
+            """ [{"dataKey":"$CAMD_WINDOW_WIDGET_DATA_KEY"}] """
+        ).single()
+        assertEquals(CAMD_FRAME_MODE_AS_IS, plain.camdWindowFrameMode)
+        val explicit = parseWidgetConfigsFromString(
+            """ [{"dataKey":"$CAMD_WINDOW_WIDGET_DATA_KEY","camdWindowFrameMode":2,"camdWindowPresetName":"front_left"}] """
+        ).single()
+        assertEquals(CAMD_FRAME_MODE_PRESET, explicit.camdWindowFrameMode)
+        assertEquals("front_left", explicit.camdWindowPresetName)
     }
 }

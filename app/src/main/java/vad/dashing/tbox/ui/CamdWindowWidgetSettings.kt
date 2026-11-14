@@ -8,14 +8,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.CAMD_FRAME_MODE_AS_IS
+import vad.dashing.tbox.CAMD_FRAME_MODE_CUSTOM
+import vad.dashing.tbox.CAMD_FRAME_MODE_PRESET
 import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
+import vad.dashing.tbox.CamdPresetInfo
+import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.R
 import vad.dashing.tbox.normalizeCamdWindowCrop
+import vad.dashing.tbox.normalizeCamdWindowFrameMode
 import vad.dashing.tbox.normalizeCamdWindowGeometry
 import vad.dashing.tbox.ui.theme.tboxButton
 import vad.dashing.tbox.ui.theme.tboxCaption
@@ -27,6 +39,7 @@ internal fun CamdWindowWidgetSettingsSection(
     modifier: Modifier = Modifier,
 ) {
     if (!state.isCamdWindowWidgetSelected) return
+    val fetchedPresets = remember { mutableStateOf<List<CamdPresetInfo>?>(null) }
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.widget_camd_window_camera),
@@ -86,7 +99,7 @@ internal fun CamdWindowWidgetSettingsSection(
             maxValue = 100,
         )
         Text(
-            text = stringResource(R.string.widget_camd_window_rotation),
+            text = stringResource(R.string.widget_camd_window_frame_mode),
             style = MaterialTheme.typography.tboxButton,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 6.dp, top = 8.dp),
@@ -95,72 +108,168 @@ internal fun CamdWindowWidgetSettingsSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            listOf(0, 90, 180, 270).forEach { degrees ->
-                FilterChip(
-                    selected = state.camdWindowRotation == degrees,
-                    onClick = { state.camdWindowRotation = degrees },
-                    enabled = state.togglesEnabled,
-                    label = {
-                        Text("$degrees°", style = MaterialTheme.typography.tboxCaption)
-                    },
+            FilterChip(
+                selected = state.camdWindowFrameMode == CAMD_FRAME_MODE_AS_IS,
+                onClick = { state.camdWindowFrameMode = CAMD_FRAME_MODE_AS_IS },
+                enabled = state.togglesEnabled,
+                label = {
+                    Text(stringResource(R.string.widget_camd_window_frame_as_is), style = MaterialTheme.typography.tboxCaption)
+                },
+            )
+            FilterChip(
+                selected = state.camdWindowFrameMode == CAMD_FRAME_MODE_CUSTOM,
+                onClick = { state.camdWindowFrameMode = CAMD_FRAME_MODE_CUSTOM },
+                enabled = state.togglesEnabled,
+                label = {
+                    Text(stringResource(R.string.widget_camd_window_frame_custom), style = MaterialTheme.typography.tboxCaption)
+                },
+            )
+            FilterChip(
+                selected = state.camdWindowFrameMode == CAMD_FRAME_MODE_PRESET,
+                onClick = { state.camdWindowFrameMode = CAMD_FRAME_MODE_PRESET },
+                enabled = state.togglesEnabled,
+                label = {
+                    Text(stringResource(R.string.widget_camd_window_frame_preset), style = MaterialTheme.typography.tboxCaption)
+                },
+            )
+        }
+        if (state.camdWindowFrameMode == CAMD_FRAME_MODE_PRESET) {
+            Text(
+                text = stringResource(R.string.widget_camd_window_preset_desc),
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            OutlinedTextField(
+                value = state.camdWindowPresetName,
+                onValueChange = { state.camdWindowPresetName = it },
+                label = { Text(stringResource(R.string.widget_camd_window_preset_name)) },
+                singleLine = true,
+                enabled = state.togglesEnabled,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(
+                onClick = {
+                    Thread {
+                        val presets = CamdWindowClient.fetchPresets()
+                        presets?.let { fetchedPresets.value = it }
+                    }.start()
+                },
+                enabled = state.togglesEnabled,
+            ) {
+                Text(stringResource(R.string.widget_camd_window_preset_fetch), style = MaterialTheme.typography.tboxCaption)
+            }
+            val presets = fetchedPresets.value
+            if (presets != null) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    presets.forEach { preset ->
+                        FilterChip(
+                            selected = state.camdWindowPresetName == preset.name,
+                            onClick = {
+                                state.camdWindowPresetName = preset.name
+                                // The preset carries its own camera; keep double-tap CLOSE working.
+                                state.camdWindowCameraId = preset.cameraId
+                            },
+                            enabled = state.togglesEnabled,
+                            label = {
+                                Text(
+                                    preset.name + if (preset.builtin) "" else " *",
+                                    style = MaterialTheme.typography.tboxCaption,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (normalizeCamdWindowFrameMode(state.camdWindowFrameMode) == CAMD_FRAME_MODE_CUSTOM) {
+            Text(
+                text = stringResource(R.string.widget_camd_window_rotation),
+                style = MaterialTheme.typography.tboxButton,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(bottom = 6.dp, top = 8.dp),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(0, 90, 180, 270).forEach { degrees ->
+                    FilterChip(
+                        selected = state.camdWindowRotation == degrees,
+                        onClick = { state.camdWindowRotation = degrees },
+                        enabled = state.togglesEnabled,
+                        label = {
+                            Text("$degrees°", style = MaterialTheme.typography.tboxCaption)
+                        },
+                    )
+                }
+            }
+            SettingSwitch(
+                isChecked = state.camdWindowFlipH,
+                onCheckedChange = { state.camdWindowFlipH = it },
+                text = stringResource(R.string.widget_camd_window_flip_h),
+                description = stringResource(R.string.widget_camd_window_flip_desc),
+                enabled = state.togglesEnabled,
+            )
+            SettingSwitch(
+                isChecked = state.camdWindowFlipV,
+                onCheckedChange = { state.camdWindowFlipV = it },
+                text = stringResource(R.string.widget_camd_window_flip_v),
+                description = "",
+                enabled = state.togglesEnabled,
+            )
+            SettingSwitch(
+                isChecked = state.camdWindowCropEnabled,
+                onCheckedChange = { state.camdWindowCropEnabled = it },
+                text = stringResource(R.string.widget_camd_window_crop),
+                description = stringResource(R.string.widget_camd_window_crop_desc),
+                enabled = state.togglesEnabled,
+            )
+            if (state.camdWindowCropEnabled) {
+                SettingInt(
+                    value = state.camdWindowCropX,
+                    onValueChange = { state.applyCamdCrop(x = it) },
+                    text = stringResource(R.string.widget_camd_window_crop_x),
+                    description = "",
+                    minValue = 0,
+                    maxValue = 95,
+                )
+                SettingInt(
+                    value = state.camdWindowCropY,
+                    onValueChange = { state.applyCamdCrop(y = it) },
+                    text = stringResource(R.string.widget_camd_window_crop_y),
+                    description = "",
+                    minValue = 0,
+                    maxValue = 95,
+                )
+                SettingInt(
+                    value = state.camdWindowCropW,
+                    onValueChange = { state.applyCamdCrop(w = it) },
+                    text = stringResource(R.string.widget_camd_window_crop_w),
+                    description = "",
+                    minValue = 5,
+                    maxValue = 100,
+                )
+                SettingInt(
+                    value = state.camdWindowCropH,
+                    onValueChange = { state.applyCamdCrop(h = it) },
+                    text = stringResource(R.string.widget_camd_window_crop_h),
+                    description = "",
+                    minValue = 5,
+                    maxValue = 100,
                 )
             }
         }
         SettingSwitch(
-            isChecked = state.camdWindowFlipH,
-            onCheckedChange = { state.camdWindowFlipH = it },
-            text = stringResource(R.string.widget_camd_window_flip_h),
-            description = stringResource(R.string.widget_camd_window_flip_desc),
+            isChecked = state.camdWindowCircle,
+            onCheckedChange = { state.camdWindowCircle = it },
+            text = stringResource(R.string.widget_camd_window_circle),
+            description = stringResource(R.string.widget_camd_window_circle_desc),
             enabled = state.togglesEnabled,
         )
-        SettingSwitch(
-            isChecked = state.camdWindowFlipV,
-            onCheckedChange = { state.camdWindowFlipV = it },
-            text = stringResource(R.string.widget_camd_window_flip_v),
-            description = "",
-            enabled = state.togglesEnabled,
-        )
-        SettingSwitch(
-            isChecked = state.camdWindowCropEnabled,
-            onCheckedChange = { state.camdWindowCropEnabled = it },
-            text = stringResource(R.string.widget_camd_window_crop),
-            description = stringResource(R.string.widget_camd_window_crop_desc),
-            enabled = state.togglesEnabled,
-        )
-        if (state.camdWindowCropEnabled) {
-            SettingInt(
-                value = state.camdWindowCropX,
-                onValueChange = { state.applyCamdCrop(x = it) },
-                text = stringResource(R.string.widget_camd_window_crop_x),
-                description = "",
-                minValue = 0,
-                maxValue = 95,
-            )
-            SettingInt(
-                value = state.camdWindowCropY,
-                onValueChange = { state.applyCamdCrop(y = it) },
-                text = stringResource(R.string.widget_camd_window_crop_y),
-                description = "",
-                minValue = 0,
-                maxValue = 95,
-            )
-            SettingInt(
-                value = state.camdWindowCropW,
-                onValueChange = { state.applyCamdCrop(w = it) },
-                text = stringResource(R.string.widget_camd_window_crop_w),
-                description = "",
-                minValue = 5,
-                maxValue = 100,
-            )
-            SettingInt(
-                value = state.camdWindowCropH,
-                onValueChange = { state.applyCamdCrop(h = it) },
-                text = stringResource(R.string.widget_camd_window_crop_h),
-                description = "",
-                minValue = 5,
-                maxValue = 100,
-            )
-        }
     }
 }
 

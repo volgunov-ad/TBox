@@ -33,6 +33,7 @@ internal class UyvyRenderer(
     initialFlipV: Boolean = false,
     initialLens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
     initialCrop: CamdCrop = CamdCrop.IDENTITY,
+    initialShape: CamdShape = CamdShape.RECT,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
@@ -53,6 +54,8 @@ internal class UyvyRenderer(
     private var lens = CamdLensCorrection.clamp(initialLens)
     @Volatile
     private var crop = CamdCrop.clamp(initialCrop)
+    @Volatile
+    private var shape = initialShape
     @Volatile
     private var surfaceWidth = 1
     @Volatile
@@ -81,6 +84,10 @@ internal class UyvyRenderer(
 
     fun setCrop(value: CamdCrop) {
         crop = CamdCrop.clamp(value)
+    }
+
+    fun setShape(value: CamdShape) {
+        shape = value
     }
 
     fun setWindowAttached(value: Boolean) {
@@ -197,6 +204,11 @@ internal class UyvyRenderer(
         val uCy = GLES20.glGetUniformLocation(program, "uCy")
         val uCropOn = GLES20.glGetUniformLocation(program, "uCropOn")
         val uCrop = GLES20.glGetUniformLocation(program, "uCrop")
+        val uTiltV = GLES20.glGetUniformLocation(program, "uTiltV")
+        val uTiltH = GLES20.glGetUniformLocation(program, "uTiltH")
+        val uShape = GLES20.glGetUniformLocation(program, "uShape")
+        val uAspect = GLES20.glGetUniformLocation(program, "uAspect")
+        val uAA = GLES20.glGetUniformLocation(program, "uAA")
         var mapped: ByteBuffer? = null
         var mappedIno = 0L
         var mappedLength = 0L
@@ -281,6 +293,14 @@ internal class UyvyRenderer(
                 val activeCrop = crop
                 GLES20.glUniform1f(uCropOn, if (activeCrop.isIdentity()) 0f else 1f)
                 GLES20.glUniform4f(uCrop, activeCrop.x, activeCrop.y, activeCrop.w, activeCrop.h)
+                GLES20.glUniform1f(uTiltV, correction.tiltV)
+                GLES20.glUniform1f(uTiltH, correction.tiltH)
+                val activeShape = shape
+                GLES20.glUniform1f(uShape, if (activeShape == CamdShape.CIRCLE) 1f else 0f)
+                val surfaceW = surfaceWidth.coerceAtLeast(1)
+                val surfaceH = surfaceHeight.coerceAtLeast(1)
+                GLES20.glUniform1f(uAspect, surfaceW.toFloat() / surfaceH.toFloat())
+                GLES20.glUniform1f(uAA, 1.5f / minOf(surfaceW, surfaceH))
                 quad.position(0)
                 GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
                 GLES20.glEnableVertexAttribArray(aPos)
@@ -407,8 +427,10 @@ internal class UyvyRenderer(
             }
         """
         // Order: rotate → optional H/V flip of the displayed image → radial visual tweak
+        // → keystone tilt (tiltV narrows/widens top vs bottom, tiltH left vs right)
         // → crop rect in the corrected-frame axes (stretched to fill the window) → UYVY sample.
         // Lens k1/k2/cx/cy are a preview aid only, not a real camera calibration.
+        // Circle shape clips the window to an inscribed circle with a smooth edge.
         const val FRAGMENT = """
             precision highp float;
             uniform sampler2D uTex;
@@ -422,8 +444,21 @@ internal class UyvyRenderer(
             uniform float uCy;
             uniform float uCropOn;
             uniform vec4 uCrop;
+            uniform float uTiltV;
+            uniform float uTiltH;
+            uniform float uShape;
+            uniform float uAspect;
+            uniform float uAA;
             varying vec2 vTex;
             void main() {
+                float alpha = 1.0;
+                if (uShape > 0.5) {
+                    vec2 pc = vTex - 0.5;
+                    vec2 qc = uAspect >= 1.0 ? vec2(pc.x * uAspect, pc.y) : vec2(pc.x, pc.y / uAspect);
+                    float dist = length(qc);
+                    alpha = 1.0 - smoothstep(0.5 - uAA, 0.5, dist);
+                    if (alpha <= 0.004) discard;
+                }
                 vec2 p = vTex - 0.5;
                 vec2 r = p;
                 if (uRot > 45.0 && uRot < 135.0) r = vec2(-p.y, p.x);
@@ -437,8 +472,12 @@ internal class UyvyRenderer(
                 float r2 = dot(d, d);
                 float scale = 1.0 + uK1 * r2 + uK2 * r2 * r2;
                 uv = c + d * scale;
+                float wv = 1.0 + uTiltV * (uv.y - 0.5) * 2.0;
+                uv.x = 0.5 + (uv.x - 0.5) / wv;
+                float wh = 1.0 + uTiltH * (uv.x - 0.5) * 2.0;
+                uv.y = 0.5 + (uv.y - 0.5) / wh;
                 if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-                    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
                     return;
                 }
                 if (uCropOn > 0.5) uv = uCrop.xy + uCrop.zw * uv;
@@ -453,7 +492,7 @@ internal class UyvyRenderer(
                     y + 1.596 * v,
                     y - 0.391 * u - 0.813 * v,
                     y + 2.018 * u,
-                    1.0
+                    alpha
                 );
             }
         """

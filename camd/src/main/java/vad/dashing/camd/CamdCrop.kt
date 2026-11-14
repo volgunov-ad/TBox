@@ -1,7 +1,5 @@
 package vad.dashing.camd
 
-import android.content.SharedPreferences
-
 /**
  * Sub-rectangle of the (lens-corrected) frame shown inside the window.
  * Fractions of the full frame; the crop is stretched to fill the window.
@@ -41,33 +39,4 @@ data class CamdCrop(
 
         private fun toGrid(value: Float): Float = kotlin.math.round(value * GRID) / GRID
     }
-}
-
-object CamdCropStore {
-    fun load(prefs: SharedPreferences, inputId: Int): CamdCrop {
-        return CamdCrop.clamp(
-            CamdCrop(
-                x = prefs.getFloat(key(inputId, "x"), 0f),
-                y = prefs.getFloat(key(inputId, "y"), 0f),
-                w = prefs.getFloat(key(inputId, "w"), 1f),
-                h = prefs.getFloat(key(inputId, "h"), 1f),
-            ),
-        )
-    }
-
-    fun save(prefs: SharedPreferences, inputId: Int, value: CamdCrop) {
-        val clamped = CamdCrop.clamp(value)
-        prefs.edit()
-            .putFloat(key(inputId, "x"), clamped.x)
-            .putFloat(key(inputId, "y"), clamped.y)
-            .putFloat(key(inputId, "w"), clamped.w)
-            .putFloat(key(inputId, "h"), clamped.h)
-            .apply()
-    }
-
-    fun reset(prefs: SharedPreferences, inputId: Int) {
-        save(prefs, inputId, CamdCrop.IDENTITY)
-    }
-
-    private fun key(inputId: Int, field: String): String = "crop_${inputId}_$field"
 }

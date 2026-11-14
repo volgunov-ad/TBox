@@ -39,11 +39,11 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
-    fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED, false)
+    fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED_KEY, false)
 
     /** Stop AVMapp at startup and do not start it when the last surround window closes. */
     fun setKeepAvmStopped(keep: Boolean): String = synchronized(lock) {
-        prefs.edit().putBoolean(KEEP_AVM_STOPPED, keep).apply()
+        prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, keep).apply()
         if (keep) {
             markAvmStopped()
             if (getprop("init.svc.AVMapp") == "running") {
@@ -67,6 +67,25 @@ class CameraWindows(private val context: Context) {
     fun lensCorrection(inputId: Int): CamdLensCorrection =
         CamdLensCorrectionStore.load(prefs, inputId)
 
+    fun presets(cameraId: Int? = null): List<CamdPreset> {
+        val all = CamdPresetStore.all(prefs)
+        return if (cameraId == null) all else all.filter { it.cameraId == cameraId }
+    }
+
+    fun preset(name: String): CamdPreset? = CamdPresetStore.byName(prefs, name)
+
+    fun saveUserPreset(preset: CamdPreset): String? = CamdPresetStore.saveUser(prefs, preset)
+
+    fun saveBuiltinPreset(
+        name: String,
+        rotation: Int,
+        flipH: Boolean,
+        flipV: Boolean,
+        crop: CamdCrop,
+    ): Boolean = CamdPresetStore.saveBuiltinOverride(prefs, name, rotation, flipH, flipV, crop)
+
+    fun deleteUserPreset(name: String): Boolean = CamdPresetStore.deleteUser(prefs, name)
+
     /** Persist per-camera visual correction and push it to an open overlay if any. */
     fun setLensCorrection(inputId: Int, value: CamdLensCorrection): CamdLensCorrection = synchronized(lock) {
         val clamped = CamdLensCorrection.clamp(value)
@@ -78,48 +97,62 @@ class CameraWindows(private val context: Context) {
         clamped
     }
 
-    fun crop(inputId: Int): CamdCrop = CamdCropStore.load(prefs, inputId)
-
-    /** Persist per-camera crop default and push it to an open overlay if any. */
-    fun setCrop(inputId: Int, value: CamdCrop): CamdCrop = synchronized(lock) {
-        val clamped = CamdCrop.clamp(value)
-        CamdCropStore.save(prefs, inputId, clamped)
-        val live = views[inputId]
-        if (live != null) {
-            main.post { live.setCrop(clamped) }
-        }
-        clamped
-    }
-
     fun open(command: CamdCommand.Open): String = synchronized(lock) {
-        val input = KnownInputs.byId(command.inputId) ?: return "state=error error=unknown_input"
-        val moved = views.containsKey(command.inputId)
-        openIds.add(command.inputId)
+        val resolved = resolvePreset(command) ?: return "state=error error=unknown_preset"
+        val input = KnownInputs.byId(resolved.inputId) ?: return "state=error error=unknown_input"
+        val moved = views.containsKey(resolved.inputId)
+        openIds.add(resolved.inputId)
         writeDesired()
         val root = runCatching { prepare(shouldStopAvmNow()) }
         if (root.isFailure) {
-            if (!moved) openIds.remove(command.inputId)
+            if (!moved) openIds.remove(resolved.inputId)
             writeDesired()
             maybeStartAvm()
             return "state=error error=${root.exceptionOrNull()?.message}"
         }
         if (!Settings.canDrawOverlays(context)) waitOverlay()
         if (!Settings.canDrawOverlays(context)) {
-            if (!moved) openIds.remove(command.inputId)
+            if (!moved) openIds.remove(resolved.inputId)
             writeDesired()
             maybeStartAvm()
             return "state=error error=overlay_permission"
         }
-        val shown = show(command, input)
+        val shown = show(resolved, input)
         if (!shown.ok) {
-            if (!moved) openIds.remove(command.inputId)
+            if (!moved) openIds.remove(resolved.inputId)
             writeDesired()
             maybeStartAvm()
             return "state=error error=${shown.error}"
         }
         val state = if (moved) "moved" else "open"
-        "state=$state input=${command.inputId}"
+        "state=$state input=${resolved.inputId}"
     }
+
+    /** Preset form: settings come from the store; the caller can only set the window rect. */
+    private fun resolvePreset(command: CamdCommand.Open): CamdCommand.Open? {
+        val name = command.presetName ?: return command
+        val preset = CamdPresetStore.byName(prefs, name) ?: return null
+        return command.copy(
+            inputId = preset.cameraId,
+            rotation = preset.rotation,
+            flipH = preset.flipH,
+            flipV = preset.flipV,
+            crop = if (preset.crop.isIdentity()) null else preset.crop,
+        )
+    }
+
+    /** One-line preset listing for the PRESETS command: `presets=cam:name:kind,...` */
+    fun presetsListing(): String {
+        val items = CamdPresetStore.all(prefs)
+        if (items.isEmpty()) return "presets=none"
+        return "presets=" + items.joinToString(",") { preset ->
+            "${preset.cameraId}:${preset.name}:${if (preset.builtin) "builtin" else "user"}"
+        }
+    }
+
+    fun exportSettings(): String = CamdBackup.exportJson(prefs)
+
+    fun importSettings(text: String): CamdImportSummary? = CamdBackup.importJson(prefs, text)
 
     fun close(inputId: Int): String = synchronized(lock) {
         openIds.remove(inputId)
@@ -258,7 +291,8 @@ class CameraWindows(private val context: Context) {
                     existing.setRotation(command.rotation)
                     existing.setFlip(command.flipH, command.flipV)
                     existing.setLensCorrection(CamdLensCorrectionStore.load(prefs, command.inputId))
-                    existing.setCrop(effectiveCrop(command))
+                    existing.setCrop(command.crop ?: CamdCrop.IDENTITY)
+                    existing.setShape(command.shape)
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
                     val live = LiveWindow(
@@ -268,7 +302,8 @@ class CameraWindows(private val context: Context) {
                         command.flipH,
                         command.flipV,
                         CamdLensCorrectionStore.load(prefs, command.inputId),
-                        effectiveCrop(command),
+                        command.crop ?: CamdCrop.IDENTITY,
+                        command.shape,
                     )
                     place(live.params, command)
                     windowManager().addView(live.root, live.params)
@@ -307,10 +342,6 @@ class CameraWindows(private val context: Context) {
         params.width = (command.w * metrics.widthPixels).toInt().coerceAtLeast(1)
         params.height = (command.h * metrics.heightPixels).toInt().coerceAtLeast(1)
     }
-
-    /** Command crop wins; otherwise the per-camera default from prefs. Identity disables cropping. */
-    private fun effectiveCrop(command: CamdCommand.Open): CamdCrop =
-        command.crop ?: CamdCropStore.load(prefs, command.inputId)
 
     private fun windowManager(): WindowManager {
         return context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -388,6 +419,7 @@ class CameraWindows(private val context: Context) {
         flipV: Boolean,
         lens: CamdLensCorrection,
         crop: CamdCrop,
+        shape: CamdShape,
     ) {
         val root: FrameLayout = FrameLayout(context)
         val picture: TextureView = TextureView(context)
@@ -396,8 +428,8 @@ class CameraWindows(private val context: Context) {
         private val renderer: UyvyRenderer
 
         init {
-            picture.isOpaque = true
-            root.setBackgroundColor(Color.BLACK)
+            picture.isOpaque = false
+            applyShapeBackground(shape)
             root.addView(
                 picture,
                 FrameLayout.LayoutParams(
@@ -451,6 +483,7 @@ class CameraWindows(private val context: Context) {
                 flipV,
                 lens,
                 crop,
+                shape,
             ) {
                 caption.visibility = View.GONE
             }
@@ -463,6 +496,11 @@ class CameraWindows(private val context: Context) {
                     renderer.setWindowAttached(false)
                 }
             })
+        }
+
+        /** Circle mode keeps the overlay transparent outside the picture; rect mode stays black. */
+        private fun applyShapeBackground(shape: CamdShape) {
+            root.setBackgroundColor(if (shape == CamdShape.CIRCLE) Color.TRANSPARENT else Color.BLACK)
         }
 
         fun setRotation(degrees: Int) {
@@ -481,6 +519,11 @@ class CameraWindows(private val context: Context) {
             renderer.setCrop(value)
         }
 
+        fun setShape(value: CamdShape) {
+            applyShapeBackground(value)
+            renderer.setShape(value)
+        }
+
         fun start() {
             renderer.start()
         }
@@ -490,7 +533,7 @@ class CameraWindows(private val context: Context) {
         }
     }
 
-    private companion object {
-        const val KEEP_AVM_STOPPED = "keep_avm_stopped"
+    companion object {
+        const val KEEP_AVM_STOPPED_KEY = "keep_avm_stopped"
     }
 }

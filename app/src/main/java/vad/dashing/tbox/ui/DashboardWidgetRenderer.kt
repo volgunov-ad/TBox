@@ -57,6 +57,7 @@ import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
 import vad.dashing.tbox.CAMD_WINDOW_WIDGET_DATA_KEY
 import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.HTTP_REQUEST_WIDGET_DATA_KEY
+import vad.dashing.tbox.normalizeCamdWindowFrameMode
 import vad.dashing.tbox.HttpRequestIconPaths
 import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.HIDE_FLOATING_PANELS_WIDGET_DATA_KEY
@@ -1420,6 +1421,9 @@ fun DashboardWidgetRenderer(
                 y = widgetConfig.camdWindowY,
                 w = widgetConfig.camdWindowW,
                 h = widgetConfig.camdWindowH,
+                frameMode = normalizeCamdWindowFrameMode(widgetConfig.camdWindowFrameMode),
+                presetName = widgetConfig.camdWindowPresetName,
+                circle = widgetConfig.camdWindowCircle,
                 rotation = widgetConfig.camdWindowRotation,
                 flipH = widgetConfig.camdWindowFlipH,
                 flipV = widgetConfig.camdWindowFlipV,

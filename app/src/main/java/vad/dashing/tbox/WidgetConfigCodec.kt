@@ -307,6 +307,13 @@ fun serializeWidgetConfigsToJsonArray(
                 obj.put("camdWindowCropW", crop.w)
                 obj.put("camdWindowCropH", crop.h)
             }
+            val frameMode = normalizeCamdWindowFrameMode(config.camdWindowFrameMode)
+            if (frameMode != CAMD_FRAME_MODE_AS_IS) obj.put("camdWindowFrameMode", frameMode)
+            val presetName = config.camdWindowPresetName.trim()
+            if (frameMode == CAMD_FRAME_MODE_PRESET && isValidCamdPresetName(presetName)) {
+                obj.put("camdWindowPresetName", presetName)
+            }
+            if (config.camdWindowCircle) obj.put("camdWindowCircle", true)
         }
         if (supportsWidgetButtonBinding(config.dataKey)) {
             normalizeWidgetButtonBinding(config.buttonBinding)?.let { binding ->
@@ -632,6 +639,32 @@ private fun parseWidgetConfigsFromJsonArray(
                 } else {
                     normalizeCamdWindowCrop(0, 0, 100, 100)
                 }
+                // Migration: tiles saved before frame modes used the rot/flip/crop fields
+                // directly; such a tile keeps working in the custom mode.
+                val camdFrameMode = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                    val stored = normalizeCamdWindowFrameMode(item.optInt("camdWindowFrameMode", CAMD_FRAME_MODE_AS_IS))
+                    if (item.has("camdWindowFrameMode")) {
+                        stored
+                    } else if (
+                        normalizeCamdRotation(item.optInt("camdWindowRotation", 0)) != 0 ||
+                        item.optBoolean("camdWindowFlipH", false) ||
+                        item.optBoolean("camdWindowFlipV", false) ||
+                        camdCropEnabled
+                    ) {
+                        CAMD_FRAME_MODE_CUSTOM
+                    } else {
+                        CAMD_FRAME_MODE_AS_IS
+                    }
+                } else {
+                    CAMD_FRAME_MODE_AS_IS
+                }
+                val camdPresetName = if (dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                    camdFrameMode == CAMD_FRAME_MODE_PRESET
+                ) {
+                    item.optString("camdWindowPresetName", "").trim().takeIf { isValidCamdPresetName(it) } ?: ""
+                } else {
+                    ""
+                }
                 val httpOpenBrowser = dataKey == HTTP_REQUEST_WIDGET_DATA_KEY &&
                     item.optBoolean("httpOpenBrowser", false)
                 // Browser mode and launch-before are mutually exclusive (UI + tap path).
@@ -853,6 +886,10 @@ private fun parseWidgetConfigsFromJsonArray(
                         camdWindowCropY = camdCrop.y,
                         camdWindowCropW = camdCrop.w,
                         camdWindowCropH = camdCrop.h,
+                        camdWindowFrameMode = camdFrameMode,
+                        camdWindowPresetName = camdPresetName,
+                        camdWindowCircle = dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                            item.optBoolean("camdWindowCircle", false),
                         appWidgetId = if (dataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                             appWidgetId
                         } else {

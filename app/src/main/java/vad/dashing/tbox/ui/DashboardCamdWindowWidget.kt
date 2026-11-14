@@ -15,6 +15,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import vad.dashing.tbox.CAMD_FRAME_MODE_AS_IS
+import vad.dashing.tbox.CAMD_FRAME_MODE_CUSTOM
+import vad.dashing.tbox.CAMD_FRAME_MODE_PRESET
 import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.CamdWindowCrop
 import vad.dashing.tbox.R
@@ -36,7 +39,10 @@ internal fun DashboardCamdWindowWidgetItem(
     y: Int,
     w: Int,
     h: Int,
-    rotation: Int,
+    frameMode: Int = CAMD_FRAME_MODE_AS_IS,
+    presetName: String = "",
+    circle: Boolean = false,
+    rotation: Int = 0,
     flipH: Boolean = false,
     flipV: Boolean = false,
     crop: CamdWindowCrop? = null,
@@ -51,7 +57,17 @@ internal fun DashboardCamdWindowWidgetItem(
             if (isEditMode) {
                 onEditClick()
             } else {
-                CamdWindowClient.open(context, camera, x, y, w, h, rotation, flipH, flipV, crop)
+                when (frameMode) {
+                    CAMD_FRAME_MODE_PRESET -> {
+                        CamdWindowClient.openPreset(context, presetName.trim(), x, y, w, h, circle)
+                    }
+                    CAMD_FRAME_MODE_CUSTOM -> {
+                        CamdWindowClient.open(context, camera, x, y, w, h, rotation, flipH, flipV, crop, circle)
+                    }
+                    else -> {
+                        CamdWindowClient.open(context, camera, x, y, w, h, circle = circle)
+                    }
+                }
             }
         },
         onDoubleClick = if (isEditMode) {

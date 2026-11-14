@@ -2909,6 +2909,15 @@
     <string name="widget_camd_window_crop_y">Вырезка: сверху, %</string>
     <string name="widget_camd_window_crop_w">Вырезка: ширина, %</string>
     <string name="widget_camd_window_crop_h">Вырезка: высота, %</string>
+    <string name="widget_camd_window_frame_mode">Кадр</string>
+    <string name="widget_camd_window_frame_as_is">Как есть</string>
+    <string name="widget_camd_window_frame_custom">Свои настройки</string>
+    <string name="widget_camd_window_frame_preset">Пресет</string>
+    <string name="widget_camd_window_preset_name">Имя пресета</string>
+    <string name="widget_camd_window_preset_desc">Настройки пресета задаёт «Камеры ГУ», здесь окно не меняет их. Имя: строчная латиница, цифры и _.</string>
+    <string name="widget_camd_window_preset_fetch">Загрузить список из «Камеры ГУ»</string>
+    <string name="widget_camd_window_circle">Круглое окно</string>
+    <string name="widget_camd_window_circle_desc">Изображение вписанным кругом, углы и бока прозрачные. Нужен «Камеры ГУ» 0.5.0+.</string>
     <string name="camd_window_camera_front">Передняя</string>
     <string name="camd_window_camera_rear">Задняя</string>
     <string name="camd_window_camera_left">Левая</string>

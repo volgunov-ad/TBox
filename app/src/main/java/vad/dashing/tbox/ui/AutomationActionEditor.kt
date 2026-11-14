@@ -32,6 +32,10 @@ import vad.dashing.tbox.CAMD_ACTION_CLOSE_ALL
 import vad.dashing.tbox.CAMD_ACTION_OPEN
 import vad.dashing.tbox.CamdAutomationWindowArgs
 import vad.dashing.tbox.CamdWindowCrop
+import vad.dashing.tbox.CAMD_FRAME_MODE_AS_IS
+import vad.dashing.tbox.CAMD_FRAME_MODE_CUSTOM
+import vad.dashing.tbox.CAMD_FRAME_MODE_PRESET
+import vad.dashing.tbox.isValidCamdPresetName
 import vad.dashing.tbox.CAMD_WINDOW_CAMERA_IDS
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
@@ -1297,7 +1301,21 @@ private fun CamdWindowActionFields(
         flipH: Boolean = args.flipH,
         flipV: Boolean = args.flipV,
         crop: CamdWindowCrop? = args.crop,
-    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV, crop)
+        presetName: String? = args.presetName,
+        circle: Boolean = args.circle,
+    ): String = formatCamdAutomationWindowArgs(mode, x, y, w, h, rotation, flipH, flipV, crop, presetName, circle)
+    // Frame mode lives inside the command line (tokens decide), the dropdown just edits it.
+    var frameMode by remember {
+        mutableStateOf(
+            when {
+                args.presetName != null -> CAMD_FRAME_MODE_PRESET
+                args.rotation != 0 || args.flipH || args.flipV || args.crop != null -> CAMD_FRAME_MODE_CUSTOM
+                else -> CAMD_FRAME_MODE_AS_IS
+            }
+        )
+    }
+    // Free draft: invalid names must be typable; the line updates only once the name is valid.
+    var presetDraft by remember { mutableStateOf(args.presetName ?: "") }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AutomationDropdown(
             label = "Окно",
@@ -1333,62 +1351,110 @@ private fun CamdWindowActionFields(
         }
         if (args.mode == CAMD_ACTION_OPEN) {
             AutomationDropdown(
-                label = "Поворот",
-                value = args.rotation,
-                options = listOf(0, 90, 180, 270),
-                optionLabel = { "$it°" },
-                onValueChange = { degrees ->
-                    onChange(action.copy(stringValue = openLine(rotation = degrees)))
+                label = "Кадр",
+                value = frameMode,
+                options = listOf(CAMD_FRAME_MODE_AS_IS, CAMD_FRAME_MODE_CUSTOM, CAMD_FRAME_MODE_PRESET),
+                optionLabel = { mode ->
+                    when (mode) {
+                        CAMD_FRAME_MODE_CUSTOM -> "Свои настройки"
+                        CAMD_FRAME_MODE_PRESET -> "Пресет"
+                        else -> "Как есть"
+                    }
                 },
-            )
-            AutomationDropdown(
-                label = "Зеркало H",
-                value = args.flipH,
-                options = listOf(false, true),
-                optionLabel = { if (it) "Да" else "Нет" },
-                onValueChange = { onChange(action.copy(stringValue = openLine(flipH = it))) },
-            )
-            AutomationDropdown(
-                label = "Зеркало V",
-                value = args.flipV,
-                options = listOf(false, true),
-                optionLabel = { if (it) "Да" else "Нет" },
-                onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
-            )
-            AutomationDropdown(
-                label = "Вырезка",
-                value = args.crop != null,
-                options = listOf(false, true),
-                optionLabel = { if (it) "Да" else "Нет" },
-                onValueChange = { enabled ->
+                onValueChange = { mode ->
+                    frameMode = mode
+                    if (mode == CAMD_FRAME_MODE_PRESET) {
+                        presetDraft = args.presetName ?: presetDraft
+                    }
                     onChange(
                         action.copy(
-                            stringValue = openLine(
-                                crop = if (enabled) CamdWindowCrop(10, 10, 80, 80) else null,
-                            ),
+                            stringValue = when (mode) {
+                                CAMD_FRAME_MODE_CUSTOM -> openLine(rotation = args.rotation, flipH = args.flipH, flipV = args.flipV, crop = args.crop, presetName = null)
+                                CAMD_FRAME_MODE_PRESET -> openLine(rotation = 0, flipH = false, flipV = false, crop = null, presetName = args.presetName)
+                                else -> openLine(rotation = 0, flipH = false, flipV = false, crop = null, presetName = null)
+                            },
                         ),
                     )
                 },
             )
-            if (args.crop != null) {
-                val crop = args.crop
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CamdPercentField("Вырезка: слева, %", crop.x, Modifier.weight(1f)) { next ->
-                        onChange(action.copy(stringValue = openLine(crop = crop.copy(x = next))))
+            if (frameMode == CAMD_FRAME_MODE_PRESET) {
+                AutomationTextField(
+                    value = presetDraft,
+                    onValueChange = { name ->
+                        presetDraft = name
+                        if (isValidCamdPresetName(name)) {
+                            onChange(action.copy(stringValue = openLine(presetName = name)))
+                        }
+                    },
+                    label = "Пресет (a-z 0-9 _)",
+                )
+            }
+            if (frameMode == CAMD_FRAME_MODE_CUSTOM) {
+                AutomationDropdown(
+                    label = "Поворот",
+                    value = args.rotation,
+                    options = listOf(0, 90, 180, 270),
+                    optionLabel = { "$it°" },
+                    onValueChange = { degrees ->
+                        onChange(action.copy(stringValue = openLine(rotation = degrees)))
+                    },
+                )
+                AutomationDropdown(
+                    label = "Зеркало H",
+                    value = args.flipH,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { onChange(action.copy(stringValue = openLine(flipH = it))) },
+                )
+                AutomationDropdown(
+                    label = "Зеркало V",
+                    value = args.flipV,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { onChange(action.copy(stringValue = openLine(flipV = it))) },
+                )
+                AutomationDropdown(
+                    label = "Вырезка",
+                    value = args.crop != null,
+                    options = listOf(false, true),
+                    optionLabel = { if (it) "Да" else "Нет" },
+                    onValueChange = { enabled ->
+                        onChange(
+                            action.copy(
+                                stringValue = openLine(
+                                    crop = if (enabled) CamdWindowCrop(10, 10, 80, 80) else null,
+                                ),
+                            ),
+                        )
+                    },
+                )
+                if (args.crop != null) {
+                    val crop = args.crop
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CamdPercentField("Вырезка: слева, %", crop.x, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(x = next))))
+                        }
+                        CamdPercentField("Вырезка: сверху, %", crop.y, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(y = next))))
+                        }
                     }
-                    CamdPercentField("Вырезка: сверху, %", crop.y, Modifier.weight(1f)) { next ->
-                        onChange(action.copy(stringValue = openLine(crop = crop.copy(y = next))))
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    CamdPercentField("Вырезка: ширина, %", crop.w, Modifier.weight(1f)) { next ->
-                        onChange(action.copy(stringValue = openLine(crop = crop.copy(w = next))))
-                    }
-                    CamdPercentField("Вырезка: высота, %", crop.h, Modifier.weight(1f)) { next ->
-                        onChange(action.copy(stringValue = openLine(crop = crop.copy(h = next))))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CamdPercentField("Вырезка: ширина, %", crop.w, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(w = next))))
+                        }
+                        CamdPercentField("Вырезка: высота, %", crop.h, Modifier.weight(1f)) { next ->
+                            onChange(action.copy(stringValue = openLine(crop = crop.copy(h = next))))
+                        }
                     }
                 }
             }
+            AutomationDropdown(
+                label = "Круг",
+                value = args.circle,
+                options = listOf(false, true),
+                optionLabel = { if (it) "Да" else "Нет" },
+                onValueChange = { onChange(action.copy(stringValue = openLine(circle = it))) },
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CamdPercentField("Слева, %", args.x, Modifier.weight(1f)) { next ->
                     onChange(action.copy(stringValue = openLine(x = next)))
@@ -1408,7 +1474,8 @@ private fun CamdWindowActionFields(
         }
         Text(
             text = "Нужно приложение «Камеры ГУ». Если служба не слушает порт, команда попробует её запустить. " +
-                "Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM.",
+                "Если удержание AVM выключено, окно входов 4, 5, 8 и 9 сначала останавливает штатный AVM. " +
+                "Настройки пресета задаёт «Камеры ГУ», здесь их поменять нельзя.",
             style = MaterialTheme.typography.tboxCaption,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),

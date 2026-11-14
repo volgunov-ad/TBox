@@ -1,5 +1,6 @@
 package vad.dashing.camd
 
+import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -98,6 +99,57 @@ class CamdCommandTest {
     }
 
     @Test
+    fun parsesOpenAsIsAndShapeToken() {
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000"),
+        )
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, shape = CamdShape.CIRCLE),
+            CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 SHAPE=circle"),
+        )
+        assertEquals(
+            CamdCommand.Open(
+                4,
+                0.02f,
+                0.55f,
+                0.40f,
+                0.40f,
+                90,
+                flipH = true,
+                flipV = false,
+                crop = CamdCrop(0f, 0f, 1f, 0.5f),
+                shape = CamdShape.CIRCLE,
+            ),
+            CamdCommands.parse("OPEN 4 0.02 0.55 0.40 0.40 90 1 crop=0,0,1,0.5 shape=circle"),
+        )
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 shape=oval"))
+        assertNull(CamdCommands.parse("OPEN 8 0.02 0.55 0.40 0.40 shape=circle shape=circle"))
+    }
+
+    @Test
+    fun parsesPresetFormWithoutIdAndRejectsMixing() {
+        assertEquals(
+            CamdCommand.Open(-1, 0.1f, 0.2f, 0.3f, 0.3f, presetName = "front_left", shape = CamdShape.CIRCLE),
+            CamdCommands.parse("OPEN preset=front_left 0.1 0.2 0.3 0.3 shape=circle"),
+        )
+        // Preset settings cannot be overridden, and there is no id slot in this form.
+        assertNull(CamdCommands.parse("OPEN preset=front_left 0.1 0.2 0.3 0.3 90"))
+        assertNull(CamdCommands.parse("OPEN preset=front_left 0.1 0.2 0.3 0.3 crop=0,0,1,1"))
+        assertNull(CamdCommands.parse("OPEN 4 preset=front_left 0.1 0.2 0.3 0.3"))
+        assertNull(CamdCommands.parse("OPEN preset=Bad-Name 0.1 0.2 0.3 0.3"))
+        assertNull(CamdCommands.parse("OPEN preset=front_left"))
+    }
+
+    @Test
+    fun parsesPresetsCommand() {
+        assertEquals(CamdCommand.ListPresets, CamdCommands.parse("PRESETS"))
+        assertEquals(CamdCommand.ListPresets, CamdCommands.parse("presets"))
+        assertNull(CamdCommands.parse("PRESETS 4"))
+        assertNull(CamdCommands.parse("STATUS extra"))
+    }
+
+    @Test
     fun rejectsUnknownInputAndAWindowThatLeavesTheScreen() {
         assertNull(CamdCommands.parse("OPEN 2 0.1 0.1 0.2 0.2"))
         assertNull(CamdCommands.parse("OPEN 0 0.9 0.1 0.3 0.2"))
@@ -149,6 +201,225 @@ class CamdCropTest {
             CamdCrop(0.95f, 0f, CamdCrop.MIN_SIZE, 1f),
             CamdCrop.clamp(CamdCrop(1f, -1f, 0.04f, 9f)),
         )
+    }
+}
+
+class CamdJsonTest {
+    @Test
+    fun writesAndParsesRoundTrip() {
+        val value = CamdJson.obj(
+            listOf(
+                "name" to CamdJson.str("a\"b\\c\n"),
+                "n" to CamdJson.num(3),
+                "f" to CamdJson.num(0.25f),
+                "b" to CamdJson.bool(true),
+                "list" to CamdJson.arr(listOf(CamdJson.num(1), CamdJson.Null)),
+            )
+        )
+        assertEquals(value, CamdJson.parse(CamdJson.write(value)))
+    }
+
+    @Test
+    fun parseRejectsBrokenDocuments() {
+        assertNull(CamdJson.parse("{"))
+        assertNull(CamdJson.parse("{\"a\":1}x"))
+        assertNull(CamdJson.parse("[1,]"))
+        assertNull(CamdJson.parse("nul"))
+        assertNull(CamdJson.parse(""))
+    }
+
+    @Test
+    fun parsesSpacesNumbersAndUnicodeEscapes() {
+        val parsed = CamdJson.parse("{ \"a\" : \"\\u0041\" , \"b\" : [ 1.5 , 2e2 ] }")!!
+        val fields = parsed.asObj()!!
+        assertEquals("A", fields["a"]?.asStr())
+        assertEquals(1.5, fields["b"]?.asArr()!![0].asNum()!!, 0.0)
+        assertEquals(200.0, fields["b"]?.asArr()!![1].asNum()!!, 0.0)
+    }
+}
+
+class CamdPresetStoreTest {
+    @Test
+    fun builtinDefaultsCoverAllCamerasAndMergeOverrides() {
+        val prefs = FakePrefs()
+        val all = CamdPresetStore.all(prefs)
+        assertEquals(15, all.size)
+        assertTrue(all.all { it.builtin })
+        assertEquals(CamdCrop(0f, 0f, 0.5f, 1f), CamdPresetStore.byName(prefs, "front_left")!!.crop)
+        assertTrue(
+            CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0f, 0f, 0.5f, 1f))
+        )
+        val edited = CamdPresetStore.byName(prefs, "front_left")!!
+        assertEquals(180, edited.rotation)
+        assertTrue(edited.flipH)
+        assertFalse(edited.flipV)
+        assertEquals(0, CamdPresetStore.byName(prefs, "front_right")!!.rotation)
+        assertEquals(false, CamdPresetStore.saveBuiltinOverride(prefs, "nope", 0, false, false, CamdCrop.IDENTITY))
+    }
+
+    @Test
+    fun userPresetsValidateNamesAndUniqueness() {
+        val prefs = FakePrefs()
+        assertEquals("bad_name", CamdPresetStore.saveUser(prefs, CamdPreset("Bad-1", 8)))
+        assertEquals("unknown_camera", CamdPresetStore.saveUser(prefs, CamdPreset("ok_name", 2)))
+        assertNull(CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90)))
+        assertEquals("name_taken", CamdPresetStore.saveUser(prefs, CamdPreset("front_left", 8)))
+        val saved = CamdPresetStore.byName(prefs, "my_corner")!!
+        assertEquals(4, saved.cameraId)
+        assertFalse(saved.builtin)
+        assertNull(CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 5)))
+        assertEquals(5, CamdPresetStore.byName(prefs, "my_corner")!!.cameraId)
+        assertTrue(CamdPresetStore.deleteUser(prefs, "my_corner"))
+        assertEquals(null, CamdPresetStore.byName(prefs, "my_corner"))
+        assertFalse(CamdPresetStore.deleteUser(prefs, "my_corner"))
+    }
+}
+
+class CamdBackupTest {
+    @Test
+    fun exportImportRoundTrip() {
+        val prefs = FakePrefs()
+        CamdLensCorrectionStore.save(prefs, 8, CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f))
+        CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90))
+        CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0f, 0f, 0.5f, 1f))
+        prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true).apply()
+
+        val json = CamdBackup.exportJson(prefs)
+
+        val fresh = FakePrefs()
+        val summary = CamdBackup.importJson(fresh, json)!!
+        assertEquals(7, summary.corrections)
+        assertEquals(1, summary.userPresets)
+        assertEquals(15, summary.builtinPresets)
+        assertTrue(summary.keepAvm)
+        assertEquals(CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f), CamdLensCorrectionStore.load(fresh, 8))
+        assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
+        assertEquals(180, CamdPresetStore.byName(fresh, "front_left")!!.rotation)
+        assertTrue(fresh.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false))
+    }
+
+    @Test
+    fun importRejectsForeignBrokenAndAmbiguousDocuments() {
+        val prefs = FakePrefs()
+        assertNull(CamdBackup.importJson(prefs, "not json"))
+        assertNull(CamdBackup.importJson(prefs, "{}"))
+        assertNull(
+            CamdBackup.importJson(
+                prefs,
+                CamdJson.write(CamdJson.obj(listOf("version" to CamdJson.num(1), "app" to CamdJson.str("other")))),
+            )
+        )
+        assertNull(
+            CamdBackup.importJson(
+                prefs,
+                CamdJson.write(CamdJson.obj(listOf("version" to CamdJson.num(2), "app" to CamdJson.str("camd")))),
+            )
+        )
+        assertNull(CamdBackup.importJson(prefs, documentWithDuplicatePresets()))
+    }
+
+    private fun documentWithDuplicatePresets(): String = CamdJson.write(
+        CamdJson.obj(
+            listOf(
+                "version" to CamdJson.num(1),
+                "app" to CamdJson.str("camd"),
+                "corrections" to CamdJson.obj(emptyList()),
+                "presets" to CamdJson.arr(listOf(presetJson("dup", 4), presetJson("dup", 8))),
+                "keepAvmStopped" to CamdJson.bool(false),
+            )
+        )
+    )
+
+    private fun presetJson(name: String, camera: Int): CamdJson = CamdJson.obj(
+        listOf(
+            "name" to CamdJson.str(name),
+            "camera" to CamdJson.num(camera),
+        )
+    )
+}
+
+private class FakePrefs : SharedPreferences {
+    val map = HashMap<String, Any?>()
+
+    override fun getAll(): Map<String, *> = map
+    override fun getString(key: String, defValue: String?): String? = map[key] as? String ?: defValue
+    override fun getStringSet(key: String, defValues: MutableSet<String>?): MutableSet<String>? =
+        map[key] as? MutableSet<String> ?: defValues
+
+    override fun getInt(key: String, defValue: Int): Int = map[key] as? Int ?: defValue
+    override fun getLong(key: String, defValue: Long): Long = map[key] as? Long ?: defValue
+    override fun getFloat(key: String, defValue: Float): Float = map[key] as? Float ?: defValue
+    override fun getBoolean(key: String, defValue: Boolean): Boolean = map[key] as? Boolean ?: defValue
+    override fun contains(key: String): Boolean = map.containsKey(key)
+    override fun edit(): SharedPreferences.Editor = FakeEditor()
+
+    override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
+    override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) = Unit
+
+    private inner class FakeEditor : SharedPreferences.Editor {
+        private val edits = HashMap<String, Any?>()
+        private val removals = HashSet<String>()
+
+        override fun putString(key: String, value: String?): SharedPreferences.Editor {
+            edits[key] = value
+            return this
+        }
+
+        override fun putStringSet(key: String, values: MutableSet<String>?): SharedPreferences.Editor {
+            edits[key] = values
+            return this
+        }
+
+        override fun putInt(key: String, value: Int): SharedPreferences.Editor {
+            edits[key] = value
+            return this
+        }
+
+        override fun putLong(key: String, value: Long): SharedPreferences.Editor {
+            edits[key] = value
+            return this
+        }
+
+        override fun putFloat(key: String, value: Float): SharedPreferences.Editor {
+            edits[key] = value
+            return this
+        }
+
+        override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor {
+            edits[key] = value
+            return this
+        }
+
+        override fun remove(key: String): SharedPreferences.Editor {
+            removals.add(key)
+            return this
+        }
+
+        override fun clear(): SharedPreferences.Editor {
+            edits.clear()
+            removals.add("*")
+            return this
+        }
+
+        override fun commit(): Boolean {
+            applyChanges()
+            return true
+        }
+
+        override fun apply() {
+            applyChanges()
+        }
+
+        private fun applyChanges() {
+            if (removals.contains("*")) {
+                map.clear()
+            } else {
+                removals.forEach { map.remove(it) }
+            }
+            removals.clear()
+            map.putAll(edits)
+            edits.clear()
+        }
     }
 }
 

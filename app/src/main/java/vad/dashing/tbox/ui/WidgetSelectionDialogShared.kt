@@ -95,8 +95,11 @@ import vad.dashing.tbox.R
 import vad.dashing.tbox.sanitizeDateTimeWidgetFormat
 import vad.dashing.tbox.ExternalWidgetHostManager
 import vad.dashing.tbox.AUTOMATION_TRIGGER_WIDGET_DATA_KEY
+import vad.dashing.tbox.CAMD_FRAME_MODE_AS_IS
+import vad.dashing.tbox.CAMD_FRAME_MODE_PRESET
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_CAMERA
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_H
+import vad.dashing.tbox.isValidCamdPresetName
 import vad.dashing.tbox.normalizeCamdRotation
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_W
 import vad.dashing.tbox.CAMD_WINDOW_DEFAULT_X
@@ -107,6 +110,7 @@ import vad.dashing.tbox.PHONE_DIAL_WIDGET_DATA_KEY
 import vad.dashing.tbox.normalizeAutomationTriggerId
 import vad.dashing.tbox.normalizeCamdWindowCamera
 import vad.dashing.tbox.normalizeCamdWindowCrop
+import vad.dashing.tbox.normalizeCamdWindowFrameMode
 import vad.dashing.tbox.normalizeCamdWindowGeometry
 import vad.dashing.tbox.normalizeDialPhoneNumber
 import vad.dashing.tbox.normalizeWidgetButtonBinding
@@ -901,6 +905,26 @@ internal class WidgetSelectionDialogState(
             100
         }
     )
+    var camdWindowFrameMode by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+            normalizeCamdWindowFrameMode(initialConfig.camdWindowFrameMode)
+        } else {
+            CAMD_FRAME_MODE_AS_IS
+        }
+    )
+    var camdWindowPresetName by mutableStateOf(
+        if (initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+            normalizeCamdWindowFrameMode(initialConfig.camdWindowFrameMode) == CAMD_FRAME_MODE_PRESET &&
+            isValidCamdPresetName(initialConfig.camdWindowPresetName.trim())
+        ) {
+            initialConfig.camdWindowPresetName.trim()
+        } else {
+            ""
+        }
+    )
+    var camdWindowCircle by mutableStateOf(
+        initialConfig.dataKey == CAMD_WINDOW_WIDGET_DATA_KEY && initialConfig.camdWindowCircle,
+    )
     var buttonBinding by mutableStateOf(
         if (supportsWidgetButtonBinding(initialConfig.dataKey)) {
             normalizeWidgetButtonBinding(initialConfig.buttonBinding)
@@ -1475,6 +1499,20 @@ internal class WidgetSelectionDialogState(
             } else {
                 100
             },
+            camdWindowFrameMode = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY) {
+                normalizeCamdWindowFrameMode(camdWindowFrameMode)
+            } else {
+                CAMD_FRAME_MODE_AS_IS
+            },
+            camdWindowPresetName = if (selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY &&
+                normalizeCamdWindowFrameMode(camdWindowFrameMode) == CAMD_FRAME_MODE_PRESET &&
+                isValidCamdPresetName(camdWindowPresetName.trim())
+            ) {
+                camdWindowPresetName.trim()
+            } else {
+                ""
+            },
+            camdWindowCircle = selectedDataKey == CAMD_WINDOW_WIDGET_DATA_KEY && camdWindowCircle,
             appWidgetId = if (selectedDataKey == WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY) {
                 draftAppWidgetId
             } else {
@@ -1920,6 +1958,13 @@ internal class WidgetSelectionDialogState(
             camdWindowCropY = crop.y
             camdWindowCropW = crop.w
             camdWindowCropH = crop.h
+            camdWindowFrameMode = normalizeCamdWindowFrameMode(cfg.camdWindowFrameMode)
+            camdWindowPresetName = if (normalizeCamdWindowFrameMode(cfg.camdWindowFrameMode) == CAMD_FRAME_MODE_PRESET) {
+                cfg.camdWindowPresetName.trim().takeIf { isValidCamdPresetName(it) } ?: ""
+            } else {
+                ""
+            }
+            camdWindowCircle = cfg.camdWindowCircle
         } else {
             camdWindowCameraId = CAMD_WINDOW_DEFAULT_CAMERA
             camdWindowX = CAMD_WINDOW_DEFAULT_X
@@ -1934,6 +1979,9 @@ internal class WidgetSelectionDialogState(
             camdWindowCropY = 0
             camdWindowCropW = 100
             camdWindowCropH = 100
+            camdWindowFrameMode = CAMD_FRAME_MODE_AS_IS
+            camdWindowPresetName = ""
+            camdWindowCircle = false
         }
         buttonBinding = if (supportsWidgetButtonBinding(selectedDataKey)) {
             normalizeWidgetButtonBinding(cfg.buttonBinding)

@@ -206,13 +206,23 @@ data class FloatingDashboardWidgetConfig(
     val dialConfirmBeforeCall: Boolean = false,
     /** Trigger id for `automationTriggerWidget`; blank keeps the tile always inactive. */
     val automationTriggerId: String = "",
-    /** Camera input for [CAMD_WINDOW_WIDGET_DATA_KEY]. */
+    /** Camera input for [CAMD_WINDOW_WIDGET_DATA_KEY]. Ignored for OPEN in preset frame mode. */
     val camdWindowCameraId: Int = CAMD_WINDOW_DEFAULT_CAMERA,
     /** Window origin and size for [CAMD_WINDOW_WIDGET_DATA_KEY], percent of the screen. */
     val camdWindowX: Int = CAMD_WINDOW_DEFAULT_X,
     val camdWindowY: Int = CAMD_WINDOW_DEFAULT_Y,
     val camdWindowW: Int = CAMD_WINDOW_DEFAULT_W,
     val camdWindowH: Int = CAMD_WINDOW_DEFAULT_H,
+    /**
+     * Frame content mode for [CAMD_WINDOW_WIDGET_DATA_KEY]: [CAMD_FRAME_MODE_AS_IS] shows the raw
+     * frame, [CAMD_FRAME_MODE_CUSTOM] uses the rot/flip/crop fields below, [CAMD_FRAME_MODE_PRESET]
+     * opens `camdWindowPresetName` (its settings cannot be overridden by the caller).
+     */
+    val camdWindowFrameMode: Int = CAMD_FRAME_MODE_AS_IS,
+    /** Preset name for [CAMD_FRAME_MODE_PRESET]: lowercase latin digits underscore, 1..32 chars. */
+    val camdWindowPresetName: String = "",
+    /** When true, OPEN carries shape=circle (inscribed circle, transparent corners). */
+    val camdWindowCircle: Boolean = false,
     /** Clockwise image rotation for [CAMD_WINDOW_WIDGET_DATA_KEY]: 0, 90, 180, or 270. */
     val camdWindowRotation: Int = 0,
     /** Horizontal mirror for [CAMD_WINDOW_WIDGET_DATA_KEY] (OPEN flipH). */

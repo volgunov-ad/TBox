@@ -31,6 +31,28 @@ const val CAMD_WINDOW_DEFAULT_Y = 55
 const val CAMD_WINDOW_DEFAULT_W = 40
 const val CAMD_WINDOW_DEFAULT_H = 40
 
+/** Frame content modes for the camera tile / automations. */
+const val CAMD_FRAME_MODE_AS_IS = 0
+const val CAMD_FRAME_MODE_CUSTOM = 1
+const val CAMD_FRAME_MODE_PRESET = 2
+
+/** camd preset names are the API address (OPEN preset=name): lowercase latin, digits, underscore. */
+const val CAMD_PRESET_NAME_MAX = 32
+val CAMD_PRESET_NAME_REGEX = Regex("^[a-z0-9_]{1,32}$")
+
+fun isValidCamdPresetName(name: String): Boolean = CAMD_PRESET_NAME_REGEX.matches(name)
+
+fun camdPresetNameIssue(name: String): String? {
+    if (name.isBlank()) return "Укажите имя пресета"
+    if (!isValidCamdPresetName(name)) return "Имя пресета: строчная латиница, цифры и _, 1–32 символа"
+    return null
+}
+
+fun normalizeCamdWindowFrameMode(value: Int): Int = when (value) {
+    CAMD_FRAME_MODE_CUSTOM, CAMD_FRAME_MODE_PRESET -> value
+    else -> CAMD_FRAME_MODE_AS_IS
+}
+
 data class CamdWindowGeometry(
     val x: Int,
     val y: Int,
@@ -92,15 +114,17 @@ fun camdWindowOpenLine(
     flipH: Boolean = false,
     flipV: Boolean = false,
     crop: CamdWindowCrop? = null,
+    circle: Boolean = false,
 ): String {
     val camera = normalizeCamdWindowCamera(cameraId)
     val geometry = normalizeCamdWindowGeometry(x, y, w, h)
     val rot = normalizeCamdRotation(rotation)
     val fx = if (flipH) 1 else 0
     val fy = if (flipV) 1 else 0
-    // Older camd: 6 tokens only; then 7 with rotation. Omit trailing identity so
-    // Monitor still talks to a service installed before rotation / flip fields.
-    // Flips require the rotation slot (even 0), same as camd's parser.
+    // Older camd: 6 tokens only; then 7 with rotation. Plain 6-token line is "as is"
+    // since camd 0.5.0 (no rot/flip/crop). Flips require the rotation slot (even 0),
+    // same as camd's parser. camd before 0.4.0 answers ERR bad_command to crop=,
+    // before 0.5.0 to shape= — the toast shows the detail.
     val line = when {
         fx == 0 && fy == 0 && rot == 0 -> String.format(
             Locale.US,
@@ -145,9 +169,35 @@ fun camdWindowOpenLine(
             fy,
         )
     }
-    if (crop == null) return line
-    // camd before 0.4.0 answers ERR bad_command; the toast shows the detail.
-    return line + String.format(
+    return line + camdCropSuffix(crop) + camdShapeSuffix(circle)
+}
+
+/** Preset form: the camera comes from the preset; caller sets only the window rect. */
+fun camdWindowPresetOpenLine(
+    presetName: String,
+    x: Int,
+    y: Int,
+    w: Int,
+    h: Int,
+    circle: Boolean = false,
+): String? {
+    if (!isValidCamdPresetName(presetName)) return null
+    val geometry = normalizeCamdWindowGeometry(x, y, w, h)
+    val line = String.format(
+        Locale.US,
+        "OPEN preset=%s %.4f %.4f %.4f %.4f",
+        presetName,
+        geometry.x / 100.0,
+        geometry.y / 100.0,
+        geometry.w / 100.0,
+        geometry.h / 100.0,
+    )
+    return line + camdShapeSuffix(circle)
+}
+
+private fun camdCropSuffix(crop: CamdWindowCrop?): String {
+    if (crop == null) return ""
+    return String.format(
         Locale.US,
         " crop=%.4f,%.4f,%.4f,%.4f",
         crop.x / 100.0,
@@ -156,6 +206,9 @@ fun camdWindowOpenLine(
         crop.h / 100.0,
     )
 }
+
+private fun camdShapeSuffix(circle: Boolean): String =
+    if (circle) " shape=circle" else ""
 
 fun camdWindowCloseLine(cameraId: Int): String {
     return "CLOSE ${normalizeCamdWindowCamera(cameraId)}"
@@ -208,8 +261,22 @@ object CamdWindowClient {
         flipH: Boolean = false,
         flipV: Boolean = false,
         crop: CamdWindowCrop? = null,
+        circle: Boolean = false,
     ) {
-        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation, flipH, flipV, crop))
+        send(context, camdWindowOpenLine(cameraId, x, y, w, h, rotation, flipH, flipV, crop, circle))
+    }
+
+    fun openPreset(
+        context: Context,
+        presetName: String,
+        x: Int,
+        y: Int,
+        w: Int,
+        h: Int,
+        circle: Boolean = false,
+    ) {
+        val line = camdWindowPresetOpenLine(presetName, x, y, w, h, circle) ?: return
+        send(context, line)
     }
 
     fun close(context: Context, cameraId: Int) {
@@ -218,6 +285,9 @@ object CamdWindowClient {
 
     fun fetchStatus(): CamdServiceStatus? =
         command("STATUS", readTimeoutMs = 2_000).getOrNull()?.let(::parseCamdStatusReply)
+
+    fun fetchPresets(): List<CamdPresetInfo>? =
+        command("PRESETS", readTimeoutMs = 2_000).getOrNull()?.let(::parseCamdPresetsReply)
 
     fun command(
         line: String,
@@ -310,6 +380,8 @@ data class CamdAutomationWindowArgs(
     val flipH: Boolean = false,
     val flipV: Boolean = false,
     val crop: CamdWindowCrop? = null,
+    val presetName: String? = null,
+    val circle: Boolean = false,
 )
 
 fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
@@ -354,23 +426,37 @@ fun formatCamdAutomationWindowArgs(
     flipH: Boolean = false,
     flipV: Boolean = false,
     crop: CamdWindowCrop? = null,
+    presetName: String? = null,
+    circle: Boolean = false,
 ): String {
     if (mode != CAMD_ACTION_OPEN) return mode
-    val rot = normalizeCamdRotation(rotation)
-    val fx = if (flipH) 1 else 0
-    val fy = if (flipV) 1 else 0
-    val positional = when {
-        fx == 0 && fy == 0 && rot == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h"
-        fx == 0 && fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot"
-        fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx"
-        else -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx $fy"
+    val positional = if (presetName != null) {
+        "$CAMD_ACTION_OPEN preset=$presetName $x $y $w $h"
+    } else {
+        val rot = normalizeCamdRotation(rotation)
+        val fx = if (flipH) 1 else 0
+        val fy = if (flipV) 1 else 0
+        when {
+            fx == 0 && fy == 0 && rot == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h"
+            fx == 0 && fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot"
+            fy == 0 -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx"
+            else -> "$CAMD_ACTION_OPEN $x $y $w $h $rot $fx $fy"
+        } + if (crop != null) " crop=${crop.x},${crop.y},${crop.w},${crop.h}" else ""
     }
-    if (crop == null) return positional
-    return "$positional crop=${crop.x},${crop.y},${crop.w},${crop.h}"
+    return positional + camdShapeSuffix(circle)
 }
 
 fun isCamdCropToken(token: String): Boolean =
     token.startsWith("crop=", ignoreCase = true)
+
+fun isCamdShapeToken(token: String): Boolean =
+    token.startsWith("shape=", ignoreCase = true)
+
+fun isCamdPresetToken(token: String): Boolean =
+    token.startsWith("preset=", ignoreCase = true)
+
+private fun isCamdNamedAutomationToken(token: String): Boolean =
+    isCamdCropToken(token) || isCamdShapeToken(token) || isCamdPresetToken(token)
 
 /** `crop=x,y,w,h` in percent, same bounds as the window. */
 fun parseCamdWindowCropToken(raw: String): CamdWindowCrop? {
@@ -394,11 +480,21 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
         return null
     }
     val cropTokens = parts.filter { isCamdCropToken(it) }
-    if (cropTokens.size > 1) return null
-    val crop = cropTokens.firstOrNull()?.let { parseCamdWindowCropToken(it) ?: return null }
-    val positional = parts.filterNot { isCamdCropToken(it) }
+    val shapeTokens = parts.filter { isCamdShapeToken(it) }
+    val presetTokens = parts.filter { isCamdPresetToken(it) }
+    if (cropTokens.size > 1 || shapeTokens.size > 1 || presetTokens.size > 1) return null
+    val circle = shapeTokens.firstOrNull()?.let { token ->
+        when (token.substringAfter('=', "").lowercase(Locale.US)) {
+            "circle" -> true
+            else -> return null
+        }
+    } ?: false
+    val presetName = presetTokens.firstOrNull()?.substringAfter('=', "")
+    val positional = parts.filterNot { isCamdNamedAutomationToken(it) }
     if (mode != CAMD_ACTION_OPEN) {
-        if (positional.size != 1) return null
+        if (positional.size != 1 || cropTokens.isNotEmpty() || presetName != null || shapeTokens.isNotEmpty()) {
+            return null
+        }
         return CamdAutomationWindowArgs(
             mode = mode,
             x = CAMD_WINDOW_DEFAULT_X,
@@ -407,6 +503,21 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
             h = CAMD_WINDOW_DEFAULT_H,
         )
     }
+    if (presetName != null) {
+        if (!isValidCamdPresetName(presetName)) return null
+        if (cropTokens.isNotEmpty()) return null
+        if (positional.size != 5) return null
+        return CamdAutomationWindowArgs(
+            mode = mode,
+            x = positional[1].toIntOrNull() ?: return null,
+            y = positional[2].toIntOrNull() ?: return null,
+            w = positional[3].toIntOrNull() ?: return null,
+            h = positional[4].toIntOrNull() ?: return null,
+            presetName = presetName,
+            circle = circle,
+        )
+    }
+    val crop = cropTokens.firstOrNull()?.let { parseCamdWindowCropToken(it) ?: return null }
     if (positional.size !in 5..8) return null
     val rotation = if (positional.size >= 6) {
         val value = positional[5].toIntOrNull() ?: return null
@@ -443,7 +554,37 @@ fun parseCamdAutomationWindowArgs(raw: String): CamdAutomationWindowArgs? {
         flipH = flipH,
         flipV = flipV,
         crop = crop,
+        circle = circle,
     )
+}
+
+data class CamdPresetInfo(
+    val cameraId: Int,
+    val name: String,
+    val builtin: Boolean,
+)
+
+/** `OK presets=cam:name:kind,...` / `OK presets=none` from the camd PRESETS command. */
+fun parseCamdPresetsReply(reply: String): List<CamdPresetInfo>? {
+    val text = reply.trim()
+    if (!text.startsWith("OK")) return null
+    val body = text.removePrefix("OK").trim()
+    val match = Regex("""presets=(\S+)""").find(body) ?: return null
+    val value = match.groupValues[1]
+    if (value == "none") return emptyList()
+    return value.split(',').map { item ->
+        val fields = item.split(':')
+        if (fields.size != 3) return null
+        val cameraId = fields[0].toIntOrNull() ?: return null
+        val name = fields[1]
+        if (!isValidCamdPresetName(name)) return null
+        val builtin = when (fields[2]) {
+            "builtin" -> true
+            "user" -> false
+            else -> return null
+        }
+        CamdPresetInfo(cameraId, name, builtin)
+    }
 }
 
 fun camdWindowGeometryIssue(x: Int, y: Int, w: Int, h: Int): String? {
@@ -467,8 +608,14 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
             if (cameraId !in CAMD_WINDOW_CAMERA_IDS) null else "CLOSE $cameraId"
         }
         CAMD_ACTION_OPEN -> {
-            if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
             if (camdWindowGeometryIssue(args.x, args.y, args.w, args.h) != null) return null
+            if (args.circle && args.presetName == null && cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
+            val preset = args.presetName
+            if (preset != null) {
+                if (camdPresetNameIssue(preset) != null) return null
+                return camdWindowPresetOpenLine(preset, args.x, args.y, args.w, args.h, args.circle)
+            }
+            if (cameraId !in CAMD_WINDOW_CAMERA_IDS) return null
             if (args.crop != null && camdWindowCropIssue(args.crop.x, args.crop.y, args.crop.w, args.crop.h) != null) {
                 return null
             }
@@ -482,6 +629,7 @@ fun camdAutomationCommandLine(cameraId: Int, raw: String): String? {
                 args.flipH,
                 args.flipV,
                 args.crop,
+                args.circle,
             )
         }
         else -> null
