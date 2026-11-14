@@ -566,7 +566,10 @@ private fun StateTriggerFields(
                         signal,
                         trigger.expectedState,
                     ),
-                    startupBehavior = if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                    startupBehavior = if (
+                        signal == AutomationSignalId.ROAD_TUNNEL ||
+                        signal == AutomationSignalId.ROAD_SETTLEMENT
+                    ) {
                         AutomationStartupBehavior.INITIALIZE_ONLY
                     } else {
                         trigger.startupBehavior
@@ -630,7 +633,9 @@ private fun StateTriggerFields(
             onValueChange = { onChange(trigger.copy(expectedState = it)) },
         )
     }
-    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL) {
+    if (trigger.signal != AutomationSignalId.ROAD_TUNNEL &&
+        trigger.signal != AutomationSignalId.ROAD_SETTLEMENT
+    ) {
         StartupBehaviorField(trigger.startupBehavior) {
             onChange(trigger.copy(startupBehavior = it))
         }

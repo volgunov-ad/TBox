@@ -339,7 +339,14 @@ enum class AutomationSignalId(
      * APP-only; Unavailable without a match. STATE `on` = inside tunnel, `off` = outside.
      * Raises road-match demand without pose correction; does not start SpeedCam.
      */
-    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE);
+    ROAD_TUNNEL("road_tunnel", AutomationSignalValueType.STATE),
+    /**
+     * Whether the matched road edge is inside a settlement / RU:urban zone
+     * ([RoadMatchAnchorState.settlement]). APP-only; Unavailable without a match.
+     * STATE `on` = inside settlement, `off` = outside. Enter/leave = on/off edge,
+     * same as [ROAD_TUNNEL]. Raises road-match demand without pose correction.
+     */
+    ROAD_SETTLEMENT("road_settlement", AutomationSignalValueType.STATE);
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationSignalId? =

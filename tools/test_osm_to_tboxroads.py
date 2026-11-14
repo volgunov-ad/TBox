@@ -211,6 +211,99 @@ class UrbanFallbackTest(unittest.TestCase):
             edges = self.m.edges_from_geojson(path, self.m.DEFAULT_HIGHWAY_CLASSES)
         self.assertEqual(len(edges), 1)
         self.assertNotIn("maxspeed", edges[0])
+        self.assertNotIn("settlement", edges[0])
+
+
+class SettlementFlagTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.m = load_tool()
+
+    def test_way_level_ru_urban_writes_settlement(self) -> None:
+        payload = {
+            "elements": [
+                {
+                    "type": "way",
+                    "id": 1,
+                    "nodes": [1, 2],
+                    "tags": {"highway": "primary", "zone:maxspeed": "RU:urban"},
+                    "geometry": [
+                        {"lat": 55.0, "lon": 37.0},
+                        {"lat": 55.0, "lon": 37.1},
+                    ],
+                },
+                {
+                    "type": "way",
+                    "id": 2,
+                    "nodes": [3, 4],
+                    "tags": {"highway": "residential"},
+                    "geometry": [
+                        {"lat": 55.1, "lon": 37.0},
+                        {"lat": 55.1, "lon": 37.1},
+                    ],
+                },
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "overpass.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            edges = self.m.edges_from_overpass_json(path, self.m.DEFAULT_HIGHWAY_CLASSES)
+        by_id = {e["wayId"]: e for e in edges}
+        self.assertTrue(by_id[1].get("settlement") is True)
+        self.assertNotIn("settlement", by_id[2])
+
+    def test_polygon_sets_settlement_including_trunk(self) -> None:
+        fc = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "residential"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 1.0], [1.2, 1.0]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "trunk"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 1.1], [1.2, 1.1]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"highway": "primary", "maxspeed": "80"},
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [[1.0, 0.9], [1.2, 0.9]],
+                    },
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"place": "town"},
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [
+                            [[0.0, 0.0], [3.0, 0.0], [3.0, 3.0], [0.0, 3.0], [0.0, 0.0]]
+                        ],
+                    },
+                },
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settlement.geojson"
+            path.write_text(json.dumps(fc), encoding="utf-8")
+            edges = self.m.edges_from_geojson(path, self.m.DEFAULT_HIGHWAY_CLASSES)
+        by_class = {e["class"]: e for e in edges}
+        self.assertTrue(by_class["residential"].get("settlement") is True)
+        self.assertEqual(by_class["residential"].get("maxspeed"), 60)
+        # Trunk is still in НП for automations, but no blind urban 60.
+        self.assertTrue(by_class["trunk"].get("settlement") is True)
+        self.assertNotIn("maxspeed", by_class["trunk"])
+        self.assertTrue(by_class["primary"].get("settlement") is True)
+        self.assertEqual(by_class["primary"].get("maxspeed"), 80)
 
 
 class JunctionSplitTest(unittest.TestCase):

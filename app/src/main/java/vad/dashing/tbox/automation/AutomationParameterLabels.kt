@@ -310,5 +310,6 @@ object AutomationParameterLabels {
         AutomationSignalId.ROAD_HIGHWAY_CLASS -> "Дорога: класс (OSM)"
         AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> "Дорога: лимит по карте (OSM), км/ч"
         AutomationSignalId.ROAD_TUNNEL -> "Дорога: тоннель"
+        AutomationSignalId.ROAD_SETTLEMENT -> "Дорога: населённый пункт"
     }
 }

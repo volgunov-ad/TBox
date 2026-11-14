@@ -252,6 +252,7 @@ internal object AutomationSignalReads {
                 AutomationSignalId.ROAD_HIGHWAY_CLASS,
                 AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
                 AutomationSignalId.ROAD_TUNNEL,
+                AutomationSignalId.ROAD_SETTLEMENT,
                 -> AutomationRoadMatchSignals.flowFor(key.signal)
                 else -> null
             }

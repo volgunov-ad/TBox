@@ -335,9 +335,12 @@ object AutomationCodec {
                         "startupBehavior",
                         AutomationStartupBehavior.entries,
                     ) { it.storageKey }.let { stored ->
-                        // Tunnel enter/exit is an edge; the evaluator never fires it on start,
-                        // so imported JSON must not keep a mode that silently does nothing.
-                        if (signal == AutomationSignalId.ROAD_TUNNEL) {
+                        // Tunnel/settlement enter/exit is an edge; the evaluator never fires
+                        // it on start, so imported JSON must not keep a mode that silently
+                        // does nothing.
+                        if (signal == AutomationSignalId.ROAD_TUNNEL ||
+                            signal == AutomationSignalId.ROAD_SETTLEMENT
+                        ) {
                             AutomationStartupBehavior.INITIALIZE_ONLY
                         } else {
                             stored

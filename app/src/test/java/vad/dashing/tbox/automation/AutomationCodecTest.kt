@@ -188,6 +188,37 @@ class AutomationCodecTest {
     }
 
     @Test
+    fun roadSettlementTrigger_importedFireIfMatchingBecomesInitializeOnly() {
+        val json = """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"settlement",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"state_equals",
+                  "id":"t",
+                  "signal":"${AutomationSignalId.ROAD_SETTLEMENT.storageKey}",
+                  "source":"${AutomationSignalSource.APP.storageKey}",
+                  "expectedState":"on",
+                  "holdMillis":0,
+                  "startupBehavior":"${AutomationStartupBehavior.FIRE_IF_MATCHING.storageKey}"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":1000}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+        """.trimIndent()
+        val trigger = AutomationCodec.decode(json).getOrThrow()
+            .automations.single().triggers.single() as AutomationTrigger.StateEquals
+        assertEquals(AutomationStartupBehavior.INITIALIZE_ONLY, trigger.startupBehavior)
+    }
+
+    @Test
     fun launchApplication_virtualDisplay_dropsLegacyLaunchPolicy() {
         val json = """
             {
