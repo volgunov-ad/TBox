@@ -208,7 +208,10 @@ A9: BCM `getVehicleWindow`. A10: `*_WIN_Position` — статус-enum **0…4*
 а не UsageStats. Новый тип триггера не нужен — в правиле по-прежнему выбирается пакет AVM.
 
 **DCL лаунчер** (`dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible`,
-`dcl_notification_shade_expanded`, `dcl_screen_mode`) — только источник «Приложение».
+`dcl_notification_shade_expanded`, `dcl_screen_mode`, `dcl_smart_acc_active`,
+`dcl_smart_acc_config_enabled`, `dcl_smart_acc_cruise_state`, `dcl_effective_speed_limit`,
+`dcl_smart_acc_speed_offset`, `dcl_smart_acc_target_speed`) — только источник «Приложение».
+`dcl_smart_acc_cruise_state` — не путать с CAN `acc_cruise_state`.
 Видимость ADAS/баров и шторки уведомлений — `on`/`off`; `dcl_screen_mode` —
 `home` / `single` / `full_width` / `fullscreen` / `split`. Значения из push/poll
 `DclLauncherApiRepository.uiState`; пока снимка нет — сигнала нет. Типичный рецепт:

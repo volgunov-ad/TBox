@@ -845,7 +845,60 @@ class AutomationActionExecutor(
                 "Штатный AVM включён"
             },
         )
+
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC -> executeDclSetSmartAcc(action)
+
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> executeDclToggleSmartAcc()
     }
+
+    private suspend fun executeDclSetSmartAcc(
+        action: AutomationAction.Builtin,
+    ): AutomationActionResult {
+        val targetSpeed = action.intValue.takeIf { it > 0 }
+        val configEnabled = when (action.stringValue.trim().lowercase()) {
+            "true", "1", "yes", "on" -> true
+            "false", "0", "no", "off" -> false
+            "" -> null
+            else -> {
+                return AutomationActionResult.failure(
+                    "configEnabled: true / false или пусто",
+                )
+            }
+        }
+        return when (
+            val result = DclLauncherApiRepository.setSmartAcc(
+                enabled = action.boolValue,
+                targetSpeed = targetSpeed,
+                configEnabled = configEnabled,
+                context = appContext,
+            )
+        ) {
+            is DclCallResult.Ok -> AutomationActionResult.ok(
+                if (action.boolValue) "DCL Умный ACC включён" else "DCL Умный ACC выключен",
+            )
+            is DclCallResult.Error -> AutomationActionResult.failure(
+                result.error.message
+                    ?: result.error.errorCode
+                    ?: "DCL Smart ACC: ошибка",
+            )
+            DclCallResult.Unavailable -> AutomationActionResult.failure(
+                "DCL Launcher API недоступен",
+            )
+        }
+    }
+
+    private suspend fun executeDclToggleSmartAcc(): AutomationActionResult =
+        when (val result = DclLauncherApiRepository.toggleSmartAcc(appContext)) {
+            is DclCallResult.Ok -> AutomationActionResult.ok("DCL Умный ACC переключён")
+            is DclCallResult.Error -> AutomationActionResult.failure(
+                result.error.message
+                    ?: result.error.errorCode
+                    ?: "DCL Smart ACC: ошибка",
+            )
+            DclCallResult.Unavailable -> AutomationActionResult.failure(
+                "DCL Launcher API недоступен",
+            )
+        }
 
     private suspend fun executeCamdWindow(action: AutomationAction.Builtin): AutomationActionResult {
         val line = camdAutomationCommandLine(action.intValue, action.stringValue)

@@ -170,6 +170,27 @@ internal object AutomationSignalReads {
                             }
                         }
                         .distinctUntilChanged()
+                AutomationSignalId.DCL_SMART_ACC_ACTIVE ->
+                    dclSmartAccBooleanFlow { it.smartAccActive }
+                AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED ->
+                    dclSmartAccBooleanFlow { it.smartAccConfigEnabled }
+                AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE ->
+                    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+                        .map { state ->
+                            val cruise = state?.cruiseState?.trim().orEmpty()
+                            if (cruise.isEmpty()) {
+                                AutomationSignalValue.Unavailable
+                            } else {
+                                AutomationSignalValue.State(cruise)
+                            }
+                        }
+                        .distinctUntilChanged()
+                AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT ->
+                    dclSmartAccNumberFlow { it.effectiveSpeedLimit }
+                AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET ->
+                    dclSmartAccNumberFlow { it.adasAccSpeedOffset }
+                AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED ->
+                    dclSmartAccNumberFlow { it.targetSpeed }
                 AutomationSignalId.TBOX_CONNECTED ->
                     TboxRepository.tboxConnected.map { connected ->
                         AutomationSignalValue.State(if (connected) "on" else "off")

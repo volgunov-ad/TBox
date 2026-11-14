@@ -30,6 +30,9 @@ object DclLauncherApiRepository {
     private val _uiState = MutableStateFlow<DclUiState?>(null)
     val uiState: StateFlow<DclUiState?> = _uiState.asStateFlow()
 
+    private val _smartAccState = MutableStateFlow<DclSmartAccState?>(null)
+    val smartAccState: StateFlow<DclSmartAccState?> = _smartAccState.asStateFlow()
+
     private val _capabilities = MutableStateFlow<DclCapabilities?>(null)
     val capabilities: StateFlow<DclCapabilities?> = _capabilities.asStateFlow()
 
@@ -77,6 +80,9 @@ object DclLauncherApiRepository {
     suspend fun refresh(context: Context = requireNotNull(appContext)): Boolean =
         withContext(Dispatchers.IO) { refreshBlocking(context.applicationContext) }
 
+    suspend fun refreshSmartAcc(context: Context = requireNotNull(appContext)): Boolean =
+        withContext(Dispatchers.IO) { refreshSmartAccBlocking(context.applicationContext) }
+
     suspend fun launchApp(
         packageName: String,
         mode: String = DclLauncherApiContract.MODE_APP_AREA,
@@ -89,6 +95,36 @@ object DclLauncherApiRepository {
             mode = mode,
             activityClass = activityClass,
         )
+
+    suspend fun setSmartAcc(
+        enabled: Boolean,
+        targetSpeed: Int? = null,
+        configEnabled: Boolean? = null,
+        context: Context = requireNotNull(appContext),
+    ): DclCallResult<Unit> {
+        val app = context.applicationContext
+        val result = DclLauncherApiClient.setSmartAcc(
+            context = app,
+            enabled = enabled,
+            targetSpeed = targetSpeed,
+            configEnabled = configEnabled,
+        )
+        if (result is DclCallResult.Ok) {
+            refreshSmartAccBlocking(app)
+        }
+        return result
+    }
+
+    suspend fun toggleSmartAcc(
+        context: Context = requireNotNull(appContext),
+    ): DclCallResult<Unit> {
+        val app = context.applicationContext
+        val result = DclLauncherApiClient.toggleSmartAcc(app)
+        if (result is DclCallResult.Ok) {
+            refreshSmartAccBlocking(app)
+        }
+        return result
+    }
 
     fun isUiStateAction(action: String?): Boolean =
         action == DclLauncherApiContract.ACTION_UI_STATE_CHANGED ||
@@ -150,7 +186,26 @@ object DclLauncherApiRepository {
                 return false
             }
         }
+        refreshSmartAccBlocking(context)
         return true
+    }
+
+    private fun refreshSmartAccBlocking(context: Context): Boolean {
+        when (val state = DclLauncherApiClient.getSmartAccStateBlocking(context)) {
+            is DclCallResult.Ok -> {
+                _smartAccState.value = state.value
+                return true
+            }
+            is DclCallResult.Error -> {
+                Log.w(
+                    TAG,
+                    "getSmartAccState error: ${state.error.errorCode} ${state.error.message}",
+                )
+                // unsupported on older DCL — keep UI-push merge only
+                return false
+            }
+            DclCallResult.Unavailable -> return false
+        }
     }
 
     private fun publishUiState(state: DclUiState) {
@@ -160,6 +215,10 @@ object DclLauncherApiRepository {
             return
         }
         _uiState.value = state
+        _smartAccState.value = DclLauncherApiCodec.smartAccFromUiState(
+            ui = state,
+            previous = _smartAccState.value,
+        )
         // Push proves the launcher process is alive; launch preference still needs caps (P1-4).
         if (_capabilities.value != null) {
             _available.value = true
@@ -169,6 +228,14 @@ object DclLauncherApiRepository {
     /** Test-only: publish a UI snapshot without Binder / broadcast. */
     internal fun publishUiStateForTests(state: DclUiState?) {
         _uiState.value = state
+        _smartAccState.value = state?.let {
+            DclLauncherApiCodec.smartAccFromUiState(it, previous = null)
+        }
+    }
+
+    /** Test-only: publish a Smart ACC snapshot without Binder. */
+    internal fun publishSmartAccStateForTests(state: DclSmartAccState?) {
+        _smartAccState.value = state
     }
 
     private fun registerPushReceiver(context: Context) {

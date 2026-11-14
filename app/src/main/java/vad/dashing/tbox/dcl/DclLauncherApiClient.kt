@@ -47,20 +47,36 @@ object DclLauncherApiClient {
             )
         }
 
+    suspend fun setSmartAcc(
+        context: Context,
+        enabled: Boolean,
+        targetSpeed: Int? = null,
+        configEnabled: Boolean? = null,
+    ): DclCallResult<Unit> =
+        withContext(Dispatchers.IO) {
+            setSmartAccBlocking(context, enabled, targetSpeed, configEnabled)
+        }
+
+    suspend fun toggleSmartAcc(context: Context): DclCallResult<Unit> =
+        withContext(Dispatchers.IO) { toggleSmartAccBlocking(context) }
+
+    suspend fun getSmartAccState(context: Context): DclCallResult<DclSmartAccState> =
+        withContext(Dispatchers.IO) { getSmartAccStateBlocking(context) }
+
     fun getCapabilitiesBlocking(context: Context): DclCallResult<DclCapabilities> {
-        val bundle = call(context, DclLauncherApiContract.METHOD_GET_CAPABILITIES, null)
+        val bundle = call(context, DclLauncherApiContract.METHOD_GET_CAPABILITIES)
             ?: return DclCallResult.Unavailable
         return DclLauncherApiCodec.parseCapabilities(bundle)
     }
 
     fun getUiStateBlocking(context: Context): DclCallResult<DclUiState> {
-        val bundle = call(context, DclLauncherApiContract.METHOD_GET_UI_STATE, null)
+        val bundle = call(context, DclLauncherApiContract.METHOD_GET_UI_STATE)
             ?: return DclCallResult.Unavailable
         return DclLauncherApiCodec.parseUiState(bundle)
     }
 
     fun getUiChromeBlocking(context: Context): DclCallResult<DclUiState> {
-        val bundle = call(context, DclLauncherApiContract.METHOD_GET_UI_CHROME, null)
+        val bundle = call(context, DclLauncherApiContract.METHOD_GET_UI_CHROME)
             ?: return DclCallResult.Unavailable
         return DclLauncherApiCodec.parseUiState(bundle)
     }
@@ -109,14 +125,51 @@ object DclLauncherApiClient {
                 putInt(DclLauncherApiContract.EXTRA_DISPLAY_ID, displayId)
             }
         }
-        val bundle = call(context, DclLauncherApiContract.METHOD_LAUNCH_APP, extras)
+        val bundle = call(context, DclLauncherApiContract.METHOD_LAUNCH_APP, extras = extras)
             ?: return DclCallResult.Unavailable
         return DclCallResult.Ok(DclLauncherApiCodec.parseLaunchResult(bundle))
     }
 
-    private fun call(context: Context, method: String, extras: Bundle?): Bundle? =
+    fun setSmartAccBlocking(
+        context: Context,
+        enabled: Boolean,
+        targetSpeed: Int? = null,
+        configEnabled: Boolean? = null,
+    ): DclCallResult<Unit> {
+        val extras = DclLauncherApiCodec.buildSetSmartAccExtras(
+            enabled = enabled,
+            targetSpeed = targetSpeed,
+            configEnabled = configEnabled,
+        )
+        val bundle = call(
+            context,
+            DclLauncherApiContract.METHOD_SET_SMART_ACC,
+            arg = DclLauncherApiCodec.setSmartAccArg(enabled),
+            extras = extras,
+        ) ?: return DclCallResult.Unavailable
+        return DclLauncherApiCodec.parseStatusOk(bundle)
+    }
+
+    fun toggleSmartAccBlocking(context: Context): DclCallResult<Unit> {
+        val bundle = call(context, DclLauncherApiContract.METHOD_TOGGLE_SMART_ACC)
+            ?: return DclCallResult.Unavailable
+        return DclLauncherApiCodec.parseStatusOk(bundle)
+    }
+
+    fun getSmartAccStateBlocking(context: Context): DclCallResult<DclSmartAccState> {
+        val bundle = call(context, DclLauncherApiContract.METHOD_GET_SMART_ACC_STATE)
+            ?: return DclCallResult.Unavailable
+        return DclLauncherApiCodec.parseSmartAccState(bundle)
+    }
+
+    private fun call(
+        context: Context,
+        method: String,
+        arg: String? = null,
+        extras: Bundle? = null,
+    ): Bundle? =
         try {
-            context.contentResolver.call(uri, method, null, extras)
+            context.contentResolver.call(uri, method, arg, extras)
         } catch (_: IllegalArgumentException) {
             null
         } catch (_: SecurityException) {

@@ -1,9 +1,11 @@
-# Руководство по интеграции с DCL Launcher API (для разработчика TBox Monitor)
+# Руководство по интеграции с DCL Launcher API v1.3 (для разработчика TBox Monitor)
 
-> **Источник:** [gist stariu85/d1d08a5be223e6f223412ed9348e80d5](https://gist.github.com/stariu85/d1d08a5be223e6f223412ed9348e80d5).  
+> **Источник:** [gist stariu85/1f7799089f03d28d3db0024cb8dc4cb7](https://gist.github.com/stariu85/1f7799089f03d28d3db0024cb8dc4cb7) (API v1.3).  
 > Это **контракт со стороны DCL**, против которого TBox Monitor (`vad.dashing.tbox`) реализует клиент. Спецификация, которую мы передавали вендору: [DCL_LAUNCHER_API_FOR_VENDOR_RU.md](DCL_LAUNCHER_API_FOR_VENDOR_RU.md). Обратное направление (DCL → API Monitor): [DCL_LOCAL_API_ACCESS_RU.md](DCL_LOCAL_API_ACCESS_RU.md).
 
-Данная инструкция описывает процесс подключения TBox Monitor (`vad.dashing.tbox`) к DCL Launcher (`ras.dashing.tbox.launcher`) для получения параметров рабочего стола, высоты панелей, границ ADAS-зоны и управления запуском приложений.
+Данная инструкция описывает процесс подключения TBox Monitor (`vad.dashing.tbox`) к DCL Launcher (`ras.dashing.tbox.launcher`) для получения параметров рабочего стола, высоты панелей, границ ADAS-зоны, управления запуском приложений и **Умного ACC** (`setSmartAcc` / `toggleSmartAcc` / `getSmartAccState`).
+
+> **Уже в Monitor (не дублировать):** `mode=full_width` / `screenMode=full_width`, Chrome-bools, `immersive`, `notificationShadeExpanded`, `localaccess` через `acquireUnstableContentProviderClient`. Monitor **сохраняет** `getCapabilities` (в gist v1.3 секция опущена, но клиент по-прежнему вызывает метод при старте).
 
 ---
 
@@ -70,6 +72,10 @@ data class DclUiState(
     val displayHeightPx: Int,        // Высота экрана в пикселях (напр. 1080)
     val overlayOpen: Boolean,        // Открыты ли оверлеи DCL поверх приложений
     val notificationShadeExpanded: Boolean?, // Шторка уведомлений / control center (API v1.3)
+    val smartAccActive: Boolean?,    // Умный ACC активен (API v1.3)
+    val smartAccConfigEnabled: Boolean?, // Опция «Скорость АСС по ограничению» (API v1.3)
+    val cruiseState: String?,        // "Off"|"Standby"|"Active"|"Override"|"Fault"
+    val effectiveSpeedLimit: Int?,   // Эффективный лимит км/ч (знак / навигатор)
     val revision: Long,              // Монотонно растущий номер версии состояния
 )
 
@@ -228,6 +234,85 @@ fun parseBounds(boundsStr: String): android.graphics.Rect {
 
 ---
 
+## 8. Управление Умным ACC (`setSmartAcc`, `toggleSmartAcc`, `getSmartAccState`)
+
+DCL Launcher предоставляет ContentProvider API для адаптации скорости круиз-контроля под знаки ограничения (Smart ACC). Monitor **только вызывает API лаунчера** — отдельного алгоритма ACC в Monitor нет.
+
+### 8.1. Включение / выключение (`setSmartAcc`)
+
+```kotlin
+fun setSmartAcc(
+    context: Context,
+    enabled: Boolean,
+    targetSpeed: Int? = null,
+    configEnabled: Boolean? = null
+): Boolean {
+    val extras = Bundle().apply {
+        putBoolean("enabled", enabled)
+        if (targetSpeed != null) putInt("targetSpeed", targetSpeed)
+        if (configEnabled != null) putBoolean("configEnabled", configEnabled)
+    }
+    return try {
+        val response = context.contentResolver.call(
+            LAUNCHER_API_URI,
+            "setSmartAcc",
+            if (enabled) "true" else "false", // arg
+            extras
+        )
+        response?.getString("status") == "ok"
+    } catch (e: Exception) {
+        false
+    }
+}
+```
+
+### 8.2. Переключение (`toggleSmartAcc`)
+
+```kotlin
+fun toggleSmartAcc(context: Context): Boolean {
+    return try {
+        val response = context.contentResolver.call(
+            LAUNCHER_API_URI, "toggleSmartAcc", null, null
+        )
+        response?.getString("status") == "ok"
+    } catch (e: Exception) {
+        false
+    }
+}
+```
+
+### 8.3. Подробное состояние (`getSmartAccState`)
+
+| Поле | Тип | Описание |
+| :--- | :--- | :--- |
+| `smartAccActive` | Boolean | Режим активен сейчас |
+| `smartAccConfigEnabled` | Boolean | Опция лаунчера «Скорость АСС по ограничению скорости» |
+| `adasAccSpeedOffset` | Int | Оффсет к знаку (км/ч), напр. `+19` / `+0` |
+| `cruiseState` | String | `"Off"` / `"Standby"` / `"Active"` / `"Override"` / `"Fault"` |
+| `effectiveSpeedLimit` | Int? | Эффективный лимит со знака или навигатора |
+| `targetSpeed` | Int? | Целевая скорость = limit + offset |
+
+Часть полей (`smartAccActive`, `smartAccConfigEnabled`, `cruiseState`, `effectiveSpeedLimit`) также входит в UI-снимок (push / `getUiState`).
+
+### 8.4. Автоматизации и UI Monitor
+
+Сигналы (источник `app`; **не** путать с CAN `acc_cruise_state`):
+
+| Signal | Тип |
+|--------|-----|
+| `dcl_smart_acc_active` | STATE on/off |
+| `dcl_smart_acc_config_enabled` | STATE on/off |
+| `dcl_smart_acc_cruise_state` | STATE Off/Standby/Active/Override/Fault |
+| `dcl_effective_speed_limit` | NUMBER км/ч |
+| `dcl_smart_acc_speed_offset` | NUMBER км/ч |
+| `dcl_smart_acc_target_speed` | NUMBER км/ч |
+
+Действия builtin: `dcl_set_smart_acc` (`boolValue` = enabled; `intValue` > 0 → targetSpeed; `stringValue` `true`/`false`/пусто → configEnabled), `dcl_toggle_smart_acc`.
+
+Настройки → тип автомобиля / среда DCL: карточка «DCL: Умный ACC» (переключатели active / config + readouts).
+
+---
+
 ## Реализация в TBox Monitor
 
-Клиент в коде Monitor: пакет `vad.dashing.tbox.dcl` (`DclLauncherApiContract`, `DclLauncherApiClient`, `DclLauncherApiRepository`; UI push — только dynamic receiver из `DclLauncherApiRepository.start`).
+Клиент в коде Monitor: пакет `vad.dashing.tbox.dcl` (`DclLauncherApiContract`, `DclLauncherApiClient`, `DclLauncherApiRepository`; UI push — только dynamic receiver из `DclLauncherApiRepository.start`). Smart ACC: `setSmartAcc` / `toggleSmartAcc` / `getSmartAccState` + `smartAccState` flow.

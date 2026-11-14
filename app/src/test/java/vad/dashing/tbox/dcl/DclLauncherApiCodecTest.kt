@@ -52,6 +52,10 @@ class DclLauncherApiCodecTest {
         assertEquals(true, state.adasPanelVisible)
         assertEquals(true, state.notificationShadeExpanded)
         assertNull(state.immersive)
+        assertNull(state.smartAccActive)
+        assertNull(state.smartAccConfigEnabled)
+        assertNull(state.cruiseState)
+        assertNull(state.effectiveSpeedLimit)
         assertEquals(DclBounds(344, 51, 1920, 998), state.appArea())
         assertEquals(DclBounds(0, 51, 344, 998), state.adasBounds())
     }
@@ -338,5 +342,164 @@ class DclLauncherApiCodecTest {
         )
         assertFalse(DclLauncherApiRepository.isUiStateAction("other.action"))
         assertFalse(DclLauncherApiRepository.isUiStateAction(null))
+    }
+
+    @Test
+    fun parseUiState_smartAccFields_optional() {
+        val withFields = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putLong(DclLauncherApiContract.KEY_REVISION, 11L)
+            putBoolean(DclLauncherApiContract.KEY_SMART_ACC_ACTIVE, true)
+            putBoolean(DclLauncherApiContract.KEY_SMART_ACC_CONFIG_ENABLED, false)
+            putString(DclLauncherApiContract.KEY_CRUISE_STATE, DclLauncherApiContract.CRUISE_STATE_ACTIVE)
+            putInt(DclLauncherApiContract.KEY_EFFECTIVE_SPEED_LIMIT, 90)
+        }
+        val state = (DclLauncherApiCodec.parseUiState(withFields) as DclCallResult.Ok).value
+        assertEquals(true, state.smartAccActive)
+        assertEquals(false, state.smartAccConfigEnabled)
+        assertEquals(DclLauncherApiContract.CRUISE_STATE_ACTIVE, state.cruiseState)
+        assertEquals(90, state.effectiveSpeedLimit)
+
+        val absent = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putLong(DclLauncherApiContract.KEY_REVISION, 12L)
+        }
+        val absentState = (DclLauncherApiCodec.parseUiState(absent) as DclCallResult.Ok).value
+        assertNull(absentState.smartAccActive)
+        assertNull(absentState.cruiseState)
+        assertNull(absentState.effectiveSpeedLimit)
+    }
+
+    @Test
+    fun parseSmartAccState_okBundle_mapsAllFields() {
+        val bundle = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putBoolean(DclLauncherApiContract.KEY_SMART_ACC_ACTIVE, true)
+            putBoolean(DclLauncherApiContract.KEY_SMART_ACC_CONFIG_ENABLED, true)
+            putInt(DclLauncherApiContract.KEY_ADAS_ACC_SPEED_OFFSET, 19)
+            putString(DclLauncherApiContract.KEY_CRUISE_STATE, DclLauncherApiContract.CRUISE_STATE_STANDBY)
+            putInt(DclLauncherApiContract.KEY_EFFECTIVE_SPEED_LIMIT, 60)
+            putInt(DclLauncherApiContract.KEY_TARGET_SPEED, 79)
+        }
+        val state = (DclLauncherApiCodec.parseSmartAccState(bundle) as DclCallResult.Ok).value
+        assertEquals(true, state.smartAccActive)
+        assertEquals(true, state.smartAccConfigEnabled)
+        assertEquals(19, state.adasAccSpeedOffset)
+        assertEquals(DclLauncherApiContract.CRUISE_STATE_STANDBY, state.cruiseState)
+        assertEquals(60, state.effectiveSpeedLimit)
+        assertEquals(79, state.targetSpeed)
+    }
+
+    @Test
+    fun parseSmartAccState_optionalAbsents() {
+        val bundle = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            putBoolean(DclLauncherApiContract.KEY_SMART_ACC_ACTIVE, false)
+            putString(DclLauncherApiContract.KEY_CRUISE_STATE, DclLauncherApiContract.CRUISE_STATE_OFF)
+        }
+        val state = (DclLauncherApiCodec.parseSmartAccState(bundle) as DclCallResult.Ok).value
+        assertEquals(false, state.smartAccActive)
+        assertNull(state.smartAccConfigEnabled)
+        assertNull(state.adasAccSpeedOffset)
+        assertEquals(DclLauncherApiContract.CRUISE_STATE_OFF, state.cruiseState)
+        assertNull(state.effectiveSpeedLimit)
+        assertNull(state.targetSpeed)
+    }
+
+    @Test
+    fun parseSmartAccState_errorBundle() {
+        val bundle = Bundle().apply {
+            putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_ERROR)
+            putString(DclLauncherApiContract.KEY_ERROR_CODE, DclLauncherApiContract.ERROR_UNSUPPORTED)
+            putString(DclLauncherApiContract.KEY_MESSAGE, "no smart acc")
+        }
+        val result = DclLauncherApiCodec.parseSmartAccState(bundle)
+        assertTrue(result is DclCallResult.Error)
+        assertEquals(
+            DclLauncherApiContract.ERROR_UNSUPPORTED,
+            (result as DclCallResult.Error).error.errorCode,
+        )
+    }
+
+    @Test
+    fun buildSetSmartAccExtras_andArg() {
+        assertEquals("true", DclLauncherApiCodec.setSmartAccArg(true))
+        assertEquals("false", DclLauncherApiCodec.setSmartAccArg(false))
+
+        val full = DclLauncherApiCodec.buildSetSmartAccExtras(
+            enabled = true,
+            targetSpeed = 90,
+            configEnabled = false,
+        )
+        assertTrue(full.getBoolean(DclLauncherApiContract.EXTRA_ENABLED))
+        assertEquals(90, full.getInt(DclLauncherApiContract.EXTRA_TARGET_SPEED))
+        assertFalse(full.getBoolean(DclLauncherApiContract.EXTRA_CONFIG_ENABLED))
+
+        val minimal = DclLauncherApiCodec.buildSetSmartAccExtras(enabled = false)
+        assertFalse(minimal.getBoolean(DclLauncherApiContract.EXTRA_ENABLED))
+        assertFalse(minimal.containsKey(DclLauncherApiContract.EXTRA_TARGET_SPEED))
+        assertFalse(minimal.containsKey(DclLauncherApiContract.EXTRA_CONFIG_ENABLED))
+    }
+
+    @Test
+    fun parseStatusOk_okAndError() {
+        val ok = DclLauncherApiCodec.parseStatusOk(
+            Bundle().apply {
+                putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_OK)
+            },
+        )
+        assertTrue(ok is DclCallResult.Ok)
+
+        val err = DclLauncherApiCodec.parseStatusOk(
+            Bundle().apply {
+                putString(DclLauncherApiContract.KEY_STATUS, DclLauncherApiContract.STATUS_ERROR)
+                putString(DclLauncherApiContract.KEY_ERROR_CODE, DclLauncherApiContract.ERROR_BUSY)
+            },
+        )
+        assertTrue(err is DclCallResult.Error)
+        assertEquals(DclLauncherApiContract.ERROR_BUSY, (err as DclCallResult.Error).error.errorCode)
+    }
+
+    @Test
+    fun smartAccFromUiState_mergesWithPrevious() {
+        val ui = DclUiState(
+            screenMode = "home",
+            foregroundPackage = "",
+            leftPackage = "",
+            rightPackage = "",
+            topBarHeightPx = 51,
+            bottomBarHeightPx = 82,
+            adasPanelBounds = DclBounds.DEFAULT_ADAS.toCsv(),
+            appAreaBounds = DclBounds.DEFAULT_APP_AREA.toCsv(),
+            displayWidthPx = 1920,
+            displayHeightPx = 1080,
+            overlayOpen = false,
+            revision = 1L,
+            updatedAtEpochMs = null,
+            adasPanelVisible = true,
+            topBarVisible = true,
+            bottomBarVisible = true,
+            immersive = false,
+            notificationShadeExpanded = false,
+            smartAccActive = true,
+            smartAccConfigEnabled = null,
+            cruiseState = DclLauncherApiContract.CRUISE_STATE_ACTIVE,
+            effectiveSpeedLimit = 80,
+        )
+        val previous = DclSmartAccState(
+            smartAccActive = false,
+            smartAccConfigEnabled = true,
+            adasAccSpeedOffset = 5,
+            cruiseState = DclLauncherApiContract.CRUISE_STATE_OFF,
+            effectiveSpeedLimit = 60,
+            targetSpeed = 65,
+        )
+        val merged = DclLauncherApiCodec.smartAccFromUiState(ui, previous)
+        assertEquals(true, merged.smartAccActive)
+        assertEquals(true, merged.smartAccConfigEnabled)
+        assertEquals(5, merged.adasAccSpeedOffset)
+        assertEquals(DclLauncherApiContract.CRUISE_STATE_ACTIVE, merged.cruiseState)
+        assertEquals(80, merged.effectiveSpeedLimit)
+        assertEquals(65, merged.targetSpeed)
     }
 }

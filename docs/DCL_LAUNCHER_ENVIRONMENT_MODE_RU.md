@@ -47,8 +47,16 @@ Bulk-convert в Settings: freeform/VD/stock на ярлыках (legacy dashboar
 | `dcl_bottom_bar_visible` | STATE on/off | `bottomBarVisible` |
 | `dcl_notification_shade_expanded` | STATE on/off | `notificationShadeExpanded` |
 | `dcl_screen_mode` | STATE home/single/full_width/fullscreen/split | `screenMode` |
+| `dcl_smart_acc_active` | STATE on/off | `smartAccActive` (Smart ACC) |
+| `dcl_smart_acc_config_enabled` | STATE on/off | `smartAccConfigEnabled` |
+| `dcl_smart_acc_cruise_state` | STATE Off/Standby/Active/Override/Fault | `cruiseState` (не CAN `acc_cruise_state`) |
+| `dcl_effective_speed_limit` | NUMBER км/ч | `effectiveSpeedLimit` |
+| `dcl_smart_acc_speed_offset` | NUMBER км/ч | `adasAccSpeedOffset` |
+| `dcl_smart_acc_target_speed` | NUMBER км/ч | `targetSpeed` |
 
 Через существующие `state_equals` / `state`. Пока снимка DCL нет — `Unavailable`.
+
+Действия: `dcl_set_smart_acc`, `dcl_toggle_smart_acc` → Binder `setSmartAcc` / `toggleSmartAcc`.
 
 ## Вне scope (v3)
 

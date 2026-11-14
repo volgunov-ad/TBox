@@ -157,6 +157,32 @@ object ExternalApiVoiceAliasesRu {
             "режим экрана DCL",
             "экран DCL",
         ),
+        AutomationSignalId.DCL_SMART_ACC_ACTIVE to listOf(
+            "умный acc",
+            "умный круиз",
+            "smart acc",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED to listOf(
+            "acc по ограничению",
+            "скорость acc по знакам",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE to listOf(
+            "состояние круиза dcl",
+            "статус smart acc",
+        ),
+        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT to listOf(
+            "эффективный лимит",
+            "лимит со знака",
+            "ограничение скорости dcl",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET to listOf(
+            "оффсет acc",
+            "смещение acc",
+        ),
+        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED to listOf(
+            "целевая скорость acc",
+            "уставка smart acc",
+        ),
         AutomationSignalId.TBOX_CONNECTED to listOf(
             "тбокс на связи",
             "тбокс подключен",
@@ -366,6 +392,8 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.HANGUP_CALL to "Сбросить звонок",
         AutomationBuiltinActionType.CAMD_WINDOW to "Окно камеры",
         AutomationBuiltinActionType.CAMD_KEEP_AVM to "Держать штатный AVM отключенным",
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC to "Умный ACC DCL",
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC to "Переключить Умный ACC DCL",
     )
 
     private val BUILTIN_EXTRAS: Map<AutomationBuiltinActionType, List<String>> = mapOf(
@@ -380,6 +408,15 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.FINISH_AND_START_TRIP to listOf("новая поездка", "начать поездку"),
         AutomationBuiltinActionType.SET_HU_SCREEN_BRIGHTNESS to listOf("яркость", "сделай ярче", "сделай темнее"),
         AutomationBuiltinActionType.WIFI_SET_ENABLED to listOf("вайфай", "wifi"),
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC to listOf(
+            "умный acc",
+            "smart acc",
+            "acc по знакам",
+        ),
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC to listOf(
+            "переключить умный acc",
+            "toggle smart acc",
+        ),
         AutomationBuiltinActionType.START_VAD_VOICE to listOf(
             "слушай",
             "вад войс",

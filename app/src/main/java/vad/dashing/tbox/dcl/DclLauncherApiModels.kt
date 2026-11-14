@@ -81,6 +81,14 @@ data class DclUiState(
     val immersive: Boolean?,
     /** DCL notification / control-center shade expanded; absent on older launchers. */
     val notificationShadeExpanded: Boolean?,
+    /** Smart ACC active now; absent on older launchers. */
+    val smartAccActive: Boolean? = null,
+    /** Launcher setting «Скорость АСС по ограничению»; absent on older launchers. */
+    val smartAccConfigEnabled: Boolean? = null,
+    /** Cruise status from DCL (`Off`/`Standby`/`Active`/`Override`/`Fault`). */
+    val cruiseState: String? = null,
+    /** Recognized speed limit km/h; absent when unknown / older DCL. */
+    val effectiveSpeedLimit: Int? = null,
 ) {
     fun adasBounds(): DclBounds =
         DclBounds.parse(adasPanelBounds, DclBounds.DEFAULT_ADAS)
@@ -88,6 +96,19 @@ data class DclUiState(
     fun appArea(): DclBounds =
         DclBounds.parse(appAreaBounds, DclBounds.DEFAULT_APP_AREA)
 }
+
+/**
+ * Detailed Smart ACC snapshot from [DclLauncherApiContract.METHOD_GET_SMART_ACC_STATE]
+ * (and merged from UI push fields when present).
+ */
+data class DclSmartAccState(
+    val smartAccActive: Boolean?,
+    val smartAccConfigEnabled: Boolean?,
+    val adasAccSpeedOffset: Int?,
+    val cruiseState: String?,
+    val effectiveSpeedLimit: Int?,
+    val targetSpeed: Int?,
+)
 
 data class DclApiError(
     val errorCode: String?,
@@ -187,6 +208,80 @@ object DclLauncherApiCodec {
                 ),
             )
         }
+
+    /** Status-only methods (`setSmartAcc`, `toggleSmartAcc`). */
+    fun parseStatusOk(bundle: Bundle): DclCallResult<Unit> =
+        runCatching {
+            val status = safeString(bundle, DclLauncherApiContract.KEY_STATUS)
+            when (status) {
+                DclLauncherApiContract.STATUS_OK,
+                DclLauncherApiContract.STATUS_ACCEPTED,
+                -> DclCallResult.Ok(Unit)
+                DclLauncherApiContract.STATUS_ERROR -> DclCallResult.Error(parseError(bundle))
+                null -> DclCallResult.Error(
+                    DclApiError(
+                        errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                        message = "missing status",
+                    ),
+                )
+                else -> DclCallResult.Error(
+                    DclApiError(
+                        errorCode = safeString(bundle, DclLauncherApiContract.KEY_ERROR_CODE),
+                        message = safeString(bundle, DclLauncherApiContract.KEY_MESSAGE) ?: status,
+                    ),
+                )
+            }
+        }.getOrElse {
+            DclCallResult.Error(
+                DclApiError(
+                    errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                    message = "status parse failed: ${it.javaClass.simpleName}",
+                ),
+            )
+        }
+
+    fun parseSmartAccState(bundle: Bundle): DclCallResult<DclSmartAccState> =
+        runCatching { parseSmartAccStateUnsafe(bundle) }
+            .getOrElse {
+                DclCallResult.Error(
+                    DclApiError(
+                        errorCode = DclLauncherApiContract.ERROR_INTERNAL,
+                        message = "smartAcc state parse failed: ${it.javaClass.simpleName}",
+                    ),
+                )
+            }
+
+    fun buildSetSmartAccExtras(
+        enabled: Boolean,
+        targetSpeed: Int? = null,
+        configEnabled: Boolean? = null,
+    ): Bundle =
+        Bundle().apply {
+            putBoolean(DclLauncherApiContract.EXTRA_ENABLED, enabled)
+            if (targetSpeed != null) {
+                putInt(DclLauncherApiContract.EXTRA_TARGET_SPEED, targetSpeed)
+            }
+            if (configEnabled != null) {
+                putBoolean(DclLauncherApiContract.EXTRA_CONFIG_ENABLED, configEnabled)
+            }
+        }
+
+    fun setSmartAccArg(enabled: Boolean): String =
+        if (enabled) "true" else "false"
+
+    /** Merge Smart ACC fields from a UI snapshot into an optional prior detailed state. */
+    fun smartAccFromUiState(
+        ui: DclUiState,
+        previous: DclSmartAccState? = null,
+    ): DclSmartAccState =
+        DclSmartAccState(
+            smartAccActive = ui.smartAccActive ?: previous?.smartAccActive,
+            smartAccConfigEnabled = ui.smartAccConfigEnabled ?: previous?.smartAccConfigEnabled,
+            adasAccSpeedOffset = previous?.adasAccSpeedOffset,
+            cruiseState = ui.cruiseState ?: previous?.cruiseState,
+            effectiveSpeedLimit = ui.effectiveSpeedLimit ?: previous?.effectiveSpeedLimit,
+            targetSpeed = previous?.targetSpeed,
+        )
 
     fun parseError(bundle: Bundle): DclApiError =
         DclApiError(
@@ -343,10 +438,67 @@ object DclLauncherApiCodec {
                 bundle,
                 DclLauncherApiContract.KEY_NOTIFICATION_SHADE_EXPANDED,
             ),
+            smartAccActive = optionalBoolean(bundle, DclLauncherApiContract.KEY_SMART_ACC_ACTIVE),
+            smartAccConfigEnabled = optionalBoolean(
+                bundle,
+                DclLauncherApiContract.KEY_SMART_ACC_CONFIG_ENABLED,
+            ),
+            cruiseState = optionalString(bundle, DclLauncherApiContract.KEY_CRUISE_STATE),
+            effectiveSpeedLimit = optionalInt(
+                bundle,
+                DclLauncherApiContract.KEY_EFFECTIVE_SPEED_LIMIT,
+            ),
         )
+
+    private fun parseSmartAccStateUnsafe(bundle: Bundle): DclCallResult<DclSmartAccState> {
+        val status = safeString(bundle, DclLauncherApiContract.KEY_STATUS)
+        if (status == DclLauncherApiContract.STATUS_ERROR) {
+            return DclCallResult.Error(parseError(bundle))
+        }
+        if (status != null && status != DclLauncherApiContract.STATUS_OK) {
+            return DclCallResult.Error(
+                DclApiError(
+                    errorCode = safeString(bundle, DclLauncherApiContract.KEY_ERROR_CODE),
+                    message = safeString(bundle, DclLauncherApiContract.KEY_MESSAGE) ?: status,
+                ),
+            )
+        }
+        return DclCallResult.Ok(
+            DclSmartAccState(
+                smartAccActive = optionalBoolean(
+                    bundle,
+                    DclLauncherApiContract.KEY_SMART_ACC_ACTIVE,
+                ),
+                smartAccConfigEnabled = optionalBoolean(
+                    bundle,
+                    DclLauncherApiContract.KEY_SMART_ACC_CONFIG_ENABLED,
+                ),
+                adasAccSpeedOffset = optionalInt(
+                    bundle,
+                    DclLauncherApiContract.KEY_ADAS_ACC_SPEED_OFFSET,
+                ),
+                cruiseState = optionalString(bundle, DclLauncherApiContract.KEY_CRUISE_STATE),
+                effectiveSpeedLimit = optionalInt(
+                    bundle,
+                    DclLauncherApiContract.KEY_EFFECTIVE_SPEED_LIMIT,
+                ),
+                targetSpeed = optionalInt(bundle, DclLauncherApiContract.KEY_TARGET_SPEED),
+            ),
+        )
+    }
 
     private fun optionalBoolean(bundle: Bundle, key: String): Boolean? =
         if (extrasContains(bundle, key)) safeBoolean(bundle, key, false) else null
+
+    private fun optionalInt(bundle: Bundle, key: String): Int? =
+        if (extrasContains(bundle, key)) safeInt(bundle, key, 0) else null
+
+    private fun optionalString(bundle: Bundle, key: String): String? =
+        if (extrasContains(bundle, key)) {
+            safeString(bundle, key)?.takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
 
     private fun extrasContains(bundle: Bundle, key: String): Boolean =
         runCatching { bundle.containsKey(key) }.getOrDefault(false)
