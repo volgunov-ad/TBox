@@ -89,6 +89,12 @@ object ExternalApiVoiceAliasesRu {
             "в тоннеле",
             "туннель",
         ),
+        AutomationSignalId.ROAD_SETTLEMENT to listOf(
+            "населённый пункт",
+            "в населённом пункте",
+            "населенный пункт",
+            "въезд в населённый пункт",
+        ),
         AutomationSignalId.ENGINE_RPM to listOf(
             "обороты",
             "обороты мотора",

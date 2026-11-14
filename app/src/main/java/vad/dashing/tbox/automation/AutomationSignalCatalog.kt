@@ -1261,6 +1261,21 @@ object AutomationSignalCatalog {
                 AutomationSignalNamedValue("on", "В тоннеле / Inside"),
             ),
         ),
+        state(
+            AutomationSignalId.ROAD_SETTLEMENT,
+            AutomationParameterLabels.signalLabel(AutomationSignalId.ROAD_SETTLEMENT),
+            appOnly,
+            binaryStates,
+            typicalRange = "Населённый пункт / Settlement (OSM на matched-ребре). " +
+                "Условие: on — в НП, off — вне НП. " +
+                "Триггер: on — въезд в НП (off→on), off — выезд из НП (on→off). " +
+                "Без match — сигнала нет. Нужен пакет с полем settlement. " +
+                "Поднимает matcher без коррекции позы; не SpeedCam.",
+            namedValues = listOf(
+                AutomationSignalNamedValue("off", "Вне НП / Outside"),
+                AutomationSignalNamedValue("on", "В НП / Inside"),
+            ),
+        ),
     )
 
     private val byId = entries.associateBy { it.id }
@@ -1397,7 +1412,7 @@ object AutomationSignalCatalog {
         return named?.takeIf { it.isNotBlank() } ?: stateOptionLabel(raw)
     }
 
-    /** UI label for a state trigger option; uses transition wording for tunnel enter/exit. */
+    /** UI label for a state trigger option; uses transition wording for tunnel/settlement enter/exit. */
     fun triggerStateOptionLabel(signal: AutomationSignalId, raw: String): String {
         if (signal == AutomationSignalId.ROAD_TUNNEL) {
             return when (raw.trim().lowercase()) {
@@ -1406,12 +1421,21 @@ object AutomationSignalCatalog {
                 else -> stateOptionLabel(signal, raw)
             }
         }
+        if (signal == AutomationSignalId.ROAD_SETTLEMENT) {
+            return when (raw.trim().lowercase()) {
+                "on" -> "Въезд в НП / Enter settlement"
+                "off" -> "Выезд из НП / Exit settlement"
+                else -> stateOptionLabel(signal, raw)
+            }
+        }
         return stateOptionLabel(signal, raw)
     }
 
     /** Default state option when a signal is selected in a trigger editor. */
     fun defaultTriggerStateOption(signal: AutomationSignalId): String? = when (signal) {
-        AutomationSignalId.ROAD_TUNNEL -> "on"
+        AutomationSignalId.ROAD_TUNNEL,
+        AutomationSignalId.ROAD_SETTLEMENT,
+        -> "on"
         else -> get(signal).stateOptions.firstOrNull()
     }
 }

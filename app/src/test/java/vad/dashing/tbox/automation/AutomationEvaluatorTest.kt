@@ -1142,6 +1142,84 @@ class AutomationEvaluatorTest {
     }
 
     @Test
+    fun roadSettlement_stateEqualsFiresOnEnterAndExit_notOnUnavailableOrStartup() {
+        val enter = AutomationTrigger.StateEquals(
+            id = "settlement_enter",
+            signal = AutomationSignalId.ROAD_SETTLEMENT,
+            source = AutomationSignalSource.APP,
+            expectedState = "on",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val exit = AutomationTrigger.StateEquals(
+            id = "settlement_exit",
+            signal = AutomationSignalId.ROAD_SETTLEMENT,
+            source = AutomationSignalSource.APP,
+            expectedState = "off",
+            startupBehavior = AutomationStartupBehavior.FIRE_IF_MATCHING,
+        )
+        val enterEval = evaluator(enter, allowStartupFire = true)
+        val exitEval = evaluator(exit, allowStartupFire = true)
+        val key = AutomationSignalKey(
+            AutomationSignalId.ROAD_SETTLEMENT,
+            AutomationSignalSource.APP,
+        )
+        fun sample(value: AutomationSignalValue, at: Long) = AutomationSignalSample(
+            key = key,
+            value = value,
+            observedAtElapsedMillis = at,
+        )
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 0L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 1_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 1_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 2_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 2_500L)))
+        assertEquals(
+            "settlement_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 3_000L),
+            )?.triggerId,
+        )
+        assertNull(
+            exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 3_000L)),
+        )
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 3_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 4_000L)))
+
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.Unavailable, 4_500L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L)))
+        val exitAfterGap = exitEval.onSignalSample(sample(AutomationSignalValue.State("off"), 5_000L))
+        assertEquals("settlement_exit", exitAfterGap?.triggerId)
+        assertEquals(AutomationSignalValue.State("on"), exitAfterGap?.oldValue)
+
+        assertEquals(
+            "settlement_enter",
+            enterEval.onSignalSample(
+                sample(AutomationSignalValue.State("on"), 6_000L),
+            )?.triggerId,
+        )
+        assertNull(exitEval.onSignalSample(sample(AutomationSignalValue.State("on"), 6_000L)))
+        assertNull(enterEval.onSignalSample(sample(AutomationSignalValue.State("off"), 7_000L)))
+        assertEquals(
+            "settlement_exit",
+            exitEval.onSignalSample(
+                sample(AutomationSignalValue.State("off"), 7_000L),
+            )?.triggerId,
+        )
+    }
+
+    @Test
     fun roadTunnel_conditionFalseWhenUnavailable() {
         val key = AutomationSignalKey(
             AutomationSignalId.ROAD_TUNNEL,

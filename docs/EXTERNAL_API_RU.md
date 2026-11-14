@@ -493,7 +493,7 @@ UI правил и HTTP API получали их одновременно. Су
 | G5 | `gear_box_oil_temperature` | температура масла КПП, `tbox` | **в каталоге** |
 | G6 | `active_trip_distance_km`, `active_trip_avg_fuel_l100km`, `active_trip_duration_s`, `active_trip_motor_hours`, `motor_hours` | поездка / моточасы, `app` | **в каталоге** |
 | G7 | `media_title`, `media_artist`, `media_playing`, `media_position_ms`, `media_duration_ms` | активная медиасессия (трек, артист, статус воспроизведения, позиция и длительность), `app` | **в каталоге** |
-| Дорога | `road_highway_class`, `road_speed_limit_kmh`, `road_tunnel` | OSM map-matching: класс дороги, ограничение скорости, признак тоннеля (on/off), `app` | **в каталоге** |
+| Дорога | `road_highway_class`, `road_speed_limit_kmh`, `road_tunnel`, `road_settlement` | OSM map-matching: класс дороги, ограничение скорости, тоннель и населённый пункт (on/off), `app` | **в каталоге** |
 | Свет / кузов | `hazard`, `drl`, `high_beam`, `rain_detected`, `wiper_sts` | аварийка, ДХО, дальний свет, датчик дождя, режим дворников, `head_unit` | **в каталоге** |
 
 **Обогащение гео/модема** (отдельные id, `catalogVersion` **5**, read-only): см. таблицу в §7.4

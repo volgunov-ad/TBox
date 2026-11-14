@@ -960,6 +960,7 @@ TCP :5555 включают только если порт ещё не слуша
 | `brake_fluid` | `head_unit` | `off`, `on` — `on` значит предупреждение о тормозной жидкости, `off` норма |
 | `road_highway_class` | `app` | класс OSM-ребра: `motorway`, `motorway_link`, `trunk`, `trunk_link`, `primary`, `primary_link`, `secondary`, `secondary_link`, `tertiary`, `tertiary_link`, `unclassified`, `residential`, `living_street`, `service`, `track`. Без привязки к карте (road map pack / match) значения нет. Не SpeedCam и не SLA с шины. Краткий провал GNSS не сбрасывает последнее значение класса для edge-триггера |
 | `road_tunnel` | `app` | `off` (вне тоннеля), `on` (в тоннеле) по OSM на привязанном ребре. Без привязки значения нет. **Условие** `state`: `on` = сейчас в тоннеле, `off` = вне. **Триггер** `state_equals`: `on` = **въезд** (`off`→`on`), `off` = **выезд** (`on`→`off`) — только переход, не «уже были в тоннеле». Для `road_tunnel` триггер всегда с `"startupBehavior": "initialize_only"` (даже если в JSON написали иное — импорт принудительно так). Краткий провал GNSS не забывает «в тоннеле» / «вне» до следующего валидного match |
+| `road_settlement` | `app` | `off` (вне НП), `on` (в населённом пункте / зоне `RU:urban`) по флагу `settlement` на привязанном ребре. Без привязки значения нет; старые паки без поля → `off` при match. **Условие** `state`: `on` = сейчас в НП, `off` = вне. **Триггер** `state_equals`: `on` = **въезд** (`off`→`on`), `off` = **выезд** (`on`→`off`). Как у `road_tunnel`: `"startupBehavior": "initialize_only"` принудительно; краткий провал GNSS не сбрасывает последнее on/off |
 | `audio_volume_speed_mode` | `head_unit` | `off`, `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_radar_alarm_volume` | `head_unit` | `low`, `medium`, `high`; только A9/mbCAN |
 | `audio_eq_mode` | `head_unit` | `pop`, `rock`, `jazz`, `classic`, `voice`, `custom`; только A9/mbCAN |
@@ -998,7 +999,7 @@ TCP :5555 включают только если порт ещё не слуша
 | Источник | `signal` |
 |---|---|
 | `head_unit` | `steering_wheel_heat`, `wiper_maintenance`, `rain_detected`, `parking_radar`, `rear_fog`, `avh`, `hdc`, `esp_off`, `tja_ica`, `hma`, `high_beam`, `hazard`, `drl`, `epb_park_lamp`, `engine_oil_pressure`, `brake_fluid`, `hvac_ac_max`, `hvac_power`, `hvac_auto`, `hvac_recirculation`, `hvac_sync`, `reverse_gear`, `door_auto_lock`, `door_ignoff_unlock`, `rear_wiper`, `mirror_auto_fold`, `blind_spot_detection`, `door_open_warning`, `fcw`, `front_windscreen_heat`, `hvac_rear_defroster`, `hvac_ac_clean_when_locked`, `hvac_anion_purify`, `fragrance`, `hvac_first_blowing`, `bt_reduce_fan`, `hvac_auto_ventilation`, `hvac_front_off`, `hud`, `hud_auto_brightness`, `tsr_switch` |
-| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel`, `phone_hfp_connected`, `dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible`, `dcl_notification_shade_expanded` |
+| `app` | `esp_gpio_in_0`, `esp_gpio_in_1`, `esp_gpio_in_2`, `esp_gpio_in_3`, `esp_relay_0`, `esp_relay_1`, `esp_ble_bound`, `wifi_enabled`, `wifi_associated`, `modem_mobile_data`, `tbox_connected`, `locate_status`, `geo_fix_valid`, `modem_registered`, `road_tunnel`, `road_settlement`, `phone_hfp_connected`, `dcl_adas_panel_visible`, `dcl_top_bar_visible`, `dcl_bottom_bar_visible`, `dcl_notification_shade_expanded` |
 
 `foreground_app` требует разрешение на статистику использования. Состояния ESP доступны только
 при подключённом USB-компаньоне. `fragrance`, `fragrance_smell` и
@@ -1359,7 +1360,7 @@ Legacy `"value": 2` (A9 on) тоже валиден и на A10 перекоди
 6. `signal` соответствует типу триггера/условия и разрешён выбранным `source`.
    Не используй `geo_position` в numeric/state триггерах и условиях.
 7. Каждое `expectedState` взято из каталога либо является подтверждённым package name/SSID.
-   Для `road_tunnel` в триггере — только edge въезд/выезд и `startupBehavior: initialize_only`.
+   Для `road_tunnel` / `road_settlement` в триггере — только edge въезд/выезд и `startupBehavior: initialize_only`.
 8. Все времена, радиусы, выдержки, задержки, глубина, число действий и `maxRuns` в диапазоне.
 9. Геозона имеет реальные числовые координаты и правильное соотношение двух радиусов.
 10. CAN-команда дословно соответствует строке каталога, backend и разрешённой операции.
