@@ -204,6 +204,34 @@ internal fun dclUiBooleanFlow(
         }
         .distinctUntilChanged()
 
+internal fun dclSmartAccBooleanFlow(
+    read: (vad.dashing.tbox.dcl.DclSmartAccState) -> Boolean?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+        .map { state ->
+            val value = state?.let(read)
+            if (value == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.State(if (value) "on" else "off")
+            }
+        }
+        .distinctUntilChanged()
+
+internal fun dclSmartAccNumberFlow(
+    read: (vad.dashing.tbox.dcl.DclSmartAccState) -> Int?,
+): Flow<AutomationSignalValue> =
+    vad.dashing.tbox.dcl.DclLauncherApiRepository.smartAccState
+        .map { state ->
+            val value = state?.let(read)
+            if (value == null) {
+                AutomationSignalValue.Unavailable
+            } else {
+                AutomationSignalValue.Number(value.toDouble())
+            }
+        }
+        .distinctUntilChanged()
+
 internal fun appThemeModeFlow(): Flow<AutomationSignalValue> =
     HeadUnitDayNightRepository.modeState.map { mode ->
         val value = when (mode) {

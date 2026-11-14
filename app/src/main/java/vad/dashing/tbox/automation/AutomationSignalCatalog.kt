@@ -990,6 +990,52 @@ object AutomationSignalCatalog {
                 "бары скрыты (state_equals + toggle_hide_floating_panels).",
         ),
         state(
+            AutomationSignalId.DCL_SMART_ACC_ACTIVE,
+            "DCL: Умный ACC",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из DCL Smart ACC (smartAccActive). Не путать с CAN " +
+                "acc_cruise_state. Нет значения, пока лаунчер не отдал снимок.",
+        ),
+        state(
+            AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED,
+            "DCL: АСС по ограничению (настройка)",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off — опция лаунчера «Скорость АСС по ограничению скорости» " +
+                "(smartAccConfigEnabled).",
+        ),
+        state(
+            AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE,
+            "DCL: состояние круиза (Smart ACC)",
+            appOnly,
+            listOf("Off", "Standby", "Active", "Override", "Fault"),
+            typicalRange = "Off / Standby / Active / Override / Fault из DCL cruiseState. " +
+                "Не путать с CAN acc_cruise_state.",
+        ),
+        number(
+            AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT,
+            "DCL: эффективный лимит, км/ч",
+            "км/ч",
+            appOnly,
+            typicalRange = "Распознанное ограничение со знака или навигатора (effectiveSpeedLimit). " +
+                "Нет значения, если лимит неизвестен или поле отсутствует.",
+        ),
+        number(
+            AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET,
+            "DCL: оффсет АСС, км/ч",
+            "км/ч",
+            appOnly,
+            typicalRange = "adasAccSpeedOffset из getSmartAccState (например +0 / +19).",
+        ),
+        number(
+            AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED,
+            "DCL: целевая скорость АСС, км/ч",
+            "км/ч",
+            appOnly,
+            typicalRange = "targetSpeed = limit + offset из getSmartAccState.",
+        ),
+        state(
             AutomationSignalId.APP_THEME_MODE,
             "Тема приложения: режим",
             appOnly,

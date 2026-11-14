@@ -168,7 +168,7 @@ class ExternalApiCatalogWriteTest {
         )
         assertEquals(200, response.status)
         val json = JSONObject(response.body)
-        assertEquals(8, json.getInt("catalogVersion"))
+        assertEquals(9, json.getInt("catalogVersion"))
         val actions = json.getJSONArray("actionTypes")
         var drive: JSONObject? = null
         for (i in 0 until actions.length()) {

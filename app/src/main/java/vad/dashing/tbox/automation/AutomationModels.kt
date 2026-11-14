@@ -251,6 +251,18 @@ enum class AutomationSignalId(
     DCL_NOTIFICATION_SHADE_EXPANDED("dcl_notification_shade_expanded", AutomationSignalValueType.STATE),
     /** DCL screen mode: `home` / `single` / `full_width` / `fullscreen` / `split`. */
     DCL_SCREEN_MODE("dcl_screen_mode", AutomationSignalValueType.STATE),
+    /** DCL Smart ACC active (`on`/`off`); not CAN `acc_cruise_state`. */
+    DCL_SMART_ACC_ACTIVE("dcl_smart_acc_active", AutomationSignalValueType.STATE),
+    /** DCL launcher option «Скорость АСС по ограничению» (`on`/`off`). */
+    DCL_SMART_ACC_CONFIG_ENABLED("dcl_smart_acc_config_enabled", AutomationSignalValueType.STATE),
+    /** DCL Smart ACC cruise: `Off` / `Standby` / `Active` / `Override` / `Fault`. */
+    DCL_SMART_ACC_CRUISE_STATE("dcl_smart_acc_cruise_state", AutomationSignalValueType.STATE),
+    /** Effective speed limit from DCL Smart ACC (km/h). */
+    DCL_EFFECTIVE_SPEED_LIMIT("dcl_effective_speed_limit"),
+    /** ADAS ACC speed offset from DCL Smart ACC (km/h). */
+    DCL_SMART_ACC_SPEED_OFFSET("dcl_smart_acc_speed_offset"),
+    /** Target cruise speed from DCL Smart ACC (limit + offset), km/h. */
+    DCL_SMART_ACC_TARGET_SPEED("dcl_smart_acc_target_speed"),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
     APP_THEME("app_theme", AutomationSignalValueType.STATE),
     /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
@@ -897,7 +909,17 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * [AutomationAction.Builtin.boolValue] `true` sends `AVM ON` (keep stopped).
      * `false` sends `AVM OFF`: raw windows close and stock AVMapp starts.
      */
-    CAMD_KEEP_AVM("camd_keep_avm");
+    CAMD_KEEP_AVM("camd_keep_avm"),
+    /**
+     * DCL Smart ACC on/off via `setSmartAcc`.
+     * [AutomationAction.Builtin.boolValue] = enabled.
+     * [AutomationAction.Builtin.intValue] > 0 → optional `targetSpeed` km/h; `0` = omit.
+     * [AutomationAction.Builtin.stringValue]: empty = omit `configEnabled`;
+     * `true` / `false` = set launcher option «Скорость АСС по ограничению».
+     */
+    DCL_SET_SMART_ACC("dcl_set_smart_acc"),
+    /** DCL Smart ACC toggle via `toggleSmartAcc`. No parameters. */
+    DCL_TOGGLE_SMART_ACC("dcl_toggle_smart_acc");
 
     companion object {
         fun fromStorageKey(raw: String?): AutomationBuiltinActionType? =

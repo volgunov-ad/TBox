@@ -23,6 +23,10 @@ object DclLauncherApiContract {
     /** Alias of [METHOD_GET_UI_STATE] with the same Bundle shape. */
     const val METHOD_GET_UI_CHROME = "getUiChrome"
     const val METHOD_LAUNCH_APP = "launchApp"
+    /** Smart ACC by speed-limit signs (API v1.3). */
+    const val METHOD_SET_SMART_ACC = "setSmartAcc"
+    const val METHOD_TOGGLE_SMART_ACC = "toggleSmartAcc"
+    const val METHOD_GET_SMART_ACC_STATE = "getSmartAccState"
 
     const val ACTION_UI_STATE_CHANGED = "ras.dashing.tbox.launcher.action.UI_STATE_CHANGED"
     /** Alias of [ACTION_UI_STATE_CHANGED] with the same extras. */
@@ -60,6 +64,12 @@ object DclLauncherApiContract {
     const val KEY_BOTTOM_BAR_VISIBLE = "bottomBarVisible"
     const val KEY_IMMERSIVE = "immersive"
     const val KEY_NOTIFICATION_SHADE_EXPANDED = "notificationShadeExpanded"
+    const val KEY_SMART_ACC_ACTIVE = "smartAccActive"
+    const val KEY_SMART_ACC_CONFIG_ENABLED = "smartAccConfigEnabled"
+    const val KEY_CRUISE_STATE = "cruiseState"
+    const val KEY_EFFECTIVE_SPEED_LIMIT = "effectiveSpeedLimit"
+    const val KEY_ADAS_ACC_SPEED_OFFSET = "adasAccSpeedOffset"
+    const val KEY_TARGET_SPEED = "targetSpeed"
     const val KEY_ERROR_CODE = "errorCode"
     const val KEY_MESSAGE = "message"
 
@@ -69,6 +79,17 @@ object DclLauncherApiContract {
     const val EXTRA_REQUEST_ID = "requestId"
     const val EXTRA_ACTION = "action"
     const val EXTRA_DISPLAY_ID = "displayId"
+    /** Smart ACC set extras / method arg. */
+    const val EXTRA_ENABLED = "enabled"
+    const val EXTRA_CONFIG_ENABLED = "configEnabled"
+    const val EXTRA_TARGET_SPEED = "targetSpeed"
+
+    /** Cruise states from DCL Smart ACC / UI snapshot (gist v1.3). */
+    const val CRUISE_STATE_OFF = "Off"
+    const val CRUISE_STATE_STANDBY = "Standby"
+    const val CRUISE_STATE_ACTIVE = "Active"
+    const val CRUISE_STATE_OVERRIDE = "Override"
+    const val CRUISE_STATE_FAULT = "Fault"
 
     const val MODE_APP_AREA = "app_area"
     const val MODE_FULL_WIDTH = "full_width"

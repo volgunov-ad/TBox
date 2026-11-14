@@ -711,7 +711,8 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_HU_SCREEN_AUTO_BRIGHTNESS ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
-                        type == AutomationBuiltinActionType.ADB_SET_TCP,
+                        type == AutomationBuiltinActionType.ADB_SET_TCP ||
+                        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC,
                     stringValue = when {
                         type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
                             apps.firstOrNull()?.packageName.orEmpty()
@@ -1171,6 +1172,65 @@ private fun BuiltinActionFields(
 
         AutomationBuiltinActionType.CAMD_WINDOW -> CamdWindowActionFields(action, onChange)
 
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Умный ACC",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            AutomationDropdown(
+                label = "АСС по ограничению (настройка)",
+                value = action.stringValue.trim().lowercase().let { raw ->
+                    when (raw) {
+                        "true", "1", "yes", "on" -> true
+                        "false", "0", "no", "off" -> false
+                        else -> null
+                    }
+                },
+                options = listOf(null, true, false),
+                optionLabel = {
+                    when (it) {
+                        true -> "Включить"
+                        false -> "Выключить"
+                        null -> "Не менять"
+                    }
+                },
+                onValueChange = { next ->
+                    onChange(
+                        action.copy(
+                            stringValue = when (next) {
+                                true -> "true"
+                                false -> "false"
+                                null -> ""
+                            },
+                        ),
+                    )
+                },
+            )
+            AutomationIntField(
+                label = "Целевая скорость, км/ч (0 = не задавать)",
+                value = action.intValue,
+                onValueChange = { onChange(action.copy(intValue = it.coerceAtLeast(0))) },
+            )
+            Text(
+                text = "Управляет Smart ACC в DCL Launcher (setSmartAcc). Не меняет CAN-круиз.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> Text(
+            text = "Переключает Умный ACC в DCL (toggleSmartAcc).",
+            style = MaterialTheme.typography.tboxCaption,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         AutomationBuiltinActionType.CAMD_KEEP_AVM -> Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1562,6 +1622,8 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
     AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
     AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
+    AutomationBuiltinActionType.DCL_SET_SMART_ACC -> "DCL: Умный ACC вкл/выкл"
+    AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> "DCL: переключить Умный ACC"
 }
 
 private fun <T> List<T>.moved(from: Int, to: Int): List<T> {

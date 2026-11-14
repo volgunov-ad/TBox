@@ -270,7 +270,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 8,
+  "catalogVersion": 9,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -328,7 +328,9 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **8** — сигнал `dcl_notification_shade_expanded`;
+- `catalogVersion` (сейчас **9** — DCL Smart ACC: сигналы `dcl_smart_acc_*` /
+  `dcl_effective_speed_limit` и builtin `dcl_set_smart_acc` / `dcl_toggle_smart_acc`;
+  **8** — сигнал `dcl_notification_shade_expanded`;
   **7** — окна камер `camd_window` и удержание штатного AVM `camd_keep_avm`;
   **6** — HFP phone dial: builtin `place_call` / `answer_call` / `hangup_call` + сигналы `phone_*`;
   **5** — read-only обогащение гео/модема отдельными signal id;

@@ -48,6 +48,8 @@ object ExternalApiActionSafetyRules {
         AutomationBuiltinActionType.HANGUP_CALL,
         AutomationBuiltinActionType.CAMD_WINDOW,
         AutomationBuiltinActionType.CAMD_KEEP_AVM,
+        AutomationBuiltinActionType.DCL_SET_SMART_ACC,
+        AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC,
         -> ExternalApiActionSafety.CONFIRM
 
         else -> ExternalApiActionSafety.SAFE
