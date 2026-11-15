@@ -280,6 +280,9 @@ internal class UyvyRenderer(
                 }
                 GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
                 GLES20.glUseProgram(program)
+                // Transparent clear so discarded circle corners stay transparent in the buffer.
+                GLES20.glClearColor(0f, 0f, 0f, 0f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 GLES20.glUniform1i(uTex, 0)
                 GLES20.glUniform1f(uWidth, published.width.toFloat())
                 GLES20.glUniform1f(uRot, rotation.toFloat())
@@ -364,10 +367,13 @@ internal class UyvyRenderer(
     }
 
     private fun chooseConfig(display: EGLDisplay): EGLConfig? {
+        // Alpha size 8 is required for shape=circle: without it the SurfaceTexture
+        // buffer has no alpha channel and the outside-circle area renders black.
         val attribs = intArrayOf(
             EGL14.EGL_RED_SIZE, 8,
             EGL14.EGL_GREEN_SIZE, 8,
             EGL14.EGL_BLUE_SIZE, 8,
+            EGL14.EGL_ALPHA_SIZE, 8,
             EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
             EGL14.EGL_NONE,
         )
