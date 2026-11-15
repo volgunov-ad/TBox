@@ -352,41 +352,43 @@ void protocol_send_hello(void)
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"can\":true,\"canBackend\":\"mcp2515\","
                  "\"canBaud\":%lu,\"canLight\":%s,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,\"ap\":true}\n",
-                 ESP_COMPANION_FW_VERSION,
-                 ESP_COMPANION_GPIO_IN_COUNT,
-                 ESP_COMPANION_RELAY_COUNT,
-                 s_hello_gnss ? "true" : "false",
-                 s_hello_gnss_chip,
-                 model_esc,
-                 um980_flag ? "true" : "false",
-                 s_hello_baud,
-                 (unsigned long)s_hello_can_baud,
-                 s_can_light_mode ? "true" : "false",
-                 s_hello_mag ? "true" : "false",
-                 s_hello_mag_chip,
-                 seen,
-                 ble_btn_is_on() ? "true" : "false",
-                 macs_json);
+                  "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,"
+                  "\"bleRelay\":true,\"ap\":true}\n",
+                  ESP_COMPANION_FW_VERSION,
+                  ESP_COMPANION_GPIO_IN_COUNT,
+                  ESP_COMPANION_RELAY_COUNT,
+                  s_hello_gnss ? "true" : "false",
+                  s_hello_gnss_chip,
+                  model_esc,
+                  um980_flag ? "true" : "false",
+                  s_hello_baud,
+                  (unsigned long)s_hello_can_baud,
+                  s_can_light_mode ? "true" : "false",
+                  s_hello_mag ? "true" : "false",
+                  s_hello_mag_chip,
+                  seen,
+                  ble_btn_is_on() ? "true" : "false",
+                  macs_json);
     } else {
         snprintf(buf, 1600,
                  "{\"v\":1,\"t\":\"hello\",\"fw\":\"%s\",\"gpioIn\":%d,\"relays\":%d,"
                  "\"gnss\":%s,\"gnssChip\":\"%s\",\"gnssModel\":\"%s\","
                  "\"um980\":%s,\"baud\":%d,\"mag\":%s,\"magChip\":\"%s\",\"magSeen\":%s,"
-                 "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,\"ap\":true}\n",
-                 ESP_COMPANION_FW_VERSION,
-                 ESP_COMPANION_GPIO_IN_COUNT,
-                 ESP_COMPANION_RELAY_COUNT,
-                 s_hello_gnss ? "true" : "false",
-                 s_hello_gnss_chip,
-                 model_esc,
-                 um980_flag ? "true" : "false",
-                 s_hello_baud,
-                 s_hello_mag ? "true" : "false",
-                 s_hello_mag_chip,
-                 seen,
-                 ble_btn_is_on() ? "true" : "false",
-                 macs_json);
+                  "\"ble\":true,\"bleOn\":%s,\"bleMacs\":%s,\"bleKey\":true,\"phone\":true,"
+                  "\"bleRelay\":true,\"ap\":true}\n",
+                  ESP_COMPANION_FW_VERSION,
+                  ESP_COMPANION_GPIO_IN_COUNT,
+                  ESP_COMPANION_RELAY_COUNT,
+                  s_hello_gnss ? "true" : "false",
+                  s_hello_gnss_chip,
+                  model_esc,
+                  um980_flag ? "true" : "false",
+                  s_hello_baud,
+                  s_hello_mag ? "true" : "false",
+                  s_hello_mag_chip,
+                  seen,
+                  ble_btn_is_on() ? "true" : "false",
+                  macs_json);
     }
     cdc_write_str(buf);
     free(buf);
@@ -422,41 +424,52 @@ void protocol_send_ble_status(void)
     ble_btn_last_mac(last_mac);
     /* 20 phones with escaped 26-byte names need ~1.7 KB. */
     char *phones_json = malloc(2048);
-    char *buf = malloc(3400);
+    /* Relay boards go in their own array; 20 entries with names fit ~2.1 KB. */
+    char *relay_json = ble_phone_relay_count() > 0 ? malloc(2304) : NULL;
+    size_t buf_cap = 3400 + (relay_json ? 2320 : 0);
+    char *buf = malloc(buf_cap);
     if (!phones_json || !buf) {
         free(phones_json);
+        free(relay_json);
         free(buf);
         return;
     }
     ble_phone_write_json(phones_json, 2048);
+    if (relay_json) {
+        ble_phone_relay_json(relay_json, 2304);
+    }
+    const char *relays = relay_json ? relay_json : "[]";
     if (last_mac[0]) {
-        snprintf(buf, 3400,
+        snprintf(buf, buf_cap,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
-                 "\"keyed\":%s,\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
+                 "\"keyed\":%s,\"phones\":%s,\"relays\":%s,\"lastBat\":%d,\"lastRssi\":%d,\"lastMac\":\"%s\"}\n",
                  ble_btn_is_on() ? "true" : "false",
                  ble_btn_is_learn() ? "true" : "false",
                  ble_phone_is_learn() ? "true" : "false",
                  macs_json,
                  keyed_json,
                  phones_json,
+                 relays,
                  ble_btn_last_bat(),
                  ble_btn_last_rssi(),
                  last_mac);
     } else {
-        snprintf(buf, 3400,
+        snprintf(buf, buf_cap,
                  "{\"v\":1,\"t\":\"bleStatus\",\"on\":%s,\"learn\":%s,\"phoneLearn\":%s,\"macs\":%s,"
-                 "\"keyed\":%s,\"phones\":%s,\"lastBat\":%d,\"lastRssi\":%d}\n",
+                 "\"keyed\":%s,\"phones\":%s,\"relays\":%s,\"lastBat\":%d,\"lastRssi\":%d}\n",
                  ble_btn_is_on() ? "true" : "false",
                  ble_btn_is_learn() ? "true" : "false",
                  ble_phone_is_learn() ? "true" : "false",
                  macs_json,
                  keyed_json,
                  phones_json,
+                 relays,
                  ble_btn_last_bat(),
                  ble_btn_last_rssi());
     }
     cdc_write_str(buf);
     free(phones_json);
+    free(relay_json);
     free(buf);
 }
 
@@ -468,6 +481,19 @@ void protocol_send_ble_seen(const char *mac, int rssi, uint32_t ms)
              mac && mac[0] ? mac : "",
              rssi,
              (unsigned long)ms);
+    cdc_write_str(buf);
+}
+
+void protocol_send_relay_dev(const char *id_hex, int mask, int flags, int uptime_s)
+{
+    if (protocol_ota_active()) return;
+    char buf[160];
+    snprintf(buf, sizeof(buf),
+             "{\"v\":1,\"t\":\"relayDev\",\"id\":\"%s\",\"mask\":%d,\"flags\":%d,\"uptime\":%d}\n",
+             id_hex && id_hex[0] ? id_hex : "",
+             mask,
+             flags,
+             uptime_s);
     cdc_write_str(buf);
 }
 
@@ -1301,6 +1327,17 @@ static void handle_line(const char *line)
         }
         bool ok = ble_phone_forget(id);
         protocol_send_ble_ack("phoneForget", ok, ok ? NULL : "fail");
+        protocol_send_ble_status();
+        return;
+    }
+    if (strstr(line, "\"t\":\"relayDevSet\"") || strstr(line, "\"t\": \"relayDevSet\"")) {
+        char id[12];
+        bool has_id = extract_json_string(line, "id", id, sizeof(id)) && id[0] != '\0';
+        uint32_t mask = extract_json_u32(line, "mask", NULL);
+        uint32_t pulse = extract_json_u32(line, "pulseMs", NULL);
+        int n = ble_phone_relay_set(has_id ? id : NULL, (uint8_t)(mask & 0xFF),
+                                    (uint16_t)(pulse & 0xFFFF));
+        protocol_send_ble_ack("relayDevSet", n > 0, n > 0 ? NULL : "no relay");
         protocol_send_ble_status();
         return;
     }

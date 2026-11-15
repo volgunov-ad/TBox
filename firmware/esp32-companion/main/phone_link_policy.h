@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 
-/** Phones linked at once. Shelly scanning keeps a 40 ms window every 80 ms. */
-#define PHONE_LINK_MAX 3
+/** Phones and relay boards linked at once. Shelly scanning keeps a 40 ms window every 80 ms. */
+#define PHONE_LINK_MAX 5
 
 /* Connection interval is in 1.25 ms units: 160 = 200 ms, 240 = 300 ms. */
 #define PHONE_ITVL_MIN 160

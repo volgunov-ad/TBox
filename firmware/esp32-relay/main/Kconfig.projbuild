@@ -1,0 +1,55 @@
+menu "Relay board (ESP32_Relay X1_V1.2)"
+
+config RELAY_GPIO
+    int "Relay control GPIO (-1 = probe mode)"
+    default -1
+    range -1 39
+    help
+        Active level is set by RELAY_ACTIVE_HIGH. -1 runs the GPIO probe: every
+        candidate in RELAY_PROBE_GPIOS is driven for 2 s with a UART log, listen
+        for the relay click and put the pin here. Strapping pins 0/2/5/12/15 are
+        never probed and must not be used.
+
+config RELAY_ACTIVE_HIGH
+    bool "Relay is active-high"
+    default y
+
+config RELAY_BTN_GPIO
+    int "Board button GPIO (-1 = none)"
+    default -1
+    range -1 39
+    help
+        Holding the button for 5 s performs a factory reset (NVS erase, reboot).
+
+config RELAY_BTN_ACTIVE_LOW
+    bool "Button is wired to GND (internal pullup)"
+    default y
+    depends on RELAY_BTN_GPIO != -1
+
+config RELAY_NAME
+    string "Pairing name base, trailing XX is replaced by the id"
+    default "Relay-XX"
+
+config RELAY_PULSE_MS
+    int "Board button pulse length (ms), 30..65535"
+    default 300
+    range 30 65535
+
+config RELAY_KEEPALIVE_S
+    int "State keepalive period (s)"
+    default 12
+    range 5 20
+
+config RELAY_REBOOT_MARGIN
+    hex "TX counter bump at every boot"
+    default 0x1000
+    help
+        Power is cut without shutdown, so the saved counter can lag. Each boot
+        jumps this far forward; stale packets from before the cut fail replay
+        protection on the companion.
+
+config RELAY_PROBE_GPIOS
+    string "Probe mode candidates"
+    default "4,13,14,25,26,27,32,33"
+
+endmenu
