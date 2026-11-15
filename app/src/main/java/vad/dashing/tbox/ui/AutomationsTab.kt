@@ -1,5 +1,6 @@
 package vad.dashing.tbox.ui
 
+import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -81,6 +82,7 @@ fun AutomationsTab(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val importReadErrorToast = stringResource(R.string.toast_automations_import_read_error)
+    val importNoPickerToast = stringResource(R.string.toast_automations_import_no_picker)
     val importedTemplate = stringResource(R.string.toast_automations_imported)
     val savedToTemplate = stringResource(R.string.toast_saved_to)
     val saveErrorTemplate = stringResource(R.string.toast_save_error)
@@ -131,9 +133,21 @@ fun AutomationsTab(
                 statuses = statuses,
                 onAdd = { automationViewModel.edit(AutomationDefinition.newDraft()) },
                 onImport = {
-                    importLauncher.launch(
-                        arrayOf("application/json", "text/plain", "application/*", "*/*"),
-                    )
+                    val openDocumentIntent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    }
+                    if (openDocumentIntent.resolveActivity(context.packageManager) == null) {
+                        Toast.makeText(context, importNoPickerToast, Toast.LENGTH_LONG).show()
+                        return@AutomationsList
+                    }
+                    runCatching {
+                        importLauncher.launch(
+                            arrayOf("application/json", "text/plain", "application/*", "*/*"),
+                        )
+                    }.onFailure {
+                        Toast.makeText(context, importNoPickerToast, Toast.LENGTH_LONG).show()
+                    }
                 },
                 onEdit = automationViewModel::edit,
                 onDuplicate = automationViewModel::duplicate,

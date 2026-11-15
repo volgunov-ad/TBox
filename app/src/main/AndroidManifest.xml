@@ -122,12 +122,25 @@
     <uses-permission android:name="ras.dashing.tbox.launcher.permission.CALL_LAUNCHER_API" />
 
     <!-- Info tab: detect companion APKs (package visibility on API 30+ / targetSdk 36).
-         DCL launcher provider: ContentResolver.call visibility on API 30+ / targetSdk 36. -->
+         DCL launcher provider: ContentResolver.call visibility on API 30+ / targetSdk 36.
+         File pickers (AutomationsTab import, MainScreenSettingsTab wallpaper): resolveActivity
+         visibility on API 30+ when the SAF handler is not a platform-signed system app. -->
     <queries>
         <package android:name="vad.dashing.mqtt" />
         <package android:name="vad.dashing.camd" />
         <package android:name="ras.dashing.tbox.launcher" />
         <provider android:authorities="ras.dashing.tbox.launcher.api" />
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
+        </intent>
     </queries>
 
     <application

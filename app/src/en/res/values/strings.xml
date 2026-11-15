@@ -151,6 +151,7 @@
     <string name="dialog_save_automation_json_downloads">Save this automation to Downloads as JSON</string>
     <string name="toast_automations_imported">Imported automations: %1$d</string>
     <string name="toast_automations_import_read_error">Could not read the automation file</string>
+    <string name="toast_automations_import_no_picker">No app on this device can pick a file.</string>
     <string name="automations_invalid_rule_hint">Invalid; other rules still run. Fix: %1$s</string>
     <string name="automation_adb_set_tcp_hint">Toggles ADB TCP on port 5555 on the head unit (same as the settings switch). Restarts adbd.</string>
     <string name="automation_adb_tcp_condition_state_label">Port :5555</string>
