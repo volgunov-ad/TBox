@@ -247,12 +247,14 @@ class CamdPresetStoreTest {
         assertTrue(all.all { it.builtin })
         assertEquals(CamdCrop(0f, 0f, 0.5f, 1f), CamdPresetStore.byName(prefs, "front_left")!!.crop)
         assertTrue(
-            CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0f, 0f, 0.5f, 1f))
+            CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0.1f, 0.2f, 0.8f, 0.7f))
         )
         val edited = CamdPresetStore.byName(prefs, "front_left")!!
         assertEquals(180, edited.rotation)
         assertTrue(edited.flipH)
         assertFalse(edited.flipV)
+        // Crop must persist too: the override value differs from the built-in default.
+        assertEquals(CamdCrop(0.1f, 0.2f, 0.8f, 0.7f), edited.crop)
         assertEquals(0, CamdPresetStore.byName(prefs, "front_right")!!.rotation)
         assertEquals(false, CamdPresetStore.saveBuiltinOverride(prefs, "nope", 0, false, false, CamdCrop.IDENTITY))
     }

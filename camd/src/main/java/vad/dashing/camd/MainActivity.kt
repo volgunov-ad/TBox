@@ -10,9 +10,12 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -251,6 +254,8 @@ class CamdController(
 
     fun setTab(tab: CamdTab) {
         _state.value = _state.value.copy(tab = tab)
+        // Fresh list every time the tab opens; also heals stale first-install state.
+        if (tab == CamdTab.PRESETS) refreshSettings()
     }
 
     fun setInput(id: Int) {
@@ -502,10 +507,25 @@ class CamdController(
             }
             refreshSettings()
             _state.value = _state.value.copy(
-                message = error ?: "Пресет «${draft.name}» сохранён",
+                message = error ?: "Пресет «${draft.name}» сохранён: ${describeSavedSettings(draft)}",
                 editingPreset = if (error == null) null else draft,
             )
         }
+    }
+
+    private fun describeSavedSettings(preset: CamdPreset): String {
+        val parts = ArrayList<String>()
+        if (preset.rotation != 0) parts.add("${preset.rotation}°")
+        if (preset.flipH) parts.add("зеркало Г")
+        if (preset.flipV) parts.add("зеркало В")
+        if (!preset.crop.isIdentity()) {
+            val crop = preset.crop
+            parts.add(
+                "вырезка ${Math.round(crop.x * 100)}/${Math.round(crop.y * 100)} " +
+                    "${Math.round(crop.w * 100)}×${Math.round(crop.h * 100)}%"
+            )
+        }
+        return if (parts.isEmpty()) "полный кадр" else parts.joinToString(", ")
     }
 
     fun deletePreset(name: String) {
@@ -580,40 +600,31 @@ private fun CamdScreen(
     onImport: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("Камеры ГУ", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    // Fixed header: title and tab row stay visible while the content scrolls.
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
         ) {
-            FilterChip(
-                selected = state.tab == CamdTab.CAMERAS,
-                onClick = { onTab(CamdTab.CAMERAS) },
-                label = { Text("Камеры", style = MaterialTheme.typography.labelLarge) },
-            )
-            FilterChip(
-                selected = state.tab == CamdTab.PRESETS,
-                onClick = { onTab(CamdTab.PRESETS) },
-                label = { Text("Пресеты", style = MaterialTheme.typography.labelLarge) },
-            )
-            FilterChip(
-                selected = state.tab == CamdTab.SETTINGS,
-                onClick = { onTab(CamdTab.SETTINGS) },
-                label = { Text("Настройки", style = MaterialTheme.typography.labelLarge) },
-            )
-            FilterChip(
-                selected = state.tab == CamdTab.BACKUP,
-                onClick = { onTab(CamdTab.BACKUP) },
-                label = { Text("Импорт/экспорт", style = MaterialTheme.typography.labelLarge) },
+            Text("Камеры ГУ", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+            CamdTabRow(
+                tabs = listOf(
+                    CamdTab.CAMERAS to "Камеры",
+                    CamdTab.PRESETS to "Пресеты",
+                    CamdTab.SETTINGS to "Настройки",
+                    CamdTab.BACKUP to "Импорт/экспорт",
+                ),
+                selected = state.tab,
+                onTabSelected = onTab,
             )
         }
-        when (state.tab) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            when (state.tab) {
             CamdTab.CAMERAS -> CamerasTab(
                 state = state,
                 onInput = onInput,
@@ -666,21 +677,72 @@ private fun CamdScreen(
             CamdTab.BACKUP -> BackupTab(onExport = onExport, onImport = onImport)
         }
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        if (state.status.isNotBlank()) {
-            Text(
-                state.status,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // Diagnostics (raw command results, service status, grabber log tail) live
+        // on the Cameras tab only; other tabs keep plain feedback messages.
+        val showMessage = state.tab == CamdTab.CAMERAS || !state.message.startsWith("state=")
+        if (showMessage) {
+            Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         }
-        if (state.log.isNotBlank()) {
-            Text(
-                state.log,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        if (state.tab == CamdTab.CAMERAS) {
+            if (state.status.isNotBlank()) {
+                Text(
+                    state.status,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (state.log.isNotBlank()) {
+                Text(
+                    state.log,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
+        }
+    }
+}
+
+@Composable
+private fun CamdTabRow(
+    tabs: List<Pair<CamdTab, String>>,
+    selected: CamdTab,
+    onTabSelected: (CamdTab) -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+        ) {
+            tabs.forEach { (tab, title) ->
+                val backgroundColor = if (selected == tab) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.background
+                }
+                val textColor = if (selected == tab) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onBackground
+                }
+                Box(
+                    modifier = Modifier
+                        .clickable { onTabSelected(tab) }
+                        .background(backgroundColor)
+                        .padding(vertical = 16.dp, horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = title,
+                        color = textColor,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
     }
 }
 
