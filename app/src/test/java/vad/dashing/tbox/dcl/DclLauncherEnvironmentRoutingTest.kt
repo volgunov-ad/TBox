@@ -466,4 +466,12 @@ class DclLauncherEnvironmentRoutingTest {
             ),
         )
     }
+
+    @Test
+    fun dclFallbackToast_onlyWhenDclResponds() {
+        // DCL installed and answering, but the launch call failed → inform the user.
+        assertTrue(dclFallbackToastVisible(dclApiAvailable = true))
+        // Launcher not installed / not answering → silent normal launch, journal only.
+        assertFalse(dclFallbackToastVisible(dclApiAvailable = false))
+    }
 }

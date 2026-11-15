@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import vad.dashing.tbox.MainActivityIntentHelper
 import vad.dashing.tbox.R
 import vad.dashing.tbox.TboxRepository
@@ -135,10 +136,9 @@ object DclAppLaunchHelper {
     }
 
     /**
-     * Blocking Binder call — callers must hop off the main thread
-     * (see [DclLauncherApiClient] / Main cold redirect).
+     * Suspending Binder `launchApp` for the app_area mode. See [launchModeBlocking].
      */
-    fun launchAppAreaBlocking(
+    suspend fun launchAppAreaBlocking(
         context: Context,
         packageName: String,
         activityClass: String? = null,
@@ -151,28 +151,33 @@ object DclAppLaunchHelper {
         )
 
     /**
-     * Blocking Binder `launchApp` for any supported mode (`app_area` / `full_width` /
-     * `fullscreen`). Callers must hop off the main thread (P0-1).
+     * Suspending Binder `launchApp` for any supported mode (`app_area` / `full_width` /
+     * `fullscreen`), bounded by [DclLauncherApiClient.CALL_TIMEOUT_MS]: a wedged DCL
+     * provider yields `false` (caller falls back to Adayo / normal launch) instead of
+     * stalling the redirect. Safe from any dispatcher (Binder hops to [Dispatchers.IO]).
      */
-    fun launchModeBlocking(
+    suspend fun launchModeBlocking(
         context: Context,
         packageName: String,
         mode: String,
         activityClass: String? = null,
-    ): Boolean {
-        val result = DclLauncherApiClient.launchAppBlocking(
-            context = context.applicationContext,
-            packageName = packageName,
-            mode = mode,
-            activityClass = activityClass,
-        )
-        return when (result) {
-            is DclCallResult.Ok -> result.value.success
-            is DclCallResult.Error,
-            DclCallResult.Unavailable,
-            -> false
-        }
-    }
+    ): Boolean =
+        withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS) {
+            withContext(Dispatchers.IO) {
+                val result = DclLauncherApiClient.launchAppBlocking(
+                    context = context.applicationContext,
+                    packageName = packageName,
+                    mode = mode,
+                    activityClass = activityClass,
+                )
+                when (result) {
+                    is DclCallResult.Ok -> result.value.success
+                    is DclCallResult.Error,
+                    DclCallResult.Unavailable,
+                    -> false
+                }
+            }
+        } ?: false
 
     fun launchRaw(context: Context, packageName: String) {
         try {
@@ -191,11 +196,16 @@ object DclAppLaunchHelper {
         onRawFallback: (() -> Unit)?,
     ) {
         withContext(Dispatchers.Main) {
-            Toast.makeText(
-                appContext,
-                appContext.getString(R.string.dcl_launcher_api_unavailable_fallback),
-                Toast.LENGTH_SHORT,
-            ).show()
+            // Toast only when DCL actually responds but the call failed. When the launcher
+            // is not installed / not answering, the launch must look completely normal
+            // (silent); the WARN journal entry above stays the only trace.
+            if (dclFallbackToastVisible(DclLauncherApiRepository.available.value)) {
+                Toast.makeText(
+                    appContext,
+                    appContext.getString(R.string.dcl_launcher_api_unavailable_fallback),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
             if (onRawFallback != null) {
                 onRawFallback()
             } else {

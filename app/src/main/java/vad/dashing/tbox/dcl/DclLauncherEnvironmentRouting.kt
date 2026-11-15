@@ -346,3 +346,11 @@ fun dclLaunchShouldUseRawFallback(result: DclCallResult<DclLaunchResult>): Boole
             }
         }
     }
+
+/**
+ * Toast «DCL API недоступен» on the raw-launch fallback only when DCL actually responds
+ * ([dclApiAvailable] == true) and the call itself failed. When the launcher is not
+ * installed / not answering, the launch must proceed the normal silent way; the WARN
+ * journal entry stays the only trace.
+ */
+fun dclFallbackToastVisible(dclApiAvailable: Boolean): Boolean = dclApiAvailable

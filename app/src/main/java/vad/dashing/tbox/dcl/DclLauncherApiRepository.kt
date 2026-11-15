@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Holds the latest DCL UI snapshot from push broadcasts and optional poll refreshes.
@@ -49,7 +50,13 @@ object DclLauncherApiRepository {
         val app = context.applicationContext
         appContext = app
         registerPushReceiver(app)
-        scope.launch { refreshBlocking(app) }
+        // refreshBlocking issues up to three Binder calls; budget each with the client
+        // watchdog so a wedged provider cannot pin an IO thread forever.
+        scope.launch {
+            withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS * 3) {
+                refreshBlocking(app)
+            }
+        }
     }
 
     fun stop() {
@@ -78,10 +85,14 @@ object DclLauncherApiRepository {
     }
 
     suspend fun refresh(context: Context = requireNotNull(appContext)): Boolean =
-        withContext(Dispatchers.IO) { refreshBlocking(context.applicationContext) }
+        withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS * 3) {
+            withContext(Dispatchers.IO) { refreshBlocking(context.applicationContext) }
+        } ?: false
 
     suspend fun refreshSmartAcc(context: Context = requireNotNull(appContext)): Boolean =
-        withContext(Dispatchers.IO) { refreshSmartAccBlocking(context.applicationContext) }
+        withTimeoutOrNull(DclLauncherApiClient.CALL_TIMEOUT_MS) {
+            withContext(Dispatchers.IO) { refreshSmartAccBlocking(context.applicationContext) }
+        } ?: false
 
     suspend fun launchApp(
         packageName: String,
@@ -110,7 +121,7 @@ object DclLauncherApiRepository {
             configEnabled = configEnabled,
         )
         if (result is DclCallResult.Ok) {
-            refreshSmartAccBlocking(app)
+            refreshSmartAcc(app)
         }
         return result
     }
@@ -121,7 +132,7 @@ object DclLauncherApiRepository {
         val app = context.applicationContext
         val result = DclLauncherApiClient.toggleSmartAcc(app)
         if (result is DclCallResult.Ok) {
-            refreshSmartAccBlocking(app)
+            refreshSmartAcc(app)
         }
         return result
     }

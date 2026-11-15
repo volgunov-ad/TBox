@@ -6,25 +6,32 @@ import android.os.Bundle
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Blocking Binder calls into DCL Launcher. Suspend wrappers hop to [Dispatchers.IO]
- * because [android.content.ContentResolver.call] must not run on the main thread.
+ * because [android.content.ContentResolver.call] must not run on the main thread,
+ * and bound the wait with [CALL_TIMEOUT_MS]: a wedged (hung, not crashed) DCL provider
+ * degrades to [DclCallResult.Unavailable] so callers run their raw fallback instead of
+ * stalling forever.
  */
 object DclLauncherApiClient {
     private val uri: Uri = Uri.parse(DclLauncherApiContract.URI)
 
+    /** Per-Binder-call watchdog; timeout is indistinguishable from "API не отвечает". */
+    const val CALL_TIMEOUT_MS = 3_000L
+
     suspend fun getCapabilities(context: Context): DclCallResult<DclCapabilities> =
-        withContext(Dispatchers.IO) { getCapabilitiesBlocking(context) }
+        callWithTimeout { getCapabilitiesBlocking(context) } ?: DclCallResult.Unavailable
 
     suspend fun getUiState(context: Context): DclCallResult<DclUiState> =
-        withContext(Dispatchers.IO) { getUiStateBlocking(context) }
+        callWithTimeout { getUiStateBlocking(context) } ?: DclCallResult.Unavailable
 
     /**
      * Same as [getUiState] via the `getUiChrome` method alias.
      */
     suspend fun getUiChrome(context: Context): DclCallResult<DclUiState> =
-        withContext(Dispatchers.IO) { getUiChromeBlocking(context) }
+        callWithTimeout { getUiChromeBlocking(context) } ?: DclCallResult.Unavailable
 
     suspend fun launchApp(
         context: Context,
@@ -35,7 +42,7 @@ object DclLauncherApiClient {
         action: String? = null,
         displayId: Int? = null,
     ): DclCallResult<DclLaunchResult> =
-        withContext(Dispatchers.IO) {
+        callWithTimeout {
             launchAppBlocking(
                 context = context,
                 packageName = packageName,
@@ -45,7 +52,7 @@ object DclLauncherApiClient {
                 action = action,
                 displayId = displayId,
             )
-        }
+        } ?: DclCallResult.Unavailable
 
     suspend fun setSmartAcc(
         context: Context,
@@ -53,15 +60,18 @@ object DclLauncherApiClient {
         targetSpeed: Int? = null,
         configEnabled: Boolean? = null,
     ): DclCallResult<Unit> =
-        withContext(Dispatchers.IO) {
+        callWithTimeout {
             setSmartAccBlocking(context, enabled, targetSpeed, configEnabled)
-        }
+        } ?: DclCallResult.Unavailable
 
     suspend fun toggleSmartAcc(context: Context): DclCallResult<Unit> =
-        withContext(Dispatchers.IO) { toggleSmartAccBlocking(context) }
+        callWithTimeout { toggleSmartAccBlocking(context) } ?: DclCallResult.Unavailable
 
     suspend fun getSmartAccState(context: Context): DclCallResult<DclSmartAccState> =
-        withContext(Dispatchers.IO) { getSmartAccStateBlocking(context) }
+        callWithTimeout { getSmartAccStateBlocking(context) } ?: DclCallResult.Unavailable
+
+    private suspend fun <T> callWithTimeout(block: () -> T): T? =
+        withTimeoutOrNull(CALL_TIMEOUT_MS) { withContext(Dispatchers.IO) { block() } }
 
     fun getCapabilitiesBlocking(context: Context): DclCallResult<DclCapabilities> {
         val bundle = call(context, DclLauncherApiContract.METHOD_GET_CAPABILITIES)
