@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                     val state by controller.state.collectAsState()
                     CamdScreen(
                         state = state,
+                        onTab = controller::setTab,
                         onInput = controller::setInput,
                         onX = controller::setX,
                         onY = controller::setY,
@@ -144,9 +145,11 @@ class MainActivity : ComponentActivity() {
                         onLensPreset = controller::setLensPreset,
                         onLensReset = controller::resetLens,
                         onOpenAsIs = controller::openAsIs,
-                        onOpenPreset = controller::openPreset,
                         onClose = controller::close,
+                        onOpenPreset = controller::openPreset,
+                        onClosePreset = controller::closeCamera,
                         onEditPreset = controller::startEditPreset,
+                        onEditCamera = controller::setEditCamera,
                         onDeletePreset = controller::deletePreset,
                         onNewPresetName = controller::setNewPresetName,
                         onCreatePreset = controller::createPreset,
@@ -159,6 +162,8 @@ class MainActivity : ComponentActivity() {
                         onEditCropH = { controller.setEditCropField(h = it) },
                         onSavePreset = controller::saveEditPreset,
                         onCancelEditPreset = controller::cancelEditPreset,
+                        onShowCloseButton = controller::setShowCloseButton,
+                        onTapToClose = controller::setTapToClose,
                         onExport = {
                             val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                             exportFile.launch("${CamdBackup.FILE_PREFIX}_$stamp.json")
@@ -177,7 +182,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+enum class CamdTab { CAMERAS, PRESETS, SETTINGS, BACKUP }
+
 data class CamdUiState(
+    val tab: CamdTab = CamdTab.CAMERAS,
     val inputId: Int = 0,
     val x: Float = 0.02f,
     val y: Float = 0.70f,
@@ -190,6 +198,8 @@ data class CamdUiState(
     val newPresetName: String = "",
     val busy: Boolean = false,
     val keepAvmStopped: Boolean = false,
+    val showCloseButton: Boolean = true,
+    val tapToClose: Boolean = false,
     val message: String = "Окно откроется после «Открыть». Записи пока нет.",
     val status: String = "",
     val log: String = ""
@@ -232,9 +242,15 @@ class CamdController(
         val inputId = _state.value.inputId
         _state.value = _state.value.copy(
             keepAvmStopped = windows.keepAvmStopped(),
+            showCloseButton = windows.showCloseButton(),
+            tapToClose = windows.tapToClose(),
             lens = windows.lensCorrection(inputId),
             presets = windows.presets(),
         )
+    }
+
+    fun setTab(tab: CamdTab) {
+        _state.value = _state.value.copy(tab = tab)
     }
 
     fun setInput(id: Int) {
@@ -311,6 +327,22 @@ class CamdController(
         }
     }
 
+    fun setShowCloseButton(value: Boolean) {
+        updateUiOptions(showClose = value)
+    }
+
+    fun setTapToClose(value: Boolean) {
+        updateUiOptions(tap = value)
+    }
+
+    private fun updateUiOptions(
+        showClose: Boolean = _state.value.showCloseButton,
+        tap: Boolean = _state.value.tapToClose,
+    ) {
+        windows.setUiOptions(showClose, tap)
+        _state.value = _state.value.copy(showCloseButton = showClose, tapToClose = tap)
+    }
+
     fun openAsIs() {
         val current = _state.value
         io.execute {
@@ -359,20 +391,6 @@ class CamdController(
         if (round) append(" shape=circle")
     }
 
-    fun close() {
-        val inputId = _state.value.inputId
-        io.execute {
-            _state.value = _state.value.copy(busy = true, message = "Закрываю…")
-            val result = windows.close(inputId)
-            _state.value = _state.value.copy(
-                busy = false,
-                message = result,
-                status = windows.status(),
-                log = engine.logTail()
-            )
-        }
-    }
-
     private fun runOpenLine(line: String) {
         val command = CamdCommands.parse(line)
         val result = if (command is CamdCommand.Open) {
@@ -391,6 +409,23 @@ class CamdController(
             status = windows.status(),
             log = engine.logTail()
         )
+    }
+
+    fun close() {
+        closeCamera(_state.value.inputId)
+    }
+
+    fun closeCamera(inputId: Int) {
+        io.execute {
+            _state.value = _state.value.copy(busy = true, message = "Закрываю…")
+            val result = windows.close(inputId)
+            _state.value = _state.value.copy(
+                busy = false,
+                message = result,
+                status = windows.status(),
+                log = engine.logTail()
+            )
+        }
     }
 
     fun presets(cameraId: Int): List<CamdPreset> = windows.presets(cameraId)
@@ -418,13 +453,18 @@ class CamdController(
         val existing = windows.preset(name)
         _state.value = _state.value.copy(
             newPresetName = "",
+            tab = CamdTab.PRESETS,
             message = if (existing != null) {
                 "Пресет «$name» уже есть — открыл его настройки"
             } else {
-                "Новый пресет «$name»: настрой и нажмите «Сохранить»"
+                "Новый пресет «$name»: выберите источник, настройте и нажмите «Сохранить»"
             },
             editingPreset = existing ?: CamdPreset(name, _state.value.inputId),
         )
+    }
+
+    fun setEditCamera(id: Int) {
+        updateEdit { it.copy(cameraId = id) }
     }
 
     fun setEditRotation(degrees: Int) {
@@ -501,6 +541,7 @@ class CamdController(
 @Composable
 private fun CamdScreen(
     state: CamdUiState,
+    onTab: (CamdTab) -> Unit,
     onInput: (Int) -> Unit,
     onX: (Float) -> Unit,
     onY: (Float) -> Unit,
@@ -516,9 +557,11 @@ private fun CamdScreen(
     onLensPreset: (CamdLensCorrection) -> Unit,
     onLensReset: () -> Unit,
     onOpenAsIs: () -> Unit,
-    onOpenPreset: (String) -> Unit,
     onClose: () -> Unit,
+    onOpenPreset: (String) -> Unit,
+    onClosePreset: (Int) -> Unit,
     onEditPreset: (CamdPreset) -> Unit,
+    onEditCamera: (Int) -> Unit,
     onDeletePreset: (String) -> Unit,
     onNewPresetName: (String) -> Unit,
     onCreatePreset: () -> Unit,
@@ -531,14 +574,12 @@ private fun CamdScreen(
     onEditCropH: (Float) -> Unit,
     onSavePreset: () -> Unit,
     onCancelEditPreset: () -> Unit,
+    onShowCloseButton: (Boolean) -> Unit,
+    onTapToClose: (Boolean) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onKeepAvm: (Boolean) -> Unit,
 ) {
-    val input = remember(state.inputId) { KnownInputs.byId(state.inputId) }
-    val cameraPresets = remember(state.presets, state.inputId) {
-        state.presets.filter { it.cameraId == state.inputId }
-    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -547,226 +588,83 @@ private fun CamdScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Камеры ГУ", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-        Text(
-            "Одно окно на камеру. Одиночное нажатие плитки в TBox Monitor открывает его, двойное закрывает. " +
-                "Повторное открытие только двигает окно. Коррекция искажения — на камеру, действует всегда.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            KnownInputs.all.forEach { camera ->
-                FilterChip(
-                    selected = camera.id == state.inputId,
-                    onClick = { onInput(camera.id) },
-                    label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) }
-                )
-            }
-        }
-        if (input?.heldByAvm == true && !state.keepAvmStopped) {
-            Text(
-                "Этот вход держит штатный AVM. Пока такое окно открыто, AVM будет остановлен.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(
-            "Окно на экране",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            "Кадр ${input?.width}×${input?.height}",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        FractionSlider("X", state.x, onX)
-        FractionSlider("Y", state.y, onY)
-        FractionSlider("Ширина", state.w, onW)
-        FractionSlider("Высота", state.h, onH)
-        SettingSwitch(
-            checked = state.round,
-            enabled = !state.busy,
-            title = "Круглое окно",
-            description = "Изображение вписанным кругом с прозрачными углами — как «кругляши» слепых зон.",
-            onCheckedChange = onRound,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onOpenAsIs, enabled = !state.busy) {
-                Text("Открыть как есть", style = MaterialTheme.typography.labelLarge)
-            }
-            Button(onClick = onClose, enabled = !state.busy) {
-                Text("Закрыть выбранную", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(
-            "Пресеты (на камеру)",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            "Поворот, зеркало и кадрирование живут в пресетах. Встроенные можно настроить, нельзя удалить. " +
-                "Свои пресеты вызываются по имени из TBox Monitor и автоматизаций: OPEN preset=имя.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        cameraPresets.forEach { preset ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = preset.name + if (preset.builtin) " (встроенный)" else "",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { onOpenPreset(preset.name) }, enabled = !state.busy) {
-                    Text("Открыть", style = MaterialTheme.typography.labelLarge)
-                }
-                TextButton(onClick = { onEditPreset(preset) }) {
-                    Text("Настроить", style = MaterialTheme.typography.labelLarge)
-                }
-                if (!preset.builtin) {
-                    TextButton(onClick = { onDeletePreset(preset.name) }) {
-                        Text("Удалить", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedTextField(
-                value = state.newPresetName,
-                onValueChange = onNewPresetName,
-                label = { Text("имя: a-z 0-9 _") },
-                singleLine = true,
-                modifier = Modifier.weight(1f),
-            )
-            Button(onClick = onCreatePreset) {
-                Text("Создать", style = MaterialTheme.typography.labelLarge)
-            }
-        }
-        state.editingPreset?.let { draft ->
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            Text(
-                "Настройка пресета «${draft.name}»" + if (draft.builtin) " (встроенный)" else "",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text("Поворот", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0, 90, 180, 270).forEach { degrees ->
-                    FilterChip(
-                        selected = draft.rotation == degrees,
-                        onClick = { onEditRotation(degrees) },
-                        label = { Text("$degrees°", style = MaterialTheme.typography.labelLarge) },
-                    )
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = draft.flipH,
-                    onClick = { onEditFlipH(!draft.flipH) },
-                    label = { Text("Зеркало Г", style = MaterialTheme.typography.labelLarge) },
-                )
-                FilterChip(
-                    selected = draft.flipV,
-                    onClick = { onEditFlipV(!draft.flipV) },
-                    label = { Text("Зеркало В", style = MaterialTheme.typography.labelLarge) },
-                )
-            }
-            FractionSlider("Вырезка: слева", draft.crop.x, onEditCropX)
-            FractionSlider("Вырезка: сверху", draft.crop.y, onEditCropY)
-            RangedSlider("Вырезка: ширина", draft.crop.w, CamdCrop.MIN_SIZE, 1f, onEditCropW)
-            RangedSlider("Вырезка: высота", draft.crop.h, CamdCrop.MIN_SIZE, 1f, onEditCropH)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onSavePreset, enabled = !state.busy) {
-                    Text("Сохранить", style = MaterialTheme.typography.labelLarge)
-                }
-                Button(onClick = onCancelEditPreset) {
-                    Text("Отмена", style = MaterialTheme.typography.labelLarge)
-                }
-            }
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(
-            "Визуальная коррекция (на камеру)",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            "Не калибровка объектива и не Brown–Conrady. k1/k2 и сдвиг центра — «рыбий глаз», тилт — перспектива «трапецией». " +
-                "Сохраняется в «Камеры ГУ»; DCL и Monitor получают уже выпрямленную картинку без коэффициентов в OPEN.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
             FilterChip(
-                selected = state.lens.isIdentity(),
-                onClick = onLensReset,
-                label = { Text("Сброс", style = MaterialTheme.typography.labelLarge) },
+                selected = state.tab == CamdTab.CAMERAS,
+                onClick = { onTab(CamdTab.CAMERAS) },
+                label = { Text("Камеры", style = MaterialTheme.typography.labelLarge) },
             )
             FilterChip(
-                selected = state.lens == CamdLensCorrection.PRESET_MILD_BARREL,
-                onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_BARREL) },
-                label = { Text("Лёгкая бочка", style = MaterialTheme.typography.labelLarge) },
+                selected = state.tab == CamdTab.PRESETS,
+                onClick = { onTab(CamdTab.PRESETS) },
+                label = { Text("Пресеты", style = MaterialTheme.typography.labelLarge) },
             )
             FilterChip(
-                selected = state.lens == CamdLensCorrection.PRESET_STRONG_BARREL,
-                onClick = { onLensPreset(CamdLensCorrection.PRESET_STRONG_BARREL) },
-                label = { Text("Сильная бочка", style = MaterialTheme.typography.labelLarge) },
+                selected = state.tab == CamdTab.SETTINGS,
+                onClick = { onTab(CamdTab.SETTINGS) },
+                label = { Text("Настройки", style = MaterialTheme.typography.labelLarge) },
             )
             FilterChip(
-                selected = state.lens == CamdLensCorrection.PRESET_MILD_PINCUSHION,
-                onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_PINCUSHION) },
-                label = { Text("Лёгкая подушка", style = MaterialTheme.typography.labelLarge) },
+                selected = state.tab == CamdTab.BACKUP,
+                onClick = { onTab(CamdTab.BACKUP) },
+                label = { Text("Импорт/экспорт", style = MaterialTheme.typography.labelLarge) },
             )
         }
-        RangedSlider("k1", state.lens.k1, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK1)
-        RangedSlider("k2", state.lens.k2, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK2)
-        RangedSlider("Центр X", state.lens.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCx)
-        RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
-        RangedSlider("Тилт В", state.lens.tiltV, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltV)
-        RangedSlider("Тилт Г", state.lens.tiltH, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltH)
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        Text(
-            "Настройки",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            "Экспорт/импорт: коррекции всех камер (включая тилт), пресеты и режим AVM одним JSON-файлом.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onExport) {
-                Text("Экспорт", style = MaterialTheme.typography.labelLarge)
-            }
-            Button(onClick = onImport) {
-                Text("Импорт", style = MaterialTheme.typography.labelLarge)
-            }
+        when (state.tab) {
+            CamdTab.CAMERAS -> CamerasTab(
+                state = state,
+                onInput = onInput,
+                onX = onX,
+                onY = onY,
+                onW = onW,
+                onH = onH,
+                onRound = onRound,
+                onLensK1 = onLensK1,
+                onLensK2 = onLensK2,
+                onLensCx = onLensCx,
+                onLensCy = onLensCy,
+                onLensTiltV = onLensTiltV,
+                onLensTiltH = onLensTiltH,
+                onLensPreset = onLensPreset,
+                onLensReset = onLensReset,
+                onOpenAsIs = onOpenAsIs,
+                onClose = onClose,
+            )
+            CamdTab.SETTINGS -> SettingsTab(
+                state = state,
+                onKeepAvm = onKeepAvm,
+                onShowCloseButton = onShowCloseButton,
+                onTapToClose = onTapToClose,
+            )
+            CamdTab.PRESETS -> PresetsTab(
+                state = state,
+                onX = onX,
+                onY = onY,
+                onW = onW,
+                onH = onH,
+                onRound = onRound,
+                onOpenPreset = onOpenPreset,
+                onClosePreset = onClosePreset,
+                onEditPreset = onEditPreset,
+                onEditCamera = onEditCamera,
+                onDeletePreset = onDeletePreset,
+                onNewPresetName = onNewPresetName,
+                onCreatePreset = onCreatePreset,
+                onEditRotation = onEditRotation,
+                onEditFlipH = onEditFlipH,
+                onEditFlipV = onEditFlipV,
+                onEditCropX = onEditCropX,
+                onEditCropY = onEditCropY,
+                onEditCropW = onEditCropW,
+                onEditCropH = onEditCropH,
+                onSavePreset = onSavePreset,
+                onCancelEditPreset = onCancelEditPreset,
+            )
+            CamdTab.BACKUP -> BackupTab(onExport = onExport, onImport = onImport)
         }
-        SettingSwitch(
-            checked = state.keepAvmStopped,
-            enabled = !state.busy,
-            title = "Держать штатный AVM отключенным",
-            description = "Штатный AVM выключается сразу и остаётся выключенным после перезагрузки. " +
-                "Выключение опции закрывает сырые окна и сразу включает его.",
-            onCheckedChange = onKeepAvm,
-        )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         Text(state.message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         if (state.status.isNotBlank()) {
@@ -782,6 +680,386 @@ private fun CamdScreen(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun CamerasTab(
+    state: CamdUiState,
+    onInput: (Int) -> Unit,
+    onX: (Float) -> Unit,
+    onY: (Float) -> Unit,
+    onW: (Float) -> Unit,
+    onH: (Float) -> Unit,
+    onRound: (Boolean) -> Unit,
+    onLensK1: (Float) -> Unit,
+    onLensK2: (Float) -> Unit,
+    onLensCx: (Float) -> Unit,
+    onLensCy: (Float) -> Unit,
+    onLensTiltV: (Float) -> Unit,
+    onLensTiltH: (Float) -> Unit,
+    onLensPreset: (CamdLensCorrection) -> Unit,
+    onLensReset: () -> Unit,
+    onOpenAsIs: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val input = remember(state.inputId) { KnownInputs.byId(state.inputId) }
+    Text(
+        "Одно окно на камеру. Одиночное нажатие плитки в TBox Monitor открывает его, двойное закрывает. " +
+            "Повторное открытие только двигает окно.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        KnownInputs.all.forEach { camera ->
+            FilterChip(
+                selected = camera.id == state.inputId,
+                onClick = { onInput(camera.id) },
+                label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) }
+            )
+        }
+    }
+    if (input?.heldByAvm == true && !state.keepAvmStopped) {
+        Text(
+            "Этот вход держит штатный AVM. Пока такое окно открыто, AVM будет остановлен.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Окно на экране (предпросмотр)",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        "Эти параметры окна — только для предпросмотра в «Камеры ГУ». В своей программе " +
+            "(плитка, автоматизация, DCL) положение и размер окна настраиваются отдельно.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "Кадр ${input?.width}×${input?.height}",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    FractionSlider("X", state.x, onX)
+    FractionSlider("Y", state.y, onY)
+    FractionSlider("Ширина", state.w, onW)
+    FractionSlider("Высота", state.h, onH)
+    SettingSwitch(
+        checked = state.round,
+        enabled = !state.busy,
+        title = "Круглое окно",
+        description = "Изображение вписанным кругом с прозрачными углами — как «кругляши» слепых зон.",
+        onCheckedChange = onRound,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onOpenAsIs, enabled = !state.busy) {
+            Text("Открыть как есть", style = MaterialTheme.typography.labelLarge)
+        }
+        Button(onClick = onClose, enabled = !state.busy) {
+            Text("Закрыть выбранную", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Визуальная коррекция (на камеру)",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        "Не калибровка объектива и не Brown–Conrady. k1/k2 и сдвиг центра — «рыбий глаз», тилт — перспектива «трапецией». " +
+            "Коррекция одна на камеру, действует всегда — и на предпросмотр, и на пресеты, и на команды других программ.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = state.lens.isIdentity(),
+            onClick = onLensReset,
+            label = { Text("Сброс", style = MaterialTheme.typography.labelLarge) },
+        )
+        FilterChip(
+            selected = state.lens == CamdLensCorrection.PRESET_MILD_BARREL,
+            onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_BARREL) },
+            label = { Text("Лёгкая бочка", style = MaterialTheme.typography.labelLarge) },
+        )
+        FilterChip(
+            selected = state.lens == CamdLensCorrection.PRESET_STRONG_BARREL,
+            onClick = { onLensPreset(CamdLensCorrection.PRESET_STRONG_BARREL) },
+            label = { Text("Сильная бочка", style = MaterialTheme.typography.labelLarge) },
+        )
+        FilterChip(
+            selected = state.lens == CamdLensCorrection.PRESET_MILD_PINCUSHION,
+            onClick = { onLensPreset(CamdLensCorrection.PRESET_MILD_PINCUSHION) },
+            label = { Text("Лёгкая подушка", style = MaterialTheme.typography.labelLarge) },
+        )
+    }
+    RangedSlider("k1", state.lens.k1, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK1)
+    RangedSlider("k2", state.lens.k2, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onLensK2)
+    RangedSlider("Центр X", state.lens.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCx)
+    RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
+    RangedSlider("Тилт В", state.lens.tiltV, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltV)
+    RangedSlider("Тилт Г", state.lens.tiltH, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltH)
+}
+
+@Composable
+private fun SettingsTab(
+    state: CamdUiState,
+    onKeepAvm: (Boolean) -> Unit,
+    onShowCloseButton: (Boolean) -> Unit,
+    onTapToClose: (Boolean) -> Unit,
+) {
+    Text(
+        "Настройки приложения «Камеры ГУ». Действуют на предпросмотр и на все окна, которые открывают " +
+            "другие программы.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "Окна",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    SettingSwitch(
+        checked = state.showCloseButton,
+        enabled = !state.busy,
+        title = "Включить крестик для закрытия окна",
+        description = "Кнопка ✕ в углу каждого окна камеры. Применяется к уже открытым окнам сразу.",
+        onCheckedChange = onShowCloseButton,
+    )
+    SettingSwitch(
+        checked = state.tapToClose,
+        enabled = !state.busy,
+        title = "Закрывать окно при нажатии на него",
+        description = "Нажатие в любом месте окна закрывает его, зона ✕ работает как раньше.",
+        onCheckedChange = onTapToClose,
+    )
+    if (!state.showCloseButton && !state.tapToClose) {
+        Text(
+            "Оба переключателя выключены: окно можно закрыть только командой CLOSE " +
+                "(например, двойным нажатием плитки в TBox Monitor).",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Камеры и AVM",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    SettingSwitch(
+        checked = state.keepAvmStopped,
+        enabled = !state.busy,
+        title = "Держать штатный AVM отключенным",
+        description = "Штатный AVM выключается сразу и остаётся выключенным после перезагрузки. " +
+            "Выключение опции закрывает сырые окна и сразу включает его.",
+        onCheckedChange = onKeepAvm,
+    )
+}
+
+@Composable
+private fun PresetsTab(
+    state: CamdUiState,
+    onX: (Float) -> Unit,
+    onY: (Float) -> Unit,
+    onW: (Float) -> Unit,
+    onH: (Float) -> Unit,
+    onRound: (Boolean) -> Unit,
+    onOpenPreset: (String) -> Unit,
+    onClosePreset: (Int) -> Unit,
+    onEditPreset: (CamdPreset) -> Unit,
+    onEditCamera: (Int) -> Unit,
+    onDeletePreset: (String) -> Unit,
+    onNewPresetName: (String) -> Unit,
+    onCreatePreset: () -> Unit,
+    onEditRotation: (Int) -> Unit,
+    onEditFlipH: (Boolean) -> Unit,
+    onEditFlipV: (Boolean) -> Unit,
+    onEditCropX: (Float) -> Unit,
+    onEditCropY: (Float) -> Unit,
+    onEditCropW: (Float) -> Unit,
+    onEditCropH: (Float) -> Unit,
+    onSavePreset: () -> Unit,
+    onCancelEditPreset: () -> Unit,
+) {
+    Text(
+        "Обрезка, поворот и зеркала хранятся в пресете вместе с камерой-источником. " +
+            "Параметры окна ниже — только для предпросмотра здесь: в своей программе " +
+            "(плитка, автоматизация, DCL) окно задаётся отдельно, а настройки пресета из команды не меняются.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "Окно для предпросмотра",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    FractionSlider("X", state.x, onX)
+    FractionSlider("Y", state.y, onY)
+    FractionSlider("Ширина", state.w, onW)
+    FractionSlider("Высота", state.h, onH)
+    SettingSwitch(
+        checked = state.round,
+        enabled = !state.busy,
+        title = "Круглое окно",
+        description = "Вписанный круг с прозрачными углами. Форма передаётся в команде (shape=circle), как и окно.",
+        onCheckedChange = onRound,
+    )
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Пресеты",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    state.presets.forEach { preset ->
+        val camera = remember(preset.cameraId) { KnownInputs.byId(preset.cameraId) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = preset.name +
+                    " · " + (camera?.title ?: "камера ${preset.cameraId}") +
+                    if (preset.builtin) " (встроенный)" else "",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { onOpenPreset(preset.name) }, enabled = !state.busy) {
+                Text("Открыть", style = MaterialTheme.typography.labelLarge)
+            }
+            TextButton(onClick = { onClosePreset(preset.cameraId) }, enabled = !state.busy) {
+                Text("Закрыть", style = MaterialTheme.typography.labelLarge)
+            }
+            TextButton(onClick = { onEditPreset(preset) }) {
+                Text("Настроить", style = MaterialTheme.typography.labelLarge)
+            }
+            if (!preset.builtin) {
+                TextButton(onClick = { onDeletePreset(preset.name) }) {
+                    Text("Удалить", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OutlinedTextField(
+            value = state.newPresetName,
+            onValueChange = onNewPresetName,
+            label = { Text("имя: a-z 0-9 _") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        Button(onClick = onCreatePreset) {
+            Text("Создать", style = MaterialTheme.typography.labelLarge)
+        }
+    }
+    state.editingPreset?.let { draft ->
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            "Настройка пресета «${draft.name}»" + if (draft.builtin) " (встроенный)" else "",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        val draftCamera = remember(draft.cameraId) { KnownInputs.byId(draft.cameraId) }
+        if (draft.builtin) {
+            Text(
+                "Источник: ${draftCamera?.title ?: "камера ${draft.cameraId}"} (у встроенного не меняется)",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                "Источник (камера)",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                KnownInputs.all.forEach { camera ->
+                    FilterChip(
+                        selected = draft.cameraId == camera.id,
+                        onClick = { onEditCamera(camera.id) },
+                        label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) },
+                    )
+                }
+            }
+        }
+        Text("Поворот", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0, 90, 180, 270).forEach { degrees ->
+                FilterChip(
+                    selected = draft.rotation == degrees,
+                    onClick = { onEditRotation(degrees) },
+                    label = { Text("$degrees°", style = MaterialTheme.typography.labelLarge) },
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = draft.flipH,
+                onClick = { onEditFlipH(!draft.flipH) },
+                label = { Text("Зеркало Г", style = MaterialTheme.typography.labelLarge) },
+            )
+            FilterChip(
+                selected = draft.flipV,
+                onClick = { onEditFlipV(!draft.flipV) },
+                label = { Text("Зеркало В", style = MaterialTheme.typography.labelLarge) },
+            )
+        }
+        Text(
+            "Вырезка — часть кадра после коррекции; растягивается на всё окно.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FractionSlider("Вырезка: слева", draft.crop.x, onEditCropX)
+        FractionSlider("Вырезка: сверху", draft.crop.y, onEditCropY)
+        RangedSlider("Вырезка: ширина", draft.crop.w, CamdCrop.MIN_SIZE, 1f, onEditCropW)
+        RangedSlider("Вырезка: высота", draft.crop.h, CamdCrop.MIN_SIZE, 1f, onEditCropH)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onSavePreset, enabled = !state.busy) {
+                Text("Сохранить", style = MaterialTheme.typography.labelLarge)
+            }
+            Button(onClick = onCancelEditPreset) {
+                Text("Отмена", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupTab(
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    Text(
+        "Экспорт/импорт: коррекции всех камер (включая тилт), все пресеты (свои и изменённые встроенные) " +
+            "и режим AVM одним JSON-файлом.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = onExport) {
+            Text("Экспорт", style = MaterialTheme.typography.labelLarge)
+        }
+        Button(onClick = onImport) {
+            Text("Импорт", style = MaterialTheme.typography.labelLarge)
         }
     }
 }

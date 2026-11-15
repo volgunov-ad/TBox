@@ -282,7 +282,11 @@ class CamdBackupTest {
         CamdLensCorrectionStore.save(prefs, 8, CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f))
         CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90))
         CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0f, 0f, 0.5f, 1f))
-        prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true).apply()
+        prefs.edit()
+            .putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true)
+            .putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, false)
+            .putBoolean(CameraWindows.TAP_TO_CLOSE_KEY, true)
+            .apply()
 
         val json = CamdBackup.exportJson(prefs)
 
@@ -296,6 +300,34 @@ class CamdBackupTest {
         assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
         assertEquals(180, CamdPresetStore.byName(fresh, "front_left")!!.rotation)
         assertTrue(fresh.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false))
+        assertFalse(fresh.getBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, true))
+        assertTrue(fresh.getBoolean(CameraWindows.TAP_TO_CLOSE_KEY, false))
+    }
+
+    @Test
+    fun importKeepsCurrentValuesWhenOptionalFieldsAreAbsent() {
+        val prefs = FakePrefs()
+        prefs.edit()
+            .putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, false)
+            .putBoolean(CameraWindows.TAP_TO_CLOSE_KEY, true)
+            .apply()
+        // Document without the window UI fields (older export).
+        val oldDocument = CamdJson.write(
+            CamdJson.obj(
+                listOf(
+                    "version" to CamdJson.num(1),
+                    "app" to CamdJson.str("camd"),
+                    "corrections" to CamdJson.obj(emptyList()),
+                    "presets" to CamdJson.arr(emptyList()),
+                    "keepAvmStopped" to CamdJson.bool(false),
+                )
+            )
+        )
+        val summary = CamdBackup.importJson(prefs, oldDocument)!!
+        assertEquals(0, summary.corrections)
+        assertFalse(summary.keepAvm)
+        assertFalse(prefs.getBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, true))
+        assertTrue(prefs.getBoolean(CameraWindows.TAP_TO_CLOSE_KEY, false))
     }
 
     @Test

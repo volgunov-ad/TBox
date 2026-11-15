@@ -39,6 +39,21 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
+    fun showCloseButton(): Boolean = prefs.getBoolean(SHOW_CLOSE_BUTTON_KEY, true)
+
+    fun tapToClose(): Boolean = prefs.getBoolean(TAP_TO_CLOSE_KEY, false)
+
+    /** Persists window UI options and applies them to already open windows. */
+    fun setUiOptions(showCloseButton: Boolean, tapToClose: Boolean) = synchronized(lock) {
+        prefs.edit()
+            .putBoolean(SHOW_CLOSE_BUTTON_KEY, showCloseButton)
+            .putBoolean(TAP_TO_CLOSE_KEY, tapToClose)
+            .apply()
+        views.values.forEach { live ->
+            main.post { live.applyUiOptions(showCloseButton, tapToClose) }
+        }
+    }
+
     fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED_KEY, false)
 
     /** Stop AVMapp at startup and do not start it when the last surround window closes. */
@@ -425,6 +440,8 @@ class CameraWindows(private val context: Context) {
         val picture: TextureView = TextureView(context)
         val caption: TextView = TextView(context)
         val params: WindowManager.LayoutParams
+        private val closeButton: TextView
+        private var tapToCloseEnabled: Boolean = prefs.getBoolean(TAP_TO_CLOSE_KEY, false)
         private val renderer: UyvyRenderer
 
         init {
@@ -446,14 +463,14 @@ class CameraWindows(private val context: Context) {
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER
             ))
-            val close = TextView(context)
-            close.text = "✕"
-            close.setTextColor(Color.WHITE)
-            close.gravity = Gravity.CENTER
-            close.textSize = 36f
-            close.setShadowLayer(10f, 0f, 0f, Color.BLACK)
-            close.setBackgroundColor(Color.TRANSPARENT)
-            close.setOnClickListener {
+            closeButton = TextView(context)
+            closeButton.text = "✕"
+            closeButton.setTextColor(Color.WHITE)
+            closeButton.gravity = Gravity.CENTER
+            closeButton.textSize = 36f
+            closeButton.setShadowLayer(10f, 0f, 0f, Color.BLACK)
+            closeButton.setBackgroundColor(Color.TRANSPARENT)
+            closeButton.setOnClickListener {
                 closeExecutor.execute { this@CameraWindows.close(id) }
             }
             val px = TypedValue.applyDimension(
@@ -463,7 +480,17 @@ class CameraWindows(private val context: Context) {
             ).toInt()
             val closeParams = FrameLayout.LayoutParams(px, px, Gravity.END or Gravity.TOP)
             closeParams.setMargins(0, 8, 8, 0)
-            root.addView(close, closeParams)
+            root.addView(closeButton, closeParams)
+            // Tap anywhere in the window (the ✕ consumes its own touches first).
+            root.setOnClickListener {
+                if (tapToCloseEnabled) {
+                    closeExecutor.execute { this@CameraWindows.close(id) }
+                }
+            }
+            applyUiOptions(
+                prefs.getBoolean(SHOW_CLOSE_BUTTON_KEY, true),
+                prefs.getBoolean(TAP_TO_CLOSE_KEY, false),
+            )
             params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -524,6 +551,11 @@ class CameraWindows(private val context: Context) {
             renderer.setShape(value)
         }
 
+        fun applyUiOptions(showCloseButton: Boolean, tapToClose: Boolean) {
+            closeButton.visibility = if (showCloseButton) View.VISIBLE else View.GONE
+            tapToCloseEnabled = tapToClose
+        }
+
         fun start() {
             renderer.start()
         }
@@ -535,5 +567,7 @@ class CameraWindows(private val context: Context) {
 
     companion object {
         const val KEEP_AVM_STOPPED_KEY = "keep_avm_stopped"
+        const val SHOW_CLOSE_BUTTON_KEY = "show_close_button"
+        const val TAP_TO_CLOSE_KEY = "tap_to_close"
     }
 }

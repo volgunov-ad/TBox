@@ -43,6 +43,12 @@ object CamdBackup {
                     "keepAvmStopped" to CamdJson.bool(
                         prefs.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false)
                     ),
+                    "showCloseButton" to CamdJson.bool(
+                        prefs.getBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, true)
+                    ),
+                    "tapToClose" to CamdJson.bool(
+                        prefs.getBoolean(CameraWindows.TAP_TO_CLOSE_KEY, false)
+                    ),
                 )
             )
         )
@@ -103,6 +109,13 @@ object CamdBackup {
             )
         }
         prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, keepAvm).apply()
+        // Optional fields: files from older exports keep the current values.
+        root["showCloseButton"]?.asBool()?.let {
+            prefs.edit().putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, it).apply()
+        }
+        root["tapToClose"]?.asBool()?.let {
+            prefs.edit().putBoolean(CameraWindows.TAP_TO_CLOSE_KEY, it).apply()
+        }
         return CamdImportSummary(
             corrections = corrections.size,
             userPresets = users.size,
