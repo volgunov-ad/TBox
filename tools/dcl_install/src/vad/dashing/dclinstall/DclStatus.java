@@ -68,6 +68,7 @@ final class DclStatus {
         rows.add(row("Голосовой помощник скрыт", hidden(packages, InstallPlan.VOICE), true, ""));
         rows.add(row("Клиент голоса скрыт", hidden(packages, InstallPlan.SPEECH_CLIENT), true, ""));
         rows.add(row("Электронное руководство скрыто", hidden(packages, InstallPlan.MANUAL), true, ""));
+        rows.add(row("Обработчик USB скрыт", hidden(packages, InstallPlan.USB_HANDLER), true, ""));
         return rows;
     }
 

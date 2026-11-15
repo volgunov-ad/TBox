@@ -17,6 +17,7 @@ final class InstallPlan {
     static final String VOICE = "com.iflytek.cutefly.speechclient.hmi";
     static final String SPEECH_CLIENT = "com.mengbo.speechclient";
     static final String MANUAL = "com.mengbo.electronicmanual";
+    static final String USB_HANDLER = "android.car.usb.handler";
 
     static final String PAYLOAD_DIR = "/sdcard/dcl_install";
     static final String LOG_FILE = "/sdcard/dcl_install_log.txt";
@@ -64,6 +65,21 @@ final class InstallPlan {
         }
         sh.append("echo STEP install_dcl\n");
         sh.append("pm install -r -d -g -t ").append(q(dclApkPath)).append(" || fail install_dcl\n");
+        appendSetupBody(sh);
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    /** Everything from toScript except uninstall/install of the DCL APK, for an already installed launcher. */
+    String toSetupScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        appendSetupBody(sh);
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    private void appendSetupBody(StringBuilder sh) {
         appendGrants(sh);
         sh.append("echo STEP home\n");
         sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
@@ -79,8 +95,6 @@ final class InstallPlan {
         sh.append("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | grep -F ");
         sh.append(q(DCL_PACKAGE)).append(" >/dev/null || fail home_check\n");
         appendCompile(sh);
-        finishScript(sh, true);
-        return sh.toString();
     }
 
     String toGrantScript() {
@@ -178,6 +192,7 @@ final class InstallPlan {
         unhide(sh, VOICE);
         unhide(sh, SPEECH_CLIENT);
         unhide(sh, MANUAL);
+        unhide(sh, USB_HANDLER);
         sh.append("cmd package set-home-activity ").append(q("com.wt.launcher3/.MainActivity")).append(" || echo WARN home\n");
         sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
         sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
@@ -257,6 +272,7 @@ final class InstallPlan {
         sh.append("echo STEP hide\n");
         sh.append("pm enable ").append(LAUNCHER).append(" || fail enable_launcher\n");
         sh.append("pm hide ").append(LAUNCHER).append(" || fail hide_launcher\n");
+        sh.append("pm hide ").append(USB_HANDLER).append(" || fail hide_usb_handler\n");
         hideIf(sh, hideSystemUi, SYSTEMUI);
         hideIf(sh, hideIottube, IOTTUBE);
         hideIf(sh, hideVoice, VOICE);

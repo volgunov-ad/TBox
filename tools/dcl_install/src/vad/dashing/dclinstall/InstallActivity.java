@@ -52,6 +52,7 @@ public class InstallActivity extends Activity {
     private CheckBox manual;
     private Button install;
     private Button grantPermissions;
+    private Button setupInstalled;
     private Button hideSelected;
     private Button changeWallpaper;
     private Button compileDcl;
@@ -147,7 +148,9 @@ public class InstallActivity extends Activity {
                 "Штатный лаунчер — рабочий стол с карточками: карта, музыка, климат, ADAS. "
                         + "Его нужно именно скрыть. Если только выключить, процесс всё равно стартует. "
                         + "Кнопка HOME после этого открывает DCL. "
-                        + "Климат, телефон, камера и настройки автомобиля остаются отдельными программами."));
+                        + "Климат, телефон, камера и настройки автомобиля остаются отдельными программами. "
+                        + "Рядом скрывается и системный обработчик USB: при загрузке с уже вставленной флешкой "
+                        + "он открывает чёрный экран поверх лаунчера."));
         column.addView(heading("Скрыть по желанию"));
         column.addView(note("Снятая галочка пакет не трогает."));
         systemUi = check("System UI", true);
@@ -190,6 +193,13 @@ public class InstallActivity extends Activity {
                 onGrantClicked();
             }
         });
+        setupInstalled = button("Настроить установленный DCL");
+        setupInstalled.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onSetupClicked();
+            }
+        });
         hideSelected = button("Скрыть выбранные приложения");
         hideSelected.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -200,6 +210,7 @@ public class InstallActivity extends Activity {
         LinearLayout.LayoutParams extraParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(64));
         extraParams.topMargin = dp(8);
+        column.addView(setupInstalled, extraParams);
         column.addView(grantPermissions, extraParams);
         column.addView(hideSelected, extraParams);
         changeWallpaper = button("Поменять картинку обоев");
@@ -227,15 +238,18 @@ public class InstallActivity extends Activity {
         });
         column.addView(restoreStock, extraParams);
         column.addView(note(
-                "Эти кнопки нужны, если DCL уже установлен. "
+                "Кнопка «Настроить установленный DCL» повторяет всю настройку без установки APK: "
+                        + "разрешения, кнопка HOME, программа флешек, обои, скрытие и компиляция, "
+                        + "затем перезагрузка. "
+                        + "Остальные кнопки нужны по отдельности. "
                         + "Разрешения применяются сразу. "
                         + "Картинка обоев берётся из текущего выбора: по умолчанию, чёрный фон или свой файл. "
                         + "Компиляция собирает код лаунчера целиком и занимает несколько минут. "
                         + "На этом ГУ сама она не запускается, поэтому после установки лаунчер тормозит. "
                         + "Скрытие останавливает постоянные пакеты после перезагрузки. "
-                        + "Штатный лаунчер скрывается всегда, остальные пакеты — по галочкам. "
+                        + "Штатный лаунчер и системный обработчик USB скрываются всегда, остальные пакеты — по галочкам. "
                         + "Возврат удаляет DCL, программу флешек и старые пустые обои, "
-                        + "показывает штатный лаунчер, System UI, голос, IoT Tube и руководство "
+                        + "показывает штатный лаунчер, System UI, обработчик USB, голос, IoT Tube и руководство "
                         + "и ставит штатные обои. Сама программа установки остаётся."));
 
         log = text("", 20, 0xFFD5DDE4);
@@ -396,6 +410,7 @@ public class InstallActivity extends Activity {
         refreshStatus();
         install.setEnabled(false);
         if (grantPermissions != null) grantPermissions.setEnabled(false);
+        if (setupInstalled != null) setupInstalled.setEnabled(false);
         if (hideSelected != null) hideSelected.setEnabled(false);
         if (changeWallpaper != null) changeWallpaper.setEnabled(false);
         if (compileDcl != null) compileDcl.setEnabled(false);
@@ -461,6 +476,47 @@ public class InstallActivity extends Activity {
         startRoot(currentPlan(false).toGrantScript());
     }
 
+    private void onSetupClicked() {
+        if (running || !isA9()) return;
+        if (installedDcl() == null) {
+            log.setText("DCL ещё не установлен.");
+            return;
+        }
+        expectReboot = true;
+        setBusy(true);
+        setupInstalled.setText("Настройка… ГУ перезагрузится");
+        log.setText("Подготовка…");
+        final boolean black = blackWallpaper.isChecked();
+        final boolean custom = customWallpaper.isChecked();
+        final String imagePath = customImagePath;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
+                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
+                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
+                    File dir = new File(InstallPlan.PAYLOAD_DIR);
+                    if (!dir.exists() && !dir.mkdirs()) {
+                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+                    }
+                    copyAsset("usbmount.apk", new File(dir, "usbmount.apk"));
+                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
+                    arm(currentPlan(false).toSetupScript());
+                    poll();
+                } catch (Exception e) {
+                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            failUi(message);
+                        }
+                    });
+                }
+            }
+        }, "dcl-setup").start();
+    }
+
     private void onHideClicked() {
         if (running || !isA9()) return;
         if (installedDcl() == null) {
@@ -490,8 +546,9 @@ public class InstallActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("Вернуть штатное состояние")
                 .setMessage("Удалить DCL, программу флешек и пустые обои? "
-                        + "Штатный лаунчер, System UI, голосовой помощник, IoT Tube и руководство "
-                        + "снова появятся. Головное устройство перезагрузится. "
+                        + "Штатный лаунчер, System UI, системный обработчик USB, "
+                        + "голосовой помощник, IoT Tube и руководство снова появятся. "
+                        + "Головное устройство перезагрузится. "
                         + "TBox Monitor и эта программа установки останутся.")
                 .setPositiveButton("Удалить и вернуть", new android.content.DialogInterface.OnClickListener() {
                     @Override
@@ -708,6 +765,7 @@ public class InstallActivity extends Activity {
             status.setTextColor(0xFFE06A6A);
             install.setEnabled(false);
             if (grantPermissions != null) grantPermissions.setEnabled(false);
+            if (setupInstalled != null) setupInstalled.setEnabled(false);
             if (hideSelected != null) hideSelected.setEnabled(false);
             if (changeWallpaper != null) changeWallpaper.setEnabled(false);
             if (compileDcl != null) compileDcl.setEnabled(false);
@@ -723,6 +781,10 @@ public class InstallActivity extends Activity {
         }
         install.setEnabled(!running && canInstall());
         install.setText("Установить и перезагрузить");
+        if (setupInstalled != null) {
+            setupInstalled.setEnabled(!running && installed != null && wallpaperChosen());
+            setupInstalled.setText("Настроить установленный DCL");
+        }
         if (grantPermissions != null) {
             grantPermissions.setEnabled(!running && installed != null);
             grantPermissions.setText("Выдать разрешения");
