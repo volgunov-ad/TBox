@@ -9,3 +9,6 @@ void relay_ble_start(void);
 
 /** Kick a state report (e.g. after a pulse expiry outside the BLE task). */
 void relay_ble_kick_state(void);
+
+/** Paired and subscribed to companion notifications right now. */
+bool relay_ble_online(void);

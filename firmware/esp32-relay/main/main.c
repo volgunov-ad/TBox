@@ -15,6 +15,7 @@
 #include "nvs_flash.h"
 
 #include "relay_ble.h"
+#include "relay_led.h"
 #include "relay_logic.h"
 #include "relay_store.h"
 #include "sdkconfig.h"
@@ -121,6 +122,9 @@ void app_main(void)
         };
         gpio_config(&cfg);
     }
+    relay_led_init();
+    ESP_LOGI(TAG, "btn GPIO %d (%s), led GPIO %d", CONFIG_RELAY_BTN_GPIO,
+             CONFIG_RELAY_BTN_ACTIVE_LOW ? "to GND" : "to VCC", CONFIG_RELAY_LED_GPIO);
 
     ble_init();
 
@@ -134,14 +138,20 @@ void app_main(void)
             relay_ble_kick_state();
         }
         if (!relay_logic_pulse_active()) state_sent = false;
+        relay_led_mode_t led = RELAY_LED_ON;
         if (reset_held()) {
             if (hold_start == 0) hold_start = now_ms();
-            else if (now_ms() - hold_start >= 5000u) {
+            led = RELAY_LED_HOLD;
+            if (now_ms() - hold_start >= 5000u) {
                 relay_store_factory_reset();
             }
         } else {
             hold_start = 0;
+            if (!relay_store_paired()) led = RELAY_LED_FAST;
+            else if (!relay_ble_online()) led = RELAY_LED_SLOW;
         }
+        relay_led_set_mode(led);
+        relay_led_poll();
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

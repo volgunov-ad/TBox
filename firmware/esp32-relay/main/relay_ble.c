@@ -376,3 +376,8 @@ void relay_ble_kick_state(void)
 {
     s_state_pending = true;
 }
+
+bool relay_ble_online(void)
+{
+    return s_conn != BLE_HS_CONN_HANDLE_NONE && s_subscribed;
+}
