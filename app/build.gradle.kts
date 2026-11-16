@@ -35,8 +35,8 @@ android {
         applicationId = "vad.dashing.tbox"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10026
-        versionName = "1.1.7"
+        versionCode = 10027
+        versionName = "1.1.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField(
