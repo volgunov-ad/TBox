@@ -97,7 +97,11 @@ class CameraWindows(private val context: Context) {
         flipH: Boolean,
         flipV: Boolean,
         crop: CamdCrop,
-    ): Boolean = CamdPresetStore.saveBuiltinOverride(prefs, name, rotation, flipH, flipV, crop)
+        defaultCorrection: Boolean,
+        correction: CamdLensCorrection,
+    ): Boolean = CamdPresetStore.saveBuiltinOverride(
+        prefs, name, rotation, flipH, flipV, crop, defaultCorrection, correction,
+    )
 
     fun deleteUserPreset(name: String): Boolean = CamdPresetStore.deleteUser(prefs, name)
 
@@ -153,6 +157,10 @@ class CameraWindows(private val context: Context) {
             flipH = preset.flipH,
             flipV = preset.flipV,
             crop = if (preset.crop.isIdentity()) null else preset.crop,
+            // defaultCorrection=true keeps the null override: the window then reads
+            // the current per-camera correction at draw time. false freezes the
+            // values stored in the preset.
+            lensOverride = if (preset.defaultCorrection) null else preset.correction,
         )
     }
 
@@ -301,11 +309,13 @@ class CameraWindows(private val context: Context) {
         main.post {
             try {
                 val existing = views[command.inputId]
+                val lens = command.lensOverride
+                    ?: CamdLensCorrectionStore.load(prefs, command.inputId)
                 if (existing != null) {
                     place(existing.params, command)
                     existing.setRotation(command.rotation)
                     existing.setFlip(command.flipH, command.flipV)
-                    existing.setLensCorrection(CamdLensCorrectionStore.load(prefs, command.inputId))
+                    existing.setLensCorrection(lens)
                     existing.setCrop(command.crop ?: CamdCrop.IDENTITY)
                     existing.setShape(command.shape)
                     windowManager().updateViewLayout(existing.root, existing.params)
@@ -316,7 +326,7 @@ class CameraWindows(private val context: Context) {
                         command.rotation,
                         command.flipH,
                         command.flipV,
-                        CamdLensCorrectionStore.load(prefs, command.inputId),
+                        lens,
                         command.crop ?: CamdCrop.IDENTITY,
                         command.shape,
                     )

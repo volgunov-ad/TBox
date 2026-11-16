@@ -159,6 +159,15 @@ class MainActivity : ComponentActivity() {
                         onEditRotation = controller::setEditRotation,
                         onEditFlipH = { controller.setEditFlip(horizontal = it, vertical = controller.state.value.editingPreset?.flipV ?: false) },
                         onEditFlipV = { controller.setEditFlip(horizontal = controller.state.value.editingPreset?.flipH ?: false, vertical = it) },
+                        onEditDefaultCorrection = controller::setEditDefaultCorrection,
+                        onEditCorrK1 = { controller.setEditCorrectionField(k1 = it) },
+                        onEditCorrK2 = { controller.setEditCorrectionField(k2 = it) },
+                        onEditCorrCx = { controller.setEditCorrectionField(cx = it) },
+                        onEditCorrCy = { controller.setEditCorrectionField(cy = it) },
+                        onEditCorrTiltV = { controller.setEditCorrectionField(tiltV = it) },
+                        onEditCorrTiltH = { controller.setEditCorrectionField(tiltH = it) },
+                        onEditCorrPreset = controller::setEditCorrectionPreset,
+                        onResetCorr = controller::resetEditCorrection,
                         onEditCropX = { controller.setEditCropField(x = it) },
                         onEditCropY = { controller.setEditCropField(y = it) },
                         onEditCropW = { controller.setEditCropField(w = it) },
@@ -219,7 +228,16 @@ class CamdController(
     private val poll = Thread {
         while (!Thread.currentThread().isInterrupted) {
             if (!_state.value.busy) {
+                // All displayed settings are re-read every second so changes made
+                // elsewhere (TBox Monitor AVM toggle, import, another UI instance)
+                // show up immediately. Draft editingPreset is never touched here.
+                val inputId = _state.value.inputId
                 _state.value = _state.value.copy(
+                    keepAvmStopped = windows.keepAvmStopped(),
+                    showCloseButton = windows.showCloseButton(),
+                    tapToClose = windows.tapToClose(),
+                    lens = windows.lensCorrection(inputId),
+                    presets = windows.presets(),
                     status = windows.status(),
                     log = engine.logTail()
                 )
@@ -480,6 +498,49 @@ class CamdController(
         updateEdit { it.copy(flipH = horizontal, flipV = vertical) }
     }
 
+    /** Disabling default corrections prefills the draft with the camera's current values. */
+    fun setEditDefaultCorrection(enabled: Boolean) {
+        val draft = _state.value.editingPreset ?: return
+        val prefilled = if (enabled) {
+            draft
+        } else {
+            draft.copy(correction = windows.lensCorrection(draft.cameraId))
+        }
+        _state.value = _state.value.copy(editingPreset = prefilled.copy(defaultCorrection = enabled))
+    }
+
+    fun setEditCorrectionField(
+        k1: Float = _state.value.editingPreset?.correction?.k1 ?: 0f,
+        k2: Float = _state.value.editingPreset?.correction?.k2 ?: 0f,
+        cx: Float = _state.value.editingPreset?.correction?.cx ?: 0f,
+        cy: Float = _state.value.editingPreset?.correction?.cy ?: 0f,
+        tiltV: Float = _state.value.editingPreset?.correction?.tiltV ?: 0f,
+        tiltH: Float = _state.value.editingPreset?.correction?.tiltH ?: 0f,
+    ) {
+        updateEdit {
+            it.copy(
+                correction = CamdLensCorrection.clamp(
+                    CamdLensCorrection(
+                        k1 = k1,
+                        k2 = k2,
+                        cx = cx,
+                        cy = cy,
+                        tiltV = tiltV,
+                        tiltH = tiltH,
+                    )
+                )
+            )
+        }
+    }
+
+    fun setEditCorrectionPreset(value: CamdLensCorrection) {
+        updateEdit { it.copy(correction = value) }
+    }
+
+    fun resetEditCorrection() {
+        updateEdit { it.copy(correction = CamdLensCorrection.IDENTITY) }
+    }
+
     fun setEditCropField(
         x: Float = _state.value.editingPreset?.crop?.x ?: 0f,
         y: Float = _state.value.editingPreset?.crop?.y ?: 0f,
@@ -497,7 +558,16 @@ class CamdController(
         val draft = _state.value.editingPreset ?: return
         io.execute {
             val error = if (draft.builtin) {
-                if (windows.saveBuiltinPreset(draft.name, draft.rotation, draft.flipH, draft.flipV, draft.crop)) {
+                if (windows.saveBuiltinPreset(
+                        draft.name,
+                        draft.rotation,
+                        draft.flipH,
+                        draft.flipV,
+                        draft.crop,
+                        draft.defaultCorrection,
+                        draft.correction,
+                    )
+                ) {
                     null
                 } else {
                     "Не удалось сохранить встроенный пресет"
@@ -525,8 +595,18 @@ class CamdController(
                     "${Math.round(crop.w * 100)}×${Math.round(crop.h * 100)}%"
             )
         }
-        return if (parts.isEmpty()) "полный кадр" else parts.joinToString(", ")
+        parts.add(
+            if (preset.defaultCorrection) {
+                "коррекции по умолчанию"
+            } else {
+                val c = preset.correction
+                "коррекции свои (k1 ${fmt(c.k1)}, k2 ${fmt(c.k2)}, тилт ${fmt(c.tiltV)}/${fmt(c.tiltH)})"
+            }
+        )
+        return parts.joinToString(", ")
     }
+
+    private fun fmt(value: Float): String = String.format(Locale.US, "%.2f", value)
 
     fun deletePreset(name: String) {
         io.execute {
@@ -588,6 +668,15 @@ private fun CamdScreen(
     onEditRotation: (Int) -> Unit,
     onEditFlipH: (Boolean) -> Unit,
     onEditFlipV: (Boolean) -> Unit,
+    onEditDefaultCorrection: (Boolean) -> Unit,
+    onEditCorrK1: (Float) -> Unit,
+    onEditCorrK2: (Float) -> Unit,
+    onEditCorrCx: (Float) -> Unit,
+    onEditCorrCy: (Float) -> Unit,
+    onEditCorrTiltV: (Float) -> Unit,
+    onEditCorrTiltH: (Float) -> Unit,
+    onEditCorrPreset: (CamdLensCorrection) -> Unit,
+    onResetCorr: () -> Unit,
     onEditCropX: (Float) -> Unit,
     onEditCropY: (Float) -> Unit,
     onEditCropW: (Float) -> Unit,
@@ -667,6 +756,15 @@ private fun CamdScreen(
                 onEditRotation = onEditRotation,
                 onEditFlipH = onEditFlipH,
                 onEditFlipV = onEditFlipV,
+                onEditDefaultCorrection = onEditDefaultCorrection,
+                onEditCorrK1 = onEditCorrK1,
+                onEditCorrK2 = onEditCorrK2,
+                onEditCorrCx = onEditCorrCx,
+                onEditCorrCy = onEditCorrCy,
+                onEditCorrTiltV = onEditCorrTiltV,
+                onEditCorrTiltH = onEditCorrTiltH,
+                onEditCorrPreset = onEditCorrPreset,
+                onResetCorr = onResetCorr,
                 onEditCropX = onEditCropX,
                 onEditCropY = onEditCropY,
                 onEditCropW = onEditCropW,
@@ -947,6 +1045,15 @@ private fun PresetsTab(
     onEditRotation: (Int) -> Unit,
     onEditFlipH: (Boolean) -> Unit,
     onEditFlipV: (Boolean) -> Unit,
+    onEditDefaultCorrection: (Boolean) -> Unit,
+    onEditCorrK1: (Float) -> Unit,
+    onEditCorrK2: (Float) -> Unit,
+    onEditCorrCx: (Float) -> Unit,
+    onEditCorrCy: (Float) -> Unit,
+    onEditCorrTiltV: (Float) -> Unit,
+    onEditCorrTiltH: (Float) -> Unit,
+    onEditCorrPreset: (CamdLensCorrection) -> Unit,
+    onResetCorr: () -> Unit,
     onEditCropX: (Float) -> Unit,
     onEditCropY: (Float) -> Unit,
     onEditCropW: (Float) -> Unit,
@@ -1084,6 +1191,55 @@ private fun PresetsTab(
                 onClick = { onEditFlipV(!draft.flipV) },
                 label = { Text("Зеркало В", style = MaterialTheme.typography.labelLarge) },
             )
+        }
+        SettingSwitch(
+            checked = draft.defaultCorrection,
+            enabled = !state.busy,
+            title = "Коррекции изображения по умолчанию",
+            description = "Включено — применяются коррекции камеры-источника (вкладка «Камеры»). " +
+                "Выключено — у пресета свои коррекции, настройки камеры для него не используются.",
+            onCheckedChange = onEditDefaultCorrection,
+        )
+        if (draft.defaultCorrection) {
+            Text(
+                "Используются коррекции камеры " +
+                    "${draftCamera?.title ?: "камера ${draft.cameraId}"} " +
+                    "с вкладки «Камеры». Правка здесь недоступна.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = draft.correction.isIdentity(),
+                    onClick = onResetCorr,
+                    label = { Text("Сброс", style = MaterialTheme.typography.labelLarge) },
+                )
+                FilterChip(
+                    selected = draft.correction == CamdLensCorrection.PRESET_MILD_BARREL,
+                    onClick = { onEditCorrPreset(CamdLensCorrection.PRESET_MILD_BARREL) },
+                    label = { Text("Лёгкая бочка", style = MaterialTheme.typography.labelLarge) },
+                )
+                FilterChip(
+                    selected = draft.correction == CamdLensCorrection.PRESET_STRONG_BARREL,
+                    onClick = { onEditCorrPreset(CamdLensCorrection.PRESET_STRONG_BARREL) },
+                    label = { Text("Сильная бочка", style = MaterialTheme.typography.labelLarge) },
+                )
+                FilterChip(
+                    selected = draft.correction == CamdLensCorrection.PRESET_MILD_PINCUSHION,
+                    onClick = { onEditCorrPreset(CamdLensCorrection.PRESET_MILD_PINCUSHION) },
+                    label = { Text("Лёгкая подушка", style = MaterialTheme.typography.labelLarge) },
+                )
+            }
+            RangedSlider("k1", draft.correction.k1, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onEditCorrK1)
+            RangedSlider("k2", draft.correction.k2, CamdLensCorrection.K_MIN, CamdLensCorrection.K_MAX, onEditCorrK2)
+            RangedSlider("Центр X", draft.correction.cx, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onEditCorrCx)
+            RangedSlider("Центр Y", draft.correction.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onEditCorrCy)
+            RangedSlider("Тилт В", draft.correction.tiltV, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onEditCorrTiltV)
+            RangedSlider("Тилт Г", draft.correction.tiltH, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onEditCorrTiltH)
         }
         Text(
             "Вырезка — часть кадра после коррекции; растягивается на всё окно.",

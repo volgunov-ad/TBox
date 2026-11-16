@@ -17,6 +17,8 @@ sealed class CamdCommand {
         val crop: CamdCrop? = null,
         val presetName: String? = null,
         val shape: CamdShape = CamdShape.RECT,
+        /** Set internally when a preset carries its own corrections (never parsed from the wire). */
+        val lensOverride: CamdLensCorrection? = null,
     ) : CamdCommand()
 
     data object CloseAll : CamdCommand()

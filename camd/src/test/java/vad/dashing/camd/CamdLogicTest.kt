@@ -245,9 +245,19 @@ class CamdPresetStoreTest {
         val all = CamdPresetStore.all(prefs)
         assertEquals(15, all.size)
         assertTrue(all.all { it.builtin })
+        assertTrue(all.all { it.defaultCorrection })
         assertEquals(CamdCrop(0f, 0f, 0.5f, 1f), CamdPresetStore.byName(prefs, "front_left")!!.crop)
         assertTrue(
-            CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0.1f, 0.2f, 0.8f, 0.7f))
+            CamdPresetStore.saveBuiltinOverride(
+                prefs,
+                "front_left",
+                180,
+                true,
+                false,
+                CamdCrop(0.1f, 0.2f, 0.8f, 0.7f),
+                defaultCorrection = false,
+                correction = CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f),
+            )
         )
         val edited = CamdPresetStore.byName(prefs, "front_left")!!
         assertEquals(180, edited.rotation)
@@ -255,8 +265,12 @@ class CamdPresetStoreTest {
         assertFalse(edited.flipV)
         // Crop must persist too: the override value differs from the built-in default.
         assertEquals(CamdCrop(0.1f, 0.2f, 0.8f, 0.7f), edited.crop)
+        assertFalse(edited.defaultCorrection)
+        assertEquals(CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f), edited.correction)
         assertEquals(0, CamdPresetStore.byName(prefs, "front_right")!!.rotation)
-        assertEquals(false, CamdPresetStore.saveBuiltinOverride(prefs, "nope", 0, false, false, CamdCrop.IDENTITY))
+        assertEquals(false, CamdPresetStore.saveBuiltinOverride(
+            prefs, "nope", 0, false, false, CamdCrop.IDENTITY, true, CamdLensCorrection.IDENTITY,
+        ))
     }
 
     @Test
@@ -269,11 +283,38 @@ class CamdPresetStoreTest {
         val saved = CamdPresetStore.byName(prefs, "my_corner")!!
         assertEquals(4, saved.cameraId)
         assertFalse(saved.builtin)
-        assertNull(CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 5)))
-        assertEquals(5, CamdPresetStore.byName(prefs, "my_corner")!!.cameraId)
+        assertTrue(saved.defaultCorrection)
+        assertNull(
+            CamdPresetStore.saveUser(
+                prefs,
+                CamdPreset(
+                    "my_corner",
+                    5,
+                    defaultCorrection = false,
+                    correction = CamdLensCorrection(k2 = 0.1f, cx = 0.05f),
+                ),
+            )
+        )
+        val edited = CamdPresetStore.byName(prefs, "my_corner")!!
+        assertEquals(5, edited.cameraId)
+        assertFalse(edited.defaultCorrection)
+        assertEquals(CamdLensCorrection(k2 = 0.1f, cx = 0.05f), edited.correction)
         assertTrue(CamdPresetStore.deleteUser(prefs, "my_corner"))
         assertEquals(null, CamdPresetStore.byName(prefs, "my_corner"))
         assertFalse(CamdPresetStore.deleteUser(prefs, "my_corner"))
+    }
+
+    @Test
+    fun decodePresetsSavedWithoutCorrectionFieldsDefaultToCameraCorrections() {
+        val legacy = CamdJson.obj(
+            listOf(
+                "name" to CamdJson.str("old_entry"),
+                "camera" to CamdJson.num(4),
+            )
+        )
+        val decoded = CamdPresetStore.decodePreset(legacy, builtinDefault = false)!!
+        assertTrue(decoded.defaultCorrection)
+        assertEquals(CamdLensCorrection.IDENTITY, decoded.correction)
     }
 }
 
@@ -283,7 +324,16 @@ class CamdBackupTest {
         val prefs = FakePrefs()
         CamdLensCorrectionStore.save(prefs, 8, CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f))
         CamdPresetStore.saveUser(prefs, CamdPreset("my_corner", 4, rotation = 90))
-        CamdPresetStore.saveBuiltinOverride(prefs, "front_left", 180, true, false, CamdCrop(0f, 0f, 0.5f, 1f))
+        CamdPresetStore.saveBuiltinOverride(
+            prefs,
+            "front_left",
+            180,
+            true,
+            false,
+            CamdCrop(0f, 0f, 0.5f, 1f),
+            defaultCorrection = false,
+            correction = CamdLensCorrection(k1 = -0.2f),
+        )
         prefs.edit()
             .putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, true)
             .putBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, false)

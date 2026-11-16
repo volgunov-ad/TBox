@@ -106,6 +106,8 @@ object CamdBackup {
                 it.flipH,
                 it.flipV,
                 it.crop,
+                it.defaultCorrection,
+                it.correction,
             )
         }
         prefs.edit().putBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, keepAvm).apply()

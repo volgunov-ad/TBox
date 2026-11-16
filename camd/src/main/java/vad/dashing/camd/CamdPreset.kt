@@ -6,6 +6,9 @@ import android.content.SharedPreferences
  * Named rot / flip / crop bundle for one camera. Built-ins are editable but never
  * deleted or renamed; user presets are freely managed. The name is the API address
  * (OPEN preset=<name>), so names are globally unique across all cameras.
+ *
+ * defaultCorrection = true resolves lens corrections from the source camera prefs
+ * at OPEN time; false uses the correction values frozen inside the preset.
  */
 data class CamdPreset(
     val name: String,
@@ -14,6 +17,8 @@ data class CamdPreset(
     val flipH: Boolean = false,
     val flipV: Boolean = false,
     val crop: CamdCrop = CamdCrop.IDENTITY,
+    val defaultCorrection: Boolean = true,
+    val correction: CamdLensCorrection = CamdLensCorrection.IDENTITY,
     val builtin: Boolean = false,
 ) {
     companion object {
@@ -65,6 +70,8 @@ object CamdPresetStore {
                     flipH = saved.flipH,
                     flipV = saved.flipV,
                     crop = saved.crop,
+                    defaultCorrection = saved.defaultCorrection,
+                    correction = saved.correction,
                 )
             } ?: definition
         }
@@ -85,6 +92,7 @@ object CamdPresetStore {
         val entry = preset.copy(
             rotation = CamdPreset.normalizeRotation(preset.rotation),
             crop = CamdCrop.clamp(preset.crop),
+            correction = CamdLensCorrection.clamp(preset.correction),
             builtin = false,
         )
         val stored = readStored(prefs)
@@ -110,6 +118,8 @@ object CamdPresetStore {
         flipH: Boolean,
         flipV: Boolean,
         crop: CamdCrop,
+        defaultCorrection: Boolean,
+        correction: CamdLensCorrection,
     ): Boolean {
         val definition = CamdBuiltinPresets.byName(name) ?: return false
         val entry = definition.copy(
@@ -117,6 +127,8 @@ object CamdPresetStore {
             flipH = flipH,
             flipV = flipV,
             crop = CamdCrop.clamp(crop),
+            defaultCorrection = defaultCorrection,
+            correction = CamdLensCorrection.clamp(correction),
         )
         val stored = readStored(prefs)
         val overrides = stored.overrides.filterNot { it.name == name } + entry
@@ -135,6 +147,13 @@ object CamdPresetStore {
             "cropY" to CamdJson.num(preset.crop.y),
             "cropW" to CamdJson.num(preset.crop.w),
             "cropH" to CamdJson.num(preset.crop.h),
+            "defCorr" to CamdJson.bool(preset.defaultCorrection),
+            "corrK1" to CamdJson.num(preset.correction.k1),
+            "corrK2" to CamdJson.num(preset.correction.k2),
+            "corrCx" to CamdJson.num(preset.correction.cx),
+            "corrCy" to CamdJson.num(preset.correction.cy),
+            "corrTiltV" to CamdJson.num(preset.correction.tiltV),
+            "corrTiltH" to CamdJson.num(preset.correction.tiltH),
         )
     )
 
@@ -152,6 +171,17 @@ object CamdPresetStore {
                 h = fields["cropH"]?.asNum()?.toFloat() ?: 1f,
             )
         )
+        // Entries saved before per-preset corrections default to camera corrections.
+        val correction = CamdLensCorrection.clamp(
+            CamdLensCorrection(
+                k1 = fields["corrK1"]?.asNum()?.toFloat() ?: 0f,
+                k2 = fields["corrK2"]?.asNum()?.toFloat() ?: 0f,
+                cx = fields["corrCx"]?.asNum()?.toFloat() ?: 0f,
+                cy = fields["corrCy"]?.asNum()?.toFloat() ?: 0f,
+                tiltV = fields["corrTiltV"]?.asNum()?.toFloat() ?: 0f,
+                tiltH = fields["corrTiltH"]?.asNum()?.toFloat() ?: 0f,
+            )
+        )
         return CamdPreset(
             name = name,
             cameraId = camera,
@@ -159,6 +189,8 @@ object CamdPresetStore {
             flipH = fields["flipH"]?.asBool() ?: false,
             flipV = fields["flipV"]?.asBool() ?: false,
             crop = crop,
+            defaultCorrection = fields["defCorr"]?.asBool() ?: true,
+            correction = correction,
             builtin = builtinDefault,
         )
     }
