@@ -58,6 +58,10 @@ public class BootReceiver extends BroadcastReceiver {
     }
 
     private static void arm(Context context) throws Exception {
+        if (new File(InstallPlan.DEALER_FLAG).isFile()) {
+            Log.i(TAG, "dealer visit on, boot fix skipped");
+            return;
+        }
         File helper = new File(context.getFilesDir(), "setwallpaper.dex");
         File unlock = new File(context.getFilesDir(), "unlockusb.dex");
         copyAsset(context, "setwallpaper.dex", helper);

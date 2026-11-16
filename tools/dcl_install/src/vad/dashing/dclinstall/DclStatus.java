@@ -39,6 +39,9 @@ final class DclStatus {
     static List<DclStatus> collect(Context context) {
         PackageManager packages = context.getPackageManager();
         List<DclStatus> rows = new ArrayList<DclStatus>();
+        boolean dealer = new File(InstallPlan.DEALER_FLAG).isFile();
+        rows.add(row("Визит к дилеру включён", dealer, false,
+                dealer ? "работает штатный лаунчер; выключите режим здесь же" : ""));
         String version = versionName(packages, InstallPlan.DCL_PACKAGE);
         boolean installed = version != null;
         rows.add(row("Лаунчер DCL установлен", installed, false, installed ? version : "файл ещё не выбран или не поставлен"));

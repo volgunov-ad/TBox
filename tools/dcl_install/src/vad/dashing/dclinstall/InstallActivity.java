@@ -57,6 +57,8 @@ public class InstallActivity extends Activity {
     private Button changeWallpaper;
     private Button compileDcl;
     private Button restoreStock;
+    private Button dealerOn;
+    private Button dealerOff;
     private TextView log;
     private String apkPath;
     private String customImagePath;
@@ -252,6 +254,29 @@ public class InstallActivity extends Activity {
                         + "показывает штатный лаунчер, System UI, обработчик USB, голос, IoT Tube и руководство "
                         + "и ставит штатные обои. Сама программа установки остаётся."));
 
+        column.addView(heading("Визит к дилеру"));
+        column.addView(note(
+                "Включение прячет DCL, программу флешек и наши обои: возвращаются штатный лаунчер, "
+                        + "System UI, штатные обои и обработчик USB, свободные окна и полный экран сбрасываются. "
+                        + "TBox Monitor и сам установщик остаются. "
+                        + "Выключение возвращает всё обратно. Оба действия перезагружают ГУ."));
+        dealerOn = button("Включено");
+        dealerOn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onDealerOnClicked();
+            }
+        });
+        dealerOff = button("Выключено");
+        dealerOff.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                onDealerOffClicked();
+            }
+        });
+        column.addView(dealerOn, extraParams);
+        column.addView(dealerOff, extraParams);
+
         log = text("", 20, 0xFFD5DDE4);
         log.setTypeface(Typeface.MONOSPACE);
         log.setPadding(0, dp(12), 0, 0);
@@ -342,20 +367,27 @@ public class InstallActivity extends Activity {
         if (key.toString().equals(checklistShown)) return;
         checklistShown = key.toString();
         statusList.removeAllViews();
+        boolean dealerMode = items.size() > 0
+                && "Визит к дилеру включён".equals(items.get(0).title)
+                && items.get(0).done;
         int done = 0;
         int required = 0;
         int unknown = 0;
-        for (int i = 0; i < items.size(); i++) {
-            if (items.get(i).optional) continue;
-            if (items.get(i).unknown) {
-                unknown++;
-                continue;
+        if (!dealerMode) {
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i).optional) continue;
+                if (items.get(i).unknown) {
+                    unknown++;
+                    continue;
+                }
+                required++;
+                if (items.get(i).done) done++;
             }
-            required++;
-            if (items.get(i).done) done++;
         }
-        String summaryText = "Для работы DCL: " + done + " из " + required;
-        if (unknown > 0) summaryText = summaryText + ", ещё проверяется " + unknown;
+        String summaryText = dealerMode
+                ? "Визит к дилеру включён"
+                : "Для работы DCL: " + done + " из " + required;
+        if (!dealerMode && unknown > 0) summaryText = summaryText + ", ещё проверяется " + unknown;
         TextView summary = text(summaryText, 24, 0xFFF4F6F8);
         summary.setTypeface(Typeface.DEFAULT_BOLD);
         summary.setPadding(0, dp(8), 0, dp(4));
@@ -370,7 +402,8 @@ public class InstallActivity extends Activity {
                 statusList.addView(header);
                 optionalHeader = true;
             }
-            int color = item.unknown ? 0xFFB7C0C8
+            int color = dealerMode && i > 0 ? 0xFFB7C0C8
+                    : item.unknown ? 0xFFB7C0C8
                     : item.done ? 0xFF8FCB7A
                     : (item.optional ? 0xFFB7C0C8 : 0xFFE07A7A);
             String mark = item.done ? "● " : "○ ";
@@ -585,6 +618,88 @@ public class InstallActivity extends Activity {
                 .show();
     }
 
+    private void onDealerOnClicked() {
+        if (running || !isA9()) return;
+        if (dealerActive()) {
+            log.setText("Визит к дилеру уже включён.");
+            return;
+        }
+        if (installedDcl() == null) {
+            log.setText("DCL ещё не установлен.");
+            return;
+        }
+        expectReboot = true;
+        setBusy(true);
+        dealerOn.setText("Включение… ГУ перезагрузится");
+        log.setText("Подготовка…");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File dir = new File(InstallPlan.PAYLOAD_DIR);
+                    if (!dir.exists() && !dir.mkdirs()) {
+                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+                    }
+                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
+                    arm(currentPlan(false).toDealerOnScript());
+                    poll();
+                } catch (Exception e) {
+                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            failUi(message);
+                        }
+                    });
+                }
+            }
+        }, "dcl-dealer-on").start();
+    }
+
+    private void onDealerOffClicked() {
+        if (running || !isA9()) return;
+        if (!dealerActive()) {
+            log.setText("Визит к дилеру не включён.");
+            return;
+        }
+        if (!wallpaperChosen()) {
+            log.setText("Выберите картинку обоев: по умолчанию, чёрный фон или свой файл.");
+            return;
+        }
+        expectReboot = true;
+        setBusy(true);
+        dealerOff.setText("Выключение… ГУ перезагрузится");
+        log.setText("Подготовка…");
+        final boolean black = blackWallpaper.isChecked();
+        final boolean custom = customWallpaper.isChecked();
+        final String imagePath = customImagePath;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (black) WallpaperStore.writeBlack(InstallActivity.this);
+                    else if (custom) WallpaperStore.writeImageFile(InstallActivity.this, imagePath);
+                    else WallpaperStore.writeImageAsset(InstallActivity.this, "default_wallpaper.jpg");
+                    File dir = new File(InstallPlan.PAYLOAD_DIR);
+                    if (!dir.exists() && !dir.mkdirs()) {
+                        throw new IllegalStateException("Нет записи в /sdcard/dcl_install");
+                    }
+                    copyAsset("setwallpaper.dex", new File(dir, "setwallpaper.dex"));
+                    arm(currentPlan(false).toDealerOffScript());
+                    poll();
+                } catch (Exception e) {
+                    final String message = e.getMessage() == null ? e.toString() : e.getMessage();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            failUi(message);
+                        }
+                    });
+                }
+            }
+        }, "dcl-dealer-off").start();
+    }
+
     private void onWallpaperClicked() {
         if (running || !isA9()) return;
         if (customWallpaper.isChecked() && customImagePath == null) {
@@ -760,6 +875,7 @@ public class InstallActivity extends Activity {
     }
 
     private void refreshStatus() {
+        boolean dealer = dealerActive();
         if (!isA9()) {
             status.setText("Это не ГУ A9 (mbCAN). Установка выключена.");
             status.setTextColor(0xFFE06A6A);
@@ -770,40 +886,52 @@ public class InstallActivity extends Activity {
             if (changeWallpaper != null) changeWallpaper.setEnabled(false);
             if (compileDcl != null) compileDcl.setEnabled(false);
             if (restoreStock != null) restoreStock.setEnabled(false);
+            if (dealerOn != null) dealerOn.setEnabled(false);
+            if (dealerOff != null) dealerOff.setEnabled(false);
             return;
         }
         status.setTextColor(0xFFB7C0C8);
         String installed = installedDcl();
-        if (installed == null) {
+        if (dealer) {
+            status.setText("ГУ A9. Визит к дилеру включён: DCL и программа флешек скрыты, работает штатный лаунчер.");
+        } else if (installed == null) {
             status.setText("ГУ A9. DCL ещё не установлен.");
         } else {
             status.setText("ГУ A9. Сейчас установлен DCL " + installed + ".");
         }
-        install.setEnabled(!running && canInstall());
+        install.setEnabled(!running && !dealer && canInstall());
         install.setText("Установить и перезагрузить");
         if (setupInstalled != null) {
-            setupInstalled.setEnabled(!running && installed != null && wallpaperChosen());
+            setupInstalled.setEnabled(!running && !dealer && installed != null && wallpaperChosen());
             setupInstalled.setText("Настроить установленный DCL");
         }
         if (grantPermissions != null) {
-            grantPermissions.setEnabled(!running && installed != null);
+            grantPermissions.setEnabled(!running && !dealer && installed != null);
             grantPermissions.setText("Выдать разрешения");
         }
         if (hideSelected != null) {
-            hideSelected.setEnabled(!running && installed != null);
+            hideSelected.setEnabled(!running && !dealer && installed != null);
             hideSelected.setText("Скрыть выбранные приложения");
         }
         if (changeWallpaper != null) {
-            changeWallpaper.setEnabled(!running && wallpaperChosen());
+            changeWallpaper.setEnabled(!running && !dealer && wallpaperChosen());
             changeWallpaper.setText("Поменять картинку обоев");
         }
         if (compileDcl != null) {
-            compileDcl.setEnabled(!running && installed != null);
+            compileDcl.setEnabled(!running && !dealer && installed != null);
             compileDcl.setText("Скомпилировать DCL");
         }
         if (restoreStock != null) {
             restoreStock.setEnabled(!running);
             restoreStock.setText("Удалить DCL и вернуть штатное");
+        }
+        if (dealerOn != null) {
+            dealerOn.setEnabled(!running && !dealer && installed != null);
+            dealerOn.setText("Включено");
+        }
+        if (dealerOff != null) {
+            dealerOff.setEnabled(!running && dealer);
+            dealerOff.setText(dealer ? "Выключено (визит идёт)" : "Выключено");
         }
     }
 
@@ -890,6 +1018,11 @@ public class InstallActivity extends Activity {
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }
+    }
+
+    /** True while the dealer visit lasts; the script writes the flag, the installer only reads it. */
+    private boolean dealerActive() {
+        return new File(InstallPlan.DEALER_FLAG).isFile();
     }
 
     private boolean isA9() {

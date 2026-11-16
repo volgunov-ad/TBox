@@ -18,6 +18,11 @@ final class InstallPlan {
     static final String SPEECH_CLIENT = "com.mengbo.speechclient";
     static final String MANUAL = "com.mengbo.electronicmanual";
     static final String USB_HANDLER = "android.car.usb.handler";
+    static final String USB_MOUNT = "vad.dashing.usbmount";
+    static final String BLANK_WALLPAPER = "vad.dashing.blankwallpaper";
+
+    /** While this file exists the head unit shows the stock look and the installer skips its boot fixups. */
+    static final String DEALER_FLAG = "/sdcard/dcl_dealer.flag";
 
     static final String PAYLOAD_DIR = "/sdcard/dcl_install";
     static final String LOG_FILE = "/sdcard/dcl_install_log.txt";
@@ -80,11 +85,18 @@ final class InstallPlan {
     }
 
     private void appendSetupBody(StringBuilder sh) {
+        appendSetupBody(sh, true, true);
+    }
+
+    /** Grants, HOME, sticks program, wallpaper, hides; the USB mount install and the compile are optional. */
+    private void appendSetupBody(StringBuilder sh, boolean installUsbmount, boolean compile) {
         appendGrants(sh);
         sh.append("echo STEP home\n");
         sh.append("cmd package set-home-activity ").append(q(DCL_HOME)).append(" || fail home\n");
-        sh.append("echo STEP usbmount\n");
-        sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
+        if (installUsbmount) {
+            sh.append("echo STEP usbmount\n");
+            sh.append("pm install -r -d -g -t ").append(q(PAYLOAD_DIR + "/usbmount.apk")).append(" || fail usbmount\n");
+        }
         appendUnstopUsb(sh, PAYLOAD_DIR + "/setwallpaper.dex", true);
         sh.append("echo STEP wallpaper\n");
         sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
@@ -94,7 +106,49 @@ final class InstallPlan {
         appendHides(sh);
         sh.append("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | grep -F ");
         sh.append(q(DCL_PACKAGE)).append(" >/dev/null || fail home_check\n");
-        appendCompile(sh);
+        if (compile) appendCompile(sh);
+    }
+
+    /** Dealer visit on: stock launcher, SystemUI, stock wallpaper and USB handler back, DCL and our helpers hidden. */
+    String toDealerOnScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        sh.append("echo STEP dealer_defaults\n");
+        sh.append("settings delete global enable_freeform_support || echo WARN freeform\n");
+        sh.append("settings delete global policy_control || echo WARN policy_control\n");
+        sh.append("remove_secure ").append(q("enabled_notification_listeners")).append(' ').append(q(DCL_NOTIFICATION)).append("\n");
+        sh.append("remove_secure ").append(q("enabled_accessibility_services")).append(' ').append(q(DCL_ACCESSIBILITY)).append("\n");
+        sh.append("settings put secure accessibility_enabled 0 || echo WARN accessibility\n");
+        sh.append("echo STEP dealer_stock\n");
+        unhide(sh, SYSTEMUI);
+        unhide(sh, LAUNCHER);
+        sh.append("cmd package set-home-activity ").append(q("com.wt.launcher3/.MainActivity")).append(" || fail home\n");
+        sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
+        sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
+        sh.append("echo STEP dealer_hide\n");
+        sh.append("pm hide ").append(DCL_PACKAGE).append(" || fail hide_dcl\n");
+        sh.append("pm hide ").append(USB_MOUNT).append(" || echo WARN hide_usbmount\n");
+        sh.append("pm hide ").append(BLANK_WALLPAPER).append(" || echo WARN hide_blank\n");
+        sh.append("pm unhide ").append(USB_HANDLER).append(" || echo WARN unhide_usb_handler\n");
+        sh.append("pm enable ").append(USB_HANDLER).append(" || echo WARN enable_usb_handler\n");
+        sh.append("echo STEP dealer_flag\n");
+        sh.append(": > ").append(q(DEALER_FLAG)).append("\n");
+        finishScript(sh, true);
+        return sh.toString();
+    }
+
+    /** Dealer visit off: bring DCL, the sticks program and the wallpaper back, re-apply the setup, reboot. */
+    String toDealerOffScript() {
+        StringBuilder sh = scriptHeader();
+        sh.append("echo STEP dealer_unhide\n");
+        unhide(sh, DCL_PACKAGE);
+        unhide(sh, USB_MOUNT);
+        unhide(sh, BLANK_WALLPAPER);
+        sh.append("pm path ").append(DCL_PACKAGE).append(" >/dev/null || fail no_dcl\n");
+        appendSetupBody(sh, false, false);
+        sh.append("rm -f ").append(q(DEALER_FLAG)).append("\n");
+        finishScript(sh, true);
+        return sh.toString();
     }
 
     String toGrantScript() {
@@ -172,20 +226,8 @@ final class InstallPlan {
         sh.append("echo STEP restore\n");
         sh.append("settings delete global enable_freeform_support || echo WARN freeform\n");
         sh.append("settings delete global policy_control || echo WARN policy_control\n");
-        sh.append("remove_secure() {\n");
-        sh.append("  cur=`settings get secure \"$1\"`\n");
-        sh.append("  if [ -z \"$cur\" ] || [ \"$cur\" = null ]; then return; fi\n");
-        sh.append("  out=\"\"\n");
-        sh.append("  IFS=:\n");
-        sh.append("  for part in $cur; do\n");
-        sh.append("    if [ \"$part\" = \"$2\" ]; then continue; fi\n");
-        sh.append("    if [ -z \"$out\" ]; then out=\"$part\"; else out=\"$out:$part\"; fi\n");
-        sh.append("  done\n");
-        sh.append("  unset IFS\n");
-        sh.append("  settings put secure \"$1\" \"$out\" || fail \"put $1\"\n");
-        sh.append("}\n");
-        sh.append("remove_secure enabled_notification_listeners ").append(q(DCL_NOTIFICATION)).append("\n");
-        sh.append("remove_secure enabled_accessibility_services ").append(q(DCL_ACCESSIBILITY)).append("\n");
+        sh.append("remove_secure ").append(q("enabled_notification_listeners")).append(' ').append(q(DCL_NOTIFICATION)).append("\n");
+        sh.append("remove_secure ").append(q("enabled_accessibility_services")).append(' ').append(q(DCL_ACCESSIBILITY)).append("\n");
         unhide(sh, SYSTEMUI);
         unhide(sh, LAUNCHER);
         unhide(sh, IOTTUBE);
@@ -197,8 +239,8 @@ final class InstallPlan {
         sh.append("CLASSPATH=").append(q(PAYLOAD_DIR + "/setwallpaper.dex"));
         sh.append(" app_process /system/bin SetWallpaper default || echo WARN wallpaper\n");
         sh.append("pm uninstall ").append(DCL_PACKAGE).append(" || echo WARN uninstall_dcl\n");
-        sh.append("pm uninstall vad.dashing.usbmount || echo WARN uninstall_usb\n");
-        sh.append("pm uninstall vad.dashing.blankwallpaper || echo WARN uninstall_blank\n");
+        sh.append("pm uninstall ").append(USB_MOUNT).append(" || echo WARN uninstall_usb\n");
+        sh.append("pm uninstall ").append(BLANK_WALLPAPER).append(" || echo WARN uninstall_blank\n");
         finishScript(sh, true);
         return sh.toString();
     }
@@ -237,6 +279,18 @@ final class InstallPlan {
         sh.append("  else\n");
         sh.append("    settings put secure \"$1\" \"$cur:$2\" || fail \"put $1\"\n");
         sh.append("  fi\n");
+        sh.append("}\n");
+        sh.append("remove_secure() {\n");
+        sh.append("  cur=`settings get secure \"$1\"`\n");
+        sh.append("  if [ -z \"$cur\" ] || [ \"$cur\" = null ]; then return; fi\n");
+        sh.append("  out=\"\"\n");
+        sh.append("  IFS=:\n");
+        sh.append("  for part in $cur; do\n");
+        sh.append("    if [ \"$part\" = \"$2\" ]; then continue; fi\n");
+        sh.append("    if [ -z \"$out\" ]; then out=\"$part\"; else out=\"$out:$part\"; fi\n");
+        sh.append("  done\n");
+        sh.append("  unset IFS\n");
+        sh.append("  settings put secure \"$1\" \"$out\" || fail \"put $1\"\n");
         sh.append("}\n");
         return sh;
     }
