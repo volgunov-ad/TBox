@@ -43,7 +43,7 @@ internal class UyvyRenderer(
     private var running = false
     @Volatile
     private var rotation = when (initialRotation) {
-        90, 180, 270 -> initialRotation
+        in 0..359 -> initialRotation
         else -> 0
     }
     @Volatile
@@ -67,10 +67,7 @@ internal class UyvyRenderer(
     private var thread: Thread? = null
 
     fun setRotation(degrees: Int) {
-        rotation = when (degrees) {
-            90, 180, 270 -> degrees
-            else -> 0
-        }
+        rotation = ((degrees % 360) + 360) % 360
     }
 
     fun setFlip(horizontal: Boolean, vertical: Boolean) {
@@ -466,10 +463,10 @@ internal class UyvyRenderer(
                     if (alpha <= 0.004) discard;
                 }
                 vec2 p = vTex - 0.5;
-                vec2 r = p;
-                if (uRot > 45.0 && uRot < 135.0) r = vec2(-p.y, p.x);
-                else if (uRot > 135.0 && uRot < 225.0) r = -p;
-                else if (uRot > 225.0) r = vec2(p.y, -p.x);
+                float a = radians(uRot);
+                float ca = cos(a);
+                float sa = sin(a);
+                vec2 r = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
                 vec2 uv = r + 0.5;
                 if (uFlipH > 0.5) uv.x = 1.0 - uv.x;
                 if (uFlipV > 0.5) uv.y = 1.0 - uv.y;

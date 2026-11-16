@@ -56,13 +56,14 @@ object CamdCommands {
     }
 
     /**
-     * `OPEN id x y w h [rot [flipH [flipV]]] [crop=cx,cy,cw,ch] [shape=circle]`
+     * `OPEN id x y w h [rot 0..360] [flipH [flipV]] [crop=cx,cy,cw,ch] [shape=circle]`
      * `OPEN preset=<name> x y w h [shape=circle]`
      *
      * Plain form: positional size 6…9, camera id required. No rot / flip / crop
      * tokens means the frame is shown as-is (per-camera lens correction still applies).
-     * Named tokens: at most one of each (crop=, shape=), case-insensitive prefix,
-     * anywhere in the line. Older clients with 6/7 tokens keep working.
+     * Rotation is integer degrees 0…360 (360 ≡ 0); older clients sending quarter
+     * turns keep working. Named tokens: at most one of each (crop=, shape=),
+     * case-insensitive prefix, anywhere in the line.
      *
      * Preset form: the camera comes from the preset, so there is no id; exactly 4
      * positional tokens (window rect) and no rot / flip / crop tokens — preset
@@ -105,15 +106,14 @@ object CamdCommands {
         val y = positional[3].toFloatOrNull() ?: return null
         val w = positional[4].toFloatOrNull() ?: return null
         val h = positional[5].toFloatOrNull() ?: return null
-        val rotation = if (positional.size >= 7) {
-            when (positional[6].toIntOrNull()) {
-                0, 90, 180, 270 -> positional[6].toInt()
-                else -> return null
-            }
-        } else {
-            0
-        }
-        val flipH = if (positional.size >= 8) {
+    val rotation = if (positional.size >= 7) {
+        val value = positional[6].toIntOrNull() ?: return null
+        if (value !in 0..360) return null
+        value % 360
+    } else {
+        0
+    }
+    val flipH = if (positional.size >= 8) {
             parseFlip(positional[7]) ?: return null
         } else {
             false

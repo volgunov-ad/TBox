@@ -30,6 +30,8 @@ class CameraWindows(private val context: Context) {
     private val lock = Any()
     private val openIds = LinkedHashSet<Int>()
     private val views = ConcurrentHashMap<Int, LiveWindow>()
+    /** inputId → preset name the window was opened with; empty for as-is / custom forms. */
+    private val windowSources = HashMap<Int, String>()
     private val main = Handler(Looper.getMainLooper())
     private val prefs: SharedPreferences =
         context.getSharedPreferences("camd", Context.MODE_PRIVATE)
@@ -143,6 +145,7 @@ class CameraWindows(private val context: Context) {
             maybeStartAvm()
             return "state=error error=${shown.error}"
         }
+        windowSources[resolved.inputId] = resolved.presetName.orEmpty()
         val state = if (moved) "moved" else "open"
         "state=$state input=${resolved.inputId}"
     }
@@ -176,6 +179,53 @@ class CameraWindows(private val context: Context) {
     fun exportSettings(): String = CamdBackup.exportJson(prefs)
 
     fun importSettings(text: String): CamdImportSummary? = CamdBackup.importJson(prefs, text)
+
+    /**
+     * Live preview: moves / reshapes the open window of [inputId] from UI state.
+     * No-op when that camera has no window; other windows are not touched.
+     */
+    fun previewWindowGeometry(inputId: Int, x: Float, y: Float, w: Float, h: Float, circle: Boolean) =
+        synchronized(lock) {
+            val live = views[inputId] ?: return@synchronized
+            val shape = if (circle) CamdShape.CIRCLE else CamdShape.RECT
+            main.post {
+                try {
+                    place(
+                        live.params,
+                        CamdCommand.Open(inputId, x, y, w, h),
+                    )
+                    live.setShape(shape)
+                    windowManager().updateViewLayout(live.root, live.params)
+                } catch (_: Throwable) {
+                    // Window may be mid-teardown; the next OPEN restores geometry.
+                }
+            }
+        }
+
+    /**
+     * Live apply after a preset save: updates every window that was opened with
+     * exactly this preset (rotation / flips / crop / corrections). Window geometry
+     * stays command-owned and is not touched.
+     */
+    fun applyPresetToWindows(preset: CamdPreset) = synchronized(lock) {
+        val targets = windowSources.filterValues { it == preset.name }.keys.toList()
+        if (targets.isEmpty()) return@synchronized
+        val lens = if (preset.defaultCorrection) {
+            CamdLensCorrectionStore.load(prefs, preset.cameraId)
+        } else {
+            preset.correction
+        }
+        val crop = if (preset.crop.isIdentity()) CamdCrop.IDENTITY else preset.crop
+        targets.forEach { inputId ->
+            val live = views[inputId] ?: return@forEach
+            main.post {
+                live.setRotation(preset.rotation)
+                live.setFlip(preset.flipH, preset.flipV)
+                live.setCrop(crop)
+                live.setLensCorrection(lens)
+            }
+        }
+    }
 
     fun close(inputId: Int): String = synchronized(lock) {
         openIds.remove(inputId)
@@ -347,6 +397,7 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun hide(inputId: Int) {
+        windowSources.remove(inputId)
         val latch = CountDownLatch(1)
         main.post {
             val live = views.remove(inputId)

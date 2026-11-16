@@ -27,10 +27,7 @@ data class CamdPreset(
 
         fun isValidName(name: String): Boolean = NAME_REGEX.matches(name)
 
-        fun normalizeRotation(degrees: Int): Int = when (degrees) {
-            90, 180, 270 -> degrees
-            else -> 0
-        }
+        fun normalizeRotation(degrees: Int): Int = ((degrees % 360) + 360) % 360
     }
 }
 

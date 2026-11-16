@@ -16,7 +16,18 @@ class CamdCommandTest {
             CamdCommand.Open(4, 0.02f, 0.55f, 0.40f, 0.40f, 90),
             CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 90"),
         )
-        assertNull(CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 45"))
+        // Arbitrary integer angles 0..360 are accepted now (360 ≡ 0).
+        assertEquals(
+            CamdCommand.Open(4, 0.02f, 0.55f, 0.40f, 0.40f, 45),
+            CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 45"),
+        )
+        assertEquals(
+            CamdCommand.Open(4, 0.02f, 0.55f, 0.40f, 0.40f, 0),
+            CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 360"),
+        )
+        assertNull(CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 361"))
+        assertNull(CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 -90"))
+        assertNull(CamdCommands.parse("OPEN 4 0.0200 0.5500 0.4000 0.4000 45.5"))
         assertEquals(CamdCommand.CloseAll, CamdCommands.parse("close"))
         assertEquals(CamdCommand.Close(4), CamdCommands.parse("CLOSE 4"))
         assertEquals(CamdCommand.Status, CamdCommands.parse("STATUS"))
@@ -47,8 +58,11 @@ class CamdCommandTest {
             CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 0, flipH = false, flipV = true),
             CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 0 1"),
         )
-        // Flip without rotation slot is not a valid 7-token line (7th must be rot).
-        assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 1"))
+        // "1" is a valid rotation now; flips still need the rotation slot (0..360).
+        assertEquals(
+            CamdCommand.Open(8, 0.02f, 0.55f, 0.40f, 0.40f, 1),
+            CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 1"),
+        )
         assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 2"))
         assertNull(CamdCommands.parse("OPEN 8 0.0200 0.5500 0.4000 0.4000 0 1 1 0"))
     }
@@ -271,6 +285,16 @@ class CamdPresetStoreTest {
         assertEquals(false, CamdPresetStore.saveBuiltinOverride(
             prefs, "nope", 0, false, false, CamdCrop.IDENTITY, true, CamdLensCorrection.IDENTITY,
         ))
+    }
+
+    @Test
+    fun normalizeRotationWrapsAnyAngle() {
+        assertEquals(0, CamdPreset.normalizeRotation(0))
+        assertEquals(45, CamdPreset.normalizeRotation(45))
+        assertEquals(359, CamdPreset.normalizeRotation(-1))
+        assertEquals(10, CamdPreset.normalizeRotation(370))
+        assertEquals(0, CamdPreset.normalizeRotation(360))
+        assertEquals(270, CamdPreset.normalizeRotation(-90))
     }
 
     @Test

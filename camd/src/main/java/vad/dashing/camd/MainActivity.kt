@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -49,6 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -225,6 +228,8 @@ class CamdController(
     private val _state = MutableStateFlow(CamdUiState())
     val state: StateFlow<CamdUiState> = _state.asStateFlow()
     private val io = Executors.newSingleThreadExecutor()
+    private val previewHandler = Handler(Looper.getMainLooper())
+    private var previewRunnable: Runnable? = null
     private val poll = Thread {
         while (!Thread.currentThread().isInterrupted) {
             if (!_state.value.busy) {
@@ -256,6 +261,7 @@ class CamdController(
 
     fun shutdown() {
         io.shutdownNow()
+        previewHandler.removeCallbacksAndMessages(null)
         poll.interrupt()
     }
 
@@ -285,22 +291,38 @@ class CamdController(
 
     fun setX(value: Float) {
         _state.value = _state.value.copy(x = value)
+        scheduleGeometryPreview()
     }
 
     fun setY(value: Float) {
         _state.value = _state.value.copy(y = value)
+        scheduleGeometryPreview()
     }
 
     fun setW(value: Float) {
         _state.value = _state.value.copy(w = value)
+        scheduleGeometryPreview()
     }
 
     fun setH(value: Float) {
         _state.value = _state.value.copy(h = value)
+        scheduleGeometryPreview()
     }
 
     fun setRound(value: Boolean) {
         _state.value = _state.value.copy(round = value)
+        scheduleGeometryPreview()
+    }
+
+    /** Debounced live move / reshape of the open window of the selected camera. */
+    private fun scheduleGeometryPreview() {
+        previewRunnable?.let { previewHandler.removeCallbacks(it) }
+        val current = _state.value
+        val runnable = Runnable {
+            windows.previewWindowGeometry(current.inputId, current.x, current.y, current.w, current.h, current.round)
+        }
+        previewRunnable = runnable
+        previewHandler.postDelayed(runnable, 150)
     }
 
     fun setLensField(
@@ -406,6 +428,15 @@ class CamdController(
                 )
                 appendShape(current.round)
             }
+            val command = CamdCommands.parse(line)
+            if (command is CamdCommand.Open) {
+                // Sync the selected camera with the preset source so the preview
+                // geometry sliders on this tab control exactly this window.
+                val preset = windows.preset(name)
+                if (preset != null) {
+                    _state.value = _state.value.copy(inputId = preset.cameraId)
+                }
+            }
             runOpenLine(line)
         }
     }
@@ -458,6 +489,9 @@ class CamdController(
     }
 
     fun cancelEditPreset() {
+        val draft = _state.value.editingPreset ?: return
+        // Roll the open window of this preset back to the stored values.
+        windows.preset(draft.name)?.let { windows.applyPresetToWindows(it) }
         _state.value = _state.value.copy(editingPreset = null)
     }
 
@@ -576,9 +610,12 @@ class CamdController(
                 windows.saveUserPreset(draft)?.let { token -> describePresetError(token) }
             }
             refreshSettings()
+            // The saved values go straight to the open window of this preset (if any),
+            // and the editor stays open so the settings remain visible.
+            if (error == null) windows.applyPresetToWindows(draft)
             _state.value = _state.value.copy(
                 message = error ?: "Пресет «${draft.name}» сохранён: ${describeSavedSettings(draft)}",
-                editingPreset = if (error == null) null else draft,
+                editingPreset = draft,
             )
         }
     }
@@ -1170,7 +1207,12 @@ private fun PresetsTab(
                 }
             }
         }
-        Text("Поворот", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text("Поворот  ${draft.rotation}°", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Slider(
+            value = draft.rotation.toFloat(),
+            onValueChange = { onEditRotation(it.roundToInt()) },
+            valueRange = 0f..359f,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(0, 90, 180, 270).forEach { degrees ->
                 FilterChip(
