@@ -2,6 +2,7 @@ package vad.dashing.tbox.automation
 
 import java.text.Collator
 import java.util.Locale
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.isSpeedLimiterHiddenFromAutomationPicker
 import vad.dashing.tbox.mbcan.AccCruiseDomain
@@ -364,6 +365,16 @@ object AutomationSignalCatalog {
                 "A9 BCM nTurnSts+nDirectionLightSts: 3+1 включена (кнопка и открытый багажник), " +
                 "0+0 / 2+2 / 1+1 выключена. Не мигающий объект поворотников и не nHazardLightSts. " +
                 "A10 R_0400_CEM_1_HazardLightSW (CEM 1-bit).",
+        ),
+        state(
+            AutomationSignalId.TURN_STABILIZED,
+            "Поворотник (стабилизированный)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Только ГУ. Бинарный статус защёлки поворотников: on с первого кадра " +
+                "мигания (без порога «≥4 вспышки»), off через 2,5 с после последнего мигания. " +
+                "Левый и правый — один и тот же on, сторон нет; аварийка защёлку не включает. " +
+                "A9 eMBCAN_VEHICLE_TURNLIGHT (мигает), A10 DirectionInd CEM 1-bit (стабилен).",
         ),
         state(
             AutomationSignalId.DRL,
@@ -1303,8 +1314,8 @@ object AutomationSignalCatalog {
                 "Триггер: on — въезд в тоннель (off→on), off — выезд из тоннеля (on→off). " +
                 "Без match — сигнала нет. Поднимает matcher без коррекции позы; не SpeedCam.",
             namedValues = listOf(
-                AutomationSignalNamedValue("off", "Вне тоннеля / Outside"),
-                AutomationSignalNamedValue("on", "В тоннеле / Inside"),
+                AutomationSignalNamedValue("off", ruEnLabel("Вне тоннеля", "Outside")),
+                AutomationSignalNamedValue("on", ruEnLabel("В тоннеле", "Inside")),
             ),
         ),
         state(
@@ -1318,8 +1329,8 @@ object AutomationSignalCatalog {
                 "Без match — сигнала нет. Нужен пакет с полем settlement. " +
                 "Поднимает matcher без коррекции позы; не SpeedCam.",
             namedValues = listOf(
-                AutomationSignalNamedValue("off", "Вне НП / Outside"),
-                AutomationSignalNamedValue("on", "В НП / Inside"),
+                AutomationSignalNamedValue("off", ruEnLabel("Вне НП", "Outside")),
+                AutomationSignalNamedValue("on", ruEnLabel("В НП", "Inside")),
             ),
         ),
     )
@@ -1462,15 +1473,15 @@ object AutomationSignalCatalog {
     fun triggerStateOptionLabel(signal: AutomationSignalId, raw: String): String {
         if (signal == AutomationSignalId.ROAD_TUNNEL) {
             return when (raw.trim().lowercase()) {
-                "on" -> "Въезд в тоннель / Enter tunnel"
-                "off" -> "Выезд из тоннеля / Exit tunnel"
+                "on" -> ruEnLabel("Въезд в тоннель", "Enter tunnel")
+                "off" -> ruEnLabel("Выезд из тоннеля", "Exit tunnel")
                 else -> stateOptionLabel(signal, raw)
             }
         }
         if (signal == AutomationSignalId.ROAD_SETTLEMENT) {
             return when (raw.trim().lowercase()) {
-                "on" -> "Въезд в НП / Enter settlement"
-                "off" -> "Выезд из НП / Exit settlement"
+                "on" -> ruEnLabel("Въезд в НП", "Enter settlement")
+                "off" -> ruEnLabel("Выезд из НП", "Exit settlement")
                 else -> stateOptionLabel(signal, raw)
             }
         }
@@ -1485,6 +1496,9 @@ object AutomationSignalCatalog {
         else -> get(signal).stateOptions.firstOrNull()
     }
 }
+
+private fun ruEnLabel(ru: String, en: String): String =
+    if (BuildConfig.FLAVOR.trim().lowercase() == "en") en else ru
 
 private fun formatNamedValues(values: List<AutomationSignalNamedValue>): String =
     values.joinToString { named ->

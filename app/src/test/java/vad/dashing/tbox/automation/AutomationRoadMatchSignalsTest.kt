@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import vad.dashing.tbox.BuildConfig
 import vad.dashing.tbox.location.roadmatch.RoadMatchAnchorState
 
 class AutomationRoadMatchSignalsTest {
@@ -204,19 +205,19 @@ class AutomationRoadMatchSignalsTest {
     @Test
     fun tunnelOptionLabels_useInsideOutsideForCondition_andEnterExitForTrigger() {
         assertEquals(
-            "В тоннеле / Inside",
+            ruEnLabel("В тоннеле", "Inside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
         )
         assertEquals(
-            "Вне тоннеля / Outside",
+            ruEnLabel("Вне тоннеля", "Outside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
         )
         assertEquals(
-            "Въезд в тоннель / Enter tunnel",
+            ruEnLabel("Въезд в тоннель", "Enter tunnel"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "on"),
         )
         assertEquals(
-            "Выезд из тоннеля / Exit tunnel",
+            ruEnLabel("Выезд из тоннеля", "Exit tunnel"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_TUNNEL, "off"),
         )
         assertEquals(
@@ -232,19 +233,19 @@ class AutomationRoadMatchSignalsTest {
     @Test
     fun settlementOptionLabels_useInsideOutsideForCondition_andEnterExitForTrigger() {
         assertEquals(
-            "В НП / Inside",
+            ruEnLabel("В НП", "Inside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "on"),
         )
         assertEquals(
-            "Вне НП / Outside",
+            ruEnLabel("Вне НП", "Outside"),
             AutomationSignalCatalog.stateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "off"),
         )
         assertEquals(
-            "Въезд в НП / Enter settlement",
+            ruEnLabel("Въезд в НП", "Enter settlement"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "on"),
         )
         assertEquals(
-            "Выезд из НП / Exit settlement",
+            ruEnLabel("Выезд из НП", "Exit settlement"),
             AutomationSignalCatalog.triggerStateOptionLabel(AutomationSignalId.ROAD_SETTLEMENT, "off"),
         )
         assertEquals(
@@ -301,3 +302,6 @@ class AutomationRoadMatchSignalsTest {
         assertEquals(null, unmatched.settlement)
     }
 }
+
+private fun ruEnLabel(ru: String, en: String): String =
+    if (BuildConfig.FLAVOR.trim().lowercase() == "en") en else ru

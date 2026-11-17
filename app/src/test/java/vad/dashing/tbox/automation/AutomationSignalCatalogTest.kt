@@ -90,6 +90,20 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun turnStabilized_isHeadUnitBinaryMappedToTurnSignals() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.TURN_STABILIZED)
+        assertEquals(listOf("off", "on"), descriptor.stateOptions)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+        assertTrue(descriptor.valueHint().isNotBlank())
+        assertEquals(
+            "Поворотник (стабилизированный)",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_STABILIZED),
+        )
+        assertEquals(MbCanSignal.TurnSignals, huInterestForSignal(AutomationSignalId.TURN_STABILIZED))
+    }
+
+    @Test
     fun catalog_coversEverySignalId() {
         assertEquals(
             AutomationSignalId.entries.toSet(),
