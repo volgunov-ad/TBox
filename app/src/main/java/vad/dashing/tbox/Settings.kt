@@ -4,12 +4,9 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
-import android.util.Log
 import androidx.datastore.core.DataStore
-import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -43,21 +40,13 @@ import vad.dashing.tbox.ui.theme.LIGHT_THEME_BACKGROUND_COLOR_PRESET_2_INT
 import vad.dashing.tbox.ui.theme.TboxFontFamily
 import vad.dashing.tbox.ui.theme.TboxTextSizeScales
 
-private const val DATASTORE_NAME = "vad.dashing.tbox.settings"
+internal const val DATASTORE_NAME = "vad.dashing.tbox.settings"
 
 // Используем extension property для DataStore
 internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = DATASTORE_NAME,
     corruptionHandler = resetOnCorruption(DATASTORE_NAME),
 )
-
-/** A corrupt preferences file would otherwise throw on every read and crash-loop the app. */
-internal fun resetOnCorruption(storeName: String): ReplaceFileCorruptionHandler<Preferences> =
-    ReplaceFileCorruptionHandler { error ->
-        Log.e("DataStore", "Corrupt $storeName, resetting", error)
-        TboxRepository.addLog("ERROR", "DataStore", "Corrupt $storeName reset: ${error.message}")
-        emptyPreferences()
-    }
 
 enum class SetLauncherAppCustomIconResult {
     Success,

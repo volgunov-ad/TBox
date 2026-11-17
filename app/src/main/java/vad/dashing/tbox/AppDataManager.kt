@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
-private const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
+internal const val APP_DATA_NAME = "vad.dashing.tbox.app_data"
 
 internal val Context.appDataStore: DataStore<Preferences> by preferencesDataStore(
     name = APP_DATA_NAME,

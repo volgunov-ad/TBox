@@ -108,13 +108,14 @@ data class MockLastGoodFix(
 }
 
 /**
- * Debounces disk writes for [MockLastGoodFix] (default 60 s).
+ * Debounces disk writes for [MockLastGoodFix] (default 300 s) — cuts the periodic
+ * settings-store write rate to one per 5 minutes.
  */
 class MockLastGoodFixDebouncer(
     private val debounceMs: Long = DEBOUNCE_MS,
 ) {
     companion object {
-        const val DEBOUNCE_MS = 60_000L
+        const val DEBOUNCE_MS = 300_000L
     }
 
     var pending: MockLastGoodFix? = null
