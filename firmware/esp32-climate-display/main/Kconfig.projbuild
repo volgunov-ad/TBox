@@ -1,0 +1,16 @@
+menu "Climate display"
+
+    config CLIMATE_UI_SIM
+        bool "Simulate climate data while CAN is offline"
+        default y
+
+    config CLIMATE_CAN_MODE
+        bool "Route EXIO5 to onboard CAN transceiver (off = USB)"
+        default y
+
+    config CLIMATE_CAN_BAUD
+        int "CAN bus baud rate"
+        default 500000
+        range 50000 1000000
+
+endmenu

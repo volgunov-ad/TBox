@@ -1,0 +1,5 @@
+#pragma once
+
+#define CONFIG_CLIMATE_UI_SIM 1
+#define CONFIG_CLIMATE_CAN_MODE 0
+#define CONFIG_CLIMATE_CAN_BAUD 500000
