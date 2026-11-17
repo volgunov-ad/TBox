@@ -57,7 +57,6 @@ static void can_proc_task(void *arg)
 static void sim_task(void *arg)
 {
     (void)arg;
-    climate_state_t state;
     uint32_t tick = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(2000));
