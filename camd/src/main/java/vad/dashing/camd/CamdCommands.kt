@@ -123,7 +123,7 @@ object CamdCommands {
         } else {
             false
         }
-        if (KnownInputs.byId(id) == null) return null
+        if (!CamdSources.isKnown(id)) return null
         if (!fraction(x) || !fraction(y) || !fraction(w) || !fraction(h)) return null
         if (w < CamdCrop.MIN_SIZE || h < CamdCrop.MIN_SIZE) return null
         if (x + w > CamdCrop.EDGE_TOLERANCE || y + h > CamdCrop.EDGE_TOLERANCE) return null

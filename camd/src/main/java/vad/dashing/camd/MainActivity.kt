@@ -48,6 +48,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import vad.dashing.camd.ui.theme.CamdTheme
 import java.io.File
 import java.text.SimpleDateFormat
@@ -300,16 +301,28 @@ class CamdController(
                 // All displayed settings are re-read every second so changes made
                 // elsewhere (TBox Monitor AVM toggle, import, another UI instance)
                 // show up immediately. Draft editingPreset is never touched here.
+                // IO runs before update{} so the write itself is a short atomic
+                // CAS: a tab switch landing mid-refresh is never lost (the
+                // stale-snapshot overwrite used to bounce the tab back to CAMERAS).
                 val inputId = _state.value.inputId
-                _state.value = _state.value.copy(
-                    keepAvmStopped = windows.keepAvmStopped(),
-                    showCloseButton = windows.showCloseButton(),
-                    tapToClose = windows.tapToClose(),
-                    lens = windows.lensCorrection(inputId),
-                    presets = windows.presets(),
-                    status = windows.status(),
-                    log = engine.logTail()
-                )
+                val keepAvmStopped = windows.keepAvmStopped()
+                val showCloseButton = windows.showCloseButton()
+                val tapToClose = windows.tapToClose()
+                val lens = windows.lensCorrection(inputId)
+                val presets = windows.presets()
+                val status = windows.status()
+                val log = engine.logTail()
+                _state.update { current ->
+                    current.copy(
+                        keepAvmStopped = keepAvmStopped,
+                        showCloseButton = showCloseButton,
+                        tapToClose = tapToClose,
+                        lens = lens,
+                        presets = presets,
+                        status = status,
+                        log = log,
+                    )
+                }
             }
             try {
                 Thread.sleep(1000)
@@ -331,50 +344,54 @@ class CamdController(
 
     private fun refreshSettings() {
         val inputId = _state.value.inputId
-        _state.value = _state.value.copy(
-            keepAvmStopped = windows.keepAvmStopped(),
-            showCloseButton = windows.showCloseButton(),
-            tapToClose = windows.tapToClose(),
-            lens = windows.lensCorrection(inputId),
-            presets = windows.presets(),
-        )
+        _state.update {
+            it.copy(
+                keepAvmStopped = windows.keepAvmStopped(),
+                showCloseButton = windows.showCloseButton(),
+                tapToClose = windows.tapToClose(),
+                lens = windows.lensCorrection(inputId),
+                presets = windows.presets(),
+            )
+        }
     }
 
     fun setTab(tab: CamdTab) {
-        _state.value = _state.value.copy(tab = tab)
+        _state.update { it.copy(tab = tab) }
         // Fresh list every time the tab opens; also heals stale first-install state.
         if (tab == CamdTab.PRESETS) refreshSettings()
     }
 
     fun setInput(id: Int) {
-        _state.value = _state.value.copy(
-            inputId = id,
-            lens = windows.lensCorrection(id),
-        )
+        _state.update {
+            it.copy(
+                inputId = id,
+                lens = windows.lensCorrection(id),
+            )
+        }
     }
 
     fun setX(value: Float) {
-        _state.value = _state.value.copy(x = value)
+        _state.update { it.copy(x = value) }
         scheduleGeometryPreview()
     }
 
     fun setY(value: Float) {
-        _state.value = _state.value.copy(y = value)
+        _state.update { it.copy(y = value) }
         scheduleGeometryPreview()
     }
 
     fun setW(value: Float) {
-        _state.value = _state.value.copy(w = value)
+        _state.update { it.copy(w = value) }
         scheduleGeometryPreview()
     }
 
     fun setH(value: Float) {
-        _state.value = _state.value.copy(h = value)
+        _state.update { it.copy(h = value) }
         scheduleGeometryPreview()
     }
 
     fun setRound(value: Boolean) {
-        _state.value = _state.value.copy(round = value)
+        _state.update { it.copy(round = value) }
         scheduleGeometryPreview()
     }
 
@@ -420,19 +437,23 @@ class CamdController(
     private fun applyLens(value: CamdLensCorrection) {
         val inputId = _state.value.inputId
         val saved = windows.setLensCorrection(inputId, value)
-        _state.value = _state.value.copy(lens = saved)
+        _state.update { it.copy(lens = saved) }
     }
 
     fun setKeepAvmStopped(keep: Boolean) {
         io.execute {
-            _state.value = _state.value.copy(busy = true, keepAvmStopped = keep)
+            _state.update { it.copy(busy = true, keepAvmStopped = keep) }
             val result = windows.setKeepAvmStopped(keep)
-            _state.value = _state.value.copy(
-                busy = false,
-                keepAvmStopped = windows.keepAvmStopped(),
-                message = result,
-                status = windows.status(),
-            )
+            val actual = windows.keepAvmStopped()
+            val status = windows.status()
+            _state.update {
+                it.copy(
+                    busy = false,
+                    keepAvmStopped = actual,
+                    message = result,
+                    status = status,
+                )
+            }
         }
     }
 
@@ -449,13 +470,13 @@ class CamdController(
         tap: Boolean = _state.value.tapToClose,
     ) {
         windows.setUiOptions(showClose, tap)
-        _state.value = _state.value.copy(showCloseButton = showClose, tapToClose = tap)
+        _state.update { it.copy(showCloseButton = showClose, tapToClose = tap) }
     }
 
     fun openAsIs() {
         val current = _state.value
         io.execute {
-            _state.value = current.copy(busy = true, message = "Открываю окно…")
+            _state.update { it.copy(busy = true, message = "Открываю окно…") }
             val line = buildString {
                 append(
                     String.format(
@@ -477,7 +498,7 @@ class CamdController(
     fun openPreset(name: String) {
         val current = _state.value
         io.execute {
-            _state.value = current.copy(busy = true, message = "Открываю окно…")
+            _state.update { it.copy(busy = true, message = "Открываю окно…") }
             val line = buildString {
                 append(
                     String.format(
@@ -498,7 +519,7 @@ class CamdController(
                 // geometry sliders on this tab control exactly this window.
                 val preset = windows.preset(name)
                 if (preset != null) {
-                    _state.value = _state.value.copy(inputId = preset.cameraId)
+                    _state.update { it.copy(inputId = preset.cameraId) }
                 }
             }
             runOpenLine(line)
@@ -517,16 +538,16 @@ class CamdController(
             "state=error error=bad_geometry"
         }
         if (result.contains("overlay_permission")) askOverlay()
-        _state.value = _state.value.copy(
-            busy = false,
-            message = if (result.contains("overlay_permission")) {
-                "Не удалось выдать показ поверх других окон."
-            } else {
-                result
-            },
-            status = windows.status(),
-            log = engine.logTail()
-        )
+        val status = windows.status()
+        val log = engine.logTail()
+        val message = if (result.contains("overlay_permission")) {
+            "Не удалось выдать показ поверх других окон."
+        } else {
+            result
+        }
+        _state.update {
+            it.copy(busy = false, message = message, status = status, log = log)
+        }
     }
 
     fun close() {
@@ -535,53 +556,56 @@ class CamdController(
 
     fun closeCamera(inputId: Int) {
         io.execute {
-            _state.value = _state.value.copy(busy = true, message = "Закрываю…")
+            _state.update { it.copy(busy = true, message = "Закрываю…") }
             val result = windows.close(inputId)
-            _state.value = _state.value.copy(
-                busy = false,
-                message = result,
-                status = windows.status(),
-                log = engine.logTail()
-            )
+            val status = windows.status()
+            val log = engine.logTail()
+            _state.update {
+                it.copy(busy = false, message = result, status = status, log = log)
+            }
         }
     }
 
     fun presets(cameraId: Int): List<CamdPreset> = windows.presets(cameraId)
 
     fun startEditPreset(preset: CamdPreset) {
-        _state.value = _state.value.copy(editingPreset = preset)
+        _state.update { it.copy(editingPreset = preset) }
     }
 
     fun cancelEditPreset() {
         val draft = _state.value.editingPreset ?: return
         // Roll the open window of this preset back to the stored values.
         windows.preset(draft.name)?.let { windows.applyPresetToWindows(it) }
-        _state.value = _state.value.copy(editingPreset = null)
+        _state.update { it.copy(editingPreset = null) }
     }
 
     fun setNewPresetName(value: String) {
-        _state.value = _state.value.copy(newPresetName = value)
+        _state.update { it.copy(newPresetName = value) }
     }
 
     fun createPreset() {
         val name = _state.value.newPresetName.trim()
         if (!CamdPreset.isValidName(name)) {
-            _state.value = _state.value.copy(
-                message = "Имя пресета: строчная латиница, цифры и _, 1–32 символа"
-            )
+            _state.update {
+                it.copy(
+                    message = "Имя пресета: строчная латиница, цифры и _, 1–32 символа"
+                )
+            }
             return
         }
         val existing = windows.preset(name)
-        _state.value = _state.value.copy(
-            newPresetName = "",
-            tab = CamdTab.PRESETS,
-            message = if (existing != null) {
-                "Пресет «$name» уже есть — открыл его настройки"
-            } else {
-                "Новый пресет «$name»: выберите источник, настройте и нажмите «Сохранить»"
-            },
-            editingPreset = existing ?: CamdPreset(name, _state.value.inputId),
-        )
+        _state.update {
+            it.copy(
+                newPresetName = "",
+                tab = CamdTab.PRESETS,
+                message = if (existing != null) {
+                    "Пресет «$name» уже есть — открыл его настройки"
+                } else {
+                    "Новый пресет «$name»: выберите источник, настройте и нажмите «Сохранить»"
+                },
+                editingPreset = existing ?: CamdPreset(name, it.inputId),
+            )
+        }
     }
 
     fun setEditCamera(id: Int) {
@@ -604,7 +628,7 @@ class CamdController(
         } else {
             draft.copy(correction = windows.lensCorrection(draft.cameraId))
         }
-        _state.value = _state.value.copy(editingPreset = prefilled.copy(defaultCorrection = enabled))
+        _state.update { it.copy(editingPreset = prefilled.copy(defaultCorrection = enabled)) }
     }
 
     fun setEditCorrectionField(
@@ -649,7 +673,7 @@ class CamdController(
     }
 
     private fun updateEdit(block: (CamdPreset) -> CamdPreset) {
-        _state.value = _state.value.copy(editingPreset = _state.value.editingPreset?.let(block))
+        _state.update { it.copy(editingPreset = it.editingPreset?.let(block)) }
     }
 
     fun saveEditPreset() {
@@ -677,10 +701,12 @@ class CamdController(
             // The saved values go straight to the open window of this preset (if any),
             // and the editor stays open so the settings remain visible.
             if (error == null) windows.applyPresetToWindows(draft)
-            _state.value = _state.value.copy(
-                message = error ?: "Пресет «${draft.name}» сохранён: ${describeSavedSettings(draft)}",
-                editingPreset = draft,
-            )
+            _state.update {
+                it.copy(
+                    message = error ?: "Пресет «${draft.name}» сохранён: ${describeSavedSettings(draft)}",
+                    editingPreset = draft,
+                )
+            }
         }
     }
 
@@ -713,9 +739,11 @@ class CamdController(
         io.execute {
             val removed = windows.deleteUserPreset(name)
             refreshSettings()
-            _state.value = _state.value.copy(
-                message = if (removed) "Пресет «$name» удалён" else "Пресет «$name» не найден",
-            )
+            _state.update {
+                it.copy(
+                    message = if (removed) "Пресет «$name» удалён" else "Пресет «$name» не найден",
+                )
+            }
         }
     }
 
@@ -735,7 +763,7 @@ class CamdController(
     }
 
     fun setMessage(text: String) {
-        _state.value = _state.value.copy(message = text)
+        _state.update { it.copy(message = text) }
     }
 }
 
@@ -982,7 +1010,7 @@ private fun CamerasTab(
     onOpenAsIs: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val input = remember(state.inputId) { KnownInputs.byId(state.inputId) }
+    val input = remember(state.inputId) { CamdSources.camera(state.inputId) }
     Text(
         "Одно окно на камеру. Одиночное нажатие плитки в TBox Monitor открывает его, двойное закрывает. " +
             "Повторное открытие только двигает окно.",
@@ -993,7 +1021,7 @@ private fun CamerasTab(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        KnownInputs.all.forEach { camera ->
+        CamdSources.allSources().forEach { camera ->
             FilterChip(
                 selected = camera.id == state.inputId,
                 onClick = { onInput(camera.id) },
@@ -1056,6 +1084,13 @@ private fun CamerasTab(
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (CamdSources.isStock(state.inputId)) {
+        Text(
+            "Штатный вид: дисторсия и раскладка уже запечены в калибровке, коррекции ниже не действуют.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1478,7 +1513,7 @@ private fun PresetsTab(
         color = MaterialTheme.colorScheme.onSurface,
     )
     state.presets.forEach { preset ->
-        val camera = remember(preset.cameraId) { KnownInputs.byId(preset.cameraId) }
+        val camera = remember(preset.cameraId) { CamdSources.camera(preset.cameraId) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1531,7 +1566,7 @@ private fun PresetsTab(
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        val draftCamera = remember(draft.cameraId) { KnownInputs.byId(draft.cameraId) }
+        val draftCamera = remember(draft.cameraId) { CamdSources.camera(draft.cameraId) }
         if (draft.builtin) {
             Text(
                 "Источник: ${draftCamera?.title ?: "камера ${draft.cameraId}"} (у встроенного не меняется)",
@@ -1548,13 +1583,20 @@ private fun PresetsTab(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                KnownInputs.all.forEach { camera ->
+                CamdSources.allSources().forEach { camera ->
                     FilterChip(
                         selected = draft.cameraId == camera.id,
                         onClick = { onEditCamera(camera.id) },
                         label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) },
                     )
                 }
+            }
+            if (CamdSources.isStock(draft.cameraId)) {
+                Text(
+                    "Штатный вид: коррекции не действуют, поворот, зеркала и вырезка работают.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
         Text("Поворот  ${draft.rotation}°", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)

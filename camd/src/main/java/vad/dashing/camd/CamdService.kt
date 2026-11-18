@@ -31,7 +31,12 @@ class CamdService : Service() {
             addAction(Intent.ACTION_SHUTDOWN)
             addAction("android.intent.action.QUICKBOOT_POWEROFF")
         }
-        registerReceiver(shutdownReceiver, shutdownFilter)
+        androidx.core.content.ContextCompat.registerReceiver(
+            this,
+            shutdownReceiver,
+            shutdownFilter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     override fun onDestroy() {

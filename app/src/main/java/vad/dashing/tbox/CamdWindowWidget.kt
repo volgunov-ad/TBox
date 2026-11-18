@@ -25,6 +25,8 @@ const val CAMD_ACTION_CLOSE = "close"
 const val CAMD_ACTION_CLOSE_ALL = "close_all"
 
 val CAMD_WINDOW_CAMERA_IDS: List<Int> = listOf(8, 9, 4, 5, 0, 1, 3)
+/** camd stock calibrated view ids (vendor AVM mesh views of inputs 8/5/9/4). */
+val CAMD_WINDOW_STOCK_CAMERA_IDS: IntRange = 40..45
 const val CAMD_WINDOW_DEFAULT_CAMERA = 8
 const val CAMD_WINDOW_DEFAULT_X = 2
 const val CAMD_WINDOW_DEFAULT_Y = 55
@@ -92,7 +94,9 @@ fun normalizeCamdWindowCrop(x: Int, y: Int, w: Int, h: Int): CamdWindowCrop {
 }
 
 fun normalizeCamdWindowCamera(id: Int): Int {
-    return if (id == 0 || id == 1 || id == 3 || id == 4 || id == 5 || id == 8 || id == 9) {
+    return if (id == 0 || id == 1 || id == 3 || id == 4 || id == 5 || id == 8 || id == 9 ||
+        id in CAMD_WINDOW_STOCK_CAMERA_IDS
+    ) {
         id
     } else {
         CAMD_WINDOW_DEFAULT_CAMERA

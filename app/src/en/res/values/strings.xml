@@ -2915,6 +2915,12 @@
     <string name="camd_window_camera_cabin">Cabin</string>
     <string name="camd_window_camera_oms">OMS</string>
     <string name="camd_window_camera_dms">DMS</string>
+    <string name="camd_window_camera_stock_front">Stock front</string>
+    <string name="camd_window_camera_stock_rear">Stock rear</string>
+    <string name="camd_window_camera_stock_left">Stock left</string>
+    <string name="camd_window_camera_stock_right">Stock right</string>
+    <string name="camd_window_camera_stock_wide_front">Stock wide front</string>
+    <string name="camd_window_camera_stock_wide_rear">Stock wide rear</string>
     <string name="camd_window_unreachable">HU Cameras is not responding</string>
     <string name="camd_window_command_failed">HU Cameras: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>

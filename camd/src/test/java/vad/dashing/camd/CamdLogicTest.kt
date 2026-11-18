@@ -168,7 +168,21 @@ class CamdCommandTest {
         assertNull(CamdCommands.parse("OPEN 2 0.1 0.1 0.2 0.2"))
         assertNull(CamdCommands.parse("OPEN 0 0.9 0.1 0.3 0.2"))
         assertNull(CamdCommands.parse("OPEN 0 0 0 0.01 0.2"))
+        assertNull(CamdCommands.parse("OPEN 39 0.1 0.1 0.2 0.2"))
+        assertNull(CamdCommands.parse("OPEN 46 0.1 0.1 0.2 0.2"))
         assertNull(CamdCommands.parse("MOVE 0"))
+    }
+
+    @Test
+    fun parsesStockSourceIds() {
+        assertEquals(
+            CamdCommand.Open(40, 0.02f, 0.55f, 0.40f, 0.40f),
+            CamdCommands.parse("OPEN 40 0.0200 0.5500 0.4000 0.4000"),
+        )
+        assertEquals(
+            CamdCommand.Open(45, 0.1f, 0.2f, 0.3f, 0.3f, 90, flipH = true, flipV = false),
+            CamdCommands.parse("OPEN 45 0.1 0.2 0.3 0.3 90 1"),
+        )
     }
 }
 
@@ -257,7 +271,7 @@ class CamdPresetStoreTest {
     fun builtinDefaultsCoverAllCamerasAndMergeOverrides() {
         val prefs = FakePrefs()
         val all = CamdPresetStore.all(prefs)
-        assertEquals(15, all.size)
+        assertEquals(21, all.size)
         assertTrue(all.all { it.builtin })
         assertTrue(all.all { it.defaultCorrection })
         assertEquals(CamdCrop(0f, 0f, 0.5f, 1f), CamdPresetStore.byName(prefs, "front_left")!!.crop)
@@ -329,6 +343,33 @@ class CamdPresetStoreTest {
     }
 
     @Test
+    fun stockPresetsTargetStockSources() {
+        val stock = CamdBuiltinPresets.all.filter { CamdSources.isStock(it.cameraId) }
+        assertEquals(
+            listOf(
+                "stock_front" to 40,
+                "stock_right" to 41,
+                "stock_rear" to 42,
+                "stock_left" to 43,
+                "stock_wide_front" to 44,
+                "stock_wide_rear" to 45,
+            ),
+            stock.map { it.name to it.cameraId },
+        )
+        assertTrue(stock.all { it.builtin && it.rotation == 0 && it.crop.isIdentity() })
+    }
+
+    @Test
+    fun userPresetsMayTargetStockSources() {
+        val prefs = FakePrefs()
+        assertNull(CamdPresetStore.saveUser(prefs, CamdPreset("my_stock", 42, rotation = 90)))
+        val saved = CamdPresetStore.byName(prefs, "my_stock")!!
+        assertEquals(42, saved.cameraId)
+        assertFalse(saved.builtin)
+        assertEquals("unknown_camera", CamdPresetStore.saveUser(prefs, CamdPreset("bad_stock", 46)))
+    }
+
+    @Test
     fun decodePresetsSavedWithoutCorrectionFieldsDefaultToCameraCorrections() {
         val legacy = CamdJson.obj(
             listOf(
@@ -370,7 +411,7 @@ class CamdBackupTest {
         val summary = CamdBackup.importJson(fresh, json)!!
         assertEquals(7, summary.corrections)
         assertEquals(1, summary.userPresets)
-        assertEquals(15, summary.builtinPresets)
+        assertEquals(21, summary.builtinPresets)
         assertTrue(summary.keepAvm)
         assertEquals(CamdLensCorrection(k1 = -0.2f, tiltV = 0.3f), CamdLensCorrectionStore.load(fresh, 8))
         assertEquals(90, CamdPresetStore.byName(fresh, "my_corner")!!.rotation)
@@ -378,6 +419,37 @@ class CamdBackupTest {
         assertTrue(fresh.getBoolean(CameraWindows.KEEP_AVM_STOPPED_KEY, false))
         assertFalse(fresh.getBoolean(CameraWindows.SHOW_CLOSE_BUTTON_KEY, true))
         assertTrue(fresh.getBoolean(CameraWindows.TAP_TO_CLOSE_KEY, false))
+    }
+
+    @Test
+    fun backupRoundTripsStockSourcePresets() {
+        val prefs = FakePrefs()
+        assertNull(CamdPresetStore.saveUser(prefs, CamdPreset("my_stock", 44, rotation = 180)))
+        val json = CamdBackup.exportJson(prefs)
+        val fresh = FakePrefs()
+        val summary = CamdBackup.importJson(fresh, json)!!
+        assertEquals(1, summary.userPresets)
+        assertEquals(44, CamdPresetStore.byName(fresh, "my_stock")!!.cameraId)
+        assertEquals(180, CamdPresetStore.byName(fresh, "my_stock")!!.rotation)
+    }
+
+    @Test
+    fun correctionsAcceptOnlyRawInputs() {
+        val prefs = FakePrefs()
+        val document = CamdJson.write(
+            CamdJson.obj(
+                listOf(
+                    "version" to CamdJson.num(1),
+                    "app" to CamdJson.str("camd"),
+                    "corrections" to CamdJson.obj(
+                        listOf("40" to CamdJson.obj(listOf("k1" to CamdJson.num(0.1f))))
+                    ),
+                    "presets" to CamdJson.arr(emptyList()),
+                    "keepAvmStopped" to CamdJson.bool(false),
+                )
+            )
+        )
+        assertNull(CamdBackup.importJson(prefs, document))
     }
 
     @Test

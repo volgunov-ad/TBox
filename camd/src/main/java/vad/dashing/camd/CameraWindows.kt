@@ -41,6 +41,11 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
+    /** Loaded once on the first stock OPEN; null when the HU has no calibration dir. */
+    private val stockCalibration: CamdCalibration? by lazy {
+        runCatching { CamdCalibration.load(File(CamdCalibration.DIR)) }.getOrNull()
+    }
+
     @Volatile
     private var recorderActive = false
 
@@ -159,6 +164,7 @@ class CameraWindows(private val context: Context) {
 
     /** Persist per-camera visual correction and push it to an open overlay if any. */
     fun setLensCorrection(inputId: Int, value: CamdLensCorrection): CamdLensCorrection = synchronized(lock) {
+        if (CamdSources.isStock(inputId)) return CamdLensCorrection.IDENTITY
         val clamped = CamdLensCorrection.clamp(value)
         CamdLensCorrectionStore.save(prefs, inputId, clamped)
         val live = views[inputId]
@@ -170,7 +176,14 @@ class CameraWindows(private val context: Context) {
 
     fun open(command: CamdCommand.Open): String = synchronized(lock) {
         val resolved = resolvePreset(command) ?: return "state=error error=unknown_preset"
-        val input = KnownInputs.byId(resolved.inputId) ?: return "state=error error=unknown_input"
+        if (!CamdSources.isKnown(resolved.inputId)) return "state=error error=unknown_input"
+        val stockView = if (CamdSources.isStock(resolved.inputId)) {
+            stockCalibration?.bySource(resolved.inputId) ?: return "state=error error=stock_cal_missing"
+        } else {
+            null
+        }
+        val input = KnownInputs.byId(stockView?.inputId ?: resolved.inputId)
+            ?: return "state=error error=unknown_input"
         val moved = views.containsKey(resolved.inputId)
         openIds.add(resolved.inputId)
         writeDesired()
@@ -188,7 +201,7 @@ class CameraWindows(private val context: Context) {
             maybeStartAvm()
             return "state=error error=overlay_permission"
         }
-        val shown = show(resolved, input)
+        val shown = show(resolved, input, stockView)
         if (!shown.ok) {
             if (!moved) openIds.remove(resolved.inputId)
             writeDesired()
@@ -260,10 +273,10 @@ class CameraWindows(private val context: Context) {
     fun applyPresetToWindows(preset: CamdPreset) = synchronized(lock) {
         val targets = windowSources.filterValues { it == preset.name }.keys.toList()
         if (targets.isEmpty()) return@synchronized
-        val lens = if (preset.defaultCorrection) {
-            CamdLensCorrectionStore.load(prefs, preset.cameraId)
-        } else {
-            preset.correction
+        val lens = when {
+            CamdSources.isStock(preset.cameraId) -> CamdLensCorrection.IDENTITY
+            preset.defaultCorrection -> CamdLensCorrectionStore.load(prefs, preset.cameraId)
+            else -> preset.correction
         }
         val crop = if (preset.crop.isIdentity()) CamdCrop.IDENTITY else preset.crop
         targets.forEach { inputId ->
@@ -308,8 +321,8 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun needsAvmStop(): Boolean {
-        if (recorderActive && recorderInputsPref().any { KnownInputs.byId(it)?.heldByAvm == true }) return true
-        return openIds.any { KnownInputs.byId(it)?.heldByAvm == true }
+        if (recorderActive && recorderInputsPref().any { CamdSources.heldByAvm(it) }) return true
+        return openIds.any { CamdSources.heldByAvm(it) }
     }
 
     private fun prepare(stopAvm: Boolean) {
@@ -405,14 +418,17 @@ class CameraWindows(private val context: Context) {
         File(context.filesDir, "avm.stopped").delete()
     }
 
-    private fun show(command: CamdCommand.Open, input: CameraInput): ShowResult {
+    private fun show(command: CamdCommand.Open, input: CameraInput, stockView: CamdStockView?): ShowResult {
         val latch = CountDownLatch(1)
         val result = ShowResult()
         main.post {
             try {
                 val existing = views[command.inputId]
-                val lens = command.lensOverride
-                    ?: CamdLensCorrectionStore.load(prefs, command.inputId)
+                val lens = if (stockView != null) {
+                    CamdLensCorrection.IDENTITY
+                } else {
+                    command.lensOverride ?: CamdLensCorrectionStore.load(prefs, command.inputId)
+                }
                 if (existing != null) {
                     place(existing.params, command)
                     existing.setRotation(command.rotation)
@@ -425,6 +441,7 @@ class CameraWindows(private val context: Context) {
                     val live = LiveWindow(
                         command.inputId,
                         input,
+                        stockView,
                         command.rotation,
                         command.flipH,
                         command.flipV,
@@ -478,7 +495,8 @@ class CameraWindows(private val context: Context) {
     private fun writeDesired() {
         val file = File(GrabberScripts.DESIRED)
         file.parentFile?.mkdirs()
-        val ids = openIds + if (recorderActive) recorderInputsPref() else emptySet()
+        val ids = (openIds.mapNotNull { CamdSources.physicalInput(it) } +
+            if (recorderActive) recorderInputsPref() else emptySet()).toSortedSet()
         val text = ids.joinToString("\n")
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
@@ -543,6 +561,7 @@ class CameraWindows(private val context: Context) {
     private inner class LiveWindow(
         val id: Int,
         val input: CameraInput,
+        val stockView: CamdStockView?,
         rotation: Int,
         flipH: Boolean,
         flipV: Boolean,
@@ -617,7 +636,7 @@ class CameraWindows(private val context: Context) {
             params.gravity = Gravity.START or Gravity.TOP
             renderer = UyvyRenderer(
                 picture,
-                File(GrabberScripts.frame(id)),
+                File(GrabberScripts.frame(stockView?.inputId ?: id)),
                 main,
                 rotation,
                 flipH,
@@ -625,6 +644,7 @@ class CameraWindows(private val context: Context) {
                 lens,
                 crop,
                 shape,
+                stockView,
             ) {
                 caption.visibility = View.GONE
             }

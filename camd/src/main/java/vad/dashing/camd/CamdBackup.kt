@@ -88,7 +88,7 @@ object CamdBackup {
         if (names.size != names.toSet().size) return null
         val users = presets.filter { CamdBuiltinPresets.byName(it.name) == null }
         val builtins = presets.filter { CamdBuiltinPresets.byName(it.name) != null }
-        if (users.any { !CamdPreset.isValidName(it.name) || KnownInputs.byId(it.cameraId) == null }) {
+        if (users.any { !CamdPreset.isValidName(it.name) || !CamdSources.isKnown(it.cameraId) }) {
             return null
         }
 

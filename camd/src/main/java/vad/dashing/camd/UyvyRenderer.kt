@@ -15,6 +15,7 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.nio.FloatBuffer
 import java.nio.channels.FileChannel
 
 /**
@@ -34,8 +35,11 @@ internal class UyvyRenderer(
     initialLens: CamdLensCorrection = CamdLensCorrection.IDENTITY,
     initialCrop: CamdCrop = CamdCrop.IDENTITY,
     initialShape: CamdShape = CamdShape.RECT,
+    private val stockView: CamdStockView? = null,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
+
+    private val mirror = stockView?.mirror ?: false
 
     @Volatile
     private var started = false
@@ -189,7 +193,11 @@ internal class UyvyRenderer(
         val quad = ByteBuffer.allocateDirect(8 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
         quad.put(floatArrayOf(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f))
         quad.position(0)
+        val meshPos = stockView?.let { directFloatBuffer(it.positions) }
+        val meshUv = stockView?.let { directFloatBuffer(it.uvs) }
         val aPos = GLES20.glGetAttribLocation(program, "aPos")
+        val aMesh = GLES20.glGetAttribLocation(program, "aMesh")
+        val uStock = GLES20.glGetUniformLocation(program, "uStock")
         val uTex = GLES20.glGetUniformLocation(program, "uTex")
         val uWidth = GLES20.glGetUniformLocation(program, "uWidth")
         val uRot = GLES20.glGetUniformLocation(program, "uRot")
@@ -281,9 +289,10 @@ internal class UyvyRenderer(
                 GLES20.glClearColor(0f, 0f, 0f, 0f)
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
                 GLES20.glUniform1i(uTex, 0)
+                GLES20.glUniform1f(uStock, if (stockView != null) 1f else 0f)
                 GLES20.glUniform1f(uWidth, published.width.toFloat())
                 GLES20.glUniform1f(uRot, rotation.toFloat())
-                GLES20.glUniform1f(uFlipH, if (flipH) 1f else 0f)
+                GLES20.glUniform1f(uFlipH, if (flipH != mirror) 1f else 0f)
                 GLES20.glUniform1f(uFlipV, if (flipV) 1f else 0f)
                 val correction = lens
                 GLES20.glUniform1f(uK1, correction.k1)
@@ -301,10 +310,23 @@ internal class UyvyRenderer(
                 val surfaceH = surfaceHeight.coerceAtLeast(1)
                 GLES20.glUniform1f(uAspect, surfaceW.toFloat() / surfaceH.toFloat())
                 GLES20.glUniform1f(uAA, 1.5f / minOf(surfaceW, surfaceH))
-                quad.position(0)
-                GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
-                GLES20.glEnableVertexAttribArray(aPos)
-                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+                if (stockView == null || meshPos == null || meshUv == null) {
+                    quad.position(0)
+                    GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
+                    GLES20.glEnableVertexAttribArray(aPos)
+                    if (aMesh >= 0) GLES20.glDisableVertexAttribArray(aMesh)
+                    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+                } else {
+                    meshPos.position(0)
+                    GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 12, meshPos)
+                    GLES20.glEnableVertexAttribArray(aPos)
+                    if (aMesh >= 0) {
+                        meshUv.position(0)
+                        GLES20.glVertexAttribPointer(aMesh, 2, GLES20.GL_FLOAT, false, 0, meshUv)
+                        GLES20.glEnableVertexAttribArray(aMesh)
+                    }
+                    GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, stockView.triangleCount * 3)
+                }
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
                 if (!sawFrame) {
@@ -327,6 +349,12 @@ internal class UyvyRenderer(
             window.release()
         }
     }
+
+    private fun directFloatBuffer(values: FloatArray): FloatBuffer =
+        ByteBuffer.allocateDirect(values.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
+            put(values)
+            position(0)
+        }
 
     private fun mapFrame(
         current: RandomAccessFile?,
@@ -423,10 +451,29 @@ internal class UyvyRenderer(
     internal companion object {
         const val VERTEX = """
             attribute vec2 aPos;
+            attribute vec2 aMesh;
+            uniform float uStock;
+            uniform float uRot;
+            uniform float uFlipH;
+            uniform float uFlipV;
+            uniform vec4 uCrop;
             varying vec2 vTex;
             void main() {
-                vTex = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5);
-                gl_Position = vec4(aPos, 0.0, 1.0);
+                if (uStock > 0.5) {
+                    vec2 cu = (aMesh - uCrop.xy) / uCrop.zw;
+                    if (uFlipH > 0.5) cu.x = 1.0 - cu.x;
+                    if (uFlipV > 0.5) cu.y = 1.0 - cu.y;
+                    vec2 p = cu - 0.5;
+                    float a = radians(-uRot);
+                    float ca = cos(a);
+                    float sa = sin(a);
+                    vec2 r = vec2(ca * p.x - sa * p.y, sa * p.x + ca * p.y);
+                    gl_Position = vec4(2.0 * (r + 0.5) - 1.0, 0.0, 1.0);
+                    vTex = aMesh;
+                } else {
+                    vTex = vec2(aPos.x * 0.5 + 0.5, 0.5 - aPos.y * 0.5);
+                    gl_Position = vec4(aPos, 0.0, 1.0);
+                }
             }
         """
         // Order: rotate → optional H/V flip of the displayed image → radial visual tweak
@@ -438,6 +485,7 @@ internal class UyvyRenderer(
             precision highp float;
             uniform sampler2D uTex;
             uniform float uWidth;
+            uniform float uStock;
             uniform float uRot;
             uniform float uFlipH;
             uniform float uFlipV;
@@ -453,6 +501,16 @@ internal class UyvyRenderer(
             uniform float uAspect;
             uniform float uAA;
             varying vec2 vTex;
+            vec4 sampleUyvy(vec2 uv) {
+                float x = uv.x * uWidth;
+                float texel = (floor(x * 0.5) + 0.5) / (uWidth * 0.5);
+                vec4 uyvy = texture2D(uTex, vec2(texel, uv.y));
+                float y = mod(floor(x), 2.0) < 0.5 ? uyvy.g : uyvy.a;
+                float u = uyvy.r - 0.5;
+                float v = uyvy.b - 0.5;
+                y = 1.164 * (y - 0.0625);
+                return vec4(y + 1.596 * v, y - 0.391 * u - 0.813 * v, y + 2.018 * u, 1.0);
+            }
             void main() {
                 float alpha = 1.0;
                 if (uShape > 0.5) {
@@ -461,6 +519,14 @@ internal class UyvyRenderer(
                     float dist = length(qc);
                     alpha = 1.0 - smoothstep(0.5 - uAA, 0.5, dist);
                     if (alpha <= 0.004) discard;
+                }
+                if (uStock > 0.5) {
+                    if (vTex.x < 0.0 || vTex.x > 1.0 || vTex.y < 0.0 || vTex.y > 1.0) {
+                        gl_FragColor = vec4(0.0, 0.0, 0.0, alpha);
+                        return;
+                    }
+                    gl_FragColor = vec4(sampleUyvy(vTex).rgb, alpha);
+                    return;
                 }
                 vec2 p = vTex - 0.5;
                 float a = radians(uRot);
@@ -484,19 +550,7 @@ internal class UyvyRenderer(
                     return;
                 }
                 if (uCropOn > 0.5) uv = uCrop.xy + uCrop.zw * uv;
-                float x = uv.x * uWidth;
-                float texel = (floor(x * 0.5) + 0.5) / (uWidth * 0.5);
-                vec4 uyvy = texture2D(uTex, vec2(texel, uv.y));
-                float y = mod(floor(x), 2.0) < 0.5 ? uyvy.g : uyvy.a;
-                float u = uyvy.r - 0.5;
-                float v = uyvy.b - 0.5;
-                y = 1.164 * (y - 0.0625);
-                gl_FragColor = vec4(
-                    y + 1.596 * v,
-                    y - 0.391 * u - 0.813 * v,
-                    y + 2.018 * u,
-                    alpha
-                );
+                gl_FragColor = vec4(sampleUyvy(uv).rgb, alpha);
             }
         """
     }

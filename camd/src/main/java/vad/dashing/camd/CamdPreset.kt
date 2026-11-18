@@ -40,6 +40,12 @@ object CamdBuiltinPresets {
         full("full_right", 5),
         full("full_front", 8),
         full("full_rear", 9),
+        full("stock_front", 40),
+        full("stock_right", 41),
+        full("stock_rear", 42),
+        full("stock_left", 43),
+        full("stock_wide_front", 44),
+        full("stock_wide_rear", 45),
         CamdPreset("front_left", 8, crop = CamdCrop(0f, 0f, 0.5f, 1f), builtin = true),
         CamdPreset("front_right", 8, crop = CamdCrop(0.5f, 0f, 0.5f, 1f), builtin = true),
         CamdPreset("rear_left", 9, crop = CamdCrop(0f, 0f, 0.5f, 1f), builtin = true),
@@ -85,7 +91,7 @@ object CamdPresetStore {
     /** Saves a user preset. Returns an error token or null on success. */
     fun saveUser(prefs: SharedPreferences, preset: CamdPreset): String? {
         if (!CamdPreset.isValidName(preset.name)) return "bad_name"
-        if (KnownInputs.byId(preset.cameraId) == null) return "unknown_camera"
+        if (!CamdSources.isKnown(preset.cameraId)) return "unknown_camera"
         val entry = preset.copy(
             rotation = CamdPreset.normalizeRotation(preset.rotation),
             crop = CamdCrop.clamp(preset.crop),
@@ -159,7 +165,7 @@ object CamdPresetStore {
         val name = fields["name"]?.asStr() ?: return null
         if (!CamdPreset.isValidName(name)) return null
         val camera = fields["camera"]?.asInt() ?: return null
-        if (KnownInputs.byId(camera) == null) return null
+        if (!CamdSources.isKnown(camera)) return null
         val crop = CamdCrop.clamp(
             CamdCrop(
                 x = fields["cropX"]?.asNum()?.toFloat() ?: 0f,

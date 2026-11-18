@@ -138,6 +138,20 @@ class CamdWindowWidgetTest {
     fun unknownCameraBecomesTheFrontCamera() {
         assertEquals("CLOSE 8", camdWindowCloseLine(99))
         assertEquals(8, normalizeCamdWindowCamera(2))
+        assertEquals(8, normalizeCamdWindowCamera(39))
+        assertEquals(8, normalizeCamdWindowCamera(46))
+    }
+
+    @Test
+    fun stockViewIdsPassThroughNormalizationAndClose() {
+        assertEquals(40, normalizeCamdWindowCamera(40))
+        assertEquals(42, normalizeCamdWindowCamera(42))
+        assertEquals(45, normalizeCamdWindowCamera(45))
+        assertEquals("CLOSE 42", camdWindowCloseLine(42))
+        assertEquals(
+            "OPEN 40 0.0200 0.5500 0.4000 0.4000",
+            camdWindowOpenLine(40, 2, 55, 40, 40),
+        )
     }
 
     @Test

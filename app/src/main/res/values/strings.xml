@@ -2926,6 +2926,12 @@
     <string name="camd_window_camera_cabin">Салон</string>
     <string name="camd_window_camera_oms">OMS</string>
     <string name="camd_window_camera_dms">DMS</string>
+    <string name="camd_window_camera_stock_front">Передняя · штатная</string>
+    <string name="camd_window_camera_stock_rear">Задняя · штатная</string>
+    <string name="camd_window_camera_stock_left">Левая · штатная</string>
+    <string name="camd_window_camera_stock_right">Правая · штатная</string>
+    <string name="camd_window_camera_stock_wide_front">Обзор спереди · штатный</string>
+    <string name="camd_window_camera_stock_wide_rear">Обзор сзади · штатный</string>
     <string name="camd_window_unreachable">Камеры ГУ не отвечают</string>
     <string name="camd_window_command_failed">Камеры ГУ: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>

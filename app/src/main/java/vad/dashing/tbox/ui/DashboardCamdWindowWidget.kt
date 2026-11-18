@@ -110,6 +110,12 @@ internal fun camdWindowCameraTitle(cameraId: Int): Int {
         5 -> R.string.camd_window_camera_right
         8 -> R.string.camd_window_camera_front
         9 -> R.string.camd_window_camera_rear
+        40 -> R.string.camd_window_camera_stock_front
+        41 -> R.string.camd_window_camera_stock_right
+        42 -> R.string.camd_window_camera_stock_rear
+        43 -> R.string.camd_window_camera_stock_left
+        44 -> R.string.camd_window_camera_stock_wide_front
+        45 -> R.string.camd_window_camera_stock_wide_rear
         else -> R.string.camd_window_camera_front
     }
 }
