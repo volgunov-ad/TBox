@@ -745,15 +745,13 @@ class MainActivity : ComponentActivity() {
                 "tbox_backup_$timestamp.json"
             }
             val dataFile = File(savePath, fileName)
-            FileWriter(dataFile).use { writer ->
-                writer.write(json)
-            }
+            val written = AtomicUtf8FileWriter.writeJsonObjectText(dataFile, json).getOrThrow()
             Toast.makeText(
                 this,
-                getString(R.string.toast_saved_to, dataFile.absolutePath),
+                getString(R.string.toast_saved_to, written.absolutePath),
                 Toast.LENGTH_LONG
             ).show()
-            Log.d(TAG, "Резервная копия сохранена: ${dataFile.absolutePath}")
+            Log.d(TAG, "Резервная копия сохранена: ${written.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Ошибка сохранения резервной копии", e)
             Toast.makeText(
