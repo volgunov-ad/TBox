@@ -96,6 +96,10 @@ internal fun headUnitFlowFor(signal: AutomationSignalId): Flow<AutomationSignalV
     AutomationSignalId.TURN_SIGNAL_RIGHT -> UniversalCanRepository.turnSignalsLatchedSide.map { side ->
         AutomationSignalValue.State(if (side == TurnSignalSide.Right) "on" else "off")
     }
+    // Legacy either-side: on if L or R latched (hazard does not latch).
+    AutomationSignalId.TURN_STABILIZED -> UniversalCanRepository.turnSignalsLatchedSide.map { side ->
+        AutomationSignalValue.State(if (side != null) "on" else "off")
+    }
     AutomationSignalId.DRL -> UniversalCanRepository.drlOnState.map {
         it?.let { on -> AutomationSignalValue.State(if (on) "on" else "off") }
             ?: AutomationSignalValue.Unavailable
@@ -359,6 +363,7 @@ internal fun huInterestForSignal(signal: AutomationSignalId): vad.dashing.tbox.m
     AutomationSignalId.HAZARD -> vad.dashing.tbox.mbcan.MbCanSignal.Hazard
     AutomationSignalId.TURN_SIGNAL_LEFT,
     AutomationSignalId.TURN_SIGNAL_RIGHT,
+    AutomationSignalId.TURN_STABILIZED,
     -> vad.dashing.tbox.mbcan.MbCanSignal.TurnSignals
     AutomationSignalId.DRL -> vad.dashing.tbox.mbcan.MbCanSignal.Drl
     AutomationSignalId.EPB_PARK_LAMP -> vad.dashing.tbox.mbcan.MbCanSignal.EpbParkLamp

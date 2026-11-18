@@ -154,6 +154,7 @@ object AutomationParameterLabels {
         AutomationSignalId.HAZARD -> "Аварийка"
         AutomationSignalId.TURN_SIGNAL_LEFT -> "Поворотник левый"
         AutomationSignalId.TURN_SIGNAL_RIGHT -> "Поворотник правый"
+        AutomationSignalId.TURN_STABILIZED -> "Поворотник (стабилизированный)"
         AutomationSignalId.DRL -> "ДХО"
         AutomationSignalId.EPB_PARK_LAMP -> "Лампа EPB (паркинг)"
         AutomationSignalId.ENGINE_OIL_PRESSURE -> "Давление масла (предупреждение)"

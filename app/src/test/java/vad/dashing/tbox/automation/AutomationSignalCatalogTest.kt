@@ -113,6 +113,25 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
+    fun turnStabilized_legacyEitherSide_hiddenFromPickerButDecodable() {
+        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.TURN_STABILIZED)
+        assertEquals(listOf("off", "on"), descriptor.stateOptions)
+        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+        assertEquals(
+            "Поворотник (стабилизированный)",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_STABILIZED),
+        )
+        assertEquals(
+            MbCanSignal.TurnSignals,
+            huInterestForSignal(AutomationSignalId.TURN_STABILIZED),
+        )
+        val picker = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
+        assertFalse(AutomationSignalId.TURN_STABILIZED in picker)
+        assertTrue(AutomationSignalId.TURN_SIGNAL_LEFT in picker)
+        assertTrue(AutomationSignalId.TURN_SIGNAL_RIGHT in picker)
+    }
+
+    @Test
     fun catalog_coversEverySignalId() {
         assertEquals(
             AutomationSignalId.entries.toSet(),
