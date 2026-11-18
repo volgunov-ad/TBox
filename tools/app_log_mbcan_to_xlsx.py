@@ -3,12 +3,16 @@
 Convert TBox Monitor app / deep-diagnostic journals (`tbox_app_log_*.txt`) to Excel.
 
 Parses lines tagged ``MBCAN_TMP.``, ``CANDIAG_MBCAN.``, ``CANDIAG_VHAL.``,
-``CANDIAG_MARK.``, ``EXPERT_CAN.`` and optionally ``TripFuel.`` into a timeline
+``CANDIAG_MARK.``, ``EXPERT_CAN.``, ``CANDIAG_TBOX.`` (raw TBox CAN frames:
+``id=0x… ms=… data=…``) and optionally ``TripFuel.`` into a timeline
 sheet, a summary of distinct cfg / property IDs, and a Marks sheet: for each
 journal mark, the signals whose value changed within ±3 seconds.
 Property IDs are marked known vs unknown against the app catalog
 (``MbCanKnownVehiclePropertyId`` / ``MbCanKnownAudioPropertyId`` in
 ``MbCanCatalog.kt``).
+
+Raw TBox CAN frames default to a delta filter (same-id frames with an
+unchanged payload are dropped); see ``--tbox-frames {all,changes,off}``.
 
 Known/unknown is based on reflecting ``const val`` integer fields from those
 Kotlin objects (same idea as ``DeepDiagnosticsCatalog.annotateMbCanItem``).
@@ -18,6 +22,7 @@ Usage::
 
     python tools/app_log_mbcan_to_xlsx.py path/to/tbox_app_log_….txt
     python tools/app_log_mbcan_to_xlsx.py app_log.txt -o out.xlsx --no-trip-fuel
+    python tools/app_log_mbcan_to_xlsx.py app_log.txt --tbox-frames all
 
 Requires ``openpyxl`` / ``tqdm`` from ``requirements.txt`` (same as ``can_log_to_xlsx.py``).
 """
@@ -60,9 +65,11 @@ DEFAULT_CATALOG_KT = (
 
 LINE_RE = re.compile(
     r"^\[(\d{2}:\d{2}:\d{2})\]\s+(\w+):\s+"
-    r"(MBCAN_TMP|CANDIAG_MBCAN|CANDIAG_VHAL|CANDIAG_MARK|EXPERT_CAN|TripFuel)\.\s*(.*)$"
+    r"(MBCAN_TMP|CANDIAG_MBCAN|CANDIAG_VHAL|CANDIAG_TBOX|CANDIAG_MARK|EXPERT_CAN|TripFuel)\.\s*(.*)$"
 )
 SNAPSHOT_RE = re.compile(r"^snapshot key=(\S+) value=(\S+)")
+TBOX_ID_RE = re.compile(r"\bid=0x([0-9A-Fa-f]+)\b")
+TBOX_DATA_RE = re.compile(r"\bdata=([0-9A-Fa-f]{2}(?: [0-9A-Fa-f]{2})*)")
 CONST_VAL_RE = re.compile(r"const val (\w+)\s*=\s*(-?\d+)")
 OBJECT_BODY_RE = re.compile(
     r"object (MbCanKnownVehiclePropertyId|MbCanKnownAudioPropertyId)\s*\{",
@@ -293,6 +300,34 @@ def parse_line(line: str, catalog: CatalogIndex, include_trip_fuel: bool) -> lis
             )
         ]
 
+    if tag == "CANDIAG_TBOX":
+        im = TBOX_ID_RE.search(body)
+        if im is None:
+            return [
+                LogEvent(
+                    time=time_s,
+                    level=level,
+                    tag=tag,
+                    kind="tbox_note",
+                    detail=body[:500],
+                    raw=raw,
+                )
+            ]
+        dm = TBOX_DATA_RE.search(body)
+        return [
+            LogEvent(
+                time=time_s,
+                level=level,
+                tag=tag,
+                kind="tbox_frame",
+                item_id=int(im.group(1), 16),
+                value=dm.group(1) if dm else None,
+                known=None,
+                detail=body[:500],
+                raw=raw,
+            )
+        ]
+
     if tag == "EXPERT_CAN":
         snap = SNAPSHOT_RE.match(body)
         if snap is not None:
@@ -486,6 +521,8 @@ def signal_identity(ev: LogEvent) -> Optional[str]:
         return f"tmp:{ev.telemetry_key}"
     if ev.kind == "snapshot" and ev.telemetry_key:
         return f"snap:{ev.telemetry_key}"
+    if ev.kind == "tbox_frame" and ev.item_id is not None:
+        return f"tbox:0x{ev.item_id:03X}"
     return None
 
 
@@ -539,6 +576,27 @@ def mark_changes(events: list[LogEvent], window_s: int = 3) -> list[tuple[str, s
     return rows
 
 
+def filter_tbox_frames(events: list[LogEvent], mode: str) -> list[LogEvent]:
+    """``all`` keeps every raw frame, ``off`` drops the tag, ``changes`` keeps
+    only frames whose payload differs from the previous frame of the same CAN id."""
+    if mode == "all":
+        return events
+    if mode == "off":
+        return [ev for ev in events if ev.tag != "CANDIAG_TBOX"]
+    last: dict[int, str] = {}
+    out: list[LogEvent] = []
+    for ev in events:
+        if ev.tag != "CANDIAG_TBOX" or ev.kind != "tbox_frame" or ev.item_id is None:
+            out.append(ev)
+            continue
+        prev = last.get(ev.item_id)
+        last[ev.item_id] = ev.value or ""
+        if prev is not None and prev == ev.value:
+            continue
+        out.append(ev)
+    return out
+
+
 def parse_file(
     path: Path,
     catalog: CatalogIndex,
@@ -565,7 +623,7 @@ def build_items_summary(events: Iterable[LogEvent]) -> list[dict[str, Any]]:
     buckets: dict[tuple[str, int], dict[str, Any]] = {}
     for ev in events:
         if ev.item_id is not None:
-            key = ("item", ev.item_id)
+            key = ("can" if ev.kind == "tbox_frame" else "item", ev.item_id)
         elif ev.property_id is not None:
             key = ("property", ev.property_id)
         else:
@@ -755,6 +813,15 @@ def main() -> None:
         help="Skip TripFuel. lines",
     )
     ap.add_argument(
+        "--tbox-frames",
+        choices=("all", "changes", "off"),
+        default="changes",
+        help=(
+            "Raw CANDIAG_TBOX CAN frames: all = every frame, changes = only "
+            "payload changes per CAN id (default), off = skip the tag"
+        ),
+    )
+    ap.add_argument(
         "--csv",
         type=Path,
         default=None,
@@ -784,6 +851,7 @@ def main() -> None:
         include_trip_fuel=not args.no_trip_fuel,
         show_progress=show_progress,
     )
+    events = filter_tbox_frames(events, args.tbox_frames)
     summary = build_items_summary(events)
     out = args.output or inp.with_suffix(".xlsx")
     write_xlsx(events, summary, out, show_progress, catalog)

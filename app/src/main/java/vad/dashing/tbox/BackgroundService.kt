@@ -1699,6 +1699,7 @@ class BackgroundService : Service() {
                             HeadUnitCanMode.Android9MbCan -> MbCanRepository.setDeepDiagnostics(false)
                             HeadUnitCanMode.Android10Vhal -> Android10VhalRepository.stopDeepDiagnosticsAsync()
                         }
+                        TboxRepository.addFileOnlyLog("INFO", "CANDIAG_TBOX", "rawTboxFrames=off")
                     }
                     MbCanDiagnostics.setEnabled(enabled)
                     MbCanDiagnostics.log("DEBUG", "diagnostics enabled=$enabled")
@@ -1719,6 +1720,11 @@ class BackgroundService : Service() {
                             }
                         }
                     }
+                    TboxRepository.addFileOnlyLog(
+                        "INFO",
+                        "CANDIAG_TBOX",
+                        "rawTboxFrames=" + if (enabled) "on" else "off",
+                    )
                     DeepCanDiagnostics.report(
                         if (UniversalCanRepository.mode.value == HeadUnitCanMode.Android9MbCan)
                             DeepCanDiagnostics.MBCAN_TAG else DeepCanDiagnostics.VHAL_TAG,
