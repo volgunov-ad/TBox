@@ -321,6 +321,10 @@ object ExternalApiVoiceAliasesRu {
             "правый поворотник",
             "поворотник справа",
         ),
+        AutomationSignalId.TURN_STABILIZED to listOf(
+            "поворотник",
+            "указатель поворота",
+        ),
         AutomationSignalId.DRL to listOf(
             "дневные ходовые огни",
             "ходовые огни",

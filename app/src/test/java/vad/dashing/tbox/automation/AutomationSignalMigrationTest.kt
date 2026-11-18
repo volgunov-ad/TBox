@@ -150,6 +150,41 @@ class AutomationSignalMigrationTest {
     }
 
     @Test
+    fun decode_keepsLegacyTurnStabilizedStateEquals() {
+        val decoded = AutomationCodec.decode(
+            """
+            {
+              "formatVersion":1,
+              "automations":[{
+                "id":"a",
+                "name":"turn",
+                "description":"",
+                "enabled":false,
+                "triggers":[{
+                  "type":"state_equals",
+                  "id":"1",
+                  "signal":"turn_stabilized",
+                  "source":"head_unit",
+                  "expectedState":"on",
+                  "holdMillis":0,
+                  "startupBehavior":"initialize_only"
+                }],
+                "conditions":[],
+                "actions":[{"type":"delay","durationMillis":0}],
+                "runMode":"single",
+                "maxRuns":1
+              }]
+            }
+            """.trimIndent(),
+        ).getOrThrow()
+
+        val trigger = decoded.automations.single().triggers.single() as AutomationTrigger.StateEquals
+        assertEquals(AutomationSignalId.TURN_STABILIZED, trigger.signal)
+        assertEquals("on", trigger.expectedState)
+        assertTrue(AutomationValidator.validate(decoded).isEmpty())
+    }
+
+    @Test
     fun decode_migratesStateEqualsTriggerWithNumericHeadlightRaw() {
         val decoded = AutomationCodec.decode(
             """

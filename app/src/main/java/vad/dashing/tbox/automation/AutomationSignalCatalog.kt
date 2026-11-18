@@ -386,6 +386,15 @@ object AutomationSignalCatalog {
             typicalRange = turnSignalTypicalRange,
         ),
         state(
+            AutomationSignalId.TURN_STABILIZED,
+            "Поворотник (стабилизированный)",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = "Устаревший (скрыт в пикере). Любой борт: on если защёлкнут левый " +
+                "или правый; аварийка не включает. Предпочитайте turn_signal_left / " +
+                "turn_signal_right. $turnSignalTypicalRange",
+        ),
+        state(
             AutomationSignalId.DRL,
             "ДХО",
             headUnitOnly,
@@ -1416,13 +1425,15 @@ object AutomationSignalCatalog {
 
     /**
      * Trigger/condition pickers: hides speed-limiter signals while
-     * [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN], and the cruise-state signal that does not
-     * match the global [vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType].
+     * [vad.dashing.tbox.SPEED_LIMITER_UI_HIDDEN], the cruise-state signal that does not
+     * match the global [vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType],
+     * and the legacy either-side [AutomationSignalId.TURN_STABILIZED] (use L/R instead).
      */
     fun pickerSignalsOfType(valueType: AutomationSignalValueType): List<AutomationSignalId> =
         signalsOfType(valueType)
             .filterNot { isSpeedLimiterHiddenFromAutomationPicker(it) }
             .filterNot { isCruiseSignalHiddenFromAutomationPicker(it) }
+            .filterNot { it == AutomationSignalId.TURN_STABILIZED }
 
     private fun isCruiseSignalHiddenFromAutomationPicker(id: AutomationSignalId): Boolean {
         val global = vad.dashing.tbox.VehicleFeatureSettings.cruiseControlType

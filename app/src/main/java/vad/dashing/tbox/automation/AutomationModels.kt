@@ -115,6 +115,12 @@ enum class AutomationSignalId(
     HAZARD("hazard", AutomationSignalValueType.STATE),
     TURN_SIGNAL_LEFT("turn_signal_left", AutomationSignalValueType.STATE),
     TURN_SIGNAL_RIGHT("turn_signal_right", AutomationSignalValueType.STATE),
+    /**
+     * Legacy either-side latch (`on` if left **or** right is latched). Kept so existing
+     * automations with `"signal":"turn_stabilized"` keep decoding after the L/R split.
+     * Hidden from new trigger/condition pickers; prefer [TURN_SIGNAL_LEFT] / [TURN_SIGNAL_RIGHT].
+     */
+    TURN_STABILIZED("turn_stabilized", AutomationSignalValueType.STATE),
     DRL("drl", AutomationSignalValueType.STATE),
     EPB_PARK_LAMP("epb_park_lamp", AutomationSignalValueType.STATE),
     ENGINE_OIL_PRESSURE("engine_oil_pressure", AutomationSignalValueType.STATE),
