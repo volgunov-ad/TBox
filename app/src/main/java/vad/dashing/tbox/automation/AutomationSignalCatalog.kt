@@ -65,6 +65,11 @@ object AutomationSignalCatalog {
         "Только ГУ. Положение 0…100 %: 0 закрыто, штатная щель 20, комфортное открытие 80, " +
             "100 полностью открыто; open (Открыто) — любое открытое положение: 20, 80, 100 и " +
             "промежуточное (A9 BCM отдаёт там −1). A9 BCM getVehicleWindow; A10 *_WIN_Position."
+    private const val turnSignalTypicalRange =
+        "Только ГУ. Бинарный статус защёлки поворотника: on с первого кадра мигания " +
+            "(порог «≥4 вспышки» намеренного перестроения не применяется), off через 2,5 с " +
+            "после последнего мигания. Аварийка защёлку не включает. " +
+            "A9 eMBCAN_VEHICLE_TURNLIGHT (мигает), A10 DirectionInd CEM 1-bit (стабилен)."
 
     val entries: List<AutomationSignalDescriptor> = listOf(
         number(
@@ -367,14 +372,18 @@ object AutomationSignalCatalog {
                 "A10 R_0400_CEM_1_HazardLightSW (CEM 1-bit).",
         ),
         state(
-            AutomationSignalId.TURN_STABILIZED,
-            "Поворотник (стабилизированный)",
+            AutomationSignalId.TURN_SIGNAL_LEFT,
+            "Поворотник левый",
             headUnitOnly,
             binaryStates,
-            typicalRange = "Только ГУ. Бинарный статус защёлки поворотников: on с первого кадра " +
-                "мигания (без порога «≥4 вспышки»), off через 2,5 с после последнего мигания. " +
-                "Левый и правый — один и тот же on, сторон нет; аварийка защёлку не включает. " +
-                "A9 eMBCAN_VEHICLE_TURNLIGHT (мигает), A10 DirectionInd CEM 1-bit (стабилен).",
+            typicalRange = turnSignalTypicalRange,
+        ),
+        state(
+            AutomationSignalId.TURN_SIGNAL_RIGHT,
+            "Поворотник правый",
+            headUnitOnly,
+            binaryStates,
+            typicalRange = turnSignalTypicalRange,
         ),
         state(
             AutomationSignalId.DRL,

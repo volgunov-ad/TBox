@@ -90,17 +90,26 @@ class AutomationSignalCatalogTest {
     }
 
     @Test
-    fun turnStabilized_isHeadUnitBinaryMappedToTurnSignals() {
-        val descriptor = AutomationSignalCatalog.get(AutomationSignalId.TURN_STABILIZED)
-        assertEquals(listOf("off", "on"), descriptor.stateOptions)
-        assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
-        assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
-        assertTrue(descriptor.valueHint().isNotBlank())
+    fun turnSignalSides_areHeadUnitBinaryMappedToTurnSignals() {
+        listOf(
+            AutomationSignalId.TURN_SIGNAL_LEFT,
+            AutomationSignalId.TURN_SIGNAL_RIGHT,
+        ).forEach { id ->
+            val descriptor = AutomationSignalCatalog.get(id)
+            assertEquals(listOf("off", "on"), descriptor.stateOptions)
+            assertTrue(AutomationSignalSource.HEAD_UNIT in descriptor.sources)
+            assertFalse(AutomationSignalSource.TBOX in descriptor.sources)
+            assertTrue(descriptor.valueHint().isNotBlank())
+            assertEquals(MbCanSignal.TurnSignals, huInterestForSignal(id))
+        }
         assertEquals(
-            "Поворотник (стабилизированный)",
-            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_STABILIZED),
+            "Поворотник левый",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_SIGNAL_LEFT),
         )
-        assertEquals(MbCanSignal.TurnSignals, huInterestForSignal(AutomationSignalId.TURN_STABILIZED))
+        assertEquals(
+            "Поворотник правый",
+            AutomationParameterLabels.signalLabel(AutomationSignalId.TURN_SIGNAL_RIGHT),
+        )
     }
 
     @Test

@@ -313,9 +313,13 @@ object ExternalApiVoiceAliasesRu {
             "аварийная сигнализация",
             "аварийные огни",
         ),
-        AutomationSignalId.TURN_STABILIZED to listOf(
-            "поворотник",
-            "указатель поворота",
+        AutomationSignalId.TURN_SIGNAL_LEFT to listOf(
+            "левый поворотник",
+            "поворотник слева",
+        ),
+        AutomationSignalId.TURN_SIGNAL_RIGHT to listOf(
+            "правый поворотник",
+            "поворотник справа",
         ),
         AutomationSignalId.DRL to listOf(
             "дневные ходовые огни",
