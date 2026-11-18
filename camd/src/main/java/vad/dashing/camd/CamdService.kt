@@ -9,6 +9,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
+
+private const val CAMD_LOG_TAG = "CamdService"
 
 class CamdService : Service() {
 
@@ -23,6 +26,7 @@ class CamdService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(CAMD_LOG_TAG, "сервис создан")
         val shutdownFilter = android.content.IntentFilter().apply {
             addAction(Intent.ACTION_SHUTDOWN)
             addAction("android.intent.action.QUICKBOOT_POWEROFF")
@@ -36,6 +40,7 @@ class CamdService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(CAMD_LOG_TAG, "команда старта: intent=$intent")
         val manager = getSystemService(NotificationManager::class.java)
         val channel = NotificationChannel(CHANNEL, "Камеры ГУ", NotificationManager.IMPORTANCE_LOW)
         manager.createNotificationChannel(channel)
@@ -65,6 +70,7 @@ class CamdService : Service() {
 }
 
 object CamdRuntime {
+    private const val TAG = "CamdRuntime"
     private val lock = Any()
     private var engine: CamdEngine? = null
     private var windows: CameraWindows? = null
@@ -81,6 +87,7 @@ object CamdRuntime {
                 engine = created
                 windows = createdWindows
                 recorder = createdRecorder
+                Log.i(CAMD_LOG_TAG, "runtime запущен")
                 CamdApiServer(created, createdWindows).start()
                 Thread({ createdWindows.recover() }, "camd-recover").apply { isDaemon = true }.start()
                 // The dashcam master switch persists: recording starts by itself after boot.

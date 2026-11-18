@@ -2,6 +2,7 @@ package vad.dashing.camd
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,14 +114,30 @@ class RecorderController(
 
     /** Boot path: the persisted master switch starts recording by itself. */
     fun autoStartIfEnabled() {
-        if (!enabledNow && prefs.getBoolean(PREF_ENABLED, false)) {
+        val wanted = prefs.getBoolean(PREF_ENABLED, false)
+        Log.i(LOG_TAG, "автостарт: pref=$wanted активна=$enabledNow")
+        if (!enabledNow && wanted) {
             Thread({ startRecording() }, "camd-rec-boot").apply { isDaemon = true; start() }
         }
     }
 
     /** Shutdown broadcast: finalize segments synchronously, keep the master switch. */
     fun finalizeNow() {
-        if (enabledNow) stopRecording("Выключение ГУ — запись завершена")
+        if (!enabledNow) return
+        synchronized(this) {
+            if (!enabledNow) return
+            enabledNow = false
+            stopEngines()
+            watcher?.interrupt()
+            watcher = null
+            windows.setRecorderActive(false)
+            Log.i(LOG_TAG, "выключение ГУ: сегменты завершены, переключатель сохранён")
+            _state.value = _state.value.copy(
+                recording = false,
+                runState = RunState.STOPPED,
+                message = "Выключение ГУ — запись завершена",
+            )
+        }
     }
 
     // Start / stop -------------------------------------------------------------
@@ -131,7 +148,9 @@ class RecorderController(
             enabledNow = true
             val inputs = _state.value.inputs
             val folder = currentFolder()
-            if (folder != null && !folder.isDirectory) folder.mkdirs()
+            if (folder != null && !folder.isDirectory && folder.parentFile?.isDirectory == true) {
+                folder.mkdirs()
+            }
             try {
                 windows.setRecorderActive(true)
                 windows.setRecorderInputsPref(inputs)
@@ -149,6 +168,10 @@ class RecorderController(
                 return
             }
             startEngines(inputs)
+            Log.i(
+                LOG_TAG,
+                "запись стартовала: ${inputs.sorted().joinToString(" ") { "cam$it" }}",
+            )
             _state.value = _state.value.copy(
                 recording = true,
                 runState = RunState.RECORDING,
@@ -208,6 +231,7 @@ class RecorderController(
     private fun stopEngines() {
         synchronized(engines) {
             engines.values.forEach { it.requestStop() }
+            engines.values.forEach { runCatching { it.interrupt() } }
             engines.values.forEach { runCatching { it.join(3_000) } }
             engines.clear()
         }
@@ -237,6 +261,7 @@ class RecorderController(
 
     private fun nextSegment(inputId: Int): File? {
         val folder = currentFolder() ?: return null
+        if (!folder.isDirectory && folder.parentFile?.isDirectory == true) folder.mkdirs()
         if (!RecorderFiles.isWritable(folder)) return null
         val quota = quotaBytes()
         if (!RecorderFiles.enforceQuota(folder, quota, RecorderFiles.SEGMENT_ESTIMATE_BYTES * 2)) {
@@ -263,6 +288,7 @@ class RecorderController(
     companion object {
         const val MAX_CAMERAS = 4
         const val DEFAULT_QUOTA_GB = 32
+        private const val LOG_TAG = "CamdRecorder"
         private const val PREF_ENABLED = "recorder_enabled"
         private const val PREF_FOLDER = "recorder_folder"
         private const val PREF_QUOTA_GB = "recorder_quota_gb"
