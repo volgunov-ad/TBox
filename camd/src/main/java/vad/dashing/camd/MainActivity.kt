@@ -60,6 +60,9 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var controller: CamdController
     private lateinit var recorder: RecorderController
+    private val accessibilityGranted = mutableStateOf(false)
+    private val accessibilityPromptSkipped = mutableStateOf(false)
+    private val showAccessibilityPrompt = mutableStateOf(false)
 
     private val requestStorage = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -139,11 +142,16 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val state by controller.state.collectAsState()
                     val recorderState by recorder.state.collectAsState()
+                    val granted by accessibilityGranted
+                    val skipped by accessibilityPromptSkipped
+                    val showPrompt by showAccessibilityPrompt
                     CamdScreen(
                         state = state,
                         recorderState = recorderState,
+                        accessibilityGranted = granted,
                         onTab = controller::setTab,
-                        onRecorderToggle = recorder::setEnabled,
+                        onRecorderToggle = ::onRecorderToggleRequested,
+                        onAccessibilityOpenSettings = ::openAccessibilitySettings,
                         onRecorderFolder = recorder::setFolder,
                         onRecorderQuota = recorder::setQuota,
                         onRecorderInput = recorder::toggleInput,
@@ -197,9 +205,54 @@ class MainActivity : ComponentActivity() {
                         onImport = { importFile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) },
                         onKeepAvm = controller::setKeepAvmStopped,
                     )
+                    if (showPrompt) {
+                        AccessibilityPromptDialog(
+                            onDismiss = { showAccessibilityPrompt.value = false },
+                            onOpenSettings = ::openAccessibilitySettings,
+                            onSkip = ::skipAccessibilityPrompt,
+                        )
+                    }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshAccessibilityStatus()
+    }
+
+    private fun refreshAccessibilityStatus() {
+        val raw = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        )
+        accessibilityGranted.value = AccessibilityGate.isEnabledInSetting(
+            raw,
+            packageName,
+            CamdAccessibilityService::class.java.name,
+        )
+        accessibilityPromptSkipped.value = recorder.accessibilityPromptSkipped()
+    }
+
+    private fun onRecorderToggleRequested(enable: Boolean) {
+        if (enable && !accessibilityGranted.value && !accessibilityPromptSkipped.value) {
+            showAccessibilityPrompt.value = true
+            return
+        }
+        recorder.setEnabled(enable)
+    }
+
+    private fun openAccessibilitySettings() {
+        showAccessibilityPrompt.value = false
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
+    private fun skipAccessibilityPrompt() {
+        recorder.dismissAccessibilityPrompt()
+        accessibilityPromptSkipped.value = true
+        showAccessibilityPrompt.value = false
+        recorder.setEnabled(true)
     }
 
     override fun onDestroy() {
@@ -690,8 +743,10 @@ class CamdController(
 private fun CamdScreen(
     state: CamdUiState,
     recorderState: RecorderController.UiState,
+    accessibilityGranted: Boolean,
     onTab: (CamdTab) -> Unit,
     onRecorderToggle: (Boolean) -> Unit,
+    onAccessibilityOpenSettings: () -> Unit,
     onRecorderFolder: (String) -> Unit,
     onRecorderQuota: (Int) -> Unit,
     onRecorderInput: (Int) -> Unit,
@@ -795,7 +850,9 @@ private fun CamdScreen(
             )
             CamdTab.RECORDER -> RecorderTab(
                 recorderState = recorderState,
+                accessibilityGranted = accessibilityGranted,
                 onToggle = onRecorderToggle,
+                onAccessibilityOpenSettings = onAccessibilityOpenSettings,
                 onFolder = onRecorderFolder,
                 onQuota = onRecorderQuota,
                 onInput = onRecorderInput,
@@ -1035,7 +1092,9 @@ private fun CamerasTab(
 @Composable
 private fun RecorderTab(
     recorderState: RecorderController.UiState,
+    accessibilityGranted: Boolean,
     onToggle: (Boolean) -> Unit,
+    onAccessibilityOpenSettings: () -> Unit,
     onFolder: (String) -> Unit,
     onQuota: (Int) -> Unit,
     onInput: (Int) -> Unit,
@@ -1070,6 +1129,29 @@ private fun RecorderTab(
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Автостарт после загрузки ГУ",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        if (accessibilityGranted) {
+            "Спецвозможность выдана: Android подключает службу камер сразу после включения ГУ — " +
+                "раньше броадкаста BOOT_COMPLETED."
+        } else {
+            "Спецвозможность не выдана: старт по броадкасту BOOT_COMPLETED. Работает, но позже " +
+                "и зависит от загрузки системы."
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Button(onClick = onAccessibilityOpenSettings) {
+        Text(
+            if (accessibilityGranted) "Открыть спецвозможности" else "Разрешить автостарт",
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
         "Папка записи",
@@ -1150,6 +1232,39 @@ private fun RecorderTab(
             },
         )
     }
+}
+
+/** One-time offer to grant the accessibility-based early autostart when recording is first enabled. */
+@Composable
+private fun AccessibilityPromptDialog(
+    onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onSkip: () -> Unit,
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Автостарт после загрузки ГУ") },
+        text = {
+            Text(
+                "Чтобы регистратор стартовал сразу после включения ГУ, выдайте приложению " +
+                    "спецвозможность: Android подключит службу камер раньше броадкаста " +
+                    "BOOT_COMPLETED. События экрана служба не читает. Сделать это можно и позже " +
+                    "на вкладке «Регистратор».",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        confirmButton = {
+            Button(onClick = onOpenSettings) {
+                Text("Открыть настройки")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onSkip) {
+                Text("Не нужно")
+            }
+        },
+    )
 }
 
 /** Built-in folder browser in the app style: storage roots, directory browsing, folder creation. */

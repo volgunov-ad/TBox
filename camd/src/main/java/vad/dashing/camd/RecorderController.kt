@@ -121,6 +121,13 @@ class RecorderController(
         }
     }
 
+    fun accessibilityPromptSkipped(): Boolean =
+        prefs.getBoolean(PREF_A11Y_PROMPT_SKIPPED, false)
+
+    fun dismissAccessibilityPrompt() {
+        prefs.edit().putBoolean(PREF_A11Y_PROMPT_SKIPPED, true).apply()
+    }
+
     /** Shutdown broadcast: finalize segments synchronously, keep the master switch. */
     fun finalizeNow() {
         if (!enabledNow) return
@@ -294,5 +301,6 @@ class RecorderController(
         private const val PREF_QUOTA_GB = "recorder_quota_gb"
         private const val PREF_INPUTS = "recorder_inputs"
         private const val PREF_PREV_KEEP = "recorder_prev_keep"
+        private const val PREF_A11Y_PROMPT_SKIPPED = "accessibility_prompt_skipped"
     }
 }
