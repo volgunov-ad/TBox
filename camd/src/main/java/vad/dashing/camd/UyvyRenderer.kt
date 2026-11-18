@@ -420,7 +420,7 @@ internal class UyvyRenderer(
         val length: Long,
     )
 
-    private companion object {
+    internal companion object {
         const val VERTEX = """
             attribute vec2 aPos;
             varying vec2 vTex;

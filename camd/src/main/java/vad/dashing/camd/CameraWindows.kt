@@ -41,6 +41,53 @@ class CameraWindows(private val context: Context) {
     }
     private val propCache = PropCache()
 
+    @Volatile
+    private var recorderActive = false
+
+    /** While recording, stock AVM is force-held off and AVM commands are denied. */
+    fun setRecorderActive(active: Boolean) {
+        recorderActive = active
+    }
+
+    fun setRecorderInputsPref(inputs: Set<Int>) {
+        prefs.edit()
+            .putStringSet(RECORDER_INPUTS_KEY, inputs.map { it.toString() }.toSet())
+            .apply()
+    }
+
+    private fun recorderInputsPref(): Set<Int> =
+        prefs.getStringSet(RECORDER_INPUTS_KEY, emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
+
+    /** Prepares the grabber for [inputs] (writes the desired union, arms root scripts, waits for the beat). */
+    fun ensureGrabberFor(inputs: Set<Int>) = synchronized(lock) {
+        writeDesired()
+        prepare(shouldStopAvmNow())
+    }
+
+    /** Recomputes the desired list after recorder inputs are gone and restarts AVM when nothing holds it. */
+    fun releaseRecorderInputs() = synchronized(lock) {
+        writeDesired()
+        maybeStartAvm()
+    }
+
+    /** Stops the stock AVM and holds it off, ignoring the user's keep flag while the recorder runs. */
+    fun forceAvmOffForRecorder() = synchronized(lock) {
+        markAvmStopped()
+        if (getprop("init.svc.AVMapp") == "running") {
+            val nonce = "r${System.currentTimeMillis()}"
+            arm(GrabberScripts.stopAvm(nonce), nonce)
+            waitProp("init.svc.AVMapp", "running", present = false)
+        }
+    }
+
+    /** Restores the user's pre-recording keep flag; starts AVM when it was not held. */
+    fun restoreAvmAfterRecorder(prevKeep: Boolean) = synchronized(lock) {
+        prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, prevKeep).apply()
+        if (!prevKeep) {
+            maybeStartAvm()
+        }
+    }
+
     fun showCloseButton(): Boolean = prefs.getBoolean(SHOW_CLOSE_BUTTON_KEY, true)
 
     fun tapToClose(): Boolean = prefs.getBoolean(TAP_TO_CLOSE_KEY, false)
@@ -60,6 +107,9 @@ class CameraWindows(private val context: Context) {
 
     /** Stop AVMapp at startup and do not start it when the last surround window closes. */
     fun setKeepAvmStopped(keep: Boolean): String = synchronized(lock) {
+        if (recorderActive) {
+            return "state=error error=recorder_active"
+        }
         prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, keep).apply()
         if (keep) {
             markAvmStopped()
@@ -248,7 +298,8 @@ class CameraWindows(private val context: Context) {
         val ids = synchronized(lock) { if (openIds.isEmpty()) "none" else openIds.joinToString(",") }
         val avm = getprop("init.svc.AVMapp").ifBlank { "unknown" }
         val keep = if (keepAvmStopped()) "1" else "0"
-        return "windows=$ids avm=$avm keep_avm=$keep"
+        val rec = if (recorderActive) "1" else "0"
+        return "windows=$ids avm=$avm keep_avm=$keep rec=$rec"
     }
 
     private fun shouldStopAvmNow(): Boolean {
@@ -257,6 +308,7 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun needsAvmStop(): Boolean {
+        if (recorderActive && recorderInputsPref().any { KnownInputs.byId(it)?.heldByAvm == true }) return true
         return openIds.any { KnownInputs.byId(it)?.heldByAvm == true }
     }
 
@@ -299,7 +351,7 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun maybeStartAvm() {
-        if (keepAvmStopped() || !avmStoppedByUs || needsAvmStop()) return
+        if (recorderActive || keepAvmStopped() || !avmStoppedByUs || needsAvmStop()) return
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
             val busy = listOf(4, 5, 8, 9).any { File(GrabberScripts.frame(it)).exists() }
@@ -426,7 +478,8 @@ class CameraWindows(private val context: Context) {
     private fun writeDesired() {
         val file = File(GrabberScripts.DESIRED)
         file.parentFile?.mkdirs()
-        val text = openIds.joinToString("\n")
+        val ids = openIds + if (recorderActive) recorderInputsPref() else emptySet()
+        val text = ids.joinToString("\n")
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
 
@@ -630,5 +683,6 @@ class CameraWindows(private val context: Context) {
         const val KEEP_AVM_STOPPED_KEY = "keep_avm_stopped"
         const val SHOW_CLOSE_BUTTON_KEY = "show_close_button"
         const val TAP_TO_CLOSE_KEY = "tap_to_close"
+        const val RECORDER_INPUTS_KEY = "recorder_inputs"
     }
 }

@@ -38,7 +38,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -47,6 +49,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import vad.dashing.camd.ui.theme.CamdTheme
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,6 +59,7 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
 
     private lateinit var controller: CamdController
+    private lateinit var recorder: RecorderController
 
     private val requestStorage = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -126,6 +130,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        recorder = CamdRuntime.recorder ?: RecorderController(applicationContext, CamdRuntime.windows(this))
         setContent {
             CamdTheme(dark = isSystemInDarkTheme()) {
                 Surface(
@@ -133,9 +138,15 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val state by controller.state.collectAsState()
+                    val recorderState by recorder.state.collectAsState()
                     CamdScreen(
                         state = state,
+                        recorderState = recorderState,
                         onTab = controller::setTab,
+                        onRecorderToggle = recorder::setEnabled,
+                        onRecorderFolder = recorder::setFolder,
+                        onRecorderQuota = recorder::setQuota,
+                        onRecorderInput = recorder::toggleInput,
                         onInput = controller::setInput,
                         onX = controller::setX,
                         onY = controller::setY,
@@ -197,7 +208,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class CamdTab { CAMERAS, PRESETS, SETTINGS, BACKUP }
+enum class CamdTab { CAMERAS, PRESETS, RECORDER, SETTINGS, BACKUP }
 
 data class CamdUiState(
     val tab: CamdTab = CamdTab.CAMERAS,
@@ -678,7 +689,12 @@ class CamdController(
 @Composable
 private fun CamdScreen(
     state: CamdUiState,
+    recorderState: RecorderController.UiState,
     onTab: (CamdTab) -> Unit,
+    onRecorderToggle: (Boolean) -> Unit,
+    onRecorderFolder: (String) -> Unit,
+    onRecorderQuota: (Int) -> Unit,
+    onRecorderInput: (Int) -> Unit,
     onInput: (Int) -> Unit,
     onX: (Float) -> Unit,
     onY: (Float) -> Unit,
@@ -736,6 +752,7 @@ private fun CamdScreen(
                 tabs = listOf(
                     CamdTab.CAMERAS to "Камеры",
                     CamdTab.PRESETS to "Пресеты",
+                    CamdTab.RECORDER to "Регистратор",
                     CamdTab.SETTINGS to "Настройки",
                     CamdTab.BACKUP to "Импорт/экспорт",
                 ),
@@ -775,6 +792,13 @@ private fun CamdScreen(
                 onKeepAvm = onKeepAvm,
                 onShowCloseButton = onShowCloseButton,
                 onTapToClose = onTapToClose,
+            )
+            CamdTab.RECORDER -> RecorderTab(
+                recorderState = recorderState,
+                onToggle = onRecorderToggle,
+                onFolder = onRecorderFolder,
+                onQuota = onRecorderQuota,
+                onInput = onRecorderInput,
             )
             CamdTab.PRESETS -> PresetsTab(
                 state = state,
@@ -1006,6 +1030,217 @@ private fun CamerasTab(
     RangedSlider("Центр Y", state.lens.cy, CamdLensCorrection.C_MIN, CamdLensCorrection.C_MAX, onLensCy)
     RangedSlider("Тилт В", state.lens.tiltV, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltV)
     RangedSlider("Тилт Г", state.lens.tiltH, CamdLensCorrection.TILT_MIN, CamdLensCorrection.TILT_MAX, onLensTiltH)
+}
+
+@Composable
+private fun RecorderTab(
+    recorderState: RecorderController.UiState,
+    onToggle: (Boolean) -> Unit,
+    onFolder: (String) -> Unit,
+    onQuota: (Int) -> Unit,
+    onInput: (Int) -> Unit,
+) {
+    var showFolderDialog by remember { mutableStateOf(false) }
+    val internalPath = remember(recorderState.folder) {
+        recorderState.folder.startsWith("/sdcard") ||
+            recorderState.folder.startsWith("/data") ||
+            recorderState.folder.startsWith("/storage/emulated")
+    }
+    SettingSwitch(
+        checked = recorderState.enabled,
+        enabled = true,
+        title = if (recorderState.recording) {
+            "● Идёт запись"
+        } else {
+            "Видеорегистратор"
+        },
+        description = when {
+            recorderState.runState == RecorderController.RunState.WAITING_MEDIA ->
+                "Носитель пропал — жду его возвращения, запись продолжится автоматически"
+            recorderState.runState == RecorderController.RunState.OVERFLOW ->
+                "Нет места: очистите папку или увеличьте квоту"
+            else ->
+                "Запись включена: стартует сразу после включения и после загрузки ГУ, завершается при его выключении"
+        },
+        onCheckedChange = onToggle,
+    )
+    Text(
+        "Пока включён регистратор, штатный AVM принудительно отключён: его нельзя включить " +
+            "ни здесь, ни из TBox Monitor, ни командой — до выключения записи.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Папка записи",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        recorderState.folder.ifBlank { "не выбрана" },
+        style = MaterialTheme.typography.bodyLarge,
+        color = if (recorderState.folder.isBlank()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+    )
+    if (internalPath) {
+        Text(
+            "Папка на внутренней памяти ГУ: флеш-память изнашивается и места мало — лучше съёмная флешка",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    Button(
+        onClick = { showFolderDialog = true },
+        enabled = !recorderState.enabled,
+    ) {
+        Text("Выбрать папку", style = MaterialTheme.typography.labelLarge)
+    }
+    Text(
+        "Камеры (до ${RecorderController.MAX_CAMERAS})",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        KnownInputs.all.forEach { camera ->
+            FilterChip(
+                selected = camera.id in recorderState.inputs,
+                onClick = { onInput(camera.id) },
+                enabled = !recorderState.enabled,
+                label = { Text(camera.title, style = MaterialTheme.typography.labelLarge) },
+            )
+        }
+    }
+    val quotaText = "Максимальный размер видео, ГБ (сейчас ${recorderState.quotaGb} ГБ)"
+    OutlinedTextField(
+        value = recorderState.quotaGb.toString(),
+        onValueChange = { raw -> raw.toIntOrNull()?.let(onQuota) },
+        label = { Text(quotaText) },
+        singleLine = true,
+        enabled = !recorderState.enabled,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Занято ${recorderState.usedBytes / (1024 * 1024)} МБ из ${recorderState.quotaGb} ГБ. " +
+            "Сегменты по 3 минуты, при превышении квоты старейшие удаляются. " +
+            "Запись идёт с коррекциями камеры (вкладка «Камеры»), без поворотов и вырезок пресетов.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (recorderState.message.isNotBlank()) {
+        Text(
+            recorderState.message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+    if (showFolderDialog) {
+        RecorderFolderDialog(
+            initial = recorderState.folder,
+            onDismiss = { showFolderDialog = false },
+            onPicked = { path ->
+                onFolder(path)
+                showFolderDialog = false
+            },
+        )
+    }
+}
+
+/** Built-in folder browser in the app style: storage roots, directory browsing, folder creation. */
+@Composable
+private fun RecorderFolderDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onPicked: (String) -> Unit,
+) {
+    fun roots(): List<File> {
+        val internal = File("/sdcard")
+        val list = ArrayList<File>()
+        list.add(internal)
+        File("/storage").listFiles()?.filter { it.isDirectory }?.forEach { root ->
+            // /storage/emulated and /storage/self are symlink aliases of the same internal storage
+            if (root.canonicalPath != internal.canonicalPath) list.add(root)
+        }
+        return list.distinctBy { it.canonicalPath }
+    }
+    var current by remember {
+        mutableStateOf(initial.takeIf { it.isNotBlank() }?.let { File(it) } ?: File("/sdcard"))
+    }
+    val directories = remember(current) {
+        current.listFiles()?.filter { it.isDirectory && it.canRead() }?.sortedBy { it.name.lowercase() } ?: emptyList()
+    }
+    var newFolderName by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Папка для записи") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    current.absolutePath,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (current.absolutePath != "/") {
+                    TextButton(onClick = { current = current.parentFile ?: current }) {
+                        Text(".. наверх", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                roots().forEach { root ->
+                    if (root.absolutePath != current.absolutePath) {
+                        TextButton(onClick = { current = root }) {
+                            Text("→ ${root.absolutePath}", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                directories.forEach { dir ->
+                    TextButton(onClick = { current = dir }) {
+                        Text(dir.name, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedTextField(
+                        value = newFolderName,
+                        onValueChange = { newFolderName = it },
+                        label = { Text("новая папка") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        val name = newFolderName.trim()
+                        if (name.isNotEmpty()) {
+                            val created = File(current, name)
+                            if (created.mkdirs() || created.isDirectory) {
+                                current = created
+                                newFolderName = ""
+                            }
+                        }
+                    }) {
+                        Text("Создать")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onPicked(current.absolutePath) }) {
+                Text("Выбрать эту папку")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        },
+    )
 }
 
 @Composable

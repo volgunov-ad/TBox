@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -11,7 +12,28 @@ import android.os.IBinder
 
 class CamdService : Service() {
 
+    private val shutdownReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            // The device is powering off: finalize MP4 segments while we still can.
+            CamdRuntime.recorder?.finalizeNow()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        val shutdownFilter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_SHUTDOWN)
+            addAction("android.intent.action.QUICKBOOT_POWEROFF")
+        }
+        registerReceiver(shutdownReceiver, shutdownFilter)
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(shutdownReceiver) }
+        super.onDestroy()
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val manager = getSystemService(NotificationManager::class.java)
@@ -46,6 +68,8 @@ object CamdRuntime {
     private val lock = Any()
     private var engine: CamdEngine? = null
     private var windows: CameraWindows? = null
+    var recorder: RecorderController? = null
+        private set
 
     fun start(context: android.content.Context) {
         synchronized(lock) {
@@ -53,10 +77,14 @@ object CamdRuntime {
                 val app = context.applicationContext
                 val created = CamdEngine(app.filesDir)
                 val createdWindows = CameraWindows(app)
+                val createdRecorder = RecorderController(app, createdWindows)
                 engine = created
                 windows = createdWindows
+                recorder = createdRecorder
                 CamdApiServer(created, createdWindows).start()
                 Thread({ createdWindows.recover() }, "camd-recover").apply { isDaemon = true }.start()
+                // The dashcam master switch persists: recording starts by itself after boot.
+                Thread({ createdRecorder.autoStartIfEnabled() }, "camd-rec-boot").apply { isDaemon = true }.start()
             }
         }
     }
