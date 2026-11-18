@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.DisplayMetrics
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.TextureView
@@ -33,6 +34,7 @@ class CameraWindows(private val context: Context) {
     /** inputId → preset name the window was opened with; empty for as-is / custom forms. */
     private val windowSources = HashMap<Int, String>()
     private val main = Handler(Looper.getMainLooper())
+    private val overlayOps = OverlayOpSequencer()
     private val prefs: SharedPreferences =
         context.getSharedPreferences("camd", Context.MODE_PRIVATE)
     private var avmStoppedByUs = false
@@ -419,15 +421,18 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun show(command: CamdCommand.Open, input: CameraInput, stockView: CamdStockView?): ShowResult {
+        val inputId = command.inputId
+        val token = overlayOps.begin(inputId)
         val latch = CountDownLatch(1)
         val result = ShowResult()
         main.post {
             try {
-                val existing = views[command.inputId]
+                if (!overlayOps.isCurrent(inputId, token)) return@post
+                val existing = views[inputId]
                 val lens = if (stockView != null) {
                     CamdLensCorrection.IDENTITY
                 } else {
-                    command.lensOverride ?: CamdLensCorrectionStore.load(prefs, command.inputId)
+                    command.lensOverride ?: CamdLensCorrectionStore.load(prefs, inputId)
                 }
                 if (existing != null) {
                     place(existing.params, command)
@@ -436,10 +441,11 @@ class CameraWindows(private val context: Context) {
                     existing.setLensCorrection(lens)
                     existing.setCrop(command.crop ?: CamdCrop.IDENTITY)
                     existing.setShape(command.shape)
+                    if (!overlayOps.isCurrent(inputId, token)) return@post
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
                     val live = LiveWindow(
-                        command.inputId,
+                        inputId,
                         input,
                         stockView,
                         command.rotation,
@@ -450,9 +456,27 @@ class CameraWindows(private val context: Context) {
                         command.shape,
                     )
                     place(live.params, command)
+                    if (!overlayOps.isCurrent(inputId, token)) return@post
                     windowManager().addView(live.root, live.params)
-                    views[command.inputId] = live
+                    if (!overlayOps.isCurrent(inputId, token)) {
+                        runCatching { windowManager().removeView(live.root) }
+                        return@post
+                    }
+                    views[inputId] = live
+                    if (!overlayOps.isCurrent(inputId, token)) {
+                        // Timeout / newer op won after we committed — undo before start.
+                        if (views.remove(inputId, live)) {
+                            live.stop()
+                            runCatching { windowManager().removeView(live.root) }
+                        }
+                        return@post
+                    }
                     live.start()
+                }
+                if (!overlayOps.isCurrent(inputId, token)) {
+                    // Moved an existing window, then cancelled: leave layout as-is; a newer
+                    // show/hide owns the generation. Do not mark ok.
+                    return@post
                 }
                 result.ok = true
             } catch (error: Throwable) {
@@ -461,22 +485,34 @@ class CameraWindows(private val context: Context) {
                 latch.countDown()
             }
         }
-        if (!latch.await(3, TimeUnit.SECONDS)) result.error = "overlay_timeout"
+        if (!latch.await(3, TimeUnit.SECONDS)) {
+            overlayOps.cancel(inputId)
+            result.error = "overlay_timeout"
+            Log.w(OVERLAY_LOG_TAG, "show timeout input=$inputId token=$token")
+        }
         return result
     }
 
     private fun hide(inputId: Int) {
         windowSources.remove(inputId)
+        val token = overlayOps.begin(inputId)
         val latch = CountDownLatch(1)
         main.post {
-            val live = views.remove(inputId)
-            live?.stop()
-            if (live != null) {
-                runCatching { windowManager().removeView(live.root) }
+            try {
+                if (!overlayOps.isCurrent(inputId, token)) return@post
+                val live = views.remove(inputId)
+                live?.stop()
+                if (live != null) {
+                    runCatching { windowManager().removeView(live.root) }
+                }
+            } finally {
+                latch.countDown()
             }
-            latch.countDown()
         }
-        latch.await(2, TimeUnit.SECONDS)
+        if (!latch.await(2, TimeUnit.SECONDS)) {
+            overlayOps.cancel(inputId)
+            Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token")
+        }
     }
 
     private fun place(params: WindowManager.LayoutParams, command: CamdCommand.Open) {
@@ -704,5 +740,6 @@ class CameraWindows(private val context: Context) {
         const val SHOW_CLOSE_BUTTON_KEY = "show_close_button"
         const val TAP_TO_CLOSE_KEY = "tap_to_close"
         const val RECORDER_INPUTS_KEY = "recorder_inputs"
+        private const val OVERLAY_LOG_TAG = "CamdOverlay"
     }
 }
