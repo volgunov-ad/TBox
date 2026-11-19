@@ -22,10 +22,19 @@ class OverlayOpSequencer {
     fun isCurrent(inputId: Int, token: Long): Boolean = counter(inputId).get() == token
 
     /**
-     * Invalidate any in-flight op (e.g. after a latch timeout) so a late Runnable no-ops.
-     * Returns the new generation.
+     * Invalidate [token] for [inputId] only if it is still current.
+     * No-op when a newer [begin] already advanced the generation (e.g. a later show),
+     * so a late latch timeout cannot cancel the newer op.
+     * Returns true when this call invalidated [token].
      */
-    fun cancel(inputId: Int): Long = begin(inputId)
+    fun cancelIfCurrent(inputId: Int, token: Long): Boolean {
+        val c = counter(inputId)
+        while (true) {
+            val cur = c.get()
+            if (cur != token) return false
+            if (c.compareAndSet(token, token + 1L)) return true
+        }
+    }
 
     /** Run [block] only while [token] is still current. Returns true if the block ran. */
     fun runIfCurrent(inputId: Int, token: Long, block: () -> Unit): Boolean {
@@ -39,4 +48,20 @@ class OverlayOpSequencer {
 
     private fun counter(inputId: Int): AtomicLong =
         generations.getOrPut(inputId) { AtomicLong(0L) }
+
+    companion object {
+        /** API / ShowResult error when a posted overlay op lost the generation race. */
+        const val ERROR_SUPERSEDED = "overlay_superseded"
+
+        /** API / ShowResult error when the main-thread latch timed out. */
+        const val ERROR_TIMEOUT = "overlay_timeout"
+    }
 }
+
+/**
+ * Non-blank reason for `state=error error=…` after a failed overlay show.
+ * Never returns null or blank — stale / missing messages become [OverlayOpSequencer.ERROR_SUPERSEDED].
+ */
+fun overlayFailureReason(error: String?): String =
+    error?.takeIf { it.isNotBlank() } ?: OverlayOpSequencer.ERROR_SUPERSEDED
+

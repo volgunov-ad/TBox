@@ -2,6 +2,7 @@ package vad.dashing.camd
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
@@ -23,14 +24,42 @@ class OverlayOpSequencerTest {
     }
 
     @Test
-    fun cancelInvalidatesPreviousToken() {
+    fun cancelIfCurrentInvalidatesMatchingTokenOnly() {
         val seq = OverlayOpSequencer()
         val showToken = seq.begin(8)
         assertTrue(seq.isCurrent(8, showToken))
-        val cancelled = seq.cancel(8)
+        assertTrue(seq.cancelIfCurrent(8, showToken))
         assertFalse(seq.isCurrent(8, showToken))
-        assertTrue(seq.isCurrent(8, cancelled))
-        assertEquals(cancelled, seq.current(8))
+        assertEquals(showToken + 1L, seq.current(8))
+        assertFalse(seq.cancelIfCurrent(8, showToken))
+    }
+
+    @Test
+    fun lateShowTimeoutDoesNotCancelNewerShow() {
+        // Old show times out after a newer show already began for the same input.
+        val seq = OverlayOpSequencer()
+        val oldShow = seq.begin(4)
+        val newShow = seq.begin(4)
+        assertFalse(
+            "timeout must not bump when a newer begin already owns the generation",
+            seq.cancelIfCurrent(4, oldShow),
+        )
+        assertTrue(seq.isCurrent(4, newShow))
+        assertEquals(newShow, seq.current(4))
+
+        val added = AtomicInteger(0)
+        assertTrue(
+            seq.runIfCurrent(4, newShow) {
+                added.incrementAndGet()
+            },
+        )
+        assertEquals(1, added.get())
+        assertFalse(
+            seq.runIfCurrent(4, oldShow) {
+                added.incrementAndGet()
+            },
+        )
+        assertEquals(1, added.get())
     }
 
     @Test
@@ -56,11 +85,10 @@ class OverlayOpSequencerTest {
     }
 
     @Test
-    fun showTimeoutCancelPreventsLateAdd() {
+    fun showTimeoutCancelPreventsLateAddWhenStillCurrent() {
         val seq = OverlayOpSequencer()
         val showToken = seq.begin(4)
-        // Latch timed out on the API thread — invalidate the posted show.
-        seq.cancel(4)
+        assertTrue(seq.cancelIfCurrent(4, showToken))
         val added = AtomicInteger(0)
         assertFalse(
             seq.runIfCurrent(4, showToken) {
@@ -104,6 +132,56 @@ class OverlayOpSequencerTest {
         assertEquals(setOf(inputId), views)
         assertTrue(seq.isCurrent(inputId, showToken))
         assertFalse(seq.isCurrent(inputId, hideToken))
+    }
+
+    @Test
+    fun delayedMainOldShowTimeoutLeavesNewerShowRunnableCurrent() {
+        val seq = OverlayOpSequencer()
+        val pending = ArrayDeque<() -> Unit>()
+        fun post(block: () -> Unit) {
+            pending.addLast(block)
+        }
+        fun drain() {
+            while (pending.isNotEmpty()) pending.removeFirst().invoke()
+        }
+
+        val views = mutableSetOf<Int>()
+        val inputId = 8
+
+        val oldShow = seq.begin(inputId)
+        post {
+            seq.runIfCurrent(inputId, oldShow) {
+                views.add(inputId)
+            }
+        }
+
+        // API thread: old show latch timed out, then a new OPEN began.
+        val newShow = seq.begin(inputId)
+        post {
+            seq.runIfCurrent(inputId, newShow) {
+                views.add(inputId)
+            }
+        }
+        assertFalse(seq.cancelIfCurrent(inputId, oldShow))
+
+        drain()
+        assertEquals(setOf(inputId), views)
+        assertTrue(seq.isCurrent(inputId, newShow))
+    }
+
+    @Test
+    fun overlayFailureReasonNeverNullOrBlank() {
+        assertEquals(OverlayOpSequencer.ERROR_SUPERSEDED, overlayFailureReason(null))
+        assertEquals(OverlayOpSequencer.ERROR_SUPERSEDED, overlayFailureReason(""))
+        assertEquals(OverlayOpSequencer.ERROR_SUPERSEDED, overlayFailureReason("   "))
+        assertEquals(OverlayOpSequencer.ERROR_SUPERSEDED, overlayFailureReason(OverlayOpSequencer.ERROR_SUPERSEDED))
+        assertEquals(OverlayOpSequencer.ERROR_TIMEOUT, overlayFailureReason(OverlayOpSequencer.ERROR_TIMEOUT))
+        assertEquals("overlay", overlayFailureReason("overlay"))
+
+        val reply = "state=error error=${overlayFailureReason(null)}"
+        assertFalse(reply.contains("error=null"))
+        assertNotEquals("state=error error=", reply)
+        assertTrue(reply.endsWith("error=${OverlayOpSequencer.ERROR_SUPERSEDED}"))
     }
 
     @Test

@@ -208,7 +208,7 @@ class CameraWindows(private val context: Context) {
             if (!moved) openIds.remove(resolved.inputId)
             writeDesired()
             maybeStartAvm()
-            return "state=error error=${shown.error}"
+            return "state=error error=${overlayFailureReason(shown.error)}"
         }
         windowSources[resolved.inputId] = resolved.presetName.orEmpty()
         val state = if (moved) "moved" else "open"
@@ -427,7 +427,10 @@ class CameraWindows(private val context: Context) {
         val result = ShowResult()
         main.post {
             try {
-                if (!overlayOps.isCurrent(inputId, token)) return@post
+                if (!overlayOps.isCurrent(inputId, token)) {
+                    result.markSuperseded()
+                    return@post
+                }
                 val existing = views[inputId]
                 val lens = if (stockView != null) {
                     CamdLensCorrection.IDENTITY
@@ -441,7 +444,10 @@ class CameraWindows(private val context: Context) {
                     existing.setLensCorrection(lens)
                     existing.setCrop(command.crop ?: CamdCrop.IDENTITY)
                     existing.setShape(command.shape)
-                    if (!overlayOps.isCurrent(inputId, token)) return@post
+                    if (!overlayOps.isCurrent(inputId, token)) {
+                        result.markSuperseded()
+                        return@post
+                    }
                     windowManager().updateViewLayout(existing.root, existing.params)
                 } else {
                     val live = LiveWindow(
@@ -456,10 +462,14 @@ class CameraWindows(private val context: Context) {
                         command.shape,
                     )
                     place(live.params, command)
-                    if (!overlayOps.isCurrent(inputId, token)) return@post
+                    if (!overlayOps.isCurrent(inputId, token)) {
+                        result.markSuperseded()
+                        return@post
+                    }
                     windowManager().addView(live.root, live.params)
                     if (!overlayOps.isCurrent(inputId, token)) {
                         runCatching { windowManager().removeView(live.root) }
+                        result.markSuperseded()
                         return@post
                     }
                     views[inputId] = live
@@ -469,6 +479,7 @@ class CameraWindows(private val context: Context) {
                             live.stop()
                             runCatching { windowManager().removeView(live.root) }
                         }
+                        result.markSuperseded()
                         return@post
                     }
                     live.start()
@@ -476,6 +487,7 @@ class CameraWindows(private val context: Context) {
                 if (!overlayOps.isCurrent(inputId, token)) {
                     // Moved an existing window, then cancelled: leave layout as-is; a newer
                     // show/hide owns the generation. Do not mark ok.
+                    result.markSuperseded()
                     return@post
                 }
                 result.ok = true
@@ -486,8 +498,9 @@ class CameraWindows(private val context: Context) {
             }
         }
         if (!latch.await(3, TimeUnit.SECONDS)) {
-            overlayOps.cancel(inputId)
-            result.error = "overlay_timeout"
+            // Only bump if this show still owns the generation — a newer show must keep it.
+            overlayOps.cancelIfCurrent(inputId, token)
+            result.error = OverlayOpSequencer.ERROR_TIMEOUT
             Log.w(OVERLAY_LOG_TAG, "show timeout input=$inputId token=$token")
         }
         return result
@@ -510,7 +523,7 @@ class CameraWindows(private val context: Context) {
             }
         }
         if (!latch.await(2, TimeUnit.SECONDS)) {
-            overlayOps.cancel(inputId)
+            overlayOps.cancelIfCurrent(inputId, token)
             Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token")
         }
     }
@@ -591,7 +604,13 @@ class CameraWindows(private val context: Context) {
 
     private class ShowResult {
         var ok: Boolean = false
+        /** Non-null reason for callers when [ok] is false; never leave this null. */
         var error: String = "overlay"
+
+        fun markSuperseded() {
+            ok = false
+            error = OverlayOpSequencer.ERROR_SUPERSEDED
+        }
     }
 
     private inner class LiveWindow(
