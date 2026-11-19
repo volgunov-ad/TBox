@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -53,6 +54,7 @@ import vad.dashing.tbox.ui.theme.tboxTitle
 import vad.dashing.tbox.automation.AUTOMATION_MAX_ACTION_DEPTH
 import vad.dashing.tbox.automation.AUTOMATION_MAX_DELAY_MS
 import vad.dashing.tbox.automation.AutomationAction
+import vad.dashing.tbox.automation.AutomationActionGroup
 import vad.dashing.tbox.automation.AutomationBuiltinActionType
 import vad.dashing.tbox.automation.AutomationCanCatalog
 import vad.dashing.tbox.automation.AutomationCanCatalogEntry
@@ -68,6 +70,10 @@ import vad.dashing.tbox.automation.AutomationMainScreenTarget
 import vad.dashing.tbox.automation.AutomationSignalStateEncoding
 import vad.dashing.tbox.automation.AutomationTriggerWidgetCommand
 import vad.dashing.tbox.automation.builtinActionTriggerWidgetCommand
+import vad.dashing.tbox.automation.builtinActionGroup
+import vad.dashing.tbox.automation.builtinActionKeywords
+import vad.dashing.tbox.automation.canActionGroup
+import vad.dashing.tbox.automation.canActionKeywords
 import vad.dashing.tbox.formatCamdAutomationWindowArgs
 import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.automation.floatingPanelEnabledOp
@@ -81,6 +87,7 @@ import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
 import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.FloatingDashboardConfig
+import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -319,10 +326,22 @@ private fun CanCommandFields(
         )
         return
     }
-    AutomationDropdown(
-        label = "CAN-действие",
+    val canOptions = remember(catalogEntries) {
+        catalogEntries.map { catalogueEntry ->
+            AutomationPickerOption(
+                value = catalogueEntry,
+                label = catalogueEntry.label,
+                group = catalogueEntry.group.label,
+                supportingText = catalogueEntry.supportedModes.canModeLabel(),
+                keywords = canActionKeywords(catalogueEntry.bus, catalogueEntry.propertyId),
+                key = "can:${catalogueEntry.bus}:${catalogueEntry.propertyId}",
+            )
+        }
+    }
+    AutomationSearchablePickerField(
+        label = "Действие",
         value = selectedEntry,
-        options = catalogEntries,
+        options = canOptions,
         optionLabel = { it.label },
         onValueChange = { selected ->
             val operation = if (
@@ -687,12 +706,23 @@ private fun BuiltinActionFields(
     onChange: (AutomationAction) -> Unit,
 ) {
     val context = LocalContext.current
-    AutomationDropdown(
-        label = "Действие приложения",
-        value = action.type,
-        options = AutomationBuiltinActionType.entries.filter {
+    val builtinOptions = remember {
+        AutomationBuiltinActionType.entries.filter {
             it != AutomationBuiltinActionType.ESP_RELAY_SET
-        }.sortedByAutomationLabel(::builtinActionLabel),
+        }.map { type ->
+            AutomationPickerOption(
+                value = type,
+                label = builtinActionLabel(type),
+                group = builtinActionGroup(type).label,
+                keywords = builtinActionKeywords(type),
+                key = "builtin:${type.storageKey}",
+            )
+        }
+    }
+    AutomationSearchablePickerField(
+        label = "Действие",
+        value = action.type,
+        options = builtinOptions,
         optionLabel = ::builtinActionLabel,
         onValueChange = { type ->
             onChange(
@@ -1556,7 +1586,91 @@ private fun AddAutomationActionRow(
     peerAutomations: List<AutomationDefinition>,
     onAdd: (AutomationAction) -> Unit,
 ) {
-    var kind by remember { mutableStateOf(ActionUiKind.CAN) }
+    var kind by remember { mutableStateOf(ActionUiKind.ACTIONS) }
+    var showActionsPicker by remember { mutableStateOf(false) }
+    val canMode by UniversalCanRepository.mode.collectAsState()
+    val mergedActionOptions: List<AutomationPickerOption<Any>> =
+        remember(canMode) {
+            buildList {
+                AutomationBuiltinActionType.entries
+                    .filter { it != AutomationBuiltinActionType.ESP_RELAY_SET }
+                    .forEach { type ->
+                        add(
+                            AutomationPickerOption<Any>(
+                                value = type,
+                                label = builtinActionLabel(type),
+                                group = builtinActionGroup(type).label,
+                                keywords = builtinActionKeywords(type),
+                                key = "builtin:${type.storageKey}",
+                            ),
+                        )
+                    }
+                AutomationCanCatalog.pickerEntries()
+                    .filter { it.supports(canMode) }
+                    .sortedByAutomationLabel { it.label }
+                    .forEach { catalogueEntry ->
+                        add(
+                            AutomationPickerOption<Any>(
+                                value = catalogueEntry,
+                                label = catalogueEntry.label,
+                                group = catalogueEntry.group.label,
+                                supportingText = catalogueEntry.supportedModes.canModeLabel(),
+                                keywords = canActionKeywords(
+                                    catalogueEntry.bus,
+                                    catalogueEntry.propertyId,
+                                ),
+                                key = "can:${catalogueEntry.bus}:${catalogueEntry.propertyId}",
+                            ),
+                        )
+                    }
+            }
+        }
+    if (showActionsPicker) {
+        val keyboardController = LocalSoftwareKeyboardController.current
+        AutomationSearchablePickerDialog(
+            title = "Действие",
+            options = mergedActionOptions,
+            onSelect = { selected ->
+                keyboardController?.hide()
+                showActionsPicker = false
+                onAdd(
+                    when (selected) {
+                        is AutomationBuiltinActionType ->
+                            AutomationAction.Builtin(selected)
+
+                        is AutomationCanCatalogEntry -> {
+                            val entry = selected
+                            AutomationAction.CanCommand(
+                                bus = entry.bus,
+                                propertyId = entry.propertyId,
+                                operation = if (
+                                    AutomationCanOperation.SET in entry.allowedOperations
+                                ) {
+                                    AutomationCanOperation.SET
+                                } else {
+                                    entry.allowedOperations.first()
+                                },
+                                value = entry.defaultValueFor(canMode),
+                            ).let(AutomationCanValueCodec::withPortableKey)
+                        }
+
+                        else -> AutomationAction.Builtin(
+                            AutomationBuiltinActionType.OPEN_MENU,
+                        )
+                    },
+                )
+            },
+            optionLabel = { value ->
+                when (value) {
+                    is AutomationBuiltinActionType -> builtinActionLabel(value)
+                    is AutomationCanCatalogEntry -> value.label
+                    else -> ""
+                }
+            },
+            onDismiss = { showActionsPicker = false },
+            widthDp = 360.dp,
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1572,7 +1686,11 @@ private fun AddAutomationActionRow(
         )
         OutlinedButton(
             onClick = rememberWrappedOnClick {
-                onAdd(defaultAction(kind, apps))
+                if (kind == ActionUiKind.ACTIONS) {
+                    showActionsPicker = true
+                } else {
+                    onAdd(defaultAction(kind, apps))
+                }
             },
         ) {
             AutomationButtonLabel("Добавить")
@@ -1580,9 +1698,16 @@ private fun AddAutomationActionRow(
     }
 }
 
+/** A9 / A10 note for CAN entries in the picker. */
+private fun Set<HeadUnitCanMode>.canModeLabel(): String {
+    val parts = mutableListOf<String>()
+    if (HeadUnitCanMode.Android9MbCan in this) parts += "A9"
+    if (HeadUnitCanMode.Android10Vhal in this) parts += "A10"
+    return if (parts.isEmpty()) "" else parts.joinToString("/")
+}
+
 private enum class ActionUiKind {
-    CAN,
-    BUILTIN,
+    ACTIONS,
     LAUNCH_APP,
     OPEN_MAIN_SCREEN,
     HTTP,
@@ -1592,8 +1717,7 @@ private enum class ActionUiKind {
         IF_THEN_ELSE;
 
     fun label(): String = when (this) {
-        CAN -> "CAN"
-        BUILTIN -> "Действие TBox Monitor"
+        ACTIONS -> "Действия"
         LAUNCH_APP -> "Запустить приложение"
         OPEN_MAIN_SCREEN -> "Открыть страницу главного экрана"
         HTTP -> "HTTP"
@@ -1608,23 +1732,7 @@ private fun defaultAction(
     kind: ActionUiKind,
     apps: List<LaunchableAppEntry>,
 ): AutomationAction = when (kind) {
-    ActionUiKind.CAN -> {
-        val canMode = UniversalCanRepository.mode.value
-        val entry = AutomationCanCatalog.pickerEntries().firstOrNull { it.supports(canMode) }
-            ?: AutomationCanCatalog.pickerEntries().first()
-        AutomationAction.CanCommand(
-            bus = entry.bus,
-            propertyId = entry.propertyId,
-            operation = if (AutomationCanOperation.SET in entry.allowedOperations) {
-                AutomationCanOperation.SET
-            } else {
-                entry.allowedOperations.first()
-            },
-            value = entry.defaultValueFor(canMode),
-        ).let(AutomationCanValueCodec::withPortableKey)
-    }
-
-    ActionUiKind.BUILTIN ->
+    ActionUiKind.ACTIONS ->
         AutomationAction.Builtin(AutomationBuiltinActionType.OPEN_MENU)
 
     ActionUiKind.LAUNCH_APP -> AutomationAction.LaunchApplication(

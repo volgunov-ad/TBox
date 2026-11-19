@@ -663,4 +663,98 @@ class AutomationSignalCatalogTest {
             AutomationSignalCatalog.preferredSource(headrest.id),
         )
     }
+
+    @Test
+    fun everySignal_hasPickerGroupWithNonBlankLabel() {
+        AutomationSignalCatalog.entries.forEach { descriptor ->
+            assertTrue(
+                descriptor.id.name,
+                descriptor.group.label.isNotBlank(),
+            )
+        }
+        assertEquals(
+            "Климат и воздух",
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.HVAC_FAN_DIRECTION).label,
+        )
+        assertEquals(
+            "ADAS и безопасность",
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.FCW).label,
+        )
+        assertEquals(
+            "Поездки и топливо",
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM).label,
+        )
+    }
+
+    @Test
+    fun signalGroups_followDomains() {
+        assertEquals(
+            AutomationSignalGroup.TRIPS,
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.FUEL_LEVEL_LITERS),
+        )
+        assertEquals(
+            AutomationSignalGroup.BODY,
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.WINDOW_FRONT_LEFT),
+        )
+        assertEquals(
+            AutomationSignalGroup.ESP,
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.ESP_RELAY_0),
+        )
+        assertEquals(
+            AutomationSignalGroup.ROADS,
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.ROAD_TUNNEL),
+        )
+        assertEquals(
+            AutomationSignalGroup.MEDIA,
+            AutomationSignalCatalog.signalGroup(AutomationSignalId.MEDIA_PLAYING),
+        )
+    }
+
+    @Test
+    fun signalKeywords_coverFolkSynonyms() {
+        assertTrue(
+            AutomationSignalCatalog.signalKeywords(AutomationSignalId.FRONT_WINDSCREEN_HEAT)
+                .contains("обогрев"),
+        )
+        assertTrue(
+            AutomationSignalCatalog.signalKeywords(AutomationSignalId.WIPER_STS)
+                .contains("дворники"),
+        )
+        assertTrue(
+            AutomationSignalCatalog.signalKeywords(AutomationSignalId.TURN_SIGNAL_LEFT)
+                .contains("поворотник"),
+        )
+        assertTrue(
+            AutomationSignalCatalog.signalKeywords(AutomationSignalId.TRUNK_DOOR)
+                .contains("багажник"),
+        )
+    }
+
+    @Test
+    fun signalSearch_findsBySynonymAndKey() {
+        // «печка» находит обогрев лобового через синонимы.
+        assertTrue(
+            AutomationPickerSearch.matches(
+                query = "печка",
+                label = AutomationSignalCatalog.get(AutomationSignalId.FRONT_WINDSCREEN_HEAT).label,
+                groupLabel =
+                    AutomationSignalCatalog.signalGroup(AutomationSignalId.FRONT_WINDSCREEN_HEAT)
+                        .label,
+                keywords =
+                    AutomationSignalCatalog.signalKeywords(AutomationSignalId.FRONT_WINDSCREEN_HEAT),
+                storageKey = AutomationSignalId.FRONT_WINDSCREEN_HEAT.storageKey,
+            ),
+        )
+        // По ключу находит HVAC-сигнал.
+        assertTrue(
+            AutomationPickerSearch.matches(
+                query = "hvac fan",
+                label = AutomationSignalCatalog.get(AutomationSignalId.HVAC_FAN_SPEED).label,
+                groupLabel = AutomationSignalCatalog.signalGroup(AutomationSignalId.HVAC_FAN_SPEED)
+                    .label,
+                keywords = AutomationSignalCatalog.signalKeywords(AutomationSignalId.HVAC_FAN_SPEED),
+                storageKey = AutomationSignalId.HVAC_FAN_SPEED.storageKey,
+            ),
+        )
+    }
 }

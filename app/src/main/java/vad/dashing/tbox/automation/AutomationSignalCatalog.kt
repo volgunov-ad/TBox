@@ -17,14 +17,36 @@ data class AutomationSignalNamedValue(
     val label: String,
 )
 
+/** User-facing group header for signal pickers. Pure Kotlin, unit-testable. */
+enum class AutomationSignalGroup(val label: String) {
+    ENGINE("Двигатель и КПП"),
+    CLIMATE("Климат и воздух"),
+    BODY("Кузов и комфорт"),
+    ADAS("ADAS и безопасность"),
+    AUDIO("Аудио"),
+    GEO("Геопозиция"),
+    NETWORK("Сеть и модем"),
+    PHONE("Телефон"),
+    MEDIA("Медиа"),
+    TRIPS("Поездки и топливо"),
+    ESP("ESP-компаньон"),
+    APP("Приложение"),
+    DCL("DCL"),
+    CAMERAS("Камеры"),
+    ROADS("Дороги"),
+}
+
 data class AutomationSignalDescriptor(
     val id: AutomationSignalId,
     val label: String,
     val unit: String = "",
     val sources: Set<AutomationSignalSource>,
+    val group: AutomationSignalGroup,
     val stateOptions: List<String> = emptyList(),
     val namedValues: List<AutomationSignalNamedValue> = emptyList(),
     val typicalRange: String = "",
+    /** Русские синонимы для поиска (в дополнение к label и storageKey). */
+    val keywords: List<String> = emptyList(),
 ) {
     fun valueHint(): String {
         val named = formatNamedValues(namedValues)
@@ -796,7 +818,9 @@ object AutomationSignalCatalog {
             id = AutomationSignalId.GEO_POSITION,
             label = "Геопозиция",
             sources = appOnly,
+            group = AutomationSignalGroup.GEO,
             typicalRange = "Текущая точка GeoDisplay (GNSS или подмена)",
+            keywords = signalKeywords(AutomationSignalId.GEO_POSITION),
         ),
         number(
             AutomationSignalId.GEO_ALTITUDE_M,
@@ -1472,13 +1496,16 @@ object AutomationSignalCatalog {
         sources: Set<AutomationSignalSource>,
         typicalRange: String = "",
         namedValues: List<AutomationSignalNamedValue> = emptyList(),
+        keywords: List<String> = emptyList(),
     ) = AutomationSignalDescriptor(
         id = id,
         label = label,
         unit = unit,
         sources = sources,
+        group = signalGroup(id),
         namedValues = namedValues,
         typicalRange = typicalRange,
+        keywords = keywords,
     )
 
     private fun state(
@@ -1488,15 +1515,497 @@ object AutomationSignalCatalog {
         options: List<String> = emptyList(),
         typicalRange: String = "",
         namedValues: List<AutomationSignalNamedValue>? = null,
+        keywords: List<String> = emptyList(),
     ) = AutomationSignalDescriptor(
         id = id,
         label = label,
         sources = sources,
+        group = signalGroup(id),
         stateOptions = options,
         namedValues = namedValues
             ?: options.map { AutomationSignalNamedValue(it, stateOptionLabel(it)) },
         typicalRange = typicalRange,
+        keywords = keywords,
     )
+
+    /** Picker group of a signal; exhaustive `when` — new ids must declare their group here. */
+    fun signalGroup(id: AutomationSignalId): AutomationSignalGroup = when (id) {
+        AutomationSignalId.ENGINE_RPM,
+        AutomationSignalId.CAR_SPEED,
+        AutomationSignalId.ENGINE_TEMPERATURE,
+        AutomationSignalId.STEERING_ANGLE,
+        AutomationSignalId.STEERING_SPEED,
+        AutomationSignalId.GAS_PEDAL,
+        AutomationSignalId.BRAKE_PEDAL,
+        AutomationSignalId.CURRENT_GEAR,
+        AutomationSignalId.TARGET_GEAR,
+        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE,
+        -> AutomationSignalGroup.ENGINE
+
+        AutomationSignalId.OUTSIDE_TEMPERATURE,
+        AutomationSignalId.INSIDE_TEMPERATURE,
+        AutomationSignalId.INSIDE_AIR_QUALITY,
+        AutomationSignalId.OUTSIDE_AIR_QUALITY,
+        -> AutomationSignalGroup.CLIMATE
+
+        AutomationSignalId.FUEL_LEVEL_PERCENT,
+        AutomationSignalId.ODOMETER_KM,
+        AutomationSignalId.CURRENT_FUEL_CONSUMPTION,
+        AutomationSignalId.DISTANCE_TO_EMPTY_KM,
+        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM,
+        AutomationSignalId.VOLTAGE,
+        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE,
+        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE,
+        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE,
+        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE,
+        AutomationSignalId.FRONT_LEFT_WHEEL_TEMPERATURE,
+        AutomationSignalId.FRONT_RIGHT_WHEEL_TEMPERATURE,
+        AutomationSignalId.REAR_LEFT_WHEEL_TEMPERATURE,
+        AutomationSignalId.REAR_RIGHT_WHEEL_TEMPERATURE,
+        AutomationSignalId.ENGINE_OIL_PRESSURE,
+        AutomationSignalId.BRAKE_FLUID,
+        AutomationSignalId.EPB_PARK_LAMP,
+        -> AutomationSignalGroup.ENGINE
+
+        AutomationSignalId.GEAR_MODE,
+        AutomationSignalId.ACC_STATUS,
+        AutomationSignalId.IGNITION_KEY,
+        AutomationSignalId.HU_SYSTEM_MODE,
+        AutomationSignalId.ACC_CRUISE_STATE,
+        AutomationSignalId.CCS_CRUISE_STATE,
+        AutomationSignalId.CRUISE_SET_SPEED,
+        AutomationSignalId.REVERSE_GEAR,
+        AutomationSignalId.DRIVE_MODE,
+        AutomationSignalId.DRIVE_MODE_6DCT,
+        AutomationSignalId.STEERING_MODE,
+        AutomationSignalId.EPS_MODE,
+        AutomationSignalId.FRM_DX_TAR_OBJ,
+        -> AutomationSignalGroup.ENGINE
+
+        AutomationSignalId.STEERING_WHEEL_HEAT,
+        AutomationSignalId.SUNSHADE,
+        AutomationSignalId.SUNROOF,
+        AutomationSignalId.WINDOW_FRONT_LEFT,
+        AutomationSignalId.WINDOW_FRONT_RIGHT,
+        AutomationSignalId.WINDOW_REAR_LEFT,
+        AutomationSignalId.WINDOW_REAR_RIGHT,
+        AutomationSignalId.TRUNK_DOOR,
+        AutomationSignalId.DOOR_FRONT_LEFT,
+        AutomationSignalId.DOOR_FRONT_RIGHT,
+        AutomationSignalId.DOOR_REAR_LEFT,
+        AutomationSignalId.DOOR_REAR_RIGHT,
+        AutomationSignalId.DOOR_AUTO_LOCK,
+        AutomationSignalId.DOOR_IGNOFF_UNLOCK,
+        AutomationSignalId.DRIVER_UNLOCK_MODE,
+        AutomationSignalId.REMOTE_LOCK_FEEDBACK,
+        AutomationSignalId.FRONT_LEFT_SEAT_MODE,
+        AutomationSignalId.FRONT_RIGHT_SEAT_MODE,
+        AutomationSignalId.REAR_LEFT_SEAT_MODE,
+        AutomationSignalId.REAR_RIGHT_SEAT_MODE,
+        AutomationSignalId.MIRROR_AUTO_FOLD,
+        -> AutomationSignalGroup.BODY
+
+        AutomationSignalId.WIPER_MAINTENANCE,
+        AutomationSignalId.WIPER_STS,
+        AutomationSignalId.WIPER_SENSITIVITY,
+        AutomationSignalId.REAR_WIPER,
+        AutomationSignalId.RAIN_DETECTED,
+        AutomationSignalId.HIGH_BEAM,
+        AutomationSignalId.HAZARD,
+        AutomationSignalId.TURN_SIGNAL_LEFT,
+        AutomationSignalId.TURN_SIGNAL_RIGHT,
+        AutomationSignalId.TURN_STABILIZED,
+        AutomationSignalId.TURN_FLASH_COUNT,
+        AutomationSignalId.DRL,
+        AutomationSignalId.HEADLIGHT_MODE,
+        AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME,
+        AutomationSignalId.LOW_BEAM_HEIGHT,
+        AutomationSignalId.REAR_FOG,
+        -> AutomationSignalGroup.BODY
+
+        AutomationSignalId.PARKING_RADAR,
+        AutomationSignalId.AVH,
+        AutomationSignalId.HDC,
+        AutomationSignalId.ESP_OFF,
+        AutomationSignalId.TJA_ICA,
+        AutomationSignalId.HMA,
+        AutomationSignalId.LAS_MODE,
+        AutomationSignalId.BLIND_SPOT_DETECTION,
+        AutomationSignalId.DOOR_OPEN_WARNING,
+        AutomationSignalId.FCW,
+        AutomationSignalId.FCW_SENSITIVITY,
+        AutomationSignalId.ACC_TIME_GAP,
+        AutomationSignalId.LDW_SENSITIVITY,
+        AutomationSignalId.TSR_SWITCH,
+        -> AutomationSignalGroup.ADAS
+
+        AutomationSignalId.HVAC_AC_MAX,
+        AutomationSignalId.HVAC_POWER,
+        AutomationSignalId.HVAC_AUTO,
+        AutomationSignalId.HVAC_RECIRCULATION,
+        AutomationSignalId.HVAC_SYNC,
+        AutomationSignalId.HVAC_CUSTOM_MODE,
+        AutomationSignalId.FRONT_WINDSCREEN_HEAT,
+        AutomationSignalId.HVAC_REAR_DEFROSTER,
+        AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED,
+        AutomationSignalId.HVAC_ANION_PURIFY,
+        AutomationSignalId.FRAGRANCE,
+        AutomationSignalId.FRAGRANCE_SMELL,
+        AutomationSignalId.FRAGRANCE_CONCENTRATION,
+        AutomationSignalId.HVAC_FIRST_BLOWING,
+        AutomationSignalId.BT_REDUCE_FAN,
+        AutomationSignalId.HVAC_AUTO_VENTILATION,
+        AutomationSignalId.HVAC_FAN_DIRECTION,
+        AutomationSignalId.HVAC_TEMPERATURE_LEFT,
+        AutomationSignalId.HVAC_TEMPERATURE_RIGHT,
+        AutomationSignalId.HVAC_FAN_SPEED,
+        AutomationSignalId.HVAC_FRONT_OFF,
+        -> AutomationSignalGroup.CLIMATE
+
+        AutomationSignalId.HUD,
+        AutomationSignalId.HUD_HEIGHT,
+        AutomationSignalId.HUD_BRIGHTNESS,
+        AutomationSignalId.HUD_DISPLAY_MODE,
+        AutomationSignalId.HUD_AUTO_BRIGHTNESS,
+        AutomationSignalId.ICM_BRIGHTNESS_MODE,
+        AutomationSignalId.ICM_BRIGHTNESS,
+        AutomationSignalId.OVERSPEED_ALARM,
+        -> AutomationSignalGroup.BODY
+
+        AutomationSignalId.AUDIO_VOLUME_SPEED_MODE,
+        AutomationSignalId.AUDIO_KEY_TONE_VOLUME,
+        AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME,
+        AutomationSignalId.AUDIO_EQ_MODE,
+        AutomationSignalId.AUDIO_EQ_BASS,
+        AutomationSignalId.AUDIO_EQ_MIDDLE,
+        AutomationSignalId.AUDIO_EQ_TREBLE,
+        AutomationSignalId.AUDIO_BALANCE,
+        AutomationSignalId.AUDIO_FADER,
+        -> AutomationSignalGroup.AUDIO
+
+        AutomationSignalId.GEO_POSITION,
+        AutomationSignalId.GEO_ALTITUDE_M,
+        AutomationSignalId.GEO_SPEED_KMH,
+        AutomationSignalId.GEO_SPEED_SOURCE,
+        AutomationSignalId.GEO_BEARING_DEG,
+        AutomationSignalId.GEO_SATELLITES_VISIBLE,
+        AutomationSignalId.GEO_SATELLITES_USED,
+        AutomationSignalId.GEO_FIX_VALID,
+        AutomationSignalId.GEO_SOURCE,
+        AutomationSignalId.LOCATE_STATUS,
+        -> AutomationSignalGroup.GEO
+
+        AutomationSignalId.ESP_GPIO_IN_0,
+        AutomationSignalId.ESP_GPIO_IN_1,
+        AutomationSignalId.ESP_GPIO_IN_2,
+        AutomationSignalId.ESP_GPIO_IN_3,
+        AutomationSignalId.ESP_RELAY_0,
+        AutomationSignalId.ESP_RELAY_1,
+        AutomationSignalId.ESP_BLE_BOUND,
+        AutomationSignalId.ESP_BLE_BATTERY,
+        -> AutomationSignalGroup.ESP
+
+        AutomationSignalId.WIFI_ENABLED,
+        AutomationSignalId.WIFI_ASSOCIATED,
+        AutomationSignalId.WIFI_SSID,
+        AutomationSignalId.HU_INTERNET_STATUS,
+        AutomationSignalId.WIFI_MODEM_LINK_STATUS,
+        AutomationSignalId.MODEM_MOBILE_DATA,
+        AutomationSignalId.MODEM_NET_TYPE,
+        AutomationSignalId.MODEM_SIM_STATUS,
+        AutomationSignalId.MODEM_SIGNAL_LEVEL,
+        AutomationSignalId.MODEM_RSSI_DBM,
+        AutomationSignalId.MODEM_REGISTERED,
+        AutomationSignalId.MODEM_OPERATOR,
+        AutomationSignalId.MODEM_SOURCE,
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS,
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS,
+        -> AutomationSignalGroup.NETWORK
+
+        AutomationSignalId.PHONE_HFP_CONNECTED,
+        AutomationSignalId.PHONE_CALL_STATE,
+        AutomationSignalId.PHONE_CALL_DIRECTION,
+        AutomationSignalId.PHONE_CALL_NUMBER,
+        -> AutomationSignalGroup.PHONE
+
+        AutomationSignalId.FOREGROUND_APP,
+        AutomationSignalId.APP_THEME_MODE,
+        AutomationSignalId.APP_THEME,
+        AutomationSignalId.HU_SCREEN_BRIGHTNESS,
+        AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS,
+        AutomationSignalId.HU_MEDIA_VOLUME,
+        AutomationSignalId.HU_PHONE_VOLUME,
+        AutomationSignalId.HU_NAVI_VOLUME,
+        AutomationSignalId.HU_VOICE_VOLUME,
+        AutomationSignalId.HU_HEADREST_SPEAKER,
+        AutomationSignalId.TBOX_CONNECTED,
+        -> AutomationSignalGroup.APP
+
+        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE,
+        AutomationSignalId.DCL_TOP_BAR_VISIBLE,
+        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE,
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED,
+        AutomationSignalId.DCL_SCREEN_MODE,
+        AutomationSignalId.DCL_SMART_ACC_ACTIVE,
+        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED,
+        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE,
+        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT,
+        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET,
+        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED,
+        -> AutomationSignalGroup.DCL
+
+        AutomationSignalId.CAMD_RECORDER_ENABLED,
+        AutomationSignalId.CAMD_RECORDING_ACTIVE,
+        -> AutomationSignalGroup.CAMERAS
+        AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED,
+        AutomationSignalId.FUEL_LEVEL_LITERS,
+        AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM,
+        AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM,
+        AutomationSignalId.ACTIVE_TRIP_DURATION_S,
+        AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS,
+        AutomationSignalId.MOTOR_HOURS,
+        -> AutomationSignalGroup.TRIPS
+
+        AutomationSignalId.MEDIA_TITLE,
+        AutomationSignalId.MEDIA_ARTIST,
+        AutomationSignalId.MEDIA_PLAYING,
+        AutomationSignalId.MEDIA_POSITION_MS,
+        AutomationSignalId.MEDIA_DURATION_MS,
+        -> AutomationSignalGroup.MEDIA
+
+        AutomationSignalId.ROAD_HIGHWAY_CLASS,
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH,
+        AutomationSignalId.ROAD_TUNNEL,
+        AutomationSignalId.ROAD_SETTLEMENT,
+        -> AutomationSignalGroup.ROADS
+    }
+
+    /** Русские синонимы для поиска; label и storageKey входят в поиск всегда. */
+    fun signalKeywords(id: AutomationSignalId): List<String> = when (id) {
+        AutomationSignalId.ENGINE_RPM -> listOf("тахометр")
+        AutomationSignalId.CAR_SPEED -> listOf("скорость")
+        AutomationSignalId.ENGINE_TEMPERATURE -> listOf("охлаждающая", "антифриз")
+        AutomationSignalId.OUTSIDE_TEMPERATURE -> listOf("улица", "за бортом")
+        AutomationSignalId.INSIDE_TEMPERATURE -> listOf("салон")
+        AutomationSignalId.STEERING_WHEEL_HEAT -> listOf("обогрев", "руль", "печка")
+        AutomationSignalId.WIPER_MAINTENANCE -> listOf("дворники", "сервис", "стеклоочиститель")
+        AutomationSignalId.WIPER_STS -> listOf("дворники", "стеклоочиститель")
+        AutomationSignalId.WIPER_SENSITIVITY -> listOf("дворники", "чувствительность", "дождь")
+        AutomationSignalId.REAR_WIPER -> listOf("дворники", "задний")
+        AutomationSignalId.RAIN_DETECTED -> listOf("дождь", "датчик")
+        AutomationSignalId.HIGH_BEAM -> listOf("фары", "дальний")
+        AutomationSignalId.HAZARD -> listOf("аварийная", "сигнализация")
+        AutomationSignalId.TURN_SIGNAL_LEFT -> listOf("поворотник", "левый", "указатель")
+        AutomationSignalId.TURN_SIGNAL_RIGHT -> listOf("поворотник", "правый", "указатель")
+        AutomationSignalId.TURN_STABILIZED -> listOf("поворотник")
+        AutomationSignalId.TURN_FLASH_COUNT -> listOf("поворотник", "мигания")
+        AutomationSignalId.DRL -> listOf("фары", "ходовые", "габариты")
+        AutomationSignalId.HEADLIGHT_MODE -> listOf("фары", "свет", "режим")
+        AutomationSignalId.HEADLIGHTS_FOLLOW_ME_HOME -> listOf("фары", "коридор", "задержка")
+        AutomationSignalId.LOW_BEAM_HEIGHT -> listOf("фары", "наклон", "высота", "ближний")
+        AutomationSignalId.REAR_FOG -> listOf("фонарь", "противотуманный", "задний")
+        AutomationSignalId.SUNSHADE -> listOf("шторка", "панорама", "крыша")
+        AutomationSignalId.SUNROOF -> listOf("люк", "панорама", "крыша", "откинуть")
+        AutomationSignalId.WINDOW_FRONT_LEFT -> listOf("стекло", "окно", "левое", "переднее")
+        AutomationSignalId.WINDOW_FRONT_RIGHT -> listOf("стекло", "окно", "правое", "переднее")
+        AutomationSignalId.WINDOW_REAR_LEFT -> listOf("стекло", "окно", "левое", "заднее")
+        AutomationSignalId.WINDOW_REAR_RIGHT -> listOf("стекло", "окно", "правое", "заднее")
+        AutomationSignalId.TRUNK_DOOR -> listOf("багажник", "пятая", "дверь", "крышка")
+        AutomationSignalId.DOOR_FRONT_LEFT -> listOf("дверь", "левая", "передняя")
+        AutomationSignalId.DOOR_FRONT_RIGHT -> listOf("дверь", "правая", "передняя")
+        AutomationSignalId.DOOR_REAR_LEFT -> listOf("дверь", "левая", "задняя")
+        AutomationSignalId.DOOR_REAR_RIGHT -> listOf("дверь", "правая", "задняя")
+        AutomationSignalId.FRONT_LEFT_SEAT_MODE ->
+            listOf("сиденье", "подогрев", "вентиляция", "левое", "переднее")
+        AutomationSignalId.FRONT_RIGHT_SEAT_MODE ->
+            listOf("сиденье", "подогрев", "вентиляция", "правое", "переднее")
+        AutomationSignalId.REAR_LEFT_SEAT_MODE ->
+            listOf("сиденье", "подогрев", "левое", "заднее")
+        AutomationSignalId.REAR_RIGHT_SEAT_MODE ->
+            listOf("сиденье", "подогрев", "правое", "заднее")
+        AutomationSignalId.MIRROR_AUTO_FOLD -> listOf("зеркала", "складывание")
+        AutomationSignalId.HVAC_AC_MAX -> listOf("климат", "кондиционер", "охлаждение")
+        AutomationSignalId.HVAC_POWER -> listOf("климат", "кондиционер", "ac")
+        AutomationSignalId.HVAC_AUTO -> listOf("климат", "авто", "печка")
+        AutomationSignalId.HVAC_RECIRCULATION -> listOf("климат", "рециркуляция", "воздух")
+        AutomationSignalId.HVAC_SYNC -> listOf("климат", "синхронизация", "зоны")
+        AutomationSignalId.HVAC_CUSTOM_MODE -> listOf("климат", "eco", "комфорт", "сильный")
+        AutomationSignalId.FRONT_WINDSCREEN_HEAT -> listOf("обогрев", "лобовое", "стекло", "печка")
+        AutomationSignalId.HVAC_REAR_DEFROSTER -> listOf("обогрев", "заднее", "зеркала")
+        AutomationSignalId.HVAC_AC_CLEAN_WHEN_LOCKED -> listOf("климат", "сушка", "очистка")
+        AutomationSignalId.HVAC_ANION_PURIFY -> listOf("воздух", "анионы", "ионизация")
+        AutomationSignalId.FRAGRANCE -> listOf("аромат", "запах", "парфюм")
+        AutomationSignalId.FRAGRANCE_SMELL -> listOf("аромат", "запах")
+        AutomationSignalId.FRAGRANCE_CONCENTRATION -> listOf("аромат", "интенсивность")
+        AutomationSignalId.HVAC_FIRST_BLOWING -> listOf("климат", "продувка")
+        AutomationSignalId.BT_REDUCE_FAN -> listOf("вентилятор", "bluetooth", "звонок")
+        AutomationSignalId.HVAC_AUTO_VENTILATION ->
+            listOf("климат", "вентиляция", "проветривание")
+        AutomationSignalId.HVAC_FAN_DIRECTION -> listOf("климат", "обдув", "ноги", "лобовое")
+        AutomationSignalId.HVAC_TEMPERATURE_LEFT -> listOf("климат", "температура", "левая")
+        AutomationSignalId.HVAC_TEMPERATURE_RIGHT -> listOf("климат", "температура", "правая")
+        AutomationSignalId.HVAC_FAN_SPEED -> listOf("климат", "вентилятор", "скорость")
+        AutomationSignalId.HVAC_FRONT_OFF -> listOf("климат", "выключить")
+        AutomationSignalId.HUD -> listOf("проектор", "проекция", "лобовое")
+        AutomationSignalId.HUD_HEIGHT -> listOf("проектор", "высота")
+        AutomationSignalId.HUD_BRIGHTNESS -> listOf("проектор", "яркость")
+        AutomationSignalId.HUD_DISPLAY_MODE -> listOf("проектор", "снег")
+        AutomationSignalId.HUD_AUTO_BRIGHTNESS -> listOf("проектор", "яркость", "авто")
+        AutomationSignalId.ICM_BRIGHTNESS_MODE -> listOf("приборная", "панель", "авто")
+        AutomationSignalId.ICM_BRIGHTNESS -> listOf("приборная", "панель", "яркость")
+        AutomationSignalId.OVERSPEED_ALARM -> listOf("скорость", "превышение", "лимит")
+        AutomationSignalId.ACC_CRUISE_STATE -> listOf("круиз", "acc", "автопилот")
+        AutomationSignalId.CCS_CRUISE_STATE -> listOf("круиз", "ccs")
+        AutomationSignalId.CRUISE_SET_SPEED -> listOf("круиз", "уставка")
+        AutomationSignalId.ACC_TIME_GAP -> listOf("круиз", "дистанция")
+        AutomationSignalId.PARKING_RADAR -> listOf("парктроник", "радар")
+        AutomationSignalId.AVH -> listOf("auto hold", "автодержание")
+        AutomationSignalId.HDC -> listOf("спуск", "съезд")
+        AutomationSignalId.ESP_OFF -> listOf("esp", "стабилизация", "занос")
+        AutomationSignalId.TJA_ICA -> listOf("ngp", "пилот", "полоса")
+        AutomationSignalId.HMA -> listOf("дальний", "авто", "свет")
+        AutomationSignalId.LAS_MODE -> listOf("полоса", "lka", "ldw")
+        AutomationSignalId.BLIND_SPOT_DETECTION -> listOf("слепые", "зоны", "bsd")
+        AutomationSignalId.DOOR_OPEN_WARNING -> listOf("дверь", "dow")
+        AutomationSignalId.FCW -> listOf("столкновение", "fcw")
+        AutomationSignalId.FCW_SENSITIVITY -> listOf("столкновение", "чувствительность")
+        AutomationSignalId.LDW_SENSITIVITY -> listOf("полоса", "чувствительность")
+        AutomationSignalId.TSR_SWITCH -> listOf("знаки", "sla", "ограничения")
+        AutomationSignalId.STEERING_ANGLE -> emptyList()
+        AutomationSignalId.STEERING_SPEED -> emptyList()
+        AutomationSignalId.GAS_PEDAL -> listOf("газ", "акселератор")
+        AutomationSignalId.BRAKE_PEDAL -> listOf("тормоз")
+        AutomationSignalId.ODOMETER_KM -> listOf("пробег")
+        AutomationSignalId.DISTANCE_TO_EMPTY_KM -> listOf("запас", "ход")
+        AutomationSignalId.DISTANCE_TO_MAINTENANCE_KM -> listOf("то", "сервис", "обслуживание")
+        AutomationSignalId.VOLTAGE -> listOf("аккумулятор", "бортовая")
+        AutomationSignalId.GEAR_MODE -> listOf("кпп", "парковка", "передача")
+        AutomationSignalId.ACC_STATUS -> listOf("ключ", "зажигание")
+        AutomationSignalId.IGNITION_KEY -> listOf("ключ", "зажигание", "стартер")
+        AutomationSignalId.HU_SYSTEM_MODE -> listOf("гу", "сон", "питание")
+        AutomationSignalId.ACC_TIME_GAP -> listOf("круиз", "дистанция")
+        AutomationSignalId.CURRENT_GEAR -> listOf("кпп", "передача")
+        AutomationSignalId.TARGET_GEAR -> listOf("кпп", "передача")
+        AutomationSignalId.FRONT_LEFT_WHEEL_PRESSURE -> listOf("колесо", "шина", "давление")
+        AutomationSignalId.FRONT_RIGHT_WHEEL_PRESSURE -> listOf("колесо", "шина", "давление")
+        AutomationSignalId.REAR_LEFT_WHEEL_PRESSURE -> listOf("колесо", "шина", "давление")
+        AutomationSignalId.REAR_RIGHT_WHEEL_PRESSURE -> listOf("колесо", "шина", "давление")
+        AutomationSignalId.FRONT_LEFT_WHEEL_TEMPERATURE -> listOf("колесо", "шина")
+        AutomationSignalId.FRONT_RIGHT_WHEEL_TEMPERATURE -> listOf("колесо", "шина")
+        AutomationSignalId.REAR_LEFT_WHEEL_TEMPERATURE -> listOf("колесо", "шина")
+        AutomationSignalId.REAR_RIGHT_WHEEL_TEMPERATURE -> listOf("колесо", "шина")
+        AutomationSignalId.INSIDE_AIR_QUALITY -> listOf("pm25", "салон", "воздух")
+        AutomationSignalId.OUTSIDE_AIR_QUALITY -> listOf("pm25", "воздух", "улица")
+        AutomationSignalId.EPB_PARK_LAMP -> listOf("паркинг", "ручник", "epb")
+        AutomationSignalId.ENGINE_OIL_PRESSURE -> listOf("масло", "давление")
+        AutomationSignalId.BRAKE_FLUID -> listOf("тормоз", "жидкость")
+        AutomationSignalId.FRM_DX_TAR_OBJ -> emptyList()
+        AutomationSignalId.DRIVE_MODE -> listOf("движение", "eco", "sport", "режим")
+        AutomationSignalId.DRIVE_MODE_6DCT -> listOf("движение", "кпп", "6dct")
+        AutomationSignalId.STEERING_MODE -> listOf("руль", "усилитель")
+        AutomationSignalId.EPS_MODE -> listOf("руль", "усилитель", "eps")
+        AutomationSignalId.DOOR_AUTO_LOCK -> listOf("замки", "двери")
+        AutomationSignalId.DOOR_IGNOFF_UNLOCK -> listOf("замки", "двери", "отпирание")
+        AutomationSignalId.DRIVER_UNLOCK_MODE -> listOf("замки", "двери", "водитель")
+        AutomationSignalId.REMOTE_LOCK_FEEDBACK ->
+            listOf("замки", "сигнал", "свет", "подтверждение")
+        AutomationSignalId.REVERSE_GEAR -> listOf("кпп", "назад")
+        AutomationSignalId.AUDIO_VOLUME_SPEED_MODE -> listOf("громкость", "скорость", "аудио")
+        AutomationSignalId.AUDIO_KEY_TONE_VOLUME -> listOf("громкость", "клавиши", "аудио")
+        AutomationSignalId.AUDIO_RADAR_ALARM_VOLUME -> listOf("громкость", "радар", "парктроник")
+        AutomationSignalId.AUDIO_EQ_MODE -> listOf("эквалайзер", "аудио", "режим")
+        AutomationSignalId.AUDIO_EQ_BASS -> listOf("эквалайзер", "бас", "низкие")
+        AutomationSignalId.AUDIO_EQ_MIDDLE -> listOf("эквалайзер", "середина")
+        AutomationSignalId.AUDIO_EQ_TREBLE -> listOf("эквалайзер", "высокие")
+        AutomationSignalId.AUDIO_BALANCE -> listOf("аудио", "баланс")
+        AutomationSignalId.AUDIO_FADER -> listOf("аудио", "фейдер")
+        AutomationSignalId.GEO_SPEED_SOURCE -> listOf("gps", "источник")
+        AutomationSignalId.GEO_SOURCE -> listOf("gps", "источник")
+        AutomationSignalId.ESP_GPIO_IN_0 -> listOf("компаньон", "вход", "датчик")
+        AutomationSignalId.ESP_GPIO_IN_1 -> listOf("компаньон", "вход", "датчик")
+        AutomationSignalId.ESP_GPIO_IN_2 -> listOf("компаньон", "вход", "датчик")
+        AutomationSignalId.ESP_GPIO_IN_3 -> listOf("компаньон", "вход", "датчик")
+        AutomationSignalId.ESP_RELAY_0 -> listOf("компаньон", "реле")
+        AutomationSignalId.ESP_RELAY_1 -> listOf("компаньон", "реле")
+        AutomationSignalId.ESP_BLE_BOUND -> listOf("компаньон", "пульт", "shelly")
+        AutomationSignalId.ESP_BLE_BATTERY -> listOf("компаньон", "пульт", "shelly", "заряд")
+        AutomationSignalId.MODEM_NET_TYPE -> listOf("модем", "сеть", "2g", "3g", "4g")
+        AutomationSignalId.MODEM_SIM_STATUS -> listOf("модем", "sim", "сим")
+        AutomationSignalId.DCL_ADAS_PANEL_VISIBLE -> listOf("dcl", "панель", "adas")
+        AutomationSignalId.DCL_TOP_BAR_VISIBLE -> listOf("dcl", "панель", "верхняя")
+        AutomationSignalId.DCL_BOTTOM_BAR_VISIBLE -> listOf("dcl", "панель", "нижняя")
+        AutomationSignalId.DCL_NOTIFICATION_SHADE_EXPANDED ->
+            listOf("dcl", "шторка", "уведомления")
+        AutomationSignalId.DCL_SCREEN_MODE -> listOf("dcl", "экран", "режим")
+        AutomationSignalId.DCL_SMART_ACC_ACTIVE -> listOf("dcl", "умный", "acc", "круиз")
+        AutomationSignalId.DCL_SMART_ACC_CONFIG_ENABLED ->
+            listOf("dcl", "умный", "acc", "ограничение")
+        AutomationSignalId.DCL_SMART_ACC_CRUISE_STATE ->
+            listOf("dcl", "умный", "acc", "круиз")
+        AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT ->
+            listOf("dcl", "лимит", "ограничение", "скорость")
+        AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET -> listOf("dcl", "acc", "оффсет")
+        AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED -> listOf("dcl", "acc", "цель", "уставка")
+        AutomationSignalId.PHONE_HFP_CONNECTED -> listOf("телефон", "bluetooth", "связь")
+        AutomationSignalId.PHONE_CALL_STATE -> listOf("телефон", "звонок")
+        AutomationSignalId.PHONE_CALL_DIRECTION -> listOf("телефон", "звонок")
+        AutomationSignalId.PHONE_CALL_NUMBER -> listOf("телефон", "звонок", "номер")
+        AutomationSignalId.GEAR_BOX_OIL_TEMPERATURE -> listOf("кпп", "масло")
+        AutomationSignalId.ACTIVE_TRIP_DISTANCE_KM -> listOf("поездка", "пробег")
+        AutomationSignalId.ACTIVE_TRIP_DURATION_S -> listOf("поездка", "длительность")
+        AutomationSignalId.ACTIVE_TRIP_MOTOR_HOURS -> listOf("поездка", "моточасы")
+        AutomationSignalId.ROAD_HIGHWAY_CLASS -> listOf("дорога", "osm", "класс")
+        AutomationSignalId.MEDIA_TITLE -> listOf("трек", "музыка")
+        AutomationSignalId.MEDIA_ARTIST -> listOf("исполнитель", "музыка")
+        AutomationSignalId.MEDIA_PLAYING -> listOf("музыка", "пауза", "играет")
+        AutomationSignalId.MEDIA_POSITION_MS -> listOf("музыка", "позиция")
+        AutomationSignalId.MEDIA_DURATION_MS -> listOf("музыка", "длительность")
+        AutomationSignalId.HU_SCREEN_BRIGHTNESS -> listOf("яркость", "подсветка", "экран")
+        AutomationSignalId.HU_SCREEN_AUTO_BRIGHTNESS -> listOf("яркость", "авто", "экран")
+        AutomationSignalId.HU_MEDIA_VOLUME -> listOf("громкость", "звук", "музыка")
+        AutomationSignalId.HU_PHONE_VOLUME -> listOf("громкость", "звук", "звонок")
+        AutomationSignalId.HU_NAVI_VOLUME -> listOf("громкость", "звук", "навигатор")
+        AutomationSignalId.HU_VOICE_VOLUME -> listOf("громкость", "звук", "голос")
+        AutomationSignalId.HU_HEADREST_SPEAKER -> listOf("динамик", "подголовник")
+        AutomationSignalId.APP_THEME_MODE -> listOf("тема", "день", "ночь")
+        AutomationSignalId.APP_THEME -> listOf("тема", "день", "ночь")
+        AutomationSignalId.FOREGROUND_APP -> listOf("приложение", "запущено", "экран")
+        AutomationSignalId.TBOX_CONNECTED -> listOf("связь", "udp", "модем")
+        AutomationSignalId.MODEM_SIGNAL_LEVEL -> listOf("модем", "уровень", "палочки")
+        AutomationSignalId.MODEM_RSSI_DBM -> listOf("модем", "rssi")
+        AutomationSignalId.MODEM_REGISTERED -> listOf("модем", "сеть", "роуминг")
+        AutomationSignalId.MODEM_OPERATOR -> listOf("модем", "оператор", "связь")
+        AutomationSignalId.MODEM_SOURCE -> listOf("модем", "источник")
+        AutomationSignalId.MODEM_MOBILE_DATA -> listOf("модем", "данные", "интернет")
+        AutomationSignalId.MODEM_THROUGHPUT_DOWN_KBPS -> listOf("модем", "скорость", "загрузка")
+        AutomationSignalId.MODEM_THROUGHPUT_UP_KBPS -> listOf("модем", "скорость", "отдача")
+        AutomationSignalId.WIFI_ENABLED -> listOf("вайфай", "wi-fi", "сеть", "радио")
+        AutomationSignalId.WIFI_ASSOCIATED -> listOf("вайфай", "wi-fi", "сеть", "подключение")
+        AutomationSignalId.WIFI_SSID -> listOf("вайфай", "wi-fi", "сеть", "ssid")
+        AutomationSignalId.WIFI_MODEM_LINK_STATUS ->
+            listOf("модем", "вайфай", "админка", "связь")
+        AutomationSignalId.HU_INTERNET_STATUS -> listOf("интернет", "сеть", "проверка")
+        AutomationSignalId.GEO_POSITION -> listOf("gps", "координаты", "место")
+        AutomationSignalId.GEO_ALTITUDE_M -> listOf("gps", "высота")
+        AutomationSignalId.GEO_SPEED_KMH -> listOf("gps", "скорость")
+        AutomationSignalId.GEO_BEARING_DEG -> listOf("gps", "курс", "компас")
+        AutomationSignalId.GEO_SATELLITES_VISIBLE -> listOf("gps", "спутники")
+        AutomationSignalId.GEO_SATELLITES_USED -> listOf("gps", "спутники")
+        AutomationSignalId.GEO_FIX_VALID -> listOf("gps", "правдивость", "фикс")
+        AutomationSignalId.LOCATE_STATUS -> listOf("gps", "фиксация")
+        AutomationSignalId.FUEL_LEVEL_PERCENT -> listOf("топливо", "бак")
+        AutomationSignalId.FUEL_LEVEL_PERCENT_FILTERED -> listOf("топливо", "фильтр", "бак")
+        AutomationSignalId.FUEL_LEVEL_LITERS -> listOf("топливо", "литры", "калибровка")
+        AutomationSignalId.CURRENT_FUEL_CONSUMPTION -> listOf("расход", "топливо")
+        AutomationSignalId.ACTIVE_TRIP_AVG_FUEL_L100KM -> listOf("поездка", "расход")
+        AutomationSignalId.MOTOR_HOURS -> listOf("моточасы", "пробег")
+        AutomationSignalId.ROAD_SPEED_LIMIT_KMH -> listOf("лимит", "ограничение", "osm")
+        AutomationSignalId.ROAD_TUNNEL -> listOf("тоннель", "туннель")
+        AutomationSignalId.ROAD_SETTLEMENT -> listOf("нп", "город", "населённый")
+        AutomationSignalId.CAMD_RECORDER_ENABLED -> listOf("камеры", "регистратор", "запись")
+        AutomationSignalId.CAMD_RECORDING_ACTIVE -> listOf("камеры", "запись")
+        else -> emptyList()
+    }
 
     /** UI label for a state option; prefers catalog [AutomationSignalDescriptor.namedValues]. */
     fun stateOptionLabel(signal: AutomationSignalId, raw: String): String {

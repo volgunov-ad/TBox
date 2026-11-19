@@ -461,10 +461,11 @@ private fun NumericConditionFields(
     onChange: (AutomationCondition) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = condition.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             onChange(
@@ -523,10 +524,11 @@ private fun StateConditionFields(
     onChange: (AutomationCondition) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = condition.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             val descriptor = AutomationSignalCatalog.get(signal)

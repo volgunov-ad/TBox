@@ -433,10 +433,11 @@ private fun NumericTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.NUMBER)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = trigger.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             onChange(
@@ -552,10 +553,11 @@ private fun StateTriggerFields(
     onChange: (AutomationTrigger) -> Unit,
 ) {
     val signals = AutomationSignalCatalog.pickerSignalsOfType(AutomationSignalValueType.STATE)
-    AutomationDropdown(
+    val signalOptions = remember(signals) { signals.toAutomationSignalOptions() }
+    AutomationSearchablePickerField(
         label = "Сигнал",
         value = trigger.signal,
-        options = signals,
+        options = signalOptions,
         optionLabel = { AutomationSignalCatalog.get(it).label },
         onValueChange = { signal ->
             onChange(
