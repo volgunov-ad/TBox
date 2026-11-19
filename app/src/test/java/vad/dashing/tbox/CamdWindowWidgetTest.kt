@@ -181,6 +181,51 @@ class CamdWindowWidgetTest {
     }
 
     @Test
+    fun keepAvmTileLooksActiveWhenKeepOffIsOff() {
+        assertEquals(true, camdKeepAvmWidgetLooksActive(keepAvm = false))
+        assertEquals(false, camdKeepAvmWidgetLooksActive(keepAvm = true))
+    }
+
+    @Test
+    fun failureDetailExtractsRecorderErrorCodesFromOkStateError() {
+        assertEquals(
+            "no_cameras",
+            camdFailureDetail("OK state=error error=no_cameras"),
+        )
+        assertEquals(
+            "no_folder",
+            camdFailureDetail("OK state=error error=no_folder"),
+        )
+        assertTrue(
+            CamdCommandException("OK state=error error=no_cameras").reply.contains("state=error"),
+        )
+    }
+
+    @Test
+    fun recorderTilePaintPrefersRecordingRedOverEnabled() {
+        assertEquals(
+            CamdRecorderWidgetPaint.Unknown,
+            camdRecorderWidgetPaint(null, null),
+        )
+        assertEquals(
+            CamdRecorderWidgetPaint.Disabled,
+            camdRecorderWidgetPaint(false, false),
+        )
+        assertEquals(
+            CamdRecorderWidgetPaint.EnabledIdle,
+            camdRecorderWidgetPaint(true, false),
+        )
+        assertEquals(
+            CamdRecorderWidgetPaint.Recording,
+            camdRecorderWidgetPaint(true, true),
+        )
+        assertEquals(
+            CamdRecorderWidgetPaint.Recording,
+            camdRecorderWidgetPaint(false, true),
+        )
+    }
+
+    @Test
     fun automationLinesMatchTheCameraApi() {
         assertEquals("AVM ON", camdKeepAvmCommandLine(true))
         assertEquals("AVM OFF", camdKeepAvmCommandLine(false))

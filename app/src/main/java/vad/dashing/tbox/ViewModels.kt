@@ -560,6 +560,8 @@ object WidgetsRepository {
             R.string.data_title_automation_trigger_widget
         ),
         CAMD_WINDOW_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_window_widget),
+        CAMD_KEEP_AVM_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_keep_avm_widget),
+        CAMD_RECORDER_WIDGET_DATA_KEY to DataTitle(R.string.data_title_camd_recorder_widget),
         EMPTY_TILE_WIDGET_DATA_KEY to DataTitle(R.string.data_title_empty_tile_widget),
         "restartTbox" to DataTitle(R.string.data_title_restart_tbox),
         "espConnected" to DataTitle(R.string.data_title_esp_connected),
@@ -995,6 +997,14 @@ object WidgetsRepository {
             R.string.widget_desc_camd_window,
             R.string.widget_actions_camd_window,
         ),
+        CAMD_KEEP_AVM_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_camd_keep_avm,
+            R.string.widget_actions_camd_keep_avm,
+        ),
+        CAMD_RECORDER_WIDGET_DATA_KEY to WidgetDescription(
+            R.string.widget_desc_camd_recorder,
+            R.string.widget_actions_camd_recorder,
+        ),
         EMPTY_TILE_WIDGET_DATA_KEY to WidgetDescription(R.string.widget_desc_empty_tile),
         "restartTbox" to WidgetDescription(
             R.string.widget_desc_restart_tbox,
@@ -1173,6 +1183,8 @@ object WidgetsRepository {
             PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             "timeWidget",
             "dateWidget",
             DRIVE_MODE_WIDGET_DATA_KEY,
@@ -1217,6 +1229,8 @@ object WidgetsRepository {
             PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             MEDIA_VOLUME_WIDGET_HORIZONTAL_DATA_KEY,
             MEDIA_VOLUME_WIDGET_VERTICAL_DATA_KEY,

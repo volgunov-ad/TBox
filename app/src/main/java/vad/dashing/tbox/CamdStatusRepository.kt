@@ -12,9 +12,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
- * Polls camd `STATUS` for automation signals (`camd_recorder_enabled`, `camd_recording_active`).
+ * Shared camd `STATUS` poll for automation signals and dashboard AVM/REC tiles.
  * Does not wake camd — same rule as the Information tab.
  */
 object CamdStatusRepository {
@@ -22,21 +23,21 @@ object CamdStatusRepository {
     val status: StateFlow<CamdServiceStatus?> = _status.asStateFlow()
 
     private val startMutex = Mutex()
+    private val refreshMutex = Mutex()
     @Volatile
     private var pollJob: Job? = null
+    @Volatile
+    private var appContext: Context? = null
 
     fun start(context: Context, scope: CoroutineScope) {
         val app = context.applicationContext
+        appContext = app
         scope.launch {
             startMutex.withLock {
                 if (pollJob?.isActive == true) return@withLock
                 pollJob = scope.launch(Dispatchers.IO) {
                     while (isActive) {
-                        if (isCamdPackageInstalled(app.packageManager)) {
-                            _status.value = CamdWindowClient.fetchStatus()
-                        } else {
-                            _status.value = null
-                        }
+                        refreshMutex.withLock { refreshOnceLocked(app) }
                         delay(POLL_INTERVAL_MS)
                     }
                 }
@@ -44,5 +45,24 @@ object CamdStatusRepository {
         }
     }
 
-    private const val POLL_INTERVAL_MS = 2_000L
+    /** One STATUS round-trip on IO; updates [status]. Safe to call from UI coroutines. */
+    suspend fun refreshNow() {
+        val app = appContext ?: return
+        refreshMutex.withLock {
+            withContext(Dispatchers.IO) {
+                refreshOnceLocked(app)
+            }
+        }
+    }
+
+    private fun refreshOnceLocked(app: Context) {
+        if (isCamdPackageInstalled(app.packageManager)) {
+            _status.value = CamdWindowClient.fetchStatus()
+        } else {
+            _status.value = null
+        }
+    }
+
+    /** Shared interval for tiles + automation signals (not per-tile timers). */
+    const val POLL_INTERVAL_MS = 5_000L
 }

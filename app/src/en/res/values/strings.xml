@@ -2653,6 +2653,8 @@
     <string name="widget_phone_dial_no_hfp">Phone is not connected over Bluetooth</string>
     <string name="data_title_automation_trigger_widget">Automation trigger</string>
     <string name="data_title_camd_window_widget">HU camera</string>
+    <string name="data_title_camd_keep_avm_widget">Keep stock AVM off</string>
+    <string name="data_title_camd_recorder_widget">Recorder</string>
 
     <!-- Descriptions shown below the selected tile type. -->
     <string name="widget_actions_template">Actions: %1$s</string>
@@ -2800,6 +2802,8 @@
     <string name="widget_desc_phone_dial">Places an outgoing HFP Bluetooth call to a saved number. Main screen and floating panels only.</string>
     <string name="widget_desc_automation_trigger">A button for automations: activated by the “Automation trigger (widget)” action, while a single or double tap runs automations with the “Widget trigger pressed” trigger (press kind single/double) and a matching id.</string>
     <string name="widget_desc_camd_window">A clean frame from a head-unit camera. Camera, size, and position are set on the tile. The HU Cameras app must be installed.</string>
+    <string name="widget_desc_camd_keep_avm">Toggle «keep stock AVM off» via HU Cameras. Center label AVM: active color when keep-off is off (stock AVM runs); inactive when keep-off is on. Requires HU Cameras.</string>
+    <string name="widget_desc_camd_recorder">HU Cameras dashcam master switch. Center label REC: inactive when off, active when on and not recording, always red while recording. Folder and cameras are set in HU Cameras (0.8.2+).</string>
     <string name="widget_desc_empty_tile">Empty tile used to create free space in the grid.</string>
     <string name="widget_desc_restart_tbox">Reboots the TBox module.</string>
     <string name="widget_desc_external_app">System Android widget from a selected third-party application.</string>
@@ -2884,6 +2888,8 @@
     <string name="widget_actions_phone_dial">Single tap — call the saved number (needs CALL_PHONE and an active HFP link). During dialing / active / held / incoming — hang up.</string>
     <string name="widget_actions_automation_trigger">Single or double tap — run automations with a matching trigger id and press kind. In edit mode — open widget settings.</string>
     <string name="widget_actions_camd_window">Single tap — open the window. Double tap — close it. In edit mode — open widget settings.</string>
+    <string name="widget_actions_camd_keep_avm">Tap — toggle keep stock AVM off via HU Cameras. In edit mode — open tile settings.</string>
+    <string name="widget_actions_camd_recorder">Tap — enable or disable the recorder (REC ON/OFF). In edit mode — open tile settings.</string>
     <string name="widget_camd_window_camera">Camera</string>
     <string name="widget_camd_window_x">From the left, %</string>
     <string name="widget_camd_window_y">From the top, %</string>
@@ -2922,6 +2928,8 @@
     <string name="camd_window_camera_stock_wide_front">Stock wide front</string>
     <string name="camd_window_camera_stock_wide_rear">Stock wide rear</string>
     <string name="camd_window_unreachable">HU Cameras is not responding</string>
+    <string name="camd_recorder_error_no_cameras">Recorder: pick at least one camera in HU Cameras</string>
+    <string name="camd_recorder_error_no_folder">Recorder: pick a recording folder in HU Cameras</string>
     <string name="camd_window_command_failed">HU Cameras: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>
     <string name="widget_automation_trigger_id_label">Trigger id</string>
