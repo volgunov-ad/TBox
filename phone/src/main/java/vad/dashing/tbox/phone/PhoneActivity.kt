@@ -459,6 +459,7 @@ private fun PhoneScreen() {
                                 }.toTypedArray()
                                 locPermissionsLauncher.launch(perms)
                             } else {
+                                if (next) ensureNotificationPermission()
                                 shareLocation = next
                                 PhoneSessionController.updateTelemetryToggles(
                                     context,

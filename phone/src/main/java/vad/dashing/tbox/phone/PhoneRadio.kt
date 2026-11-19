@@ -61,8 +61,8 @@ class PhoneRadio(
     override val confirmed: Boolean get() = linkUp && snapOnLink
 
     override var storeKey: ByteArray = ByteArray(PhoneBleCodec.KEY_LEN)
-    override var acceptFromCounter: Long = -1L
-    override var waitingCounter: Long = -1L
+    @Volatile override var acceptFromCounter: Long = -1L
+    @Volatile override var waitingCounter: Long = -1L
 
     val bluetoothOn: Boolean
         get() = runCatching { manager?.adapter?.isEnabled == true }.getOrDefault(false)
@@ -100,6 +100,9 @@ class PhoneRadio(
                 if (gatt != this@PhoneRadio.gatt) return@post
                 if (mtu < PhoneBleCodec.SEALED_LEN + 3) {
                     Log.w(TAG, "mtu $mtu is too small")
+                    dropLink()
+                    rescanLater()
+                    return@post
                 }
                 gatt.discoverServices()
             }

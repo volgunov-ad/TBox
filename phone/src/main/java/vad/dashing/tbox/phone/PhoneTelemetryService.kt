@@ -817,7 +817,15 @@ class PhoneBluetoothReceiver : BroadcastReceiver() {
                 val known = store.directAddress
                 @Suppress("DEPRECATION")
                 val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                if (known.isNullOrBlank() || device?.address.equals(known, ignoreCase = true)) {
+                val address = if (Build.VERSION.SDK_INT >= 31 &&
+                    context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    null
+                } else {
+                    runCatching { device?.address }.getOrNull()
+                }
+                if (known.isNullOrBlank() || address.equals(known, ignoreCase = true)) {
                     PhoneTelemetryService.startOrUpdate(context)
                 }
             }
