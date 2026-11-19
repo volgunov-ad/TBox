@@ -66,30 +66,37 @@ class CameraWindows(private val context: Context) {
         prefs.getStringSet(RECORDER_INPUTS_KEY, emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
 
     /** Prepares the grabber for [inputs] (writes the desired union, arms root scripts, waits for the beat). */
-    fun ensureGrabberFor(inputs: Set<Int>) = synchronized(lock) {
-        writeDesired()
-        prepare(shouldStopAvmNow())
+    fun ensureGrabberFor(inputs: Set<Int>) {
+        val stopAvm = synchronized(lock) {
+            writeDesired()
+            shouldStopAvmNow()
+        }
+        // Root arm / beat waits stay outside the lock (P1-1).
+        prepare(stopAvm)
     }
 
     /** Recomputes the desired list after recorder inputs are gone and restarts AVM when nothing holds it. */
-    fun releaseRecorderInputs() = synchronized(lock) {
-        writeDesired()
+    fun releaseRecorderInputs() {
+        synchronized(lock) { writeDesired() }
         maybeStartAvm()
     }
 
     /** Stops the stock AVM and holds it off, ignoring the user's keep flag while the recorder runs. */
-    fun forceAvmOffForRecorder() = synchronized(lock) {
-        markAvmStopped()
-        if (getprop("init.svc.AVMapp") == "running") {
-            val nonce = "r${System.currentTimeMillis()}"
-            arm(GrabberScripts.stopAvm(nonce), nonce)
-            waitProp("init.svc.AVMapp", "running", present = false)
+    fun forceAvmOffForRecorder() {
+        val nonce = synchronized(lock) {
+            markAvmStopped()
+            if (getprop("init.svc.AVMapp") != "running") return
+            "r${System.currentTimeMillis()}"
         }
+        arm(GrabberScripts.stopAvm(nonce), nonce)
+        waitProp("init.svc.AVMapp", "running", present = false)
     }
 
     /** Restores the user's pre-recording keep flag; starts AVM when it was not held. */
-    fun restoreAvmAfterRecorder(prevKeep: Boolean) = synchronized(lock) {
-        prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, prevKeep).apply()
+    fun restoreAvmAfterRecorder(prevKeep: Boolean) {
+        synchronized(lock) {
+            prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, prevKeep).apply()
+        }
         if (!prevKeep) {
             maybeStartAvm()
         }
@@ -113,27 +120,32 @@ class CameraWindows(private val context: Context) {
     fun keepAvmStopped(): Boolean = prefs.getBoolean(KEEP_AVM_STOPPED_KEY, false)
 
     /** Stop AVMapp at startup and do not start it when the last surround window closes. */
-    fun setKeepAvmStopped(keep: Boolean): String = synchronized(lock) {
+    fun setKeepAvmStopped(keep: Boolean): String {
         if (recorderActive) {
             return "state=error error=recorder_active"
         }
-        prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, keep).apply()
         if (keep) {
-            markAvmStopped()
-            if (getprop("init.svc.AVMapp") == "running") {
-                val nonce = "k${System.currentTimeMillis()}"
-                arm(GrabberScripts.stopAvm(nonce), nonce)
-                waitProp("init.svc.AVMapp", "running", present = false)
+            val nonce = synchronized(lock) {
+                prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, true).apply()
+                markAvmStopped()
+                if (getprop("init.svc.AVMapp") != "running") return "state=avm_held"
+                "k${System.currentTimeMillis()}"
             }
+            arm(GrabberScripts.stopAvm(nonce), nonce)
+            waitProp("init.svc.AVMapp", "running", present = false)
             return "state=avm_held"
         }
-        val ids = openIds.toList()
-        openIds.clear()
-        writeDesired()
+        val ids = synchronized(lock) {
+            prefs.edit().putBoolean(KEEP_AVM_STOPPED_KEY, false).apply()
+            val snapshot = openIds.toList()
+            openIds.clear()
+            writeDesired()
+            avmStoppedByUs = true
+            snapshot
+        }
         ids.forEach { hide(it) }
-        avmStoppedByUs = true
         maybeStartAvm()
-        "state=avm_restore"
+        return "state=avm_restore"
     }
 
     fun canDraw(): Boolean = Settings.canDrawOverlays(context)
@@ -176,43 +188,60 @@ class CameraWindows(private val context: Context) {
         clamped
     }
 
-    fun open(command: CamdCommand.Open): String = synchronized(lock) {
-        val resolved = resolvePreset(command) ?: return "state=error error=unknown_preset"
-        if (!CamdSources.isKnown(resolved.inputId)) return "state=error error=unknown_input"
-        val stockView = if (CamdSources.isStock(resolved.inputId)) {
-            stockCalibration?.bySource(resolved.inputId) ?: return "state=error error=stock_cal_missing"
-        } else {
-            null
-        }
-        val input = KnownInputs.byId(stockView?.inputId ?: resolved.inputId)
-            ?: return "state=error error=unknown_input"
-        val moved = views.containsKey(resolved.inputId)
-        openIds.add(resolved.inputId)
-        writeDesired()
-        val root = runCatching { prepare(shouldStopAvmNow()) }
-        if (root.isFailure) {
-            if (!moved) openIds.remove(resolved.inputId)
+    fun open(command: CamdCommand.Open): String {
+        data class Prep(
+            val resolved: CamdCommand.Open,
+            val input: CameraInput,
+            val stockView: CamdStockView?,
+            val moved: Boolean,
+            val stopAvm: Boolean,
+        )
+
+        val prep = synchronized(lock) {
+            val resolved = resolvePreset(command) ?: return "state=error error=unknown_preset"
+            if (!CamdSources.isKnown(resolved.inputId)) return "state=error error=unknown_input"
+            val stockView = if (CamdSources.isStock(resolved.inputId)) {
+                stockCalibration?.bySource(resolved.inputId) ?: return "state=error error=stock_cal_missing"
+            } else {
+                null
+            }
+            val input = KnownInputs.byId(stockView?.inputId ?: resolved.inputId)
+                ?: return "state=error error=unknown_input"
+            val moved = views.containsKey(resolved.inputId)
+            openIds.add(resolved.inputId)
             writeDesired()
-            maybeStartAvm()
+            Prep(resolved, input, stockView, moved, shouldStopAvmNow())
+        }
+
+        // Root waits and overlay latch must not hold [lock] (P1-1).
+        val root = runCatching { prepare(prep.stopAvm) }
+        if (root.isFailure) {
+            rollbackOpen(prep.resolved.inputId, prep.moved)
             return "state=error error=${root.exceptionOrNull()?.message}"
         }
         if (!Settings.canDrawOverlays(context)) waitOverlay()
         if (!Settings.canDrawOverlays(context)) {
-            if (!moved) openIds.remove(resolved.inputId)
-            writeDesired()
-            maybeStartAvm()
+            rollbackOpen(prep.resolved.inputId, prep.moved)
             return "state=error error=overlay_permission"
         }
-        val shown = show(resolved, input, stockView)
+        val shown = show(prep.resolved, prep.input, prep.stockView)
         if (!shown.ok) {
-            if (!moved) openIds.remove(resolved.inputId)
-            writeDesired()
-            maybeStartAvm()
+            rollbackOpen(prep.resolved.inputId, prep.moved)
             return "state=error error=${overlayFailureReason(shown.error)}"
         }
-        windowSources[resolved.inputId] = resolved.presetName.orEmpty()
-        val state = if (moved) "moved" else "open"
-        "state=$state input=${resolved.inputId}"
+        synchronized(lock) {
+            windowSources[prep.resolved.inputId] = prep.resolved.presetName.orEmpty()
+        }
+        val state = if (prep.moved) "moved" else "open"
+        return "state=$state input=${prep.resolved.inputId}"
+    }
+
+    private fun rollbackOpen(inputId: Int, moved: Boolean) {
+        synchronized(lock) {
+            if (!moved) openIds.remove(inputId)
+            writeDesired()
+        }
+        maybeStartAvm()
     }
 
     /** Preset form: settings come from the store; the caller can only set the window rect. */
@@ -292,21 +321,49 @@ class CameraWindows(private val context: Context) {
         }
     }
 
-    fun close(inputId: Int): String = synchronized(lock) {
-        openIds.remove(inputId)
-        writeDesired()
-        hide(inputId)
+    fun close(inputId: Int): String {
+        synchronized(lock) {
+            openIds.remove(inputId)
+            writeDesired()
+        }
+        val hidden = hide(inputId)
         maybeStartAvm()
-        "state=closed input=$inputId"
+        if (!hidden.ok) {
+            return "state=error error=${hidden.error} input=$inputId"
+        }
+        return "state=closed input=$inputId"
     }
 
-    fun closeAll(): String = synchronized(lock) {
-        val ids = openIds.toList()
-        openIds.clear()
-        writeDesired()
-        ids.forEach { hide(it) }
+    fun closeAll(): String {
+        val ids = synchronized(lock) {
+            val snapshot = openIds.toList()
+            openIds.clear()
+            writeDesired()
+            snapshot
+        }
+        var hideFailed = false
+        var hideError = OverlayOpSequencer.ERROR_TIMEOUT
+        ids.forEach { id ->
+            val hidden = hide(id)
+            if (!hidden.ok) {
+                hideFailed = true
+                hideError = hidden.error
+            }
+        }
         maybeStartAvm()
-        "state=closed"
+        if (hideFailed) {
+            return "state=error error=$hideError"
+        }
+        return "state=closed"
+    }
+
+    /**
+     * Close overlays, release the close executor. Used by [CamdRuntime.stop].
+     * Idempotent enough for process teardown.
+     */
+    fun shutdown() {
+        closeAll()
+        closeExecutor.shutdownNow()
     }
 
     fun status(): String {
@@ -366,7 +423,10 @@ class CameraWindows(private val context: Context) {
     }
 
     private fun maybeStartAvm() {
-        if (recorderActive || keepAvmStopped() || !avmStoppedByUs || needsAvmStop()) return
+        val should = synchronized(lock) {
+            !(recorderActive || keepAvmStopped() || !avmStoppedByUs || needsAvmStop())
+        }
+        if (!should) return
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
             val busy = listOf(4, 5, 8, 9).any { File(GrabberScripts.frame(it)).exists() }
@@ -375,27 +435,36 @@ class CameraWindows(private val context: Context) {
         }
         val nonce = "a${System.currentTimeMillis()}"
         arm(GrabberScripts.startAvm(nonce), nonce)
-        clearAvmStopped()
+        synchronized(lock) { clearAvmStopped() }
         waitProp("init.svc.AVMapp", "running", present = true)
     }
 
     /** If the process died after stopping AVMapp, the next start puts it back. */
     fun recover() {
-        synchronized(lock) {
+        val stopNonce = synchronized(lock) {
             if (keepAvmStopped()) {
                 markAvmStopped()
                 if (getprop("init.svc.AVMapp") == "running") {
-                    runCatching {
-                        val nonce = "k${System.currentTimeMillis()}"
-                        arm(GrabberScripts.stopAvm(nonce), nonce)
-                    }
+                    "k${System.currentTimeMillis()}"
+                } else {
+                    return
                 }
-                return
+            } else {
+                null
             }
+        }
+        if (stopNonce != null) {
+            runCatching { arm(GrabberScripts.stopAvm(stopNonce), stopNonce) }
+            return
+        }
+        val shouldRestore = synchronized(lock) {
             val marker = File(context.filesDir, "avm.stopped")
             if (!marker.exists()) return
             avmStoppedByUs = true
             writeDesired()
+            true
+        }
+        if (shouldRestore) {
             runCatching { maybeStartAvm() }
         }
     }
@@ -501,13 +570,19 @@ class CameraWindows(private val context: Context) {
             // Only bump if this show still owns the generation — a newer show must keep it.
             overlayOps.cancelIfCurrent(inputId, token)
             result.error = OverlayOpSequencer.ERROR_TIMEOUT
-            Log.w(OVERLAY_LOG_TAG, "show timeout input=$inputId token=$token")
+            val count = OverlayLatchMetrics.onShowTimeout()
+            Log.w(OVERLAY_LOG_TAG, "show timeout input=$inputId token=$token count=$count")
         }
         return result
     }
 
-    private fun hide(inputId: Int) {
-        windowSources.remove(inputId)
+    private class HideResult(
+        val ok: Boolean,
+        val error: String = OverlayOpSequencer.ERROR_TIMEOUT,
+    )
+
+    private fun hide(inputId: Int): HideResult {
+        synchronized(lock) { windowSources.remove(inputId) }
         val token = overlayOps.begin(inputId)
         val latch = CountDownLatch(1)
         main.post {
@@ -524,8 +599,11 @@ class CameraWindows(private val context: Context) {
         }
         if (!latch.await(2, TimeUnit.SECONDS)) {
             overlayOps.cancelIfCurrent(inputId, token)
-            Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token")
+            val count = OverlayLatchMetrics.onHideTimeout()
+            Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token count=$count")
+            return HideResult(ok = false, error = OverlayOpSequencer.ERROR_TIMEOUT)
         }
+        return HideResult(ok = true)
     }
 
     private fun place(params: WindowManager.LayoutParams, command: CamdCommand.Open) {

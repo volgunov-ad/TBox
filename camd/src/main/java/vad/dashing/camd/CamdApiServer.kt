@@ -5,7 +5,9 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
@@ -17,38 +19,95 @@ import kotlin.concurrent.thread
  * AVM ON|OFF
  * STATUS
  * PRESETS
+ *
+ * Listen loop is supervised: bind/accept failures retry with backoff (P1-2 / P1-5).
+ * [stop] closes the [ServerSocket] so a stuck accept wakes and the thread exits.
  */
 class CamdApiServer(
     private val engine: CamdEngine,
     private val windows: CameraWindows? = null,
     private val clientTimeoutMs: Int = CLIENT_TIMEOUT_MS,
+    private val port: Int = DaemonScripts.API_PORT,
+    private val sleeper: (Long) -> Unit = { ms -> Thread.sleep(ms) },
+    /** Test seam: override to simulate a failed bind without racing SO_REUSEADDR. */
+    private val binder: (ServerSocket) -> Unit = { server ->
+        server.bind(
+            InetSocketAddress(InetAddress.getByName("127.0.0.1"), port),
+            8,
+        )
+    },
 ) {
 
     @Volatile
     private var running = false
 
+    @Volatile
+    private var serverSocket: ServerSocket? = null
+
+    private val generation = AtomicInteger(0)
+
     fun start() {
         if (running) return
         running = true
+        val gen = generation.incrementAndGet()
         thread(name = "camd-api", isDaemon = true) {
+            supervise(gen)
+        }
+    }
+
+    /** Stop accepting and close the listen socket (idempotent). */
+    fun stop() {
+        running = false
+        generation.incrementAndGet()
+        val socket = serverSocket
+        serverSocket = null
+        runCatching { socket?.close() }
+    }
+
+    /** True while the supervisor intends to keep listening. */
+    fun isRunning(): Boolean = running
+
+    private fun supervise(gen: Int) {
+        var backoffMs = CamdApiListenBackoff.INITIAL_MS
+        while (running && generation.get() == gen) {
+            var server: ServerSocket? = null
             try {
-                val server = ServerSocket()
+                server = ServerSocket()
                 server.reuseAddress = true
-                server.bind(
-                    InetSocketAddress(InetAddress.getByName("127.0.0.1"), DaemonScripts.API_PORT),
-                    8
-                )
-                while (running) {
+                binder(server)
+                serverSocket = server
+                backoffMs = CamdApiListenBackoff.INITIAL_MS
+                // Log stubs throw in JVM unit tests — never let logging kill the supervisor.
+                runCatching { Log.i(TAG, "API слушает $port") }
+                while (running && generation.get() == gen) {
                     val socket = server.accept()
                     thread(name = "camd-api-client", isDaemon = true) {
                         serveClient(socket)
                     }
                 }
             } catch (error: Throwable) {
-                running = false
-                Log.e(TAG, "API не слушает ${DaemonScripts.API_PORT}", error)
+                if (!running || generation.get() != gen) break
+                // Closing the socket from [stop] wakes accept with SocketException — expected.
+                if (error is SocketException && !running) break
+                runCatching {
+                    Log.e(TAG, "API не слушает $port — повтор через ${backoffMs}ms", error)
+                }
+                runCatching { server?.close() }
+                if (serverSocket === server) serverSocket = null
+                try {
+                    sleeper(backoffMs)
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+                backoffMs = CamdApiListenBackoff.next(backoffMs)
+            } finally {
+                runCatching { server?.close() }
+                if (serverSocket === server) serverSocket = null
             }
         }
+        running = false
+        runCatching { Log.i(TAG, "API supervisor остановлен (port=$port)") }
     }
 
     internal fun serveClient(socket: Socket) {
@@ -62,7 +121,7 @@ class CamdApiServer(
             }
         } catch (_: SocketTimeoutException) {
         } catch (error: Throwable) {
-            Log.e(TAG, "запрос API", error)
+            runCatching { Log.e(TAG, "запрос API", error) }
         }
     }
 
@@ -73,10 +132,10 @@ class CamdApiServer(
             is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
             CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
             is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
-                CamdCommand.Status -> {
-                    val text = windows?.status() ?: engine.status()
-                    "OK " + text.ifBlank { "state=unknown" }
-                }
+            CamdCommand.Status -> {
+                val text = windows?.status() ?: engine.status()
+                "OK " + text.ifBlank { "state=unknown" }
+            }
             CamdCommand.ListPresets -> windows?.let { "OK " + it.presetsListing() } ?: "ERR no_windows"
         }
     }

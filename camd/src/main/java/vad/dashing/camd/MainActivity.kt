@@ -1245,7 +1245,7 @@ private fun RecorderTab(
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
         "Занято ${recorderState.usedBytes / (1024 * 1024)} МБ из ${recorderState.quotaGb} ГБ. " +
-            "Сегменты по 3 минуты, при превышении квоты старейшие удаляются. " +
+            "Сегменты по 30 секунд (crash-safe moov), при превышении квоты старейшие удаляются. " +
             "Запись идёт с коррекциями камеры (вкладка «Камеры»), без поворотов и вырезок пресетов.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,

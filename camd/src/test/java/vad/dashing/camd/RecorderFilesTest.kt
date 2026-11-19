@@ -10,6 +10,13 @@ import java.util.Calendar
 
 class RecorderFilesTest {
     @Test
+    fun crashSafeSegmentIsShortForFrequentMoov() {
+        // MediaMuxer writes moov only on stop — keep segments ≤ 30 s (P1-3).
+        assertEquals(30_000L, RecorderFiles.SEGMENT_MS)
+        assertTrue(RecorderFiles.SEGMENT_ESTIMATE_BYTES < 50L * 1024 * 1024)
+    }
+
+    @Test
     fun segmentNameEmbedsInputAndTimestamp() {
         val calendar = Calendar.getInstance().apply {
             set(2026, Calendar.NOVEMBER, 17, 12, 30, 45)
