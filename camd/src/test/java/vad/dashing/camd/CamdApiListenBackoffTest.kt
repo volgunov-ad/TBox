@@ -20,6 +20,14 @@ class CamdApiListenBackoffTest {
     }
 }
 
+class CamdApiClientLimitTest {
+    @Test
+    fun concurrentClientCapIsPositiveAndBounded() {
+        assertEquals(8, CamdApiClientLimit.MAX_CONCURRENT)
+        assertTrue(CamdApiClientLimit.MAX_CONCURRENT in 2..32)
+    }
+}
+
 class OverlayLatchMetricsTest {
     @Test
     fun countsShowAndHideTimeoutsIndependently() {
@@ -63,6 +71,42 @@ class CamdApiServerSuperviseTest {
         // Old supervise exit must not clear running for the newer generation.
         Thread.sleep(300)
         assertTrue("newer listen must stay running", server.isRunning())
+        server.stop()
+        awaitPortClosedThenRebind(port, 3_000)
+    }
+
+    @Test
+    fun boundedPoolServesManyConcurrentStatusClients() {
+        val engine = CamdEngine(java.io.File("build/camd-test-files").apply { mkdirs() })
+        val port = freePort()
+        val server = CamdApiServer(engine, port = port, maxClientThreads = 2)
+        server.start()
+        assertTrue(awaitPortOpen(port, 3_000))
+        val clients = 12
+        val ok = CountDownLatch(clients)
+        val failures = AtomicInteger(0)
+        repeat(clients) {
+            Thread({
+                try {
+                    java.net.Socket().use { client ->
+                        client.soTimeout = 5_000
+                        client.connect(InetSocketAddress("127.0.0.1", port), 2_000)
+                        client.getOutputStream().write("STATUS\n".toByteArray())
+                        client.getOutputStream().flush()
+                        val line = client.getInputStream().bufferedReader().readLine()
+                        if (line == null || !line.startsWith("OK ")) {
+                            failures.incrementAndGet()
+                        }
+                    }
+                } catch (_: Throwable) {
+                    failures.incrementAndGet()
+                } finally {
+                    ok.countDown()
+                }
+            }, "camd-api-client-limit-test").apply { isDaemon = true }.start()
+        }
+        assertTrue("all clients should finish", ok.await(10, TimeUnit.SECONDS))
+        assertEquals(0, failures.get())
         server.stop()
         awaitPortClosedThenRebind(port, 3_000)
     }

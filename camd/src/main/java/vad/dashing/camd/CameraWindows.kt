@@ -65,10 +65,18 @@ class CameraWindows(private val context: Context) {
     private fun recorderInputsPref(): Set<Int> =
         prefs.getStringSet(RECORDER_INPUTS_KEY, emptySet()).orEmpty().mapNotNull { it.toIntOrNull() }.toSet()
 
-    /** Prepares the grabber for [inputs] (writes the desired union, arms root scripts, waits for the beat). */
+    /**
+     * Prepares the grabber for [inputs]: persists them as recorder inputs, writes the
+     * desired union from that set (not a stale prefs snapshot), arms root scripts, waits
+     * for the beat. Callers may still call [setRecorderInputsPref] first; this uses
+     * [inputs] either way (P2-5).
+     */
     fun ensureGrabberFor(inputs: Set<Int>) {
         val stopAvm = synchronized(lock) {
-            writeDesired()
+            prefs.edit()
+                .putStringSet(RECORDER_INPUTS_KEY, inputs.map { it.toString() }.toSet())
+                .apply()
+            writeDesired(recorderInputs = inputs)
             shouldStopAvmNow()
         }
         // Root arm / beat waits stay outside the lock (P1-1).
@@ -638,11 +646,15 @@ class CameraWindows(private val context: Context) {
         return context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
 
-    private fun writeDesired() {
+    private fun writeDesired(recorderInputs: Set<Int>? = null) {
         val file = File(GrabberScripts.DESIRED)
         file.parentFile?.mkdirs()
-        val ids = (openIds.mapNotNull { CamdSources.physicalInput(it) } +
-            if (recorderActive) recorderInputsPref() else emptySet()).toSortedSet()
+        val recorderIds = when {
+            recorderInputs != null -> recorderInputs
+            recorderActive -> recorderInputsPref()
+            else -> emptySet()
+        }
+        val ids = GrabDesiredIds.compute(openIds, recorderIds)
         val text = ids.joinToString("\n")
         file.writeText(if (text.isEmpty()) "" else text + "\n")
     }
@@ -797,6 +809,7 @@ class CameraWindows(private val context: Context) {
                 crop,
                 shape,
                 stockView,
+                inputId = id,
             ) {
                 caption.visibility = View.GONE
             }

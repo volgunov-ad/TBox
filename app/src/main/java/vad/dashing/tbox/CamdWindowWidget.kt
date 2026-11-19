@@ -238,8 +238,8 @@ fun startCamdService(context: Context) {
     } catch (_: Exception) {
         // Missing package, or signature START permission not granted to Monitor yet.
     }
-    // Always also broadcast: BootReceiver is exported without the START permission and
-    // starts CamdService from inside the camd package (which holds the permission).
+    // Always also broadcast: StartReceiver (signature START) starts CamdService
+    // from inside the camd package. Same-signature Monitor holds the permission.
     app.sendBroadcast(Intent(CAMD_START_ACTION).setPackage(CAMD_PACKAGE_NAME))
 }
 
