@@ -7,6 +7,8 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
@@ -17,15 +19,18 @@ import kotlin.concurrent.thread
  * CLOSE
  * CLOSE <id>
  * AVM ON|OFF
+ * REC ON|OFF
  * STATUS
  * PRESETS
  *
  * Listen loop is supervised: bind/accept failures retry with backoff (P1-2 / P1-5).
  * [stop] closes the [ServerSocket] so a stuck accept wakes and the thread exits.
+ * Client handlers run on a bounded pool ([CamdApiClientLimit.MAX_CONCURRENT], P2-3).
  */
 class CamdApiServer(
     private val engine: CamdEngine,
     private val windows: CameraWindows? = null,
+    private val recorder: RecorderController? = null,
     private val clientTimeoutMs: Int = CLIENT_TIMEOUT_MS,
     private val port: Int = DaemonScripts.API_PORT,
     private val sleeper: (Long) -> Unit = { ms -> Thread.sleep(ms) },
@@ -36,6 +41,7 @@ class CamdApiServer(
             8,
         )
     },
+    private val maxClientThreads: Int = CamdApiClientLimit.MAX_CONCURRENT,
 ) {
 
     @Volatile
@@ -44,11 +50,15 @@ class CamdApiServer(
     @Volatile
     private var serverSocket: ServerSocket? = null
 
+    @Volatile
+    private var clientExecutor: ExecutorService? = null
+
     private val generation = AtomicInteger(0)
 
     fun start() {
         if (running) return
         running = true
+        ensureClientPool()
         val gen = generation.incrementAndGet()
         thread(name = "camd-api", isDaemon = true) {
             supervise(gen)
@@ -62,10 +72,21 @@ class CamdApiServer(
         val socket = serverSocket
         serverSocket = null
         runCatching { socket?.close() }
+        val pool = clientExecutor
+        clientExecutor = null
+        pool?.shutdownNow()
     }
 
     /** True while the supervisor intends to keep listening. */
     fun isRunning(): Boolean = running
+
+    private fun ensureClientPool() {
+        val existing = clientExecutor
+        if (existing != null && !existing.isShutdown) return
+        clientExecutor = Executors.newFixedThreadPool(maxClientThreads.coerceAtLeast(1)) { runnable ->
+            Thread(runnable, "camd-api-client").apply { isDaemon = true }
+        }
+    }
 
     private fun supervise(gen: Int) {
         var backoffMs = CamdApiListenBackoff.INITIAL_MS
@@ -76,13 +97,21 @@ class CamdApiServer(
                 server.reuseAddress = true
                 binder(server)
                 serverSocket = server
+                ensureClientPool()
                 backoffMs = CamdApiListenBackoff.INITIAL_MS
                 // Log stubs throw in JVM unit tests — never let logging kill the supervisor.
                 runCatching { Log.i(TAG, "API слушает $port") }
                 while (running && generation.get() == gen) {
                     val socket = server.accept()
-                    thread(name = "camd-api-client", isDaemon = true) {
-                        serveClient(socket)
+                    val pool = clientExecutor
+                    if (pool == null || pool.isShutdown) {
+                        runCatching { socket.close() }
+                        continue
+                    }
+                    try {
+                        pool.execute { serveClient(socket) }
+                    } catch (_: java.util.concurrent.RejectedExecutionException) {
+                        runCatching { socket.close() }
                     }
                 }
             } catch (error: Throwable) {
@@ -135,9 +164,12 @@ class CamdApiServer(
             is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
             CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
             is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
+            is CamdCommand.SetRecorderEnabled ->
+                recorder?.let { "OK " + it.applyEnabledFromApi(command.enabled) } ?: "ERR no_recorder"
             CamdCommand.Status -> {
-                val text = windows?.status() ?: engine.status()
-                "OK " + text.ifBlank { "state=unknown" }
+                val base = (windows?.status() ?: engine.status()).ifBlank { "state=unknown" }
+                val rec = recorder?.statusFlags().orEmpty()
+                "OK " + if (rec.isEmpty()) base else "$base $rec"
             }
             CamdCommand.ListPresets -> windows?.let { "OK " + it.presetsListing() } ?: "ERR no_windows"
         }

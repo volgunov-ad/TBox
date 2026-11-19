@@ -33,6 +33,12 @@ class CamdCommandTest {
         assertEquals(CamdCommand.Status, CamdCommands.parse("STATUS"))
         assertEquals(CamdCommand.SetKeepAvm(true), CamdCommands.parse("AVM ON"))
         assertEquals(CamdCommand.SetKeepAvm(false), CamdCommands.parse("avm off"))
+        assertEquals(CamdCommand.SetRecorderEnabled(true), CamdCommands.parse("REC ON"))
+        assertEquals(CamdCommand.SetRecorderEnabled(false), CamdCommands.parse("rec off"))
+        assertEquals(CamdCommand.SetRecorderEnabled(true), CamdCommands.parse("REC 1"))
+        assertEquals(CamdCommand.SetRecorderEnabled(false), CamdCommands.parse("REC 0"))
+        assertNull(CamdCommands.parse("REC"))
+        assertNull(CamdCommands.parse("REC YES"))
         assertNull(CamdCommands.parse("AVM"))
     }
 
@@ -670,6 +676,55 @@ class CamdPortTest {
     fun apiPortDoesNotCollideWithMonitorOrMqtt() {
         assertTrue(DaemonScripts.API_PORT != 8765)
         assertTrue(DaemonScripts.API_PORT != 8766)
+    }
+}
+
+class GrabDesiredIdsTest {
+    @Test
+    fun mapsStockOpenIdsToPhysicalAndUnionsRecorder() {
+        assertEquals(
+            sortedSetOf(8, 4),
+            GrabDesiredIds.compute(listOf(40, 43), emptyList()),
+        )
+        assertEquals(
+            sortedSetOf(4, 5, 8),
+            GrabDesiredIds.compute(listOf(40), listOf(4, 5)),
+        )
+        // Raw + stock of the same physical input collapse to one grabber id.
+        assertEquals(
+            sortedSetOf(8),
+            GrabDesiredIds.compute(listOf(8, 40, 44), emptyList()),
+        )
+        assertEquals(
+            emptySet<Int>(),
+            GrabDesiredIds.compute(emptyList(), emptyList()),
+        )
+    }
+
+    @Test
+    fun ensureGrabberForUsesCallerInputsNotStalePrefsSemantics() {
+        // ensureGrabberFor(inputs) writes desired via GrabDesiredIds.compute(open, inputs).
+        // With no open windows, the caller's set alone must appear (P2-5).
+        assertEquals(
+            sortedSetOf(4, 9),
+            GrabDesiredIds.compute(emptyList(), listOf(4, 9)),
+        )
+    }
+}
+
+class CamdManifestPermissionTest {
+    @Test
+    fun declaresSystemAlertWindow() {
+        val candidates = listOf(
+            java.io.File("src/main/AndroidManifest.xml"),
+            java.io.File("camd/src/main/AndroidManifest.xml"),
+        )
+        val manifest = candidates.firstOrNull { it.isFile }
+            ?: error("AndroidManifest.xml not found from ${java.io.File(".").absolutePath}")
+        val text = manifest.readText()
+        assertTrue(
+            text.contains("""android:name="android.permission.SYSTEM_ALERT_WINDOW""""),
+        )
     }
 }
 

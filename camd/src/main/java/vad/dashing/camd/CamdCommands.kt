@@ -25,6 +25,8 @@ sealed class CamdCommand {
     data class Close(val inputId: Int) : CamdCommand()
     data object Status : CamdCommand()
     data class SetKeepAvm(val keep: Boolean) : CamdCommand()
+    /** Master switch for the dashcam (persisted); not the same as recording-active. */
+    data class SetRecorderEnabled(val enabled: Boolean) : CamdCommand()
     data object ListPresets : CamdCommand()
 }
 
@@ -41,6 +43,7 @@ object CamdCommands {
             }
             "STATUS" -> if (parts.size == 1) CamdCommand.Status else null
             "AVM" -> parseAvm(parts)
+            "REC" -> parseRec(parts)
             "PRESETS" -> if (parts.size == 1) CamdCommand.ListPresets else null
             else -> null
         }
@@ -51,6 +54,16 @@ object CamdCommands {
         return when (parts[1].uppercase()) {
             "ON", "1" -> CamdCommand.SetKeepAvm(true)
             "OFF", "0" -> CamdCommand.SetKeepAvm(false)
+            else -> null
+        }
+    }
+
+    /** `REC ON|OFF|1|0` — set dashcam master switch (like `AVM ON|OFF`). */
+    private fun parseRec(parts: List<String>): CamdCommand.SetRecorderEnabled? {
+        if (parts.size != 2) return null
+        return when (parts[1].uppercase()) {
+            "ON", "1" -> CamdCommand.SetRecorderEnabled(true)
+            "OFF", "0" -> CamdCommand.SetRecorderEnabled(false)
             else -> null
         }
     }

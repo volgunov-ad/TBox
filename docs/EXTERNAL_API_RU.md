@@ -270,7 +270,7 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
 {
   "ok": true,
   "apiVersion": 1,
-  "catalogVersion": 9,
+  "catalogVersion": 10,
   "serverEnabled": true,
   "webPanelEnabled": true,
   "pairingActive": false,
@@ -328,7 +328,8 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   lowercase; минимум — нормализованный `label`, плюс разговорные синонимы для типовых
   вопросов),
 - действия (`actionTypes`): все `builtin` (с `actionType`, `safety`, `voiceAliasesRu` и опциональным `write`), все `can_command` (с `bus`, `propertyId`, `label`, `safety`, `operations`, `signalId`, `write`, `voiceAliasesRu`), а также 4 общих типа: `launch_application` (`confirm`), `open_main_screen` (`safe`), `http_request` (`confirm`), `delay` (`safe`),
-- `catalogVersion` (сейчас **9** — DCL Smart ACC: сигналы `dcl_smart_acc_*` /
+- `catalogVersion` (сейчас **10** — регистратор camd: действие `camd_recorder`,
+  сигналы `camd_recorder_enabled` / `camd_recording_active`; **9** — DCL Smart ACC: сигналы `dcl_smart_acc_*` /
   `dcl_effective_speed_limit` и builtin `dcl_set_smart_acc` / `dcl_toggle_smart_acc`;
   **8** — сигнал `dcl_notification_shade_expanded`;
   **7** — окна камер `camd_window` и удержание штатного AVM `camd_keep_avm`;
@@ -528,7 +529,7 @@ HFP phone — **6**; окна камер и удержание штатного 
 | Класс | Примеры | Поведение API |
 |-------|---------|----------------|
 | `safe` | чтение; медиа play/pause; `set_media_volume`; `show_toast`; `open_main_screen`; `delay` | invoke при базовом токене |
-| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, `place_call` / `answer_call` / `hangup_call`, `camd_window` / `camd_keep_avm`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
+| `confirm` | `can_command` (климат, сиденья, окна, люк, багажник pulse и др.), `launch_application`, `http_request`, `place_call` / `answer_call` / `hangup_call`, `camd_window` / `camd_keep_avm` / `camd_recorder`, круиз, Wi‑Fi, restart TBox, run automation | в v1 разрешены базовому клиенту; при необходимости ужесточить позже |
 | `dangerous` | `adb_set_tcp`, `adb_shell`, `adb_force_stop` | только если в Monitor включён тумблер опасных команд |
 
 Точная разметка `safety` по каждому builtin/can_command — в `ExternalApiActionSafety.kt` + поле `safety` в `/v1/catalog`.

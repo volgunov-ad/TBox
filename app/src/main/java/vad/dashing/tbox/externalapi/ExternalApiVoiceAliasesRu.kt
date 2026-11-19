@@ -404,6 +404,7 @@ object ExternalApiVoiceAliasesRu {
         AutomationBuiltinActionType.HANGUP_CALL to "Сбросить звонок",
         AutomationBuiltinActionType.CAMD_WINDOW to "Окно камеры",
         AutomationBuiltinActionType.CAMD_KEEP_AVM to "Держать штатный AVM отключенным",
+        AutomationBuiltinActionType.CAMD_RECORDER to "Регистратор камер ГУ",
         AutomationBuiltinActionType.DCL_SET_SMART_ACC to "Умный ACC DCL",
         AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC to "Переключить Умный ACC DCL",
     )

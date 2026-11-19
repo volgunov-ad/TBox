@@ -191,6 +191,24 @@ internal object AutomationSignalReads {
                     dclSmartAccNumberFlow { it.adasAccSpeedOffset }
                 AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED ->
                     dclSmartAccNumberFlow { it.targetSpeed }
+                AutomationSignalId.CAMD_RECORDER_ENABLED ->
+                    vad.dashing.tbox.CamdStatusRepository.status.map { status ->
+                        val enabled = status?.recorderEnabled
+                        if (enabled == null) {
+                            AutomationSignalValue.Unavailable
+                        } else {
+                            AutomationSignalValue.State(if (enabled) "on" else "off")
+                        }
+                    }.distinctUntilChanged()
+                AutomationSignalId.CAMD_RECORDING_ACTIVE ->
+                    vad.dashing.tbox.CamdStatusRepository.status.map { status ->
+                        val active = status?.recordingActive
+                        if (active == null) {
+                            AutomationSignalValue.Unavailable
+                        } else {
+                            AutomationSignalValue.State(if (active) "on" else "off")
+                        }
+                    }.distinctUntilChanged()
                 AutomationSignalId.TBOX_CONNECTED ->
                     TboxRepository.tboxConnected.map { connected ->
                         AutomationSignalValue.State(if (connected) "on" else "off")

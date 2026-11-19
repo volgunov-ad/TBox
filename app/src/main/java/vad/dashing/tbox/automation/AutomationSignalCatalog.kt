@@ -1065,6 +1065,23 @@ object AutomationSignalCatalog {
             typicalRange = "targetSpeed = limit + offset из getSmartAccState.",
         ),
         state(
+            AutomationSignalId.CAMD_RECORDER_ENABLED,
+            "Камеры ГУ: регистратор включён",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из STATUS rec_enabled= (мастер-переключатель REC ON/OFF). " +
+                "Не путать с camd_recording_active. Нет значения, пока camd не ответил STATUS " +
+                "с этим полем или пакет не установлен.",
+        ),
+        state(
+            AutomationSignalId.CAMD_RECORDING_ACTIVE,
+            "Камеры ГУ: запись идёт",
+            appOnly,
+            binaryStates,
+            typicalRange = "on/off из STATUS rec_active= (конвейер записи вооружён). " +
+                "Отдельно от camd_recorder_enabled: enabled может быть on при ожидании носителя.",
+        ),
+        state(
             AutomationSignalId.APP_THEME_MODE,
             "Тема приложения: режим",
             appOnly,

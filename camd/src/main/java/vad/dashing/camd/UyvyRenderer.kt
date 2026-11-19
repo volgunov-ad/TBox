@@ -9,6 +9,7 @@ import android.opengl.EGLSurface
 import android.opengl.GLES20
 import android.os.Handler
 import android.system.Os
+import android.util.Log
 import android.view.Surface
 import android.view.TextureView
 import java.io.File
@@ -36,6 +37,8 @@ internal class UyvyRenderer(
     initialCrop: CamdCrop = CamdCrop.IDENTITY,
     initialShape: CamdShape = CamdShape.RECT,
     private val stockView: CamdStockView? = null,
+    /** API / window source id for WARN logs on GL/render failure (P2-2). */
+    private val inputId: Int = -1,
     private val onFirstFrame: () -> Unit,
 ) : TextureView.SurfaceTextureListener {
 
@@ -151,16 +154,19 @@ internal class UyvyRenderer(
         val window = Surface(surfaceTexture)
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         if (display == EGL14.EGL_NO_DISPLAY) {
+            warnGl("eglGetDisplay failed")
             window.release()
             return
         }
         val version = IntArray(2)
         if (!EGL14.eglInitialize(display, version, 0, version, 1)) {
+            warnGl("eglInitialize failed")
             window.release()
             return
         }
         val config = chooseConfig(display)
         if (config == null) {
+            warnGl("eglChooseConfig failed")
             EGL14.eglTerminate(display)
             window.release()
             return
@@ -174,6 +180,7 @@ internal class UyvyRenderer(
         )
         val surface = EGL14.eglCreateWindowSurface(display, config, window, intArrayOf(EGL14.EGL_NONE), 0)
         if (context == null || context == EGL14.EGL_NO_CONTEXT || surface == null || surface == EGL14.EGL_NO_SURFACE) {
+            warnGl("eglCreateContext/Surface failed")
             if (surface != null && surface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(display, surface)
             if (context != null && context != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
@@ -336,8 +343,9 @@ internal class UyvyRenderer(
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
             // A bad frame must not leave the EGL surface attached.
+            warnGl("GL/render failure", error)
         } finally {
             runCatching { source?.close() }
             GLES20.glDeleteTextures(1, texture, 0)
@@ -347,6 +355,16 @@ internal class UyvyRenderer(
             EGL14.eglDestroyContext(display, context)
             EGL14.eglTerminate(display)
             window.release()
+        }
+    }
+
+    private fun warnGl(message: String, error: Throwable? = null) {
+        runCatching {
+            if (error != null) {
+                Log.w(TAG, "$message input=$inputId frame=${frame.name}", error)
+            } else {
+                Log.w(TAG, "$message input=$inputId frame=${frame.name}")
+            }
         }
     }
 
@@ -449,6 +467,8 @@ internal class UyvyRenderer(
     )
 
     internal companion object {
+        private const val TAG = "CamdGl"
+
         const val VERTEX = """
             attribute vec2 aPos;
             attribute vec2 aMesh;

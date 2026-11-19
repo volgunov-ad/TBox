@@ -45,7 +45,7 @@
 | Порт | `8770` (`DaemonScripts.API_PORT` / `CAMD_WINDOW_PORT`) |
 | Кодировка | UTF-8, перевод строки `\n` |
 | Аутентификация | **нет** (любой локальный процесс может послать команду) |
-| Параллелизм | сервер принимает соединения; обработка на отдельном потоке `camd-api-client` |
+| Параллелизм | сервер принимает соединения; обработка на пуле до 8 потоков `camd-api-client` |
 
 Порты рядом (не путать):
 
@@ -65,9 +65,10 @@
    `vad.dashing.camd` / `vad.dashing.camd.CamdService`.  
    Нужно permission **`vad.dashing.camd.permission.START`** (`protectionLevel=signature`).  
    У DCL **другая подпись** → прямой `startForegroundService` **скорее всего не сработает**.
-2. Рабочий обходной путь (тоже использует Monitor как fallback):  
+2. Тот же signature-путь через broadcast (Monitor делает оба):  
    `sendBroadcast(new Intent("vad.dashing.camd.START").setPackage("vad.dashing.camd"))`.  
-   `BootReceiver` экспортирован **без** этого permission и сам стартует `CamdService`.
+   Принимает **`StartReceiver`** (не `BootReceiver`); у отправителя тоже нужно  
+   `vad.dashing.camd.permission.START`. У DCL с другой подписью этот путь **тоже** не сработает.
 3. Повторять команду на `8770` с паузой ~250 мс до ~4 с (логика `CamdWindowClient.command`).
 
 **`STATUS` службу не будит** — опрос статуса не должен вызывать старт.
@@ -89,7 +90,7 @@ OPEN preset=<name> <x> <y> <w> <h> [shape=circle]
 
 | Поле | Тип | Ограничения |
 |------|-----|-------------|
-| `id` | int | Только известные входы: `0`, `1`, `3`, `4`, `5`, `8`, `9`. **Не пишется** в preset-форме — камера берётся из пресета |
+| `id` | int | Известные входы: сырые `0`, `1`, `3`, `4`, `5`, `8`, `9` и штатные виды AVM **`40`–`45`** (см. таблицу ниже). **Не пишется** в preset-форме — камера берётся из пресета |
 | `x`, `y`, `w`, `h` | float | Доли экрана `0…1`. Минимум стороны `0.05`. `x+w ≤ 1.02`, `y+h ≤ 1.02` |
 | `rotation` | int, опционально | Целые градусы **0…360** по часовой (360 ≡ 0, нормализуется в 0); по умолчанию `0`. С `camd` ≥ **0.6.0** — любой угол; старые сборки принимают только `0/90/180/270`, прочие отвечают `ERR bad_command` |
 | `flipH` | int `0\|1`, опционально | Горизонтальное зеркало картинки **после** поворота; по умолчанию `0`. Если задаёте flip — **обязателен** токен `rotation` (можно `0`) |
@@ -137,7 +138,20 @@ OPEN preset=<name> <x> <y> <w> <h> [shape=circle]
 | `1` | OMS | нет |
 | `3` | DMS | нет |
 
-Для `4`/`5`/`8`/`9` при открытии первого такого окна `camd` останавливает `AVMapp` (`setprop ctl.stop AVMapp`), пока открыто хотя бы одно; после закрытия последнего — снова `ctl.start`, если не включён режим «держать AVM выключенным».
+**Штатные виды AVM (калибровка `/vendor/etc/mbhal/avm/…`, `camd` ≥ **0.8.0**):** тот же физический кадр, рисуется вендорским мешем. Списки, где есть только `0/1/3/4/5/8/9`, **неполные**.
+
+| id | Название в UI | Физический вход | Держит `AVMapp` |
+|----|---------------|-----------------|-----------------|
+| `40` | сток: перед | `8` | да |
+| `41` | сток: право | `5` | да |
+| `42` | сток: зад | `9` | да |
+| `43` | сток: лево | `4` | да |
+| `44` | сток: широкий перед | `8` | да |
+| `45` | сток: широкий зад | `9` | да |
+
+Окно стока можно открыть одновременно с сырым окном той же физической камеры. На сток не действуют per-camera коррекции k1/k2/тилт. Если на ГУ нет каталога калибровки — `OK state=error error=stock_cal_missing`.
+
+Для `4`/`5`/`8`/`9` и стоков `40`–`45` при открытии первого такого окна `camd` останавливает `AVMapp` (`setprop ctl.stop AVMapp`), пока открыто хотя бы одно; после закрытия последнего — снова `ctl.start`, если не включён режим «держать AVM выключенным».
 
 ### 3.1.1. `PRESETS` — список пресетов
 
@@ -181,10 +195,33 @@ CLOSE          # все окна
 
 ```
 AVM ON    # или AVM 1 — держать AVMapp остановленным (в т.ч. после reboot prefs)
-AVM OFF   # или AVM 0 — закрыть все сырые окна и сразу запустить AVMapp
+AVM OFF   # или AVM 0 — закрыть ВСЕ открытые окна camd и сразу запустить AVMapp
 ```
 
+**Важно:** `AVM OFF` — это не «только разрешить штатный 360 снова». Служба **закрывает все** окна (`OPEN` сырые и сток 40–45), сбрасывает `keep_avm`, затем стартует `AVMapp`. Если клиенту нужно лишь убрать удержание AVM, но оставить свои оверлеи — такого отдельного режима нет: сначала `CLOSE`/`CLOSE <id>` по ненужным окнам, либо смириться с полным закрытием. Пока идёт запись регистратора, обе команды отвечают `error=recorder_active`.
+
 В `STATUS` флаг: `keep_avm=0|1`.
+
+### 3.3.1. `REC` — мастер-переключатель регистратора
+
+Тот же стиль, что `AVM ON|OFF` (SET). GET enabled — поле `rec_enabled=` в `STATUS`, отдельно от «запись идёт».
+
+```
+REC ON    # или REC 1 — включить мастер-переключатель (папка/камеры уже в prefs camd)
+REC OFF   # или REC 0 — выключить и остановить запись
+```
+
+Ответы: `OK state=rec_on enabled=1` / `OK state=rec_off enabled=0`, либо
+`OK state=error error=no_cameras|no_folder`.
+
+**Не путать:**
+
+| Поле / смысл | Что это |
+|--------------|---------|
+| `rec_enabled` | мастер-переключатель (`REC ON`, переживает reboot) |
+| `rec_active` | конвейер записи сейчас вооружён (engines/watcher) |
+
+Их **нельзя** склеивать в один status-blob.
 
 ### 3.4. `STATUS`
 
@@ -195,8 +232,8 @@ STATUS
 Пример ответа:
 
 ```
-OK windows=8,4 avm=stopped keep_avm=0
-OK windows=none avm=running keep_avm=1
+OK windows=8,4 avm=stopped keep_avm=0 rec_enabled=0 rec_active=0
+OK windows=none avm=running keep_avm=1 rec_enabled=1 rec_active=1
 ```
 
 ---
@@ -211,7 +248,8 @@ OK windows=none avm=running keep_avm=1
 | `OK state=moved input=<id>` | То же окно перенесено |
 | `OK state=closed …` | Закрыто |
 | `OK state=avm_held` / `OK state=avm_restore` | Переключатель AVM |
-| `OK windows=… avm=… keep_avm=…` | Статус |
+| `OK state=rec_on enabled=1` / `OK state=rec_off enabled=0` | Переключатель регистратора |
+| `OK windows=… avm=… keep_avm=… rec_enabled=… rec_active=…` | Статус (enabled и active — отдельные поля) |
 | `ERR bad_command` | Строка не разобралась / неверные числа / неизвестный id / геометрия вне правил |
 | `ERR no_windows` | Служба без слоя окон (не должна встречаться в нормальном FGS) |
 | `OK state=error error=overlay_permission` | Нет права оверлея у `vad.dashing.camd` |
@@ -310,10 +348,12 @@ printf 'CLOSE 8\n' | nc 127.0.0.1 8770
 
 | Поле | Значение |
 |------|----------|
-| `actionType` | `camd_window` или `camd_keep_avm` |
+| `actionType` | `camd_window`, `camd_keep_avm` или `camd_recorder` |
 | `intValue` (`camd_window`) | id камеры (в preset-режиме используется для `CLOSE`, сам OPEN берёт камеру из пресета) |
 | `stringValue` (`camd_window`) | `open <x%> <y%> <w%> <h%> [rotation [flipH [flipV]]] [crop=x%,y%,w%,h%]`, `open preset=<имя> <x%> <y%> <w%> <h%>`, суффикс ` shape=circle` — **в процентах 0…100**, либо `close` / `close_all` |
 | `boolValue` (`camd_keep_avm`) | `true` = `AVM ON`, `false` = `AVM OFF` |
+| `boolValue` (`camd_recorder`) | `true` = `REC ON`, `false` = `REC OFF` |
+| Сигналы | `camd_recorder_enabled`, `camd_recording_active` (`on`/`off`) |
 
 Monitor сам переводит проценты в доли и шлёт строку на `8770`, при необходимости будит службу.  
 Это **обёртка**, не отдельный протокол камер. Прямой сокет проще и не требует consent/токена.
@@ -348,7 +388,7 @@ Monitor сам переводит проценты в доли и шлёт ст�
 - Узнать статус (`windows`, `avm`, `keep_avm`).
 - Удерживать штатный AVM выключенным (`AVM ON`/`OFF`).
 - Разбудить службу broadcast’ом `vad.dashing.camd.START`.
-- То же через Monitor `camd_window` / `camd_keep_avm`, если уже есть локальный API-доступ.
+- То же через Monitor `camd_window` / `camd_keep_avm` / `camd_recorder`, если уже есть локальный API-доступ.
 
 ### Совместимость OPEN
 
@@ -409,5 +449,5 @@ Monitor сам переводит проценты в доли и шлёт ст�
 | Входы | `camd/.../KnownInputs.kt` |
 | Manifest / START / permission | `camd/src/main/AndroidManifest.xml` |
 | Клиент Monitor | `app/.../CamdWindowWidget.kt` (`CamdWindowClient`) |
-| Автоматизации / External API | `camd_window`, `camd_keep_avm` → `AutomationActionExecutor` |
+| Автоматизации / External API | `camd_window`, `camd_keep_avm`, `camd_recorder` → `AutomationActionExecutor`; сигналы `camd_recorder_enabled` / `camd_recording_active` |
 | Инженерия | [CAMD_RU.md](CAMD_RU.md) |

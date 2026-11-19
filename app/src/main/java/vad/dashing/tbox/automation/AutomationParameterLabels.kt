@@ -285,6 +285,8 @@ object AutomationParameterLabels {
         AutomationSignalId.DCL_EFFECTIVE_SPEED_LIMIT -> "DCL: эффективный лимит, км/ч"
         AutomationSignalId.DCL_SMART_ACC_SPEED_OFFSET -> "DCL: оффсет АСС, км/ч"
         AutomationSignalId.DCL_SMART_ACC_TARGET_SPEED -> "DCL: целевая скорость АСС, км/ч"
+        AutomationSignalId.CAMD_RECORDER_ENABLED -> "Камеры ГУ: регистратор включён"
+        AutomationSignalId.CAMD_RECORDING_ACTIVE -> "Камеры ГУ: запись идёт"
         AutomationSignalId.APP_THEME_MODE -> "Тема приложения: режим"
         AutomationSignalId.APP_THEME -> "Тема приложения: сейчас"
         AutomationSignalId.HU_SCREEN_BRIGHTNESS -> "Яркость экрана ГУ"
