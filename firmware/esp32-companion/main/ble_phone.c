@@ -140,6 +140,8 @@ static bool s_learn;
 static uint32_t s_learn_deadline_ms;
 static bool s_pending_pair;
 static phone_rec_t s_pending;
+/* Link that sent the pending PAIR: cleartext PAIR binds no link by itself. */
+static uint16_t s_pending_conn;
 /* Denied during this learn session; the phone may write the packet again. */
 static bool s_denied_valid;
 static uint8_t s_denied_id[4];
@@ -871,6 +873,16 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     int existing = find_phone(id);
     if (existing >= 0 && memcmp(s_phones[existing].key, key, 16) == 0) {
         mark_link_seen();
+        /* A relay binds only on sealed packets and latches "paired" only on an
+         * inbound 0x30, so answer its repeated PAIR until it stops. */
+        if (s_phones[existing].kind == REC_KIND_RELAY) {
+            bind_phone(existing);
+            if (s_relay_desired_valid[existing]) {
+                relay_send_cmd_locked(existing, s_relay_desired[existing], 0);
+            } else {
+                relay_send_cmd_locked(existing, 0, 0);
+            }
+        }
         return;
     }
 
@@ -884,6 +896,7 @@ static void on_pair_packet(const uint8_t *payload, uint8_t len, uint8_t kind)
     s_pending.name_len = (uint8_t)name_len;
     sanitize_name(s_pending.name, s_pending.name_len);
     s_pending_pair = true;
+    s_pending_conn = s_rx_link ? s_rx_link->handle : BLE_HS_CONN_HANDLE_NONE;
     mark_link_seen();
 
     memcpy(s_out_pair_id, s_pending.id, 4);
@@ -1008,10 +1021,20 @@ bool ble_phone_allow(const char *id_hex)
                 s_learn = false;
                 s_out_pair = false;
                 if (rec.kind == REC_KIND_RELAY) {
-                    /* The relay latches "paired" on the first 0x30, so send one even
-                     * before the HU asks for a state (fresh records default to open). */
+                    /* The relay latches "paired" on the first 0x30. PAIR is
+                     * cleartext and binds no link, so bind the link that sent
+                     * the PAIR before pushing the latch command (open). */
                     s_relay_desired[index] = 0;
                     s_relay_desired_valid[index] = false;
+                    links_ensure();
+                    phone_link_t *link = link_by_conn(s_pending_conn);
+                    if (link && link->phone_index != index) {
+                        phone_link_t *rx = s_rx_link;
+                        s_rx_link = link;
+                        bind_phone(index);
+                        s_rx_link = rx;
+                    }
+                    ESP_LOGI(TAG, "relay %d latch cmd queued", index);
                     relay_send_cmd_locked(index, 0, 0);
                 }
             }
