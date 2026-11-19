@@ -71,9 +71,18 @@ internal fun DashboardCamdKeepAvmWidgetItem(
                 onEditClick()
                 return@DashboardWidgetScaffold
             }
-            if (busy || keepAvm == null) return@DashboardWidgetScaffold
-            busy = true
+            if (busy) return@DashboardWidgetScaffold
             val app = context.applicationContext
+            if (keepAvm == null) {
+                Toast.makeText(
+                    app,
+                    app.getString(R.string.settings_camd_keep_avm_down),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                scope.launch { CamdStatusRepository.refreshNow() }
+                return@DashboardWidgetScaffold
+            }
+            busy = true
             val nextKeep = !keepAvm
             scope.launch {
                 val result = withContext(Dispatchers.IO) {
@@ -141,9 +150,18 @@ internal fun DashboardCamdRecorderWidgetItem(
                 onEditClick()
                 return@DashboardWidgetScaffold
             }
-            if (busy || !canToggle) return@DashboardWidgetScaffold
-            busy = true
+            if (busy) return@DashboardWidgetScaffold
             val app = context.applicationContext
+            if (!canToggle) {
+                Toast.makeText(
+                    app,
+                    app.getString(R.string.camd_window_unreachable),
+                    Toast.LENGTH_SHORT,
+                ).show()
+                scope.launch { CamdStatusRepository.refreshNow() }
+                return@DashboardWidgetScaffold
+            }
+            busy = true
             val nextEnabled = !(status?.recorderEnabled ?: false)
             scope.launch {
                 val result = withContext(Dispatchers.IO) {

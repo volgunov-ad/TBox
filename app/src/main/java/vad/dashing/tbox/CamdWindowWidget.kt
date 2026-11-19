@@ -60,49 +60,6 @@ fun camdRecorderWidgetPaint(
     }
 }
 
-/** Tile: toggle camd «keep stock AVM off» (`AVM ON` / `AVM OFF`). */
-const val CAMD_KEEP_AVM_WIDGET_DATA_KEY = "camdKeepAvmWidget"
-
-/** Tile: toggle camd dashcam master switch (`REC ON` / `REC OFF`). */
-const val CAMD_RECORDER_WIDGET_DATA_KEY = "camdRecorderWidget"
-
-/** Fixed center label on [CAMD_KEEP_AVM_WIDGET_DATA_KEY]. */
-const val CAMD_KEEP_AVM_WIDGET_CENTER_LABEL = "AVM"
-
-/** Fixed center label on [CAMD_RECORDER_WIDGET_DATA_KEY]. */
-const val CAMD_RECORDER_WIDGET_CENTER_LABEL = "REC"
-
-/**
- * Visual «on» for the keep-AVM tile: active when keep-off is **off** (stock AVM works).
- * Inactive when keep-off is on (stock AVM stopped).
- */
-fun camdKeepAvmWidgetLooksActive(keepAvm: Boolean): Boolean = !keepAvm
-
-/** How the REC tile paints its center label (recording overrides config colors). */
-enum class CamdRecorderWidgetPaint {
-    /** No STATUS / missing rec_* — dim inactive. */
-    Unknown,
-    /** Master off. */
-    Disabled,
-    /** Master on, pipeline not armed. */
-    EnabledIdle,
-    /** Pipeline recording — always red. */
-    Recording,
-}
-
-fun camdRecorderWidgetPaint(
-    recorderEnabled: Boolean?,
-    recordingActive: Boolean?,
-): CamdRecorderWidgetPaint {
-    if (recorderEnabled == null && recordingActive == null) return CamdRecorderWidgetPaint.Unknown
-    if (recordingActive == true) return CamdRecorderWidgetPaint.Recording
-    return if (recorderEnabled == true) {
-        CamdRecorderWidgetPaint.EnabledIdle
-    } else {
-        CamdRecorderWidgetPaint.Disabled
-    }
-}
-
 const val CAMD_PACKAGE_NAME = "vad.dashing.camd"
 const val CAMD_START_ACTION = "vad.dashing.camd.START"
 const val CAMD_WINDOW_PORT = 8770
@@ -436,11 +393,26 @@ fun camdFailureToast(context: Context, error: Throwable): String {
     if (reply.isNullOrBlank()) {
         return context.getString(R.string.camd_window_unreachable)
     }
+    camdKnownErrorToast(context, reply)?.let { return it }
     val detail = camdFailureDetail(reply)
     return if (detail.isNullOrBlank()) {
         context.getString(R.string.camd_window_unreachable)
     } else {
         context.getString(R.string.camd_window_command_failed, detail)
+    }
+}
+
+/**
+ * Friendly copy for stable camd `error=` codes (e.g. `OK state=error error=no_cameras`
+ * from REC ON). Null → fall back to [camdFailureDetail] wrapping.
+ */
+fun camdKnownErrorToast(context: Context, reply: String): String? {
+    val code = Regex("""error=(\S+)""").find(reply)?.groupValues?.get(1)
+        ?: reply.removePrefix("ERR").trim().takeIf { reply.trimStart().startsWith("ERR") }
+    return when (code) {
+        "no_cameras" -> context.getString(R.string.camd_recorder_error_no_cameras)
+        "no_folder" -> context.getString(R.string.camd_recorder_error_no_folder)
+        else -> null
     }
 }
 

@@ -2939,6 +2939,8 @@
     <string name="camd_window_camera_stock_wide_front">Обзор спереди · штатный</string>
     <string name="camd_window_camera_stock_wide_rear">Обзор сзади · штатный</string>
     <string name="camd_window_unreachable">Камеры ГУ не отвечают</string>
+    <string name="camd_recorder_error_no_cameras">Регистратор: выберите хотя бы одну камеру в «Камерах ГУ»</string>
+    <string name="camd_recorder_error_no_folder">Регистратор: выберите папку для записи в «Камерах ГУ»</string>
     <string name="camd_window_command_failed">Камеры ГУ: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Триггер автоматизации</string>
     <string name="widget_automation_trigger_id_label">ID триггера</string>

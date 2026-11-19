@@ -2928,6 +2928,8 @@
     <string name="camd_window_camera_stock_wide_front">Stock wide front</string>
     <string name="camd_window_camera_stock_wide_rear">Stock wide rear</string>
     <string name="camd_window_unreachable">HU Cameras is not responding</string>
+    <string name="camd_recorder_error_no_cameras">Recorder: pick at least one camera in HU Cameras</string>
+    <string name="camd_recorder_error_no_folder">Recorder: pick a recording folder in HU Cameras</string>
     <string name="camd_window_command_failed">HU Cameras: %1$s</string>
     <string name="widget_automation_trigger_settings_title">Automation trigger</string>
     <string name="widget_automation_trigger_id_label">Trigger id</string>

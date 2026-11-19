@@ -45,11 +45,6 @@ object CamdStatusRepository {
         }
     }
 
-    /** Push a just-fetched STATUS (e.g. after a tile toggle) without waiting for the next tick. */
-    fun publish(status: CamdServiceStatus?) {
-        _status.value = status
-    }
-
     /** One STATUS round-trip on IO; updates [status]. Safe to call from UI coroutines. */
     suspend fun refreshNow() {
         val app = appContext ?: return

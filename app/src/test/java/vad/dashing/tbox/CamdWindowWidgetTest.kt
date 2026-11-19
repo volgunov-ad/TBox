@@ -187,6 +187,21 @@ class CamdWindowWidgetTest {
     }
 
     @Test
+    fun failureDetailExtractsRecorderErrorCodesFromOkStateError() {
+        assertEquals(
+            "no_cameras",
+            camdFailureDetail("OK state=error error=no_cameras"),
+        )
+        assertEquals(
+            "no_folder",
+            camdFailureDetail("OK state=error error=no_folder"),
+        )
+        assertTrue(
+            CamdCommandException("OK state=error error=no_cameras").reply.contains("state=error"),
+        )
+    }
+
+    @Test
     fun recorderTilePaintPrefersRecordingRedOverEnabled() {
         assertEquals(
             CamdRecorderWidgetPaint.Unknown,
