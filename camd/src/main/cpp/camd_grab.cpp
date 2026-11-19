@@ -215,6 +215,26 @@ static Camera* open_camera(int id) {
             return nullptr;
         }
         camera->ptrs[i] = mmap(nullptr, camera->size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (camera->ptrs[i] == MAP_FAILED) {
+            int mapErrno = errno;
+            struct stat st;
+            memset(&st, 0, sizeof(st));
+            unsigned long long inode = 0;
+            long long stSize = -1;
+            if (fstat(fd, &st) == 0) {
+                inode = (unsigned long long)st.st_ino;
+                stSize = (long long)st.st_size;
+            }
+            fprintf(stderr,
+                    "mmap ion id=%d slot=%d failed errno=%d inode=%llu st_size=%lld map_size=%d\n",
+                    id, i, mapErrno, inode, stSize, camera->size);
+            ALOGE("mmap ion id=%d slot=%d failed errno=%d inode=%llu st_size=%lld map_size=%d",
+                  id, i, mapErrno, inode, stSize, camera->size);
+            camera->ptrs[i] = nullptr;
+            close(ion);
+            release_camera(camera);
+            return nullptr;
+        }
         camera->buffers[i].n_planes = 1;
         camera->buffers[i].planes[0].width = (unsigned)width;
         camera->buffers[i].planes[0].height = (unsigned)height;
