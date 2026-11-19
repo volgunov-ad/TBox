@@ -19,6 +19,7 @@ import kotlin.concurrent.thread
  * CLOSE
  * CLOSE <id>
  * AVM ON|OFF
+ * REC ON|OFF
  * STATUS
  * PRESETS
  *
@@ -29,6 +30,7 @@ import kotlin.concurrent.thread
 class CamdApiServer(
     private val engine: CamdEngine,
     private val windows: CameraWindows? = null,
+    private val recorder: RecorderController? = null,
     private val clientTimeoutMs: Int = CLIENT_TIMEOUT_MS,
     private val port: Int = DaemonScripts.API_PORT,
     private val sleeper: (Long) -> Unit = { ms -> Thread.sleep(ms) },
@@ -162,9 +164,12 @@ class CamdApiServer(
             is CamdCommand.Close -> windows?.let { "OK " + it.close(command.inputId) } ?: "ERR no_windows"
             CamdCommand.CloseAll -> windows?.let { "OK " + it.closeAll() } ?: "ERR no_windows"
             is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
+            is CamdCommand.SetRecorderEnabled ->
+                recorder?.let { "OK " + it.applyEnabledFromApi(command.enabled) } ?: "ERR no_recorder"
             CamdCommand.Status -> {
-                val text = windows?.status() ?: engine.status()
-                "OK " + text.ifBlank { "state=unknown" }
+                val base = (windows?.status() ?: engine.status()).ifBlank { "state=unknown" }
+                val rec = recorder?.statusFlags().orEmpty()
+                "OK " + if (rec.isEmpty()) base else "$base $rec"
             }
             CamdCommand.ListPresets -> windows?.let { "OK " + it.presetsListing() } ?: "ERR no_windows"
         }

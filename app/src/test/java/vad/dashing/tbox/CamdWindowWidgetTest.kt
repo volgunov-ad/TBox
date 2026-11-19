@@ -160,14 +160,32 @@ class CamdWindowWidgetTest {
         assertEquals(listOf(4, 5), status?.windows)
         assertEquals("stopped", status?.avm)
         assertEquals(true, status?.keepAvm)
+        assertEquals(null, status?.recorderEnabled)
+        assertEquals(null, status?.recordingActive)
         assertEquals(emptyList<Int>(), parseCamdStatusReply("OK windows=none avm=running keep_avm=0")?.windows)
         assertEquals(null, parseCamdStatusReply("ERR down"))
+    }
+
+    @Test
+    fun statusReplyReadsSeparateRecorderEnabledAndActiveFlags() {
+        val status = parseCamdStatusReply(
+            "OK windows=none avm=running keep_avm=0 rec_enabled=1 rec_active=0",
+        )
+        assertEquals(true, status?.recorderEnabled)
+        assertEquals(false, status?.recordingActive)
+        val both = parseCamdStatusReply(
+            "OK windows=8 avm=stopped keep_avm=1 rec_enabled=1 rec_active=1",
+        )
+        assertEquals(true, both?.recorderEnabled)
+        assertEquals(true, both?.recordingActive)
     }
 
     @Test
     fun automationLinesMatchTheCameraApi() {
         assertEquals("AVM ON", camdKeepAvmCommandLine(true))
         assertEquals("AVM OFF", camdKeepAvmCommandLine(false))
+        assertEquals("REC ON", camdRecorderCommandLine(true))
+        assertEquals("REC OFF", camdRecorderCommandLine(false))
         assertEquals(
             "OPEN 5 0.0200 0.5500 0.4000 0.4000 90",
             camdAutomationCommandLine(5, "open 2 55 40 40 90"),

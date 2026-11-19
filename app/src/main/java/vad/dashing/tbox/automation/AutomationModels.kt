@@ -271,6 +271,15 @@ enum class AutomationSignalId(
     DCL_SMART_ACC_SPEED_OFFSET("dcl_smart_acc_speed_offset"),
     /** Target cruise speed from DCL Smart ACC (limit + offset), km/h. */
     DCL_SMART_ACC_TARGET_SPEED("dcl_smart_acc_target_speed"),
+    /**
+     * Camd dashcam master switch (`REC ON` / prefs). `on`/`off` from STATUS `rec_enabled=`.
+     * Unavailable until camd answers STATUS with that field.
+     */
+    CAMD_RECORDER_ENABLED("camd_recorder_enabled", AutomationSignalValueType.STATE),
+    /**
+     * Camd recording pipeline armed (`rec_active=`). Not the same as [CAMD_RECORDER_ENABLED].
+     */
+    CAMD_RECORDING_ACTIVE("camd_recording_active", AutomationSignalValueType.STATE),
     APP_THEME_MODE("app_theme_mode", AutomationSignalValueType.STATE),
     APP_THEME("app_theme", AutomationSignalValueType.STATE),
     /** Head-unit screen backlight UI level 1…10 (not HUD / ICM). */
@@ -918,6 +927,13 @@ enum class AutomationBuiltinActionType(val storageKey: String) {
      * `false` sends `AVM OFF`: raw windows close and stock AVMapp starts.
      */
     CAMD_KEEP_AVM("camd_keep_avm"),
+    /**
+     * Dashcam master switch («Камеры ГУ» регистратор).
+     * [AutomationAction.Builtin.boolValue] `true` → `REC ON`, `false` → `REC OFF`.
+     * Not the same as recording-active (see signals `camd_recorder_enabled` /
+     * `camd_recording_active`). Folder and cameras must already be set in camd.
+     */
+    CAMD_RECORDER("camd_recorder"),
     /**
      * DCL Smart ACC on/off via `setSmartAcc`.
      * [AutomationAction.Builtin.boolValue] = enabled.

@@ -2483,6 +2483,7 @@ class BackgroundService : Service() {
                 vad.dashing.tbox.drsensor.DrSensorRepository.start(this@BackgroundService)
                 vad.dashing.tbox.phone.PhoneCallStateRepository.start(this@BackgroundService)
                 vad.dashing.tbox.dcl.DclLauncherApiRepository.start(this@BackgroundService)
+                vad.dashing.tbox.CamdStatusRepository.start(this@BackgroundService, scope)
                 yield()
                 applyModemDataSource()
                 yield()

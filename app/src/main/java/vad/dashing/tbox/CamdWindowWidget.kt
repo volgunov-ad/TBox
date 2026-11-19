@@ -372,6 +372,10 @@ data class CamdServiceStatus(
     val windows: List<Int>,
     val avm: String,
     val keepAvm: Boolean,
+    /** Master switch (`REC ON`); null when the camd build omits `rec_enabled=`. */
+    val recorderEnabled: Boolean? = null,
+    /** Recording pipeline armed (`rec_active=`); null when omitted. Not the same as enabled. */
+    val recordingActive: Boolean? = null,
 )
 
 data class CamdAutomationWindowArgs(
@@ -401,7 +405,7 @@ fun isCamdPackageInstalled(packageManager: PackageManager): Boolean =
         false
     }
 
-/** `OK windows=none|4,5 avm=running|stopped keep_avm=0|1` */
+/** `OK windows=none|4,5 avm=running|stopped keep_avm=0|1 [rec_enabled=0|1 rec_active=0|1]` */
 fun parseCamdStatusReply(reply: String): CamdServiceStatus? {
     val text = reply.trim()
     if (!text.startsWith("OK")) return null
@@ -409,16 +413,28 @@ fun parseCamdStatusReply(reply: String): CamdServiceStatus? {
     val windows = Regex("""windows=(\S+)""").find(body)?.groupValues?.get(1) ?: return null
     val avm = Regex("""avm=(\S+)""").find(body)?.groupValues?.get(1) ?: return null
     val keep = Regex("""keep_avm=([01])""").find(body)?.groupValues?.get(1) ?: return null
+    val recEnabled = Regex("""rec_enabled=([01])""").find(body)?.groupValues?.get(1)
+    val recActive = Regex("""rec_active=([01])""").find(body)?.groupValues?.get(1)
     val ids = if (windows == "none") {
         emptyList()
     } else {
         windows.split(',').mapNotNull { it.toIntOrNull() }
     }
-    return CamdServiceStatus(windows = ids, avm = avm, keepAvm = keep == "1")
+    return CamdServiceStatus(
+        windows = ids,
+        avm = avm,
+        keepAvm = keep == "1",
+        recorderEnabled = recEnabled?.let { it == "1" },
+        recordingActive = recActive?.let { it == "1" },
+    )
 }
 
 fun camdKeepAvmCommandLine(keepStopped: Boolean): String =
     if (keepStopped) "AVM ON" else "AVM OFF"
+
+/** `REC ON` / `REC OFF` — dashcam master switch (not recording-active). */
+fun camdRecorderCommandLine(enabled: Boolean): String =
+    if (enabled) "REC ON" else "REC OFF"
 
 fun formatCamdAutomationWindowArgs(
     mode: String,

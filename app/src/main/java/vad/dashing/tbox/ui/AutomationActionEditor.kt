@@ -716,6 +716,7 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_AUTOMATION_TRIGGER_WIDGET ||
                         type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
                         type == AutomationBuiltinActionType.ADB_SET_TCP ||
+                        type == AutomationBuiltinActionType.CAMD_RECORDER ||
                         type == AutomationBuiltinActionType.DCL_SET_SMART_ACC,
                     stringValue = when {
                         type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
@@ -1255,6 +1256,27 @@ private fun BuiltinActionFields(
             )
         }
 
+        AutomationBuiltinActionType.CAMD_RECORDER -> Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationDropdown(
+                label = "Регистратор Камеры ГУ",
+                value = action.boolValue,
+                options = listOf(true, false),
+                optionLabel = { if (it) "Включить" else "Выключить" },
+                onValueChange = { onChange(action.copy(boolValue = it)) },
+            )
+            Text(
+                text = "Мастер-переключатель регистратора (REC ON/OFF). Папка и камеры задаются " +
+                    "в приложении «Камеры ГУ». Это не то же самое, что «запись идёт» " +
+                    "(сигнал camd_recording_active). Если служба не слушает порт, команда " +
+                    "попробует её запустить.",
+                style = MaterialTheme.typography.tboxCaption,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         AutomationBuiltinActionType.ANSWER_CALL,
         AutomationBuiltinActionType.HANGUP_CALL,
         -> Column(
@@ -1689,6 +1711,7 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.HANGUP_CALL -> "Сбросить звонок (HFP)"
     AutomationBuiltinActionType.CAMD_WINDOW -> "Окно камеры"
     AutomationBuiltinActionType.CAMD_KEEP_AVM -> "Держать штатный AVM отключенным"
+    AutomationBuiltinActionType.CAMD_RECORDER -> "Регистратор Камеры ГУ"
     AutomationBuiltinActionType.DCL_SET_SMART_ACC -> "DCL: Умный ACC вкл/выкл"
     AutomationBuiltinActionType.DCL_TOGGLE_SMART_ACC -> "DCL: переключить Умный ACC"
 }

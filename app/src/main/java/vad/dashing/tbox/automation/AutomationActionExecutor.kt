@@ -23,6 +23,7 @@ import vad.dashing.tbox.CamdWindowClient
 import vad.dashing.tbox.CarDataRepository
 import vad.dashing.tbox.camdAutomationCommandLine
 import vad.dashing.tbox.camdKeepAvmCommandLine
+import vad.dashing.tbox.camdRecorderCommandLine
 import vad.dashing.tbox.parseCamdAutomationWindowArgs
 import vad.dashing.tbox.HeadUnitBrightnessRepository
 import vad.dashing.tbox.HeadUnitDayNightMapping
@@ -843,6 +844,14 @@ class AutomationActionExecutor(
                 "Штатный AVM удерживается выключенным"
             } else {
                 "Штатный AVM включён"
+            },
+        )
+        AutomationBuiltinActionType.CAMD_RECORDER -> executeCamd(
+            camdRecorderCommandLine(action.boolValue),
+            if (action.boolValue) {
+                "Регистратор Камеры ГУ включён"
+            } else {
+                "Регистратор Камеры ГУ выключен"
             },
         )
 

@@ -378,8 +378,9 @@ class CameraWindows(private val context: Context) {
         val ids = synchronized(lock) { if (openIds.isEmpty()) "none" else openIds.joinToString(",") }
         val avm = getprop("init.svc.AVMapp").ifBlank { "unknown" }
         val keep = if (keepAvmStopped()) "1" else "0"
-        val rec = if (recorderActive) "1" else "0"
-        return "windows=$ids avm=$avm keep_avm=$keep rec=$rec"
+        // Recorder flags (rec_enabled / rec_active) are appended by CamdApiServer from
+        // RecorderController — do not pack them into one blob here.
+        return "windows=$ids avm=$avm keep_avm=$keep"
     }
 
     private fun shouldStopAvmNow(): Boolean {

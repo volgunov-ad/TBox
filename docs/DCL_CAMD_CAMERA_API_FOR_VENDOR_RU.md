@@ -202,6 +202,27 @@ AVM OFF   # или AVM 0 — закрыть ВСЕ открытые окна cam
 
 В `STATUS` флаг: `keep_avm=0|1`.
 
+### 3.3.1. `REC` — мастер-переключатель регистратора
+
+Тот же стиль, что `AVM ON|OFF` (SET). GET enabled — поле `rec_enabled=` в `STATUS`, отдельно от «запись идёт».
+
+```
+REC ON    # или REC 1 — включить мастер-переключатель (папка/камеры уже в prefs camd)
+REC OFF   # или REC 0 — выключить и остановить запись
+```
+
+Ответы: `OK state=rec_on enabled=1` / `OK state=rec_off enabled=0`, либо
+`OK state=error error=no_cameras|no_folder`.
+
+**Не путать:**
+
+| Поле / смысл | Что это |
+|--------------|---------|
+| `rec_enabled` | мастер-переключатель (`REC ON`, переживает reboot) |
+| `rec_active` | конвейер записи сейчас вооружён (engines/watcher) |
+
+Их **нельзя** склеивать в один status-blob.
+
 ### 3.4. `STATUS`
 
 ```
@@ -211,8 +232,8 @@ STATUS
 Пример ответа:
 
 ```
-OK windows=8,4 avm=stopped keep_avm=0
-OK windows=none avm=running keep_avm=1
+OK windows=8,4 avm=stopped keep_avm=0 rec_enabled=0 rec_active=0
+OK windows=none avm=running keep_avm=1 rec_enabled=1 rec_active=1
 ```
 
 ---
@@ -227,7 +248,8 @@ OK windows=none avm=running keep_avm=1
 | `OK state=moved input=<id>` | То же окно перенесено |
 | `OK state=closed …` | Закрыто |
 | `OK state=avm_held` / `OK state=avm_restore` | Переключатель AVM |
-| `OK windows=… avm=… keep_avm=…` | Статус |
+| `OK state=rec_on enabled=1` / `OK state=rec_off enabled=0` | Переключатель регистратора |
+| `OK windows=… avm=… keep_avm=… rec_enabled=… rec_active=…` | Статус (enabled и active — отдельные поля) |
 | `ERR bad_command` | Строка не разобралась / неверные числа / неизвестный id / геометрия вне правил |
 | `ERR no_windows` | Служба без слоя окон (не должна встречаться в нормальном FGS) |
 | `OK state=error error=overlay_permission` | Нет права оверлея у `vad.dashing.camd` |
@@ -326,10 +348,12 @@ printf 'CLOSE 8\n' | nc 127.0.0.1 8770
 
 | Поле | Значение |
 |------|----------|
-| `actionType` | `camd_window` или `camd_keep_avm` |
+| `actionType` | `camd_window`, `camd_keep_avm` или `camd_recorder` |
 | `intValue` (`camd_window`) | id камеры (в preset-режиме используется для `CLOSE`, сам OPEN берёт камеру из пресета) |
 | `stringValue` (`camd_window`) | `open <x%> <y%> <w%> <h%> [rotation [flipH [flipV]]] [crop=x%,y%,w%,h%]`, `open preset=<имя> <x%> <y%> <w%> <h%>`, суффикс ` shape=circle` — **в процентах 0…100**, либо `close` / `close_all` |
 | `boolValue` (`camd_keep_avm`) | `true` = `AVM ON`, `false` = `AVM OFF` |
+| `boolValue` (`camd_recorder`) | `true` = `REC ON`, `false` = `REC OFF` |
+| Сигналы | `camd_recorder_enabled`, `camd_recording_active` (`on`/`off`) |
 
 Monitor сам переводит проценты в доли и шлёт строку на `8770`, при необходимости будит службу.  
 Это **обёртка**, не отдельный протокол камер. Прямой сокет проще и не требует consent/токена.
@@ -364,7 +388,7 @@ Monitor сам переводит проценты в доли и шлёт ст�
 - Узнать статус (`windows`, `avm`, `keep_avm`).
 - Удерживать штатный AVM выключенным (`AVM ON`/`OFF`).
 - Разбудить службу broadcast’ом `vad.dashing.camd.START`.
-- То же через Monitor `camd_window` / `camd_keep_avm`, если уже есть локальный API-доступ.
+- То же через Monitor `camd_window` / `camd_keep_avm` / `camd_recorder`, если уже есть локальный API-доступ.
 
 ### Совместимость OPEN
 
@@ -425,5 +449,5 @@ Monitor сам переводит проценты в доли и шлёт ст�
 | Входы | `camd/.../KnownInputs.kt` |
 | Manifest / START / permission | `camd/src/main/AndroidManifest.xml` |
 | Клиент Monitor | `app/.../CamdWindowWidget.kt` (`CamdWindowClient`) |
-| Автоматизации / External API | `camd_window`, `camd_keep_avm` → `AutomationActionExecutor` |
+| Автоматизации / External API | `camd_window`, `camd_keep_avm`, `camd_recorder` → `AutomationActionExecutor`; сигналы `camd_recorder_enabled` / `camd_recording_active` |
 | Инженерия | [CAMD_RU.md](CAMD_RU.md) |

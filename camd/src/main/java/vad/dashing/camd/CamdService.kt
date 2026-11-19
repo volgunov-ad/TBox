@@ -94,7 +94,7 @@ object CamdRuntime {
                 val created = CamdEngine(app.filesDir)
                 val createdWindows = CameraWindows(app)
                 val createdRecorder = RecorderController(app, createdWindows)
-                val createdApi = CamdApiServer(created, createdWindows)
+                val createdApi = CamdApiServer(created, createdWindows, createdRecorder)
                 engine = created
                 windows = createdWindows
                 recorder = createdRecorder
@@ -108,9 +108,10 @@ object CamdRuntime {
                 // Process survived but listen supervisor exited — restart API only (P1-5).
                 val eng = engine
                 val win = windows
+                val rec = recorder
                 if (eng != null) {
                     Log.w(TAG, "API не слушает — перезапускаю listen")
-                    val createdApi = CamdApiServer(eng, win)
+                    val createdApi = CamdApiServer(eng, win, rec)
                     apiServer = createdApi
                     createdApi.start()
                 }
