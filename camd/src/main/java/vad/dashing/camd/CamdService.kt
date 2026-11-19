@@ -41,7 +41,9 @@ class CamdService : Service() {
 
     override fun onDestroy() {
         Log.i(CAMD_LOG_TAG, "сервис уничтожается — останавливаю runtime")
-        CamdRuntime.stop()
+        // stop() → closeAll → hide posts to main and awaits. Must not run on the main
+        // thread or the latch deadlocks (posted Runnable never runs).
+        Thread({ CamdRuntime.stop() }, "camd-runtime-stop").apply { isDaemon = true }.start()
         runCatching { unregisterReceiver(shutdownReceiver) }
         super.onDestroy()
     }

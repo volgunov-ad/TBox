@@ -50,6 +50,24 @@ class CamdApiServerSuperviseTest {
     }
 
     @Test
+    fun stopThenStartKeepsRunningWhenOldSuperviseExits() {
+        val engine = CamdEngine(java.io.File("build/camd-test-files").apply { mkdirs() })
+        val port = freePort()
+        val server = CamdApiServer(engine, port = port)
+        server.start()
+        assertTrue(awaitPortOpen(port, 3_000))
+        server.stop()
+        assertTrue(awaitPortClosedThenRebind(port, 3_000))
+        server.start()
+        assertTrue(awaitPortOpen(port, 3_000))
+        // Old supervise exit must not clear running for the newer generation.
+        Thread.sleep(300)
+        assertTrue("newer listen must stay running", server.isRunning())
+        server.stop()
+        awaitPortClosedThenRebind(port, 3_000)
+    }
+
+    @Test
     fun retriesBindAfterTransientFailure() {
         val engine = CamdEngine(java.io.File("build/camd-test-files").apply { mkdirs() })
         val port = freePort()

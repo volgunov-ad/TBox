@@ -106,8 +106,11 @@ class CamdApiServer(
                 if (serverSocket === server) serverSocket = null
             }
         }
-        running = false
-        runCatching { Log.i(TAG, "API supervisor остановлен (port=$port)") }
+        // Only clear [running] for this generation — a newer start() must keep it true.
+        if (generation.get() == gen) {
+            running = false
+        }
+        runCatching { Log.i(TAG, "API supervisor остановлен (port=$port gen=$gen)") }
     }
 
     internal fun serveClient(socket: Socket) {

@@ -576,23 +576,41 @@ class CameraWindows(private val context: Context) {
         return result
     }
 
-    private class HideResult(
-        val ok: Boolean,
-        val error: String = OverlayOpSequencer.ERROR_TIMEOUT,
-    )
+    private class HideResult {
+        var ok: Boolean = false
+        var error: String = OverlayOpSequencer.ERROR_TIMEOUT
+
+        fun markSuperseded() {
+            ok = false
+            error = OverlayOpSequencer.ERROR_SUPERSEDED
+        }
+    }
 
     private fun hide(inputId: Int): HideResult {
         synchronized(lock) { windowSources.remove(inputId) }
         val token = overlayOps.begin(inputId)
         val latch = CountDownLatch(1)
+        val result = HideResult()
         main.post {
             try {
-                if (!overlayOps.isCurrent(inputId, token)) return@post
+                if (!overlayOps.isCurrent(inputId, token)) {
+                    // Newer OPEN/CLOSE won — do not remove the new overlay; report like show.
+                    result.markSuperseded()
+                    return@post
+                }
                 val live = views.remove(inputId)
                 live?.stop()
                 if (live != null) {
                     runCatching { windowManager().removeView(live.root) }
                 }
+                if (!overlayOps.isCurrent(inputId, token)) {
+                    result.markSuperseded()
+                    return@post
+                }
+                result.ok = true
+            } catch (error: Throwable) {
+                result.ok = false
+                result.error = error.message ?: "overlay"
             } finally {
                 latch.countDown()
             }
@@ -601,9 +619,10 @@ class CameraWindows(private val context: Context) {
             overlayOps.cancelIfCurrent(inputId, token)
             val count = OverlayLatchMetrics.onHideTimeout()
             Log.w(OVERLAY_LOG_TAG, "hide timeout input=$inputId token=$token count=$count")
-            return HideResult(ok = false, error = OverlayOpSequencer.ERROR_TIMEOUT)
+            result.ok = false
+            result.error = OverlayOpSequencer.ERROR_TIMEOUT
         }
-        return HideResult(ok = true)
+        return result
     }
 
     private fun place(params: WindowManager.LayoutParams, command: CamdCommand.Open) {
