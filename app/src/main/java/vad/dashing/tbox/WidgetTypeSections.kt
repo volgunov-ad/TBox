@@ -226,6 +226,8 @@ object WidgetTypeSections {
             "espGpioIn3",
             "espRelay0",
             "espRelay1",
+            "espBleRelay0",
+            "espBleRelay1",
         )
     }
 

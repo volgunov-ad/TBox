@@ -1196,6 +1196,9 @@
     <string name="esp_ble_scan_desc">Пассивный приём BTHome (Shelly Blu Button 1 и RC Button 4). По умолчанию выкл.</string>
     <string name="esp_ble_learn">Обучить пульт</string>
     <string name="esp_ble_learn_cancel">Отменить обучение</string>
+    <string name="esp_ble_relay_close">Замкнуть</string>
+    <string name="esp_ble_relay_open">Разомкнуть</string>
+    <string name="esp_ble_relay_pulse">Импульс</string>
     <string name="esp_ble_learn_hint">Нажмите любую кнопку на пульте в течение 30 с</string>
     <string name="esp_ble_learning">Ожидание нажатия…</string>
     <string name="esp_ble_bound_macs">Привязанные MAC</string>
@@ -1563,11 +1566,14 @@
     <string name="data_title_esp_connected">Компаньон подключен</string>
     <string name="data_title_esp_relay_0">Компаньон реле 0</string>
     <string name="data_title_esp_relay_1">Компаньон реле 1</string>
+    <string name="data_title_esp_ble_relay_0">BLE реле 0</string>
+    <string name="data_title_esp_ble_relay_1">BLE реле 1</string>
     <string name="data_title_esp_gpio_in_0">Компаньон вход 0</string>
     <string name="data_title_esp_gpio_in_1">Компаньон вход 1</string>
     <string name="data_title_esp_gpio_in_2">Компаньон вход 2</string>
     <string name="data_title_esp_gpio_in_3">Компаньон вход 3</string>
     <string name="widget_desc_esp_relay">Выход компаньона: режим кнопки или реле (настройка плитки)</string>
+    <string name="widget_desc_esp_ble_relay">Канал BLE-реле на плате ESP32 (через компаньон)</string>
     <string name="widget_desc_esp_gpio">Состояние входа GPIO компаньона</string>
     <string name="widget_desc_esp_connected">USB-подключение к компаньону ESP32 (да/нет)</string>
     <string name="widget_esp_relay_mode_title">Режим работы</string>

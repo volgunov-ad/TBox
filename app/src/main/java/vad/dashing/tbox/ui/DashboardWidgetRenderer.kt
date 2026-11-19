@@ -2438,6 +2438,67 @@ fun DashboardWidgetRenderer(
             )
         }
 
+        "espBleRelay0", "espBleRelay1" -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val index = if (widget.dataKey == "espBleRelay0") 0 else 1
+            val relayMode = widgetConfig.espRelayMode
+            fun startRelayToggle() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_TOGGLE
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
+                            index,
+                        )
+                    }
+                )
+            }
+            fun startRelayPulse() {
+                context.startService(
+                    android.content.Intent(context, vad.dashing.tbox.BackgroundService::class.java).apply {
+                        action = vad.dashing.tbox.BackgroundService.ACTION_ESP_BLE_RELAY_PULSE
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_BLE_RELAY_INDEX,
+                            index,
+                        )
+                        putExtra(
+                            vad.dashing.tbox.BackgroundService.EXTRA_ESP_RELAY_DURATION_MS,
+                            EspRelayWidgetMode.BUTTON_PULSE_MS,
+                        )
+                    }
+                )
+            }
+            DashboardWidgetItem(
+                widget = widget,
+                dataProvider = dataProvider,
+                onClick = {
+                    if (enableInnerInteractions && !isEditMode) {
+                        when (relayMode) {
+                            EspRelayWidgetMode.BUTTON -> startRelayPulse()
+                            EspRelayWidgetMode.RELAY -> startRelayToggle()
+                        }
+                    } else {
+                        onClick()
+                    }
+                },
+                onDoubleClick = if (enableInnerInteractions && !isEditMode) {
+                    { startRelayToggle() }
+                } else {
+                    {}
+                },
+                onLongClick = onLongClick,
+                dashboardManager = dashboardManager,
+                dashboardChart = false,
+                elevation = elevation,
+                shape = shape,
+                title = widgetConfig.showTitle,
+                titleOverride = titleOverride,
+                units = widgetConfig.showUnit,
+                backgroundColor = widgetBackgroundColor,
+                textColor = widgetTextColor
+            )
+        }
+
         GAS_BRAKE_WIDGET_DATA_KEY -> {
             DashboardGasBrakeWidgetItem(
                 widget = widget,

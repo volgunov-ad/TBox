@@ -714,6 +714,16 @@ object AutomationValidator {
                 issues += AutomationValidationIssue("$path.intValue", "Недопустимый канал реле")
             }
 
+            AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE,
+            AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE,
+            AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
+            -> if (action.intValue !in 0..1) {
+                issues += AutomationValidationIssue(
+                    "$path.intValue",
+                    "Недопустимый индекс BLE-реле (0 или 1)",
+                )
+            }
+
             AutomationBuiltinActionType.ESP_RELAY_SET ->
                 issues += AutomationValidationIssue(
                     path,
@@ -989,7 +999,9 @@ object AutomationValidator {
                 )
             }
         }
-        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE) {
+        if (action.type == AutomationBuiltinActionType.ESP_RELAY_PULSE ||
+            action.type == AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE
+        ) {
             val duration = action.stringValue.trim()
             val parsedDuration = duration.toLongOrNull()
             if (

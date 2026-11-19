@@ -72,6 +72,10 @@ internal object AutomationSignalReads {
                 AutomationSignalId.ESP_GPIO_IN_3 -> espGpioInputFlow(3)
                 AutomationSignalId.ESP_RELAY_0 -> espMaskBitFlow(EspCompanionRepository.relayMask, 0)
                 AutomationSignalId.ESP_RELAY_1 -> espMaskBitFlow(EspCompanionRepository.relayMask, 1)
+                AutomationSignalId.ESP_BLE_RELAY_0 ->
+                    espRelayMaskMapBitFlow(EspCompanionRepository.bleRelayMasks, 0)
+                AutomationSignalId.ESP_BLE_RELAY_1 ->
+                    espRelayMaskMapBitFlow(EspCompanionRepository.bleRelayMasks, 1)
                 AutomationSignalId.ESP_BLE_BOUND -> espBleBoundFlow()
                 AutomationSignalId.ESP_BLE_BATTERY -> {
                     val mac = key.mac?.trim().orEmpty()

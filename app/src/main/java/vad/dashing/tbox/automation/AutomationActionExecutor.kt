@@ -571,6 +571,19 @@ class AutomationActionExecutor(
             durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
         )
 
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> serviceActions.setEspBleRelayState(
+            index = action.intValue,
+            on = action.boolValue,
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE ->
+            serviceActions.toggleEspBleRelay(action.intValue)
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> serviceActions.pulseEspBleRelay(
+            index = action.intValue,
+            durationMillis = action.stringValue.toLongOrNull()?.takeIf { it > 0L },
+        )
+
         AutomationBuiltinActionType.MEDIA_PREVIOUS -> mediaAction(action) {
             packages, preferred -> SharedMediaControlService.skipToPrevious(packages, preferred)
         }

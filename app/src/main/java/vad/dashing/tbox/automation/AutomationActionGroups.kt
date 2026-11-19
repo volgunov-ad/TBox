@@ -50,6 +50,9 @@ fun builtinActionKeywords(type: AutomationBuiltinActionType): List<String> = whe
     AutomationBuiltinActionType.ESP_RELAY_SET -> emptyList()
     AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> listOf("реле", "канал", "эсп")
     AutomationBuiltinActionType.ESP_RELAY_PULSE -> listOf("реле", "канал", "импульс", "эсп")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> listOf("реле", "ble", "бле", "замкнуть", "эсп")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> listOf("реле", "ble", "бле", "эсп")
+    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> listOf("реле", "ble", "бле", "импульс", "эсп")
     AutomationBuiltinActionType.MEDIA_PREVIOUS -> listOf("трек", "музыка", "назад")
     AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> listOf("трек", "музыка", "пауза", "старт")
     AutomationBuiltinActionType.MEDIA_PLAY -> listOf("трек", "музыка", "старт", "играть")
@@ -331,6 +334,9 @@ fun builtinActionGroup(type: AutomationBuiltinActionType): AutomationActionGroup
     AutomationBuiltinActionType.ESP_RELAY_SET,
     AutomationBuiltinActionType.ESP_RELAY_TOGGLE,
     AutomationBuiltinActionType.ESP_RELAY_PULSE,
+    AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
+    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE,
+    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE,
     -> AutomationActionGroup.ESP
 
     AutomationBuiltinActionType.CRUISE_ENGAGE_TO_TARGET,

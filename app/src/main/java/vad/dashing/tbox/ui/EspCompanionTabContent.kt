@@ -42,6 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -57,6 +61,7 @@ import vad.dashing.tbox.SettingsViewModel
 import vad.dashing.tbox.esp.CompanionProtocolLogRecorder
 import vad.dashing.tbox.esp.EspCompanionProtocol
 import vad.dashing.tbox.esp.EspCompanionRepository
+import vad.dashing.tbox.esp.EspRelayDevice
 import vad.dashing.tbox.esp.LocationSource
 import vad.dashing.tbox.esp.Um980Commands
 import vad.dashing.tbox.location.LocationIncomingBitRate
@@ -102,6 +107,89 @@ private fun CompanionHelperText(text: String) {
     )
 }
 
+/** One paired BLE relay board: online dot, id, toggle and 300 ms pulse. */
+@Composable
+private fun EspBleRelayRow(
+    relay: EspRelayDevice,
+    mask: Int,
+    enabled: Boolean,
+) {
+    val context = LocalContext.current
+    val closed = (mask and 1) != 0
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(
+                    color = if (relay.online) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                    shape = CircleShape,
+                ),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            if (relay.name.isNotBlank()) {
+                Text(
+                    text = relay.name,
+                    style = MaterialTheme.typography.tboxBody,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text = relay.id,
+                style = MaterialTheme.typography.tboxCaption,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        TextButton(
+            onClick = rememberWrappedOnClick {
+                context.startService(
+                    Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_ESP_BLE_RELAY_PULSE
+                        putExtra(BackgroundService.EXTRA_ESP_BLE_RELAY_ID, relay.id)
+                        putExtra(BackgroundService.EXTRA_ESP_RELAY_DURATION_MS, 300L)
+                    },
+                )
+            },
+            enabled = enabled,
+        ) {
+            Text(
+                text = stringResource(R.string.esp_ble_relay_pulse),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+        TextButton(
+            onClick = rememberWrappedOnClick {
+                context.startService(
+                    Intent(context, BackgroundService::class.java).apply {
+                        action = BackgroundService.ACTION_ESP_BLE_RELAY_SET
+                        putExtra(BackgroundService.EXTRA_ESP_BLE_RELAY_ID, relay.id)
+                        // EXTRA_ESP_RELAY_MASK doubles as the boolean state extra.
+                        putExtra(BackgroundService.EXTRA_ESP_RELAY_MASK, if (closed) 0 else 1)
+                    },
+                )
+            },
+            enabled = enabled,
+        ) {
+            Text(
+                text = stringResource(
+                    if (closed) R.string.esp_ble_relay_open else R.string.esp_ble_relay_close,
+                ),
+                style = MaterialTheme.typography.tboxButton,
+            )
+        }
+    }
+}
+
 @Composable
 fun EspCompanionTabContent(
     settingsViewModel: SettingsViewModel,
@@ -137,6 +225,8 @@ fun EspCompanionTabContent(
         if (!bleLearn) bleLearnKey = ""
     }
     val phones by EspCompanionRepository.phones.collectAsStateWithLifecycle()
+    val bleRelays by EspCompanionRepository.bleRelays.collectAsStateWithLifecycle()
+    val bleRelayMasks by EspCompanionRepository.bleRelayMasks.collectAsStateWithLifecycle()
     val phoneLearn by EspCompanionRepository.phoneLearnActive.collectAsStateWithLifecycle()
     val pendingPhone by EspCompanionRepository.pendingPhone.collectAsStateWithLifecycle()
     val bleDevices by EspCompanionRepository.bleDevices.collectAsStateWithLifecycle()
@@ -611,9 +701,21 @@ fun EspCompanionTabContent(
                             description = stringResource(R.string.esp_ble_scan_desc),
                             enabled = controlsEnabled,
                         )
+                        if (info.bleRelay && bleRelays.isNotEmpty()) {
+                            for (relay in bleRelays) {
+                                EspBleRelayRow(
+                                    relay = relay,
+                                    mask = bleRelayMasks[relay.id] ?: relay.mask,
+                                    enabled = controlsEnabled,
+                                )
+                            }
+                        }
                         if (info.phone) {
                             CompanionHelperText(
-                                stringResource(R.string.esp_phone_slots, bleMacs.size + phones.size),
+                                stringResource(
+                                    R.string.esp_phone_slots,
+                                    bleMacs.size + phones.size + bleRelays.size,
+                                ),
                             )
                         }
                         if (bleLearn) {

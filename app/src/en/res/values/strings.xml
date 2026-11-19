@@ -1188,6 +1188,9 @@
     <string name="esp_ble_scan_desc">Passive BTHome receive (Shelly Blu Button 1 and RC Button 4). Off by default.</string>
     <string name="esp_ble_learn">Learn remote</string>
     <string name="esp_ble_learn_cancel">Cancel learn</string>
+    <string name="esp_ble_relay_close">Close</string>
+    <string name="esp_ble_relay_open">Open</string>
+    <string name="esp_ble_relay_pulse">Pulse</string>
     <string name="esp_ble_learn_hint">Press any button on the remote within 30 s</string>
     <string name="esp_ble_learning">Waiting for press…</string>
     <string name="esp_ble_bound_macs">Bound MACs</string>
@@ -1555,11 +1558,14 @@
     <string name="data_title_esp_connected">Companion connected</string>
     <string name="data_title_esp_relay_0">Companion relay 0</string>
     <string name="data_title_esp_relay_1">Companion relay 1</string>
+    <string name="data_title_esp_ble_relay_0">BLE relay 0</string>
+    <string name="data_title_esp_ble_relay_1">BLE relay 1</string>
     <string name="data_title_esp_gpio_in_0">Companion input 0</string>
     <string name="data_title_esp_gpio_in_1">Companion input 1</string>
     <string name="data_title_esp_gpio_in_2">Companion input 2</string>
     <string name="data_title_esp_gpio_in_3">Companion input 3</string>
     <string name="widget_desc_esp_relay">Companion output: button or relay mode (tile setting)</string>
+    <string name="widget_desc_esp_ble_relay">BLE relay channel on the ESP32 board (via companion)</string>
     <string name="widget_desc_esp_gpio">Companion GPIO input state</string>
     <string name="widget_desc_esp_connected">USB connection to ESP32 companion (yes/no)</string>
     <string name="widget_esp_relay_mode_title">Operating mode</string>

@@ -118,6 +118,24 @@ class TboxDataProvider(
     private val restartFlow = MutableStateFlow(context.getString(R.string.tbox_short)).asStateFlow()
     private val emptyFlow = MutableStateFlow("").asStateFlow()
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+
+    /** BLE relay tile text: closed/open by board id; empty when the board is absent. */
+    private fun bleRelayStateText(
+        index: Int,
+        yesLabel: String,
+        noLabel: String,
+    ): StateFlow<String> = combine(
+        vad.dashing.tbox.esp.EspCompanionRepository.bleRelayMasks,
+        vad.dashing.tbox.esp.EspCompanionRepository.bleRelays,
+    ) { masks, relays ->
+        val relay = relays.getOrNull(index) ?: return@combine ""
+        val closed = ((masks[relay.id] ?: relay.mask) and 1) != 0
+        valueToString(closed, booleanTrue = yesLabel, booleanFalse = noLabel)
+    }.distinctUntilChanged().stateIn(
+        scope = viewModel.viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "",
+    )
     private val localTimeFlow = flow {
         val formatter = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault())
         while (true) {
@@ -441,6 +459,8 @@ class TboxDataProvider(
             "espRelay1" -> vad.dashing.tbox.esp.EspCompanionRepository.relayMask.mapState {
                 valueToString((it and 2) != 0, booleanTrue = yesLabel, booleanFalse = noLabel)
             }
+            "espBleRelay0" -> bleRelayStateText(0, yesLabel, noLabel)
+            "espBleRelay1" -> bleRelayStateText(1, yesLabel, noLabel)
             else -> emptyFlow
         }
     }

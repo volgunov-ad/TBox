@@ -747,7 +747,8 @@ private fun BuiltinActionFields(
                         type == AutomationBuiltinActionType.SET_AUTOMATION_ENABLED ||
                         type == AutomationBuiltinActionType.ADB_SET_TCP ||
                         type == AutomationBuiltinActionType.CAMD_RECORDER ||
-                        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC,
+                        type == AutomationBuiltinActionType.DCL_SET_SMART_ACC ||
+                        type == AutomationBuiltinActionType.ESP_BLE_RELAY_SET,
                     stringValue = when {
                         type == AutomationBuiltinActionType.ADB_FORCE_STOP ->
                             apps.firstOrNull()?.packageName.orEmpty()
@@ -805,6 +806,38 @@ private fun BuiltinActionFields(
         ) {
             AutomationIntField(
                 label = "Канал реле",
+                value = action.intValue,
+                onValueChange = { onChange(action.copy(intValue = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            AutomationTextField(
+                value = action.stringValue,
+                onValueChange = { onChange(action.copy(stringValue = it)) },
+                label = "Длительность, мс (пусто = стандарт)",
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> AutomationDropdown(
+            label = "Канал BLE-реле",
+            value = action.boolValue,
+            options = listOf(true, false),
+            optionLabel = { if (it) "Замкнуть" else "Разомкнуть" },
+            onValueChange = { onChange(action.copy(boolValue = it)) },
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> AutomationIntField(
+            label = "Реле (0 или 1)",
+            value = action.intValue,
+            onValueChange = { onChange(action.copy(intValue = it)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AutomationIntField(
+                label = "Реле (0 или 1)",
                 value = action.intValue,
                 onValueChange = { onChange(action.copy(intValue = it)) },
                 modifier = Modifier.weight(1f),
@@ -1768,6 +1801,9 @@ internal fun builtinActionLabel(type: AutomationBuiltinActionType): String = whe
     AutomationBuiltinActionType.ESP_RELAY_SET -> "Установить маску ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_TOGGLE -> "Переключить ESP-реле"
     AutomationBuiltinActionType.ESP_RELAY_PULSE -> "Импульс ESP-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_SET -> "Замкнуть/разомкнуть BLE-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_TOGGLE -> "Переключить BLE-реле"
+    AutomationBuiltinActionType.ESP_BLE_RELAY_PULSE -> "Импульс BLE-реле"
     AutomationBuiltinActionType.MEDIA_PREVIOUS -> "Предыдущий трек"
     AutomationBuiltinActionType.MEDIA_PLAY_PAUSE -> "Воспроизведение/пауза"
     AutomationBuiltinActionType.MEDIA_PLAY -> "Воспроизведение"

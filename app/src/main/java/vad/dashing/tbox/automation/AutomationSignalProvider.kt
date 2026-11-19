@@ -131,6 +131,23 @@ internal fun espMaskBitFlow(mask: Flow<Int>, bit: Int): Flow<AutomationSignalVal
         AutomationSignalValue.State(if ((value and (1 shl bit)) != 0) "on" else "off")
     }.withAvailability(EspCompanionRepository.connected)
 
+/** Bit 0 of a per-id mask map; index picks the paired board from `bleStatus.relays`. */
+internal fun espRelayMaskMapBitFlow(
+    masks: Flow<Map<String, Int>>,
+    index: Int,
+): Flow<AutomationSignalValue> =
+    combine(
+        masks,
+        EspCompanionRepository.bleRelays,
+        EspCompanionRepository.connected,
+    ) { maskMap, relays, connected ->
+        if (!connected) return@combine AutomationSignalValue.Unavailable
+        val id = relays.getOrNull(index)?.id
+            ?: return@combine AutomationSignalValue.Unavailable
+        val value = maskMap[id] ?: 0
+        AutomationSignalValue.State(if ((value and 1) != 0) "on" else "off")
+    }
+
 /**
  * Input levels stay [AutomationSignalValue.Unavailable] until the companion sends a `gpio`
  * snapshot on this link. The default mask (0) and a mask left from the previous session

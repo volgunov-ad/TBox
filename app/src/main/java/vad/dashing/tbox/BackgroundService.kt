@@ -579,9 +579,14 @@ class BackgroundService : Service() {
         const val ACTION_ESP_RELAY_SET = "vad.dashing.tbox.ESP_RELAY_SET"
         const val ACTION_ESP_RELAY_TOGGLE = "vad.dashing.tbox.ESP_RELAY_TOGGLE"
         const val ACTION_ESP_RELAY_PULSE = "vad.dashing.tbox.ESP_RELAY_PULSE"
+        const val ACTION_ESP_BLE_RELAY_SET = "vad.dashing.tbox.ESP_BLE_RELAY_SET"
+        const val ACTION_ESP_BLE_RELAY_TOGGLE = "vad.dashing.tbox.ESP_BLE_RELAY_TOGGLE"
+        const val ACTION_ESP_BLE_RELAY_PULSE = "vad.dashing.tbox.ESP_BLE_RELAY_PULSE"
         const val EXTRA_ESP_RELAY_MASK = "esp_relay_mask"
         const val EXTRA_ESP_RELAY_CHANNEL = "esp_relay_channel"
         const val EXTRA_ESP_RELAY_DURATION_MS = "esp_relay_duration_ms"
+        const val EXTRA_ESP_BLE_RELAY_INDEX = "esp_ble_relay_index"
+        const val EXTRA_ESP_BLE_RELAY_ID = "esp_ble_relay_id"
         const val ACTION_ESP_UM980_CMD = "vad.dashing.tbox.ESP_UM980_CMD"
         const val EXTRA_ESP_UM980_CMD = "esp_um980_cmd"
         const val EXTRA_ESP_UM980_CMDS = "esp_um980_cmds"
@@ -1772,6 +1777,26 @@ class BackgroundService : Service() {
                     espCompanionManager?.pulseRelay(channel, durationMs)
                 }
             }
+            ACTION_ESP_BLE_RELAY_SET -> {
+                val on = intent.getIntExtra(EXTRA_ESP_RELAY_MASK, 0) != 0
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.setBleRelayState(target, on)
+                }
+            }
+            ACTION_ESP_BLE_RELAY_TOGGLE -> {
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.toggleBleRelay(target)
+                }
+            }
+            ACTION_ESP_BLE_RELAY_PULSE -> {
+                val durationMs = intent.getLongExtra(
+                    EXTRA_ESP_RELAY_DURATION_MS,
+                    EspRelayWidgetMode.BUTTON_PULSE_MS,
+                )
+                withBleRelayTarget(intent) { target ->
+                    espCompanionManager?.pulseBleRelay(target, durationMs)
+                }
+            }
             ACTION_ESP_UM980_CMD -> {
                 val refreshAfter = intent.getBooleanExtra(EXTRA_ESP_UM980_REFRESH_AFTER, false)
                 val ensureSg = intent.getIntExtra(EXTRA_ESP_UM980_ENSURE_SIGNALGROUP, 0)
@@ -2104,6 +2129,19 @@ class BackgroundService : Service() {
         servicePhase = ServiceLifecyclePhase.Idle
     }
 
+    /** BLE relay target: board id string or 0-based index into the paired list. */
+    private fun withBleRelayTarget(intent: Intent, block: (Any) -> Unit) {
+        val id = intent.getStringExtra(EXTRA_ESP_BLE_RELAY_ID)?.trim().orEmpty()
+        if (id.isNotEmpty()) {
+            block(id)
+            return
+        }
+        val index = intent.getIntExtra(EXTRA_ESP_BLE_RELAY_INDEX, -1)
+        if (index >= 0) {
+            block(index)
+        }
+    }
+
     private fun automationServiceActions(): AutomationServiceActions =
         object : AutomationServiceActions {
             override suspend fun finishAndStartTrip(): AutomationActionResult {
@@ -2248,6 +2286,44 @@ class BackgroundService : Service() {
                         )
                     },
                 )
+            }
+
+            override suspend fun setEspBleRelayState(
+                index: Int,
+                on: Boolean,
+            ): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.setBleRelayState(id, on)
+                return AutomationActionResult.ok(
+                    if (on) "BLE-реле замкнуто" else "BLE-реле разомкнуто",
+                )
+            }
+
+            override suspend fun toggleEspBleRelay(index: Int): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.toggleBleRelay(id)
+                return AutomationActionResult.ok("BLE-реле переключено")
+            }
+
+            override suspend fun pulseEspBleRelay(
+                index: Int,
+                durationMillis: Long?,
+            ): AutomationActionResult {
+                val manager = espCompanionManager
+                    ?: return AutomationActionResult.failure("ESP-компаньон недоступен")
+                val id = EspCompanionRepository.bleRelays.value.getOrNull(index)?.id
+                    ?: return AutomationActionResult.failure("BLE-реле $index не сопряжено")
+                manager.pulseBleRelay(
+                    id,
+                    durationMillis ?: EspRelayWidgetMode.BUTTON_PULSE_MS,
+                )
+                return AutomationActionResult.ok("Импульс BLE-реле запущен")
             }
 
             override suspend fun setEspRelayMask(mask: Int): AutomationActionResult {

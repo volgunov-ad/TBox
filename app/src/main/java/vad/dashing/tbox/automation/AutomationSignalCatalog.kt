@@ -892,6 +892,8 @@ object AutomationSignalCatalog {
         state(AutomationSignalId.ESP_GPIO_IN_3, "ESP-вход 3", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_0, "ESP-реле 0", appOnly, binaryStates),
         state(AutomationSignalId.ESP_RELAY_1, "ESP-реле 1", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_BLE_RELAY_0, "BLE-реле 0", appOnly, binaryStates),
+        state(AutomationSignalId.ESP_BLE_RELAY_1, "BLE-реле 1", appOnly, binaryStates),
         state(AutomationSignalId.ESP_BLE_BOUND, "ESP BLE пульт привязан", appOnly, binaryStates),
         number(
             AutomationSignalId.ESP_BLE_BATTERY,
@@ -1701,6 +1703,8 @@ object AutomationSignalCatalog {
         AutomationSignalId.ESP_GPIO_IN_3,
         AutomationSignalId.ESP_RELAY_0,
         AutomationSignalId.ESP_RELAY_1,
+        AutomationSignalId.ESP_BLE_RELAY_0,
+        AutomationSignalId.ESP_BLE_RELAY_1,
         AutomationSignalId.ESP_BLE_BOUND,
         AutomationSignalId.ESP_BLE_BATTERY,
         -> AutomationSignalGroup.ESP
