@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -43,7 +45,6 @@ import androidx.compose.ui.window.DialogProperties
 import vad.dashing.tbox.automation.AutomationPickerSearch
 import vad.dashing.tbox.automation.AutomationSignalCatalog
 import vad.dashing.tbox.automation.AutomationSignalId
-import vad.dashing.tbox.automation.AutomationSignalSource
 import vad.dashing.tbox.ui.theme.tboxBody
 import vad.dashing.tbox.ui.theme.tboxCaption
 import vad.dashing.tbox.ui.theme.tboxTitle
@@ -62,27 +63,45 @@ internal data class AutomationPickerOption<T>(
     val key: String = "",
 )
 
-/** Signal picker options: label + units/sources hint + group + RU synonyms. */
+/** Dialog surface vertical padding (12 dp top + 12 dp bottom). */
+private val dialogVerticalPadding = 24.dp
+
+/** Title line estimate. */
+private val dialogTitleEstimate = 24.dp
+
+/** Search field estimate. */
+private val searchFieldEstimate = 64.dp
+
+/** Signal picker options: label + units hint + group + RU synonyms. */
 internal fun List<AutomationSignalId>.toAutomationSignalOptions():
     List<AutomationPickerOption<AutomationSignalId>> = map { id ->
     val descriptor = AutomationSignalCatalog.get(id)
-    val units = descriptor.unit.ifBlank { null }
-    val sources = descriptor.sources.joinToString(" / ") { source ->
-        when (source) {
-            AutomationSignalSource.TBOX -> "TBox"
-            AutomationSignalSource.HEAD_UNIT -> "ГУ"
-            AutomationSignalSource.APP -> "Приложение"
-        }
-    }
-    val supporting = listOfNotNull(units, sources).joinToString(" · ")
     AutomationPickerOption(
         value = id,
         label = descriptor.label,
-        supportingText = supporting.ifBlank { null },
+        supportingText = descriptor.unit.ifBlank { null },
         group = descriptor.group.label,
         keywords = AutomationSignalCatalog.signalKeywords(id),
         key = id.storageKey,
     )
+}
+    .sortedGroupedConsecutive()
+
+/**
+ * The picker renders consecutive options with the same group under one header, so each
+ * group must be one contiguous block. Catalog ordering interleaves groups; sort stably
+ * by first appearance of the group, keeping the within-group order intact.
+ */
+internal fun <T> List<AutomationPickerOption<T>>.sortedGroupedConsecutive():
+    List<AutomationPickerOption<T>> {
+    val groupOrder = LinkedHashMap<String, Int>()
+    forEach { option ->
+        val group = option.group ?: return@forEach
+        if (group !in groupOrder) groupOrder[group] = groupOrder.size
+    }
+    return sortedBy { option ->
+        option.group?.let { groupOrder[it] } ?: Int.MAX_VALUE
+    }
 }
 
 /**
@@ -170,6 +189,10 @@ internal fun <T> AutomationSearchablePickerDialog(
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // Taller list: ~85% of screen height, minus dialog paddings/title/search field.
+    val configuration = LocalConfiguration.current
+    val listMaxHeight = (configuration.screenHeightDp * 0.85f).dp -
+        (dialogVerticalPadding + dialogTitleEstimate + searchFieldEstimate)
     val filtered = remember(query, options) {
         if (AutomationPickerSearch.normalize(query).isEmpty()) {
             options
@@ -246,12 +269,12 @@ internal fun <T> AutomationSearchablePickerDialog(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 420.dp),
+                            .heightIn(max = listMaxHeight),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        grouped.forEach { section ->
+                        grouped.forEachIndexed { sectionIndex, section ->
                             section.header?.let { header ->
-                                item(key = "header:$header") {
+                                item(key = "header:$sectionIndex:$header") {
                                     Text(
                                         text = header,
                                         style = MaterialTheme.typography.tboxCaption,
@@ -260,14 +283,13 @@ internal fun <T> AutomationSearchablePickerDialog(
                                     )
                                 }
                             }
-                            items(
-                                count = section.options.size,
-                                key = { index ->
-                                    val option = section.options[index]
-                                    "option:${option.key.ifBlank { option.label }}:$index"
+                            itemsIndexed(
+                                items = section.options,
+                                key = { index, option ->
+                                    "option:$sectionIndex:$index:" +
+                                        (option.key.ifBlank { option.label })
                                 },
-                            ) { index ->
-                                val option = section.options[index]
+                            ) { _, option ->
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier

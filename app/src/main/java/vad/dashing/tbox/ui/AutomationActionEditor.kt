@@ -87,7 +87,6 @@ import vad.dashing.tbox.automation.floatingPanelVisibilityOpToInt
 import vad.dashing.tbox.automation.WifiStaController
 import vad.dashing.tbox.automation.sortedByAutomationLabel
 import vad.dashing.tbox.FloatingDashboardConfig
-import vad.dashing.tbox.HeadUnitCanMode
 import vad.dashing.tbox.freeform.FreeformLaunchBounds
 import vad.dashing.tbox.freeform.FreeformLaunchSide
 import vad.dashing.tbox.mbcan.UniversalCanRepository
@@ -332,12 +331,12 @@ private fun CanCommandFields(
                 value = catalogueEntry,
                 label = catalogueEntry.label,
                 group = catalogueEntry.group.label,
-                supportingText = catalogueEntry.supportedModes.canModeLabel(),
                 keywords = canActionKeywords(catalogueEntry.bus, catalogueEntry.propertyId),
                 key = "can:${catalogueEntry.bus}:${catalogueEntry.propertyId}",
             )
         }
     }
+        .sortedGroupedConsecutive()
     AutomationSearchablePickerField(
         label = "Действие",
         value = selectedEntry,
@@ -718,6 +717,7 @@ private fun BuiltinActionFields(
                 key = "builtin:${type.storageKey}",
             )
         }
+        .sortedGroupedConsecutive()
     }
     AutomationSearchablePickerField(
         label = "Действие",
@@ -1614,7 +1614,6 @@ private fun AddAutomationActionRow(
                                 value = catalogueEntry,
                                 label = catalogueEntry.label,
                                 group = catalogueEntry.group.label,
-                                supportingText = catalogueEntry.supportedModes.canModeLabel(),
                                 keywords = canActionKeywords(
                                     catalogueEntry.bus,
                                     catalogueEntry.propertyId,
@@ -1625,6 +1624,7 @@ private fun AddAutomationActionRow(
                     }
             }
         }
+        .sortedGroupedConsecutive()
     if (showActionsPicker) {
         val keyboardController = LocalSoftwareKeyboardController.current
         AutomationSearchablePickerDialog(
@@ -1696,14 +1696,6 @@ private fun AddAutomationActionRow(
             AutomationButtonLabel("Добавить")
         }
     }
-}
-
-/** A9 / A10 note for CAN entries in the picker. */
-private fun Set<HeadUnitCanMode>.canModeLabel(): String {
-    val parts = mutableListOf<String>()
-    if (HeadUnitCanMode.Android9MbCan in this) parts += "A9"
-    if (HeadUnitCanMode.Android10Vhal in this) parts += "A10"
-    return if (parts.isEmpty()) "" else parts.joinToString("/")
 }
 
 private enum class ActionUiKind {
