@@ -333,7 +333,6 @@ python3 tools/tbox_external_api_pair.py --check-only --run-automation клима
   `dcl_effective_speed_limit` и builtin `dcl_set_smart_acc` / `dcl_toggle_smart_acc`;
   **8** — сигнал `dcl_notification_shade_expanded`;
   **7** — окна камер `camd_window` и удержание штатного AVM `camd_keep_avm`;
-  **10** — регистратор `camd_recorder` + сигналы enabled/active;
   **6** — HFP phone dial: builtin `place_call` / `answer_call` / `hangup_call` + сигналы `phone_*`;
   **5** — read-only обогащение гео/модема отдельными signal id;
   **4** — у `can_command` добавлены `operations`, `signalId` и `write`, а у builtin `set_media_volume` — `write`).

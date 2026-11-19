@@ -100,33 +100,41 @@ class RecorderController(
      * Returns a STATUS-style fragment (`state=rec_on|rec_off|error …`) for TCP replies.
      */
     fun applyEnabledFromApi(enabled: Boolean): String {
-        if (enabled) {
-            val state = _state.value
-            if (state.inputs.isEmpty()) {
-                _state.value = state.copy(message = "Выберите хотя бы одну камеру")
-                return "state=error error=no_cameras"
+        val state = _state.value
+        val plan = RecorderEnableApi.plan(
+            wantEnabled = enabled,
+            hasInputs = state.inputs.isNotEmpty(),
+            hasFolder = state.folder.isNotBlank(),
+            armed = enabledNow,
+            prefEnabled = prefs.getBoolean(PREF_ENABLED, false),
+        )
+        when (plan.action) {
+            RecorderEnableApi.Action.ERROR_NO_CAMERAS,
+            RecorderEnableApi.Action.ERROR_NO_FOLDER,
+            -> {
+                _state.value = state.copy(message = plan.message.orEmpty())
             }
-            if (state.folder.isBlank()) {
-                _state.value = state.copy(message = "Выберите папку для записи")
-                return "state=error error=no_folder"
+            RecorderEnableApi.Action.IDEMPOTENT_ON -> Unit
+            RecorderEnableApi.Action.TURN_ON -> {
+                prefs.edit().putBoolean(PREF_ENABLED, true).apply()
+                _state.value = _state.value.copy(enabled = true, message = "Включаю запись…")
+                if (!enabledNow) {
+                    Thread({ startRecording() }, "camd-rec-start").apply { isDaemon = true; start() }
+                }
             }
-            if (enabledNow && prefs.getBoolean(PREF_ENABLED, false)) {
-                return "state=rec_on enabled=1"
+            RecorderEnableApi.Action.TURN_OFF -> {
+                prefs.edit().putBoolean(PREF_ENABLED, false).apply()
+                if (enabledNow) {
+                    Thread({ stopRecording("Запись остановлена") }, "camd-rec-stop").apply {
+                        isDaemon = true
+                        start()
+                    }
+                } else {
+                    _state.value = _state.value.copy(enabled = false)
+                }
             }
-            prefs.edit().putBoolean(PREF_ENABLED, true).apply()
-            _state.value = _state.value.copy(enabled = true, message = "Включаю запись…")
-            if (!enabledNow) {
-                Thread({ startRecording() }, "camd-rec-start").apply { isDaemon = true; start() }
-            }
-            return "state=rec_on enabled=1"
         }
-        prefs.edit().putBoolean(PREF_ENABLED, false).apply()
-        if (enabledNow) {
-            Thread({ stopRecording("Запись остановлена") }, "camd-rec-stop").apply { isDaemon = true; start() }
-        } else {
-            _state.value = _state.value.copy(enabled = false)
-        }
-        return "state=rec_off enabled=0"
+        return plan.reply
     }
 
     /** Persisted master switch (survives reboot); not the same as [recordingActive]. */
