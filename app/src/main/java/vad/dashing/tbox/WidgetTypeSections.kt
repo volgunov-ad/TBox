@@ -208,6 +208,8 @@ object WidgetTypeSections {
             PHONE_DIAL_WIDGET_DATA_KEY,
             AUTOMATION_TRIGGER_WIDGET_DATA_KEY,
             CAMD_WINDOW_WIDGET_DATA_KEY,
+            CAMD_KEEP_AVM_WIDGET_DATA_KEY,
+            CAMD_RECORDER_WIDGET_DATA_KEY,
             EMPTY_TILE_WIDGET_DATA_KEY,
             "restartTbox",
             WidgetsRepository.EXTERNAL_WIDGET_DATA_KEY,
