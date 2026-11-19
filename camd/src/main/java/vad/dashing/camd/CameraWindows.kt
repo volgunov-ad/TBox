@@ -56,6 +56,15 @@ class CameraWindows(private val context: Context) {
         recorderActive = active
     }
 
+    /**
+     * Self-grant of the accessibility service through the mb_daemon root channel,
+     * same as the overlay grant. Blocking; call from a worker thread.
+     */
+    fun grantAccessibility() {
+        val nonce = "a${System.currentTimeMillis()}"
+        arm(GrabberScripts.grantAccessibility(nonce), nonce)
+    }
+
     fun setRecorderInputsPref(inputs: Set<Int>) {
         prefs.edit()
             .putStringSet(RECORDER_INPUTS_KEY, inputs.map { it.toString() }.toSet())

@@ -651,6 +651,43 @@ class GrabberScriptTest {
     }
 
     @Test
+    fun grantAccessibilityAppendsAndNeverOverwrites() {
+        val text = GrabberScripts.grantAccessibility("nonce7")
+        val svc = "vad.dashing.camd/vad.dashing.camd.CamdAccessibilityService"
+        val get = text.indexOf("cur=$(settings get secure enabled_accessibility_services")
+        val put = text.indexOf("settings put secure enabled_accessibility_services")
+        val enabled = text.indexOf("settings put secure accessibility_enabled 1")
+        val exit = text.indexOf("exit 0")
+        assertTrue(get >= 0)
+        assertTrue(put > get)
+        assertTrue(enabled > put)
+        assertTrue(exit > enabled)
+        assertTrue(text.contains("*\"$svc\"*) : ;;"))
+        assertTrue(text.contains("null|\"\") cur=\"$svc\""))
+        assertTrue(text.contains("*) cur=\"\$cur:$svc\" ;;"))
+        assertTrue(text.contains("echo nonce7"))
+        assertFalse(text.contains("\r"))
+        assertTrue(text.trimEnd().endsWith("exit 0"))
+    }
+
+    @Test
+    fun grantAccessibilityContainsNoSecondPutOfTheSameKey() {
+        val text = GrabberScripts.grantAccessibility("n8")
+        assertEquals(1, countOccurrences(text, "settings put secure enabled_accessibility_services"))
+        assertEquals(1, countOccurrences(text, "settings put secure accessibility_enabled"))
+    }
+
+    private fun countOccurrences(text: String, needle: String): Int {
+        var count = 0
+        var index = text.indexOf(needle)
+        while (index >= 0) {
+            count++
+            index = text.indexOf(needle, index + needle.length)
+        }
+        return count
+    }
+
+    @Test
     fun stopAvmDoesNotRestartTheGrabber() {
         val text = GrabberScripts.stopAvm("nonce4")
         assertTrue(text.contains("setprop ctl.stop AVMapp"))

@@ -55,6 +55,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
     private val accessibilityGranted = mutableStateOf(false)
     private val accessibilityPromptSkipped = mutableStateOf(false)
     private val showAccessibilityPrompt = mutableStateOf(false)
+    private lateinit var accessibilityHelper: AccessibilityAutoGrant
 
     private val requestStorage = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -135,6 +137,16 @@ class MainActivity : ComponentActivity() {
             }
         }
         recorder = CamdRuntime.recorder ?: RecorderController(applicationContext, CamdRuntime.windows(this))
+        accessibilityHelper = AccessibilityAutoGrant(
+            windows = CamdRuntime.windows(this),
+            onGranted = { runOnUiThread { refreshAccessibilityStatus() } },
+            onFail = { error ->
+                runOnUiThread {
+                    showAccessibilityPrompt.value = false
+                    controller.setMessage("Автовыдача не удалась: $error")
+                }
+            },
+        )
         setContent {
             CamdTheme(dark = isSystemInDarkTheme()) {
                 Surface(
@@ -153,6 +165,7 @@ class MainActivity : ComponentActivity() {
                         onTab = controller::setTab,
                         onRecorderToggle = ::onRecorderToggleRequested,
                         onAccessibilityOpenSettings = ::openAccessibilitySettings,
+                        onAccessibilityAutoGrant = ::autoGrantAccessibility,
                         onRecorderFolder = recorder::setFolder,
                         onRecorderQuota = recorder::setQuota,
                         onRecorderInput = recorder::toggleInput,
@@ -211,6 +224,7 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showAccessibilityPrompt.value = false },
                             onOpenSettings = ::openAccessibilitySettings,
                             onSkip = ::skipAccessibilityPrompt,
+                            onAutoGrant = ::autoGrantAccessibility,
                         )
                     }
                 }
@@ -249,6 +263,10 @@ class MainActivity : ComponentActivity() {
         startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
+    private fun autoGrantAccessibility() {
+        accessibilityHelper.grant()
+    }
+
     private fun skipAccessibilityPrompt() {
         recorder.dismissAccessibilityPrompt()
         accessibilityPromptSkipped.value = true
@@ -259,6 +277,37 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         if (::controller.isInitialized) controller.shutdown()
         super.onDestroy()
+    }
+}
+
+/**
+ * Runs the mb_daemon self-grant of the accessibility service off the main thread.
+ * The service connects by itself; success is observed via the secure setting re-read.
+ */
+private class AccessibilityAutoGrant(
+    private val windows: CameraWindows,
+    private val onGranted: () -> Unit,
+    private val onFail: (String) -> Unit,
+) {
+    private val single = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "camd-a11y-grant").apply { isDaemon = true }
+    }
+    private val inFlight = AtomicBoolean()
+
+    fun grant() {
+        if (!inFlight.compareAndSet(false, true)) {
+            return
+        }
+        single.execute {
+            try {
+                windows.grantAccessibility()
+                onGranted()
+            } catch (error: Exception) {
+                onFail(error.message ?: "mb_daemon не ответил")
+            } finally {
+                inFlight.set(false)
+            }
+        }
     }
 }
 
@@ -775,6 +824,7 @@ private fun CamdScreen(
     onTab: (CamdTab) -> Unit,
     onRecorderToggle: (Boolean) -> Unit,
     onAccessibilityOpenSettings: () -> Unit,
+    onAccessibilityAutoGrant: () -> Unit,
     onRecorderFolder: (String) -> Unit,
     onRecorderQuota: (Int) -> Unit,
     onRecorderInput: (Int) -> Unit,
@@ -881,6 +931,7 @@ private fun CamdScreen(
                 accessibilityGranted = accessibilityGranted,
                 onToggle = onRecorderToggle,
                 onAccessibilityOpenSettings = onAccessibilityOpenSettings,
+                onAccessibilityAutoGrant = onAccessibilityAutoGrant,
                 onFolder = onRecorderFolder,
                 onQuota = onRecorderQuota,
                 onInput = onRecorderInput,
@@ -1130,6 +1181,7 @@ private fun RecorderTab(
     accessibilityGranted: Boolean,
     onToggle: (Boolean) -> Unit,
     onAccessibilityOpenSettings: () -> Unit,
+    onAccessibilityAutoGrant: () -> Unit,
     onFolder: (String) -> Unit,
     onQuota: (Int) -> Unit,
     onInput: (Int) -> Unit,
@@ -1181,11 +1233,18 @@ private fun RecorderTab(
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    Button(onClick = onAccessibilityOpenSettings) {
-        Text(
-            if (accessibilityGranted) "Открыть спецвозможности" else "Разрешить автостарт",
-            style = MaterialTheme.typography.labelLarge,
-        )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(onClick = onAccessibilityAutoGrant, enabled = !accessibilityGranted) {
+            Text("Выдать автоматически", style = MaterialTheme.typography.labelLarge)
+        }
+        Button(onClick = onAccessibilityOpenSettings) {
+            Text(
+                if (accessibilityGranted) "Открыть спецвозможности" else "Через настройки",
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
     }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
@@ -1275,6 +1334,7 @@ private fun AccessibilityPromptDialog(
     onDismiss: () -> Unit,
     onOpenSettings: () -> Unit,
     onSkip: () -> Unit,
+    onAutoGrant: () -> Unit,
 ) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
@@ -1283,20 +1343,26 @@ private fun AccessibilityPromptDialog(
             Text(
                 "Чтобы регистратор стартовал сразу после включения ГУ, выдайте приложению " +
                     "спецвозможность: Android подключит службу камер раньше броадкаста " +
-                    "BOOT_COMPLETED. События экрана служба не читает. Сделать это можно и позже " +
-                    "на вкладке «Регистратор».",
+                    "BOOT_COMPLETED. События экрана служба не читает. «Выдать автоматически» " +
+                    "делает это через root-канал mb_daemon, как разрешение на окна. Сделать это " +
+                    "можно и позже на вкладке «Регистратор».",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
         confirmButton = {
-            Button(onClick = onOpenSettings) {
-                Text("Открыть настройки")
+            Button(onClick = onAutoGrant) {
+                Text("Выдать автоматически")
             }
         },
         dismissButton = {
-            TextButton(onClick = onSkip) {
-                Text("Не нужно")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onOpenSettings) {
+                    Text("Через настройки")
+                }
+                TextButton(onClick = onSkip) {
+                    Text("Не нужно")
+                }
             }
         },
     )

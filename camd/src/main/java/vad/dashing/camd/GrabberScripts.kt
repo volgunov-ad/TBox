@@ -56,6 +56,24 @@ object GrabberScripts {
         "exit 0",
     ).joinToString("\n") + "\n"
 
+    fun grantAccessibility(nonce: String): String {
+        val svc = "vad.dashing.camd/vad.dashing.camd.CamdAccessibilityService"
+        val lines = ArrayList<String>()
+        lines.add("#!/system/bin/sh")
+        lines.add("cur=\$(settings get secure enabled_accessibility_services 2>/dev/null)")
+        lines.add("case \"\$cur\" in")
+        lines.add("  *\"$svc\"*) : ;;")
+        lines.add("  null|\"\") cur=\"$svc\" ;;")
+        lines.add("  *) cur=\"\$cur:$svc\" ;;")
+        lines.add("esac")
+        lines.add("settings put secure enabled_accessibility_services \"\$cur\"")
+        lines.add("settings put secure accessibility_enabled 1")
+        lines.add("echo $nonce > $ARM")
+        lines.add("chmod 666 $ARM")
+        lines.add("exit 0")
+        return lines.joinToString("\n") + "\n"
+    }
+
     fun startAvm(nonce: String): String = listOf(
         "#!/system/bin/sh",
         "setprop ctl.start AVMapp",
