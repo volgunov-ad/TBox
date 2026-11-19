@@ -35,6 +35,10 @@ firmware/esp32-companion/managed_components/
 firmware/esp32-companion/sdkconfig
 firmware/esp32-companion/sdkconfig.old
 firmware/esp32-companion/_cdc_*.txt
+firmware/esp32-relay/build/
+firmware/esp32-relay/managed_components/
+firmware/esp32-relay/sdkconfig
+firmware/esp32-relay/sdkconfig.old
 
 # Large vendor PDFs kept locally (not in git)
 docs/*.pdf

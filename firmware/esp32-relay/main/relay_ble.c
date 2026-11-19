@@ -61,10 +61,10 @@ static uint32_t backoff_ms(void)
     return BACKOFF_MIN_MS + esp_random() % (BACKOFF_MAX_MS - BACKOFF_MIN_MS);
 }
 
-static void svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
-                        const struct ble_gatt_svc *svc, void *arg);
-static void chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
-                        const struct ble_gatt_chr *chr, void *arg);
+static int svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
+                       const struct ble_gatt_svc *svc, void *arg);
+static int chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
+                       const struct ble_gatt_chr *chr, void *arg);
 static int cccd_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
                    struct ble_gatt_attr *attr, void *arg);
 static int conn_gap_cb(struct ble_gap_event *event, void *arg);
@@ -108,7 +108,7 @@ static void send_state(void)
     body[4] = s_gen_echo;
     relay_crypt_seal(relay_store_key(), STATE_TYPE, relay_store_id(),
                      relay_store_next_tx(), body, pkt);
-    int rc = ble_gattc_write(s_conn, s_chr_write, pkt, RELAY_PKT_LEN, write_cb, NULL);
+    int rc = ble_gattc_write_flat(s_conn, s_chr_write, pkt, RELAY_PKT_LEN, write_cb, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "state rc=%d", rc);
     }
@@ -142,45 +142,47 @@ static void on_notify(const uint8_t *pkt, uint16_t len)
              (unsigned long)counter, chan, states, pulse_ms, actual);
 }
 
-static void svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
-                        const struct ble_gatt_svc *svc, void *arg)
+static int svc_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
+                       const struct ble_gatt_svc *svc, void *arg)
 {
     (void)arg;
     if (error->status == 0 && svc) {
         s_svc_found = true;
         ble_gattc_disc_all_chrs(conn_handle, svc->start_handle, svc->end_handle,
                                 chr_disc_cb, NULL);
-        return;
+        return 0;
     }
     if (!s_svc_found) {
         ESP_LOGW(TAG, "service not found");
         ble_gap_terminate(conn_handle, BLE_ERR_REM_USER_CONN_TERM);
     }
+    return 0;
 }
 
-static void chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
-                        const struct ble_gatt_chr *chr, void *arg)
+static int chr_disc_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
+                       const struct ble_gatt_chr *chr, void *arg)
 {
     (void)arg;
     if (error->status == 0 && chr) {
-        if (ble_uuid_cmp(chr->uuid, &s_chr_write_uuid.u) == 0) {
+        if (ble_uuid_cmp(&chr->uuid.u, &s_chr_write_uuid.u) == 0) {
             s_chr_write = chr->val_handle;
-        } else if (ble_uuid_cmp(chr->uuid, &s_chr_notify_uuid.u) == 0) {
+        } else if (ble_uuid_cmp(&chr->uuid.u, &s_chr_notify_uuid.u) == 0) {
             s_chr_notify = chr->val_handle;
         }
-        return;
+        return 0;
     }
     if (s_chr_write == 0 || s_chr_notify == 0) {
         ESP_LOGW(TAG, "chars not found (w=%d n=%d)", s_chr_write, s_chr_notify);
         ble_gap_terminate(conn_handle, BLE_ERR_REM_USER_CONN_TERM);
-        return;
+        return 0;
     }
     uint8_t cccd[2] = { 0x01, 0x00 };
-    int rc = ble_gattc_write(conn_handle, (uint16_t)(s_chr_notify + 1), cccd, 2,
-                             cccd_cb, NULL);
+    int rc = ble_gattc_write_flat(conn_handle, (uint16_t)(s_chr_notify + 1), cccd, 2,
+                                  cccd_cb, NULL);
     if (rc != 0) {
         ESP_LOGW(TAG, "cccd rc=%d", rc);
     }
+    return 0;
 }
 
 static int cccd_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
@@ -260,7 +262,8 @@ static int disc_gap_cb(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISC: {
         if (s_conn != BLE_HS_CONN_HANDLE_NONE) return 0;
         struct ble_hs_adv_fields fields;
-        if (ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length) != 0) {
+        if (ble_hs_adv_parse_fields(&fields, event->disc.data,
+                                    event->disc.length_data) != 0) {
             return 0;
         }
         bool match = false;
@@ -288,8 +291,8 @@ static int disc_gap_cb(struct ble_gap_event *event, void *arg)
 static void start_disc(void)
 {
     struct ble_gap_disc_params params = { 0 };
-    params.itvl_min = 0x0060; /* 60 ms */
-    params.itvl_max = 0x00C0; /* 120 ms */
+    params.itvl = 0x0060;   /* scan interval 60 ms */
+    params.window = 0x0030; /* scan window 30 ms */
     params.passive = 0;
     params.filter_duplicates = 0;
     int rc = ble_gap_disc(s_own_addr_type, BLE_HS_FOREVER, &params, disc_gap_cb, NULL);
@@ -319,8 +322,9 @@ static void relay_task(void *arg)
         if (s_subscribed) {
             if (!relay_store_paired() && s_mtu >= (uint16_t)(s_pair_len + 3)) {
                 if ((int32_t)(now - s_next_pair_ms) >= 0) {
-                    int rc = ble_gattc_write_no_rsp(s_conn, s_chr_write,
-                                                    s_pair_pkt, s_pair_len);
+                    int rc = ble_gattc_write_flat(s_conn, s_chr_write,
+                                                  s_pair_pkt, s_pair_len,
+                                                  write_cb, NULL);
                     if (rc != 0) ESP_LOGW(TAG, "pair rc=%d", rc);
                     s_next_pair_ms = now + PAIR_RETRY_MS;
                 }
