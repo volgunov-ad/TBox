@@ -8,12 +8,17 @@ import java.util.Locale
 /**
  * Pure file-level logic of the dashcam recorder: segment naming, listing and quota
  * rotation. No Android dependencies so the quota rules are unit-testable.
+ *
+ * Platform [android.media.MediaMuxer] MPEG-4 writes the moov atom only on [MediaMuxer.stop].
+ * Short segments therefore act as crash-safe “frequent moov”: a power cut loses at most
+ * one in-flight segment (~[SEGMENT_MS]), and every finished file remains playable (P1-3).
  */
 object RecorderFiles {
-    const val SEGMENT_MS = 180_000L
+    /** Wall-clock length of one MP4 segment. Short on purpose for power-cut safety. */
+    const val SEGMENT_MS = 30_000L
 
-    /** Rough bytes of one 3-minute segment at the fixed 6 Mbps — used as free-space reserve. */
-    const val SEGMENT_ESTIMATE_BYTES = 150L * 1024 * 1024
+    /** Rough bytes of one segment at the fixed 6 Mbps — used as free-space reserve. */
+    const val SEGMENT_ESTIMATE_BYTES = 25L * 1024 * 1024
 
     val SEGMENT_REGEX = Regex("cam(\\d+)_(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2})\\.mp4")
 

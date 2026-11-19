@@ -20,7 +20,9 @@ import java.nio.channels.FileChannel
 /**
  * Headless dashcam pipeline for one camera: reads the grabber's shared UYVY file,
  * renders each frame through the same correction shader as the preview into an
- * hardware AVC encoder input surface, and writes 3-minute MP4 segments.
+ * hardware AVC encoder input surface, and writes short crash-safe MP4 segments
+ * ([RecorderFiles.SEGMENT_MS]): MediaMuxer places moov at each segment close, so a
+ * power cut leaves finished files playable (P1-3).
  * When the media folder is unavailable [nextSegment] returns null and the engine
  * parks itself, retrying every few seconds until stopped.
  */
@@ -163,6 +165,7 @@ internal class RecorderEngine(
                     uploadedWidth = 0
                     uploadedHeight = 0
                     ptsBase = System.nanoTime() / 1000
+                    // MPEG-4 moov is finalized in muxer.stop() at segment end — keep SEGMENT_MS short.
                     muxer = MediaMuxer(segment.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
                 }
 

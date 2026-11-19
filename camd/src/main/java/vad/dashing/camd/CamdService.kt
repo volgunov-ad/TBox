@@ -40,6 +40,10 @@ class CamdService : Service() {
     }
 
     override fun onDestroy() {
+        Log.i(CAMD_LOG_TAG, "сервис уничтожается — останавливаю runtime")
+        // stop() → closeAll → hide posts to main and awaits. Must not run on the main
+        // thread or the latch deadlocks (posted Runnable never runs).
+        Thread({ CamdRuntime.stop() }, "camd-runtime-stop").apply { isDaemon = true }.start()
         runCatching { unregisterReceiver(shutdownReceiver) }
         super.onDestroy()
     }
@@ -79,6 +83,7 @@ object CamdRuntime {
     private val lock = Any()
     private var engine: CamdEngine? = null
     private var windows: CameraWindows? = null
+    private var apiServer: CamdApiServer? = null
     var recorder: RecorderController? = null
         private set
 
@@ -89,15 +94,44 @@ object CamdRuntime {
                 val created = CamdEngine(app.filesDir)
                 val createdWindows = CameraWindows(app)
                 val createdRecorder = RecorderController(app, createdWindows)
+                val createdApi = CamdApiServer(created, createdWindows)
                 engine = created
                 windows = createdWindows
                 recorder = createdRecorder
+                apiServer = createdApi
                 Log.i(CAMD_LOG_TAG, "runtime запущен")
-                CamdApiServer(created, createdWindows).start()
+                createdApi.start()
                 Thread({ createdWindows.recover() }, "camd-recover").apply { isDaemon = true }.start()
                 // The dashcam master switch persists: recording starts by itself after boot.
                 Thread({ createdRecorder.autoStartIfEnabled() }, "camd-rec-boot").apply { isDaemon = true }.start()
+            } else if (apiServer?.isRunning() != true) {
+                // Process survived but listen supervisor exited — restart API only (P1-5).
+                val eng = engine
+                val win = windows
+                if (eng != null) {
+                    Log.w(TAG, "API не слушает — перезапускаю listen")
+                    val createdApi = CamdApiServer(eng, win)
+                    apiServer = createdApi
+                    createdApi.start()
+                }
             }
+        }
+    }
+
+    /**
+     * Tear down overlays, recorder engines, API socket and clear the singleton (P1-2).
+     * Idempotent. Called from [CamdService.onDestroy].
+     */
+    fun stop() {
+        synchronized(lock) {
+            Log.i(TAG, "runtime stop")
+            runCatching { apiServer?.stop() }
+            runCatching { recorder?.finalizeNow() }
+            runCatching { windows?.shutdown() }
+            apiServer = null
+            recorder = null
+            windows = null
+            engine = null
         }
     }
 

@@ -99,6 +99,48 @@ class OverlayOpSequencerTest {
     }
 
     @Test
+    fun lateHideOnStaleTokenReportsSupersededNotSuccess() {
+        // Mirrors CameraWindows.hide: stale token → overlay_superseded (not ok=true).
+        val seq = OverlayOpSequencer()
+        val pending = ArrayDeque<() -> Unit>()
+        fun post(block: () -> Unit) {
+            pending.addLast(block)
+        }
+        fun drain() {
+            while (pending.isNotEmpty()) pending.removeFirst().invoke()
+        }
+
+        val views = mutableSetOf(9)
+        val inputId = 9
+        var hideOk = true
+        var hideError = ""
+
+        val hideToken = seq.begin(inputId)
+        post {
+            if (!seq.isCurrent(inputId, hideToken)) {
+                hideOk = false
+                hideError = OverlayOpSequencer.ERROR_SUPERSEDED
+                return@post
+            }
+            views.remove(inputId)
+            hideOk = true
+        }
+
+        val showToken = seq.begin(inputId)
+        post {
+            seq.runIfCurrent(inputId, showToken) {
+                views.add(inputId)
+            }
+        }
+
+        drain()
+        assertFalse("stale hide must not report success", hideOk)
+        assertEquals(OverlayOpSequencer.ERROR_SUPERSEDED, hideError)
+        assertEquals(setOf(inputId), views)
+        assertTrue(seq.isCurrent(inputId, showToken))
+    }
+
+    @Test
     fun delayedMainExecutorCloseOpenDoesNotRemoveNewOverlay() {
         // Fake main: runnables sit until drain(), simulating main-thread jank.
         val seq = OverlayOpSequencer()
