@@ -71,6 +71,52 @@ class RecorderFilesTest {
     }
 
     @Test
+    fun segmentsAcrossCamerasSortedByTimestampNotByCamera() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val cam5Newest = File(dir, "cam5_2026-11-17_10-09-00.mp4")
+            val cam4Mid = File(dir, "cam4_2026-11-17_10-06-00.mp4")
+            val cam2Mid = File(dir, "cam2_2026-11-17_10-03-00.mp4")
+            val cam1Oldest = File(dir, "cam1_2026-11-17_10-00-00.mp4")
+            listOf(cam5Newest, cam4Mid, cam2Mid, cam1Oldest).forEach { it.writeBytes(ByteArray(10)) }
+
+            assertEquals(
+                listOf(cam1Oldest, cam2Mid, cam4Mid, cam5Newest),
+                RecorderFiles.listSegments(dir),
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun quotaRotationSpreadsDeletesAcrossCamerasByTime() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val cam1_0800 = File(dir, "cam1_2026-11-17_08-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam2_0800 = File(dir, "cam2_2026-11-17_08-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam4_0800 = File(dir, "cam4_2026-11-17_08-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam5_0800 = File(dir, "cam5_2026-11-17_08-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam1_0900 = File(dir, "cam1_2026-11-17_09-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam2_0900 = File(dir, "cam2_2026-11-17_09-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam4_0900 = File(dir, "cam4_2026-11-17_09-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val cam5_0900 = File(dir, "cam5_2026-11-17_09-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+
+            assertTrue(RecorderFiles.enforceQuota(dir, quotaBytes = 550, reserveBytes = 0))
+            assertFalse(cam1_0800.exists())
+            assertFalse(cam2_0800.exists())
+            assertFalse(cam4_0800.exists())
+            assertTrue(cam5_0800.exists())
+            assertTrue(cam1_0900.exists())
+            assertTrue(cam2_0900.exists())
+            assertTrue(cam4_0900.exists())
+            assertTrue(cam5_0900.exists())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun quotaFailsWithoutQuotaOrFreeSpace() {
         val dir = Files.createTempDirectory("camdrec").toFile()
         try {

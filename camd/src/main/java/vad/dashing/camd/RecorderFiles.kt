@@ -29,7 +29,17 @@ object RecorderFiles {
 
     /** Own segments sorted oldest first (the name embeds the start timestamp). */
     fun listSegments(dir: File): List<File> =
-        dir.listFiles()?.filter { it.isFile && isOwnSegment(it) }?.sortedBy { it.name } ?: emptyList()
+        dir.listFiles()?.filter { it.isFile && isOwnSegment(it) }?.sortedWith(
+            compareBy(
+                { matchTimestamp(it) },
+                { it.name },
+            ),
+        ) ?: emptyList()
+
+    private fun matchTimestamp(file: File): String {
+        val match = SEGMENT_REGEX.find(file.name) ?: return ""
+        return match.groupValues[2]
+    }
 
     fun totalBytes(dir: File): Long = listSegments(dir).sumOf { it.length() }
 
