@@ -71,27 +71,34 @@ internal class UyvyRenderer(
     private var token = 0L
     @Volatile
     private var windowAttached = true
+    @Volatile
+    private var settingsVersion = 0L
     private var thread: Thread? = null
 
     fun setRotation(degrees: Int) {
         rotation = ((degrees % 360) + 360) % 360
+        settingsVersion += 1
     }
 
     fun setFlip(horizontal: Boolean, vertical: Boolean) {
         flipH = horizontal
         flipV = vertical
+        settingsVersion += 1
     }
 
     fun setLensCorrection(value: CamdLensCorrection) {
         lens = CamdLensCorrection.clamp(value)
+        settingsVersion += 1
     }
 
     fun setCrop(value: CamdCrop) {
         crop = CamdCrop.clamp(value)
+        settingsVersion += 1
     }
 
     fun setShape(value: CamdShape) {
         shape = value
+        settingsVersion += 1
     }
 
     fun setWindowAttached(value: Boolean) {
@@ -221,6 +228,52 @@ internal class UyvyRenderer(
         val uShape = GLES20.glGetUniformLocation(program, "uShape")
         val uAspect = GLES20.glGetUniformLocation(program, "uAspect")
         val uAA = GLES20.glGetUniformLocation(program, "uAA")
+        val drawCurrent: (UyvySlot) -> Unit = { published ->
+            GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
+            GLES20.glUseProgram(program)
+            // Transparent clear so discarded circle corners stay transparent in the buffer.
+            GLES20.glClearColor(0f, 0f, 0f, 0f)
+            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            GLES20.glUniform1i(uTex, 0)
+            GLES20.glUniform1f(uStock, if (stockView != null) 1f else 0f)
+            GLES20.glUniform1f(uWidth, published.width.toFloat())
+            GLES20.glUniform1f(uRot, rotation.toFloat())
+            GLES20.glUniform1f(uFlipH, if (flipH != mirror) 1f else 0f)
+            GLES20.glUniform1f(uFlipV, if (flipV) 1f else 0f)
+            val correction = lens
+            GLES20.glUniform1f(uK1, correction.k1)
+            GLES20.glUniform1f(uK2, correction.k2)
+            GLES20.glUniform1f(uCx, correction.cx)
+            GLES20.glUniform1f(uCy, correction.cy)
+            val activeCrop = crop
+            GLES20.glUniform1f(uCropOn, if (activeCrop.isIdentity()) 0f else 1f)
+            GLES20.glUniform4f(uCrop, activeCrop.x, activeCrop.y, activeCrop.w, activeCrop.h)
+            GLES20.glUniform1f(uTiltV, correction.tiltV)
+            GLES20.glUniform1f(uTiltH, correction.tiltH)
+            val activeShape = shape
+            GLES20.glUniform1f(uShape, if (activeShape == CamdShape.CIRCLE) 1f else 0f)
+            val surfaceW = surfaceWidth.coerceAtLeast(1)
+            val surfaceH = surfaceHeight.coerceAtLeast(1)
+            GLES20.glUniform1f(uAspect, surfaceW.toFloat() / surfaceH.toFloat())
+            GLES20.glUniform1f(uAA, 1.5f / minOf(surfaceW, surfaceH))
+            if (stockView == null || meshPos == null || meshUv == null) {
+                quad.position(0)
+                GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
+                GLES20.glEnableVertexAttribArray(aPos)
+                if (aMesh >= 0) GLES20.glDisableVertexAttribArray(aMesh)
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+            } else {
+                meshPos.position(0)
+                GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 12, meshPos)
+                GLES20.glEnableVertexAttribArray(aPos)
+                if (aMesh >= 0) {
+                    meshUv.position(0)
+                    GLES20.glVertexAttribPointer(aMesh, 2, GLES20.GL_FLOAT, false, 0, meshUv)
+                    GLES20.glEnableVertexAttribArray(aMesh)
+                }
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, stockView.triangleCount * 3)
+            }
+        }
         var mapped: ByteBuffer? = null
         var mappedIno = 0L
         var mappedLength = 0L
@@ -230,9 +283,12 @@ internal class UyvyRenderer(
         var uploadedWidth = 0
         var uploadedHeight = 0
         var sawFrame = false
+        var idle = 0
+        var lastSettingsVersion = settingsVersion
         try {
             while (running && myToken == token && program != 0) {
                 if (!windowAttached) {
+                    idle = 0
                     Thread.sleep(16)
                     continue
                 }
@@ -243,14 +299,23 @@ internal class UyvyRenderer(
                 mappedLength = shared.length
                 val buffer = mapped
                 if (buffer == null) {
-                    Thread.sleep(8)
+                    Thread.sleep(RenderPacing.sleepMs(idle))
+                    idle += 1
                     continue
                 }
                 val published = readUyvySlot(buffer)
                 if (published == null || published.seq == lastSeq) {
-                    Thread.sleep(8)
+                    if (lastSettingsVersion != settingsVersion) {
+                        lastSettingsVersion = settingsVersion
+                        if (!redrawCurrentFrame(display, surface, published, drawCurrent)) {
+                            break
+                        }
+                    }
+                    Thread.sleep(RenderPacing.sleepMs(idle))
+                    idle += 1
                     continue
                 }
+                idle = 0
                 val bytes = published.slotBytes
                 val copy = pixels?.takeIf { it.capacity() == bytes } ?: ByteBuffer.allocateDirect(bytes).also {
                     pixels = it
@@ -261,6 +326,7 @@ internal class UyvyRenderer(
                 viewBuffer.limit(UYVY_HEADER + published.slot * bytes + bytes)
                 copy.put(viewBuffer)
                 if (buffer.getInt(16) != published.seq) continue
+                idle = 0
                 copy.position(0)
                 GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture[0])
                 if (uploadedWidth != published.width || uploadedHeight != published.height) {
@@ -290,50 +356,7 @@ internal class UyvyRenderer(
                         copy,
                     )
                 }
-                GLES20.glViewport(0, 0, surfaceWidth.coerceAtLeast(1), surfaceHeight.coerceAtLeast(1))
-                GLES20.glUseProgram(program)
-                // Transparent clear so discarded circle corners stay transparent in the buffer.
-                GLES20.glClearColor(0f, 0f, 0f, 0f)
-                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
-                GLES20.glUniform1i(uTex, 0)
-                GLES20.glUniform1f(uStock, if (stockView != null) 1f else 0f)
-                GLES20.glUniform1f(uWidth, published.width.toFloat())
-                GLES20.glUniform1f(uRot, rotation.toFloat())
-                GLES20.glUniform1f(uFlipH, if (flipH != mirror) 1f else 0f)
-                GLES20.glUniform1f(uFlipV, if (flipV) 1f else 0f)
-                val correction = lens
-                GLES20.glUniform1f(uK1, correction.k1)
-                GLES20.glUniform1f(uK2, correction.k2)
-                GLES20.glUniform1f(uCx, correction.cx)
-                GLES20.glUniform1f(uCy, correction.cy)
-                val activeCrop = crop
-                GLES20.glUniform1f(uCropOn, if (activeCrop.isIdentity()) 0f else 1f)
-                GLES20.glUniform4f(uCrop, activeCrop.x, activeCrop.y, activeCrop.w, activeCrop.h)
-                GLES20.glUniform1f(uTiltV, correction.tiltV)
-                GLES20.glUniform1f(uTiltH, correction.tiltH)
-                val activeShape = shape
-                GLES20.glUniform1f(uShape, if (activeShape == CamdShape.CIRCLE) 1f else 0f)
-                val surfaceW = surfaceWidth.coerceAtLeast(1)
-                val surfaceH = surfaceHeight.coerceAtLeast(1)
-                GLES20.glUniform1f(uAspect, surfaceW.toFloat() / surfaceH.toFloat())
-                GLES20.glUniform1f(uAA, 1.5f / minOf(surfaceW, surfaceH))
-                if (stockView == null || meshPos == null || meshUv == null) {
-                    quad.position(0)
-                    GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 0, quad)
-                    GLES20.glEnableVertexAttribArray(aPos)
-                    if (aMesh >= 0) GLES20.glDisableVertexAttribArray(aMesh)
-                    GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
-                } else {
-                    meshPos.position(0)
-                    GLES20.glVertexAttribPointer(aPos, 2, GLES20.GL_FLOAT, false, 12, meshPos)
-                    GLES20.glEnableVertexAttribArray(aPos)
-                    if (aMesh >= 0) {
-                        meshUv.position(0)
-                        GLES20.glVertexAttribPointer(aMesh, 2, GLES20.GL_FLOAT, false, 0, meshUv)
-                        GLES20.glEnableVertexAttribArray(aMesh)
-                    }
-                    GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, stockView.triangleCount * 3)
-                }
+                drawCurrent(published)
                 if (!EGL14.eglSwapBuffers(display, surface)) break
                 lastSeq = published.seq
                 if (!sawFrame) {
@@ -366,6 +389,18 @@ internal class UyvyRenderer(
                 Log.w(TAG, "$message input=$inputId frame=${frame.name}")
             }
         }
+    }
+
+    /** Re-draws the last uploaded frame after a settings change without a new frame. */
+    private fun redrawCurrentFrame(
+        display: EGLDisplay,
+        surface: EGLSurface,
+        published: UyvySlot?,
+        draw: (UyvySlot) -> Unit,
+    ): Boolean {
+        if (published == null) return true
+        draw(published)
+        return EGL14.eglSwapBuffers(display, surface)
     }
 
     private fun directFloatBuffer(values: FloatArray): FloatBuffer =
@@ -465,6 +500,20 @@ internal class UyvyRenderer(
         val inode: Long,
         val length: Long,
     )
+
+    internal object RenderPacing {
+        const val ACTIVE_MS = 8L
+        const val BASE_MS = 12L
+        const val STEP_FACTOR = 1.6
+        const val BACKOFF_CAP_MS = 40L
+
+        /** Idle sleep for the Nth consecutive empty iteration (0 = frame just arrived). */
+        fun sleepMs(idleIterations: Int): Long {
+            if (idleIterations <= 0) return ACTIVE_MS
+            val ms = BASE_MS * Math.pow(STEP_FACTOR, (idleIterations - 1).toDouble())
+            return ms.toLong().coerceIn(BASE_MS, BACKOFF_CAP_MS)
+        }
+    }
 
     internal companion object {
         private const val TAG = "CamdGl"

@@ -447,6 +447,7 @@ int main(void) {
         for (int id = 0; id < 10; id++) {
             if (open_cameras[id] && open_cameras[id]->handle && grab(open_cameras[id])) got = 1;
         }
-        usleep(got ? 4000 : 20000);
+        long long idle_us = (got || count > 0) ? 4000 : 200000;
+        usleep((useconds_t)idle_us);
     }
 }

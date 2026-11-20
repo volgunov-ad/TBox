@@ -2,6 +2,7 @@ package vad.dashing.camd
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -23,6 +24,31 @@ class UyvyFrameTest {
         assertNull(readUyvySlot(header(width = 1280, height = 800, seq = 2, slot = 2)))
         assertNull(readUyvySlot(header(width = 1487, height = 616, seq = 1, slot = 0)))
         assertNull(readUyvySlot(ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN)))
+    }
+
+    @Test
+    fun renderPacingIsFastWhileFramesArrive() {
+        assertEquals(8L, UyvyRenderer.RenderPacing.sleepMs(0))
+        assertEquals(8L, UyvyRenderer.RenderPacing.sleepMs(-1))
+    }
+
+    @Test
+    fun renderPacingBacksOffWhileIdle() {
+        val first = UyvyRenderer.RenderPacing.sleepMs(1)
+        val mid = UyvyRenderer.RenderPacing.sleepMs(3)
+        val saturated = UyvyRenderer.RenderPacing.sleepMs(50)
+        assertEquals(12L, first)
+        assertTrue(mid > first)
+        assertEquals(40L, saturated)
+        assertEquals(40L, UyvyRenderer.RenderPacing.sleepMs(500))
+    }
+
+    @Test
+    fun renderPacingNeverExceedsTheCap() {
+        for (idle in 0..60) {
+            val ms = UyvyRenderer.RenderPacing.sleepMs(idle)
+            assertTrue("idle=$idle ms=$ms", ms >= 8L && ms <= 40L)
+        }
     }
 
     private fun header(width: Int, height: Int, seq: Int, slot: Int): ByteBuffer {
