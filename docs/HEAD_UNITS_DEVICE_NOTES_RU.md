@@ -476,7 +476,7 @@ adb shell setprop vendor.autorun.sdcard.logfile ''
 |---|---|
 | `system_a/b` | `sda6` / `sda7` (8 ГБ); активный `sda7` = dm-0 `vroot` |
 | `early_services_a/b` | dm-1 `vearly_userspace` |
-| `vendor_a/b` | `sde16` / `sde35` (2 ГБ); активный `sde35` = dm-2 `vendor` (**линейный**, не verity) |
+| `vendor_a/b` | `sde16` / `sde35` (2 ГБ); активный `sde35` = dm-2 `vendor` (**dm-verity**, см. §10.2.1 и §10.3) |
 | `vbmeta_a/b` | `sde17` / `sde36` (64 КБ, используется 4096 байт) |
 | прочее | `sde39` devinfo, `sda3` misc (BCB пуст), `sda9` earlydata rw, `sda8` oemdata rw |
 
@@ -488,30 +488,42 @@ adb shell setprop vendor.autorun.sdcard.logfile ''
 |---|---|---|---|
 | `system` | sha1 | `6b6b3081e4312614e2db0978116f36058e7155c2` | да — попадает в cmdline `dm="1 vroot …"` (dm-verity, `restart_on_corruption`, FEC) |
 | `early_services` | sha1 | `fbdbb17fdb5424ae2845c9ff7c396fcb72eda7f8` | да — `dm1="1 vearly_userspace …"` |
-| `vendor` | sha1 | `a12efcac00491a407df6a3bf6d243003f3cc9aa0` | **нет** — dm-дескриптора для vendor в cmdline нет, dm-2 линейный |
+| `vendor` | sha1 | `a12efcac00491a407df6a3bf6d243003f3cc9aa0` | **да** — уточнено 20.11.2026 (ранее ошибочно считали dm-2 линейным): в cmdline vendor-дескриптора нет, но таблицу verity собирает libfs_mgr при монтировании — dmesg: `[libfs_mgr]Loading verity table: '1 … by-name/vendor_b … sha1 a12efcac… restart_on_corruption ignore_zero_blocks use_fec_from_device …'` → `device-mapper: init: dm-2 is ready` → `EXT4-fs (dm-2): mounted filesystem without journal` (§10.2.1) |
 | `boot` | sha256 | `91587e50…5e5a30` | проверка ABL |
 | `dtbo` | sha256 | `e0c8bdd0…672f2af` | проверка ABL |
 
 `devinfo` — Qualcomm-структура `ANDROID-BOOT!` (байты 13/14 = `01 01`); семантика полей под этим форматом не подтверждена, поэтому её не трогали.
+
+### 10.2.1. Проверка записи в /vendor и platform-ключа (бенч 20.11.2026, стенд 192.168.1.128)
+
+Цель — systemless-встройка DCL/TBox/camd в `/vendor/priv-app` как priv-app. Все три гипотезы проверены, все три закрыты:
+
+1. **Запись в `/vendor` не переживает перезагрузку.** Root-скрипт через §10.1: `blockdev --setrw /dev/block/sde35` (rc=0) → `mount -o remount,rw /vendor` (rc=0) → `mkdir /vendor/priv-app` → `cp` APK (rc=0, `ls` видел файл с `u:object_r:vendor_app_file:s0`) → sync → перезагрузка. После ребута `/vendor/priv-app` **отсутствует**, файл пропал. Причина (dmesg текущего бута): `/vendor` монтируется **с dm-verity на dm-2** — `[libfs_mgr]Loading verity table: '1 … vendor_b … sha1 a12efcac… restart_on_corruption ignore_zero_blocks use_fec_from_device …'` → `dm-2 is ready` → `EXT4-fs (dm-2): mounted filesystem without journal`. `remount,rw` проходит, но verity-таргет отбрасывает write-bio в page cache — запись видна в текущей сессии и теряется. §10.3 «реальный барьер — только BLKROSET» — **неверно**; BLKROSET лишь первый барьер. Побочных эффектов нет: загрузка штатная, `verifiedbootstate=green`, `sde35` вернулся в `getro=1`, dmesg без `dm-verity`-ошибок (ignore_zero_blocks не читал область за пределами таблицы). Рецепт «запись в /vendor» из §10.3 — **не работает, не использовать**; подлинные правки `/vendor` возможны только с переподписанным vbmeta (unlock bootloader, wipe) — вне досягаемости.
+2. **Platform-ключ A9 ≠ наш AOSP test key.** `adb install` APK (`hasCode=false`, manifest-only) c `android:sharedUserId="android.uid.system"` и подписью `tools/winpatch/certs/platform.pk8` → `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE: Package vad.dashing.bench.platformuid has no signatures that match those in shared user android.uid.system; ignoring!`. Путь «DCL с uid 1000 через наш platform.pk8» на A9 закрыт (на A10 совпадение есть — [LAUNCHER_WINDOW_AA_CARPLAY_RU.md](LAUNCHER_WINDOW_AA_CARPLAY_RU.md)).
+3. **`/vendor/priv-app` в стоке не существует** (mkdir прошёл), `ro.control_privapp_permissions` не задан — PMS не enforcing; при сканировании PMS видел директорию (`logcat PackageManager: No files in app dir /vendor/priv-app` — в буте, где dir уже создан) — сканирование `/vendor/priv-app` само по себе не было бы барьером, барьер — verity (п. 1).
+
+Артефакты бенча: `C:\Users\volgu\AppData\Local\Temp\rufp\bench\` — `BenchVendor.apk` (debug-подпись, `vad.dashing.bench`), `BenchPlatformKey.apk` (platform-подпись, `vad.dashing.bench.platformuid`, sharedUserId), LF root-скрипты `bench_vendor.sh`/`bench_fix.sh`/`bench_cleanup.sh`. Сборка manifest-only APK: `aapt package -f -M <manifest> -I android.jar -F <out.apk>` (**обязателен `-F`**: с `-o` aapt молча ничего не создаёт), затем `apksigner sign`. Стенд возвращён в исходное: `/vendor` ro, `sde35` ro=1, `/sdcard/autorun.*` и тестовые файлы в `/data/local/tmp` удалены.
+
+### 10.2.2. Следствия для DCL-лаунчера на A9
+
+Встроить DCL/TBox/camd как priv-app в разделы (`/system`, `/vendor`) без unlock bootloader нельзя. Рабочая конфигурация остаётся: обычная `/data/app`-установка + выдача прав через `pm grant` (`tools/dcl_install`, InstallPlan.java) + root-хелперы через §10.1 (`dclwm`, DCL RootOrchestrator, boot-фиксапы `dcl_install`). Privileged-бонусы (`STATUS_BAR` для блокировки шторки без скрытия SystemUI и т. п.) на A9 недоступны.
 
 ### 10.3. Итог по защите записи
 
 | Раздел | Механизм защиты | Снимается root-ом (mb_daemon)? |
 |---|---|---|
 | `/system` | enforced dm-verity `vroot` + подписанный locked vbmeta; `remount,rw /` → «'/dev/root' is read-only» | **нет** — только unlock загрузчика (USB, wipe) или ключ OEM; raw-запись в `sda7` ломает дерево Merkle → незагрузка |
-| `/vendor` | `remount,rw` как root проходит (dm-2 линейный); реальный барьер — BLKROSET-флаг на `sde35` (`blockdev --getro`=1), выставлен userspace (init/fs_mgr), не аппаратно | **да** — проверено 31.10.2026: `blockdev --setrw /dev/block/sde35` → rc=0, ro=0 (после теста возвращено) |
+| `/vendor` | dm-verity на dm-2 (sha1, `restart_on_corruption`, FEC; таблицу собирает libfs_mgr при монтировании, в cmdline dm-дескриптора нет); `remount,rw` как root проходит (после `blockdev --setrw sde35`), но **записи отбрасываются verity-таргетом после перезагрузки** — файлы не переживают ребут | **нет** — бенч 20.11.2026 (§10.2.1): файл в `/vendor` пропал после ребута, hashtree остался консистентным; правка раздела возможна только с переподписанным vbmeta |
 
-Рецепт записи в `/vendor` (root из §10.1):
+Рецепт записи в `/vendor` (root из §10.1) — **не работает** (§10.2.1): `remount,rw` проходит и запись видна в текущей сессии, но verity-таргет dm-2 отбрасывает её — после перезагрузки изменений нет:
 
 ```
-blockdev --setrw /dev/block/sde35
-mount -o remount,rw /vendor
-# ... изменения ...
-mount -o remount,ro /vendor
-blockdev --setro /dev/block/sde35
+blockdev --setrw /dev/block/sde35      # проходит, ro=0
+mount -o remount,rw /vendor            # проходит
+# ... изменения видны до перезагрузки, затем теряются ...
 ```
 
-Оговорки: содержимое `/vendor` разойдётся с подписанным hashtree-дескриптором vbmeta — текущий boot-путь это не проверяет (загрузке не мешает), но сломаются OTA-дельты на vendor и любая будущая проверка. `modem_b` монтируется внутри `/vendor/firmware_mnt` — раздел затрагивает прошивку модема, эксперименты только с копиями. Для постоянных правок предпочтительнее systemless: bind-оверлеи из `/data`, наводимые при старте через тот же примитив §10.1 (аналог временного варианта на A10). Симптом «remount rw прошёл, remount ro даёт I/O error» — тот же, что на A10 (§6.6), но причина на A9 программная (BLKROSET), а не eMMC WP.
+Оговорки: содержимое `/vendor` разойдётся с подписанным hashtree-дескриптором vbmeta — запись и так не выживает (verity-таргет dm-2 отбрасывает её, §10.2.1), а сломались бы OTA-дельты на vendor и любая будущая проверка. `modem_b` монтируется внутри `/vendor/firmware_mnt` — раздел затрагивает прошивку модема, эксперименты только с копиями. Для постоянных правок остаётся только unlock bootloader (wipe `userdata`); bind-оверлеи из `/data`, наводимые при старте через §10.1, правки `/vendor` не требуют. Симптом «remount rw прошёл, remount ro даёт I/O error» — тот же, что на A10 (§6.6), но причина на A9 — verity-таргет dm-2, а не eMMC WP.
 
 Данные получены read-only-инспектом + тремя прогонами root-диагностики через примитив §10.1 (adb 192.168.1.128:5555); после тестов ГУ возвращён в исходное состояние (`sde35` ro=1, `/vendor` ro, флаги сняты), артефакты на `/sdcard` удалены.
 
