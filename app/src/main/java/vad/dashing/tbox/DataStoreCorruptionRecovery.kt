@@ -30,13 +30,15 @@ internal object DataStoreFiles {
     private const val BACKUP_FILE_SUFFIX = ".preferences_pb.bak"
     private const val DIAGNOSTICS_DIR = "diagnostics"
     private const val CORRUPT_DIR_NAME = "corrupt"
-    private const val MARKER_FILE_NAME = "datastore_corruption.log"
+    const val MARKER_FILE_NAME = "datastore_corruption.log"
+
+    fun backupFileName(storeName: String): String = "$storeName$BACKUP_FILE_SUFFIX"
 
     fun mainFile(filesDir: File, storeName: String): File =
         File(File(filesDir, DATASTORE_DIR), "$storeName$DATASTORE_FILE_SUFFIX")
 
     fun backupFile(filesDir: File, storeName: String): File =
-        File(File(filesDir, BACKUP_DIR), "$storeName$BACKUP_FILE_SUFFIX")
+        File(File(filesDir, BACKUP_DIR), backupFileName(storeName))
 
     fun corruptDir(filesDir: File): File =
         File(File(filesDir, DIAGNOSTICS_DIR), CORRUPT_DIR_NAME)
@@ -55,7 +57,9 @@ internal object DataStoreCorruptionDiagnostics {
             if (dir.isDirectory || dir.mkdirs()) {
                 rotateOldCopies(dir, storeName)
                 val stamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
-                main.copyTo(File(dir, "$storeName.$stamp.corrupt"), overwrite = true)
+                val copy = main.copyTo(File(dir, "$storeName.$stamp.corrupt"), overwrite = true)
+                DataStorePublicMirror.mirrorCorruptCopy(copy, storeName)
+                copy
             } else {
                 null
             }
@@ -84,6 +88,7 @@ internal object DataStoreCorruptionDiagnostics {
             error?.let { " error=${it.javaClass.simpleName}:${it.message ?: ""}" } ?: ""
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
         marker.appendText("$stamp store=$storeName corrupt=$corruptInfo restored=$restored$errorInfo\n")
+        DataStorePublicMirror.mirrorMarker(marker)
     } catch (_: Exception) {
     }
 
@@ -125,10 +130,14 @@ internal object DataStoreBackupManager {
             if (!main.isFile) return@withContext false
             val backup = DataStoreFiles.backupFile(filesDir, storeName)
             if (backup.isFile && fileSignature(backup) == fileSignature(main)) {
+                // Private bak unchanged; still catch up public mirror if missing
+                // (e.g. storage permission granted after the last bak write).
+                DataStorePublicMirror.mirrorBackupIfPublicMissing(backup, storeName)
                 return@withContext false
             }
             if (readPreferencesFromFile(main) == null) return@withContext false
             atomicCopy(main, backup)
+            DataStorePublicMirror.mirrorBackup(backup, storeName)
             true
         }
 

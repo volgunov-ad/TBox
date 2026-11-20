@@ -9,10 +9,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -24,7 +26,24 @@ class DataStoreCorruptionRecoveryTest {
 
     private val storeName = "vad.dashing.tbox.test_store"
 
-    private fun filesDir(): File = tmpFolder.root
+    private lateinit var filesRoot: File
+    private lateinit var publicRoot: File
+
+    @Before
+    fun setUpPublicMirror() {
+        // Keep private filesDir separate from Downloads/Tbm so the mirror root
+        // is not nested under the app-private tree under test.
+        filesRoot = tmpFolder.newFolder("files")
+        publicRoot = tmpFolder.newFolder("Downloads", "Tbm")
+        DataStorePublicMirror.publicRootOverride = publicRoot
+    }
+
+    @After
+    fun clearPublicMirror() {
+        DataStorePublicMirror.publicRootOverride = null
+    }
+
+    private fun filesDir(): File = filesRoot
 
     private fun mainFile(): File = DataStoreFiles.mainFile(filesDir(), storeName)
 
@@ -33,6 +52,13 @@ class DataStoreCorruptionRecoveryTest {
     private fun markerFile(): File = DataStoreFiles.markerFile(filesDir())
 
     private fun corruptDir(): File = DataStoreFiles.corruptDir(filesDir())
+
+    private fun publicBackupFile(): File =
+        DataStorePublicMirror.publicBackupFile(publicRoot, storeName)
+
+    private fun publicMarkerFile(): File = DataStorePublicMirror.publicMarkerFile(publicRoot)
+
+    private fun publicCorruptDir(): File = DataStorePublicMirror.publicCorruptDir(publicRoot)
 
     private fun writePreferences(file: File, key: String, value: Int) {
         file.parentFile?.mkdirs()
@@ -46,9 +72,9 @@ class DataStoreCorruptionRecoveryTest {
     }
 
     private fun seedBackupFile(key: String, value: Int) {
-        val src = File(tmpFolder.newFolder("seed"), "seed.preferences_pb")
+        val src = File(tmpFolder.newFolder("seed_${System.nanoTime()}"), "seed.preferences_pb")
         writePreferences(src, key, value)
-        src.copyTo(backupFile(), overwrite = true)
+        src.copyTo(backupFile().also { it.parentFile?.mkdirs() }, overwrite = true)
     }
 
     @Test
@@ -63,6 +89,16 @@ class DataStoreCorruptionRecoveryTest {
         assertTrue(DataStoreBackupManager.backupIfChanged(filesDir(), storeName))
         assertTrue(backupFile().isFile)
         assertEquals(mainFile().length(), backupFile().length())
+        assertTrue(publicBackupFile().isFile)
+        assertEquals(backupFile().length(), publicBackupFile().length())
+        assertTrue(
+            backupFile().readBytes().contentEquals(publicBackupFile().readBytes()),
+        )
+        // Live Preferences protobuf must stay under private filesDir, not Downloads/Tbm.
+        assertFalse(File(publicRoot, "datastore").exists())
+        assertFalse(
+            File(publicRoot, "vad.dashing.tbox.test_store.preferences_pb").exists(),
+        )
     }
 
     @Test
@@ -83,6 +119,8 @@ class DataStoreCorruptionRecoveryTest {
         val changed = File(tmpFolder.newFolder("changed_src"), "other.preferences_pb")
         writePreferences(changed, "extra", 7)
         changed.copyTo(mainFile(), overwrite = true)
+        // Force a distinct mtime so length+mtime signature cannot match on coarse FS clocks.
+        mainFile().setLastModified(backupFile().lastModified() + 5_000L)
         assertTrue(DataStoreBackupManager.backupIfChanged(filesDir(), storeName))
         val restored = DataStoreBackupManager.restorePreferences(filesDir(), storeName)
         assertEquals(7, restored?.get(intPreferencesKey("extra")))
@@ -141,6 +179,19 @@ class DataStoreCorruptionRecoveryTest {
         assertTrue(marker.contains("restored=true"))
         val copies = corruptDir().listFiles { file -> file.name.endsWith(".corrupt") }
         assertTrue(copies != null && copies.size == 1)
+        assertTrue(publicMarkerFile().isFile)
+        assertEquals(marker, publicMarkerFile().readText())
+        val publicCopies =
+            publicCorruptDir().listFiles { file -> file.name.endsWith(".corrupt") }
+        assertTrue(publicCopies != null && publicCopies.size == 1)
+        assertEquals(copies!![0].name, publicCopies!![0].name)
+        assertTrue(copies[0].readBytes().contentEquals(publicCopies[0].readBytes()))
+        assertTrue(backupFile().isFile)
+        assertEquals(
+            42,
+            DataStoreBackupManager.restorePreferences(filesDir(), storeName)
+                ?.get(intPreferencesKey("speed")),
+        )
     }
 
     @Test
@@ -152,6 +203,8 @@ class DataStoreCorruptionRecoveryTest {
         val marker = markerFile().readText()
         assertTrue(marker.contains("restored=false"))
         assertTrue(marker.contains("store=$storeName"))
+        assertTrue(publicMarkerFile().isFile)
+        assertEquals(marker, publicMarkerFile().readText())
     }
 
     @Test
@@ -172,5 +225,26 @@ class DataStoreCorruptionRecoveryTest {
                 ?: emptyList()
         assertEquals(3, copies.size)
         assertFalse(copies.contains("$storeName.20260101_000000_001.corrupt"))
+    }
+
+    @Test
+    fun publicMirrorSkippedWhenOverrideMissingAndNoContext() = runBlocking {
+        DataStorePublicMirror.publicRootOverride = null
+        writePreferences(mainFile(), "speed", 42)
+        assertTrue(DataStoreBackupManager.backupIfChanged(filesDir(), storeName))
+        assertTrue(backupFile().isFile)
+        assertFalse(publicBackupFile().exists())
+    }
+
+    @Test
+    fun unchangedPrivateBakStillFillsMissingPublicMirror() = runBlocking {
+        writePreferences(mainFile(), "speed", 42)
+        assertTrue(DataStoreBackupManager.backupIfChanged(filesDir(), storeName))
+        assertTrue(publicBackupFile().isFile)
+        publicBackupFile().delete()
+        assertFalse(publicBackupFile().exists())
+        assertFalse(DataStoreBackupManager.backupIfChanged(filesDir(), storeName))
+        assertTrue(publicBackupFile().isFile)
+        assertTrue(backupFile().readBytes().contentEquals(publicBackupFile().readBytes()))
     }
 }
