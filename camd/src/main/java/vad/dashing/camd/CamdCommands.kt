@@ -27,6 +27,8 @@ sealed class CamdCommand {
     data class SetKeepAvm(val keep: Boolean) : CamdCommand()
     /** Master switch for the dashcam (persisted); not the same as recording-active. */
     data class SetRecorderEnabled(val enabled: Boolean) : CamdCommand()
+    /** Emergency save: close in-flight segments and copy them (+ previous) to the SOS folder. */
+    data object RecorderEmergencySave : CamdCommand()
     data object ListPresets : CamdCommand()
 }
 
@@ -58,12 +60,17 @@ object CamdCommands {
         }
     }
 
-    /** `REC ON|OFF|1|0` — set dashcam master switch (like `AVM ON|OFF`). */
-    private fun parseRec(parts: List<String>): CamdCommand.SetRecorderEnabled? {
+    /**
+     * `REC ON|OFF|1|0` — set dashcam master switch (like `AVM ON|OFF`).
+     * `REC SOS` / `REC SAVE` — emergency save (0.8.6): close in-flight segments and copy
+     * them (plus the configured previous ones) into the SOS folder.
+     */
+    private fun parseRec(parts: List<String>): CamdCommand? {
         if (parts.size != 2) return null
         return when (parts[1].uppercase()) {
             "ON", "1" -> CamdCommand.SetRecorderEnabled(true)
             "OFF", "0" -> CamdCommand.SetRecorderEnabled(false)
+            "SOS", "SAVE" -> CamdCommand.RecorderEmergencySave
             else -> null
         }
     }

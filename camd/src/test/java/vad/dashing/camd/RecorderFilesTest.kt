@@ -1,5 +1,6 @@
 package vad.dashing.camd
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,10 +11,17 @@ import java.util.Calendar
 
 class RecorderFilesTest {
     @Test
-    fun crashSafeSegmentIsShortForFrequentMoov() {
-        // MediaMuxer writes moov only on stop — keep segments ≤ 30 s (P1-3).
-        assertEquals(30_000L, RecorderFiles.SEGMENT_MS)
-        assertTrue(RecorderFiles.SEGMENT_ESTIMATE_BYTES < 50L * 1024 * 1024)
+    fun segmentLengthDefaultsToThreeMinutesAndOptionsMatch() {
+        assertEquals(180_000L, RecorderFiles.SEGMENT_MS)
+        assertEquals(180, RecorderController.DEFAULT_SEGMENT_SEC)
+        assertArrayEquals(longArrayOf(30_000L, 60_000L, 180_000L, 300_000L), RecorderFiles.SEGMENT_OPTIONS_MS)
+    }
+
+    @Test
+    fun segmentEstimateGrowsWithSegmentLength() {
+        // 6 Mbps = 750 KB/s; reserve must cover a 5-minute segment, not a 30 s one.
+        assertTrue(RecorderFiles.SEGMENT_ESTIMATE_BYTES >= 100L * 1024 * 1024)
+        assertEquals(750_000L * (RecorderFiles.SEGMENT_MS / 1000L), RecorderFiles.SEGMENT_ESTIMATE_BYTES)
     }
 
     @Test
@@ -23,6 +31,10 @@ class RecorderFilesTest {
             set(Calendar.MILLISECOND, 0)
         }
         assertEquals("cam4_2026-11-17_12-30-45.mp4", RecorderFiles.segmentName(4, calendar.time))
+        assertEquals(
+            "cam4_2026-11-17_12-30-45_1.mp4",
+            RecorderFiles.segmentName(4, calendar.time, suffix = 1),
+        )
     }
 
     @Test
@@ -30,6 +42,8 @@ class RecorderFilesTest {
         assertTrue(RecorderFiles.isOwnSegment(File("cam0_2026-11-17_12-30-45.mp4")))
         assertTrue(RecorderFiles.isOwnSegment(File("cam9_2026-01-01_00-00-00.mp4")))
         assertTrue(RecorderFiles.isOwnSegment(File("cam10_2026-11-17_12-30-45.mp4")))
+        assertTrue(RecorderFiles.isOwnSegment(File("cam4_2026-11-17_12-30-45_1.mp4")))
+        assertTrue(RecorderFiles.isOwnSegment(File("cam4_2026-11-17_12-30-45_12.mp4")))
         assertFalse(RecorderFiles.isOwnSegment(File("cam0_2026-11-17_12-30-45.mp4.bak")))
         assertFalse(RecorderFiles.isOwnSegment(File("cam_2026-11-17_12-30-45.mp4")))
         assertFalse(RecorderFiles.isOwnSegment(File("notes.txt")))
@@ -135,6 +149,80 @@ class RecorderFilesTest {
             assertTrue(RecorderFiles.isWritable(dir))
             assertFalse(RecorderFiles.isWritable(null))
             assertFalse(RecorderFiles.isWritable(File(dir, "missing")))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun segmentInputExtractsCameraIdIncludingSuffix() {
+        assertEquals(4, RecorderFiles.segmentInput(File("cam4_2026-11-17_12-30-45.mp4")))
+        assertEquals(4, RecorderFiles.segmentInput(File("cam4_2026-11-17_12-30-45_1.mp4")))
+        assertEquals(12, RecorderFiles.segmentInput(File("cam12_2026-11-17_12-30-45.mp4")))
+        assertEquals(null, RecorderFiles.segmentInput(File("notes.txt")))
+    }
+
+    @Test
+    fun sosFolderNameUsesSameTimestampStyle() {
+        val calendar = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 20, 12, 34, 56)
+            set(Calendar.MILLISECOND, 0)
+        }
+        assertEquals("sos_2026-11-20_12-34-56", RecorderFiles.sosFolderName(calendar.time))
+    }
+
+    @Test
+    fun sosSelectionTakesNewestPerCameraOnly() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val cam4old = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(10)) }
+            val cam4mid = File(dir, "cam4_2026-11-17_10-00-30.mp4").apply { writeBytes(ByteArray(10)) }
+            val cam4new = File(dir, "cam4_2026-11-17_10-01-00.mp4").apply { writeBytes(ByteArray(10)) }
+            val cam2new = File(dir, "cam2_2026-11-17_10-01-00.mp4").apply { writeBytes(ByteArray(10)) }
+
+            assertEquals(emptyList<File>(), RecorderFiles.sosSegmentsForCamera(dir, 4, 0))
+            assertEquals(listOf(cam4new), RecorderFiles.sosSegmentsForCamera(dir, 4, 1))
+            assertEquals(listOf(cam4mid, cam4new), RecorderFiles.sosSegmentsForCamera(dir, 4, 2))
+            assertEquals(
+                listOf(cam4old, cam4mid, cam4new),
+                RecorderFiles.sosSegmentsForCamera(dir, 4, 3),
+            )
+            // More requested than present: everything the camera has.
+            assertEquals(
+                listOf(cam4old, cam4mid, cam4new),
+                RecorderFiles.sosSegmentsForCamera(dir, 4, 10),
+            )
+            assertEquals(listOf(cam2new), RecorderFiles.sosSegmentsForCamera(dir, 2, 5))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun copyFileSkipsExistingAndRemovesPartialOnFailure() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val source = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(64)) }
+            val target = File(dir, "copy.mp4")
+            assertTrue(RecorderFiles.copyFile(source, target))
+            assertEquals(64L, target.length())
+            // Same name again — skip silently (repeat tap must not duplicate files).
+            assertFalse(RecorderFiles.copyFile(source, target))
+            assertEquals(64L, target.length())
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun quotaRotationStillMatchesSuffixedSegments() {
+        val dir = Files.createTempDirectory("camdrec").toFile()
+        try {
+            val a = File(dir, "cam4_2026-11-17_10-00-00.mp4").apply { writeBytes(ByteArray(100)) }
+            val b = File(dir, "cam4_2026-11-17_10-00-00_1.mp4").apply { writeBytes(ByteArray(100)) }
+            assertTrue(RecorderFiles.enforceQuota(dir, quotaBytes = 150, reserveBytes = 0))
+            assertFalse(a.exists())
+            assertTrue(b.exists())
         } finally {
             dir.deleteRecursively()
         }

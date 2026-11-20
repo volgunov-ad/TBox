@@ -20,6 +20,7 @@ import kotlin.concurrent.thread
  * CLOSE <id>
  * AVM ON|OFF
  * REC ON|OFF
+ * REC SOS (alias REC SAVE)
  * STATUS
  * PRESETS
  *
@@ -166,6 +167,8 @@ class CamdApiServer(
             is CamdCommand.SetKeepAvm -> windows?.let { "OK " + it.setKeepAvmStopped(command.keep) } ?: "ERR no_windows"
             is CamdCommand.SetRecorderEnabled ->
                 recorder?.let { "OK " + it.applyEnabledFromApi(command.enabled) } ?: "ERR no_recorder"
+            CamdCommand.RecorderEmergencySave ->
+                recorder?.let { "OK " + it.requestEmergencySave() } ?: "ERR no_recorder"
             CamdCommand.Status -> {
                 val base = (windows?.status() ?: engine.status()).ifBlank { "state=unknown" }
                 val rec = recorder?.statusFlags().orEmpty()

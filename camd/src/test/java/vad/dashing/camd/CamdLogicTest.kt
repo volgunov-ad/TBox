@@ -37,8 +37,11 @@ class CamdCommandTest {
         assertEquals(CamdCommand.SetRecorderEnabled(false), CamdCommands.parse("rec off"))
         assertEquals(CamdCommand.SetRecorderEnabled(true), CamdCommands.parse("REC 1"))
         assertEquals(CamdCommand.SetRecorderEnabled(false), CamdCommands.parse("REC 0"))
+        assertEquals(CamdCommand.RecorderEmergencySave, CamdCommands.parse("REC SOS"))
+        assertEquals(CamdCommand.RecorderEmergencySave, CamdCommands.parse("rec save"))
         assertNull(CamdCommands.parse("REC"))
         assertNull(CamdCommands.parse("REC YES"))
+        assertNull(CamdCommands.parse("REC SOS extra"))
         assertNull(CamdCommands.parse("AVM"))
     }
 

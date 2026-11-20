@@ -169,6 +169,11 @@ class MainActivity : ComponentActivity() {
                         onRecorderFolder = recorder::setFolder,
                         onRecorderQuota = recorder::setQuota,
                         onRecorderInput = recorder::toggleInput,
+                        onRecorderSosFolder = recorder::setSosFolder,
+                        onRecorderSosPrevious = recorder::setSosPrevious,
+                        onRecorderSegmentSec = recorder::setSegmentSec,
+                        onRecorderEmergencySave = { recorder.requestEmergencySave() },
+                        onRecorderRepair = { recorder.requestSegmentRepair() },
                         onInput = controller::setInput,
                         onX = controller::setX,
                         onY = controller::setY,
@@ -828,6 +833,11 @@ private fun CamdScreen(
     onRecorderFolder: (String) -> Unit,
     onRecorderQuota: (Int) -> Unit,
     onRecorderInput: (Int) -> Unit,
+    onRecorderSosFolder: (String) -> Unit,
+    onRecorderSosPrevious: (Int) -> Unit,
+    onRecorderSegmentSec: (Int) -> Unit,
+    onRecorderEmergencySave: () -> Unit,
+    onRecorderRepair: () -> Unit,
     onInput: (Int) -> Unit,
     onX: (Float) -> Unit,
     onY: (Float) -> Unit,
@@ -935,6 +945,11 @@ private fun CamdScreen(
                 onFolder = onRecorderFolder,
                 onQuota = onRecorderQuota,
                 onInput = onRecorderInput,
+                onSosFolder = onRecorderSosFolder,
+                onSosPrevious = onRecorderSosPrevious,
+                onSegmentSec = onRecorderSegmentSec,
+                onEmergencySave = onRecorderEmergencySave,
+                onRepair = onRecorderRepair,
             )
             CamdTab.PRESETS -> PresetsTab(
                 state = state,
@@ -1185,8 +1200,14 @@ private fun RecorderTab(
     onFolder: (String) -> Unit,
     onQuota: (Int) -> Unit,
     onInput: (Int) -> Unit,
+    onSosFolder: (String) -> Unit,
+    onSosPrevious: (Int) -> Unit,
+    onSegmentSec: (Int) -> Unit,
+    onEmergencySave: () -> Unit,
+    onRepair: () -> Unit,
 ) {
     var showFolderDialog by remember { mutableStateOf(false) }
+    var showSosFolderDialog by remember { mutableStateOf(false) }
     val internalPath = remember(recorderState.folder) {
         recorderState.folder.startsWith("/sdcard") ||
             recorderState.folder.startsWith("/data") ||
@@ -1301,10 +1322,109 @@ private fun RecorderTab(
         enabled = !recorderState.enabled,
         modifier = Modifier.fillMaxWidth(),
     )
+    Text(
+        "Длина сегмента",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RecorderFiles.SEGMENT_OPTIONS_MS.forEach { optionMs ->
+            val sec = (optionMs / 1000L).toInt()
+            FilterChip(
+                selected = recorderState.segmentSec == sec,
+                onClick = { onSegmentSec(sec) },
+                enabled = !recorderState.enabled,
+                label = {
+                    Text(
+                        if (sec % 60 == 0) "${sec / 60} мин" else "$sec сек",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                },
+            )
+        }
+    }
+    Text(
+        "Короткие сегменты надёжнее при обрыве питания: незакрытый ролик теряется целиком. " +
+            "Изменение применяется с нового сегмента и только при выключенной записи.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Аварийное сохранение",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        "Кнопка или команда REC SOS мгновенно закрывает текущие ролики и копирует их вместе с " +
+            "предыдущими в отдельную папку. Копии не удаляются ротацией квоты.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        "Папка сохранения",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        recorderState.sosFolder.ifBlank { "не выбрана" },
+        style = MaterialTheme.typography.bodyLarge,
+        color = if (recorderState.sosFolder.isBlank()) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+    )
+    Button(onClick = { showSosFolderDialog = true }) {
+        Text("Выбрать папку сохранения", style = MaterialTheme.typography.labelLarge)
+    }
+    Text(
+        "Предыдущих файлов (0–5, для всех камер)",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        (0..5).forEach { count ->
+            FilterChip(
+                selected = recorderState.sosPrevious == count,
+                onClick = { onSosPrevious(count) },
+                label = { Text(count.toString(), style = MaterialTheme.typography.labelLarge) },
+            )
+        }
+    }
+    Button(
+        onClick = onEmergencySave,
+        enabled = recorderState.recording && !recorderState.message.startsWith("Аварийное сохранение"),
+    ) {
+        Text("Аварийно сохранить", style = MaterialTheme.typography.labelLarge)
+    }
+    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        "Восстановление битых роликов",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    Text(
+        "Если питание пропало посреди сегмента, ролик остался без индекса и не открывается. " +
+            "Кнопка находит такие файлы в папке записи и пересобирает их в играбельные: " +
+            "настройки кодирования берутся из целого ролика той же камеры, поэтому заранее " +
+            "запишите хотя бы один целый. Пишущийся сейчас сегмент не трогается.",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Button(onClick = onRepair) {
+        Text("Восстановить битые", style = MaterialTheme.typography.labelLarge)
+    }
     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
     Text(
         "Занято ${recorderState.usedBytes / (1024 * 1024)} МБ из ${recorderState.quotaGb} ГБ. " +
-            "Сегменты по 30 секунд (crash-safe moov), при превышении квоты старейшие удаляются. " +
+            "Сегменты по ${recorderState.segmentSec} сек (moov пишется при закрытии), при превышении квоты старейшие удаляются. " +
             "Запись идёт с коррекциями камеры (вкладка «Камеры»), без поворотов и вырезок пресетов.",
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1323,6 +1443,16 @@ private fun RecorderTab(
             onPicked = { path ->
                 onFolder(path)
                 showFolderDialog = false
+            },
+        )
+    }
+    if (showSosFolderDialog) {
+        RecorderFolderDialog(
+            initial = recorderState.sosFolder,
+            onDismiss = { showSosFolderDialog = false },
+            onPicked = { path ->
+                onSosFolder(path)
+                showSosFolderDialog = false
             },
         )
     }

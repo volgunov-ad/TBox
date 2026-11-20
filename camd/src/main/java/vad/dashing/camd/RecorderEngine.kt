@@ -34,14 +34,49 @@ internal class RecorderEngine(
     private val onSegmentClosed: (File) -> Unit,
     private val onWaiting: (Boolean, String) -> Unit,
     private val onError: (String) -> Unit,
+    /** Segment wall-clock length; re-read per segment, so a settings change applies to the next segment. */
+    private val segmentMs: () -> Long = { RecorderFiles.SEGMENT_MS },
 ) : Thread("camd-rec-$inputId") {
 
     @Volatile
     private var running = true
 
+    /**
+     * Set by the emergency save ([RecorderController.requestEmergencySave]): the current
+     * in-flight segment closes immediately through the normal finally path —
+     * signalEndOfInputStream → muxer.stop() writes the moov → onSegmentClosed — and the
+     * next segment starts fresh. Delay is one render frame (~50 ms).
+     */
+    @Volatile
+    private var closeNow = false
+
+    /** Segment currently being written (file exists on disk but has no moov yet). */
+    @Volatile
+    private var currentSegment: File? = null
+
+    /** Number of segments fully closed with a moov — the SOS completion signal. */
+    private val closedCount = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Last segment that got its moov (the SOS "current" file to copy). */
+    @Volatile
+    private var lastClosedSegment: File? = null
+
     fun requestStop() {
         running = false
     }
+
+    fun requestCloseNow() {
+        closeNow = true
+    }
+
+    /** The in-flight segment file, or null while parked between segments. */
+    fun currentSegmentFile(): File? = currentSegment
+
+    /** Monotonic count of successfully closed segments. */
+    fun closedSegmentCount(): Int = closedCount.get()
+
+    /** The most recently closed segment, or null if none has been closed yet. */
+    fun lastClosedSegmentFile(): File? = lastClosedSegment
 
     override fun run() {
         var gl: Gl? = null
@@ -126,10 +161,12 @@ internal class RecorderEngine(
         var correction = CamdLensCorrectionStore.load(prefs, inputId)
         var lastLensMs = 0L
         var lastRenderMs = 0L
+        val segmentLengthMs = segmentMs()
         val segmentStart = System.currentTimeMillis()
+        closeNow = false
 
         try {
-            while (running && System.currentTimeMillis() - segmentStart < RecorderFiles.SEGMENT_MS) {
+            while (running && !closeNow && System.currentTimeMillis() - segmentStart < segmentLengthMs) {
                 val read = readFrame(source, mapped, mappedIno, mappedLength, pixels, lastSeq)
                 source = read.source
                 mapped = read.buffer
@@ -165,7 +202,8 @@ internal class RecorderEngine(
                     uploadedWidth = 0
                     uploadedHeight = 0
                     ptsBase = System.nanoTime() / 1000
-                    // MPEG-4 moov is finalized in muxer.stop() at segment end — keep SEGMENT_MS short.
+                    // MPEG-4 moov is finalized in muxer.stop() at segment end — keep segments short.
+                    currentSegment = segment
                     muxer = MediaMuxer(segment.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
                 }
 
@@ -198,12 +236,15 @@ internal class RecorderEngine(
                 if (track >= 0 && m != null) {
                     m.stop()
                     onSegmentClosed(segment)
+                    closedCount.incrementAndGet()
+                    lastClosedSegment = segment
                 } else {
                     segment.delete()
                 }
             } catch (_: Throwable) {
                 segment.delete()
             }
+            currentSegment = null
             runCatching { muxer?.release() }
             runCatching { codec?.release() }
             if (surface != null) {
